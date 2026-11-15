@@ -688,8 +688,9 @@ fn a_refused_publication_does_not_commit_an_action() {
         HOST,
         &action,
         &mut game.chance,
-        |table, entry| {
-            assert_eq!(table.revision(), entry.n);
+        |before, staged, entry| {
+            assert_eq!(*before, initial);
+            assert_eq!(staged.revision(), entry.n);
             assert!(entry.n > initial.revision());
             Err(Refusal::INVALID)
         },

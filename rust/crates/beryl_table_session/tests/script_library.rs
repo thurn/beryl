@@ -71,7 +71,7 @@ fn a_bottom_look_carries_only_its_count_to_the_other_seat() {
             assert!(acts(script).any(|act| matches!(act,
                 Act::Lift { span: Span::Begin, handling: held } if *held == handling
             )));
-            assert_eq!(game.views[index].0.handling, Some(handling));
+            assert_eq!(game.views()[index].view().handling, Some(handling));
             let shown = serde_json::to_string(script).unwrap();
             assert_eq!(shown.contains(&format!("Bottom {}", actor.0)), own);
             assert!(!shown.contains(&format!("Top {}", actor.0)));
@@ -90,9 +90,13 @@ fn a_bottom_look_carries_only_its_count_to_the_other_seat() {
                 })
             ));
         }
-        assert!(game.views.iter().all(|(view, _)| view.handling.is_none()));
         assert!(
-            game.table.objects[&ObjectId(u32::from(actor.0) * 10 + 2)]
+            game.views()
+                .iter()
+                .all(|publication| publication.view().handling.is_none())
+        );
+        assert!(
+            game.published.table().objects[&ObjectId(u32::from(actor.0) * 10 + 2)]
                 .known_to
                 .contains(&actor)
         );
@@ -160,7 +164,12 @@ fn lending_lifts_without_revealing_and_moving_a_card_ends_the_lift() {
                 .any(|step| step.act.verb() == Verb::Fly)
         );
     }
-    assert!(game.table.lent_zones.contains(&(library, GUEST)));
+    assert!(
+        game.published
+            .table()
+            .lent_zones
+            .contains(&(library, GUEST))
+    );
 }
 
 #[test]
@@ -285,8 +294,8 @@ fn both_seats_get_roll_phase_and_shuffle_notices() {
         },
     );
     let old_orders = [
-        game.views[0].0.players.you.library.clone(),
-        game.views[1].0.players.opponent.library.clone(),
+        game.views()[0].view().players.you.library.clone(),
+        game.views()[1].view().players.opponent.library.clone(),
     ];
     let scripts = game.apply(
         HOST,

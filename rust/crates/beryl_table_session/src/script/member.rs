@@ -7,7 +7,7 @@ use beryl_session::script::{Act, Fact, Notice, Step, Subject, Tally};
 use beryl_table::change::{ObjectEdit, TableEdit};
 use beryl_table::redact::AnimationEvent;
 use beryl_table::state::{ObjectId, Zone};
-use beryl_table::{Change, Table};
+use beryl_table::{Change, Refusal, Table};
 
 use super::{Builder, spans};
 use crate::view::{Slots, Viewer, arrows, cards, handling, phase, piles, turn, zone};
@@ -20,7 +20,7 @@ impl Builder {
         viewer: Viewer,
         slots: &mut Slots,
         final_slots: &Slots,
-    ) {
+    ) -> Result<(), Refusal> {
         let previous = slots.clone();
         let transfers: Vec<_> = events
             .iter()
@@ -29,10 +29,9 @@ impl Builder {
                 _ => None,
             })
             .collect();
-        if slots.between(table, &transfers, final_slots).is_none() {
-            self.error = Some("ran out of stage slots".into());
-            return;
-        }
+        slots
+            .between(table, &transfers, final_slots)
+            .ok_or(Refusal::INVALID)?;
         let member = Member {
             table,
             viewer,
@@ -56,6 +55,7 @@ impl Builder {
         self.end_spans(&wanted, &beat, new_look);
         self.finish(beat);
         self.begin_spans(&wanted);
+        Ok(())
     }
 
     fn member_steps(&mut self, member: &Member<'_>, events: &[AnimationEvent]) -> Vec<Step> {

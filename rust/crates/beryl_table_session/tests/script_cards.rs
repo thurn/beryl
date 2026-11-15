@@ -203,7 +203,7 @@ fn card_changes_use_the_expected_verbs_for_both_seats() {
     ] {
         game.verbs(HOST, &action, verb);
     }
-    let marker = game.table.markers.keys().next().unwrap().0;
+    let marker = game.published.table().markers.keys().next().unwrap().0;
     game.verbs(
         HOST,
         &Action::Remove {
@@ -252,7 +252,7 @@ fn a_draw_moves_anonymous_backs_as_one_group() {
     );
     add(&mut table, 2, "Second Card", Zone::Library(HOST), &[]);
     let mut game = Game::new(table);
-    let old = game.views[1].1.get(ObjectId(1)).unwrap();
+    let old = game.views()[1].slot(ObjectId(1)).unwrap();
     let [owner, guest] = game.apply(
         HOST,
         &Action::Draw {
@@ -302,9 +302,9 @@ fn undo_of_bounce_restores_a_token_without_flying_it_from_hand() {
 
     let scripts = game.apply(HOST, &Action::Undo { entry: None });
     for (index, script) in scripts.iter().enumerate() {
-        let slots = &game.views[index].1;
-        let card = slots.get(ObjectId(1)).unwrap();
-        let token = slots.get(ObjectId(2)).unwrap();
+        let publication = game.views()[index];
+        let card = publication.slot(ObjectId(1)).unwrap();
+        let token = publication.slot(ObjectId(2)).unwrap();
         let arrivals = script
             .beats
             .iter()
@@ -325,7 +325,9 @@ fn undo_of_bounce_restores_a_token_without_flying_it_from_hand() {
 #[test]
 fn player_counters_are_part_of_script_replay() {
     let mut game = Game::new(Table::new(2));
-    let before = game.views.each_ref().map(|(view, _)| Stage::of(view));
+    let before = game
+        .views()
+        .map(|publication| Stage::of(publication.view()));
     let scripts = game.apply(
         GUEST,
         &Action::PlayerCounter {
@@ -346,7 +348,7 @@ fn player_counters_are_part_of_script_replay() {
             });
         }
         script.beats.retain(|beat| !beat.is_empty());
-        let (after, _) = &game.views[index];
+        let after = game.views()[index].view();
         assert!(replay::failure(&before[index], &script, after).is_some());
     }
 }

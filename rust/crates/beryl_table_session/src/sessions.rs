@@ -3,13 +3,12 @@
 use std::hash::{BuildHasher, RandomState};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use beryl_session::protocol::{TableAction, TableActionRefs};
+use beryl_session::protocol::TableAction;
 use beryl_session::{GameUpdate, SessionId, SessionIds};
 use beryl_table::deck::Deck;
-use beryl_table::{Action, Chance, Log, Refusal, Seat, Table, redact};
+use beryl_table::{Action, Chance, Log, Refusal, Seat, Table};
 
-use crate::script::script;
-use crate::view::{Slots, view};
+use crate::publication::PublishedTable;
 
 const SOLO: Seat = Seat(0);
 
@@ -21,12 +20,22 @@ pub struct TableSessions {
 }
 
 struct Solo {
-    table: Table,
-    log: Log,
-    chance: Chance,
-    slots: Slots,
-    refs: TableActionRefs,
-    update: GameUpdate,
+    table: PublishedTable,
+    session: SessionId,
+}
+
+impl Solo {
+    fn update(&self) -> GameUpdate {
+        GameUpdate {
+            session: self.session,
+            view: self
+                .table
+                .publication(SOLO)
+                .expect("solo seat")
+                .view()
+                .clone(),
+        }
+    }
 }
 
 impl TableSessions {
@@ -48,49 +57,22 @@ impl TableSessions {
     /// Start a solo table with a repeatable shuffle for a recorded run.
     pub fn solo_seeded(&self, deck: Deck, seed: u64) -> Result<SessionId, Refusal> {
         let mut current = self.lock();
-        let mut table = Table::new(1);
-        let mut log = Log::new(&table);
-        let mut chance = Chance::fresh(seed);
-        log.apply(
-            &mut table,
+        let table = Table::new(1);
+        let log = Log::new(&table);
+        let mut table = PublishedTable::new(table, log, Chance::fresh(seed))?;
+        table.apply_host(
             SOLO,
             &Action::LoadDeck {
                 seat: SOLO,
                 main: deck.main,
                 side: deck.side,
             },
-            &mut chance,
         )?;
-        let table_before = table.clone();
-        let mut slots = Slots::default();
-        let (before, _) = view(&table_before, &log, SOLO, &mut slots)?;
-        log.apply(
-            &mut table,
-            SOLO,
-            &Action::Start { first: SOLO },
-            &mut chance,
-        )?;
-        let mut next_slots = slots.clone();
-        let (mut view, refs) = view(&table, &log, SOLO, &mut next_slots)?;
-        view.script = Some(script(
-            &before,
-            log.entries().last().expect("start recorded an entry"),
-            &table_before,
-            &view,
-            SOLO,
-            &slots,
-            &next_slots,
-        ));
+        table.apply_host(SOLO, &Action::Start { first: SOLO })?;
         let session = self.ids.allocate();
-        let update = GameUpdate { session, view };
-        *current = Some(Solo {
-            table,
-            log,
-            chance,
-            slots: next_slots,
-            refs,
-            update: update.clone(),
-        });
+        let solo = Solo { table, session };
+        let update = solo.update();
+        *current = Some(solo);
         (self.emit)(update);
         Ok(session)
     }
@@ -98,45 +80,13 @@ impl TableSessions {
     pub fn act(&self, action: TableAction) -> Result<(), Refusal> {
         let mut current = self.lock();
         let solo = current.as_mut().ok_or(Refusal::Stale)?;
-        let table_before = solo.table.clone();
-        let mut slots = solo.slots.clone();
-        solo.refs.apply_checked(
-            &mut solo.table,
-            &mut solo.log,
-            SOLO,
-            action,
-            &mut solo.chance,
-            |table, entry| {
-                // Refuse an action that would exhaust the stage's slots before committing it.
-                let projected = redact::seen_by(table, SOLO);
-                slots
-                    .update(&projected, SOLO, std::slice::from_ref(entry))
-                    .ok_or(Refusal::INVALID)
-            },
-        )?;
-        let (mut view, refs) = view(&solo.table, &solo.log, SOLO, &mut slots)
-            .expect("the action checked the next view's slots");
-        view.script = Some(script(
-            &solo.update.view,
-            solo.log
-                .entries()
-                .last()
-                .expect("the action recorded an entry"),
-            &table_before,
-            &view,
-            SOLO,
-            &solo.slots,
-            &slots,
-        ));
-        solo.slots = slots;
-        solo.refs = refs;
-        solo.update.view = view;
-        (self.emit)(solo.update.clone());
+        solo.table.apply_client(SOLO, action)?;
+        (self.emit)(solo.update());
         Ok(())
     }
 
     pub fn current(&self) -> Option<GameUpdate> {
-        self.lock().as_ref().map(|solo| solo.update.clone())
+        self.lock().as_ref().map(Solo::update)
     }
 
     pub fn leave(&self) {

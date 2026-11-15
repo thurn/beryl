@@ -1,8 +1,9 @@
 //! Projects manual Magic tables onto the game session's shared UI protocol.
 
 pub mod decks;
-pub mod script;
+pub mod publication;
+mod script;
 pub mod sessions;
-pub mod view;
+mod view;
 
 pub use sessions::TableSessions;

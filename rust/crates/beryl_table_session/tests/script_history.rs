@@ -6,7 +6,6 @@ use beryl_table::action::{Destination, Position};
 use beryl_table::state::{Assist, Face, Line, LineVisibility, ObjectId, Proposal, Zone};
 use beryl_table::testing::{ASSIST_AND_LOG, CORE, Generator, Kind};
 use beryl_table::{Action, Refusal, Table};
-use beryl_table_session::script::proposal_marks;
 
 mod script_common;
 use script_common::{FIELD, GUEST, Game, HOST, add, select};
@@ -108,7 +107,10 @@ fn a_batched_mulligan_keeps_its_draw_motion_and_undo_restores_the_hand() {
             4
         );
     }
-    assert_eq!(game.table.zone(HAND).unwrap(), [ObjectId(1), ObjectId(2)]);
+    assert_eq!(
+        game.published.table().zone(HAND).unwrap(),
+        [ObjectId(1), ObjectId(2)]
+    );
 }
 
 #[test]
@@ -186,9 +188,9 @@ fn proposal_marks_deduplicate_and_end_before_apply_or_on_withdrawal() {
         })
         .collect(),
     };
-    let marks = game.views.each_ref().map(|(view, slots)| {
-        let marks = proposal_marks(std::slice::from_ref(&proposal), view, slots);
-        assert_eq!(marks, [slots.get(ObjectId(1)).unwrap()]);
+    let marks = game.views().map(|publication| {
+        let marks = publication.proposal_marks(std::slice::from_ref(&proposal));
+        assert_eq!(marks, [publication.slot(ObjectId(1)).unwrap()]);
         marks
     });
     let quiet = Action::SetAssist {
@@ -257,7 +259,7 @@ fn every_script_replays_and_names_nothing_hidden() {
             let (kind, by, action) = if turn % 19 == 0 {
                 (None, HOST, Action::CloseLook {})
             } else {
-                let (kind, by, action) = generator.next(&game.table, &kinds);
+                let (kind, by, action) = generator.next(game.published.table(), &kinds);
                 (Some(kind), by, action)
             };
             let scripts = match game.try_apply(by, &action) {
@@ -272,7 +274,7 @@ fn every_script_replays_and_names_nothing_hidden() {
                 Err(_) => continue,
             };
             covered.extend(kind);
-            let entries = game.log.entries();
+            let entries = game.published.log().entries();
             let entry = entries.last().unwrap();
             let undone = entry.undoes.map(|target| {
                 &entries
@@ -284,9 +286,10 @@ fn every_script_replays_and_names_nothing_hidden() {
             if let Some(reason) = check_resets(&action, undone, &scripts) {
                 *resets.entry((undone.is_some(), reason)).or_insert(0) += scripts.len();
             }
-            for seat in game.table.seats() {
+            for seat in game.published.table().seats() {
                 let index = usize::from(seat.0);
-                let (view, slots) = &game.views[index];
+                let publication = game.views()[index];
+                let view = publication.view();
                 let json = serde_json::to_string(&(view, &scripts[index])).unwrap();
                 let visible: BTreeSet<_> = view
                     .objects
@@ -294,13 +297,14 @@ fn every_script_replays_and_names_nothing_hidden() {
                     .filter_map(|record| record.name.as_deref())
                     .collect();
                 for object in game
-                    .table
+                    .published
+                    .table()
                     .objects
                     .values()
                     .filter(|object| !object.known_to.contains(&seat))
                 {
                     let name = object.card.name().expect("host card");
-                    let slot = slots.get(object.id).unwrap();
+                    let slot = publication.slot(object.id).unwrap();
                     assert!(
                         view.objects
                             .iter()

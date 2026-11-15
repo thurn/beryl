@@ -10,7 +10,7 @@ use beryl_table::state::{
 };
 use beryl_table::testing::{CORE, Generator};
 use beryl_table::{Action, Chance, Change, Log, Refusal, Seat, Table};
-use beryl_table_session::view::{Slots, view};
+use beryl_table_session::publication::{PublishedTable, SeatPublication};
 
 const HOST: Seat = Seat(0);
 const GUEST: Seat = Seat(1);
@@ -93,9 +93,9 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
     .unwrap();
 
     for seat in [HOST, GUEST] {
-        let mut slots = Slots::default();
-        let (view, refs) = view(&table, &log, seat, &mut slots).unwrap();
-        let slot = |id| slots.get(id).unwrap();
+        let publication = SeatPublication::new(&table, &log, seat).unwrap();
+        let view = publication.view();
+        let slot = |id| publication.slot(id).unwrap();
         let object = |id| {
             view.objects
                 .iter()
@@ -179,10 +179,10 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
             if seat == HOST { "You" } else { "Seat 1" }
         );
         assert_eq!(manual.log[0].text, "Put an ability on the stack.");
-        assert_eq!(refs.actions(), manual.object_actions);
         assert_eq!(manual.acting.len(), if seat == GUEST { 2 } else { 0 });
         let action = |id| {
-            refs.actions()
+            manual
+                .object_actions
                 .iter()
                 .find(|entry| entry.subject == Subject::Object { slot: slot(id) })
         };
@@ -191,7 +191,7 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
             "the card back is usable in a lent library"
         );
         assert_eq!(action(sideboard).is_some(), seat == HOST);
-        assert!(refs.actions().iter().any(|entry| entry.subject
+        assert!(manual.object_actions.iter().any(|entry| entry.subject
             == Subject::Ability {
                 id: view.stack[1].marker_id().unwrap()
             }));
@@ -204,42 +204,42 @@ fn explicit_reveals_issue_only_card_references_in_hidden_piles() {
         let mut table = Table::new(2);
         let known = add(&mut table, 1, "Island", zone, &[HOST, GUEST]);
         let chosen = add(&mut table, 2, "Plains", zone, &[HOST]);
-        let mut log = Log::new(&table);
-        let mut chance = Chance::fresh(17);
-        let mut slots = Slots::default();
-        let (_, refs) = view(&table, &log, HOST, &mut slots).unwrap();
-        let reference = refs
-            .actions()
+        let log = Log::new(&table);
+        let mut table = PublishedTable::new(table, log, Chance::fresh(17)).unwrap();
+        let host = table.publication(HOST).unwrap();
+        let reference = host
+            .view()
+            .table
+            .as_ref()
+            .unwrap()
+            .object_actions
             .iter()
             .find(|entry| {
                 entry.subject
                     == Subject::Object {
-                        slot: slots.get(chosen).unwrap(),
+                        slot: host.slot(chosen).unwrap(),
                     }
             })
             .unwrap()
             .reference
             .clone();
-        refs.apply(
-            &mut table,
-            &mut log,
-            HOST,
-            Action::Reveal {
-                zone,
-                objects: Some(vec![reference]),
-                random: None,
-                to: vec![GUEST],
-            },
-            &mut chance,
-        )
-        .unwrap();
+        table
+            .apply_client(
+                HOST,
+                Action::Reveal {
+                    zone,
+                    objects: Some(vec![reference]),
+                    random: None,
+                    to: vec![GUEST],
+                },
+            )
+            .unwrap();
 
-        let mut slots = Slots::default();
-        let (guest, refs) = view(&table, &log, GUEST, &mut slots).unwrap();
+        let guest = table.publication(GUEST).unwrap();
         let subject = |id| Subject::Object {
-            slot: slots.get(id).unwrap(),
+            slot: guest.slot(id).unwrap(),
         };
-        let published = guest.table.unwrap();
+        let published = guest.view().table.as_ref().unwrap();
         assert!(published.acting.is_empty());
         assert!(
             !published
@@ -253,10 +253,9 @@ fn explicit_reveals_issue_only_card_references_in_hidden_piles() {
             .find(|entry| entry.subject == subject(chosen))
             .unwrap();
         assert_eq!(choice.zone, zone);
+        let reference = choice.reference.clone();
         assert_eq!(
-            refs.apply(
-                &mut table,
-                &mut log,
+            table.apply_client(
                 GUEST,
                 Action::Reveal {
                     zone,
@@ -264,28 +263,25 @@ fn explicit_reveals_issue_only_card_references_in_hidden_piles() {
                     random: None,
                     to: vec![GUEST]
                 },
-                &mut chance,
             ),
             Err(Refusal::Permission)
         );
-        refs.apply(
-            &mut table,
-            &mut log,
-            GUEST,
-            Action::Move {
-                selection: Selection {
-                    objects: vec![choice.reference.clone()],
-                    zone,
+        table
+            .apply_client(
+                GUEST,
+                Action::Move {
+                    selection: Selection {
+                        objects: vec![reference],
+                        zone,
+                    },
+                    to: Destination::Zone(Zone::Graveyard(HOST)),
+                    position: Position::Top,
+                    face: None,
+                    tapped: None,
                 },
-                to: Destination::Zone(Zone::Graveyard(HOST)),
-                position: Position::Top,
-                face: None,
-                tapped: None,
-            },
-            &mut chance,
-        )
-        .unwrap();
-        assert_eq!(table.zone(Zone::Graveyard(HOST)).unwrap(), [chosen]);
+            )
+            .unwrap();
+        assert_eq!(table.table().zone(Zone::Graveyard(HOST)).unwrap(), [chosen]);
     }
 }
 
@@ -300,12 +296,10 @@ fn only_the_seat_that_knows_the_draw_can_follow_its_slot() {
         &[HOST, GUEST],
     );
     let mut log = Log::new(&table);
-    let mut owner_slots = Slots::default();
-    let mut guest_slots = Slots::default();
-    view(&table, &log, HOST, &mut owner_slots).unwrap();
-    view(&table, &log, GUEST, &mut guest_slots).unwrap();
-    let owner_before = owner_slots.get(before);
-    let guest_before = guest_slots.get(before);
+    let mut owner = SeatPublication::new(&table, &log, HOST).unwrap();
+    let mut guest = SeatPublication::new(&table, &log, GUEST).unwrap();
+    let owner_before = owner.slot(before);
+    let guest_before = guest.slot(before);
     let mut chance = Chance::fresh(10);
     log.apply(
         &mut table,
@@ -320,19 +314,24 @@ fn only_the_seat_that_knows_the_draw_can_follow_its_slot() {
 
     let after = table.zones[0].hand[0];
     assert_ne!(before, after);
-    let (owner, refs) = view(&table, &log, HOST, &mut owner_slots).unwrap();
-    let (guest, _) = view(&table, &log, GUEST, &mut guest_slots).unwrap();
-    assert_eq!(owner_slots.get(after), owner_before);
-    assert_ne!(guest_slots.get(after), guest_before);
-    assert_eq!(owner.objects[0].name.as_deref(), Some("Brainstorm"));
-    assert!(guest.objects[0].name.is_none());
+    owner.refresh(&table, &log).unwrap();
+    guest.refresh(&table, &log).unwrap();
+    assert_eq!(owner.slot(after), owner_before);
+    assert_ne!(guest.slot(after), guest_before);
+    assert_eq!(owner.view().objects[0].name.as_deref(), Some("Brainstorm"));
+    assert!(guest.view().objects[0].name.is_none());
     assert!(
-        !serde_json::to_string(&guest)
+        !serde_json::to_string(guest.view())
             .unwrap()
             .contains("Brainstorm")
     );
     assert!(
-        refs.actions()
+        owner
+            .view()
+            .table
+            .as_ref()
+            .unwrap()
+            .object_actions
             .iter()
             .any(|entry| entry.zone == Zone::Hand(HOST))
     );
@@ -344,11 +343,11 @@ fn only_the_seat_that_knows_the_draw_can_follow_its_slot() {
         &mut chance,
     )
     .unwrap();
-    view(&table, &log, HOST, &mut owner_slots).unwrap();
-    view(&table, &log, GUEST, &mut guest_slots).unwrap();
-    assert_eq!(owner_slots.get(before), owner_before);
-    assert_ne!(guest_slots.get(before), guest_before);
-    let unshuffled = owner_slots.get(before);
+    owner.refresh(&table, &log).unwrap();
+    guest.refresh(&table, &log).unwrap();
+    assert_eq!(owner.slot(before), owner_before);
+    assert_ne!(guest.slot(before), guest_before);
+    let unshuffled = owner.slot(before);
     log.apply(
         &mut table,
         HOST,
@@ -359,7 +358,8 @@ fn only_the_seat_that_knows_the_draw_can_follow_its_slot() {
         &mut chance,
     )
     .unwrap();
-    let (shuffled, _) = view(&table, &log, HOST, &mut owner_slots).unwrap();
+    owner.refresh(&table, &log).unwrap();
+    let shuffled = owner.view();
     assert_ne!(Some(shuffled.objects[0].slot), unshuffled);
     assert!(shuffled.objects[0].name.is_none());
 }
@@ -375,7 +375,8 @@ fn a_solo_view_uses_the_card_record_of_the_face_up() {
         &[HOST],
     );
     table.objects.get_mut(&id).unwrap().face = Face::Back;
-    let (view, _) = view(&table, &Log::new(&table), HOST, &mut Slots::default()).unwrap();
+    let publication = SeatPublication::new(&table, &Log::new(&table), HOST).unwrap();
+    let view = publication.view();
     let card = &view.objects[0];
     assert_eq!(card.face, FaceName::Back);
     assert_eq!(card.name.as_deref(), Some("Soporific Springs"));
@@ -388,7 +389,7 @@ fn a_solo_view_uses_the_card_record_of_the_face_up() {
     assert!(face.oracle_text.as_ref().unwrap().contains("Add"));
     assert!(face.images.normal.contains("/back/"));
     assert!(view.players.opponent.library.is_empty());
-    assert!(view.table.unwrap().orders.opponent.hand.is_empty());
+    assert!(view.table.as_ref().unwrap().orders.opponent.hand.is_empty());
 }
 
 #[test]
@@ -417,8 +418,10 @@ fn a_marker_keeps_its_redacted_preview_after_its_source_leaves() {
     ] {
         log.apply(&mut table, HOST, &action, &mut chance).unwrap();
     }
-    let (owner, _) = view(&table, &log, HOST, &mut Slots::default()).unwrap();
-    let (guest, _) = view(&table, &log, GUEST, &mut Slots::default()).unwrap();
+    let owner = SeatPublication::new(&table, &log, HOST).unwrap();
+    let owner = owner.view();
+    let guest = SeatPublication::new(&table, &log, GUEST).unwrap();
+    let guest = guest.view();
     assert!(
         matches!(&owner.stack[0], StackItem::Ability { source: None, name, text: Some(text), .. }
         if name == "Brazen Borrower" && text == "Private text")
@@ -435,20 +438,22 @@ fn one_thousand_random_actions_keep_unknown_names_out_of_each_view() {
     let mut generator = Generator::new(227);
     let mut chance = Chance::fresh(481);
     let mut log = Log::new(&table);
-    let mut slots = [Slots::default(), Slots::default()];
+    let mut publications =
+        [HOST, GUEST].map(|seat| SeatPublication::new(&table, &log, seat).unwrap());
     for index in 0..1_000 {
         let (_, by, action) = generator.next(&table, CORE);
         log.apply(&mut table, by, &action, &mut chance).unwrap();
         for seat in table.seats() {
-            let slots = &mut slots[usize::from(seat.0)];
-            let (view, _) = view(&table, &log, seat, slots).unwrap();
-            let json = serde_json::to_string(&view).unwrap();
+            let publication = &mut publications[usize::from(seat.0)];
+            publication.refresh(&table, &log).unwrap();
+            let view = publication.view();
+            let json = serde_json::to_string(view).unwrap();
             for object in table.objects.values() {
                 let name = object.card.name().expect("host is missing a card identity");
                 let shown = view
                     .objects
                     .iter()
-                    .find(|shown| Some(shown.slot) == slots.get(object.id))
+                    .find(|shown| Some(shown.slot) == publication.slot(object.id))
                     .unwrap();
                 if object.known_to.contains(&seat) {
                     assert_eq!(shown.name.as_deref(), Some(name));
@@ -482,8 +487,14 @@ fn deck_shortcuts_follow_only_the_viewers_deck() {
     table.game_match.seats[1].deck = vec![("Urza's Saga".into(), 1)];
     let log = Log::new(&table);
     let for_seat = |seat| {
-        let (view, _) = view(&table, &log, seat, &mut Slots::default()).unwrap();
-        view.table.unwrap().deck_tokens
+        let publication = SeatPublication::new(&table, &log, seat).unwrap();
+        publication
+            .view()
+            .table
+            .as_ref()
+            .unwrap()
+            .deck_tokens
+            .clone()
     };
     let host = for_seat(HOST);
     assert_eq!(host[0].name, "Clue Token");
@@ -522,14 +533,16 @@ fn a_face_down_custom_token_hides_its_printed_details_and_note() {
     let text = serde_json::to_string(&redacted.action).unwrap();
     assert!(!text.contains("Private"));
     assert!(!text.contains("Secret"));
-    let (guest, _) = view(&table, &log, GUEST, &mut Slots::default()).unwrap();
+    let guest = SeatPublication::new(&table, &log, GUEST).unwrap();
+    let guest = guest.view();
     let hidden = &guest.objects[0];
     assert_eq!(hidden.face, FaceName::Down);
     assert!(hidden.token);
     assert!(hidden.name.is_none() && hidden.note.is_none());
     assert!(hidden.custom_colors.is_none() && hidden.type_line.is_none());
 
-    let (host, _) = view(&table, &log, HOST, &mut Slots::default()).unwrap();
+    let host = SeatPublication::new(&table, &log, HOST).unwrap();
+    let host = host.view();
     let known = &host.objects[0];
     assert_eq!(known.face, FaceName::Down);
     assert_eq!(known.name.as_deref(), Some("Private token"));

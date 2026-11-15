@@ -71,10 +71,11 @@ impl TableActionRefs {
         action: TableAction,
         chance: &mut Chance,
     ) -> Result<&'log Entry, Refusal> {
-        self.apply_checked(table, log, by, action, chance, |_, _| Ok(()))
+        self.apply_checked(table, log, by, action, chance, |_, _, _| Ok(()))
     }
 
-    /// Checks the action's result before the new table and log become authoritative.
+    /// Passes the previous table, staged table and new entry to the publication
+    /// check before committing the action.
     #[allow(clippy::too_many_arguments)] // Same inputs as apply, with a projection check.
     pub fn apply_checked<'log>(
         &self,
@@ -83,7 +84,7 @@ impl TableActionRefs {
         by: Seat,
         action: TableAction,
         chance: &mut Chance,
-        check: impl FnOnce(&Table, &Entry) -> Result<(), Refusal>,
+        check: impl FnOnce(&Table, &Table, &Entry) -> Result<(), Refusal>,
     ) -> Result<&'log Entry, Refusal> {
         if by != self.seat {
             return Err(Refusal::Stale);

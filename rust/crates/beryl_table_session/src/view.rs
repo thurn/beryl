@@ -3,7 +3,7 @@
 pub(super) mod cards;
 mod slots;
 
-pub use slots::Slots;
+pub(super) use slots::Slots;
 
 use std::collections::HashSet;
 
@@ -19,14 +19,11 @@ use beryl_table::action::Portion;
 use beryl_table::assist;
 use beryl_table::log::UndoControl;
 use beryl_table::state::{ArrowKind, ArrowTarget, Assist, ObjectId, Phase, Zone};
-use beryl_table::{Log, Refusal, Seat, Table, redact};
+use beryl_table::{Entry, Log, Refusal, Seat, Table, redact};
 
-/// Publish this view and retain its action references together. Use the same
-/// slots for successive views of this seat. The log supplies both the wording
-/// captured for this seat and the changes that can preserve a card's slot.
-pub fn view(
+pub(super) fn project(
     table: &Table,
-    log: &Log,
+    entries: &[Entry],
     seat: Seat,
     slots: &mut Slots,
 ) -> Result<(PlayerView, TableActionRefs), Refusal> {
@@ -38,7 +35,7 @@ pub fn view(
         return Err(Refusal::INVALID);
     }
     slots
-        .update(&projected, seat, log.entries())
+        .update(&projected, seat, entries)
         .ok_or(Refusal::INVALID)?;
 
     let (you, yours) = piles(&projected, seat, slots);
@@ -69,7 +66,7 @@ pub fn view(
     view.turn.own_number = turn.own_number;
     view.handling = handling(&projected, viewer);
     view.table = Some(TableView {
-        log: history(log, table, seat),
+        log: Vec::new(),
         proposals: Vec::new(),
         labels: Vec::new(),
         assists: assists(&projected, seat),
@@ -94,7 +91,7 @@ pub fn view(
             .filter(|card| card.stats.is_some() && card.zone == Zone::Battlefield)
             .filter_map(|card| slots.get(card.id))
             .collect(),
-        last_draw: log.last_draw(table, seat),
+        last_draw: None,
         deck_tokens: deck_tokens(&projected, seat),
         prompt: None,
     });
@@ -260,6 +257,13 @@ fn assists(table: &Table, seat: Seat) -> AssistsView {
         library_flows: on(Assist::LibraryFlows),
         ability_menus: on(Assist::AbilityMenus),
     }
+}
+
+// Log controls depend on the recorded entry, including strikes and undo targets.
+pub(super) fn attach_history(view: &mut PlayerView, log: &Log, table: &Table, seat: Seat) {
+    let manual = view.table.as_mut().expect("manual table projection");
+    manual.log = history(log, table, seat);
+    manual.last_draw = log.last_draw(table, seat);
 }
 
 fn history(log: &Log, table: &Table, seat: Seat) -> Vec<LogLine> {

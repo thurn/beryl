@@ -203,17 +203,18 @@ impl Log {
         action: &Action,
         chance: &mut Chance,
     ) -> Result<&Entry, Refusal> {
-        self.apply_checked(table, by, action, chance, |_, _| Ok(()))
+        self.apply_checked(table, by, action, chance, |_, _, _| Ok(()))
     }
 
-    /// Lets a session check whether it can publish the result before the action is recorded.
+    /// Passes the previous table, staged table and new entry to the publication
+    /// check before committing the action.
     pub fn apply_checked(
         &mut self,
         table: &mut Table,
         by: Seat,
         action: &Action,
         chance: &mut Chance,
-        check: impl FnOnce(&Table, &Entry) -> Result<(), Refusal>,
+        check: impl FnOnce(&Table, &Table, &Entry) -> Result<(), Refusal>,
     ) -> Result<&Entry, Refusal> {
         self.apply_transaction(table, chance, check, |log, table, chance| {
             log.execute(table, by, action, chance, RevealRules::Explicit)
@@ -230,7 +231,7 @@ impl Log {
         self.apply_transaction(
             table,
             chance,
-            |_, _| Ok(()),
+            |_, _, _| Ok(()),
             |log, table, chance| {
                 let mut entry = log.execute(table, by, action, chance, RevealRules::Legacy)?;
                 entry.legacy_reveals = true;
@@ -249,7 +250,7 @@ impl Log {
         action: Action<Id>,
         chance: &mut Chance,
         mut resolve: impl FnMut(&Table, Action<Id>) -> Result<Action, Refusal>,
-        check: impl FnOnce(&Table, &Entry) -> Result<(), Refusal>,
+        check: impl FnOnce(&Table, &Table, &Entry) -> Result<(), Refusal>,
     ) -> Result<&Entry, Refusal> {
         self.apply_transaction(table, chance, check, |log, table, chance| {
             if matches!(action, Action::Batch { .. }) {
@@ -265,21 +266,19 @@ impl Log {
         &mut self,
         table: &mut Table,
         chance: &mut Chance,
-        check: impl FnOnce(&Table, &Entry) -> Result<(), Refusal>,
+        check: impl FnOnce(&Table, &Table, &Entry) -> Result<(), Refusal>,
         execute: impl FnOnce(&Self, &mut Table, &mut Chance) -> Result<Entry, Refusal>,
     ) -> Result<&Entry, Refusal> {
         if table.entry_number != self.tip() {
             return Err(Refusal::INVALID);
         }
-        let before = table.clone();
+        let mut staged = table.clone();
         let mut planned_chance = chance.clone();
-        let entry = execute(self, table, &mut planned_chance)?;
-        if let Err(refusal) = check(table, &entry) {
-            *table = before;
-            return Err(refusal);
-        }
+        let entry = execute(self, &mut staged, &mut planned_chance)?;
+        check(table, &staged, &entry)?;
+        self.record(table, &staged, entry);
+        *table = staged;
         *chance = planned_chance;
-        self.record(&before, table, entry);
         Ok(self.entries.last().expect("appended entry"))
     }
 

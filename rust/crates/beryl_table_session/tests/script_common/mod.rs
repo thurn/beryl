@@ -1,20 +1,16 @@
-use beryl_session::protocol::{ObjectId as Slot, PlayerView};
+use beryl_session::protocol::ObjectId as Slot;
 use beryl_session::script::{Open, Script, Table as Stage, Verb, carried, replay};
 use beryl_table::action::Selection;
 use beryl_table::state::{Card, Object, ObjectId, Zone};
 use beryl_table::{Action, Chance, Change, Log, Seat, Table};
-use beryl_table_session::script::{ProposalMarks, script, script_with_proposal_marks};
-use beryl_table_session::view::{Slots, view};
+use beryl_table_session::publication::{ProposalMarks, PublishedTable, SeatPublication};
 
 pub const HOST: Seat = Seat(0);
 pub const GUEST: Seat = Seat(1);
 pub const FIELD: Zone = Zone::Battlefield;
 
 pub struct Game {
-    pub table: Table,
-    pub log: Log,
-    chance: Chance,
-    pub views: [(PlayerView, Slots); 2],
+    pub published: PublishedTable,
     spans: [Vec<Open>; 2],
     marks: [Vec<Slot>; 2],
 }
@@ -22,19 +18,15 @@ pub struct Game {
 impl Game {
     pub fn new(table: Table) -> Self {
         let log = Log::new(&table);
-        let views = [HOST, GUEST].map(|seat| {
-            let mut slots = Slots::default();
-            let (initial, _) = view(&table, &log, seat, &mut slots).unwrap();
-            (initial, slots)
-        });
         Self {
-            table,
-            log,
-            chance: Chance::fresh(777),
-            views,
+            published: PublishedTable::new(table, log, Chance::fresh(777)).unwrap(),
             spans: Default::default(),
             marks: Default::default(),
         }
+    }
+
+    pub fn views(&self) -> [&SeatPublication; 2] {
+        [HOST, GUEST].map(|seat| self.published.publication(seat).unwrap())
     }
 
     pub fn apply(&mut self, by: Seat, action: &Action) -> [Script; 2] {
@@ -56,46 +48,33 @@ impl Game {
         action: &Action,
         marks: [Vec<Slot>; 2],
     ) -> Result<[Script; 2], beryl_table::Refusal> {
-        let host_before = self.table.clone();
-        self.log
-            .apply(&mut self.table, by, action, &mut self.chance)?;
-        let entry = self.log.entries().last().unwrap();
+        let before = self
+            .views()
+            .map(|publication| Stage::of(publication.view()));
+        self.published.apply_host_with_marks(by, action, |seat| {
+            let index = usize::from(seat.0);
+            ProposalMarks {
+                before: &self.marks[index],
+                after: &marks[index],
+            }
+        })?;
         let scripts = [HOST, GUEST].map(|seat| {
             let index = usize::from(seat.0);
-            let (before, previous) = &mut self.views[index];
-            let mut slots = previous.clone();
-            let (after, _) = view(&self.table, &self.log, seat, &mut slots).unwrap();
-            let script = if self.marks[index].is_empty() && marks[index].is_empty() {
-                script(before, entry, &host_before, &after, seat, previous, &slots)
-            } else {
-                script_with_proposal_marks(
-                    before,
-                    Some((entry, &host_before)),
-                    &after,
-                    seat,
-                    previous,
-                    &slots,
-                    ProposalMarks {
-                        before: &self.marks[index],
-                        after: &marks[index],
-                    },
-                )
-            };
+            let after = self.published.publication(seat).unwrap().view();
+            let script = after.script.as_ref().unwrap();
             assert_eq!(
-                replay::failure(&Stage::of(before), &script, &after),
+                replay::failure(&before[index], script, after),
                 None,
                 "{action:?}"
             );
             let start = if script.reset.is_some() {
-                &after
+                Stage::of(after)
             } else {
-                &*before
+                before[index].clone()
             };
-            self.spans[index] = carried(Stage::of(start), &self.spans[index], &script)
+            self.spans[index] = carried(start, &self.spans[index], script)
                 .unwrap_or_else(|error| panic!("{action:?}: {error}\n{script}"));
-            *before = after;
-            *previous = slots;
-            script
+            script.clone()
         });
         self.marks = marks;
         Ok(scripts)

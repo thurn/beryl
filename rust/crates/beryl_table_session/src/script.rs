@@ -9,34 +9,11 @@ use beryl_session::script::{
     Act, Notice, Open, Reset, Script, Span, Step, Subject, Table as Stage, replay,
 };
 use beryl_table::redact::{AnimationEvent, ResetReason, visit_animation};
-use beryl_table::{Entry, Seat, Table};
+use beryl_table::{Entry, Refusal, Seat, Table};
 
 use crate::view::{Slots, Viewer};
 
-pub use proposals::proposal_marks;
-
-/// All inputs belong to the same seat and entry. Take a copy of the previous
-/// slots before publishing `after` with `view`, which advances those slots.
-#[must_use]
-pub fn script(
-    before: &PlayerView,
-    entry: &Entry,
-    table_before: &Table,
-    after: &PlayerView,
-    seat: Seat,
-    slots_before: &Slots,
-    slots_after: &Slots,
-) -> Script {
-    script_with_proposal_marks(
-        before,
-        Some((entry, table_before)),
-        after,
-        seat,
-        slots_before,
-        slots_after,
-        ProposalMarks::default(),
-    )
-}
+pub(super) use proposals::proposal_marks;
 
 /// The stage slots affected by the viewer's checked proposal lines in each view.
 #[derive(Clone, Copy, Default)]
@@ -47,8 +24,7 @@ pub struct ProposalMarks<'a> {
 
 /// Builds the script when the viewer has pending proposals. A panel-only update
 /// such as toggling a line has no entry but can still begin or end marks.
-#[must_use]
-pub fn script_with_proposal_marks(
+pub(super) fn script_with_proposal_marks(
     before: &PlayerView,
     entry: Option<(&Entry, &Table)>,
     after: &PlayerView,
@@ -56,7 +32,7 @@ pub fn script_with_proposal_marks(
     slots_before: &Slots,
     slots_after: &Slots,
     marks: ProposalMarks<'_>,
-) -> Script {
+) -> Result<Script, Refusal> {
     let viewer = Viewer(seat);
     let start = Stage::of(before);
     let end = Stage::of(after);
@@ -83,7 +59,7 @@ pub fn script_with_proposal_marks(
             ResetReason::Game { number } => Some(Notice::Game { number }),
             ResetReason::Lobby => None,
         };
-        return reset(&end, &wanted, notice, builder.cause);
+        return Ok(reset(&end, &wanted, notice, builder.cause));
     }
     builder.end_withdrawn_marks(&wanted);
     let mut reserved = slots_after.clone();
@@ -92,7 +68,7 @@ pub fn script_with_proposal_marks(
     }
     let mut slots = slots_before.clone();
     for (events, projected) in &members {
-        builder.member(events, projected, viewer, &mut slots, &reserved);
+        builder.member(events, projected, viewer, &mut slots, &reserved)?;
     }
     builder.end_spans(&wanted, &[], false);
     builder.begin_spans(&wanted);
@@ -125,9 +101,9 @@ pub fn script_with_proposal_marks(
             "manual table entry {:?} does not replay: {failure}",
             entry.map(|(entry, _)| entry.n)
         );
-        return reset(&end, &wanted, None, None);
+        return Ok(reset(&end, &wanted, None, None));
     }
-    script
+    Ok(script)
 }
 
 // A reset takes the final view whole, even if a batch contains other members.
