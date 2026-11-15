@@ -1,5 +1,6 @@
 //! `Places`: where things stand as a script's steps so far have them, for a verb.
 
+use beryl_protocol::protocol::ObjectId;
 use beryl_protocol::script::Subject;
 
 use super::Motion;
@@ -37,6 +38,13 @@ impl Places<'_> {
             Subject::Player { player } => Some(self.motion.table.player_pose(player)),
             Subject::Ability { id } => self.motion.fresh.ability(id).map(|rest| rest.pose),
         }
+    }
+
+    /// The cards this step's look lifts off their pile as it begins, or puts back as it ends,
+    /// in the order they left it; none for a step that is not a look's.
+    #[must_use]
+    pub fn handled(&self) -> &[ObjectId] {
+        self.motion.look.lifting()
     }
 
     #[must_use]

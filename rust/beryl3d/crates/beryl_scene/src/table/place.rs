@@ -10,7 +10,7 @@ use glam::{Quat, Vec2, Vec3};
 
 use super::rows::{Laid, NameIds, RowRules, SameName, face_up, lay_row};
 use super::stack::{OnStack, on_stack, place_stack, spells};
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, LAYER, Layout};
+use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, LAYER, Layout, lifted};
 use crate::frame::Place;
 use crate::pose::Pose;
 
@@ -102,7 +102,13 @@ pub(crate) fn place_zones(
     let mut placement = Placement::default();
     for (group, objects) in Group::ALL.into_iter().zip(all_members(zones)) {
         let rules = (layout, camera, scroll, None);
-        lay(group, &objects, &zones.stack, rules, &mut placement);
+        lay(
+            group,
+            &objects,
+            &zones.stack,
+            (rules, zones.handling.as_ref()),
+            &mut placement,
+        );
     }
     placement
 }
@@ -128,6 +134,14 @@ pub(crate) fn place_reusing(
         let same = objects.len() == was.len()
             && objects.iter().zip(&was).all(|(a, b)| a == b)
             && (group != Group::Stack || zones.stack == known_zones.stack);
+        // A group the cards being handled are lifted from is placed again when the cards
+        // handled changed, though its objects did not.
+        let lifted_from = |handled: Option<&lifted::Handled>| {
+            handled.and_then(|handled| lifted::group_of(handled.handling)) == Some(group)
+        };
+        let (handled, known_handled) = (zones.handling.as_ref(), known_zones.handling.as_ref());
+        let same = same
+            && (handled == known_handled || !(lifted_from(handled) || lifted_from(known_handled)));
         if same {
             for object in objects {
                 if let Some(rest) = known.get(object.slot) {
@@ -143,7 +157,7 @@ pub(crate) fn place_reusing(
                 group,
                 &objects,
                 &zones.stack,
-                (layout, camera, scroll, None),
+                ((layout, camera, scroll, None), zones.handling.as_ref()),
                 &mut placement,
             );
         }
@@ -164,7 +178,13 @@ pub(crate) fn place_group(
     let objects = members(zones, group);
     placed.clear();
     placed.extend(objects.iter().map(|object| object.slot));
-    lay(group, &objects, &zones.stack, rules, placement);
+    lay(
+        group,
+        &objects,
+        &zones.stack,
+        (rules, zones.handling.as_ref()),
+        placement,
+    );
 }
 
 /// What placement follows besides the objects: the layout, the camera, the rows' scroll offsets
@@ -337,6 +357,8 @@ pub(crate) struct Zones<'a> {
     stack: Vec<OnStack>,
     /// Each side's library and graveyard, bottom first: the viewer's and then the opponent's.
     piles: [[&'a [ObjectId]; 2]; 2],
+    /// The cards the opponent is handling, which rest lifted off their pile (`lifted`).
+    pub(crate) handling: Option<lifted::Handled>,
 }
 
 impl<'a> Zones<'a> {
@@ -349,13 +371,18 @@ impl<'a> Zones<'a> {
             .map(|object| usize::from(object.slot.0) + 1)
             .max()
             .unwrap_or(0);
-        Self {
+        let zones = Self {
             in_view_order: Some(&view.objects),
             slots: by_slot(end, view.objects.iter()),
             battlefield: &view.battlefield,
             stack: on_stack(view.stack.iter().map(|item| (item, None)), abilities),
             piles: [player(&view.players.you), player(&view.players.opponent)],
-        }
+            handling: None,
+        };
+        let handled = view
+            .handling
+            .map(|handling| lifted::Handled::of(&zones, handling));
+        zones.handled(handled)
     }
 
     /// The zones of the table a script plays over. It keeps its objects by slot, which is the
@@ -372,6 +399,16 @@ impl<'a> Zones<'a> {
             battlefield: &table.battlefield,
             stack: on_stack(table.stack.iter().map(|entry| (&entry.item, entry.id)), &[]),
             piles: [piles(&table.you), piles(&table.opponent)],
+            handling: None,
+        }
+    }
+
+    /// The same zones, with the cards `handled` names being handled. The table a script plays
+    /// over does not keep which cards are handled, so the script's player keeps it.
+    pub(crate) fn handled(self, handled: Option<lifted::Handled>) -> Self {
+        Self {
+            handling: handled,
+            ..self
         }
     }
 
@@ -418,7 +455,7 @@ fn by_slot<'a>(
 }
 
 /// The objects of `group`, in the order it lays them out from.
-fn members<'a>(zones: &Zones<'a>, group: Group) -> Vec<&'a ObjectView> {
+pub(crate) fn members<'a>(zones: &Zones<'a>, group: Group) -> Vec<&'a ObjectView> {
     match group {
         Group::Pile {
             side,
@@ -476,13 +513,13 @@ fn all_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
     all
 }
 
-/// Places `objects`, the members of `group`, into `placement`. The stack's group places every
-/// item of `stack`.
+/// Places `objects`, the members of `group`, into `placement`, lifting the cards `handled`
+/// names from it. The stack's group places every item of `stack`.
 fn lay(
     group: Group,
     objects: &[&ObjectView],
     stack: &[OnStack],
-    rules: Rules,
+    (rules, handled): (Rules, Option<&lifted::Handled>),
     placement: &mut Placement,
 ) {
     let (layout, camera, scroll, ids) = rules;
@@ -515,6 +552,7 @@ fn lay(
         }
         Group::Stack => place_stack(placement, objects, stack, layout),
     }
+    lifted::lay(handled, group, objects, (layout, camera), placement);
 }
 
 /// Whose side of the table an object is on: a permanent's controller's, and otherwise the

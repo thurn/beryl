@@ -7,7 +7,9 @@
 //! so a pose's scale of 1 is a card's real size.
 
 mod camera;
+pub(crate) mod lifted;
 mod place;
+mod revealed;
 mod rows;
 mod scene;
 mod stack;

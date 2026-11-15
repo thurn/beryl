@@ -667,7 +667,7 @@ pub struct Segment {
     pub from: Pose,
     pub to: Pose,
     pub arc: f32,          // how far the path rises above the straight line
-    pub shape: Shape,      // the path: `Shape::Line`, `Shape::Fading`, or a verb's own
+    pub shape: Shape,      // the path: `Line`, `Fading`, `TurnedOver` (flip) or `Grown` (showcase)
 }
 
 impl Segment {
@@ -1058,6 +1058,19 @@ flight start exactly where the card was.
   positions are given relative to the camera, not the table, so they are the
   same size and in the same place at any window shape. They are still 3D
   objects: they tilt, they are lit and they cast shadows on the table below.
+- **Cards the opponent looks at lie beside their pile.** While a view's
+  `handling` names a look, the cards it holds up are placed apart from their
+  pile: a library's top cards lie face down on the table beside it, at its size
+  and raised off it, as Arena's do; the viewer's hand, which the opponent looks
+  at, is held up in the middle of the screen. Which cards those are is fixed as
+  the look begins. A script that changes the look with no `lift` step takes the
+  look of the view it leads to.
+- **A revealed card has a second card element.** A card held up to be read
+  (`showcase`) lies where it was, and its face joins the Revealed Cards pile at
+  the top left of the screen, placed relative to the camera. The face's element
+  id is the card's slot plus `REVEALED_FACE` (2^21), which the "no duplicates"
+  check counts apart from cards. The pile keeps its faces until a script with a
+  reset, or until another cause reveals cards.
 - **Marks are separate quads.** What a card's own record says (tapped, a power
   and toughness plaque, counters, summoning sickness) and what a prompt marks on
   it are drawn as a few quads placed on the card's face, so they change without

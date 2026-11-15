@@ -22,6 +22,7 @@
 mod affect;
 mod compile;
 mod counts;
+pub(crate) use compile::nanoseconds;
 pub mod record;
 pub(crate) mod step;
 
@@ -29,7 +30,7 @@ use std::collections::VecDeque;
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::PlayerView;
-use beryl_protocol::script::{self, StepTiming, Subject, Table as Played, Verb};
+use beryl_protocol::script::{self, Act, StepTiming, Subject, Table as Played, Verb};
 use glam::Vec2;
 
 use self::compile::{Compiled, bit, compile};
@@ -454,6 +455,14 @@ impl Show {
     pub fn push(&mut self, update: Box<GameUpdate>, timings: Vec<StepTiming>) {
         let number = self.given;
         self.given += 1;
+        // The faces the script holds up to be read, for the Revealed Cards pile to draw once
+        // their steps play.
+        let scripted = update.view.script.iter().flat_map(|script| &script.beats);
+        for step in scripted.flatten() {
+            if let Act::Showcase { object } = &step.act {
+                self.table.reveal(object);
+            }
+        }
         let from = self.played.take();
         let (compiled, played) =
             self.compile(number, self.before_next(), from.as_ref(), &update, &timings);

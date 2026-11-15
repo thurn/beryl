@@ -12,10 +12,15 @@ pub use draw::{Draw, Material, Mesh, Sprite, TextureArray, sprites};
 
 use crate::input::Rect;
 
-/// A card's element id is its object's slot in the view. A flat-layer element's is given when
-/// it first enters the tree, and kept while it stays.
+/// A card's element id is its object's slot in the view, and the face of that card in the
+/// Revealed Cards pile's is `REVEALED_FACE` more. A flat-layer element's is given when it first
+/// enters the tree, and kept while it stays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ElementId(pub u32);
+
+/// What a card's element id is raised by for its face in the Revealed Cards pile: the second
+/// element of a card held up to be read, beside the card itself.
+pub const REVEALED_FACE: u32 = 1 << 21;
 
 /// A range of `Frame::names`, so that a resolved element owns no string.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

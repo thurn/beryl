@@ -48,9 +48,12 @@ fn every_verb_has_a_play_function_and_says_whether_it_is_built() {
             Verb::Appear,
             Verb::Vanish,
             Verb::Emerge,
+            Verb::Flip,
             Verb::Strike,
             Verb::Count,
-            Verb::Set
+            Verb::Set,
+            Verb::Showcase,
+            Verb::Lift
         ]
     );
 }

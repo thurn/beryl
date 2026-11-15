@@ -10,7 +10,7 @@ use super::fault::{Context, Fault, Layout, Rule, Subject};
 use super::hit::{Overlaps, bounds, contains, has_free_rect, hit, intersection, is_within};
 use super::tree::locator_of;
 use crate::data::audit;
-use crate::frame::{Frame, Place, Role, StateBits};
+use crate::frame::{Frame, Place, REVEALED_FACE, Role, StateBits};
 use crate::input::{Rect, Size};
 
 /// Every check that needs one frame, in the doc's order.
@@ -157,17 +157,33 @@ pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults
 }
 
+/// The kinds of element whose ids `duplicates` counts apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Kind {
+    Layer,
+    Card,
+    /// A card's face in the Revealed Cards pile.
+    Revealed,
+}
+
 /// No duplicates: no two elements share an id, so no game object has two cards, and no two
 /// sibling elements of the flat layer share a role and a name. A card's id is its object's
 /// slot and a flat-layer element's is given by the layer, so the two kinds are counted apart.
+/// A card id at or above `REVEALED_FACE` is the face of the card in slot `id - REVEALED_FACE`
+/// in the Revealed Cards pile, which a card held up to be read has beside itself: it is no
+/// second card of that object, and is counted apart from the cards.
 #[must_use]
 pub fn duplicates(frame: &Frame, context: &Context) -> Vec<Fault> {
     let mut faults = Vec::new();
-    let mut ids: BTreeMap<(bool, u32), u32> = BTreeMap::new();
+    let mut ids: BTreeMap<(Kind, u32), u32> = BTreeMap::new();
     let mut siblings: BTreeMap<(u32, &str, &str), u32> = BTreeMap::new();
     for (index, element) in frame.resolved.iter().enumerate() {
         let index = index as u32;
-        let key = (element.role == Role::Card, element.id.0);
+        let key = match element.role {
+            Role::Card if element.id.0 >= REVEALED_FACE => (Kind::Revealed, element.id.0),
+            Role::Card => (Kind::Card, element.id.0),
+            _ => (Kind::Layer, element.id.0),
+        };
         if let Some(&first) = ids.get(&key) {
             let (a, b) = (subject(frame, first), subject(frame, index));
             faults.push(fault(

@@ -10,7 +10,7 @@ pub mod arrows;
 pub mod marks;
 pub mod streaks;
 
-use beryl_protocol::protocol::CardHandling;
+use beryl_protocol::protocol::{CardHandling, ObjectId};
 use beryl_protocol::script::{self, Arrow, Mark, Stream, Subject};
 
 use crate::pose::Curve;
@@ -38,6 +38,13 @@ pub enum Span {
     Mark(MarkSpan),
     /// Cards the opponent is handling, lifted from their pile.
     Lift(CardHandling),
+    /// The face of the card in `slot`, held up for both players to read in the Revealed Cards
+    /// pile, as `cause` revealed it (`showcase`). The table keeps the record of the face shown
+    /// (`Table::reveal`), since the card itself may since have gone where its name is hidden.
+    Revealed {
+        slot: ObjectId,
+        cause: Option<Subject>,
+    },
 }
 
 /// A span begins or ends, fading over `over` on the script's clock. `step` is the number of the
@@ -90,8 +97,27 @@ impl Lit {
         }
     }
 
-    /// `span` begins to appear, standing whole once `over` is done.
+    /// `span` begins to appear, standing whole once `over` is done. A revealed face joins the
+    /// Revealed Cards pile on top: the faces another cause revealed, and the face its own card
+    /// showed there before, leave the pile as it begins, as the web interface's `heldUp`
+    /// (`ui/src/stage/table.ts`) has it.
     pub fn begin(&mut self, span: Span, over: Interval) {
+        if let Span::Revealed { slot, cause } = span {
+            for open in &mut self.open {
+                if let Span::Revealed {
+                    slot: shown,
+                    cause: by,
+                } = open.span
+                    && open.ends.is_none()
+                    && (shown == slot || by != cause)
+                {
+                    open.ends = Some(Interval {
+                        from: over.from,
+                        to: over.from,
+                    });
+                }
+            }
+        }
         self.open.push(Open {
             span,
             begins: over,

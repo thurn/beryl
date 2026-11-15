@@ -69,6 +69,15 @@ pub enum Shape {
     /// 1 - (eased progress)², as the web interface's `dissolve` (`ui/src/stage/tracks.ts`);
     /// once the segment has ended it is at `to`, with no path between the two.
     Fading,
+    /// A card turning over where it lies (`flip`): it rises `verbs.flip.rise` millimetres and
+    /// grows to `verbs.flip.scale` times its size by `verbs.flip.grown` of its time, turns over
+    /// while it is up, crossing edge-on at the middle of its time, and from `verbs.flip.settle`
+    /// of its time settles back to where it rests. Its time is shared out evenly: the step's
+    /// curve does not bend it.
+    TurnedOver,
+    /// A face coming to be seen where it rests (`showcase`): it grows from `verbs.showcase.size`
+    /// of its size and is opaque once `verbs.showcase.seen` of its motion is done.
+    Grown,
 }
 
 /// One stretch of animation between two poses. Code outside this file makes one with

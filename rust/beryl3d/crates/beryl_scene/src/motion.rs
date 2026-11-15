@@ -7,6 +7,7 @@ use std::f32::consts::PI;
 use beryl_protocol::script::Curve as Named;
 use glam::Vec3;
 
+use crate::data::space::verbs;
 use crate::pose::{Curve, Pose, Segment, Shape};
 use crate::verbs::Interval;
 
@@ -130,22 +131,69 @@ impl Segment {
             reason = "the fraction is between 0 and 1"
         )]
         let elapsed = ((t - self.start) as f64 / self.duration as f64) as f32;
-        let u = self.curve.ease(elapsed);
-        let (from, to) = (&self.from, &self.to);
         match self.shape {
-            Shape::Line => Pose {
-                position: from.position.lerp(to.position, u)
-                    + Vec3::Z * self.arc * (PI * elapsed).sin(),
-                rotation: from.rotation.slerp(to.rotation, u),
-                scale: from.scale + (to.scale - from.scale) * u,
-                opacity: from.opacity + (to.opacity - from.opacity) * u,
-                turn: from.turn + (to.turn - from.turn) * u,
-            },
-            Shape::Fading => Pose {
-                opacity: from.opacity * (1.0 - u * u),
-                ..*from
-            },
+            Shape::Line => {
+                let u = self.curve.ease(elapsed);
+                let pose = between(&self.from, &self.to, u);
+                Pose {
+                    position: pose.position + Vec3::Z * self.arc * (PI * elapsed).sin(),
+                    ..pose
+                }
+            }
+            Shape::TurnedOver => turned_over(&self.from, &self.to, elapsed),
+            Shape::Grown => {
+                let u = self.curve.ease(elapsed);
+                let pose = between(&self.from, &self.to, u);
+                let size = verbs::showcase::SIZE;
+                Pose {
+                    scale: pose.scale * (size + (1.0 - size) * u),
+                    opacity: pose.opacity * (u / verbs::showcase::SEEN).min(1.0),
+                    ..pose
+                }
+            }
+            Shape::Fading => {
+                let u = self.curve.ease(elapsed);
+                Pose {
+                    opacity: self.from.opacity * (1.0 - u * u),
+                    ..self.from
+                }
+            }
         }
+    }
+}
+
+/// The pose `u` of the way from `from` to `to`, each part of it alike.
+fn between(from: &Pose, to: &Pose, u: f32) -> Pose {
+    Pose {
+        position: from.position.lerp(to.position, u),
+        rotation: from.rotation.slerp(to.rotation, u),
+        scale: from.scale + (to.scale - from.scale) * u,
+        opacity: from.opacity + (to.opacity - from.opacity) * u,
+        turn: from.turn + (to.turn - from.turn) * u,
+    }
+}
+
+/// A card turning over where it lies, `elapsed` of the way through (`Shape::TurnedOver`), as
+/// the web interface's `turnedOver` (`ui/src/stage/tracks.ts`) has it: it rises and grows
+/// quickly and then slowing into its largest by `grown`, stays up, and from `settle` comes back
+/// down, slowing onto the table. It turns over while it is up, evenly from `grown` to `settle`,
+/// so that it is edge-on, and shows its new side, at the middle of its time.
+fn turned_over(from: &Pose, to: &Pose, elapsed: f32) -> Pose {
+    let (grown, settle) = (verbs::flip::GROWN, verbs::flip::SETTLE);
+    let up = if elapsed < grown {
+        Curve::EASE_OUT.ease(elapsed / grown)
+    } else if elapsed < settle {
+        1.0
+    } else {
+        1.0 - Curve::EASE_IN_OUT.ease((elapsed - settle) / (1.0 - settle))
+    };
+    let pose = between(from, to, elapsed);
+    let turned = ((elapsed - grown) / (settle - grown)).clamp(0.0, 1.0);
+    Pose {
+        position: pose.position + Vec3::Z * verbs::flip::RISE * up,
+        scale: pose.scale * (1.0 + (verbs::flip::SCALE - 1.0) * up),
+        turn: from.turn + (to.turn - from.turn) * turned,
+        ..pose
     }
 }
 

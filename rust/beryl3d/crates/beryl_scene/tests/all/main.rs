@@ -21,4 +21,5 @@ mod table;
 mod tokens;
 mod verbs_count;
 mod verbs_leaving;
+mod verbs_shown;
 mod verbs_strike;

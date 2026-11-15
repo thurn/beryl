@@ -3,7 +3,7 @@
 
 use std::cell::Cell;
 
-use beryl_protocol::protocol::{ObjectId, PlayerView, Side, StackItem};
+use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, Side, StackItem};
 use beryl_protocol::script::Subject;
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
@@ -131,6 +131,9 @@ pub struct Table {
     scroll: Scroll,
     objects: Objects,
     placed: Placed,
+    /// The record of the face each card last showed when it was held up to be read, by slot,
+    /// which the Revealed Cards pile draws (`Span::Revealed`).
+    revealed: Vec<Option<ObjectView>>,
 }
 
 /// How many objects a table has placed since its count was last taken, for `Work::placed`.
@@ -167,6 +170,7 @@ impl Table {
             scroll: Scroll::default(),
             objects: Objects::default(),
             placed: Placed::default(),
+            revealed: Vec::new(),
         }
     }
 
@@ -191,6 +195,21 @@ impl Table {
         let hand = &self.layout.hand;
         self.camera
             .screen_pose(anchor.life, hand.depth, Quat::IDENTITY, hand.height)
+    }
+
+    /// Keeps `object`, the record of a card held up to be read, for the Revealed Cards pile to
+    /// draw its face from once the step that holds it up plays.
+    pub fn reveal(&mut self, object: &ObjectView) {
+        let slot = usize::from(object.slot.0);
+        if self.revealed.len() <= slot {
+            self.revealed.resize(slot + 1, None);
+        }
+        self.revealed[slot] = Some(object.clone());
+    }
+
+    /// The record of the face the card in `slot` last showed when it was held up to be read.
+    pub(crate) fn revealed(&self, slot: ObjectId) -> Option<&ObjectView> {
+        self.revealed.get(usize::from(slot.0))?.as_ref()
     }
 
     /// Fits the camera to a window of a new shape and recomputes every resting place.
@@ -411,6 +430,7 @@ impl Table {
             );
         }
         self.write_abilities(view, motion, faces, (back, dress), builder);
+        self.write_revealed(faces, (back, dress), builder);
         let cloth = Affine3A::from_scale_rotation_translation(
             Vec3::new(CLOTH / CARD_WIDTH, CLOTH / CARD_HEIGHT, 1.0),
             glam::Quat::IDENTITY,
@@ -472,13 +492,7 @@ impl Table {
     ) {
         let shown = &view.objects[object.view_index as usize];
         let name = shown.name.as_deref().unwrap_or("");
-        // A token's printing tells apart tokens that share a name, so its face is found by
-        // that first.
-        let face = shown
-            .token_printing
-            .as_deref()
-            .and_then(|printing| faces.board_layer(printing))
-            .or_else(|| faces.board_layer(name));
+        let face = face_of(faces, shown);
         let mut state = 0;
         if object.tapped {
             state |= StateBits::TAPPED;
@@ -519,7 +533,7 @@ impl Table {
 
     /// Writes the resolved element and the draw record of a card named `name` with this `id`
     /// and `role`, resting at `place` and drawn as `look` says, with its back from layer `back`.
-    fn write_look(
+    pub(super) fn write_look(
         &self,
         name: &str,
         (id, role): (ElementId, Role),
@@ -687,4 +701,14 @@ impl Table {
                 .to_screen(transform.transform_point3(Vec3::new(x, y, 0.0)))
         })
     }
+}
+
+/// The board-size layer of the face of the card `shown` records, if it has one. A token's
+/// printing tells apart tokens that share a name, so its face is found by that first.
+pub(super) fn face_of(faces: &Faces, shown: &ObjectView) -> Option<u16> {
+    shown
+        .token_printing
+        .as_deref()
+        .and_then(|printing| faces.board_layer(printing))
+        .or_else(|| faces.board_layer(shown.name.as_deref().unwrap_or("")))
 }

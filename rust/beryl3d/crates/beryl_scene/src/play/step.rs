@@ -3,7 +3,7 @@
 //! (docs/beryl-3d.md, "Verbs").
 
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, StackItem, ZoneName};
-use beryl_protocol::script::{Act, Room, Step, StepTiming, Subject, Table as Played, mover_of};
+use beryl_protocol::script::{Act, Step, StepTiming, Subject, Table as Played, mover_of};
 
 use super::compile::{nanoseconds, subject_of};
 use super::record::{Cause, SegmentRecord};
@@ -13,12 +13,16 @@ use crate::light::{SpanChange, StreakRun};
 use crate::motion::Track;
 use crate::notice::NoticeRun;
 use crate::pose::{Curve, Pose, Segment};
+use crate::table::lifted::Look;
 use crate::table::{Group, NameIds, Placement, Rest, Table, Zones};
 use crate::verbs::{self, Interval};
 
 mod abilities;
 mod counts;
 mod places;
+mod room;
+
+use room::room_of;
 
 pub use places::Places;
 
@@ -171,21 +175,25 @@ pub(crate) struct Motion<'a> {
     /// When the latest slide of what closed up after a step's subject left ends, in
     /// milliseconds on the script's clock, until `take_closed` reads it.
     closed: Option<f64>,
+    /// The cards the opponent is handling as the steps so far leave the table, which the table
+    /// played over does not keep.
+    look: Look,
 }
 
 impl<'a> Motion<'a> {
-    /// The table `played`, which shows `before`, ready for a script's steps to play over it.
+    /// The table `played`, which shows `before`, ready for the steps of the script that leads
+    /// to `after`, timed by `timings`, to play over it.
     pub(crate) fn new(
         before: &'a PlayerView,
-        played: Played,
-        table: &'a Table,
+        played: &Played,
+        (table, after, timings): (&'a Table, &PlayerView, &[StepTiming]),
         records: bool,
         shown: bool,
     ) -> Self {
         let rests = if shown {
             table.rests()
         } else {
-            table.placement(before, &numbers_of(&played))
+            table.placement(before, &numbers_of(played))
         };
         // Each object's group, read from where it rests.
         let mut members = vec![Vec::new(); Group::ALL.len()];
@@ -203,7 +211,7 @@ impl<'a> Motion<'a> {
         Self {
             table,
             names: NameIds::of(&before.objects),
-            played,
+            played: played.clone(),
             rests,
             members,
             groups,
@@ -222,6 +230,10 @@ impl<'a> Motion<'a> {
             records,
             written: Written::default(),
             closed: None,
+            look: Look::opening(
+                (before, after),
+                timings.iter().any(|timing| timing.duration > 0.0),
+            ),
         }
     }
 
@@ -230,7 +242,7 @@ impl<'a> Motion<'a> {
     /// whose abilities an act may add or take away without naming an object. Their resting
     /// places go to `fresh` and their slots to `next`; `rests` is left as it was. Returns which
     /// groups it placed, or none if the table could not take the act.
-    fn place(&mut self, act: &Act) -> Option<[bool; Group::ALL.len()]> {
+    fn place(&mut self, act: &Act, timed: bool) -> Option<[bool; Group::ALL.len()]> {
         let touched = &mut self.touched;
         touched.clear();
         if self
@@ -242,9 +254,10 @@ impl<'a> Motion<'a> {
             self.unplaced += 1;
             return None;
         }
-        let zones = Zones::of_table(&self.played);
         let mut dirty = [self.whole; Group::ALL.len()];
         dirty[Group::Stack.index()] = true;
+        self.look.follow((act, timed), &self.played, &mut dirty);
+        let zones = Zones::of_table(&self.played).handled(self.look.handled());
         if self.first {
             for group in Group::ALL
                 .into_iter()
@@ -282,7 +295,7 @@ impl<'a> Motion<'a> {
         if self.whole {
             return self.table.placement(view, abilities);
         }
-        let played = Zones::of_table(&self.played);
+        let played = Zones::of_table(&self.played).handled(self.look.handled());
         self.table
             .placement_reusing(&Zones::of_view(view, abilities), (&played, &self.rests))
     }
@@ -384,7 +397,9 @@ impl<'a> Motion<'a> {
             assert!(
                 same(
                     &self.rests,
-                    &self.table.placement_of(&Zones::of_table(&self.played))
+                    &self
+                        .table
+                        .placement_of(&Zones::of_table(&self.played).handled(self.look.handled()))
                 ),
                 "placing only the groups a step changed gives what placing every group does"
             );
@@ -409,19 +424,44 @@ impl<'a> Motion<'a> {
         };
         // A step the table cannot take changes nothing; the table takes the view as it stands
         // when the script ends, whatever the steps did.
-        let Some(dirty) = self.place(&step.act) else {
-            return;
-        };
         let own = Interval {
             from: nanoseconds(laid.from),
             to: nanoseconds(laid.to),
         };
         let (room, regroup) = room_of(timing, laid, own);
+        let Some(dirty) = self.place(&step.act, room.duration() > 0 || own.duration() > 0) else {
+            return;
+        };
         let subject = subject_of(step);
         self.mark_affected(&dirty, subject);
         let affected = std::mem::take(&mut self.affected);
-        let mut played = false;
+        // A step that moves no card of its own (a player's, an ability's, a span's) has its verb
+        // play it first. The cards a look lifts or puts back are the `lift` verb's to move, so
+        // the step leaves them to it.
+        let mut played = subject.is_none();
+        if played {
+            let poses = match mover {
+                Some(Subject::Ability { id }) => self.ability_poses(id, own.from),
+                _ => (None, None),
+            };
+            self.play(
+                number,
+                (beat, index),
+                timing,
+                own,
+                (mover, was.as_ref()),
+                poses,
+                &dirty,
+            );
+        }
         for &slot in &affected {
+            if self
+                .look
+                .lifting()
+                .contains(&ObjectId(u16::try_from(slot).unwrap_or(u16::MAX)))
+            {
+                continue;
+            }
             let rested = self.rests.rests.get(slot).copied().flatten();
             let now = self.now(slot, &dirty);
             if Some(slot) == subject {
@@ -455,20 +495,14 @@ impl<'a> Motion<'a> {
                 self.push(slot, segment, cause);
             }
         }
-        // A step that moves no card (a player's, an ability's, a span's) still has its verb
-        // play it.
         if !played {
-            let poses = match mover {
-                Some(Subject::Ability { id }) => self.ability_poses(id, own.from),
-                _ => (None, None),
-            };
             self.play(
                 number,
                 (beat, index),
                 timing,
                 own,
                 (mover, was.as_ref()),
-                poses,
+                (None, None),
                 &dirty,
             );
         }
@@ -718,42 +752,6 @@ impl<'a> Motion<'a> {
             });
         }
     }
-}
-
-/// When what the step makes room among goes to its new place, given its `timing`, when it was
-/// `laid` out and its `own` interval: what makes room for it does so before it begins, where its
-/// act went ahead of it; after it, where it says how long the room it left takes to close; and
-/// otherwise as its `room` says, over the step or from a share of it. And, where its `room` says
-/// so, when the cards that stay in a hand a card joins or leaves go to their new places: in the
-/// time it gives, from when its act is applied, whatever else the step says, as the web stage's
-/// do (`carried` in `ui/src/stage/tracks.ts`).
-fn room_of(timing: &StepTiming, laid: &Laid, own: Interval) -> (Interval, Option<Interval>) {
-    let room = match (laid.opens, timing.closes, timing.room) {
-        (Some(opens), _, _) => Interval {
-            from: nanoseconds(opens.at),
-            to: nanoseconds(opens.by),
-        },
-        (None, Some(closes), _) => Interval {
-            from: own.to,
-            to: nanoseconds(laid.to + closes),
-        },
-        (None, None, Room::From { share }) => Interval {
-            from: nanoseconds(laid.from + share * (laid.to - laid.from)),
-            to: own.to,
-        },
-        (None, None, Room::Step | Room::For { .. }) => own,
-    };
-    let regroup = match timing.room {
-        Room::For { ms } => {
-            let applied = laid.opens.map_or(laid.from, |opens| opens.at);
-            Some(Interval {
-                from: nanoseconds(applied),
-                to: nanoseconds(applied + ms),
-            })
-        }
-        Room::Step | Room::From { .. } => None,
-    };
-    (room, regroup)
 }
 
 /// Adds `segment` to the track of the object in `slot`, growing `tracks` to hold it.

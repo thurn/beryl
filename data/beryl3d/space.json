@@ -21,6 +21,47 @@
         0,
         0
       ]
+    },
+    "flip": {
+      "rise": 20,
+      "scale": 1.2,
+      "grown": 0.3,
+      "settle": 0.7
+    },
+    "showcase": {
+      "size": 0.6,
+      "seen": 0.5
+    },
+    "lift": {
+      "library": {
+        "beside": [
+          100,
+          0
+        ],
+        "step": 0.27,
+        "columns": 5,
+        "rise": 12,
+        "packet": [
+          2,
+          -3
+        ]
+      },
+      "hand": {
+        "at": [
+          0.0,
+          -0.438
+        ],
+        "height": 0.161,
+        "step": 0.72,
+        "columns": 7,
+        "lean_degrees": 2,
+        "depth": 280,
+        "packet": [
+          0.002,
+          -0.003
+        ],
+        "drop": 0.0067
+      }
     }
   },
   "pointer": {},
@@ -46,7 +87,9 @@
     "frame_rate.misses",
     "frame_rate.up_frames",
     "frame_rate.up_frames_most",
-    "frame_rate.lowest_hz"
+    "frame_rate.lowest_hz",
+    "verbs.lift.library.columns",
+    "verbs.lift.hand.columns"
   ],
   "card": {
     "width": 63,
@@ -132,5 +175,15 @@
         "fan": 0.04
       }
     }
+  },
+  "revealed": {
+    "at": [
+      -0.9125,
+      0.595
+    ],
+    "height": 0.143,
+    "step": 0.02,
+    "reach": 0.08,
+    "depth": 290
   }
 }

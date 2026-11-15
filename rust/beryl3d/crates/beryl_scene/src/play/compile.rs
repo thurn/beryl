@@ -175,7 +175,9 @@ pub(crate) fn compile<'a>(
     }
     let mut motion = before
         .filter(|_| script.reset.is_none())
-        .map(|(before, played)| Motion::new(before, played.clone(), table, records, shown));
+        .map(|(before, played)| {
+            Motion::new(before, played, (table, after, timings), records, shown)
+        });
     let mut steps = Vec::new();
     let mut number = 0;
     let effects = &mut compiled.effects;
@@ -363,7 +365,7 @@ pub(crate) fn bit(verb: Verb) -> u32 {
 }
 
 /// A stage time in milliseconds, as `beat` gives it, in nanoseconds.
-pub(super) fn nanoseconds(milliseconds: f64) -> u64 {
+pub(crate) fn nanoseconds(milliseconds: f64) -> u64 {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,

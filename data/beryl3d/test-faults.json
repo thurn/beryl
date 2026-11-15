@@ -31,18 +31,6 @@
     "b3d:aangs-iceberg/waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top-pass/you/2560x1080": {
       "step-shown": 1
     },
-    "b3d:aangs-iceberg/waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top/opponent/1440x900": {
-      "no-jumps": 2
-    },
-    "b3d:aangs-iceberg/waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top/opponent/1600x900": {
-      "no-jumps": 2
-    },
-    "b3d:aangs-iceberg/waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top/opponent/1920x1080": {
-      "no-jumps": 2
-    },
-    "b3d:aangs-iceberg/waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top/opponent/2560x1080": {
-      "no-jumps": 2
-    },
     "b3d:aangs-iceberg/waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top/you/1440x900": {
       "no-jumps": 2
     },
@@ -359,22 +347,22 @@
       "step-shown": 1
     },
     "b3d:combat-attackers/opponent/1440x900": {
-      "no-jumps": 215,
+      "no-jumps": 217,
       "rest-placement": 1,
       "step-shown": 7
     },
     "b3d:combat-attackers/opponent/1600x900": {
-      "no-jumps": 215,
+      "no-jumps": 217,
       "rest-placement": 1,
       "step-shown": 9
     },
     "b3d:combat-attackers/opponent/1920x1080": {
-      "no-jumps": 215,
+      "no-jumps": 217,
       "rest-placement": 1,
       "step-shown": 9
     },
     "b3d:combat-attackers/opponent/2560x1080": {
-      "no-jumps": 215,
+      "no-jumps": 217,
       "rest-placement": 4,
       "step-shown": 21
     },
@@ -1012,16 +1000,16 @@
       "step-shown": 1
     },
     "b3d:jace-the-mind-sculptor/bounced/opponent/1440x900": {
-      "no-jumps": 12
+      "no-jumps": 13
     },
     "b3d:jace-the-mind-sculptor/bounced/opponent/1600x900": {
-      "no-jumps": 12
+      "no-jumps": 13
     },
     "b3d:jace-the-mind-sculptor/bounced/opponent/1920x1080": {
-      "no-jumps": 12
+      "no-jumps": 13
     },
     "b3d:jace-the-mind-sculptor/bounced/opponent/2560x1080": {
-      "no-jumps": 12
+      "no-jumps": 13
     },
     "b3d:jace-vryns-prodigy/1-shrinks-a-creature-until-his-controllers-next-turn-pass/opponent/2560x1080": {
       "step-shown": 1
@@ -1237,13 +1225,13 @@
       "step-shown": 1
     },
     "b3d:mindslaver/the-controller-chooses-the-controlled-players-cleanup-discard/opponent/1440x900": {
-      "rest-placement": 5
+      "rest-placement": 8
     },
     "b3d:mindslaver/the-controller-chooses-the-controlled-players-cleanup-discard/opponent/1600x900": {
-      "rest-placement": 6
+      "rest-placement": 8
     },
     "b3d:mindslaver/the-controller-chooses-the-controlled-players-cleanup-discard/opponent/1920x1080": {
-      "rest-placement": 6
+      "rest-placement": 8
     },
     "b3d:mindslaver/the-controller-chooses-the-controlled-players-cleanup-discard/opponent/2560x1080": {
       "rest-placement": 8,
@@ -1634,18 +1622,6 @@
     "b3d:shape-order/opponent/2560x1080": {
       "step-shown": 3
     },
-    "b3d:shape-pay-theirs/opponent/1440x900": {
-      "no-jumps": 2
-    },
-    "b3d:shape-pay-theirs/opponent/1600x900": {
-      "no-jumps": 2
-    },
-    "b3d:shape-pay-theirs/opponent/1920x1080": {
-      "no-jumps": 2
-    },
-    "b3d:shape-pay-theirs/opponent/2560x1080": {
-      "no-jumps": 2
-    },
     "b3d:shape-pay-theirs/you/1440x900": {
       "no-jumps": 2
     },
@@ -1694,16 +1670,16 @@
       "step-shown": 1
     },
     "b3d:shape-split/opponent/1440x900": {
-      "no-jumps": 21
+      "no-jumps": 20
     },
     "b3d:shape-split/opponent/1600x900": {
-      "no-jumps": 21
+      "no-jumps": 20
     },
     "b3d:shape-split/opponent/1920x1080": {
-      "no-jumps": 21
+      "no-jumps": 20
     },
     "b3d:shape-split/opponent/2560x1080": {
-      "no-jumps": 21,
+      "no-jumps": 20,
       "step-shown": 5
     },
     "b3d:shape-split/you/1440x900": {
@@ -2154,16 +2130,16 @@
       "step-shown": 1
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom-0/opponent/1440x900": {
-      "no-jumps": 6
+      "no-jumps": 8
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom-0/opponent/1600x900": {
-      "no-jumps": 6
+      "no-jumps": 8
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom-0/opponent/1920x1080": {
-      "no-jumps": 6
+      "no-jumps": 8
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom-0/opponent/2560x1080": {
-      "no-jumps": 6,
+      "no-jumps": 8,
       "step-shown": 2
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom-0/you/1440x900": {
@@ -2179,28 +2155,28 @@
       "rest-placement": 1
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom-ask-3/opponent/1440x900": {
-      "no-jumps": 7
+      "no-jumps": 8
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom-ask-3/opponent/1600x900": {
-      "no-jumps": 7
+      "no-jumps": 8
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom-ask-3/opponent/1920x1080": {
-      "no-jumps": 7
+      "no-jumps": 8
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom-ask-3/opponent/2560x1080": {
-      "no-jumps": 7
+      "no-jumps": 8
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom/opponent/1440x900": {
-      "no-jumps": 6
+      "no-jumps": 8
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom/opponent/1600x900": {
-      "no-jumps": 6
+      "no-jumps": 8
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom/opponent/1920x1080": {
-      "no-jumps": 6
+      "no-jumps": 8
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom/opponent/2560x1080": {
-      "no-jumps": 6,
+      "no-jumps": 8,
       "step-shown": 2
     },
     "b3d:stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom/you/1440x900": {
@@ -3146,16 +3122,16 @@
       "step-shown": 1
     },
     "b3d:verbs-dig-theirs/opponent/1440x900": {
-      "no-jumps": 8
+      "no-jumps": 10
     },
     "b3d:verbs-dig-theirs/opponent/1600x900": {
-      "no-jumps": 8
+      "no-jumps": 10
     },
     "b3d:verbs-dig-theirs/opponent/1920x1080": {
-      "no-jumps": 8
+      "no-jumps": 10
     },
     "b3d:verbs-dig-theirs/opponent/2560x1080": {
-      "no-jumps": 8,
+      "no-jumps": 10,
       "step-shown": 2
     },
     "b3d:verbs-dig-theirs/you/1440x900": {
@@ -3172,16 +3148,16 @@
       "step-shown": 1
     },
     "b3d:verbs-dig/opponent/1440x900": {
-      "no-jumps": 8
+      "no-jumps": 10
     },
     "b3d:verbs-dig/opponent/1600x900": {
-      "no-jumps": 8
+      "no-jumps": 10
     },
     "b3d:verbs-dig/opponent/1920x1080": {
-      "no-jumps": 8
+      "no-jumps": 10
     },
     "b3d:verbs-dig/opponent/2560x1080": {
-      "no-jumps": 8,
+      "no-jumps": 10,
       "step-shown": 3
     },
     "b3d:verbs-dig/you/1440x900": {
