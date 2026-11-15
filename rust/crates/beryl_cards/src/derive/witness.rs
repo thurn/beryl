@@ -129,7 +129,7 @@ const CARD_TO_EXILE: Witness = Witness {
     words: "with another blue card in hand",
     mine: &[],
     theirs: &[],
-    hand: &[props::UNTARGETED_SPELL],
+    hand: &[props::UNTARGETED_SPELL.card],
     prelude: &[],
 };
 
