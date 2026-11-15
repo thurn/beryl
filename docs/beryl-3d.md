@@ -1256,6 +1256,29 @@ fn prompt_bar(prompt: &PromptView) -> Element {
   and the inspector lay out boxes with `taffy` and place real 3D cards in them,
   so a card looks and animates the same wherever it appears.
 
+### Floats
+
+A **float** is a small element placed at a point of the window instead of in a
+screen's layout: the turn banner, the pill above a player who is looking at
+cards, a life total and the number that floats off it, the count on a pile, and
+the count of cards scrolled off the end of a row. `Layer::float(id, element)`
+shows or removes one, and its ids are in `element::floats`.
+
+- **Each float is a taffy tree of its own**, laid out at its content's size and
+  matched against the element it had, as a screen is. It is outside the root's
+  flex flow, so a float never moves the prompt bar.
+- **Its look is not layout.** `Layer::set_float_look` sets a `FloatLook`: the
+  `point` in logical points, the `anchor` that says which point of the float's
+  box stands there (from (0, 0), its top left, to (1, 1)), its `opacity` and an
+  optional `tint` for its text. Setting a look lays nothing out and allocates
+  nothing, so the client may move or fade a float on every frame.
+- **Floats are drawn whether a prompt is open or not**, after the screen and in
+  order of their ids. The top element of a float is drawn on a panel, as a
+  screen's top element is. A float with a press takes presses at any time.
+
+Anchoring a float to an object on the table, transitions, grid layout and
+scrolling are milestone 3's.
+
 ### Sizes
 
 The flat layer is laid out in logical points, and the same code serves every

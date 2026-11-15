@@ -246,3 +246,47 @@ pub fn button(label: &str) -> Element {
     element.style.padding = [0.0, size::BUTTON_PADDING, 0.0, size::BUTTON_PADDING];
     element
 }
+
+/// Which float of the flat layer an element is: a small element placed at a point of the
+/// window rather than in a screen's layout (`Layer::float`). The ids every part of the client
+/// uses are in `floats`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FloatId(pub u16);
+
+/// The ids of the flat layer's floats. Where a float comes in pairs or more, the arrays are
+/// indexed by side first, the viewer's at 0 and the opponent's at 1.
+pub mod floats {
+    use super::FloatId;
+
+    /// The banner in the middle of the window that says whose turn begins.
+    pub const BANNER: FloatId = FloatId(0);
+    /// The pill above a player that says they are looking at cards.
+    pub const SCRY_PILL: [FloatId; 2] = [FloatId(1), FloatId(2)];
+    /// The coin shown when the game decides who plays first.
+    pub const COIN: FloatId = FloatId(3);
+    /// A player's life total.
+    pub const LIFE: [FloatId; 2] = [FloatId(4), FloatId(5)];
+    /// The number that floats off a life total when it changes.
+    pub const LIFE_CHANGE: [FloatId; 2] = [FloatId(6), FloatId(7)];
+    /// A player's mana pool.
+    pub const POOL: [FloatId; 2] = [FloatId(8), FloatId(9)];
+    /// The count on a pile, by side, then library, graveyard and exile.
+    pub const PILE_COUNT: [[FloatId; 3]; 2] = [
+        [FloatId(10), FloatId(11), FloatId(12)],
+        [FloatId(13), FloatId(14), FloatId(15)],
+    ];
+    /// The count of cards scrolled off one end of a battlefield row: by side, then by row in
+    /// `RowName`'s order (creatures, others, lands), then the left end and the right end.
+    pub const ROW_COUNT: [[[FloatId; 2]; 3]; 2] = [
+        [
+            [FloatId(16), FloatId(17)],
+            [FloatId(18), FloatId(19)],
+            [FloatId(20), FloatId(21)],
+        ],
+        [
+            [FloatId(22), FloatId(23)],
+            [FloatId(24), FloatId(25)],
+            [FloatId(26), FloatId(27)],
+        ],
+    ];
+}

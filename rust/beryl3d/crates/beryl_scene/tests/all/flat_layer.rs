@@ -11,15 +11,16 @@ use beryl_protocol::protocol::{
 };
 use beryl_protocol::script::Act;
 use beryl_scene::agent::checks::text_fits;
+use beryl_scene::agent::tree::{TreeOptions, tree};
 use beryl_scene::agent::{Context, Layout, Rule};
 use beryl_scene::command::{Reply, SessionCommand};
-use beryl_scene::element::{row, text};
+use beryl_scene::element::{Press, floats, row, text};
 use beryl_scene::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
 use beryl_scene::input::{
     AssetReady, Button, GlyphCell, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase,
     Size,
 };
-use beryl_scene::layout::Layer;
+use beryl_scene::layout::{FloatLook, Layer};
 use beryl_scene::table::Table;
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
 use beryl_scene::text::Text;
@@ -319,7 +320,7 @@ fn a_title_too_long_for_its_box_fails_text_fits() {
     ));
     let mut frame = Frame::with_capacity(16, 16, 1024);
     let mut builder = FrameBuilder::new(&mut frame);
-    layer.write(&mut builder, Table::default().camera());
+    layer.write(&mut builder, Table::default().camera(), true);
     let frame = builder.finish();
     let faults = text_fits(frame, &context());
     assert!(!faults.is_empty());
@@ -490,5 +491,167 @@ fn a_prompt_opens_only_once_its_view_has_played_out() {
     assert!(
         matches!(client.next_command(), Some(SessionCommand::Click(_))),
         "the open bar's Cancel queues a click"
+    );
+}
+
+/// The float every float test shows: a life total of 20.
+const LIFE: beryl_scene::element::FloatId = floats::LIFE[0];
+
+/// A look standing a float's centre at `point`.
+fn centred_at(point: Vec2) -> FloatLook {
+    FloatLook {
+        point,
+        anchor: Vec2::new(0.5, 0.5),
+        ..FloatLook::default()
+    }
+}
+
+/// `layer` written into a new frame, with the prompt bar drawn if `open`, and the layout work
+/// done since the last frame.
+fn write_layer(layer: &mut Layer, open: bool) -> Frame {
+    let mut frame = Frame::with_capacity(64, 256, 1024);
+    let mut builder = FrameBuilder::new(&mut frame);
+    let (layout_nodes, text_runs) = layer.take_work();
+    builder.layout_work(layout_nodes, text_runs);
+    layer.write(&mut builder, Table::default().camera(), open);
+    builder.finish().clone()
+}
+
+#[test]
+fn a_float_is_centred_on_its_point() {
+    let mut layer = Layer::new();
+    layer.float(LIFE, Some(text("20")));
+    layer.set_float_look(LIFE, centred_at(Vec2::new(100.0, 50.0)));
+    let frame = write_layer(&mut layer, false);
+    let life = find(&frame, Role::Text, "20");
+    let at = centre(&frame, life);
+    assert!(
+        at.distance(Vec2::new(100.0, 50.0)) < 0.01,
+        "centred at {at}"
+    );
+    assert_eq!(frame.resolved[life].place, Place::Layer);
+    // The tree printout, as `Page::tree` prints it, shows the float under the flat layer.
+    let tree = tree(&frame, &TreeOptions::default()).expect("the whole tree");
+    let (left, top, right, bottom) = edges(&frame, life);
+    let expected = format!(
+        "text \"20\" #{} {},{} {}x{}",
+        frame.resolved[life].id.0,
+        left.round(),
+        top.round(),
+        (right - left).round(),
+        (bottom - top).round()
+    );
+    assert!(tree.contains("  layer\n"), "{tree}");
+    assert!(tree.contains(&expected), "{expected:?} in {tree}");
+}
+
+#[test]
+fn a_new_look_moves_a_float_and_lays_out_nothing() {
+    let mut layer = Layer::new();
+    layer.float(LIFE, Some(text("20")));
+    layer.set_float_look(LIFE, centred_at(Vec2::new(100.0, 50.0)));
+    let before = write_layer(&mut layer, false);
+    assert!(before.work.layout_nodes > 0);
+    layer.set_float_look(LIFE, centred_at(Vec2::new(300.0, 80.0)));
+    let after = write_layer(&mut layer, false);
+    assert_eq!(after.work.layout_nodes, 0);
+    assert_eq!(after.work.text_runs, 0);
+    let moved = |frame: &Frame| frame.resolved[find(frame, Role::Text, "20")].corners;
+    for (old, new) in moved(&before).into_iter().zip(moved(&after)) {
+        assert!(
+            (new - old).distance(Vec2::new(200.0, 30.0)) < 0.01,
+            "{old} to {new}"
+        );
+    }
+}
+
+#[test]
+fn a_removed_float_leaves_the_frame() {
+    let mut layer = Layer::new();
+    layer.float(LIFE, Some(text("20")));
+    write_layer(&mut layer, false);
+    layer.float(LIFE, None);
+    let frame = write_layer(&mut layer, false);
+    assert!(frame.resolved.is_empty(), "{:?}", frame.resolved);
+    assert_eq!(frame.draws.len(), 0);
+}
+
+#[test]
+fn a_float_leaves_the_prompt_bar_where_it_was() {
+    let mut layer = Layer::new();
+    layer.show(Some(
+        row()
+            .name("prompt")
+            .padding(space::L)
+            .child(text("Pay {1}{U}").style(type_style::TITLE)),
+    ));
+    let alone = write_layer(&mut layer, true);
+    layer.float(LIFE, Some(text("20").padding(space::L)));
+    layer.set_float_look(LIFE, centred_at(Vec2::new(WIDTH / 2.0, HEIGHT / 2.0)));
+    let beside = write_layer(&mut layer, true);
+    for name in ["prompt", "Pay {1}{U}"] {
+        let role = if name == "prompt" {
+            Role::Region
+        } else {
+            Role::Text
+        };
+        assert_eq!(
+            alone.resolved[find(&alone, role, name)].corners,
+            beside.resolved[find(&beside, role, name)].corners,
+            "{name} moved"
+        );
+    }
+    find(&beside, Role::Text, "20");
+}
+
+#[test]
+fn a_float_is_drawn_while_no_prompt_is_open() {
+    let mut layer = Layer::new();
+    layer.show(Some(row().name("prompt").child(text("Pay {1}{U}"))));
+    layer.float(LIFE, Some(text("20")));
+    layer.set_float_look(
+        LIFE,
+        FloatLook {
+            opacity: 0.5,
+            tint: Some([255, 0, 0, 255]),
+            ..centred_at(Vec2::new(100.0, 50.0))
+        },
+    );
+    let frame = write_layer(&mut layer, false);
+    let life = find(&frame, Role::Text, "20");
+    assert!((frame.resolved[life].opacity - 0.5).abs() < 1e-6);
+    assert!(
+        !frame
+            .resolved
+            .iter()
+            .any(|element| frame.name(element.name) == "prompt"),
+        "the closed prompt bar is not drawn"
+    );
+    // The float's top element is drawn on a panel, faded by its look.
+    let layer_draws = &frame.draws[frame.layer as usize..];
+    let panels: Vec<_> = (layer_draws.iter())
+        .filter(|draw| draw.material == Material::Panel as u8)
+        .collect();
+    assert_eq!(panels.len(), 1);
+    assert_eq!(panels[0].tint[3], 0x70, "half of the panel's alpha");
+}
+
+#[test]
+fn a_float_with_a_press_takes_presses_and_one_without_does_not() {
+    let mut layer = Layer::new();
+    layer.float(LIFE, Some(text("20")));
+    layer.set_float_look(LIFE, centred_at(Vec2::new(100.0, 50.0)));
+    let at = Vec2::new(100.0, 50.0);
+    assert_eq!(layer.press_at(at, false), None);
+    layer.float(
+        LIFE,
+        Some(text("20").on_press(Press::Button(ButtonId::Auto))),
+    );
+    let frame = write_layer(&mut layer, false);
+    let id = frame.resolved[find(&frame, Role::Text, "20")].id;
+    assert_eq!(
+        layer.press_at(at, false),
+        Some((id, Press::Button(ButtonId::Auto), true)),
+        "a kept float keeps its look and takes presses with no prompt open"
     );
 }

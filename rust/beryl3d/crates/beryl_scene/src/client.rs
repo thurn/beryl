@@ -48,7 +48,7 @@ pub struct Client {
     window: Window,
     /// The table and the scripts that lead it from view to view.
     show: Show,
-    /// The flat layer: the prompt bar.
+    /// The flat layer: the prompt bar and the floats.
     layer: Layer,
     /// The open decision and its prompt's latest state, from the view or a click's reply.
     prompt: Option<(DecisionId, PromptView)>,
@@ -165,9 +165,7 @@ impl Client {
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
         self.open = self.show.settled();
-        if self.open {
-            self.layer.write(&mut builder, self.show.table().camera());
-        }
+        (self.layer).write(&mut builder, self.show.table().camera(), self.open);
         builder.finish();
         if let Some(point) = self.mouse
             && let Some(index) = crate::agent::hit(&self.frame, point)
@@ -193,17 +191,14 @@ impl Client {
             };
         }
         let primary = pointer.button == Button::Primary;
-        if !self.open {
-            self.pressed = None;
-            return;
-        }
+        let open = self.open;
         match pointer.phase {
             PointerPhase::Down if primary => {
-                self.pressed = self.layer.press_at(pointer.position).map(|(id, ..)| id);
+                self.pressed = (self.layer.press_at(pointer.position, open)).map(|(id, ..)| id);
             }
             PointerPhase::Up if primary => {
                 let pressed = self.pressed.take();
-                if let Some((id, press, true)) = self.layer.press_at(pointer.position)
+                if let Some((id, press, true)) = self.layer.press_at(pointer.position, open)
                     && pressed == Some(id)
                 {
                     self.press(press);

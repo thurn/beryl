@@ -3,8 +3,10 @@
 //! tree it keeps: a node equal to the one before it keeps its layout and its laid-out text.
 //! Layout is flexbox, computed by taffy, and text is shaped and broken by parley through
 //! taffy's measure function. All of that happens in `Client::handle`; writing a frame only
-//! reads the numbers kept here.
+//! reads the numbers kept here. Beside the screen it keeps floats, small elements placed at a
+//! point of the window (`float`).
 
+mod float;
 mod glyphs;
 mod write;
 
@@ -13,7 +15,10 @@ use taffy::{
     NodeId, TaffyTree, compute_leaf_layout,
 };
 
+pub use float::FloatLook;
 pub use glyphs::{Glyphs, key as glyph_key};
+
+use float::Float;
 
 use crate::element::{Align, Direction, Element, Justify, Press, Style};
 use crate::frame::{ElementId, Role};
@@ -60,6 +65,8 @@ pub struct Layer {
     /// The window, padded by the safe area: the root every screen is laid out in.
     root: NodeId,
     screen: Option<Node>,
+    /// The floats, in order of their ids, which is the order they are drawn in.
+    floats: Vec<Float>,
     next_id: u32,
     text: Text,
     window: Window,
@@ -90,6 +97,7 @@ impl Layer {
             taffy,
             root,
             screen: None,
+            floats: Vec::new(),
             next_id: FIRST_ID,
             text: Text::new(),
             window,
@@ -154,9 +162,10 @@ impl Layer {
     }
 
     /// The innermost element at `point` that a press means something on, with its press and
-    /// whether it is enabled.
+    /// whether it is enabled. Floats are drawn over the screen, so they are searched first, the
+    /// last drawn first. The screen is searched only while it is `open`, that is drawn.
     #[must_use]
-    pub fn press_at(&self, point: glam::Vec2) -> Option<(ElementId, Press, bool)> {
+    pub fn press_at(&self, point: glam::Vec2, open: bool) -> Option<(ElementId, Press, bool)> {
         fn find(node: &Node, point: glam::Vec2) -> Option<(ElementId, Press, bool)> {
             if !contains(node.rect, point) {
                 return None;
@@ -168,7 +177,13 @@ impl Layer {
                     element.press.map(|press| (node.id, press, element.enabled))
                 })
         }
-        self.screen.as_ref().and_then(|node| find(node, point))
+        (self.floats.iter().rev())
+            .find_map(|float| find(&float.node, point - float.corner()))
+            .or_else(|| {
+                (self.screen.as_ref())
+                    .filter(|_| open)
+                    .and_then(|node| find(node, point))
+            })
     }
 
     /// Matches `element` against `old`, the node at its place in the tree before: a node of the
@@ -260,50 +275,45 @@ impl Layer {
     /// Computes the layout of whatever changed, and lays out text at its new widths. Does
     /// nothing when nothing has changed since the last call.
     fn relayout(&mut self) {
-        if !self
+        let root_dirty = self
             .taffy
             .dirty(self.root)
-            .expect("the root is in the tree")
-        {
+            .expect("the root is in the tree");
+        let floats_dirty: u32 = (self.floats.iter())
+            .map(|float| self.dirty(&float.node))
+            .sum();
+        if !root_dirty && floats_dirty == 0 {
             return;
         }
-        self.layout_nodes += 1 + self.screen.as_ref().map_or(0, |node| self.dirty(node));
-        let size = self.window.size;
-        let text = &mut self.text;
-        self.taffy
-            .compute_layout_with_measure(
-                self.root,
-                taffy::Size {
-                    width: AvailableSpace::Definite(size.width),
-                    height: AvailableSpace::Definite(size.height),
-                },
-                |inputs, _, leaf, style| {
-                    compute_leaf_layout(
-                        inputs,
-                        style,
-                        |_, _| 0.0,
-                        |known, available| {
-                            let Some(leaf) = leaf else {
-                                return taffy::Size::ZERO;
-                            };
-                            let limit = known.width.or(match available.width {
-                                AvailableSpace::Definite(width) => Some(width),
-                                AvailableSpace::MinContent => Some(0.0),
-                                AvailableSpace::MaxContent => None,
-                            });
-                            let (width, height) = text.measure(&leaf.text, leaf.style, limit);
-                            taffy::Size {
-                                width: known.width.unwrap_or(width),
-                                height: known.height.unwrap_or(height),
-                            }
-                        },
-                    )
-                },
-            )
-            .expect("the root is in the tree");
-        if let Some(mut node) = self.screen.take() {
-            self.place(&mut node, glam::Vec2::ZERO);
-            self.screen = Some(node);
+        if root_dirty {
+            self.layout_nodes += 1 + self.screen.as_ref().map_or(0, |node| self.dirty(node));
+            let size = self.window.size;
+            let space = taffy::Size {
+                width: AvailableSpace::Definite(size.width),
+                height: AvailableSpace::Definite(size.height),
+            };
+            compute(&mut self.taffy, &mut self.text, self.root, space);
+            if let Some(mut node) = self.screen.take() {
+                self.place(&mut node, glam::Vec2::ZERO);
+                self.screen = Some(node);
+            }
+        }
+        if floats_dirty > 0 {
+            self.layout_nodes += floats_dirty;
+            // A float is as large as its content, whatever the window's size.
+            let space = taffy::Size {
+                width: AvailableSpace::MaxContent,
+                height: AvailableSpace::MaxContent,
+            };
+            let mut floats = std::mem::take(&mut self.floats);
+            for float in &mut floats {
+                let root = float.node.taffy;
+                if self.taffy.dirty(root).expect("the float is in the tree") {
+                    compute(&mut self.taffy, &mut self.text, root, space);
+                    self.place(&mut float.node, glam::Vec2::ZERO);
+                }
+            }
+            self.floats = floats;
         }
         self.text_runs += self.text.end_pass();
         self.want_glyphs();
@@ -375,10 +385,44 @@ impl Layer {
                 visit(child, scale, glyphs);
             }
         }
-        if let Some(node) = &self.screen {
+        let floats = self.floats.iter().map(|float| &float.node);
+        for node in self.screen.iter().chain(floats) {
             visit(node, self.window.scale, &mut self.glyphs);
         }
     }
+}
+
+/// Computes the layout of the tree under `root` in `space`, measuring text with `text`.
+fn compute(
+    taffy: &mut TaffyTree<TextLeaf>,
+    text: &mut Text,
+    root: NodeId,
+    space: taffy::Size<AvailableSpace>,
+) {
+    taffy
+        .compute_layout_with_measure(root, space, |inputs, _, leaf, style| {
+            compute_leaf_layout(
+                inputs,
+                style,
+                |_, _| 0.0,
+                |known, available| {
+                    let Some(leaf) = leaf else {
+                        return taffy::Size::ZERO;
+                    };
+                    let limit = known.width.or(match available.width {
+                        AvailableSpace::Definite(width) => Some(width),
+                        AvailableSpace::MinContent => Some(0.0),
+                        AvailableSpace::MaxContent => None,
+                    });
+                    let (width, height) = text.measure(&leaf.text, leaf.style, limit);
+                    taffy::Size {
+                        width: known.width.unwrap_or(width),
+                        height: known.height.unwrap_or(height),
+                    }
+                },
+            )
+        })
+        .expect("the root is in the tree");
 }
 
 /// The root's style: the whole window, padded by its safe area and by the dock's offsets, with

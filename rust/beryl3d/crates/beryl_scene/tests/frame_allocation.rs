@@ -1,5 +1,6 @@
-//! `Client::frame` allocates nothing once a prompt bar has been laid out (docs/beryl-3d.md,
-//! "The frame": no allocation). This binary counts every heap allocation, so it holds one test.
+//! `Client::frame` allocates nothing once a prompt bar has been laid out, and neither does
+//! moving a float of the flat layer and writing it (docs/beryl-3d.md, "The frame": no
+//! allocation). This binary counts every heap allocation, so it holds one test.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -8,9 +9,14 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::prompt::Purpose;
 use beryl_protocol::prompt::{ButtonId, PartName, PromptButton, PromptView, ShapeBody, Words};
 use beryl_protocol::protocol::{DecisionId, DecisionView, Kind, SessionId, Status};
+use beryl_scene::element::{floats, text};
+use beryl_scene::frame::{Frame, FrameBuilder};
 use beryl_scene::input::{AssetReady, GlyphCell, Input, Insets, Size};
+use beryl_scene::layout::{FloatLook, Layer};
+use beryl_scene::table::Table;
 use beryl_scene::testing::ViewBuilder;
 use beryl_scene::{Client, Config};
+use glam::Vec2;
 
 /// The system allocator, counting the allocations it makes.
 struct Counting;
@@ -124,4 +130,29 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
     let after = ALLOCATIONS.load(Ordering::Relaxed);
     assert!(records > 3, "the frame holds the bar's records");
     assert_eq!(after - before, 0, "allocations during Client::frame");
+
+    // A float moved and faded by a new look, then written into a frame.
+    let mut layer = Layer::new();
+    layer.float(floats::LIFE[0], Some(text("20")));
+    let mut frame = Frame::with_capacity(64, 256, 1024);
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    layer.set_float_look(
+        floats::LIFE[0],
+        FloatLook {
+            point: Vec2::new(100.0, 50.0),
+            anchor: Vec2::new(0.5, 0.5),
+            opacity: 0.5,
+            tint: Some([255, 0, 0, 255]),
+        },
+    );
+    let mut builder = FrameBuilder::new(&mut frame);
+    layer.write(&mut builder, Table::default().camera(), false);
+    let elements = builder.finish().resolved.len();
+    let after = ALLOCATIONS.load(Ordering::Relaxed);
+    assert_eq!(elements, 1, "the frame holds the float");
+    assert_eq!(
+        after - before,
+        0,
+        "allocations setting a float's look and writing it"
+    );
 }
