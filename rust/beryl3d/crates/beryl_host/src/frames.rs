@@ -7,7 +7,9 @@ use std::time::Instant;
 
 use beryl_scene::Client;
 use beryl_scene::frame::{Frame, Wake};
-use beryl_scene::input::Input;
+use beryl_scene::input::{Input, Tier};
+
+use crate::rate::{Paced, RateRule, Step, Thresholds};
 
 /// A source of display ticks: a display link on macOS, winit's redraw requests elsewhere, a
 /// timer in the windowless host, or a test's own calls.
@@ -15,6 +17,11 @@ pub trait Ticks {
     /// Starts ticks while `running` is true and stops them otherwise. Called after every batch
     /// of events, so a source may ask again on each call while running.
     fn set_running(&mut self, running: bool);
+
+    /// Asks the display for `hz` frames a second, a rate that divides its highest
+    /// (`crate::rate`). A source that cannot change its rate ignores it, and its host counts
+    /// frames against a fixed rate instead (`FrameLoop::fixed_at`).
+    fn set_rate(&mut self, _hz: f32) {}
 }
 
 /// What drawing one frame cost, in nanoseconds.
@@ -34,7 +41,7 @@ pub trait Draw {
 }
 
 /// One frame the loop drew.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ticked {
     /// The tick's time, in nanoseconds since the client started.
     pub tick: u64,
@@ -47,6 +54,11 @@ pub struct Ticked {
     pub client: u64,
     /// What drawing cost, or `None` when nothing was shown.
     pub shown: Option<Shown>,
+    /// The rate the host had asked the display for when the tick came, in frames a second. A
+    /// frame is late against this rate.
+    pub hz: f32,
+    /// The step the host took after this frame, if it took one.
+    pub step: Option<Step>,
 }
 
 /// What the host found when it opened its window or target, for the app's log.
@@ -108,6 +120,11 @@ pub struct FrameLoop<T> {
     input_since: bool,
     /// When the last frame was drawn, while the ticks have run since.
     last: Option<u64>,
+    /// The rate the host asks the display for, and when it steps (`paced`). Without one the
+    /// loop counts frames against `hz` and never steps.
+    rate: Option<RateRule>,
+    /// The rate frames are counted against: the rule's choice, or the fixed rate.
+    hz: f32,
     /// The drive script being played, if any (`--drive`).
     #[cfg(feature = "drive")]
     drive: Option<crate::drive::Drive>,
@@ -123,9 +140,36 @@ impl<T: Ticks> FrameLoop<T> {
             drawn_at_pause: false,
             input_since: false,
             last: None,
+            rate: None,
+            hz: 60.0,
             #[cfg(feature = "drive")]
             drive: None,
         }
+    }
+
+    /// The same loop asking for `display_hz`, the display's highest rate, and stepping down
+    /// and up by the rule in `crate::rate` with its thresholds from the data. `tier_can_drop`
+    /// says whether the tier is Enhanced and chosen automatically, so that it drops first.
+    #[must_use]
+    pub fn paced(self, display_hz: f32, tier_can_drop: bool) -> Self {
+        self.paced_by(RateRule::new(display_hz, tier_can_drop, Thresholds::DATA))
+    }
+
+    /// The same loop stepping by `rule`.
+    fn paced_by(mut self, rule: RateRule) -> Self {
+        self.hz = rule.hz();
+        self.ticks.set_rate(rule.hz());
+        self.rate = Some(rule);
+        self
+    }
+
+    /// The same loop counting frames against `hz` and never stepping, for a host whose ticks
+    /// come at a fixed rate.
+    #[must_use]
+    pub fn fixed_at(mut self, hz: f32) -> Self {
+        self.hz = hz;
+        self.rate = None;
+        self
     }
 
     /// The same loop playing `drive` on the display's clock.
@@ -193,12 +237,17 @@ impl<T: Ticks> FrameLoop<T> {
         let frame = self.client.frame(clock);
         let client = started.elapsed().as_nanos() as u64;
         let shown = draw.draw(frame);
+        let since_last = self.last.map(|last| now.saturating_sub(last));
+        let hz = self.hz;
+        let step = self.pace(since_last, client, shown);
         let ticked = Ticked {
             tick: now,
             clock,
-            since_last: self.last.map(|last| now.saturating_sub(last)),
+            since_last,
             client,
             shown,
+            hz,
+            step,
         };
         self.last = Some(now);
         self.input_since = false;
@@ -230,6 +279,23 @@ impl<T: Ticks> FrameLoop<T> {
 
     pub fn ticks(&mut self) -> &mut T {
         &mut self.ticks
+    }
+
+    /// Feeds an animating frame to the rate rule, and carries out the step it returns: a
+    /// tier for the client, a rate for the ticks.
+    fn pace(&mut self, since_last: Option<u64>, client: u64, shown: Option<Shown>) -> Option<Step> {
+        let rule = self.rate.as_mut()?;
+        let gap = since_last?;
+        let work = client + shown.map_or(0, |shown| shown.encoded);
+        let step = rule.frame(Paced { gap, work })?;
+        match step {
+            Step::Baseline => self.client.handle(Input::Tier(Tier::Baseline)),
+            Step::Rate(hz) => {
+                self.hz = hz;
+                self.ticks.set_rate(hz);
+            }
+        }
+        Some(step)
     }
 
     /// The client's clock at `now`: `now`, or the pause once it has passed.

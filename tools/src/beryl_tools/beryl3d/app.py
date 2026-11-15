@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 from .. import checks, paths as repo_paths, system
 from . import paths
@@ -190,7 +191,8 @@ def report(path: Path) -> str:
         out += [
             f"{summary['frames']} frames in {summary['seconds']:.1f} s, each on a display tick;"
             f" first shown at {summary['first_shown_ms']} ms",
-            f"late: {summary['late']} ({summary['held_to_60']} held to 60 Hz,"
+            rate_line(run, summary),
+            f"late against the rate asked for: {summary['late']} ({summary['held_to_60']} held to 60 Hz,"
             f" {summary['missed_60']} missed 60 Hz); worst gap {summary['worst_gap_ms']:.1f} ms",
             f"waited for a drawable: median {summary.get('median_wait_ms', 0.0):.1f} ms,"
             f" 95th percentile {summary.get('p95_wait_ms', 0.0):.1f} ms,"
@@ -207,12 +209,34 @@ def report(path: Path) -> str:
         out.append(f"worst {len(worst)} of {len(late)} late frames (ms):")
         for frame in worst:
             out.append(
-                f"  at {frame['at_ms']:.0f}: gap {frame['since_last_ms']:.1f},"
+                f"  at {frame['at_ms']:.0f}: gap {frame['since_last_ms']:.1f}"
+                f" at {frame.get('hz', run['display_hz'])} Hz,"
                 f" waited {frame['waited_ms']:.1f}, client {frame['client_ms']:.2f},"
                 f" encoded {frame['encoded_ms']:.2f}, searching {frame['searching']},"
                 f" verbs {','.join(frame['verbs']) or '-'}"
             )
     return "\n".join(out)
+
+
+def rate_line(run: dict[str, Any], summary: dict[str, Any]) -> str:
+    """The rate the host asked the display for and its steps down and up (decision C18), one
+    line. A log written before the host stepped has no steps and asked for the display's rate.
+    """
+    steps = summary.get("steps", [])
+    if not steps:
+        return f"asked for {run['display_hz']} Hz throughout"
+    said = [
+        (
+            f"{step['hz']} Hz at {step['at_ms']:.0f} ms"
+            if step["hz"] is not None
+            else f"Baseline tier at {step['at_ms']:.0f} ms"
+        )
+        for step in steps
+    ]
+    return (
+        f"asked for {run['display_hz']} Hz, then {', '.join(said)};"
+        f" {summary['hz']} Hz at the end"
+    )
 
 
 def frames_arguments(parser: argparse.ArgumentParser) -> None:

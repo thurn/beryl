@@ -80,11 +80,7 @@ impl DisplayLink {
         // SAFETY: NSView's `displayLinkWithTarget:selector:` (macOS 14); `tick:` is a method of
         // `Ticker` that takes the display link, and the link retains its target.
         let link = unsafe { view.displayLinkWithTarget_selector(target, sel!(tick:)) };
-        link.setPreferredFrameRateRange(CAFrameRateRange {
-            minimum: hz * 0.75,
-            maximum: hz,
-            preferred: hz,
-        });
+        link.setPreferredFrameRateRange(range(hz));
         // SAFETY: CADisplayLink's `addToRunLoop:forMode:` with the main run loop in the common
         // modes, so ticks continue while the window is resized or a menu is open.
         unsafe { link.addToRunLoop_forMode(&NSRunLoop::mainRunLoop(), NSRunLoopCommonModes) };
@@ -96,12 +92,28 @@ impl DisplayLink {
         })
     }
 
+    /// Asks for `hz` frames a second from now on: a rate that divides the display's
+    /// (`crate::rate`).
+    pub fn set_rate(&mut self, hz: f32) {
+        self.link.setPreferredFrameRateRange(range(hz));
+    }
+
     /// Runs the link while frames are wanted and pauses it otherwise.
     pub fn set_running(&mut self, running: bool) {
         if self.running != running {
             self.running = running;
             self.link.setPaused(!running);
         }
+    }
+}
+
+/// The frame rate range that asks for exactly `hz`. No lower rate is acceptable, because the
+/// rule in `crate::rate` chooses the rate and counts frames against it.
+fn range(hz: f32) -> CAFrameRateRange {
+    CAFrameRateRange {
+        minimum: hz,
+        maximum: hz,
+        preferred: hz,
     }
 }
 

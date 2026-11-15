@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use beryl_3d::frame_log::{self, FrameLog, Run};
+use beryl_host::rate::Step;
 use beryl_host::{Shown, Ticked};
 
 const MS: u64 = 1_000_000;
@@ -24,6 +25,8 @@ fn ticked(tick_ms: u64, since_last_ms: Option<u64>, shown: bool) -> Ticked {
             waited: 2 * MS,
             encoded: MS / 2,
         }),
+        hz: 120.0,
+        step: None,
     }
 }
 
@@ -77,6 +80,56 @@ fn what_the_writer_writes_the_reader_reads() {
     let printed = summary.print(&read.run);
     assert!(
         printed.contains("drive hover-hand, load threads 16:utility, slow GPU 5 ms"),
+        "{printed}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn frames_are_late_against_the_rate_the_host_chose() {
+    let run = Run {
+        checkout: "/checkout".to_owned(),
+        pid: 44,
+        started_ms: 3_000,
+        window: "fullscreen".to_owned(),
+        display_hz: 120.0,
+        adapter: "a GPU".to_owned(),
+        load: None,
+        fixture: None,
+        pause_at_ms: None,
+        drive: None,
+        load_threads: None,
+        slow_gpu_ms: None,
+    };
+    let dir = dir("rate");
+    let mut log = FrameLog::create(&dir, &run).expect("the log is made");
+    // At 120 Hz a frame 17 ms after the last is held to 60 Hz, a fault. After the host steps
+    // down to 60 Hz, the same gap is on time and a 30 ms one is late.
+    log.frame(&ticked(10, None, true), &[], false);
+    log.frame(&ticked(27, Some(17), true), &[], false);
+    let mut stepped = ticked(44, Some(17), true);
+    stepped.step = Some(Step::Rate(60.0));
+    log.frame(&stepped, &[], false);
+    for (tick, gap) in [(61, 17), (78, 17), (108, 30)] {
+        let mut frame = ticked(tick, Some(gap), true);
+        frame.hz = 60.0;
+        log.frame(&frame, &[], false);
+    }
+    let path = log.path().to_owned();
+    let summary = log.finish().expect("the log is finished");
+    let read = frame_log::read(&path).expect("the log reads back");
+    assert_eq!(
+        (summary.late, summary.held_to_60, summary.missed_60),
+        (3, 2, 1)
+    );
+    let rates: Vec<f32> = read.late.iter().map(|late| late.hz).collect();
+    assert_eq!(rates, [120.0, 120.0, 60.0]);
+    assert!((summary.hz - 60.0).abs() < f32::EPSILON);
+    assert_eq!(summary.steps.len(), 1);
+    assert_eq!(summary.steps[0].hz, Some(60.0));
+    let printed = summary.print(&read.run);
+    assert!(
+        printed.contains("asked for 120 Hz, then 60 Hz at 44 ms; 60 Hz at the end"),
         "{printed}"
     );
     let _ = std::fs::remove_dir_all(&dir);

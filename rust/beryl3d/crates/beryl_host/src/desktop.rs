@@ -19,7 +19,7 @@ use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
-use winit::window::{Fullscreen, Window, WindowId};
+use winit::window::{Window, WindowId};
 
 use crate::events::Translator;
 use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Sleep, Ticks};
@@ -33,8 +33,9 @@ pub enum WindowMode {
     Background,
     /// An ordinary window.
     Foreground,
-    /// The whole display, where the system can show the surface without composing it with
-    /// other windows. A key leaves and re-enters it (`is_fullscreen_key`).
+    /// The whole display. A key leaves and re-enters it (`is_fullscreen_key`). On macOS it is
+    /// a borderless window over the whole display that the window server composes as usual
+    /// (`set_fullscreen`), not a fullscreen Space.
     Fullscreen,
 }
 
@@ -238,6 +239,15 @@ impl Ticks for Pacer {
             }
         }
     }
+
+    fn set_rate(&mut self, hz: f32) {
+        #[cfg(target_os = "macos")]
+        if let Pacer::Link(link) = self {
+            link.set_rate(hz);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = hz;
+    }
 }
 
 impl<S: FnOnce(&mut Renderer)> App<S> {
@@ -250,18 +260,17 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
         let mut attributes = Window::default_attributes()
             .with_title(self.options.title.clone())
             .with_inner_size(LogicalSize::new(width, height));
-        attributes = match self.options.mode {
-            WindowMode::Background => attributes.with_active(false),
-            WindowMode::Foreground => attributes,
-            WindowMode::Fullscreen => {
-                attributes.with_fullscreen(Some(Fullscreen::Borderless(None)))
-            }
-        };
+        if self.options.mode == WindowMode::Background {
+            attributes = attributes.with_active(false);
+        }
         let window = Arc::new(
             event_loop
                 .create_window(attributes)
                 .map_err(|error| format!("no window: {error}"))?,
         );
+        if self.options.mode == WindowMode::Fullscreen {
+            set_fullscreen(&window, true);
+        }
         let size = window.inner_size();
         let (mut renderer, surface) =
             Renderer::for_window(Arc::clone(&window), size.width, size.height)?;
@@ -277,9 +286,17 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
             adapter: renderer.adapter().to_owned(),
         });
         let pacer = self.pacer(&window, display_hz);
+        // winit's redraw requests cannot ask for a lower rate, so only a display link steps.
+        let fixed = matches!(pacer, Pacer::Redraw(_));
         let frames = FrameLoop::new(client, pacer)
             .with_feed(feed)
             .paused_at(self.options.pause_at);
+        // The tier starts at Baseline, and Enhanced is not built yet, so it cannot drop.
+        let frames = if fixed {
+            frames.fixed_at(display_hz)
+        } else {
+            frames.paced(display_hz, false)
+        };
         #[cfg(feature = "drive")]
         let frames = frames.driven(self.drive.take());
         let mut frames = frames;
@@ -428,10 +445,7 @@ impl<S: FnOnce(&mut Renderer)> ApplicationHandler<UserEvent> for App<S> {
                 let modifiers = running.translator.modifiers();
                 if is_fullscreen_key(*physical_key, modifiers.control, modifiers.command) {
                     if *state == ElementState::Pressed && !repeat {
-                        let fullscreen = running.window.fullscreen().is_none();
-                        running
-                            .window
-                            .set_fullscreen(fullscreen.then_some(Fullscreen::Borderless(None)));
+                        set_fullscreen(&running.window, !is_fullscreen(&running.window));
                     }
                     return;
                 }
@@ -481,6 +495,34 @@ impl<S: FnOnce(&mut Renderer)> ApplicationHandler<UserEvent> for App<S> {
         };
         event_loop.set_control_flow(flow);
     }
+}
+
+/// Makes `window` cover the whole display, or puts it back. On macOS this is winit's "simple"
+/// fullscreen: the window grows over the display and hides the menu bar and the Dock, and the
+/// window server composes it as it does any window. A fullscreen Space, which winit's
+/// `Fullscreen::Borderless` makes on macOS, lets the system show the surface directly on a
+/// `ProMotion` display, with a variable refresh: there the display link's own timestamps skipped
+/// 12.5 ms or more about twice a second under load, so frames came late at every rate down to
+/// 30 Hz, while the composed window held 120 Hz (docs/beryl-3d.md, "Measurements").
+fn set_fullscreen(window: &Window, on: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        use winit::platform::macos::WindowExtMacOS;
+        window.set_simple_fullscreen(on);
+    }
+    #[cfg(not(target_os = "macos"))]
+    window.set_fullscreen(on.then_some(winit::window::Fullscreen::Borderless(None)));
+}
+
+/// Whether `window` covers the whole display (`set_fullscreen`).
+fn is_fullscreen(window: &Window) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use winit::platform::macos::WindowExtMacOS;
+        window.simple_fullscreen()
+    }
+    #[cfg(not(target_os = "macos"))]
+    window.fullscreen().is_some()
 }
 
 /// Carries out one of the client's requests. A desktop has no haptics, and its text fields are

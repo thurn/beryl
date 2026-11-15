@@ -92,9 +92,17 @@ impl Windowless {
             adapter: renderer.adapter().to_owned(),
         });
         crate::threads::interactive_thread();
-        let frames = FrameLoop::new(client, Timer::default())
+        let timer = Timer {
+            running: false,
+            next: None,
+            interval: interval_at(options.hz),
+        };
+        // The timer stands in for a display of `options.hz`, and steps down as a display link
+        // does, so that `--slow-gpu` shows the rule at work in a run with no window.
+        let frames = FrameLoop::new(client, timer)
             .with_feed(feed)
-            .paused_at(options.pause_at);
+            .paused_at(options.pause_at)
+            .paced(options.hz, false);
         #[cfg(feature = "drive")]
         let frames = frames.driven(self.drive);
         let mut frames = frames;
@@ -108,7 +116,6 @@ impl Windowless {
             target,
             slow_gpu: options.slow_gpu,
         };
-        let interval = Duration::from_secs_f64(1.0 / f64::from(options.hz.max(1.0)));
         let started = Instant::now();
         let end = options.end_after.map(|end| started + end);
         loop {
@@ -125,6 +132,7 @@ impl Windowless {
             let since = |at: Instant| at.duration_since(started).as_nanos() as u64;
             let sleep = frames.schedule(since(now));
             let timer = frames.ticks();
+            let interval = timer.interval;
             let wake = if timer.running {
                 let tick = *timer.next.get_or_insert(now);
                 if tick <= now {
@@ -169,11 +177,12 @@ impl Windowless {
 }
 
 /// Ticks from a timer: while running, one every interval from when they started.
-#[derive(Default)]
 struct Timer {
     running: bool,
     /// When the next tick is due, while running.
     next: Option<Instant>,
+    /// The time between ticks: one over the rate the frame loop asked for.
+    interval: Duration,
 }
 
 impl Ticks for Timer {
@@ -183,6 +192,15 @@ impl Ticks for Timer {
             self.next = None;
         }
     }
+
+    fn set_rate(&mut self, hz: f32) {
+        self.interval = interval_at(hz);
+    }
+}
+
+/// The time between ticks at `hz` frames a second.
+fn interval_at(hz: f32) -> Duration {
+    Duration::from_secs_f64(1.0 / f64::from(hz.max(1.0)))
 }
 
 /// The offscreen target frames are drawn into.

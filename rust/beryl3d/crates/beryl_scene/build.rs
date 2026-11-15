@@ -2,7 +2,8 @@
 //! module `space`, and each number of the `audit` object of `data/beryl3d/gates.json` as an
 //! `f32` constant named for its key in upper case, to `OUT_DIR/data.rs`, which `src/data.rs`
 //! includes. In `space`, each verb or case under `verbs` is a module of `f32` constants, one per
-//! value, and each count under `catch_up` a `usize` constant.
+//! value, and each count under `catch_up` a `usize` constant. Under `frame_rate`, a whole
+//! number becomes a `usize` constant and any other number an `f32` one.
 
 use std::fmt::Write;
 use std::fs;
@@ -87,6 +88,24 @@ fn write_space(json: &serde_json::Value, out: &mut String) {
             .unwrap_or_else(|| panic!("space.json's `catch_up.{key}` is a count"));
         let name = key.to_uppercase();
         writeln!(out, "        /// `catch_up.{key}` in `data/beryl3d/space.json`.\n        pub const {name}: usize = {count};").unwrap();
+    }
+    out.push_str("    }\n");
+    out.push_str("    /// When the host steps its frame rate down or up (`beryl_host`'s `rate`).\n    pub mod frame_rate {\n");
+    for (key, value) in json["frame_rate"]
+        .as_object()
+        .expect("space.json's `frame_rate` is an object")
+    {
+        let name = key.to_uppercase();
+        let constant = match (value.as_u64(), value.as_f64()) {
+            (Some(count), _) => format!("pub const {name}: usize = {count};"),
+            (None, Some(number)) => format!("pub const {name}: f32 = {number:?}_f32;"),
+            _ => panic!("space.json's `frame_rate.{key}` is a number"),
+        };
+        writeln!(
+            out,
+            "        /// `frame_rate.{key}` in `data/beryl3d/space.json`.\n        {constant}"
+        )
+        .unwrap();
     }
     out.push_str("    }\n}\n");
 }

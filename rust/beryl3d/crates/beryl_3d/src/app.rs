@@ -159,9 +159,7 @@ impl Feed for AppFeed {
             log.unbuilt(verb.name());
         }
         // Verbs are listed only for a late frame, so a frame on time collects none.
-        let late = ticked
-            .since_last
-            .is_some_and(|gap| gap as f64 > 1.5e9 / f64::from(self.run.display_hz.max(1.0)));
+        let late = FrameLog::is_late(ticked);
         let verbs: Vec<&str> = if late {
             client.playing_verbs().map(Verb::name).collect()
         } else {

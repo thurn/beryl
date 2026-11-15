@@ -200,12 +200,12 @@ the client they describe, and later sections refer to them by number.
 
 - **C15. Default to good performance.** Where a choice trades smoothness for
   something else, the faster choice is the default and the other is opt-in. The
-  desktop app therefore starts fullscreen, where macOS and Windows can show its
-  surface without composing it with other windows, and a key leaves fullscreen.
-  The prototype's one fullscreen run under load had fewer late frames than its
-  windowed runs, and Arena also starts fullscreen. The frame log records the
-  window mode, so the choice keeps being tested and is reversed if windowed play
-  proves no worse.
+  desktop app therefore starts fullscreen, as Arena does, and a key leaves
+  fullscreen. On macOS that is a window over the whole display that the window
+  server composes as usual, not a fullscreen Space: on a ProMotion display a
+  fullscreen Space's frames came late at every rate down to 30 Hz under load,
+  while the composed window held 120 Hz (see [Measurements](#measurements)). The
+  frame log records the window mode, so the choice keeps being tested.
 
 - **C16. An agent measures frame delivery without a person.** Every number a
   person was needed for in the prototype can be produced by a run an agent
@@ -233,10 +233,9 @@ the client they describe, and later sections refer to them by number.
   it, the host steps down to the next rate that divides the display's (120 to 60
   Hz) and stays there until a sustained run of frames shows room to step back
   up. The thresholds are data, not literals in code. Being shown at 60 Hz on a
-  120 Hz display without asking for it is a fault, not a step down. The
-  measurements found fullscreen on macOS often held to 60 Hz (see
-  [Measurements](#measurements)). If the reason cannot be fixed, the desktop app
-  starts windowed instead, as C15 already allows.
+  120 Hz display without asking for it is a fault, not a step down. The late
+  frames the measurements first took for 60 Hz in fullscreen on macOS came from
+  the fullscreen Space, and the desktop app no longer uses one (C15).
 
 ## What does not change
 
@@ -834,21 +833,52 @@ There are four hosts.
   `handle` and `frame` directly and reads the frames. It can also own a renderer
   that draws into a texture instead of a window, for pictures.
 - **The desktop host** uses `winit` 0.30, the current stable release, on macOS
-  and Windows. It starts fullscreen (decision C15). On macOS it paces frames
-  with a display link (`NSView`'s, asking for the display's highest rate) and
-  draws only on the link's ticks: an input or a session update reaches the
-  client core at once and is drawn on the next tick. In the prototype, `winit`'s
-  own redraw requests left a 120 Hz display at 60 Hz, and drawing on every input
-  used up macOS's three drawables. On Windows, `winit`'s redraw requests are the
-  ticks. F11, and ⌃⌘F on macOS, leave and re-enter fullscreen. The `background`
-  window mode makes the app an accessory app on macOS, with no Dock icon, so its
-  window never becomes active and never gets the keyboard.
+  and Windows. It starts fullscreen (decision C15): on macOS winit's "simple"
+  fullscreen, a window over the whole display with the menu bar and the Dock
+  hidden, and not a fullscreen Space. On macOS it paces frames with a display
+  link (`NSView`'s, asking for exactly the rate the rate rule chose, at first
+  the display's highest) and draws only on the link's ticks: an input or a
+  session update reaches the client core at once and is drawn on the next tick.
+  In the prototype, `winit`'s own redraw requests left a 120 Hz display at 60
+  Hz, and drawing on every input used up macOS's three drawables. On Windows,
+  `winit`'s redraw requests are the ticks. F11, and ⌃⌘F on macOS, leave and
+  re-enter fullscreen. The `background` window mode makes the app an accessory
+  app on macOS, with no Dock icon, so its window never becomes active and never
+  gets the keyboard.
 - **The iOS host** is a Swift app of a few hundred lines. It owns a
   `CAMetalLayer` and a `CADisplayLink`, asks for the display's highest refresh
   rate, and calls the Rust library through C functions.
 - **The Android host** is a Kotlin app of a few hundred lines. It owns a
   `SurfaceView` and a `Choreographer` frame callback, and calls the same C
   functions through JNI.
+
+**Choosing a frame rate** (decision C18). Every host feeds the time between its
+animating frames to one rule, `RateRule` in `beryl_host::rate`, through the
+frame loop that all hosts share, and carries out the steps it returns. Its
+thresholds are `frame_rate` in `data/beryl3d/space.json`.
+
+- **A frame misses the rate** when more than `late_intervals` (1.5) of the
+  chosen rate's intervals passed since the frame before it while the ticks ran.
+  The first `settle_frames` (120) animating frames after the host opens are not
+  counted, because a new window's first second was often late.
+- **Stepping down.** When `misses` (3) of the last `window` (60) animating
+  frames missed, the rule first drops the Enhanced tier to Baseline, if the tier
+  is chosen automatically and is Enhanced. If frames still miss, it asks for the
+  next rate that divides the display's (120, 60, 40, 30 Hz), down to `lowest_hz`
+  (30).
+- **Stepping back up.** After `up_frames` (600) animating frames in a row that
+  came on time and whose own work (the client's frame and encoding it) took no
+  more than `room` (half) of the next rate up's interval, it asks for that rate.
+- **Not going back and forth.** When frames miss again within `up_frames` of a
+  step up, the next step up waits twice as long, up to `up_frames_most` (9,600
+  frames). A step up that holds restores the ordinary wait.
+- **Who steps.** The macOS display link asks for exactly the chosen rate. The
+  windowless host's timer steps the same way, so `--slow-gpu` shows the rule at
+  work in a run with no window. winit's redraw requests on Windows cannot ask
+  for a rate, and the phone spike's apps do not yet change theirs, so those
+  count frames against a fixed rate and never step. Milestone 4's phone hosts
+  call the same rule and change `CADisplayLink`'s preferred frame rate range and
+  Android's `Surface.setFrameRate`.
 
 The C functions the phone hosts call:
 
@@ -1476,12 +1506,12 @@ fixed by a setting.
   the slowest of those is under a third of the display's refresh interval, the
   tier becomes Enhanced before the first turn. A floor device fails this test
   and never shows an Enhanced frame.
-- **During play** the renderer watches the time between presented frames against
-  the display's refresh interval (16.7 milliseconds at 60 Hz). If 3 of any 60
-  consecutive animating frames arrive more than half an interval late, it
-  switches to Baseline for the rest of the session and records the switch in the
-  app's log. This covers a device that passed at startup and then heated up, or
-  was moved to a larger display.
+- **During play** the host's rate rule (see [Hosts](#hosts)) watches the time
+  between presented frames against the chosen rate's interval (16.7 milliseconds
+  at 60 Hz). If 3 of any 60 consecutive animating frames arrive more than half
+  an interval late, it switches to Baseline for the rest of the session, before
+  it lowers the rate, and the frame log records the switch. This covers a device
+  that passed at startup and then heated up, or was moved to a larger display.
 - **A setting** offers Automatic, Baseline and Enhanced. Automatic, the default,
   is the two rules above. Baseline and Enhanced fix the tier: a player who
   chooses Enhanced gets it, and it does not step down.
@@ -1981,12 +2011,14 @@ just b3d smoke
   that names the line. `hover-hand` sweeps the pointer across the hand for 20
   seconds.
 - **Every run writes a frame log of its own** and prints the log's path with a
-  summary: frames drawn, late frames, frames held to 60 Hz on a faster display,
-  and how long frames waited for a drawable (the median, the 95th percentile,
-  the worst and the total). Its first line records the window, the display's
-  rate, the load average and any drive script, busy threads and slowed frames.
-  `just b3d frames [path]` prints a log's summary and its worst frames. With no
-  path it reads the newest log of a run started from the same checkout.
+  summary: frames drawn, the rate the host asked for and its steps down and up,
+  late frames counted against the rate asked for, frames held to 60 Hz when it
+  asked for more, and how long frames waited for a drawable (the median, the
+  95th percentile, the worst and the total). Its first line records the window,
+  the display's rate, the load average and any drive script, busy threads and
+  slowed frames. `just b3d frames [path]` prints a log's summary and its worst
+  frames. With no path it reads the newest log of a run started from the same
+  checkout.
 - **`live`** speaks to a running debug build over a local socket named for that
   process: `live tree`, `live png` and `live do '<action>'`. When several apps
   are running it takes `--app <process id>`.
@@ -2550,11 +2582,45 @@ milliseconds.
   background window's worst gap was one wait of 154 ms for a drawable, in the
   run with no added load, so a single run does not show that the added threads
   matter.
-- **Fullscreen held frames to 60 Hz.** 93 of its 94 late frames came within one
-  and a half sixtieths of a second, and its 95th percentile wait was 8 ms: the
-  system often showed the fullscreen surface at 60 Hz, which the background
-  window, composed with the others, did not do. Neither the frame log nor these
-  runs say why.
+- **Fullscreen was not held to 60 Hz: its display link skipped.** The log
+  counted 93 of its 94 late frames as held to 60 Hz because they came within one
+  and a half sixtieths of a second, but 75 of them came exactly 21.3 ms after
+  the frame before, not 16.7 ms. The cause was found the same day, below.
+
+Why fullscreen was late was then measured, on 2026-11-15, the same way at a load
+average of 50 to 62, with the rate rule of decision C18 in place.
+
+| Window                                 | Frames | Late (held / missed 60 Hz) | Rate asked for at the end | Worst gap |
+| -------------------------------------- | -----: | -------------------------- | ------------------------- | --------: |
+| fullscreen Space, first run            |    578 | 22 (5 / 17)                | 30 Hz                     |   63.0 ms |
+| fullscreen Space, second run           |    484 | 22 (2 / 20)                | 30 Hz                     |   63.0 ms |
+| simple fullscreen, before settling     |  1,266 | 3 (2 / 1)                  | 120 Hz                    |   25.2 ms |
+| simple fullscreen, before settling     |    723 | 4 (3 / 1)                  | 60 Hz                     |   25.7 ms |
+| simple fullscreen, settling, first run |  1,282 | 3 (2 / 1)                  | 120 Hz                    |   30.1 ms |
+| simple fullscreen, settling, second    |  1,287 | 1 (1 / 0)                  | 120 Hz                    |   21.3 ms |
+| foreground window                      |  1,346 | 2 (2 / 0)                  | 120 Hz                    |   20.3 ms |
+| background window                      |  1,301 | 0                          | 120 Hz                    |    8.5 ms |
+
+- **A fullscreen Space skips display refreshes.** winit's
+  `Fullscreen::Borderless` makes a fullscreen Space on macOS, where the system
+  shows the app's surface directly on the ProMotion display. There the display
+  link's own timestamps, read in each tick, skipped about twice a second: 20.8
+  ms between ticks at 120 Hz, 29.2 ms at 60 Hz and 45.8 ms at 40 Hz, each a
+  whole number of 4.17 ms steps. The app's work stayed under 0.4 ms a frame. The
+  rate rule stepped down from 120 to 30 Hz in each run, and frames still came
+  late at 30 Hz, so no rate helps. Making the link's range exactly the rate
+  asked for, rather than 75% of it to the rate, did not change this.
+- **A composed window over the whole display holds 120 Hz.** winit's "simple"
+  fullscreen grows an ordinary window over the display and hides the menu bar
+  and the Dock, and the window server composes it as it does any window. It
+  showed as few late frames as the foreground and background windows, so the
+  desktop app's fullscreen on macOS is now this (decision C15). One run before
+  settling stepped down to 60 Hz 1.3 seconds in, after a cluster of late frames
+  as the window opened, and stayed there for want of 600 frames in a row with
+  room, which is why the rule now lets 120 frames settle first.
+- **The step down works with no window.** The windowless host at 60 Hz with
+  `--slow-gpu 24ms` stepped down to 30 Hz once its frames settled and had no
+  late frame after.
 
 | Measure                                   | Result                          |
 | ----------------------------------------- | ------------------------------- |

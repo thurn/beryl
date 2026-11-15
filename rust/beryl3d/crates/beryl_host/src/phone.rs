@@ -100,7 +100,11 @@ impl Phone {
                     adapter: renderer.adapter().to_owned(),
                 });
                 crate::threads::interactive_thread();
-                let mut frames = FrameLoop::new(client, Platform).with_feed(feed);
+                // The spike's Swift and Kotlin apps cannot change their display's rate yet, so
+                // frames are counted against 60 Hz and the rate never steps.
+                let mut frames = FrameLoop::new(client, Platform)
+                    .with_feed(feed)
+                    .fixed_at(60.0);
                 frames.handle(size);
                 self.state = State::Running(Box::new(Running {
                     frames,

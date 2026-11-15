@@ -3,10 +3,12 @@
 //! reads with `just b3d frames`. Its first line describes the run, then one line follows for
 //! each late frame, and the last line is the run's summary.
 //!
-//! A frame is late when more than one and a half display intervals passed since the frame
-//! before it while the ticks ran. On a display faster than 60 Hz, a late frame that still came
-//! within one and a half sixtieths of a second was held to 60 Hz, which is counted apart from
-//! one that missed 60 Hz.
+//! A frame is late when more than one and a half intervals of the rate the host asked for
+//! passed since the frame before it while the ticks ran (decision C18). When the host asked
+//! for more than 60 Hz, a late frame that still came within one and a half sixtieths of a
+//! second was held to 60 Hz, which is counted apart from one that missed 60 Hz: the system
+//! showed it at 60 Hz without being asked, a fault and not a step down. The host's steps down
+//! and up (`beryl_host::rate`) are listed in the summary.
 //!
 //! The frame thread does no file I/O (docs/beryl-3d.md, "Threads"): it counts frames itself
 //! and sends each line to a thread of the log's own, which writes it.
@@ -19,6 +21,7 @@ use std::thread::JoinHandle;
 use std::time::Instant;
 
 use beryl_host::Ticked;
+use beryl_host::rate::Step;
 use serde::{Deserialize, Serialize};
 
 /// A sixtieth of a second, in nanoseconds.
@@ -81,8 +84,21 @@ pub struct Late {
     pub verbs: Vec<String>,
     /// Whether the AI was searching.
     pub searching: bool,
-    /// Whether it still came within one and a half sixtieths of a second, on a faster display.
+    /// Whether it still came within one and a half sixtieths of a second, when the host had
+    /// asked for more than 60 Hz.
     pub held_to_60: bool,
+    /// The rate the host had asked for, which it was late against.
+    #[serde(default)]
+    pub hz: f32,
+}
+
+/// A step the host took (`beryl_host::rate`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Stepped {
+    /// When, in milliseconds since the run started.
+    pub at_ms: f64,
+    /// The rate it asked for from then on, or `None` when it dropped the tier to Baseline.
+    pub hz: Option<f32>,
 }
 
 /// The last line: what the run did.
@@ -97,7 +113,8 @@ pub struct Summary {
     /// When the first frame was shown, in milliseconds since the run started.
     pub first_shown_ms: Option<f64>,
     pub late: u64,
-    /// Late frames that came within one and a half sixtieths of a second, on a faster display.
+    /// Late frames that came within one and a half sixtieths of a second, when the host had
+    /// asked for more than 60 Hz.
     pub held_to_60: u64,
     /// Late frames that missed 60 Hz too.
     pub missed_60: u64,
@@ -116,6 +133,12 @@ pub struct Summary {
     pub after_pause: u64,
     /// The verbs the client played as instant changes because they are not built yet.
     pub unbuilt: Vec<String>,
+    /// The rate the host asked for when the run ended, in frames a second.
+    #[serde(default)]
+    pub hz: f32,
+    /// The host's steps down and up, in order.
+    #[serde(default)]
+    pub steps: Vec<Stepped>,
 }
 
 /// One line of the log.
@@ -144,8 +167,6 @@ pub struct FrameLog {
     path: PathBuf,
     /// When the log was made, as the host opened.
     created: Instant,
-    display_interval: f64,
-    faster_than_60: bool,
     pause_at: Option<u64>,
     summary: Summary,
     /// Whether a frame has been drawn at or after the pause.
@@ -183,8 +204,6 @@ impl FrameLog {
             writer,
             path,
             created: Instant::now(),
-            display_interval: 1e9 / f64::from(run.display_hz.max(1.0)),
-            faster_than_60: run.display_hz > 61.0,
             pause_at: run.pause_at_ms.map(|ms| (ms * 1e6) as u64),
             summary: Summary::default(),
             reached_pause: false,
@@ -197,10 +216,28 @@ impl FrameLog {
         &self.path
     }
 
+    /// Whether `ticked` came late against the rate the host had asked for.
+    #[must_use]
+    pub fn is_late(ticked: &Ticked) -> bool {
+        ticked
+            .since_last
+            .is_some_and(|gap| gap as f64 > LATE * 1e9 / f64::from(ticked.hz.max(1.0)))
+    }
+
     /// Counts a frame the host drew, and sends a line for it to be written when it was late.
     pub fn frame(&mut self, ticked: &Ticked, verbs: &[&str], searching: bool) {
         let summary = &mut self.summary;
         summary.frames += 1;
+        summary.hz = ticked.hz;
+        if let Some(step) = ticked.step {
+            summary.steps.push(Stepped {
+                at_ms: ms(ticked.tick),
+                hz: match step {
+                    Step::Baseline => None,
+                    Step::Rate(hz) => Some(hz),
+                },
+            });
+        }
         if let Some(pause) = self.pause_at
             && ticked.tick >= pause
         {
@@ -223,10 +260,10 @@ impl FrameLog {
             return;
         };
         summary.worst_gap_ms = summary.worst_gap_ms.max(ms(gap));
-        if (gap as f64) <= LATE * self.display_interval {
+        if !Self::is_late(ticked) {
             return;
         }
-        let held_to_60 = self.faster_than_60 && (gap as f64) <= LATE * SIXTIETH;
+        let held_to_60 = ticked.hz > 61.0 && (gap as f64) <= LATE * SIXTIETH;
         summary.late += 1;
         if held_to_60 {
             summary.held_to_60 += 1;
@@ -243,6 +280,7 @@ impl FrameLog {
             verbs: verbs.iter().map(|verb| (*verb).to_owned()).collect(),
             searching,
             held_to_60,
+            hz: ticked.hz,
         };
         // The writer ends only with the log, so a failed send has nowhere to go.
         let _ = self.lines.send(Line::Late(late));
@@ -357,6 +395,27 @@ impl Run {
 }
 
 impl Summary {
+    /// The rate the host asked for, and its steps, one line.
+    fn print_rate(&self, run: &Run) -> String {
+        if self.steps.is_empty() {
+            return format!("asked for {} Hz throughout", run.display_hz);
+        }
+        let steps: Vec<String> = self
+            .steps
+            .iter()
+            .map(|step| match step.hz {
+                Some(hz) => format!("{hz} Hz at {:.0} ms", step.at_ms),
+                None => format!("Baseline tier at {:.0} ms", step.at_ms),
+            })
+            .collect();
+        format!(
+            "asked for {} Hz, then {}; {} Hz at the end",
+            run.display_hz,
+            steps.join(", "),
+            self.hz
+        )
+    }
+
     /// The summary as `just b3d frames` prints it, a few lines.
     #[must_use]
     pub fn print(&self, run: &Run) -> String {
@@ -365,6 +424,7 @@ impl Summary {
                 "{} frames in {:.1} s, each on a tick of the {} Hz display ({} window, {})",
                 self.frames, self.seconds, run.display_hz, run.window, run.adapter
             ),
+            self.print_rate(run),
             format!(
                 "late: {} ({} held to 60 Hz, {} missed 60 Hz); worst gap {:.1} ms",
                 self.late, self.held_to_60, self.missed_60, self.worst_gap_ms

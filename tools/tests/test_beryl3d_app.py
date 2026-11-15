@@ -23,7 +23,7 @@ def log(folder: Path, started: int, checkout: str, frames: int) -> Path:
     run = {
         "checkout": checkout,
         "window": "none",
-        "display_hz": 60.0,
+        "display_hz": 120.0,
         "adapter": "a GPU",
         "load": [1.0, 2.0, 3.0],
         "fixture": "verbs-zones",
@@ -44,6 +44,7 @@ def log(folder: Path, started: int, checkout: str, frames: int) -> Path:
                 "verbs": ["fly"],
                 "searching": False,
                 "held_to_60": False,
+                "hz": 120.0 if i < 6 else 60.0,
             }
         }
         for i in range(12)
@@ -64,6 +65,8 @@ def log(folder: Path, started: int, checkout: str, frames: int) -> Path:
             "p95_wait_ms": 1.0,
             "after_pause": 0,
             "unbuilt": [],
+            "hz": 60.0,
+            "steps": [{"at_ms": 550.0, "hz": 60.0}],
         }
     }
     lines = [{"run": run}, *late, summary]
@@ -89,6 +92,7 @@ def test_a_report_gives_the_summary_and_the_ten_worst_frames(tmp_path: Path) -> 
         "median 0.9 ms, 95th percentile 1.0 ms, worst 1.0 ms" in line
         for line in printed
     )
+    assert "asked for 120.0 Hz, then 60.0 Hz at 550 ms; 60.0 Hz at the end" in printed
     worst = [line for line in printed if line.startswith("  at ")]
     assert len(worst) == app.WORST
-    assert "gap 31.0" in worst[0] and "gap 22.0" in worst[-1]
+    assert "gap 31.0 at 60.0 Hz" in worst[0] and "gap 22.0 at 120.0 Hz" in worst[-1]

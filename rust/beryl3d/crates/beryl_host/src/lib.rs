@@ -19,6 +19,7 @@ mod inbox;
 #[cfg(target_os = "macos")]
 mod macos;
 mod phone;
+pub mod rate;
 mod threads;
 mod windowless;
 
