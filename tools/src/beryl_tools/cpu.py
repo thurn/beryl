@@ -23,7 +23,9 @@ is owed is counted ([`Sampler`]). So the CPU a process used between its last sam
 and every process too short-lived to be sampled at all, is still counted, charged to the exited
 child's context or else the parent's. Root-owned processes cannot be read that way, so their
 own CPU comes from `ps` and a child that outlives its parent (re-parented to `launchd`) loses
-its last few seconds. Each row also records `top`'s own busy figure for the minute
+its last few seconds. A pid is the same process for as long as its start time (`ps`'s `lstart`)
+is; a figure that falls for the same process comes from a less precise reading (a zombie that
+`proc_pid_rusage` cannot read shows `ps`'s cputime of zero) and adds nothing. Each row also records `top`'s own busy figure for the minute
 (`top_cores`); the sampled sum should be close to it. `peak_cores` is the highest rate seen
 between two consecutive samples, for bursts shorter than a minute.
 
@@ -156,6 +158,8 @@ class Process:
     cwd: str = ""
     # CPU seconds of the children this process has reaped, or None where it cannot be read.
     children: float | None = None
+    # When the process started, as `ps` prints it: a pid whose start changes is a new process.
+    start: str = ""
 
 
 def parse_cputime(text: str) -> float:
@@ -243,15 +247,22 @@ def _run(command: list[str]) -> str:
 
 
 def read_processes() -> dict[int, Process]:
-    """Every process: pid, parent, cumulative CPU, executable and arguments. The two `ps` calls
-    are joined by pid; a process gone between them is dropped. Where `proc_pid_rusage` can read
-    a process, its CPU and its reaped children's come from there."""
+    """Every process: pid, parent, start time, cumulative CPU, executable and arguments. The two
+    `ps` calls are joined by pid; a process gone between them is dropped. Where
+    `proc_pid_rusage` can read a process, its CPU and its reaped children's come from there.
+    """
     table: dict[int, Process] = {}
-    for row in _run(["ps", "-axo", "pid=,ppid=,cputime=,comm="]).splitlines():
-        parts = row.split(None, 3)
-        if len(parts) == 4:
+    # `lstart` is five words, such as `Sun Nov 15 06:54:46 2026`.
+    for row in _run(["ps", "-axo", "pid=,ppid=,lstart=,cputime=,comm="]).splitlines():
+        parts = row.split(None, 8)
+        if len(parts) == 9:
             table[int(parts[0])] = Process(
-                int(parts[0]), int(parts[1]), parse_cputime(parts[2]), parts[3], ""
+                int(parts[0]),
+                int(parts[1]),
+                parse_cputime(parts[7]),
+                parts[8],
+                "",
+                start=" ".join(parts[2:7]),
             )
     for row in _run(["ps", "-axo", "pid=,args="]).splitlines():
         parts = row.split(None, 1)
@@ -333,6 +344,11 @@ class Sampler:
     and the parent's next growth in reaped-children CPU pays that first. Only the rest is new:
     the exited child's last seconds and processes that never lived through a sample. That rest
     is charged to the most recently exited child's key (`tail`), or to the parent's own.
+
+    A pid whose start time changed is an exit followed by a new process. For the same process, a
+    figure is never allowed to fall: a zombie's `ps` cputime is zero, and taking that as a fresh
+    start would leave its exit owing its parent nothing, so the parent's reaped total would count
+    the child's whole lifetime a second time.
     """
 
     def __init__(self) -> None:
@@ -342,6 +358,7 @@ class Sampler:
         self.keys: dict[int, Key] = {}
         self.owed: dict[int, float] = {}
         self.tail: dict[int, Key] = {}
+        self.starts: dict[int, str] = {}
         self.primed = False
 
     def step(
@@ -362,22 +379,30 @@ class Sampler:
 
         # Exits first: a child that exited and was reaped since the previous step shows up in its
         # parent's reaped total in this step, so what it is owed must be recorded before then.
-        self._forget(set(self.last) - set(table))
+        reused = {
+            pid
+            for pid, proc in table.items()
+            if pid in self.starts and self.starts[pid] != proc.start
+        }
+        self._forget((set(self.last) - set(table)) | reused)
         for pid in self._parents_first(table):
             proc = table[pid]
             if pid not in self.keys:
                 self.keys[pid] = classify(proc, self.keys.get(proc.ppid))
             key = self.keys[pid]
             self.parents[pid] = proc.ppid
-            delta = self._growth(self.last.get(pid), proc.cpu)
-            self.last[pid] = proc.cpu
+            self.starts[pid] = proc.start
+            before = self.last.get(pid)
+            delta = self._growth(before, proc.cpu)
+            self.last[pid] = max(before or 0.0, proc.cpu)
             if delta > 0:
                 charge(key, proc.exe, delta)
             children = proc.children
             if children is None:
                 continue
-            grown = self._growth(self.last_children.get(pid), children)
-            self.last_children[pid] = children
+            before = self.last_children.get(pid)
+            grown = self._growth(before, children)
+            self.last_children[pid] = max(before or 0.0, children)
             owed = self.owed.get(pid, 0.0)
             paid = min(owed, grown)
             if owed:
@@ -391,11 +416,11 @@ class Sampler:
 
     def _growth(self, before: float | None, now: float) -> float:
         """How much a cumulative figure grew. A process first seen after the baseline was born
-        since the previous sample, so all of it is new; a figure that shrank belongs to a new
-        process that reused the pid."""
+        since the previous sample, so all of it is new; a figure that fell is a less precise
+        reading of the same process and adds nothing."""
         if before is None:
             return now if self.primed else 0.0
-        return now - before if now >= before else now
+        return max(now - before, 0.0)
 
     def _forget(self, gone: set[int]) -> None:
         """Drops exited processes, children before parents, and records what was counted for
@@ -418,6 +443,7 @@ class Sampler:
             parent = self.parents.pop(pid, 0)
             key = self.keys.pop(pid, None)
             self.tail.pop(pid, None)
+            self.starts.pop(pid, None)
             if parent in self.last_children:
                 self.owed[parent] = self.owed.get(parent, 0.0) + counted
                 if key is not None:

@@ -148,3 +148,42 @@ def test_a_child_reaped_after_a_delay_is_paid_when_the_parent_reaps_it() -> None
     cargo.children = 2.5
     used, _ = sampler.step({10: cargo}, {})
     assert used == {("other", "compile", "-"): 0.5}
+
+
+def test_a_zombie_child_is_not_counted_twice_when_reaped() -> None:
+    sampler = Sampler()
+    app = proc(10, 1, 0.0, "/usr/bin/node")
+    app.children = 0.0
+    child = proc(11, 10, 0.0, "/usr/bin/node")
+    child.children = 0.0
+    sampler.step({10: app, 11: child}, {})  # Baseline.
+    child.cpu = 8000.0
+    used, _ = sampler.step({10: app, 11: child}, {})
+    assert sum(used.values()) == 8000.0
+    # The child exits and waits to be reaped. `proc_pid_rusage` cannot read the zombie, so
+    # its CPU is `ps`'s, which is zero for a zombie: that adds nothing.
+    zombie = proc(11, 10, 0.0, "<defunct>")
+    used, _ = sampler.step({10: app, 11: zombie}, {})
+    assert used == {}
+    # The app reaps it: its whole 8,000 s were counted already, and its last second is new.
+    app.children = 8001.0
+    used, _ = sampler.step({10: app}, {})
+    assert sum(used.values()) == 1.0
+
+
+def test_a_pid_with_a_new_start_time_is_a_new_process() -> None:
+    sampler = Sampler()
+    shell = proc(5, 1, 0.0, "/bin/zsh")
+    shell.children = 0.0
+    old = proc(11, 5, 0.0, "/usr/bin/rustc")
+    old.start = "Sun Nov 15 06:54:46 2026"
+    sampler.step({5: shell, 11: old}, {})  # Baseline.
+    old.cpu = 30.0
+    sampler.step({5: shell, 11: old}, {})
+    # Between two samples rustc exits, the shell reaps it (31 s), and a new process takes its
+    # pid and runs for 2 s: rustc's last second and the new process's 2 s are new.
+    shell.children = 31.0
+    new = proc(11, 5, 2.0, "/usr/bin/git")
+    new.start = "Sun Nov 15 07:10:02 2026"
+    used, _ = sampler.step({5: shell, 11: new}, {})
+    assert used == {("other", "compile", "-"): 1.0, ("other", "tool", "-"): 2.0}
