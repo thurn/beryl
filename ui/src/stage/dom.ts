@@ -99,6 +99,16 @@ export class DomSurface implements Surface {
     };
   }
 
+  /** Elements under a point in stage coordinates, front first. */
+  hits(at: Point): Element[] {
+    const box = this.#layer.getBoundingClientRect();
+    const scale = box.width / this.#layer.offsetWidth || 1;
+    return this.#layer.ownerDocument.elementsFromPoint(
+      box.left + at.x * scale,
+      box.top + at.y * scale,
+    );
+  }
+
   pointed(): Element | null {
     const at = this.#pointer;
     return at ? this.#layer.ownerDocument.elementFromPoint(at.x, at.y) : null;
@@ -319,8 +329,15 @@ export class DomSurface implements Surface {
       nodeOf(target) !== undefined ||
       playerOf(target) !== undefined;
     const mac = /Mac/.test(navigator.platform);
+    const keys = (e: PointerEvent) => ({
+      meta: mac ? e.metaKey : e.ctrlKey,
+      shift: e.shiftKey,
+      alt: e.altKey,
+    });
+    let suppressClick = false;
     let active:
-      { id: number; capture: HTMLElement; button: number } | undefined;
+      | { id: number; capture: HTMLElement; button: number; external: boolean }
+      | undefined;
     const finish = (e: PointerEvent) => {
       if (active?.id !== e.pointerId) return false;
       active = undefined;
@@ -369,21 +386,32 @@ export class DomSurface implements Surface {
           active = undefined;
           return;
         }
-        if (active || (e.button !== 0 && e.button !== 2) || !onTable(e.target))
-          return;
+        suppressClick = false;
+        if (active || (e.button !== 0 && e.button !== 2)) return;
+        const external =
+          e.button === 0 && e.target instanceof Element
+            ? pointer.dragSource(e.target, keys(e), at(e))
+            : undefined;
+        if (external === undefined && !onTable(e.target)) return;
         const node = nodeOf(e.target);
-        const target = nameOf(node ?? null) ?? playerOf(e.target);
+        const target =
+          external?.name ?? nameOf(node ?? null) ?? playerOf(e.target);
         const kind =
           e.button === 2
             ? "secondary"
             : e.pointerType === "touch"
               ? "touch"
               : "primary";
-        if (!pointer.press(target, at(e), kind)) return;
+        if (!pointer.press(target, at(e), kind, external?.origin)) return;
         // A card keeps capture as it did before. Bare felt captures on the board itself.
-        const capture = node ?? board;
+        const capture = external?.capture ?? node ?? board;
         capture.setPointerCapture(e.pointerId);
-        active = { id: e.pointerId, capture, button: e.button };
+        active = {
+          id: e.pointerId,
+          capture,
+          button: e.button,
+          external: !!external,
+        };
       }),
       on(board, "pointermove", (e) => {
         if (active?.id !== e.pointerId) return;
@@ -399,19 +427,25 @@ export class DomSurface implements Surface {
           : active?.button === 0
             ? nodeOf(active.capture)
             : undefined;
+        const external = active?.external;
         if (!finish(e)) return;
-        pointer.release(at(e), under(e, excluded), {
-          meta: mac ? e.metaKey : e.ctrlKey,
-          shift: e.shiftKey,
-          alt: e.altKey,
-        });
+        const moved = pointer.release(at(e), under(e, excluded), keys(e));
+        suppressClick = !!external && moved !== false;
       }),
       on(board, "pointercancel", cancel),
       on(board, "contextmenu", (e) => {
         if (pointer.handlesContextMenu && onTable(e.target)) e.preventDefault();
       }),
     ];
+    const click = (e: MouseEvent) => {
+      if (!suppressClick) return;
+      suppressClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    board.addEventListener("click", click, true);
     return () => {
+      board.removeEventListener("click", click, true);
       this.#repoint = undefined;
       if (this.#holder === pointer) this.#holder = undefined;
       for (const stop of stops) stop();

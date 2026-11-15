@@ -726,7 +726,11 @@ sideboard: Array<ObjectId>, };
 
 export type ManualOrders = { you: ManualPiles, opponent: ManualPiles, };
 
-export type TableView = { log: Array<LogLine>, proposals: Array<ProposalView>, labels: Array<LabelView>, assists: AssistsView, phase: TablePhase, seats: number, orders: ManualOrders, 
+export type TableView = { log: Array<LogLine>, proposals: Array<ProposalView>, labels: Array<LabelView>, assists: AssistsView, phase: TablePhase, seats: number, 
+/**
+ * The viewer's absolute seat, omitted for seat zero.
+ */
+seat?: number, orders: ManualOrders, 
 /**
  * Hidden zones lent or revealed to this viewer.
  */

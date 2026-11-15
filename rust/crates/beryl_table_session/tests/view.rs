@@ -124,6 +124,7 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
         );
         assert_eq!(manual.phase, TablePhase::SecondMain);
         assert_eq!(manual.seats, 2);
+        assert_eq!(manual.seat.unwrap_or_default(), seat.0);
         assert_eq!(host.life, 12);
         assert_eq!(
             [

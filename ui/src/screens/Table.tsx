@@ -12,6 +12,7 @@ import {
 } from "../stage/playback";
 import { registerClicks } from "../table/click";
 import { TableClient } from "../table/client";
+import { TableDrag } from "../table/drag";
 import { registerSelection } from "../table/select";
 import { GameBoard } from "./Board";
 import { Button } from "../components/Controls";
@@ -24,6 +25,9 @@ export function TableScreen() {
   const [{ board, client }] = useState(() => {
     const board = createBoardStage(false);
     const client = new TableClient(board.stage.pointer);
+    client.drag = new TableDrag(client, board.stage, (failure) =>
+      setError(String(failure)),
+    );
     registerSelection(client);
     registerClicks(client, (failure) => setError(String(failure)));
     return { board, client };
@@ -42,6 +46,7 @@ export function TableScreen() {
     const unlisten = onGameUpdate((update, past) => {
       if (!mounted || !update.view.table) return;
       heard = true;
+      client.drag?.arriving();
       feed.arrive(update, past);
     });
     void unlisten
@@ -61,7 +66,7 @@ export function TableScreen() {
         () => {},
       );
     };
-  }, [feed]);
+  }, [client, feed]);
 
   useLayoutEffect(() => {
     const update = () => {

@@ -105,10 +105,12 @@ export function landed(
 export function PileButtons({
   bands,
   piles,
+  draggable,
   onOpen,
 }: {
   bands: Bands;
   piles: PhonePile[];
+  draggable: boolean;
   onOpen(pile: PhonePile, event: MouseEvent<HTMLButtonElement>): void;
 }) {
   return piles.map((pile) => {
@@ -128,7 +130,7 @@ export function PileButtons({
         aria-label={pileName(pile)}
         data-pile={pile.zone}
         data-side={pile.side}
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={draggable ? undefined : (e) => e.stopPropagation()}
         onClick={(event) => onOpen(pile, event)}
       />
     );

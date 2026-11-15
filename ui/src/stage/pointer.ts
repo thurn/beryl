@@ -28,6 +28,7 @@ export interface PointerKeys {
 
 interface Press {
   name: Name | undefined;
+  origin?: DragSource["origin"];
   player: { player: Side } | undefined;
   kind: PressKind;
   start: Point;
@@ -50,8 +51,21 @@ export interface Drop {
   keys: PointerKeys;
 }
 
+/** A control that can drag a card and still receives its usual native click. */
+export interface DragSource {
+  name: Name;
+  capture: HTMLElement;
+  origin: Pick<Pose, "x" | "y" | "width" | "rotation" | "skew" | "opacity">;
+}
+
 /** What the stage tells its active client. */
 export interface PointerClient {
+  /** A card represented by a control outside the stage card layer. */
+  dragSource?(
+    element: Element,
+    keys: PointerKeys,
+    at: Point,
+  ): DragSource | undefined;
   /** Which nodes a press may pick up. */
   holdable?(name: Name): boolean;
   /** A card click. Call `unhandled` if it should go to the stage's viewers. */
@@ -95,7 +109,7 @@ export interface Held {
 /** What the stage does as a card is held (stage.ts): each is called after `held` changed. */
 export interface Holding {
   /** `name` was picked up. */
-  lifted(name: Name): void;
+  lifted(name: Name, origin?: DragSource["origin"]): void;
   /** The pointer moved with it. */
   moved(name: Name): void;
   /** It was let go where `pose` has it; `taken` as the drop's listener said. */
@@ -257,8 +271,23 @@ export class Pointer {
     this.#tell();
   }
 
+  dragSource(element: Element, keys: PointerKeys, at: Point) {
+    return this.#client?.dragSource?.(element, keys, at);
+  }
+
+  /** A taken drop was refused, so return the card to its resting place. */
+  rejectDrop(name: Name) {
+    if (this.#settling !== name) return;
+    this.#letGo(name, this.#holding.pose(name) ?? undefined, false);
+  }
+
   /** Begins a press on a card, a player, or empty table. Returns whether it was accepted. */
-  press(target: Target, at: Point, kind: PressKind = "primary"): boolean {
+  press(
+    target: Target,
+    at: Point,
+    kind: PressKind = "primary",
+    origin?: DragSource["origin"],
+  ): boolean {
     const name =
       typeof target === "object"
         ? "name" in target
@@ -287,6 +316,7 @@ export class Pointer {
       (this.handlesContextMenu || this.#client?.over || this.#client?.sweep);
     const press: Press = {
       name,
+      origin,
       player,
       kind,
       start: at,
@@ -355,7 +385,7 @@ export class Pointer {
     this.#held = { name, start, at };
     this.#settling = undefined;
     this.#tell();
-    this.#holding.lifted(name);
+    this.#holding.lifted(name, press.origin);
     this.#client?.lift?.(name);
     return true;
   }
@@ -386,8 +416,8 @@ export class Pointer {
     }
     const held = this.#held;
     if (!held) {
-      if (!moved) this.#click(name, at, keys);
-      return;
+      if (!moved && !press.origin) this.#click(name, at, keys);
+      return press.origin !== undefined && moved;
     }
     this.#held = { ...held, at };
     const pose = this.#holding.pose(held.name) ?? undefined;
@@ -404,6 +434,7 @@ export class Pointer {
         keys,
       }) === true;
     this.#letGo(held.name, pose, taken);
+    return press.origin !== undefined;
   }
 
   #click(name: Name, at: Point, keys: PointerKeys) {

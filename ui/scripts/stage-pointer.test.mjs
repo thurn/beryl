@@ -238,6 +238,20 @@ test("a taken drop stays where it was let go, and its step starts from there", (
     assert.deepEqual([made.pose(3).x, made.pose(3).y], [800, 0]);
 });
 
+test("a refused drop goes home while another card is pressed", () => {
+    const { made } = listening({ taken: true });
+    made.release = LINEAR;
+    made.pointer.press(3, { x: 0, y: 500 });
+    made.pointer.move({ x: 1000, y: 100 });
+    made.pointer.release({ x: 1000, y: 100 });
+    made.pointer.press(1, { x: 0, y: 0 });
+    made.pointer.rejectDrop(3);
+    made.clock.advance(100);
+    assert.deepEqual([made.pose(3).x, made.pose(3).y], [500, 300]);
+    made.clock.advance(100);
+    assert.deepEqual([made.pose(3).x, made.pose(3).y], [0, 500]);
+});
+
 test("a taken drop that no step moves goes home when its script is over", () => {
     const { made } = listening({ taken: true, timings: { fly: LINEAR } });
     made.release = LINEAR;

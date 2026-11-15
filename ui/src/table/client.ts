@@ -18,6 +18,7 @@ import type {
   Under,
 } from "../stage/pointer";
 import { shakeRefusal } from "../stage/Refusal";
+import type { TableDrag } from "./drag";
 
 type ObjectKind =
   "permanent" | "their_permanent" | "hand_card" | "stack_entry" | "viewer_card";
@@ -67,6 +68,10 @@ type Aim = (
   done: boolean,
 ) => void;
 type Sweep = (from: Point, to: Point, done: boolean) => void;
+type DragRegistration = Pick<PointerClient, "dragSource" | "over" | "lift"> & {
+  canHold?(): boolean;
+  viewChanged?(): void;
+};
 type DropHandler = (
   drop: Drop,
   from: CardTarget,
@@ -86,10 +91,12 @@ export class TableClient {
   readonly #open: Array<{ close: () => void }> = [];
   #cardClick?: (target: CardTarget, keys: PointerKeys) => boolean;
   view?: PlayerView;
+  drag?: TableDrag;
   #surface?: DomSurface;
   readonly #clicks = new Map<TableTarget["kind"], Click>();
   readonly #secondaries = new Set<Secondary>();
   #drop?: DropHandler;
+  #drag?: DragRegistration;
   #aim?: Aim;
   #sweep?: Sweep;
   #cancelSweep?: () => void;
@@ -127,6 +134,7 @@ export class TableClient {
       );
     // References expire with the view. A held press cannot acquire new ones on release.
     this.pointer.cancel();
+    this.#drag?.viewChanged?.();
   }
 
   get surface() {
@@ -204,8 +212,13 @@ export class TableClient {
     this.#secondaries.add(handler);
   }
 
-  onDrop(handler: DropHandler) {
+  onDrop(handler: DropHandler, drag: DragRegistration) {
     this.#drop = handler;
+    this.#drag = drag;
+  }
+
+  rejectDrop(name: Name) {
+    this.pointer.rejectDrop(name);
   }
 
   onAim(handler: Aim) {
@@ -287,7 +300,15 @@ export class TableClient {
   }
 
   readonly gestures: PointerClient = {
-    holdable: (name) => this.#drop !== undefined && !!this.card(name)?.action,
+    dragSource: (element, keys, at) =>
+      this.#drag?.dragSource?.(element, keys, at),
+    holdable: (name) =>
+      !!this.#drop &&
+      (this.#drag?.canHold?.() ?? true) &&
+      !!this.card(name, true)?.action &&
+      typeof name === "number",
+    over: (target, at) => this.#drag?.over?.(target, at),
+    lift: (name) => this.#drag?.lift?.(name),
     click: (name, _at, keys, unhandled) => {
       const target = this.card(name);
       if (!target || !this.click(target, keys)) unhandled();
@@ -295,7 +316,7 @@ export class TableClient {
     playerClick: (side, _at, keys) => this.click({ kind: "life", side }, keys),
     secondary: (under, at) => this.secondary(this.#under(under), at),
     drop: (drop) => {
-      const from = this.card(drop.name);
+      const from = this.card(drop.name, true);
       return from && this.#drop?.(drop, from, this.#under(drop.onto));
     },
     aim: (name, at, over, done) => {

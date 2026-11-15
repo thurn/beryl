@@ -87,7 +87,7 @@ export function TrayUnder({
 const DECK = { backs: 4, dx: -1.5, dy: -2.5 };
 
 /** The library a put-back's cards go onto, face down in `box`. */
-function Library({ box }: { box: Box }) {
+export function Library({ box }: { box: Box }) {
   return (
     <div
       className="stage-tray-library"

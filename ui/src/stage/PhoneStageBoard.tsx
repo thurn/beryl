@@ -1,3 +1,5 @@
+import { DropTargets } from "../table/DropTargets";
+import { phoneDropAreas } from "../table/dropZones";
 // The phone's game screen drawn on the stage: the phone's strips
 // (mobile/chrome.tsx), one node an object or ability where the page's stage has it, laid out
 // for the phone (phone.ts) and drawn in the phone's faces (mobile/faces.tsx), and the rest of
@@ -329,9 +331,18 @@ export function PhoneStageBoard({
           <Shares asked={asked} prompts={prompts} stage={stage} />
         </>
       )}
+      {client?.drag && surface && table && bands && viewport && (
+        <DropTargets
+          client={client}
+          drag={client.drag}
+          areas={phoneDropAreas(bands, viewport)}
+          tray={phoneTray(table, viewport)}
+        />
+      )}
       {bands && table && (
         <>
           <PileButtons
+            draggable={!!client}
             bands={bands}
             piles={piles}
             onOpen={(pile, event) =>

@@ -1,3 +1,5 @@
+import { DropTargets } from "../table/DropTargets";
+import { desktopDropAreas } from "../table/dropZones";
 // The game's table drawn on the stage: the cloth, one node an object or ability
 // where the page's stage has it (playback.ts), and the chrome around them (Chrome.tsx,
 // game/Corner.tsx). The
@@ -288,6 +290,14 @@ export function StageBoard({
           prompts={prompts}
           space={desktopTray()}
         />
+        {client?.drag && surface && (
+          <DropTargets
+            client={client}
+            drag={client.drag}
+            areas={desktopDropAreas()}
+            tray={desktopTray()}
+          />
+        )}
         <Shares asked={asked} prompts={prompts} stage={stage} />
         <Controls
           stage={stage}

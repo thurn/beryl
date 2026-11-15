@@ -275,6 +275,9 @@ restore the old behavior.
   control or each other. No layer of a library, graveyard or exile pile covers a
   card in play, for either seat, however long a row grows. The opponent's piles
   keep the band above their back row to themselves (by-biv, by-krxg).
+- **Library drop halves.** While a dragged card is over a library, the pile
+  shows Top and Bottom. The half under the pointer lights up. Dropping multiple
+  cards opens the ordering tray before the cards are moved.
 - **Manual table prompts.** Numbers, text and power/toughness are entered in the
   lower-right action dock. The field starts selected, and numeric entries have a
   step down and a step up. A sign changes the current value where one exists.

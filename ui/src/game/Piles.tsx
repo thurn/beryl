@@ -161,7 +161,11 @@ export function ZoneViewer({
   }, [client, close]);
   return (
     <>
-      <div className="viewer-scrim" onPointerDown={close} />
+      <div
+        className="viewer-scrim"
+        onPointerDown={client ? undefined : close}
+        onClick={client ? close : undefined}
+      />
       <div
         ref={panel}
         className={closing ? "zone-viewer zone-viewer-going" : "zone-viewer"}

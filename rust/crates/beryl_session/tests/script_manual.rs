@@ -154,6 +154,7 @@ fn manual_view_with_ordered_zones() -> PlayerView {
         assists: AssistsView::default(),
         phase: TablePhase::FirstMain,
         seats: 2,
+        seat: None,
         orders: ManualOrders {
             you: ManualPiles {
                 hand: slots(&[1, 2, 3]),

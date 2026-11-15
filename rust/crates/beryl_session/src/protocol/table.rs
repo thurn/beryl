@@ -217,6 +217,10 @@ pub struct TableView {
     pub assists: AssistsView,
     pub phase: TablePhase,
     pub seats: u8,
+    /// The viewer's absolute seat, omitted for seat zero.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub seat: Option<u8>,
     pub orders: ManualOrders,
     /// Hidden zones lent or revealed to this viewer.
     pub acting: Vec<ZoneRef>,

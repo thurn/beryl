@@ -71,6 +71,7 @@ pub fn view(
         assists: assists(&projected, seat),
         phase,
         seats: projected.players.len() as u8,
+        seat: (seat.0 != 0).then_some(seat.0),
         orders: ManualOrders {
             you: yours,
             opponent: theirs,

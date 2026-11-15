@@ -904,6 +904,11 @@
     },
     {
       "kind": "no-equivalent",
+      "name": "Library drop halves",
+      "rule": "While a dragged card is over a library, the pile shows Top and Bottom. The half under the pointer lights up. Dropping multiple cards opens the ordering tray before the cards are moved."
+    },
+    {
+      "kind": "no-equivalent",
       "name": "Manual table prompts",
       "rule": "Numbers, text and power/toughness are entered in the lower-right action dock. The field starts selected, and numeric entries have a step down and a step up. A sign changes the current value where one exists. The button says what it will do, such as Draw 3. Return confirms and Escape cancels."
     },
