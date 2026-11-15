@@ -53,11 +53,24 @@ NEXT: re.Pattern[str] = re.compile(
 FINISHED: re.Pattern[str] = re.compile(
     r"Finished\b[^\n]*? in (?:(\d+)m )?(\d+(?:\.\d+)?)s\b"
 )
+# The fast check's lines for work it left to slow CI (tools/src/beryl_tools/checks.py,
+# `run_all`, and rust_fit.py, `deferred_line`): a step cut at the hard limit,
+# `deferred: <lane> <step>`, and the Rust tests that did not fit the time left,
+# `rust-tests: <n> tests deferred to slow CI`.
+DEFERRED_STEP: re.Pattern[str] = re.compile(r"^deferred: (\S+) (.+?)\s*$", re.MULTILINE)
+DEFERRED_TESTS: re.Pattern[str] = re.compile(
+    r"^(\S+): (\d+) tests deferred to slow CI\b", re.MULTILINE
+)
 # The tool call a task notification reports on.
 NOTIFIED: re.Pattern[str] = re.compile(r"<tool-use-id>([^<\s]+)</tool-use-id>")
 # Lines without one of these are neither requests, tool results nor prompts, and are not
 # parsed.
-WANTED: tuple[bytes, ...] = (b'"usage"', b'"tool_result"', b'"user"')
+WANTED: tuple[bytes, ...] = (
+    b'"usage"',
+    b'"tool_result"',
+    b'"user"',
+    b"<task-notification>",
+)
 
 
 def project_name(path: Path) -> str:
@@ -118,6 +131,20 @@ def compile_seconds(output: object) -> float | None:
         for found in FINISHED.finditer(value if isinstance(value, str) else ""):
             total = (total or 0.0) + 60 * int(found[1] or 0) + float(found[2])
     return total
+
+
+def deferred(output: object) -> str | None:
+    """The fast-check work a shell command's output says was left to slow CI, as the JSON
+    list `tool_results.deferred` stores; None when it says none."""
+    if not isinstance(output, dict):
+        return None
+    found: list[str] = []
+    for key in ("stdout", "stderr"):
+        value = output.get(key)
+        text = value if isinstance(value, str) else ""
+        found += [f"{m[1]} {m[2]}" for m in DEFERRED_STEP.finditer(text)]
+        found += [f"{m[1]}: {m[2]} tests" for m in DEFERRED_TESTS.finditer(text)]
+    return json.dumps(sorted(found)) if found else None
 
 
 def message_text(content: object) -> str:
@@ -216,6 +243,30 @@ class Transcripts(LineSource):
             found += sorted(folder.glob("*/subagents/*.jsonl"))
         return found
 
+    def queued(self, path: Path, record: dict[str, object]) -> list[Row]:
+        """A notice queued while the session was busy that a background command finished:
+        a `notifications` row with the command's tool call and when the notice came."""
+        content = record.get("content")
+        if record.get("operation") != "enqueue" or not isinstance(content, str):
+            return []
+        if not content.lstrip().startswith("<task-notification"):
+            return []
+        found = NOTIFIED.search(content)
+        if not found:
+            return []
+        return [
+            (
+                "notifications",
+                {
+                    "host": self.host,
+                    "provider": PROVIDER,
+                    "transcript": transcript_of(path)[0],
+                    "call": found[1],
+                    "time": text_field(record, "timestamp"),
+                },
+            )
+        ]
+
     def parse(self, path: Path, line: bytes) -> list[Row]:
         if not any(w in line for w in WANTED):
             return []
@@ -223,6 +274,8 @@ class Transcripts(LineSource):
         if not isinstance(record, dict):
             raise TypeError("not an object")
         kind = record.get("type")
+        if kind == "queue-operation":
+            return self.queued(path, record)
         if kind not in ("assistant", "user"):
             return []
         message = record["message"]
@@ -274,6 +327,7 @@ class Transcripts(LineSource):
                             output if output is not None else block.get("content")
                         ),
                         "compile_seconds": compile_seconds(output),
+                        "deferred": deferred(output),
                     },
                 )
             )

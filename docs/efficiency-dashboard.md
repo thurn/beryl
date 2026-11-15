@@ -1003,6 +1003,8 @@ just efficiency dollars --by source --epic by-bajq
 just efficiency cards --by tier
 just efficiency machine --since 7d
 just efficiency ci --lane oracle
+just efficiency pushes --since 24h
+just efficiency failures --since 7d
 just efficiency changes
 just efficiency findings
 just efficiency coverage
@@ -1016,6 +1018,8 @@ just efficiency coverage
   `purpose`, `model`, `tier`, `role`, `lane`, `epic`, `day`.
 - `machine` shows cores in use, saturation, queued core hours and shared CPU.
 - `ci` shows the tree described under [CI accounting](#ci-accounting).
+- `pushes` shows [the fast check](#the-fast-check) per push, and `failures`
+  shows [what each slow-CI failure costs](#what-a-slow-ci-failure-costs).
 - `coverage` reports what is missing or unknown: hosts with no data, models with
   no price, unmatched commands, skipped lines, closes with no open window, and
   the tool's own cost.

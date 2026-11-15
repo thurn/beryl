@@ -251,7 +251,7 @@ def derive(
         )
         db.execute(
             """UPDATE tool_calls SET end = r.end, result_bytes = r.result_bytes,
-                compile_seconds = r.compile_seconds
+                compile_seconds = r.compile_seconds, deferred = r.deferred
             FROM tool_results AS r WHERE r.host = tool_calls.host
                 AND r.provider = tool_calls.provider
                 AND r.transcript = tool_calls.transcript AND r.call = tool_calls.call

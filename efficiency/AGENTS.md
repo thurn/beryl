@@ -65,7 +65,16 @@ store" and "Isolation" before changing anything here.
   stored one); no line is kept. The verdicts on the `ci-check` beads come from
   `bd export` into `verdicts`. `family` names a check's family. `ci.py` is the
   `ci` query (the tree script, check lane, family, check, with CPU by kind of
-  process from the sampler) and the CI metrics.
+  process from the sampler) and the CI metrics. `pushes.py` is the `pushes`
+  query: each `enact push` tool call split by the fast check's `lane_runs` in
+  the bead's worktree inside the call, with repeats after losing the race to
+  `staging`, the steps the push's output says were left to slow CI
+  (`tool_calls.deferred`), and the fast check's failures by verdict; the `bead`
+  query shows the same split for its pushes. A push run in the background ends
+  at its `notifications` row (or `prompts` row), when the session was told it
+  finished. `failures.py` is the `failures` query: per Steward bead
+  (`enact_ci_range`) its sessions' cost, bisection's CPU and the minutes
+  `master` stayed behind.
 - `commits.py`: the commits source, `git log` of `staging` and `master` run in
   the main checkout, with `master`'s reflog in `ref_moves` (kept after git
   expires it), which says when each commit reached `master`. `History` gives

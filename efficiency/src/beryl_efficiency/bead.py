@@ -8,10 +8,11 @@ from __future__ import annotations
 import sqlite3
 import statistics
 from collections import defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 from . import timing
 from .facts import Facts, Window, load, minutes, money, total
+from .pushes import Push, push_line, pushes
 from .render import Result, describe, table, wrap
 from .rollups import Part, agent_parts, bar, kind_name, number, split_lines
 from .scope import Scope
@@ -112,6 +113,7 @@ class BeadReport:
     sessions: list[Worked]
     strip: list[Stretch]
     contexts: list[Context]
+    pushes: list[Push] = field(default_factory=list)
 
 
 def core_minutes(facts: Facts, bead: str) -> float | None:
@@ -302,6 +304,7 @@ def report_from(
         ],
         strip,
         marks,
+        pushes(db, facts, Scope(range=scope.range), bead),
     )
     sessions = sorted({w.session for w in windows})
     return Result(
@@ -310,7 +313,8 @@ def report_from(
         lines(result),
         [f"efficiency session {s} --bead {bead}" for s in sessions[:3]]
         or [f"efficiency sql \"select * from windows where bead = '{bead}'\""],
-        describe(
+        {"pushes": "the bead's pushes, each split into its fast check and the rest"}
+        | describe(
             "agent_minutes",
             "person_minutes",
             "idle_minutes",
@@ -387,6 +391,7 @@ def lines(b: BeadReport) -> list[str]:
             if b.unpriced
             else []
         ),
+        *(["", *(push_line(p) for p in b.pushes)] if b.pushes else []),
         "",
         *table(
             ["session", "title", "kind", "start", "minutes"],

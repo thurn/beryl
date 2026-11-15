@@ -24,6 +24,7 @@ TABLES = {
     "ref_moves",
     "checks",
     "lane_runs",
+    "notifications",
     "verdicts",
     "cpu",
     "cpu_minutes",

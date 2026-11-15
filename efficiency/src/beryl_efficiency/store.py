@@ -437,6 +437,25 @@ MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY (ref, time, sha)
     );
     """,
+    """
+    -- The fast-check work a push's output says was left to slow CI, as a JSON list of
+    -- `<lane> <step>` for a step cut at the hard limit and `<lane>: <n> tests` for tests a
+    -- lane cut to fit its time; null when the output says none.
+    ALTER TABLE tool_results ADD COLUMN deferred TEXT;
+    ALTER TABLE tool_calls ADD COLUMN deferred TEXT;
+    -- When the session was told that a command it ran in the background had finished, for
+    -- a notice queued while the session was busy, which is not a prompt of its own.
+    CREATE TABLE notifications (
+        host TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        transcript TEXT NOT NULL,
+        call TEXT NOT NULL,
+        time TEXT NOT NULL,
+        PRIMARY KEY (host, provider, transcript, call)
+    );
+    -- Transcripts are read again from the start for both.
+    DELETE FROM sources WHERE source = 'claude';
+    """,
 )
 
 

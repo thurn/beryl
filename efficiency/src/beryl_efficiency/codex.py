@@ -281,6 +281,7 @@ class Rollouts(LineSource):
                     "end": time,
                     "result_bytes": claude.size(output),
                     "compile_seconds": claude.compile_seconds({"stdout": text}),
+                    "deferred": claude.deferred({"stdout": text}),
                 },
             )
         ]

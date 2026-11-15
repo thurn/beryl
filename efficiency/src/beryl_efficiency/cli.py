@@ -25,11 +25,13 @@ from . import (
     cpu,
     exchange,
     facts,
+    failures,
     ingest,
     kinds,
     machine,
     metrics,
     paths,
+    pushes,
     rollups,
     session,
     store,
@@ -493,6 +495,14 @@ def run_ci(args: argparse.Namespace) -> Result:
     )
 
 
+def run_pushes(args: argparse.Namespace) -> Result:
+    return answer(args, pushes.report)
+
+
+def run_failures(args: argparse.Namespace) -> Result:
+    return answer(args, failures.report)
+
+
 def run_metrics(args: argparse.Namespace) -> Result:
     if args.name is None:
         return metrics.listing()
@@ -545,6 +555,14 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
         "CI's cost, catches and flakiness by script, check lane, family and check",
         run_ci,
     ),
+    "pushes": (
+        "the fast check per push: its seconds, CPU, repeats and steps left to slow CI",
+        run_pushes,
+    ),
+    "failures": (
+        "what each slow-CI failure cost: its Steward bead, bisection, time behind",
+        run_failures,
+    ),
     "metrics": ("the named series, or one series by day", run_metrics),
     "changes": (
         "changes made to save time or tokens, with medians before and after",
@@ -572,6 +590,8 @@ SCOPED: dict[str, str] = {
     "cards": "7d",
     "machine": "7d",
     "ci": "7d",
+    "pushes": "7d",
+    "failures": "7d",
     "epic": "all",
     "bead": "all",
     "session": "all",
