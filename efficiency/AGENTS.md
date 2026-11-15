@@ -91,6 +91,12 @@ store" and "Isolation" before changing anything here.
   commit reached `staging`. Metrics date a sample by when its unit began, a bead
   by its start, so that a bead open across a change counts as before it. Its
   test also validates the file.
+- `findings.py` is the `findings` query: the rules of "Findings", ranked in one
+  group per unit, with `--rule` for one rule's items. `finding.py` holds what
+  every rule shares (`Rule`, `Item`, the scope helpers), and the rules
+  themselves are in `dollar_rules.py`, `time_rules.py` and `cpu_rules.py`, one
+  function each with its reference in its docstring. A rule returns its items
+  over the range; `findings.py` scales them to a week.
 - The query layer: `scope.py` parses `--since` and the cohort filters into a
   `Scope`; `facts.py` loads beads and windows with their `window_time` and
   `window_dollars` rows, which every query adds up, so that a roll-up's lines

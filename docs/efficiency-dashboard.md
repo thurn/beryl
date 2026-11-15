@@ -931,6 +931,29 @@ The rules, each with its unit and its reference:
 - **misses** (core hours): for each miss, the bisection and the slow-CI runs
   that failed because of it. Reference: zero.
 
+How the rules are built:
+
+- `just efficiency findings` lists the groups; `--rule <rule>` prints one rule's
+  items (one per role, kind of command, check or failure) with their count,
+  cost, reference and saving. A finding's `evidence` is that `--rule` command,
+  and its `see` names the wider query it draws on. A rule whose saving is zero
+  is left out.
+- The range defaults to the last seven days. Over any other range every figure
+  is divided by the range's length in weeks.
+- A cohort for outlier-beads and repeated-command is the beads with the same
+  role and tier labels, and needs at least five closed beads. Tier-gap compares
+  tiers within one role by their mean cost per bead.
+- Compile-share counts only kinds the command kinds table marks heavy, because
+  `cat` or `grep` over a build log prints cargo's `Finished ... in` lines too.
+  Repeated-command compares only kinds that the cohort's median bead runs at
+  least once; otherwise a bead that ran a rare command once would count all of
+  it.
+- Small-reads counts the read tools (Read, Grep, Glob) as well as shell reads
+  and searches, since a run of either is the same waste.
+- Never-caught looks at slow CI, the fast check, the sweep and the nightly by
+  family, and counts a `mixed` verdict as a catch. Misses counts the slow-CI
+  runs with a failure on any commit in the Steward bead's range.
+
 ## The store
 
 The store is one SQLite file in the Beryl cache directory. It is private to the

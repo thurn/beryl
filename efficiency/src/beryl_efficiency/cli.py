@@ -26,6 +26,7 @@ from . import (
     exchange,
     facts,
     failures,
+    findings,
     ingest,
     kinds,
     machine,
@@ -503,6 +504,10 @@ def run_failures(args: argparse.Namespace) -> Result:
     return answer(args, failures.report)
 
 
+def run_findings(args: argparse.Namespace) -> Result:
+    return answer(args, lambda db, f, s: findings.report(db, f, s, args.rule))
+
+
 def run_metrics(args: argparse.Namespace) -> Result:
     if args.name is None:
         return metrics.listing()
@@ -563,6 +568,10 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
         "what each slow-CI failure cost: its Steward bead, bisection, time behind",
         run_failures,
     ),
+    "findings": (
+        "waste ranked by what removing it would save, per unit",
+        run_findings,
+    ),
     "metrics": ("the named series, or one series by day", run_metrics),
     "changes": (
         "changes made to save time or tokens, with medians before and after",
@@ -592,6 +601,7 @@ SCOPED: dict[str, str] = {
     "ci": "7d",
     "pushes": "7d",
     "failures": "7d",
+    "findings": "7d",
     "epic": "all",
     "bead": "all",
     "session": "all",
@@ -655,6 +665,12 @@ def parser() -> argparse.ArgumentParser:
                 "--since",
                 default="all",
                 help="changes that reached staging since: 24h, 7d, all or a date",
+            )
+        if name == "findings":
+            p.add_argument(
+                "--rule",
+                choices=[r.name for r in findings.RULES],
+                help="one rule's full detail",
             )
         if name == "metrics":
             p.add_argument("name", nargs="?", metavar="<name>", help="a metric's name")
