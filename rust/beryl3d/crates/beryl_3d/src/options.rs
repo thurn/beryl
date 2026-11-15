@@ -130,9 +130,7 @@ impl Options {
                 "--search-class" if tools => {
                     let word = value()?;
                     options.search_class = Class::from_word(&word).ok_or_else(|| {
-                        format!(
-                            "--search-class {word}: a class is utility, default or interactive"
-                        )
+                        format!("--search-class {word}: a class is utility, default or interactive")
                     })?;
                 }
                 "--for" => options.run_for = Some(duration(&value()?)?),

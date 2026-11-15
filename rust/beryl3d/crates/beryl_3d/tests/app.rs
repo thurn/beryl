@@ -60,7 +60,14 @@ fn a_release_build_has_no_fixture_option() {
     let agent = |words: &[&str], tools| Options::parse(&arguments(words), tools);
     assert!(agent(&["--agent", "expert"], false).is_err());
     let played = agent(
-        &["--agent", "expert", "--seed", "7", "--search-class", "default"],
+        &[
+            "--agent",
+            "expert",
+            "--seed",
+            "7",
+            "--search-class",
+            "default",
+        ],
         true,
     )
     .expect("a debug build plays a game for the viewer");

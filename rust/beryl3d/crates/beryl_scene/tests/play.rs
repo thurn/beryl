@@ -6,10 +6,10 @@ mod common;
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{Side, StackItem, Why, ZoneName};
 use beryl_protocol::script::{Act, Fact, Step, Subject, Verb};
-use beryl_scene::testing::{ScriptBuilder, timing};
 use beryl_scene::frame::Wake;
 use beryl_scene::play::Show;
 use beryl_scene::pose::Curve;
+use beryl_scene::testing::{ScriptBuilder, timing};
 use common::{MS, before, discard, draw, empty_frame, frame, show, three_beats, window};
 
 /// Every object of `update`'s view stands where placement puts it in the show's window.
