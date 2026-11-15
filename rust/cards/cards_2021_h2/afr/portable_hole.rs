@@ -33,10 +33,10 @@ pub mod scenarios {
     const HOLE: &str = Card::PortableHole;
 
     /// Mana value 2: a legal target.
-    const TWO_DROP: &str = Prop::SmallCreature;
+    const TWO_DROP: &str = Prop::Vanilla;
 
     /// Mana value 3: not a legal target.
-    const THREE_DROP: &str = Prop::Creature;
+    const THREE_DROP: &str = Prop::Flier;
 
     pub const SCENARIOS: &[Scenario] = &[
         // P1's two-drop is the one legal target: not their three-drop, not P0's own two-drop. On
@@ -114,11 +114,14 @@ pub mod scenarios {
             ]),
         // P1 answers the trigger by returning the Hole to P0's hand with Sink into Stupor: the
         // event the exile lasts until has happened, so the two-drop never leaves (CR 610.3b).
-        // P0's two-drop in hand, with flash and the Islands for it, gives P0 a priority to pass
-        // between the two resolutions.
+        // P0's instant in hand, with the Islands for it and P1's two-drop to target, gives P0 a
+        // priority to pass between the two resolutions.
         Scenario::new("Portable Hole gone before its trigger resolves")
-            .battlefield(P0, &[Card::Plains, Card::Island, Card::Island])
-            .hand(P0, &[HOLE, TWO_DROP])
+            .battlefield(
+                P0,
+                &[Card::Plains, Card::Island, Card::Island, Card::Island],
+            )
+            .hand(P0, &[HOLE, Prop::Removal])
             .library(P0, &[Card::Island])
             .battlefield(P1, &[TWO_DROP, Card::Island, Card::Island, Card::Island])
             .hand(P1, &[Card::SinkIntoStupor])

@@ -29,7 +29,12 @@ pub const SCENARIOS: &[Scenario] =
             .hand(P0, &[THIRST])
             .library(
                 P0,
-                &[names::PLAINS, names::ISLAND, props::ARTIFACT, names::ISLAND],
+                &[
+                    names::PLAINS,
+                    names::ISLAND,
+                    props::ARTIFACT.card,
+                    names::ISLAND,
+                ],
             )
             .library(P1, &[names::ISLAND])
             .actions(&[

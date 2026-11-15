@@ -25,11 +25,11 @@ pub mod scenarios {
         .interaction(&[Card::Damn])
         .battlefield(P0, &[Card::Swamp, Card::Swamp])
         .hand(P0, &[Card::Damn])
-        .battlefield(P1, &[Card::EliteSpellbinder])
+        .battlefield(P1, &[Prop::Flier])
         .actions(&[
             ME.casts(Card::Damn),
             Resolve,
             ME.tapped(Card::Swamp, 2),
-            THEM.has(Zone::Graveyard, Card::EliteSpellbinder, 1),
+            THEM.has(Zone::Graveyard, Prop::Flier, 1),
         ])];
 }

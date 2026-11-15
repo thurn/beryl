@@ -196,11 +196,11 @@ pub mod scenarios {
         // to the cards that Converter exiled (CR 607.2a), so Oust goes to the graveyard for a
         // Rogue. The creature makes the target a choice, which the oracles are then told.
         Scenario::new("Currency Converter's ability returns a card after the Converter left")
-            // The Converter, the {2} for its loot, and a tapped creature, which can't attack on
-            // the first turn.
-            .battlefield(P0, &[CONVERTER, Card::Island, Card::Island])
-            .permanents(P0, &[Permanent::new(Prop::SmallCreature).tapped()])
-            .hand(P0, &[Card::Oust, Prop::SmallCreature])
+            // The Converter, the {2} for its loot, a Swamp for the flash creature, and a tapped
+            // creature, which can't attack on the first turn.
+            .battlefield(P0, &[CONVERTER, Card::Island, Card::Island, Card::Swamp])
+            .permanents(P0, &[Permanent::new(Prop::Vanilla).tapped()])
+            .hand(P0, &[Card::Oust, Prop::FlashCreature])
             .library(P0, &[Card::Plains, Card::Plains, Card::Plains])
             .battlefield(P1, &[Card::Island; 3])
             .hand(P1, &[Card::SinkIntoStupor])
@@ -212,7 +212,7 @@ pub mod scenarios {
                 Resolve,
                 ME.yes(),
                 advance_to(3, TurnStep::PrecombatMain),
-                // The two-drop in P0's hand, with flash, makes each of P0's priorities a decision.
+                // The flash creature in P0's hand makes each of P0's priorities a decision.
                 ME.activates(CONVERTER, 2),
                 ME.passes(),
                 THEM.casts(Card::SinkIntoStupor),

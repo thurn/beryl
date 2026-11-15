@@ -42,15 +42,15 @@ pub mod scenarios {
             .interaction(&[Card::Damn])
             .battlefield(P0, &[Card::Swamp, Card::Swamp, ARTIST])
             .hand(P0, &[Card::Damn])
-            .battlefield(P1, &[Card::EliteSpellbinder])
+            .battlefield(P1, &[Prop::Flier])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.casts(Card::Damn),
-                ME.targets(Card::EliteSpellbinder),
+                ME.targets(Prop::Flier),
                 Resolve,
                 ME.targets_player(THEM),
                 Resolve,
-                THEM.controls(Card::EliteSpellbinder, 0),
+                THEM.controls(Prop::Flier, 0),
                 ME.controls(ARTIST, 1),
                 THEM.life(19),
                 ME.life(21),
@@ -61,11 +61,11 @@ pub mod scenarios {
             .interaction(&[Card::Damn])
             .battlefield(P0, &[Card::Swamp, Card::Swamp, ARTIST])
             .hand(P0, &[Card::Damn])
-            .battlefield(P1, &[Card::EliteSpellbinder])
+            .battlefield(P1, &[Prop::Flier])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.casts(Card::Damn),
-                ME.targets(Card::EliteSpellbinder),
+                ME.targets(Prop::Flier),
                 Resolve,
                 ME.targets_player(ME),
                 Resolve,
@@ -83,11 +83,11 @@ pub mod scenarios {
                     Card::Plains,
                     Card::Plains,
                     ARTIST,
-                    Prop::SmallCreature,
+                    Prop::Vanilla,
                 ],
             )
             .hand(P0, &[Card::Damn])
-            .battlefield(P1, &[Card::EliteSpellbinder])
+            .battlefield(P1, &[Prop::Flier])
             .library(P1, &[Card::Island])
             .actions(&[
                 Action::Cast {
@@ -146,17 +146,17 @@ pub mod scenarios {
                 THEM.life(19),
                 ME.life(21),
             ]),
-        // Exile isn't dying: Portable Hole exiles P1's creature and nothing triggers.
+        // Exile isn't dying: `Prop::Artifact` exiles P1's creature and nothing triggers.
         Scenario::new("Blood Artist ignores a creature that is exiled")
             .battlefield(P0, &[Card::Plains, ARTIST])
             .hand(P0, &[Prop::Artifact])
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P1, &[Prop::Vanilla])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.casts(Prop::Artifact),
                 Resolve,
                 Resolve,
-                THEM.controls(Prop::SmallCreature, 0),
+                THEM.controls(Prop::Vanilla, 0),
                 stack(0),
                 THEM.life(20),
                 ME.life(20),
@@ -165,13 +165,13 @@ pub mod scenarios {
         Scenario::new("Blood Artist ignores a creature returned to a hand")
             .battlefield(P0, &[Card::Island, Card::Island, Card::Island, ARTIST])
             .hand(P0, &[Prop::Removal])
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P1, &[Prop::Vanilla])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.casts(Prop::Removal),
                 Resolve,
-                THEM.controls(Prop::SmallCreature, 0),
-                THEM.has(Zone::Hand, Prop::SmallCreature, 1),
+                THEM.controls(Prop::Vanilla, 0),
+                THEM.has(Zone::Hand, Prop::Vanilla, 1),
                 stack(0),
                 THEM.life(20),
                 ME.life(20),

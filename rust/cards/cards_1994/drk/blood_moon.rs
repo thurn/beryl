@@ -43,9 +43,8 @@ pub mod scenarios {
 
     const BLOOD_MOON: &str = Card::BloodMoon;
 
-    // `Prop::Artifact` is Portable Hole, a {W} artifact; `Prop::Creature` is Elite
-    // Spellbinder, a 3/1 flier, there for an attack to be the first decision when no spell
-    // can be cast. Tundra is a nonbasic Plains Island that taps for {W} or {U}.
+    // `Prop::Flier` is there for an attack to be the first decision when no spell can be
+    // cast.
 
     pub const SCENARIOS: &[Scenario] = &[
         // Tundra is a Mountain, so it pays the {R} of a second Blood Moon.
@@ -54,12 +53,12 @@ pub mod scenarios {
             .hand(P0, &[BLOOD_MOON])
             .actions(&[ME.casts(BLOOD_MOON), Resolve, ME.controls(BLOOD_MOON, 2)]),
         // Tundra has lost the mana abilities of its rules text and its old land types, so
-        // it can't pay the {W} of Portable Hole: P0 is given no priority in the main phase.
+        // it can't pay the artifact's {W}: P0 is given no priority in the main phase.
         Scenario::new("a nonbasic land loses its own mana abilities")
             .hand(P0, &[Prop::Artifact])
-            .battlefield(P0, &[BLOOD_MOON, Card::Tundra, Prop::Creature])
+            .battlefield(P0, &[BLOOD_MOON, Card::Tundra, Prop::Flier])
             .actions(&[ME.deciding(DecisionKind::Attacker, 2)]),
-        // A basic land is no nonbasic land: the Plains still pays for Portable Hole.
+        // A basic land is no nonbasic land: the Plains still pays for the artifact.
         Scenario::new("a basic land keeps its land type")
             .hand(P0, &[Prop::Artifact])
             .battlefield(P0, &[BLOOD_MOON, Card::Plains])
@@ -86,10 +85,7 @@ pub mod scenarios {
         // Swamps and can't pay Damn's {B}{B}, and Urborg itself taps only for {R}.
         Scenario::new("Urborg entering under it makes no Swamps")
             .interaction(&[Card::UrborgTombOfYawgmoth, Card::Damn])
-            .battlefield(
-                P0,
-                &[BLOOD_MOON, Card::Plains, Card::Plains, Prop::Creature],
-            )
+            .battlefield(P0, &[BLOOD_MOON, Card::Plains, Card::Plains, Prop::Flier])
             .hand(P0, &[Card::UrborgTombOfYawgmoth, Card::Damn])
             .actions(&[
                 ME.plays(Card::UrborgTombOfYawgmoth),
@@ -109,7 +105,7 @@ pub mod scenarios {
                     Card::Island,
                     Card::Plains,
                     Card::Plains,
-                    Prop::Creature,
+                    Prop::Flier,
                 ],
             )
             .hand(P0, &[BLOOD_MOON, Card::Damn])

@@ -63,8 +63,7 @@ pub mod scenarios {
     const ISLAND: TextWord = TextWord::LandType(Subtype::Island);
     const SWAMP: TextWord = TextWord::LandType(Subtype::Swamp);
 
-    // `Prop::Creature` is Elite Spellbinder, a 3/1 flier, there so that P0 declares
-    // attackers even when Dandân can't attack. That a text change lets Dandân attack a player
+    // `Prop::Flier` is there so that P0 declares attackers even when Dandân can't attack. That a text change lets Dandân attack a player
     // with a Swamp and no Island is a test of `beryl_cards`, `tests::text`: Forge changes the
     // word in the trigger but not in the attack restriction, and XMage has no Mind Bend or
     // Crystal Spray, so no oracle can show it.
@@ -79,9 +78,9 @@ pub mod scenarios {
                 advance_to(1, TurnStep::EndOfCombat),
                 THEM.life(16),
             ]),
-        // P1 controls no Island, so only the Spellbinder is offered, beside "done".
+        // P1 controls no Island, so only the flier is offered, beside "done".
         Scenario::new("Dandân can't attack a player who controls no Island")
-            .battlefield(P0, &[DANDAN, Card::Island, Prop::Creature])
+            .battlefield(P0, &[DANDAN, Card::Island, Prop::Flier])
             .battlefield(P1, &[Card::Plains])
             .actions(&[ME.deciding(DecisionKind::Attacker, 2)]),
         // P0 taps their one Island for Mind Bend, which makes it a Swamp: P0 controls no
@@ -116,7 +115,7 @@ pub mod scenarios {
         // "Island" reads "Swamp", so P1's Island no longer lets Dandân attack.
         Scenario::new("Mind Bend keeps Dandân from attacking a player with only an Island")
             .interaction(&[MIND_BEND])
-            .battlefield(P0, &[DANDAN, Card::Island, Card::Swamp, Prop::Creature])
+            .battlefield(P0, &[DANDAN, Card::Island, Card::Swamp, Prop::Flier])
             .battlefield(P1, &[Card::Island])
             .hand(P0, &[MIND_BEND])
             .actions(&[

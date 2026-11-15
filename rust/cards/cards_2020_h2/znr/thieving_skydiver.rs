@@ -65,7 +65,7 @@ pub mod scenarios {
                     Card::Island,
                 ],
             )
-            .battlefield(P1, &[Card::ManaCrypt, Prop::Creature])
+            .battlefield(P1, &[Card::ManaCrypt, Prop::Flier])
             .library(P0, &[Card::Island])
             .library(P1, &[Card::Plains])
             .actions(&[
@@ -97,7 +97,7 @@ pub mod scenarios {
         Scenario::new("Thieving Skydiver kicked steals an Equipment and wears it")
             .hand(P0, &[SKYDIVER])
             .battlefield(P0, &[Card::Island; 4])
-            .battlefield(P1, &[Prop::Equipment, Prop::Creature])
+            .battlefield(P1, &[Prop::Equipment, Prop::Flier])
             .library(P0, &[Card::Island])
             .library(P1, &[Card::Plains])
             .actions(&[

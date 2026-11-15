@@ -39,30 +39,28 @@ pub mod scenarios {
     const BOLT: &str = Card::LightningBolt;
     const HOLY: &str = Card::HolyStrength;
 
-    // `Prop::Creature` is a white 3/1 flier, `Prop::SmallCreature` a blue 2/1.
-
     /// P0 holds Lightning Bolt and a Mountain to cast it, Mother of Runes and a white
     /// creature.
     const BOLTING: Scenario = Scenario::setup()
         .interaction(&[BOLT])
-        .battlefield(P0, &[Card::Mountain, MOTHER, Prop::Creature])
+        .battlefield(P0, &[Card::Mountain, MOTHER, Prop::Flier])
         .hand(P0, &[BOLT, Card::Mountain]);
 
     /// P0 casts Lightning Bolt at their own white creature and, in response, activates
     /// Mother of Runes targeting it.
     const BOLT_IT: [Action; 4] = [
         ME.casts(BOLT),
-        ME.targets(Prop::Creature),
+        ME.targets(Prop::Flier),
         ME.activates(MOTHER, 0),
-        ME.targets(Prop::Creature),
+        ME.targets(Prop::Flier),
     ];
 
     /// In P0's turn 3, P0 attacks with their blue 2/1 into P1's white 3/1.
     const fn attacking(name: &'static str) -> Scenario {
         Scenario::new(name)
             .at(3, P0, TurnStep::PrecombatMain)
-            .battlefield(P0, &[MOTHER, Prop::SmallCreature])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P0, &[MOTHER, Prop::Vanilla])
+            .battlefield(P1, &[Prop::Flier])
             .library(P0, &[Card::Plains, Card::Plains])
             .library(P1, &[Card::Plains, Card::Plains])
     }
@@ -83,7 +81,7 @@ pub mod scenarios {
                 BOLT_IT[3],
                 ME.chooses_color(Colors::RED),
                 ME.has(Zone::Graveyard, BOLT, 1),
-                ME.has(Zone::Battlefield, Prop::Creature, 1),
+                ME.has(Zone::Battlefield, Prop::Flier, 1),
                 ME.tapped(MOTHER, 1),
             ]),
         BOLTING
@@ -94,18 +92,18 @@ pub mod scenarios {
                 BOLT_IT[2],
                 BOLT_IT[3],
                 ME.chooses_color(Colors::BLUE),
-                ME.has(Zone::Graveyard, Prop::Creature, 1),
+                ME.has(Zone::Graveyard, Prop::Flier, 1),
             ]),
         // "You control": P1's creature is no target, so Mother and P0's creature are the
         // two.
         Scenario::new("Mother of Runes targets only a creature its controller controls")
-            .battlefield(P0, &[MOTHER, Prop::Creature])
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P0, &[MOTHER, Prop::Flier])
+            .battlefield(P1, &[Prop::Vanilla])
             .hand(P0, &[Card::Island])
             .actions(&[
                 ME.activates(MOTHER, 0),
                 ME.deciding(DecisionKind::Target, 2),
-                ME.targets(Prop::Creature),
+                ME.targets(Prop::Flier),
                 ME.chooses_color(Colors::GREEN),
                 ME.tapped(MOTHER, 1),
             ]),
@@ -115,18 +113,18 @@ pub mod scenarios {
         // [CR 702.16c]: https://yawgatog.com/resources/magic-rules/#R70216c
         Scenario::new("protection from white makes a white Aura fall off")
             .interaction(&[HOLY])
-            .battlefield(P0, &[Card::Plains, MOTHER, Prop::SmallCreature])
+            .battlefield(P0, &[Card::Plains, MOTHER, Prop::Vanilla])
             .hand(P0, &[HOLY, Card::Island])
             .actions(&[
                 ME.casts(HOLY),
-                ME.targets(Prop::SmallCreature),
+                ME.targets(Prop::Vanilla),
                 Resolve,
-                ME.pt(Prop::SmallCreature, 3, 3),
+                ME.pt(Prop::Vanilla, 3, 3),
                 ME.activates(MOTHER, 0),
-                ME.targets(Prop::SmallCreature),
+                ME.targets(Prop::Vanilla),
                 ME.chooses_color(Colors::WHITE),
                 ME.has(Zone::Graveyard, HOLY, 1),
-                ME.pt(Prop::SmallCreature, 2, 1),
+                ME.pt(Prop::Vanilla, 2, 1),
             ]),
         // [CR 702.16f]: "Attacking creatures with protection can’t be blocked by creatures
         // that have the stated quality." P1's white creature can't block, so P1 takes 2.
@@ -136,14 +134,14 @@ pub mod scenarios {
             .actions(&[
                 advance_to(3, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Prop::SmallCreature),
+                ME.attacks_with(Prop::Vanilla),
                 ME.done_attacking(),
                 ME.activates(MOTHER, 0),
-                ME.targets(Prop::SmallCreature),
+                ME.targets(Prop::Vanilla),
                 ME.chooses_color(Colors::WHITE),
                 advance_to(3, TurnStep::EndOfCombat),
                 THEM.life(18),
-                ME.has(Zone::Battlefield, Prop::SmallCreature, 1),
+                ME.has(Zone::Battlefield, Prop::Vanilla, 1),
             ]),
         // [CR 702.16e]: "Any damage that would be dealt by sources that have the stated
         // quality to a permanent or player with protection is prevented." Blocked first, the
@@ -154,16 +152,16 @@ pub mod scenarios {
         attacking("protection from white prevents a white blocker's combat damage").actions(&[
             advance_to(3, TurnStep::BeginningOfCombat),
             ME.passes(),
-            ME.attacks_with(Prop::SmallCreature),
+            ME.attacks_with(Prop::Vanilla),
             ME.done_attacking(),
             ME.passes(),
-            THEM.chooses(DecisionKind::Blocker, Prop::Creature),
+            THEM.chooses(DecisionKind::Blocker, Prop::Flier),
             ME.activates(MOTHER, 0),
-            ME.targets(Prop::SmallCreature),
+            ME.targets(Prop::Vanilla),
             ME.chooses_color(Colors::WHITE),
             advance_to(3, TurnStep::EndOfCombat),
-            ME.has(Zone::Battlefield, Prop::SmallCreature, 1),
-            THEM.has(Zone::Graveyard, Prop::Creature, 1),
+            ME.has(Zone::Battlefield, Prop::Vanilla, 1),
+            THEM.has(Zone::Graveyard, Prop::Flier, 1),
             THEM.life(20),
         ]),
     ];

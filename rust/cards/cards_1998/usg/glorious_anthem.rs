@@ -35,64 +35,49 @@ pub mod scenarios {
 
     const ANTHEM: &str = Card::GloriousAnthem;
 
-    // `Prop::Creature` is a 3/1, `Prop::SmallCreature` a 2/1 with flash for {1}{U}, and
-    // `Prop::Removal` returns a nonland permanent an opponent controls to its owner's hand.
-
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("creatures its controller controls get +1/+1, the opponent's don't")
-            .battlefield(P0, &[ANTHEM, Prop::Creature])
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P0, &[ANTHEM, Prop::Flier])
+            .battlefield(P1, &[Prop::Vanilla])
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])
-            .actions(&[
-                ME.pt(Prop::Creature, 4, 2),
-                THEM.pt(Prop::SmallCreature, 2, 1),
-            ]),
+            .actions(&[ME.pt(Prop::Flier, 4, 2), THEM.pt(Prop::Vanilla, 2, 1)]),
         Scenario::new("cast, it gives the creatures already there +1/+1")
             .hand(P0, &[ANTHEM])
-            .battlefield(
-                P0,
-                &[Card::Plains, Card::Plains, Card::Plains, Prop::Creature],
-            )
+            .battlefield(P0, &[Card::Plains, Card::Plains, Card::Plains, Prop::Flier])
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])
             .actions(&[
-                ME.pt(Prop::Creature, 3, 1),
+                ME.pt(Prop::Flier, 3, 1),
                 ME.casts(ANTHEM),
                 Resolve,
-                ME.pt(Prop::Creature, 4, 2),
+                ME.pt(Prop::Flier, 4, 2),
             ]),
-        // The creature's enters trigger has no instant or sorcery card in a graveyard to
-        // target, so it is removed (CR 603.3d) and nothing waits on the stack.
         Scenario::new("a creature that enters later gets +1/+1")
-            .hand(P0, &[Prop::SmallCreature])
+            .hand(P0, &[Prop::Vanilla])
             .battlefield(P0, &[ANTHEM, Card::Island, Card::Island])
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])
-            .actions(&[
-                ME.casts(Prop::SmallCreature),
-                Resolve,
-                ME.pt(Prop::SmallCreature, 3, 2),
-            ]),
+            .actions(&[ME.casts(Prop::Vanilla), Resolve, ME.pt(Prop::Vanilla, 3, 2)]),
         Scenario::new("two of them give +2/+2")
-            .battlefield(P0, &[ANTHEM, ANTHEM, Prop::Creature])
+            .battlefield(P0, &[ANTHEM, ANTHEM, Prop::Flier])
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])
-            .actions(&[ME.pt(Prop::Creature, 5, 3)]),
+            .actions(&[ME.pt(Prop::Flier, 5, 3)]),
         Scenario::new("once it leaves the battlefield, the bonus ends")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, &[ANTHEM, Prop::Creature])
+            .battlefield(P0, &[ANTHEM, Prop::Flier])
             .hand(P1, &[Prop::Removal])
             .battlefield(P1, &[Card::Island, Card::Island, Card::Island])
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])
             .actions(&[
-                ME.pt(Prop::Creature, 4, 2),
+                ME.pt(Prop::Flier, 4, 2),
                 THEM.casts(Prop::Removal),
                 THEM.targets(ANTHEM),
                 Resolve,
                 ME.has(Zone::Hand, ANTHEM, 1),
-                ME.pt(Prop::Creature, 3, 1),
+                ME.pt(Prop::Flier, 3, 1),
             ]),
         // Swift Reconfiguration makes the 2/1 a noncreature Vehicle in layer 4; crewing it
         // makes it an artifact creature again, also in layer 4, until end of turn. The
@@ -106,24 +91,24 @@ pub mod scenarios {
                 &[
                     ANTHEM,
                     Card::Plains,
-                    Prop::SmallCreature,
-                    Prop::Creature,
-                    Prop::Creature,
+                    Prop::Vanilla,
+                    Prop::Flier,
+                    Prop::Flier,
                 ],
             )
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])
             .actions(&[
-                ME.pt(Prop::SmallCreature, 3, 2),
+                ME.pt(Prop::Vanilla, 3, 2),
                 ME.casts(Card::SwiftReconfiguration),
-                ME.targets(Prop::SmallCreature),
+                ME.targets(Prop::Vanilla),
                 Resolve,
-                ME.creature(Prop::SmallCreature, false),
-                Action::activate_granted(P0, Prop::SmallCreature, 0),
-                ME.tapped(Prop::Creature, 2),
+                ME.creature(Prop::Vanilla, false),
+                Action::activate_granted(P0, Prop::Vanilla, 0),
+                ME.tapped(Prop::Flier, 2),
                 Resolve,
-                ME.creature(Prop::SmallCreature, true),
-                ME.pt(Prop::SmallCreature, 3, 2),
+                ME.creature(Prop::Vanilla, true),
+                ME.pt(Prop::Vanilla, 3, 2),
             ]),
     ];
 }

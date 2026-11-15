@@ -41,49 +41,45 @@ pub mod scenarios {
     const VIGILANCE: &str = Card::Vigilance;
     const DRESS_DOWN: &str = Card::DressDown;
 
-    // `Prop::Creature` is Elite Spellbinder, a 3/1 flier with no vigilance of its own.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("an enchanted creature attacks without tapping")
-            .battlefield(P0, &[Card::Plains, Prop::Creature])
+            .battlefield(P0, &[Card::Plains, Prop::Flier])
             .hand(P0, &[VIGILANCE])
             .actions(&[
                 ME.casts(VIGILANCE),
                 Resolve,
                 advance_to(1, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Prop::Creature),
-                ME.tapped(Prop::Creature, 0),
+                ME.attacks_with(Prop::Flier),
+                ME.tapped(Prop::Flier, 0),
             ]),
         Scenario::new("a creature without the Aura taps to attack")
-            .battlefield(P0, &[Prop::Creature])
+            .battlefield(P0, &[Prop::Flier])
             .actions(&[
                 advance_to(1, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Prop::Creature),
-                ME.tapped(Prop::Creature, 1),
+                ME.attacks_with(Prop::Flier),
+                ME.tapped(Prop::Flier, 1),
             ]),
         // "Loses all abilities" began before the Aura was attached, so its timestamp is the
         // earlier and the keyword the Aura grants stays.
         Scenario::new("an Aura attached after Dress Down still gives vigilance")
             .interaction(&[DRESS_DOWN])
-            .battlefield(P0, &[DRESS_DOWN, Card::Plains, Prop::Creature])
+            .battlefield(P0, &[DRESS_DOWN, Card::Plains, Prop::Flier])
             .hand(P0, &[VIGILANCE])
             .actions(&[
                 ME.casts(VIGILANCE),
                 Resolve,
                 advance_to(1, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Prop::Creature),
-                ME.tapped(Prop::Creature, 0),
+                ME.attacks_with(Prop::Flier),
+                ME.tapped(Prop::Flier, 0),
             ]),
         // Dress Down, cast with flash after the Aura was attached, has the later timestamp:
         // the creature loses vigilance, though the Aura stays attached.
         Scenario::new("Dress Down after the Aura takes vigilance away")
             .interaction(&[DRESS_DOWN])
-            .battlefield(
-                P0,
-                &[Card::Plains, Card::Island, Card::Island, Prop::Creature],
-            )
+            .battlefield(P0, &[Card::Plains, Card::Island, Card::Island, Prop::Flier])
             .hand(P0, &[VIGILANCE, DRESS_DOWN])
             .library(P0, &[Card::Plains, Card::Island])
             .actions(&[
@@ -96,8 +92,8 @@ pub mod scenarios {
                 ME.controls(VIGILANCE, 1),
                 advance_to(1, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Prop::Creature),
-                ME.tapped(Prop::Creature, 1),
+                ME.attacks_with(Prop::Flier),
+                ME.tapped(Prop::Flier, 1),
             ]),
     ];
 }

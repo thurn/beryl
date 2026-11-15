@@ -34,21 +34,18 @@ pub mod scenarios {
     pub const SCENARIOS: &[Scenario] = &[
         // Equip {1} attaches it to a creature its controller controls, which gets +1/+1. The
         // opponent's creature is not a legal target (CR 702.6a: "target creature you
-        // control"), so P0 chooses between its own two. `Prop::Creature` is a 3/1.
+        // control"), so P0 chooses between its own two.
         Scenario::new("Leonin Scimitar equips a creature, which gets +1/+1")
-            .battlefield(
-                P0,
-                &[SCIMITAR, Prop::Creature, Prop::SmallCreature, Card::Plains],
-            )
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P0, &[SCIMITAR, Prop::Flier, Prop::Vanilla, Card::Plains])
+            .battlefield(P1, &[Prop::Vanilla])
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])
             .actions(&[
                 ME.activates(SCIMITAR, 1), // Equip {1}
                 ME.deciding(DecisionKind::Target, 2),
-                ME.targets(Prop::Creature),
+                ME.targets(Prop::Flier),
                 Resolve,
-                ME.pt(Prop::Creature, 4, 2),
+                ME.pt(Prop::Flier, 4, 2),
             ]),
     ];
 }

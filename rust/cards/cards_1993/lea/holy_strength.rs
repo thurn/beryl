@@ -37,24 +37,23 @@ pub mod scenarios {
 
     const HOLY: &str = Card::HolyStrength;
 
-    // `Prop::SmallCreature` is a 2/1.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Holy Strength makes its creature 3/3")
-            .battlefield(P0, &[Card::Plains, Prop::SmallCreature])
+            .battlefield(P0, &[Card::Plains, Prop::Vanilla])
             .hand(P0, &[HOLY, Card::Island])
             .actions(&[
                 ME.casts(HOLY),
                 ME.controls(HOLY, 1),
-                ME.pt(Prop::SmallCreature, 3, 3),
+                ME.pt(Prop::Vanilla, 3, 3),
             ]),
         Scenario::new("Holy Strength enchants an opponent's creature")
             .battlefield(P0, &[Card::Plains])
             .hand(P0, &[HOLY, Card::Island])
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P1, &[Prop::Vanilla])
             .actions(&[
                 ME.casts(HOLY),
                 ME.controls(HOLY, 1),
-                THEM.pt(Prop::SmallCreature, 3, 3),
+                THEM.pt(Prop::Vanilla, 3, 3),
             ]),
     ];
 }

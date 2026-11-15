@@ -37,7 +37,7 @@ pub mod scenarios {
 
     const SNAPCASTER: &str = Card::SnapcasterMage;
 
-    const SPELLBINDER: &str = Card::EliteSpellbinder;
+    const SPELLBINDER: &str = Prop::Flier;
 
     pub const SCENARIOS: &[Scenario] = &[
         // Flashed in against P1's Timetwister, it gives the Counterspell in P0's graveyard
@@ -82,10 +82,10 @@ pub mod scenarios {
                     Card::Island,
                 ],
             )
-            .hand(P1, &[Prop::Creature, Prop::Removal, Card::Plains])
+            .hand(P1, &[Prop::Flier, Prop::Removal, Card::Plains])
             .library(P1, &[Card::Island])
             .actions(&[
-                THEM.casts(Prop::Creature),
+                THEM.casts(Prop::Flier),
                 ME.casts(SNAPCASTER),
                 // Snapcaster resolves; P1, who could cast Sink into Stupor, passes as its trigger
                 // resolves and again with the creature alone on the stack.
@@ -99,7 +99,7 @@ pub mod scenarios {
                 ME.has(Zone::Exile, Card::Counterspell, 1),
                 ME.has(Zone::Hand, Card::Counterspell, 0),
                 Resolve,
-                THEM.controls(Prop::Creature, 1),
+                THEM.controls(Prop::Flier, 1),
             ]),
         // Damn given flashback is cast for its mana cost only: the flashback cost is the
         // alternative cost, so overload can't be added (CR 118.9a), though P0 could pay it. The
@@ -153,7 +153,7 @@ pub mod scenarios {
         Scenario::new("Snapcaster Mage with no instant or sorcery to target")
             .battlefield(P0, &[Card::Island, Card::Island, Card::Plains])
             .hand(P0, &[SNAPCASTER])
-            .graveyard(P0, &[Card::Plains, Prop::Creature])
+            .graveyard(P0, &[Card::Plains, Prop::Flier])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.casts(SNAPCASTER),

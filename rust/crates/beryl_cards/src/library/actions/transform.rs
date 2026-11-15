@@ -22,11 +22,11 @@ pub const SCENARIOS: &[Scenario] =
             .graveyard(P0, &[names::PLAINS; 4])
             .library(P0, &[names::ISLAND, names::ISLAND])
             .permanents(P1, &[Permanent::new(names::ISLAND); 3])
-            .hand(P1, &[props::REMOVAL])
+            .hand(P1, &[props::REMOVAL.card])
             .library(P1, &[names::PLAINS])
             .actions(&[
                 Action::activate(P0, JACE, 0),
-                Action::cast(P1, props::REMOVAL),
+                Action::cast(P1, props::REMOVAL.card),
                 Action::Resolve,
                 Action::assert(Assertion::Count {
                     player: P0,

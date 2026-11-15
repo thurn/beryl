@@ -50,12 +50,12 @@ pub mod scenarios {
         Scenario::new("Lightning Bolt kills a creature")
             .battlefield(P0, &[Card::Mountain])
             .hand(P0, &[BOLT, Card::Mountain])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P1, &[Prop::Flier])
             .actions(&[
                 ME.casts(BOLT),
-                ME.targets(Prop::Creature),
-                THEM.has(Zone::Battlefield, Prop::Creature, 0),
-                THEM.has(Zone::Graveyard, Prop::Creature, 1),
+                ME.targets(Prop::Flier),
+                THEM.has(Zone::Battlefield, Prop::Flier, 0),
+                THEM.has(Zone::Graveyard, Prop::Flier, 1),
                 THEM.life(20),
             ]),
         Scenario::new("Lightning Bolt removes the loyalty of a planeswalker")
@@ -76,12 +76,12 @@ pub mod scenarios {
                 &[Card::Mountain, Card::Island, Card::Island, Card::Island],
             )
             .hand(P0, &[BOLT, Prop::Removal])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P1, &[Prop::Flier])
             .actions(&[
                 ME.casts(BOLT),
-                ME.targets(Prop::Creature),
+                ME.targets(Prop::Flier),
                 ME.casts(Prop::Removal),
-                THEM.has(Zone::Hand, Prop::Creature, 1),
+                THEM.has(Zone::Hand, Prop::Flier, 1),
                 ME.has(Zone::Graveyard, BOLT, 1),
                 THEM.life(20),
             ]),

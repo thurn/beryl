@@ -39,7 +39,6 @@ pub mod scenarios {
 
     const BLESSING: &str = Card::BuildersBlessing;
 
-    // `Prop::Creature` is Elite Spellbinder, a 3/1 flier.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("an untapped creature of its controller gets +0/+2")
             .battlefield(
@@ -49,31 +48,31 @@ pub mod scenarios {
                     Card::Plains,
                     Card::Plains,
                     Card::Plains,
-                    Prop::Creature,
+                    Prop::Flier,
                 ],
             )
             .hand(P0, &[BLESSING])
             .actions(&[
-                ME.pt(Prop::Creature, 3, 1),
+                ME.pt(Prop::Flier, 3, 1),
                 ME.casts(BLESSING),
                 Resolve,
-                ME.pt(Prop::Creature, 3, 3),
+                ME.pt(Prop::Flier, 3, 3),
             ]),
-        // Attacking taps the Spellbinder, which then loses the bonus.
+        // Attacking taps the flier, which then loses the bonus.
         Scenario::new("a tapped creature does not get it")
-            .battlefield(P0, &[BLESSING, Prop::Creature])
+            .battlefield(P0, &[BLESSING, Prop::Flier])
             .actions(&[
-                ME.pt(Prop::Creature, 3, 3),
+                ME.pt(Prop::Flier, 3, 3),
                 advance_to(1, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Prop::Creature),
-                ME.tapped(Prop::Creature, 1),
-                ME.pt(Prop::Creature, 3, 1),
+                ME.attacks_with(Prop::Flier),
+                ME.tapped(Prop::Flier, 1),
+                ME.pt(Prop::Flier, 3, 1),
             ]),
         Scenario::new("a creature an opponent controls does not get it")
             .battlefield(P0, &[BLESSING])
             .hand(P0, &[Card::Plains])
-            .battlefield(P1, &[Prop::Creature])
-            .actions(&[THEM.pt(Prop::Creature, 3, 1)]),
+            .battlefield(P1, &[Prop::Flier])
+            .actions(&[THEM.pt(Prop::Flier, 3, 1)]),
     ];
 }

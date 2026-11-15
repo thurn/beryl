@@ -14,7 +14,10 @@ pub const SCENARIOS: &[Scenario] =
         Scenario::new("Manifest dread manifests the instant and buries the creature")
             .at(1, P0, TurnStep::PostcombatMain)
             .permanents(P0, &[Permanent::new(names::ABHORRENT_OCULUS)])
-            .library(P0, &[props::SMALL_CREATURE, props::INSTANT, names::ISLAND])
+            .library(
+                P0,
+                &[props::VANILLA.card, props::INSTANT.card, names::ISLAND],
+            )
             .library(P1, &[names::PLAINS])
             .actions(&[
                 Action::AdvanceTo {
@@ -22,16 +25,16 @@ pub const SCENARIOS: &[Scenario] =
                     step: TurnStep::Upkeep,
                 },
                 Action::Resolve,
-                Action::choose(P0, DecisionKind::ChooseObject, props::INSTANT),
+                Action::choose(P0, DecisionKind::ChooseObject, props::INSTANT.card),
                 Action::assert(Assertion::FaceDown {
                     player: P0,
-                    card: props::INSTANT,
+                    card: props::INSTANT.card,
                     count: 1,
                 }),
                 Action::assert(Assertion::Count {
                     player: P0,
                     zone: Zone::Graveyard,
-                    card: Some(props::SMALL_CREATURE),
+                    card: Some(props::VANILLA.card),
                     count: 1,
                 }),
                 Action::assert(Assertion::Library {

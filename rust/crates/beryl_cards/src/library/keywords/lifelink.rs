@@ -41,7 +41,7 @@ pub const SCENARIOS: &[Scenario] = &[
         ]),
     Scenario::new("A lifelinker's damage to a blocker gains its controller that much life")
         .permanents(P0, &[Permanent::new(LIFELINKER)])
-        .permanents(P1, &[Permanent::new(props::SMALL_CREATURE)])
+        .permanents(P1, &[Permanent::new(props::VANILLA.card)])
         .library(P0, &[names::ISLAND])
         .library(P1, &[names::ISLAND])
         .actions(&[
@@ -51,7 +51,7 @@ pub const SCENARIOS: &[Scenario] = &[
             },
             Action::pass(P0),
             Action::choose(P0, DecisionKind::Attacker, LIFELINKER),
-            Action::choose(P1, DecisionKind::Blocker, props::SMALL_CREATURE),
+            Action::choose(P1, DecisionKind::Blocker, props::VANILLA.card),
             Action::AdvanceTo {
                 turn: 1,
                 step: TurnStep::EndOfCombat,
@@ -67,7 +67,7 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::assert(Assertion::Count {
                 player: P1,
                 zone: Zone::Graveyard,
-                card: Some(props::SMALL_CREATURE),
+                card: Some(props::VANILLA.card),
                 count: 1,
             }),
         ]),

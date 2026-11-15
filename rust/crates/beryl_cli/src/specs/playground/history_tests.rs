@@ -153,7 +153,8 @@ fn opponent_responds_above_the_viewers_spell() {
             let e = json!(e);
             e["kind"] == "cast"
                 && v.objects.iter().any(|o| {
-                    o.name.as_deref() == Some("Snapcaster Mage") && json!(o.slot) == e["slot"]
+                    o.name.as_deref() == Some(beryl_cards::props::FLASH_CREATURE.card)
+                        && json!(o.slot) == e["slot"]
                 })
         });
         responded

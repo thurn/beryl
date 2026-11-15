@@ -48,26 +48,25 @@ pub mod scenarios {
     const MERFOLK: &str = Card::MerfolkOfThePearlTrident;
     const MIND_BEND: &str = Card::MindBend;
 
-    // Merfolk of the Pearl Trident is a vanilla 1/1 Merfolk. `Prop::Creature` is Elite
-    // Spellbinder, a 3/1 flier, which is no Merfolk.
+    // Merfolk of the Pearl Trident is a vanilla 1/1 Merfolk.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("other Merfolk get +1/+1, whoever controls them")
-            .battlefield(P0, &[LORD, MERFOLK, Prop::Creature])
+            .battlefield(P0, &[LORD, MERFOLK, Prop::Flier])
             .battlefield(P1, &[MERFOLK])
             .actions(&[
                 ME.pt(LORD, 2, 2),
                 ME.pt(MERFOLK, 2, 2),
                 THEM.pt(MERFOLK, 2, 2),
-                ME.pt(Prop::Creature, 3, 1),
+                ME.pt(Prop::Flier, 3, 1),
             ]),
         Scenario::new("two Lords of Atlantis pump each other")
             .battlefield(P0, &[LORD])
             .battlefield(P1, &[LORD])
             .actions(&[ME.pt(LORD, 3, 3), THEM.pt(LORD, 3, 3)]),
-        // P1 controls an Island, so the Spellbinder can't block the Merfolk.
+        // P1 controls an Island, so the flier can't block the Merfolk.
         Scenario::new("other Merfolk have islandwalk")
             .battlefield(P0, &[LORD, MERFOLK])
-            .battlefield(P1, &[Card::Island, Prop::Creature])
+            .battlefield(P1, &[Card::Island, Prop::Flier])
             .actions(&[
                 advance_to(1, TurnStep::BeginningOfCombat),
                 ME.passes(),
@@ -81,7 +80,7 @@ pub mod scenarios {
         Scenario::new("Mind Bend on the Lord gives other Merfolk swampwalk")
             .interaction(&[MIND_BEND])
             .battlefield(P0, &[LORD, MERFOLK, Card::Island])
-            .battlefield(P1, &[Card::Swamp, Prop::Creature])
+            .battlefield(P1, &[Card::Swamp, Prop::Flier])
             .hand(P0, &[MIND_BEND])
             .actions(&[
                 ME.casts(MIND_BEND),
@@ -97,11 +96,11 @@ pub mod scenarios {
                 THEM.life(18),
             ]),
         // With "islandwalk" read as "swampwalk", P1's Island no longer stops a block: the
-        // Spellbinder blocks and kills the 2/2 Merfolk.
+        // flier blocks and kills the 2/2 Merfolk.
         Scenario::new("Mind Bend on the Lord takes islandwalk from other Merfolk")
             .interaction(&[MIND_BEND])
             .battlefield(P0, &[LORD, MERFOLK, Card::Island])
-            .battlefield(P1, &[Card::Island, Prop::Creature])
+            .battlefield(P1, &[Card::Island, Prop::Flier])
             .hand(P0, &[MIND_BEND])
             .actions(&[
                 ME.casts(MIND_BEND),
@@ -113,7 +112,7 @@ pub mod scenarios {
                 ME.passes(),
                 ME.attacks_with(MERFOLK),
                 ME.done_attacking(),
-                Action::choose(P1, DecisionKind::Blocker, Prop::Creature),
+                Action::choose(P1, DecisionKind::Blocker, Prop::Flier),
                 advance_to(1, TurnStep::EndOfCombat),
                 THEM.life(20),
                 ME.has(Zone::Graveyard, MERFOLK, 1),

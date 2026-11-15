@@ -42,15 +42,14 @@ pub mod scenarios {
     const ISLAND: TextWord = TextWord::LandType(Subtype::Island);
     const MOUNTAIN: TextWord = TextWord::LandType(Subtype::Mountain);
 
-    // `Prop::Creature` is Elite Spellbinder, a white 3/1 flier.
     pub const SCENARIOS: &[Scenario] = &[
         // "Red" on Circle of Protection: Red reads "white", so on P1's next turn its ability
-        // chooses the white Spellbinder and prevents its 3 combat damage. The change lasts
+        // chooses the white flier and prevents its 3 combat damage. The change lasts
         // past the end of the turn it was made in.
         Scenario::new("Mind Bend makes Circle of Protection: Red a circle against white")
             .interaction(&[COP])
             .battlefield(P0, &[COP, Card::Island, Card::Plains])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P1, &[Prop::Flier])
             .hand(P0, &[MIND_BEND])
             .actions(&[
                 ME.casts(MIND_BEND),
@@ -61,20 +60,20 @@ pub mod scenarios {
                 advance_to(2, TurnStep::BeginningOfCombat),
                 THEM.passes(),
                 ME.passes(),
-                THEM.attacks_with(Prop::Creature),
+                THEM.attacks_with(Prop::Flier),
                 ME.activates(COP, 0),
-                ME.picks(Prop::Creature),
+                ME.picks(Prop::Flier),
                 advance_to(2, TurnStep::EndOfCombat),
                 ME.life(20),
             ]),
         // Circle of Protection: Red's ability went on the stack before Mind Bend changed
         // "red": it keeps the text its source had then (CR 113.7a), so it chooses among red
         // sources: P1's Hill Giant is the only one, so P0 is asked nothing and gets priority.
-        // Read as "white", it would ask between the Spellbinder and the Circle itself.
+        // Read as "white", it would ask between the flier and the Circle itself.
         Scenario::new("an ability on the stack keeps the words its source had")
             .interaction(&[COP])
             .battlefield(P0, &[COP, Card::Island, Card::Plains])
-            .battlefield(P1, &[Card::HillGiant, Prop::Creature])
+            .battlefield(P1, &[Card::HillGiant, Prop::Flier])
             .hand(P0, &[MIND_BEND])
             .actions(&[
                 ME.activates(COP, 0),

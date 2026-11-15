@@ -46,7 +46,7 @@ pub mod scenarios {
         // creature is never exiled, and Fiend Hunter stays.
         Scenario::new("Stifle counters an enters trigger")
             .interaction(&[Card::FiendHunter])
-            .battlefield(P0, &[Card::Island, Prop::SmallCreature])
+            .battlefield(P0, &[Card::Island, Prop::Vanilla])
             .hand(P0, &[Card::Stifle])
             .battlefield(P1, &[Card::Plains, Card::Plains, Card::Plains])
             .hand(P1, &[Card::FiendHunter])
@@ -57,7 +57,7 @@ pub mod scenarios {
                 THEM.passes(),
                 ME.casts(Card::Stifle),
                 stack(0),
-                ME.controls(Prop::SmallCreature, 1),
+                ME.controls(Prop::Vanilla, 1),
                 THEM.controls(Card::FiendHunter, 1),
             ]),
         // A delayed triggered ability is a target too (ruling 2004-10-04). Flickerwisp exiles

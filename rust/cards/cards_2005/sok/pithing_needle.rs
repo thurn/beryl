@@ -81,14 +81,14 @@ pub mod scenarios {
         // "Another card" is legal and stops nothing: Mother still gives protection.
         needle("naming another card stops nothing")
             .interaction(&[MOTHER])
-            .battlefield(P0, &[Card::Island, MOTHER, Prop::Creature])
+            .battlefield(P0, &[Card::Island, MOTHER, Prop::Flier])
             .actions(&[
                 ME.casts(NEEDLE),
                 Resolve,
                 ME.names_another_card(),
                 ME.controls(NEEDLE, 1),
                 ME.activates(MOTHER, 0),
-                ME.targets(Prop::Creature),
+                ME.targets(Prop::Flier),
                 Resolve,
                 ME.chooses_color(Colors::RED),
                 ME.tapped(MOTHER, 1),

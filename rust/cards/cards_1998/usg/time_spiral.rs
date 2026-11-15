@@ -71,7 +71,7 @@ pub mod scenarios {
                 P1,
                 &[
                     Permanent::new(Card::Tundra).tapped(),
-                    Permanent::new(Prop::SmallCreature).tapped(),
+                    Permanent::new(Prop::Vanilla).tapped(),
                 ],
             )
             .hand(P1, &[Card::Plains])
@@ -88,7 +88,7 @@ pub mod scenarios {
                 ME.tapped(Card::Island, 0),
                 ME.tapped(Card::Plains, 3),
                 THEM.tapped(Card::Tundra, 1),
-                THEM.tapped(Prop::SmallCreature, 1),
+                THEM.tapped(Prop::Vanilla, 1),
                 ME.has(Zone::Exile, Card::TimeSpiral, 1),
                 ME.has_cards(Zone::Graveyard, 0),
                 ME.has_cards(Zone::Hand, 7),

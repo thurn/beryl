@@ -17,7 +17,7 @@ pub const SCENARIOS: &[Scenario] =
                 P0,
                 &[Permanent::new(names::ISLAND), Permanent::new(names::ISLAND)],
             )
-            .hand(P0, &[props::SMALL_CREATURE])
+            .hand(P0, &[props::VANILLA.card])
             .permanents(
                 P1,
                 &[Permanent::new(names::PLAINS), Permanent::new(names::ISLAND)],
@@ -25,12 +25,12 @@ pub const SCENARIOS: &[Scenario] =
             .hand(P1, &[names::NO_MORE_LIES])
             .library(P1, &[names::ISLAND])
             .actions(&[
-                Action::cast(P0, props::SMALL_CREATURE),
+                Action::cast(P0, props::VANILLA.card),
                 Action::cast(P1, names::NO_MORE_LIES),
                 Action::assert(Assertion::Count {
                     player: P0,
                     zone: Zone::Exile,
-                    card: Some(props::SMALL_CREATURE),
+                    card: Some(props::VANILLA.card),
                     count: 1,
                 }),
                 Action::assert(Assertion::Count {
@@ -41,7 +41,7 @@ pub const SCENARIOS: &[Scenario] =
                 }),
                 Action::assert(Assertion::Controls {
                     player: P0,
-                    card: props::SMALL_CREATURE,
+                    card: props::VANILLA.card,
                     count: 0,
                 }),
             ]),

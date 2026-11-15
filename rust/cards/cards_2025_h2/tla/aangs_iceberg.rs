@@ -45,10 +45,7 @@ pub mod scenarios {
         Scenario::new("exiles a permanent until it leaves; waterbend taps a creature to pay")
             .at(2, P1, TurnStep::End)
             .hand(P0, &[ICEBERG])
-            .battlefield(
-                P0,
-                &[Card::Plains, Card::Plains, Card::Plains, Prop::Creature],
-            )
+            .battlefield(P0, &[Card::Plains, Card::Plains, Card::Plains, Prop::Flier])
             .permanents(
                 P1,
                 &[Permanent::new(Prop::Planeswalker).counters(CounterKind::Loyalty, 5)],
@@ -71,9 +68,9 @@ pub mod scenarios {
                 advance_to(3, TurnStep::PrecombatMain),
                 ME.activates(ICEBERG, 1), // Waterbend {3}
                 // CR 701.67a: the creature taps for one generic mana; two Plains pay the rest.
-                ME.chooses(DecisionKind::ManaPayment, Prop::Creature),
+                ME.chooses(DecisionKind::ManaPayment, Prop::Flier),
                 ME.tapped(Card::Plains, 2),
-                ME.tapped(Prop::Creature, 1),
+                ME.tapped(Prop::Flier, 1),
                 // Scry 2 over the artifact and Plains: the artifact to the bottom, Plains stays
                 // on top.
                 ME.picks_up_to(Prop::Artifact),
@@ -85,7 +82,7 @@ pub mod scenarios {
                 THEM.has_loyalty(Prop::Planeswalker, 3),
             ]),
         Scenario::new("waterbend taps a creature and an artifact; scry reorders the top")
-            .battlefield(P0, &[ICEBERG, Card::Plains, Prop::Creature, Prop::Artifact])
+            .battlefield(P0, &[ICEBERG, Card::Plains, Prop::Flier, Prop::Artifact])
             .library(P0, &[Card::Island, Card::Plains])
             .library(P1, &[Card::Plains])
             .actions(&[
@@ -95,7 +92,7 @@ pub mod scenarios {
                 ME.chooses(DecisionKind::ManaPayment, Prop::Artifact),
                 // Then the creature is the only way left to pay one more, and the Plains pays
                 // the last.
-                ME.tapped(Prop::Creature, 1),
+                ME.tapped(Prop::Flier, 1),
                 ME.tapped(Card::Plains, 1),
                 // Nothing to the bottom; the Plains on top of the Island.
                 ME.done_picking(),

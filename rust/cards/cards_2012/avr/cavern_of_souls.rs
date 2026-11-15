@@ -60,51 +60,47 @@ pub static CARD: CardDef = Printed::CavernOfSouls
 pub mod scenarios {
     use crate::prelude::*;
 
-    /// Snapcaster Mage is a Human Wizard, {1}{U}: the creature spell of the chosen type. Its
-    /// enters trigger finds no instant in its controller's graveyard, and is removed.
+    /// `Prop::Vanilla` is the creature spell of the chosen type, an Elk.
     pub const SCENARIOS: &[Scenario] = &[
         // The Plains can't make {U}, so the Cavern's colored mana pays it.
         Scenario::new("Cavern of Souls' creature spell can't be countered")
             .battlefield(P0, &[Card::Plains])
-            .hand(P0, &[Card::CavernOfSouls, Prop::SmallCreature])
+            .hand(P0, &[Card::CavernOfSouls, Prop::Vanilla])
             .battlefield(P1, &[Card::Island, Card::Island])
             .hand(P1, &[Card::Counterspell])
             .actions(&[
                 ME.plays(Card::CavernOfSouls),
-                ME.chooses_named("Human"),
-                ME.casts(Prop::SmallCreature),
+                ME.chooses_named("Elk"),
+                ME.casts(Prop::Vanilla),
                 ME.tapped(Card::CavernOfSouls, 1),
                 THEM.casts(Card::Counterspell),
                 Resolve,
                 THEM.has(Zone::Graveyard, Card::Counterspell, 1),
-                ME.controls(Prop::SmallCreature, 1),
+                ME.controls(Prop::Vanilla, 1),
             ]),
         // Paid with the Cavern's {C} and an Island's {U}, the spell is countered: a payment
         // that spends the colored mana and one that doesn't are both offered, the colored first.
         Scenario::new("Cavern of Souls' colorless mana gives no protection")
             .battlefield(P0, &[Card::Island])
-            .hand(P0, &[Card::CavernOfSouls, Prop::SmallCreature])
+            .hand(P0, &[Card::CavernOfSouls, Prop::Vanilla])
             .battlefield(P1, &[Card::Island, Card::Island])
             .hand(P1, &[Card::Counterspell])
             .actions(&[
                 ME.plays(Card::CavernOfSouls),
-                ME.chooses_named("Human"),
-                ME.casts(Prop::SmallCreature),
+                ME.chooses_named("Elk"),
+                ME.casts(Prop::Vanilla),
                 ME.deciding(DecisionKind::PaymentPlan, 2),
                 ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 1 }),
                 ME.tapped(Card::Island, 1),
                 THEM.casts(Card::Counterspell),
-                ME.has(Zone::Graveyard, Prop::SmallCreature, 1),
+                ME.has(Zone::Graveyard, Prop::Vanilla, 1),
             ]),
         // Of another creature type, the colored mana pays for nothing here: the Cavern's {C}
-        // and the Plains can't pay Snapcaster Mage's {U}, and the colorless mana pays for the
+        // and the Plains can't pay the creature's {U}, and the colorless mana pays for the
         // artifact's generic cost.
         Scenario::new("Cavern of Souls' colored mana pays only for the chosen type")
             .battlefield(P0, &[Card::Plains])
-            .hand(
-                P0,
-                &[Card::CavernOfSouls, Prop::SmallCreature, Prop::Artifact],
-            )
+            .hand(P0, &[Card::CavernOfSouls, Prop::Vanilla, Prop::Artifact])
             .actions(&[
                 ME.plays(Card::CavernOfSouls),
                 ME.chooses_named("Another creature type"),
@@ -117,15 +113,12 @@ pub mod scenarios {
         // the artifact's {W}, so only the creature can be cast.
         Scenario::new("Cavern of Souls' colored mana pays for no noncreature spell")
             .battlefield(P0, &[Card::Island])
-            .hand(
-                P0,
-                &[Card::CavernOfSouls, Prop::SmallCreature, Prop::Artifact],
-            )
+            .hand(P0, &[Card::CavernOfSouls, Prop::Vanilla, Prop::Artifact])
             .actions(&[
                 ME.plays(Card::CavernOfSouls),
-                ME.chooses_named("Human"),
+                ME.chooses_named("Elk"),
                 ME.deciding(DecisionKind::Priority, 2),
-                ME.casts(Prop::SmallCreature),
+                ME.casts(Prop::Vanilla),
                 ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 0 }),
                 ME.tapped(Card::Island, 1),
                 ME.tapped(Card::CavernOfSouls, 1),

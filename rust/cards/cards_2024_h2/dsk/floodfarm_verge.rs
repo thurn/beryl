@@ -65,11 +65,11 @@ pub mod scenarios {
         // two-drop creature.
         Scenario::new("Floodfarm Verge's {U} with a Plains")
             .battlefield(P0, &[VERGE, Card::Plains])
-            .hand(P0, &[Prop::SmallCreature])
+            .hand(P0, &[Prop::Vanilla])
             .actions(&[
-                ME.casts(Prop::SmallCreature),
+                ME.casts(Prop::Vanilla),
                 Resolve,
-                ME.controls(Prop::SmallCreature, 1),
+                ME.controls(Prop::Vanilla, 1),
             ]),
         // Alone, its {W} pays for the artifact. The land still to play keeps the game in P0's
         // main phase.

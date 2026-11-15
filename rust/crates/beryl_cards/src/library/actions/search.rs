@@ -20,7 +20,7 @@ pub const SCENARIOS: &[Scenario] =
                 &[Permanent::new(names::PLAINS), Permanent::new(names::PLAINS)],
             )
             .hand(P0, &[WINDS, names::PLAINS])
-            .permanents(P1, &[Permanent::new(props::CREATURE)])
+            .permanents(P1, &[Permanent::new(props::FLIER.card)])
             .library(P1, &[names::TUNDRA, names::PLAINS, names::ISLAND])
             .actions(&[
                 Action::cast(P0, WINDS),
@@ -29,7 +29,7 @@ pub const SCENARIOS: &[Scenario] =
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Exile,
-                    card: Some(props::CREATURE),
+                    card: Some(props::FLIER.card),
                     count: 1,
                 }),
                 Action::assert(Assertion::Controls {

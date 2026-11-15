@@ -140,7 +140,7 @@ pub mod scenarios {
         // Thalia doesn't tax it) and gives the Bolt flashback; the flashback cost {R} is {1}{R}
         // under Thalia and {2}{R} under both.
         Scenario::new("Trinisphere and Thalia: flashback costs three")
-            .interaction(&[BOLT, THALIA])
+            .interaction(&[BOLT, THALIA, SNAPCASTER])
             .battlefield(
                 P0,
                 &[

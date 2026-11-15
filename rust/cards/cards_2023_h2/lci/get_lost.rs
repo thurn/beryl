@@ -58,12 +58,12 @@ pub mod scenarios {
 
     use super::MAP;
 
-    const SPELLBINDER: &str = Card::EliteSpellbinder;
+    const FLIER: &str = Prop::Flier;
 
     const MAP_NAME: &str = MAP.name;
 
-    /// In P1's turn 2, P0 destroys one of P1's two Elite Spellbinders with Get Lost at instant
-    /// speed; P1 then sacrifices a Map, paying {1} with their Plains, and their other Spellbinder
+    /// In P1's turn 2, P0 destroys one of P1's two fliers with Get Lost at instant
+    /// speed; P1 then sacrifices a Map, paying {1} with their Plains, and their other flier
     /// explores the top of `top`. The Island in P1's hand keeps their priority a decision.
     const fn exploring(name: &'static str, top: &'static [&'static str]) -> Scenario {
         Scenario::new(name)
@@ -71,7 +71,7 @@ pub mod scenarios {
             .battlefield(P0, &[Card::Plains; 3])
             .hand(P0, &[Card::GetLost])
             .library(P0, &[Card::Plains])
-            .battlefield(P1, &[SPELLBINDER, SPELLBINDER, Card::Plains])
+            .battlefield(P1, &[FLIER, FLIER, Card::Plains])
             .hand(P1, &[Card::Island])
             .library(P1, top)
     }
@@ -98,10 +98,10 @@ pub mod scenarios {
         Scenario::new("Get Lost costs one and a white")
             .battlefield(P0, &[Card::Plains, Card::Plains])
             .hand(P0, &[Card::GetLost, Card::Island])
-            .battlefield(P1, &[SPELLBINDER])
+            .battlefield(P1, &[FLIER])
             .actions(&[
                 ME.casts(Card::GetLost),
-                THEM.has(Zone::Graveyard, SPELLBINDER, 1),
+                THEM.has(Zone::Graveyard, FLIER, 1),
                 ME.tapped(Card::Plains, 2),
             ]),
         // The Island left in P0's hand keeps the game in P0's main phase once Get Lost has
@@ -129,14 +129,14 @@ pub mod scenarios {
         .actions(&[
             LET_P0_ACT,
             GET_LOST,
-            THEM.has(Zone::Graveyard, SPELLBINDER, 1),
+            THEM.has(Zone::Graveyard, FLIER, 1),
             THEM.has(Zone::Battlefield, MAP_NAME, 2),
             ME.has(Zone::Battlefield, MAP_NAME, 0),
             SACRIFICE_A_MAP,
             THEM.has(Zone::Battlefield, MAP_NAME, 1),
             THEM.has(Zone::Hand, Card::Plains, 1),
             THEM.library_top(&[Card::Island]),
-            THEM.counters(SPELLBINDER, CounterKind::PlusOne, 0),
+            THEM.counters(FLIER, CounterKind::PlusOne, 0),
         ]),
         exploring(
             "A Map explores a nonland into a counter and the graveyard",
@@ -147,7 +147,7 @@ pub mod scenarios {
             GET_LOST,
             SACRIFICE_A_MAP,
             THEM.yes(),
-            THEM.counters(SPELLBINDER, CounterKind::PlusOne, 1),
+            THEM.counters(FLIER, CounterKind::PlusOne, 1),
             THEM.has(Zone::Graveyard, Card::Oust, 1),
             THEM.library_top(&[Card::Island]),
         ]),
@@ -160,7 +160,7 @@ pub mod scenarios {
             GET_LOST,
             SACRIFICE_A_MAP,
             THEM.no(),
-            THEM.counters(SPELLBINDER, CounterKind::PlusOne, 1),
+            THEM.counters(FLIER, CounterKind::PlusOne, 1),
             THEM.has(Zone::Graveyard, Card::Oust, 0),
             THEM.library_top(&[Card::Oust, Card::Island]),
         ]),
@@ -168,7 +168,7 @@ pub mod scenarios {
             LET_P0_ACT,
             GET_LOST,
             SACRIFICE_A_MAP,
-            THEM.counters(SPELLBINDER, CounterKind::PlusOne, 1),
+            THEM.counters(FLIER, CounterKind::PlusOne, 1),
         ]),
     ];
 }

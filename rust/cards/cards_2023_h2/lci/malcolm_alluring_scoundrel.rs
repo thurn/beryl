@@ -51,7 +51,7 @@ pub mod scenarios {
     /// ([CR 608.2g]).
     ///
     /// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
-    const SPELLBINDER: &str = Card::EliteSpellbinder;
+    const FLIER: &str = Prop::Flier;
 
     /// Malcolm attacks alone in `turn` and his trigger resolves; the discard has one kind of card
     /// to choose from.
@@ -70,12 +70,12 @@ pub mod scenarios {
     const HITS: [[Action; 5]; 4] = [hit!(1), hit!(3), hit!(5), hit!(7)];
 
     pub const SCENARIOS: &[Scenario] = &[
-        // Four hits: each loots, and the fourth discards the Spellbinder it drew and casts it free
+        // Four hits: each loots, and the fourth discards the flier it drew and casts it free
         // in the combat damage step.
         Scenario::new("Malcolm's fourth chorus counter casts the discard")
             .battlefield(P0, &[MALCOLM])
             // Malcolm's draws in turns 1, 3, 5 and 7 and the draw steps of 3, 5 and 7: Islands,
-            // then the Spellbinder last.
+            // then the flier last.
             .library(
                 P0,
                 &[
@@ -85,7 +85,7 @@ pub mod scenarios {
                     Card::Island,
                     Card::Island,
                     Card::Island,
-                    SPELLBINDER,
+                    FLIER,
                 ],
             )
             .library(P1, &[Card::Plains, Card::Plains, Card::Plains])
@@ -112,13 +112,13 @@ pub mod scenarios {
                 HITS[3][2],
                 HITS[3][3],
                 HITS[3][4],
-                // Three Islands and the Spellbinder in hand.
-                ME.picks(SPELLBINDER),
-                ME.chooses(DecisionKind::CastOffer, SPELLBINDER),
+                // Three Islands and the flier in hand.
+                ME.picks(FLIER),
+                ME.chooses(DecisionKind::CastOffer, FLIER),
                 stack(1),
                 Resolve,
                 ME.counters(MALCOLM, CounterKind::Chorus, 4),
-                ME.controls(SPELLBINDER, 1),
+                ME.controls(FLIER, 1),
                 ME.has(Zone::Hand, Card::Island, 3),
                 THEM.life(12),
             ]),

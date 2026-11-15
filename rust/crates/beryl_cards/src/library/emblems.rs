@@ -24,7 +24,7 @@ pub const SCENARIOS: &[Scenario] =
             .permanents(
                 P1,
                 &[
-                    Permanent::new(props::ARTIFACT),
+                    Permanent::new(props::ARTIFACT.card),
                     Permanent::new(names::ISLAND),
                 ],
             )
@@ -43,12 +43,12 @@ pub const SCENARIOS: &[Scenario] =
                     step: TurnStep::Upkeep,
                 },
                 Action::pass(P0),
-                Action::choose(P0, DecisionKind::Target, props::ARTIFACT),
+                Action::choose(P0, DecisionKind::Target, props::ARTIFACT.card),
                 Action::Resolve,
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Exile,
-                    card: Some(props::ARTIFACT),
+                    card: Some(props::ARTIFACT.card),
                     count: 1,
                 }),
             ]),

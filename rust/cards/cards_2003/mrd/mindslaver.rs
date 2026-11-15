@@ -48,10 +48,10 @@ pub mod scenarios {
                     Card::Island,
                     Card::Island,
                     Card::Island,
-                    Prop::SmallCreature,
+                    Prop::Vanilla,
                 ],
             )
-            .battlefield(P1, &[Card::Plains, Prop::Creature])
+            .battlefield(P1, &[Card::Plains, Prop::Flier])
             .hand(P1, &[Prop::Sorcery])
             .library(P0, &[Card::Island, Card::Island])
             .library(P1, &[Card::Island, Card::Island])
@@ -67,12 +67,12 @@ pub mod scenarios {
             ME.has(Zone::Graveyard, MINDSLAVER, 1),
             advance_to(2, TurnStep::PrecombatMain),
             ME.casts(Prop::Sorcery),
-            ME.targets(Prop::Creature),
+            ME.targets(Prop::Flier),
             Resolve,
-            THEM.has(Zone::Library, Prop::Creature, 1),
+            THEM.has(Zone::Library, Prop::Flier, 1),
             THEM.tapped(Card::Plains, 1),
             THEM.life(23),
-            ME.controls(Prop::SmallCreature, 1),
+            ME.controls(Prop::Vanilla, 1),
         ]),
         // CR 724.5 and 724.8: P0 declares P1's attack into its own blocker, and as the
         // defending player declares that block for itself. Each creature dies.
@@ -85,21 +85,21 @@ pub mod scenarios {
                     Card::Island,
                     Card::Island,
                     Card::Island,
-                    Prop::Creature,
+                    Prop::Flier,
                 ],
             )
-            .battlefield(P1, &[Card::Plains, Prop::SmallCreature])
+            .battlefield(P1, &[Card::Plains, Prop::Vanilla])
             .actions(&[
                 ME.activates(MINDSLAVER, 0),
                 ME.targets_player(THEM),
                 Resolve,
                 advance_to(2, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Prop::SmallCreature),
-                ME.chooses(DecisionKind::Blocker, Prop::Creature),
+                ME.attacks_with(Prop::Vanilla),
+                ME.chooses(DecisionKind::Blocker, Prop::Flier),
                 advance_to(2, TurnStep::EndOfCombat),
-                THEM.has(Zone::Graveyard, Prop::SmallCreature, 1),
-                ME.has(Zone::Graveyard, Prop::Creature, 1),
+                THEM.has(Zone::Graveyard, Prop::Vanilla, 1),
+                ME.has(Zone::Graveyard, Prop::Flier, 1),
                 ME.life(20),
             ]),
         // CR 724.1: "The affected player is controlled during the entire turn; the effect
@@ -121,9 +121,9 @@ pub mod scenarios {
             ME.done_attacking(),
             advance_to(4, TurnStep::PrecombatMain),
             THEM.casts(Prop::Sorcery),
-            THEM.targets(Prop::SmallCreature),
+            THEM.targets(Prop::Vanilla),
             Resolve,
-            ME.has(Zone::Library, Prop::SmallCreature, 1),
+            ME.has(Zone::Library, Prop::Vanilla, 1),
             ME.life(23),
         ]),
         // CR 724.1a: "Multiple player-controlling effects that affect the same player
@@ -140,7 +140,7 @@ pub mod scenarios {
                     Card::Island,
                     Card::Island,
                     Card::Plains,
-                    Prop::Creature,
+                    Prop::Flier,
                 ],
             )
             .actions(&[
@@ -155,9 +155,9 @@ pub mod scenarios {
                 stack(0),
                 advance_to(2, TurnStep::PrecombatMain),
                 THEM.casts(Prop::Sorcery),
-                THEM.targets(Prop::SmallCreature),
+                THEM.targets(Prop::Vanilla),
                 Resolve,
-                ME.has(Zone::Library, Prop::SmallCreature, 1),
+                ME.has(Zone::Library, Prop::Vanilla, 1),
             ]),
     ];
 }

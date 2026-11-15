@@ -10,7 +10,7 @@ use beryl_scenario::{Action, P0, Permanent, Scenario};
 
 use crate::{CARDS, names, props};
 
-/// P0 equips Leonin Scimitar to Elite Spellbinder, then makes the Spellbinder a noncreature
+/// P0 equips Leonin Scimitar to `props::FLIER`, then makes the flier a noncreature
 /// Vehicle artifact with Swift Reconfiguration.
 const RECONFIGURED: Scenario =
     Scenario::new("An Equipment falls off a creature that stops being one")
@@ -19,8 +19,8 @@ const RECONFIGURED: Scenario =
         .permanents(
             P0,
             &[
-                Permanent::new(props::EQUIPMENT),
-                Permanent::new(props::CREATURE),
+                Permanent::new(props::EQUIPMENT.card),
+                Permanent::new(props::FLIER.card),
                 Permanent::new(names::PLAINS),
                 Permanent::new(names::PLAINS),
             ],
@@ -28,7 +28,7 @@ const RECONFIGURED: Scenario =
         .library(P0, &[names::PLAINS])
         .library(beryl_scenario::P1, &[names::PLAINS])
         .actions(&[
-            Action::activate(P0, props::EQUIPMENT, 1),
+            Action::activate(P0, props::EQUIPMENT.card, 1),
             Action::Resolve,
             Action::Cast {
                 player: P0,
@@ -52,7 +52,7 @@ fn an_equipment_on_a_permanent_that_stops_being_a_creature_comes_off() {
             let scimitar = s
                 .permanents()
                 .map(|(slot, _)| slot)
-                .find(|&slot| s.definition_name(&t, slot) == props::EQUIPMENT);
+                .find(|&slot| s.definition_name(&t, slot) == props::EQUIPMENT.card);
             let on = scimitar.map(|slot| {
                 s.object(slot)
                     .attached_to()
@@ -64,10 +64,10 @@ fn an_equipment_on_a_permanent_that_stops_being_a_creature_comes_off() {
         },
     )
     .unwrap_or_else(|e| panic!("{e}"));
-    // Unattached, then on the Spellbinder, then unattached and still on the battlefield.
+    // Unattached, then on the flier, then unattached and still on the battlefield.
     assert_eq!(
         attached,
-        [None, Some(props::CREATURE), None].map(Some),
+        [None, Some(props::FLIER.card), None].map(Some),
         "the Scimitar's host after each step"
     );
 }

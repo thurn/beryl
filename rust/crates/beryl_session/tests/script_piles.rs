@@ -124,7 +124,7 @@ fn an_explored_card_is_held_up_whether_it_leaves_the_library_or_stays() {
     assert!(!own.contains("showcase"), "{own}");
     let name = "A Map explores a nonland into a counter, left on top";
     let rest = [
-        "count #257 (Elite Spellbinder) plusOne 1 <- a1",
+        "count #257 (Geist of the Moors) plusOne 1 <- a1",
         "-point friendly-target a1 > #257",
         "vanish a1 stack>gone resolve <- a1",
     ];
@@ -141,8 +141,8 @@ fn a_face_down_permanent_put_into_a_library_is_held_up_as_it_goes() {
     let lines = |gains: &str| {
         text(&[
             "-point hostile-target #256 > #0".to_owned(),
-            "vanish #0 (Snapcaster Mage) battlefield>library bottom effect <- #256".to_owned(),
-            "& showcase #0 (Snapcaster Mage) <- #256".to_owned(),
+            "vanish #0 (Wetland Sambar) battlefield>library bottom effect <- #256".to_owned(),
+            "& showcase #0 (Wetland Sambar) <- #256".to_owned(),
             format!("count {gains} life 23 <- #256"),
             "vanish #256 (Oust) stack>graveyard resolve <- #256".to_owned(),
         ])
@@ -170,7 +170,7 @@ fn the_opponents_choice_of_top_or_bottom_is_announced() {
         (
             "Subtlety hard cast: the creature spell's owner puts it on top",
             7,
-            "#261 (Elite Spellbinder)",
+            "#261 (Geist of the Moors)",
             "top",
             &[
                 "-point source a1 > #0",

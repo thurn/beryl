@@ -55,7 +55,7 @@ pub mod scenarios {
                 &[
                     Card::Plains,
                     Prop::Instant,
-                    Prop::Creature,
+                    Prop::Flier,
                     Card::Oust,
                     Prop::Artifact,
                 ],

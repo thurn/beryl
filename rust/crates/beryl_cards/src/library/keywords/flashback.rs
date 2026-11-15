@@ -22,22 +22,22 @@ pub const SCENARIOS: &[Scenario] =
                     Permanent::new(names::PLAINS),
                 ],
             )
-            .hand(P0, &[props::SMALL_CREATURE])
-            .graveyard(P0, &[props::SORCERY])
+            .hand(P0, &[names::SNAPCASTER_MAGE])
+            .graveyard(P0, &[props::SORCERY.card])
             .library(P0, &[names::ISLAND])
             .library(P1, &[names::PLAINS, names::PLAINS])
             .actions(&[
-                Action::cast(P0, props::SMALL_CREATURE),
-                // The creature, then its trigger, whose one target is the sorcery.
+                Action::cast(P0, names::SNAPCASTER_MAGE),
+                // Snapcaster Mage, then its trigger, whose one target is the sorcery.
                 Action::Resolve,
                 Action::Resolve,
                 // Its one target is that creature, whose controller gains 3 life.
-                Action::cast(P0, props::SORCERY),
+                Action::cast(P0, props::SORCERY.card),
                 Action::Resolve,
                 Action::assert(Assertion::Count {
                     player: P0,
                     zone: Zone::Exile,
-                    card: Some(props::SORCERY),
+                    card: Some(props::SORCERY.card),
                     count: 1,
                 }),
                 Action::assert(Assertion::Count {

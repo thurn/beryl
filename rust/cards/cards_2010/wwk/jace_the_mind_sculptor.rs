@@ -85,10 +85,7 @@ pub mod scenarios {
         Scenario::new("0 draws three and puts two back in the order chosen")
             .battlefield(P0, &[JACE])
             .hand(P0, &[Prop::Artifact])
-            .library(
-                P0,
-                &[Card::Island, Card::Plains, Prop::Creature, Card::Island],
-            )
+            .library(P0, &[Card::Island, Card::Plains, Prop::Flier, Card::Island])
             .library(P1, &[Card::Plains])
             .actions(&[
                 ME.activates(JACE, 1), // 0
@@ -104,14 +101,14 @@ pub mod scenarios {
                 P0,
                 &[Permanent::new(JACE).counters(CounterKind::Loyalty, 13)],
             )
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P1, &[Prop::Flier])
             .hand(P1, &[Card::Plains])
             .library(P0, &[Card::Island, Card::Island])
             .library(P1, &[Card::Island, Card::Island, Card::Island])
             .actions(&[
                 ME.activates(JACE, 2), // −1
                 Resolve,
-                THEM.has(Zone::Hand, Prop::Creature, 1),
+                THEM.has(Zone::Hand, Prop::Flier, 1),
                 ME.has_loyalty(JACE, 12),
                 advance_to(3, TurnStep::PrecombatMain),
                 ME.activates(JACE, 3), // −12

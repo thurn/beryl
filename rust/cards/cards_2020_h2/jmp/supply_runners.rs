@@ -31,7 +31,6 @@ pub mod scenarios {
 
     const RUNNERS: &str = Card::SupplyRunners;
 
-    // `Prop::Creature` is Elite Spellbinder, a 3/1 flier.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("each other creature you control gets a +1/+1 counter")
             .battlefield(
@@ -42,8 +41,8 @@ pub mod scenarios {
                     Card::Plains,
                     Card::Plains,
                     Card::Plains,
-                    Prop::Creature,
-                    Prop::SmallCreature,
+                    Prop::Flier,
+                    Prop::Vanilla,
                 ],
             )
             .hand(P0, &[RUNNERS])
@@ -52,9 +51,9 @@ pub mod scenarios {
                 Resolve,
                 stack(1),
                 Resolve,
-                ME.counters(Prop::Creature, CounterKind::PlusOne, 1),
-                ME.counters(Prop::SmallCreature, CounterKind::PlusOne, 1),
-                ME.pt(Prop::Creature, 4, 2),
+                ME.counters(Prop::Flier, CounterKind::PlusOne, 1),
+                ME.counters(Prop::Vanilla, CounterKind::PlusOne, 1),
+                ME.pt(Prop::Flier, 4, 2),
                 // The Dog is no "other" creature.
                 ME.counters(RUNNERS, CounterKind::PlusOne, 0),
                 ME.pt(RUNNERS, 2, 2),
@@ -71,14 +70,14 @@ pub mod scenarios {
                     Card::Plains,
                 ],
             )
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P1, &[Prop::Flier])
             .hand(P0, &[RUNNERS])
             .actions(&[
                 ME.casts(RUNNERS),
                 Resolve,
                 stack(1),
                 Resolve,
-                THEM.counters(Prop::Creature, CounterKind::PlusOne, 0),
+                THEM.counters(Prop::Flier, CounterKind::PlusOne, 0),
                 ME.counters(RUNNERS, CounterKind::PlusOne, 0),
             ]),
     ];

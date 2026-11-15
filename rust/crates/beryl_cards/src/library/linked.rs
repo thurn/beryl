@@ -20,19 +20,19 @@ pub const SCENARIOS: &[Scenario] =
                 P0,
                 &[Permanent::new(CONVERTER), Permanent::new(names::PLAINS)],
             )
-            .hand(P0, &[props::ARTIFACT, names::ISLAND])
+            .hand(P0, &[props::ARTIFACT.card, names::ISLAND])
             .library(P0, &[names::PLAINS])
-            .permanents(P1, &[Permanent::new(props::SMALL_CREATURE)])
+            .permanents(P1, &[Permanent::new(props::VANILLA.card)])
             .library(P1, &[names::PLAINS])
             .actions(&[
-                Action::cast(P0, props::ARTIFACT),
+                Action::cast(P0, props::ARTIFACT.card),
                 // The artifact, then its trigger, whose one target is the creature.
                 Action::Resolve,
                 Action::Resolve,
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Exile,
-                    card: Some(props::SMALL_CREATURE),
+                    card: Some(props::VANILLA.card),
                     count: 1,
                 }),
                 Action::activate(P0, CONVERTER, 2),
@@ -40,7 +40,7 @@ pub const SCENARIOS: &[Scenario] =
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Exile,
-                    card: Some(props::SMALL_CREATURE),
+                    card: Some(props::VANILLA.card),
                     count: 1,
                 }),
                 Action::assert(Assertion::Controls {

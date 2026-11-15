@@ -69,8 +69,8 @@ fn shared() -> BTreeSet<&'static str> {
             names_of(def, &mut allowed);
         }
     }
-    for &prop in props::ALL {
-        names_of(card(prop), &mut allowed);
+    for prop in props::ALL {
+        names_of(card(prop.card), &mut allowed);
     }
     allowed
 }
@@ -117,6 +117,50 @@ fn scenarios_name_only_their_card_its_tokens_basic_lands_and_props() {
                         scenario.name
                     ));
                 }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Each prop's card has exactly what its contract says, so a scenario can rely on the contract
+/// and a reader never needs to know which card fills the role. A contract that says `""` for
+/// its text is held to a card with no rules text beyond its keywords.
+#[test]
+fn every_prop_card_keeps_its_contract() {
+    use beryl_card::SubtypeWords;
+
+    use crate::props::Stats;
+
+    let mut failures = Vec::new();
+    for prop in props::ALL {
+        let face = card(prop.card).front();
+        let stats = match (face.power, face.toughness, face.loyalty) {
+            (Some(power), Some(toughness), _) => Stats::Creature { power, toughness },
+            (_, _, Some(loyalty)) => Stats::Planeswalker { loyalty },
+            _ => Stats::None,
+        };
+        let textless = face.abilities.is_empty()
+            && face.casting.is_empty()
+            && face.additional_cost.is_empty()
+            && face.grants.is_empty();
+        let checks = [
+            ("cost", face.cost == prop.cost),
+            ("types", face.types == prop.types),
+            (
+                "subtypes",
+                face.subtypes == SubtypeWords::new(prop.subtypes),
+            ),
+            ("stats", stats == prop.stats),
+            ("keywords", face.keywords == prop.keywords),
+            ("text", textless == prop.text.is_empty()),
+        ];
+        for (what, kept) in checks {
+            if !kept {
+                failures.push(format!(
+                    "{}: its {what} differs from its contract: {face:?}",
+                    prop.card
+                ));
             }
         }
     }

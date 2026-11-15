@@ -101,8 +101,8 @@ pub mod scenarios {
                     Card::Plains,
                     Card::Plains,
                     Card::Plains,
-                    Prop::SmallCreature,
-                    Card::EliteSpellbinder,
+                    Prop::Vanilla,
+                    Prop::Flier,
                 ],
             )
             .hand(P1, &[Card::Plains, Card::Plains])
@@ -129,7 +129,7 @@ pub mod scenarios {
                     Card::Plains,
                     Card::Plains,
                     Card::Plains,
-                    Prop::SmallCreature,
+                    Prop::Vanilla,
                 ],
             )
             .actions(&[
@@ -163,20 +163,15 @@ pub mod scenarios {
             // Two lands and two creatures.
             .battlefield(
                 P1,
-                &[
-                    Card::Plains,
-                    Card::Plains,
-                    Prop::SmallCreature,
-                    Card::EliteSpellbinder,
-                ],
+                &[Card::Plains, Card::Plains, Prop::Vanilla, Prop::Flier],
             )
             .actions(&[
                 ME.casts(BEZA),
                 Resolve,
                 ME.casts(Card::SinkIntoStupor),
-                ME.targets(Prop::SmallCreature),
+                ME.targets(Prop::Vanilla),
                 Resolve,
-                THEM.has(Zone::Hand, Prop::SmallCreature, 1),
+                THEM.has(Zone::Hand, Prop::Vanilla, 1),
                 Resolve,
                 ME.controls(FISH_TOKEN, 0),
                 ME.has_cards(Zone::Hand, 1),

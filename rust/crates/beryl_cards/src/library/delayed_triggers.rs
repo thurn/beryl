@@ -25,14 +25,14 @@ pub const SCENARIOS: &[Scenario] =
                     Permanent::new(names::PLAINS),
                 ],
             )
-            .hand(P0, &[props::ARTIFACT, props::ARTIFACT])
+            .hand(P0, &[props::ARTIFACT.card, props::ARTIFACT.card])
             .library(P0, &[names::ISLAND, names::ISLAND, names::ISLAND])
             .permanents(P1, &[Permanent::new(names::ISLAND)])
             .library(P1, &[names::ISLAND, names::ISLAND])
             .actions(&[
-                Action::cast(P0, props::ARTIFACT),
+                Action::cast(P0, props::ARTIFACT.card),
                 Action::Resolve,
-                Action::cast(P0, props::ARTIFACT),
+                Action::cast(P0, props::ARTIFACT.card),
                 Action::Resolve,
                 Action::activate(P0, TEFERI, 0),
                 Action::Resolve,

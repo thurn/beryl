@@ -397,7 +397,7 @@ mod tests {
     #[test]
     fn review_shares_the_payment_choice_and_its_result() {
         use beryl_cards::names::MANA_TITHE;
-        use beryl_cards::props::ARTIFACT;
+        const ARTIFACT: &str = beryl_cards::props::ARTIFACT.card;
         use beryl_session::CandidateIndex;
         use beryl_session::protocol::{Candidate, ZoneName};
 
@@ -470,7 +470,7 @@ mod tests {
     #[test]
     fn counter_review_starts_before_the_target_spell_is_cast() {
         use beryl_cards::names::MANA_TITHE;
-        use beryl_cards::props::ARTIFACT;
+        const ARTIFACT: &str = beryl_cards::props::ARTIFACT.card;
         use beryl_session::protocol::ZoneName;
 
         let def = CARDS

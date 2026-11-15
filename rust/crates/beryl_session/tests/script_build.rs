@@ -233,7 +233,7 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
             "& +point hostile-target a1 > #257",
             "count #1 (The Wandering Emperor) loyalty 1 <- you",
             "-point hostile-target a1 > #257",
-            "vanish #257 (Snapcaster Mage) battlefield>exile exile <- a1",
+            "vanish #257 (Wetland Sambar) battlefield>exile exile <- a1",
             "count you life 22 <- a1",
             "-point source a1 > #1",
             "vanish a1 stack>gone resolve <- a1",
@@ -261,7 +261,7 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
             "count #1 (The Wandering Emperor) loyalty 1 <- opponent",
             "dwell a1",
             "-point hostile-target a1 > #257",
-            "vanish #257 (Snapcaster Mage) battlefield>exile exile <- a1",
+            "vanish #257 (Wetland Sambar) battlefield>exile exile <- a1",
             "count opponent life 22 <- a1",
             "-point source a1 > #1",
             "vanish a1 stack>gone resolve <- a1",
@@ -309,7 +309,7 @@ fn a_plus_one_counter_counts_with_the_stats_it_changes() {
         3,
     );
     let lines = [
-        "count #256 (Snapcaster Mage) plusOne 1 <- a1",
+        "count #256 (Wetland Sambar) plusOne 1 <- a1",
         "-point source a1 > #0",
         "& -point hostile-target a1 > #256",
         "vanish a1 stack>gone resolve <- a1",
@@ -368,7 +368,7 @@ fn an_aura_flies_onto_its_permanent() {
     let lands = [
         "-point hostile-target #0 > #259",
         "fly #0 (Swift Reconfiguration) stack>battlefield on #259 resolve <- #0",
-        "count #259 (Snapcaster Mage) pt",
+        "count #259 (Wetland Sambar) pt",
     ];
     let mine: Vec<String> = cast("you")
         .into_iter()
@@ -395,8 +395,8 @@ fn a_sweepers_creatures_vanish_together() {
     let lines = [
         "vanish #0 (Adeline, Resplendent Cathar) battlefield>graveyard destroy <- #1",
         "& vanish #512 battlefield>gone destroy <- #1",
-        "& vanish #257 (Elite Spellbinder) battlefield>graveyard destroy <- #1",
-        "& vanish #256 (Snapcaster Mage) battlefield>graveyard destroy <- #1",
+        "& vanish #257 (Geist of the Moors) battlefield>graveyard destroy <- #1",
+        "& vanish #256 (Wetland Sambar) battlefield>graveyard destroy <- #1",
         "vanish #1 (Damn) stack>graveyard resolve <- #1",
     ];
     assert_eq!(first, text(&lines));
@@ -484,7 +484,7 @@ fn an_exiled_permanent_vanishes() {
     let [first, second] = script(names::PORTABLE_HOLE, name, 3);
     let lines = [
         "-point hostile-target a1 > #261",
-        "vanish #261 (Snapcaster Mage) battlefield>exile exile <- a1",
+        "vanish #261 (Wetland Sambar) battlefield>exile exile <- a1",
         "-point source a1 > #2",
         "vanish a1 stack>gone resolve <- a1",
     ];
@@ -508,7 +508,7 @@ fn a_permanent_put_into_a_library_takes_its_place() {
             "tap #3 (Plains) <- you",
             "& streak #3 > #1 white 1 <- #3",
             "-point hostile-target #1 > #256",
-            "vanish #256 (Elite Spellbinder) battlefield>library @1 effect <- #1",
+            "vanish #256 (Geist of the Moors) battlefield>library @1 effect <- #1",
             "count opponent life 23 <- #1",
             "vanish #1 (Oust) stack>graveyard resolve <- #1",
         ])
@@ -522,7 +522,7 @@ fn a_permanent_put_into_a_library_takes_its_place() {
             "& streak #3 > #1 white 1 <- #3",
             "dwell #1",
             "-point hostile-target #1 > #256",
-            "vanish #256 (Elite Spellbinder) battlefield>library @1 effect <- #1",
+            "vanish #256 (Geist of the Moors) battlefield>library @1 effect <- #1",
             "count you life 23 <- #1",
             "vanish #1 (Oust) stack>graveyard resolve <- #1",
         ])

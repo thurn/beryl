@@ -49,7 +49,7 @@ pub mod scenarios {
             .interaction(&[Card::GetLost])
             .hand(P0, &[HUNTER, Card::GetLost])
             .battlefield(P0, &[Card::Plains; 5])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P1, &[Prop::Flier])
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])
             .actions(&[
@@ -57,15 +57,15 @@ pub mod scenarios {
                 Resolve,
                 Resolve,
                 ME.yes(),
-                THEM.has(Zone::Exile, Prop::Creature, 1),
-                THEM.controls(Prop::Creature, 0),
+                THEM.has(Zone::Exile, Prop::Flier, 1),
+                THEM.controls(Prop::Flier, 0),
                 // Fiend Hunter is the only creature left to target, so it is chosen silently.
                 ME.casts(Card::GetLost),
                 Resolve,
                 Resolve,
                 ME.has(Zone::Graveyard, HUNTER, 1),
-                THEM.has(Zone::Exile, Prop::Creature, 0),
-                THEM.controls(Prop::Creature, 1),
+                THEM.has(Zone::Exile, Prop::Flier, 0),
+                THEM.controls(Prop::Flier, 1),
             ]),
         // The leaves ability triggers for every zone, so bouncing Fiend Hunter with Jace returns the
         // creature too.
@@ -75,7 +75,7 @@ pub mod scenarios {
                 P0,
                 &[Card::Plains, Card::Plains, Card::Plains, Prop::Planeswalker],
             )
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P1, &[Prop::Vanilla])
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])
             .actions(&[
@@ -83,15 +83,15 @@ pub mod scenarios {
                 Resolve,
                 Resolve,
                 ME.yes(),
-                THEM.has(Zone::Exile, Prop::SmallCreature, 1),
+                THEM.has(Zone::Exile, Prop::Vanilla, 1),
                 // Fiend Hunter is the only creature on the battlefield, so Jace targets it
                 // silently.
                 ME.activates(Prop::Planeswalker, 2), // −1
                 Resolve,
                 Resolve,
                 ME.has(Zone::Hand, HUNTER, 1),
-                THEM.has(Zone::Exile, Prop::SmallCreature, 0),
-                THEM.controls(Prop::SmallCreature, 1),
+                THEM.has(Zone::Exile, Prop::Vanilla, 0),
+                THEM.controls(Prop::Vanilla, 1),
             ]),
         // If Fiend Hunter leaves with its enters ability still on the stack, the leaves ability
         // resolves first and returns nothing; the enters ability then exiles the creature for
@@ -100,7 +100,7 @@ pub mod scenarios {
             .interaction(&[Card::GetLost])
             .hand(P0, &[HUNTER, Card::GetLost])
             .battlefield(P0, &[Card::Plains; 5])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P1, &[Prop::Flier])
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])
             .actions(&[
@@ -112,8 +112,8 @@ pub mod scenarios {
                 Resolve,
                 Resolve,
                 ME.yes(),
-                THEM.has(Zone::Exile, Prop::Creature, 1),
-                THEM.controls(Prop::Creature, 0),
+                THEM.has(Zone::Exile, Prop::Flier, 1),
+                THEM.controls(Prop::Flier, 0),
             ]),
     ];
 }

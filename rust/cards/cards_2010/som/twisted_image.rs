@@ -30,51 +30,47 @@ pub mod scenarios {
 
     const IMAGE: &str = Card::TwistedImage;
 
-    // `Prop::Creature` is Elite Spellbinder, a 3/1 flier.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("switching a 3/1 makes it a 1/3 and draws a card")
-            .battlefield(P0, &[Card::Island, Prop::Creature])
+            .battlefield(P0, &[Card::Island, Prop::Flier])
             .hand(P0, &[IMAGE])
             .library(P0, &[Card::Plains, Card::Island])
             .actions(&[
                 ME.casts(IMAGE),
                 Resolve,
-                ME.pt(Prop::Creature, 1, 3),
+                ME.pt(Prop::Flier, 1, 3),
                 ME.has(Zone::Hand, Card::Plains, 1),
                 ME.has(Zone::Graveyard, IMAGE, 1),
             ]),
         // Switching twice puts the creature back to 3/1.
         Scenario::new("switching twice restores the original values")
-            .battlefield(P0, &[Card::Island, Card::Island, Prop::Creature])
+            .battlefield(P0, &[Card::Island, Card::Island, Prop::Flier])
             .hand(P0, &[IMAGE, IMAGE])
             .library(P0, &[Card::Plains, Card::Island, Card::Island])
             .actions(&[
                 ME.casts(IMAGE),
                 Resolve,
-                ME.pt(Prop::Creature, 1, 3),
+                ME.pt(Prop::Flier, 1, 3),
                 ME.casts(IMAGE),
                 Resolve,
-                ME.pt(Prop::Creature, 3, 1),
+                ME.pt(Prop::Flier, 3, 1),
             ]),
-        // The Wandering Emperor's +1 puts a +1/+1 counter on the Spellbinder: 4/2 from layer
+        // The Wandering Emperor's +1 puts a +1/+1 counter on the flier: 4/2 from layer
         // 7c, switched afterwards in layer 7d.
         Scenario::new("a creature with a +1/+1 counter is switched after the counter")
             .interaction(&[Card::TheWanderingEmperor])
-            .battlefield(
-                P0,
-                &[Card::Island, Card::TheWanderingEmperor, Prop::Creature],
-            )
+            .battlefield(P0, &[Card::Island, Card::TheWanderingEmperor, Prop::Flier])
             .hand(P0, &[IMAGE])
             .library(P0, &[Card::Plains, Card::Island])
             .actions(&[
                 ME.activates(Card::TheWanderingEmperor, 1),
                 ME.target_count(1),
                 Resolve,
-                ME.counters(Prop::Creature, CounterKind::PlusOne, 1),
-                ME.pt(Prop::Creature, 4, 2),
+                ME.counters(Prop::Flier, CounterKind::PlusOne, 1),
+                ME.pt(Prop::Flier, 4, 2),
                 ME.casts(IMAGE),
                 Resolve,
-                ME.pt(Prop::Creature, 2, 4),
+                ME.pt(Prop::Flier, 2, 4),
             ]),
     ];
 }

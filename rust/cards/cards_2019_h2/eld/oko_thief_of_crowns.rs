@@ -87,7 +87,7 @@ pub mod scenarios {
     const ADELINE: &str = Card::AdelineResplendentCathar;
     const BEZA: &str = Card::BezaTheBoundingSpring;
     const SCIMITAR: &str = Prop::Equipment;
-    const SNAPCASTER: &str = Prop::SmallCreature;
+    const VANILLA: &str = Prop::Vanilla;
 
     /// Oko with `loyalty` loyalty counters.
     const fn oko(loyalty: u8) -> Permanent {
@@ -110,20 +110,19 @@ pub mod scenarios {
                 ME.life(23),
                 ME.has(Zone::Battlefield, FOOD_TOKEN, 0),
             ]),
-        // `Prop::Creature` is a 3/1 flier.
         Scenario::new("+1 makes an opponent's creature a 3/3 Elk")
             .battlefield(P0, &[OKO])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P1, &[Prop::Flier])
             .library(P0, &[Card::Island])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.activates(OKO, 1), // +1
                 Resolve,
                 ME.has_loyalty(OKO, 5),
-                THEM.pt(Prop::Creature, 3, 3),
+                THEM.pt(Prop::Flier, 3, 3),
                 // It lasts past the turn.
                 advance_to(2, TurnStep::Upkeep),
-                THEM.pt(Prop::Creature, 3, 3),
+                THEM.pt(Prop::Flier, 3, 3),
             ]),
         // Adeline is a legendary */4 with vigilance whose power is the number of creatures her
         // controller controls, and who makes a Human token whenever her controller attacks. As
@@ -148,36 +147,36 @@ pub mod scenarios {
         // "Effects that modify a creature's power and/or toughness ... will apply to the creature
         // no matter when they started to take effect").
         Scenario::new("+1's Elk wearing an Equipment attached before")
-            .battlefield(P0, &[OKO, SCIMITAR, SNAPCASTER, Card::Island])
+            .battlefield(P0, &[OKO, SCIMITAR, VANILLA, Card::Island])
             .library(P0, &[Card::Island])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.activates(SCIMITAR, 1), // Equip {1}
                 Resolve,
-                ME.pt(SNAPCASTER, 3, 2),
+                ME.pt(VANILLA, 3, 2),
                 ME.activates(OKO, 1), // +1
-                ME.targets(SNAPCASTER),
+                ME.targets(VANILLA),
                 Resolve,
-                ME.pt(SNAPCASTER, 4, 4),
+                ME.pt(VANILLA, 4, 4),
             ]),
         Scenario::new("+1's Elk wearing an Equipment attached after")
-            .battlefield(P0, &[OKO, SCIMITAR, SNAPCASTER, Card::Island])
+            .battlefield(P0, &[OKO, SCIMITAR, VANILLA, Card::Island])
             .library(P0, &[Card::Island])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.activates(OKO, 1), // +1
-                ME.targets(SNAPCASTER),
+                ME.targets(VANILLA),
                 Resolve,
-                ME.pt(SNAPCASTER, 3, 3),
+                ME.pt(VANILLA, 3, 3),
                 ME.activates(SCIMITAR, 1), // Equip {1}
                 Resolve,
-                ME.pt(SNAPCASTER, 4, 4),
+                ME.pt(VANILLA, 4, 4),
             ]),
         // The attached Leonin Scimitar made an Elk is a creature and no Equipment, so it can equip
         // nothing and becomes unattached (CR 301.5c, CR 704.5n): the 2/1 it was on loses its
         // +1/+1.
         Scenario::new("+1 makes an attached Equipment a 3/3 Elk")
-            .battlefield(P0, &[OKO, SCIMITAR, SNAPCASTER, Card::Island])
+            .battlefield(P0, &[OKO, SCIMITAR, VANILLA, Card::Island])
             .library(P0, &[Card::Island])
             .library(P1, &[Card::Island])
             .actions(&[
@@ -188,7 +187,7 @@ pub mod scenarios {
                 Resolve,
                 ME.creature(SCIMITAR, true),
                 ME.pt(SCIMITAR, 3, 3),
-                ME.pt(SNAPCASTER, 2, 1),
+                ME.pt(VANILLA, 2, 1),
             ]),
         // The card's ruling: an artifact made an Elk "loses any other card types it has (such as
         // artifact)". P1's Leonin Scimitar, made an Elk, is no artifact for a kicked Thieving
@@ -217,13 +216,13 @@ pub mod scenarios {
         Scenario::new("−5 exchanges an artifact for a small creature")
             .permanents(P0, &[oko(5)])
             .battlefield(P0, &[Prop::Equipment])
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P1, &[Prop::Vanilla])
             .library(P0, &[Card::Island])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.activates(OKO, 2), // −5
                 Resolve,
-                ME.controls(Prop::SmallCreature, 1),
+                ME.controls(Prop::Vanilla, 1),
                 THEM.controls(Prop::Equipment, 1),
                 ME.has(Zone::Graveyard, OKO, 1),
             ]),
@@ -234,18 +233,18 @@ pub mod scenarios {
             .interaction(&[BEZA])
             .permanents(P0, &[oko(6)])
             .battlefield(P0, &[SCIMITAR])
-            .battlefield(P1, &[BEZA, SNAPCASTER])
+            .battlefield(P1, &[BEZA, VANILLA])
             .library(P0, &[Card::Island])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.activates(OKO, 2), // −5
                 Resolve,
-                ME.controls(SNAPCASTER, 1),
+                ME.controls(VANILLA, 1),
                 THEM.controls(BEZA, 1),
                 THEM.controls(SCIMITAR, 1),
                 advance_to(1, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacking(SNAPCASTER, 0),
+                ME.attacking(VANILLA, 0),
             ]),
         // The card's ruling: "If either of the target permanents is an illegal target when Oko's
         // last ability resolves, the exchange won't happen." P0 makes a Food with +2 on turn 1.
@@ -254,7 +253,7 @@ pub mod scenarios {
         Scenario::new("−5 exchanges nothing when a target is gone")
             .permanents(P0, &[oko(3)])
             .battlefield(P0, &[Card::Island, Card::Island])
-            .battlefield(P1, &[SNAPCASTER])
+            .battlefield(P1, &[VANILLA])
             .library(P0, &[Card::Island, Card::Island])
             .library(P1, &[Card::Island, Card::Island])
             .actions(&[
@@ -271,8 +270,8 @@ pub mod scenarios {
                 Resolve,
                 ME.life(23),
                 Resolve,
-                THEM.controls(SNAPCASTER, 1),
-                ME.controls(SNAPCASTER, 0),
+                THEM.controls(VANILLA, 1),
+                ME.controls(VANILLA, 0),
                 ME.has(Zone::Graveyard, OKO, 1),
             ]),
     ];

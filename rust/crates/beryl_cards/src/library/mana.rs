@@ -19,9 +19,9 @@ pub const SCENARIOS: &[Scenario] =
             .hand(P0, &[names::MANA_DRAIN])
             .library(P0, &[names::PLAINS, names::PLAINS])
             .permanents(P1, &[Permanent::new(names::ISLAND); 3])
-            .hand(P1, &[props::UNTARGETED_SPELL])
+            .hand(P1, &[props::UNTARGETED_SPELL.card])
             .actions(&[
-                Action::cast(P1, props::UNTARGETED_SPELL),
+                Action::cast(P1, props::UNTARGETED_SPELL.card),
                 Action::cast(P0, names::MANA_DRAIN),
                 Action::AdvanceTo {
                     turn: 3,

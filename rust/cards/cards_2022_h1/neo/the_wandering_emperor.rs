@@ -75,7 +75,6 @@ pub mod scenarios {
 
     const EMPEROR: &str = Card::TheWanderingEmperor;
 
-    // `Prop::SmallCreature` is a 2/1.
     pub const SCENARIOS: &[Scenario] = &[
         // Flashed in on the opponent's turn during combat, she activates at instant speed
         // (her static ability's rule change); the turn after, she waits for a main phase.
@@ -83,17 +82,17 @@ pub mod scenarios {
             .at(2, P1, TurnStep::BeginningOfCombat)
             .hand(P0, &[EMPEROR])
             .battlefield(P0, &[Card::Plains; 4])
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P1, &[Prop::Vanilla])
             .library(P0, &[Card::Plains, Card::Plains])
             .library(P1, &[Card::Plains, Card::Plains])
             .actions(&[
                 ME.passes(),
                 // The creature attacks, tapped; the attackers' controller has nothing to do.
-                THEM.attacks_with(Prop::SmallCreature),
+                THEM.attacks_with(Prop::Vanilla),
                 // With nothing else to do, each resolves as soon as its controller passes.
                 ME.casts(EMPEROR),
                 ME.activates(EMPEROR, 3), // -2
-                THEM.has(Zone::Exile, Prop::SmallCreature, 1),
+                THEM.has(Zone::Exile, Prop::Vanilla, 1),
                 ME.life(22),
                 ME.has_loyalty(EMPEROR, 1),
                 // The turn after, in her controller's upkeep: no instant-speed loyalty abilities.
@@ -106,40 +105,40 @@ pub mod scenarios {
             ]),
         Scenario::new("+1 grows a creature and gives it first strike")
             .battlefield(P0, &[EMPEROR])
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P1, &[Prop::Vanilla])
             .library(P0, &[Card::Plains, Card::Plains])
             .library(P1, &[Card::Plains, Card::Plains])
             .actions(&[
                 ME.activates(EMPEROR, 1), // +1
                 ME.target_count(1),
                 Resolve,
-                THEM.pt(Prop::SmallCreature, 3, 2),
+                THEM.pt(Prop::Vanilla, 3, 2),
                 ME.has_loyalty(EMPEROR, 4),
                 // The counter stays after the turn.
                 advance_to(2, TurnStep::Upkeep),
-                THEM.pt(Prop::SmallCreature, 3, 2),
+                THEM.pt(Prop::Vanilla, 3, 2),
             ]),
         // The +1's first strike decides a combat: P0's 2/1 becomes a 3/2 first striker and
         // attacks into P1's 3/1, which blocks. It deals its damage first and kills the blocker,
         // which deals none back (CR 510.4: "the only creatures that assign combat damage in that
         // step are those with first strike or double strike").
         Scenario::new("+1's first strike wins a combat")
-            .battlefield(P0, &[EMPEROR, Prop::SmallCreature])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P0, &[EMPEROR, Prop::Vanilla])
+            .battlefield(P1, &[Prop::Flier])
             .library(P0, &[Card::Plains, Card::Plains])
             .library(P1, &[Card::Plains, Card::Plains])
             .actions(&[
                 ME.activates(EMPEROR, 1), // +1
                 ME.target_count(1),
-                ME.targets(Prop::SmallCreature),
+                ME.targets(Prop::Vanilla),
                 Resolve,
                 advance_to(1, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Prop::SmallCreature),
-                THEM.chooses(DecisionKind::Blocker, Prop::Creature),
+                ME.attacks_with(Prop::Vanilla),
+                THEM.chooses(DecisionKind::Blocker, Prop::Flier),
                 advance_to(1, TurnStep::EndOfCombat),
-                ME.controls(Prop::SmallCreature, 1),
-                THEM.controls(Prop::Creature, 0),
+                ME.controls(Prop::Vanilla, 1),
+                THEM.controls(Prop::Flier, 0),
             ]),
         Scenario::new("−1 makes a 2/2 Samurai")
             .battlefield(P0, &[EMPEROR])

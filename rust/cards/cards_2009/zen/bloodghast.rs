@@ -100,7 +100,7 @@ pub mod scenarios {
         // to block and the 2/1 attacker deals its damage.
         Scenario::new("it can't block")
             .battlefield(P0, &[GHAST])
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P1, &[Prop::Vanilla])
             .library(P0, &[Card::Island, Card::Island])
             .library(P1, &[Card::Island, Card::Island])
             .actions(&[
@@ -109,7 +109,7 @@ pub mod scenarios {
                 ME.done_attacking(),
                 advance_to(2, TurnStep::BeginningOfCombat),
                 THEM.passes(),
-                THEM.attacks_with(Prop::SmallCreature),
+                THEM.attacks_with(Prop::Vanilla),
                 advance_to(2, TurnStep::EndOfCombat),
                 ME.life(18),
             ]),

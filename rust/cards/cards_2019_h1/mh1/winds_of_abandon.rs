@@ -80,10 +80,10 @@ pub mod scenarios {
 
     const WINDS: &str = Card::WindsOfAbandon;
 
-    const SPELLBINDER: &str = Card::EliteSpellbinder;
+    const FLIER: &str = Prop::Flier;
 
     /// P0's creature, or P1's second.
-    const TWO_DROP: &str = Prop::SmallCreature;
+    const TWO_DROP: &str = Prop::Vanilla;
 
     const SIX_PLAINS_AND_ADELINE: &[&str] = &[
         Card::Plains,
@@ -101,13 +101,13 @@ pub mod scenarios {
         Scenario::new("Winds of Abandon exiles a creature; its controller fetches a tapped basic")
             .battlefield(P0, &[Card::Plains, Card::Plains, TWO_DROP])
             .hand(P0, &[WINDS, Card::Plains])
-            .battlefield(P1, &[SPELLBINDER])
+            .battlefield(P1, &[FLIER])
             .library(P1, &[Card::Tundra, Card::Plains, Card::Island])
             .actions(&[
                 ME.casts(WINDS),
                 Resolve,
                 THEM.picks_up_to(Card::Plains),
-                THEM.has(Zone::Exile, SPELLBINDER, 1),
+                THEM.has(Zone::Exile, FLIER, 1),
                 ME.controls(TWO_DROP, 1),
                 THEM.controls(Card::Plains, 1),
                 THEM.tapped(Card::Plains, 1),
@@ -118,7 +118,7 @@ pub mod scenarios {
         Scenario::new("Winds of Abandon overloaded: a basic per creature exiled")
             .battlefield(P0, SIX_PLAINS_AND_ADELINE)
             .hand(P0, &[WINDS, Card::Plains])
-            .battlefield(P1, &[SPELLBINDER, TWO_DROP])
+            .battlefield(P1, &[FLIER, TWO_DROP])
             .library(P1, &[Card::Island, Card::Plains, Card::Tundra])
             .actions(&[
                 Action::Cast {
@@ -142,12 +142,12 @@ pub mod scenarios {
         Scenario::new("Winds of Abandon: no basic land to find")
             .battlefield(P0, &[Card::Plains, Card::Plains])
             .hand(P0, &[WINDS, Card::Plains])
-            .battlefield(P1, &[SPELLBINDER])
+            .battlefield(P1, &[FLIER])
             .library(P1, &[Card::Tundra, TWO_DROP])
             .actions(&[
                 ME.casts(WINDS),
                 Resolve,
-                THEM.has(Zone::Exile, SPELLBINDER, 1),
+                THEM.has(Zone::Exile, FLIER, 1),
                 THEM.has_cards(Zone::Battlefield, 0),
                 THEM.has_cards(Zone::Library, 2),
             ]),

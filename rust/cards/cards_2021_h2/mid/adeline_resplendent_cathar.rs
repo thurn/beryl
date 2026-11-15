@@ -64,7 +64,7 @@ pub mod scenarios {
     /// counts it, and vigilance keeps her untapped.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Adeline's Human arrives attacking")
-            .battlefield(P0, &[ADELINE, Card::EliteSpellbinder])
+            .battlefield(P0, &[ADELINE, Prop::Flier])
             .actions(&[
                 ME.pt(ADELINE, 2, 4),
                 advance_to(1, TurnStep::BeginningOfCombat),
@@ -81,28 +81,28 @@ pub mod scenarios {
                 // Adeline's 3 and the Human's 1.
                 THEM.life(16),
             ]),
-        // Adeline stays home while the Spellbinder attacks: "you attack" all the same.
+        // Adeline stays home while the flier attacks: "you attack" all the same.
         Scenario::new("Adeline's Human arrives when she stays home")
-            .battlefield(P0, &[ADELINE, Card::EliteSpellbinder])
+            .battlefield(P0, &[ADELINE, Prop::Flier])
             .actions(&[
                 advance_to(1, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Card::EliteSpellbinder),
+                ME.attacks_with(Prop::Flier),
                 ME.done_attacking(),
                 Resolve,
                 ME.attacking(HUMAN_TOKEN, 1),
                 ME.attacking(ADELINE, 0),
                 advance_to(1, TurnStep::EndOfCombat),
-                // The Spellbinder's 3 and the Human's 1.
+                // The flier's 3 and the Human's 1.
                 THEM.life(16),
             ]),
         // Her power is defined in every zone (CR 604.3). In a hand she has no controller, so
-        // "creatures you control" are her owner's (CR 108.4a): the Spellbinder, not P1's
+        // "creatures you control" are her owner's (CR 108.4a): the flier, not P1's
         // creature, and she is 1/4.
         Scenario::new("Adeline in a hand counts her owner's creatures")
             .hand(P0, &[ADELINE])
-            .battlefield(P0, &[Card::EliteSpellbinder])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P0, &[Prop::Flier])
+            .battlefield(P1, &[Prop::Flier])
             .actions(&[ME.pt_in(Zone::Hand, ADELINE, 1, 4)]),
         // "Attacking that player or a planeswalker they control": its controller picks the
         // planeswalker (CR 508.4), whom the Human's damage then removes loyalty from (CR 120.3c).

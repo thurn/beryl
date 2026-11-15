@@ -47,16 +47,16 @@ pub mod scenarios {
     use crate::prelude::*;
 
     pub const SCENARIOS: &[Scenario] = &[
-        // Cast for {2}{U}{U} in response to P1's Elite Spellbinder, which P1 puts on top. The
+        // Cast for {2}{U}{U} in response to P1's flier, which P1 puts on top. The
         // Plains in P1's hand keeps P1's main phase a decision once the stack is empty.
         Scenario::new("Subtlety hard cast: the creature spell's owner puts it on top")
             .at(2, P1, TurnStep::PrecombatMain)
             .battlefield(P0, &[Card::Island; 4])
             .hand(P0, &[Card::Subtlety])
             .battlefield(P1, &[Card::Plains; 3])
-            .hand(P1, &[Card::EliteSpellbinder, Card::Plains])
+            .hand(P1, &[Prop::Flier, Card::Plains])
             .actions(&[
-                THEM.casts(Card::EliteSpellbinder),
+                THEM.casts(Prop::Flier),
                 // Passing and the cast for mana: with no other blue card in hand, no evoke.
                 ME.deciding(DecisionKind::Priority, 2),
                 ME.casts(Card::Subtlety),
@@ -64,7 +64,7 @@ pub mod scenarios {
                 ME.target_count(1),
                 Resolve,
                 THEM.yes(),
-                THEM.library_top(&[Card::EliteSpellbinder, Card::Island]),
+                THEM.library_top(&[Prop::Flier, Card::Island]),
                 stack(0),
                 ME.controls(Card::Subtlety, 1),
             ]),
@@ -108,9 +108,9 @@ pub mod scenarios {
                 &[Card::Subtlety, Prop::UntargetedSpell, Prop::Planeswalker],
             )
             .battlefield(P1, &[Card::Plains; 3])
-            .hand(P1, &[Card::EliteSpellbinder, Card::Plains])
+            .hand(P1, &[Prop::Flier, Card::Plains])
             .actions(&[
-                THEM.casts(Card::EliteSpellbinder),
+                THEM.casts(Prop::Flier),
                 // Passing, the cast for mana and the evoke.
                 ME.deciding(DecisionKind::Priority, 3),
                 Action::Cast {
@@ -128,7 +128,7 @@ pub mod scenarios {
                 Resolve,
                 Resolve,
                 THEM.yes(),
-                THEM.library_top(&[Card::EliteSpellbinder, Card::Island]),
+                THEM.library_top(&[Prop::Flier, Card::Island]),
                 ME.has(Zone::Graveyard, Card::Subtlety, 1),
             ]),
     ];

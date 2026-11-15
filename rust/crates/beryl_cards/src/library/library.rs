@@ -19,7 +19,7 @@ pub const DIG: &[Scenario] =
         Scenario::new("Looking at the top five cards of a library of three looks at them all")
             .permanents(P0, ISLANDS)
             .hand(P0, &[names::STOCK_UP])
-            .library(P0, &[names::PLAINS, props::ARTIFACT, names::ISLAND])
+            .library(P0, &[names::PLAINS, props::ARTIFACT.card, names::ISLAND])
             .library(P1, &[names::ISLAND])
             .actions(&[
                 Action::cast(P0, names::STOCK_UP),
@@ -29,7 +29,7 @@ pub const DIG: &[Scenario] =
                     kind: DecisionKind::ChooseObject,
                     candidates: 3,
                 }),
-                Action::choose(P0, DecisionKind::ChooseObject, props::ARTIFACT),
+                Action::choose(P0, DecisionKind::ChooseObject, props::ARTIFACT.card),
                 Action::choose(P0, DecisionKind::ChooseObject, names::ISLAND),
                 Action::assert(Assertion::Count {
                     player: P0,
@@ -59,7 +59,7 @@ pub const PUT_BACK: &[Scenario] =
                 &[
                     names::ISLAND,
                     names::PLAINS,
-                    props::CREATURE,
+                    props::FLIER.card,
                     names::ISLAND,
                     names::ISLAND,
                 ],
@@ -69,10 +69,15 @@ pub const PUT_BACK: &[Scenario] =
                 Action::activate(P0, JACE, 1),
                 Action::Resolve,
                 Action::choose(P0, DecisionKind::ChooseObject, names::PLAINS),
-                Action::choose(P0, DecisionKind::ChooseObject, props::CREATURE),
+                Action::choose(P0, DecisionKind::ChooseObject, props::FLIER.card),
                 Action::assert(Assertion::Library {
                     player: P0,
-                    top: &[props::CREATURE, names::PLAINS, names::ISLAND, names::ISLAND],
+                    top: &[
+                        props::FLIER.card,
+                        names::PLAINS,
+                        names::ISLAND,
+                        names::ISLAND,
+                    ],
                 }),
                 Action::AdvanceTo {
                     turn: 3,
@@ -81,7 +86,7 @@ pub const PUT_BACK: &[Scenario] =
                 Action::assert(Assertion::Count {
                     player: P0,
                     zone: Zone::Hand,
-                    card: Some(props::CREATURE),
+                    card: Some(props::FLIER.card),
                     count: 1,
                 }),
             ]),
@@ -107,10 +112,10 @@ pub const TOP_OR_BOTTOM: &[Scenario] =
                     Permanent::new(names::PLAINS),
                 ],
             )
-            .hand(P1, &[props::CREATURE, names::PLAINS])
+            .hand(P1, &[props::FLIER.card, names::PLAINS])
             .library(P1, &[names::ISLAND])
             .actions(&[
-                Action::cast(P1, props::CREATURE),
+                Action::cast(P1, props::FLIER.card),
                 Action::cast(P0, names::SUBTLETY),
                 Action::Resolve,
                 Action::answer(P0, DecisionKind::TargetCount, Pick::Number { n: 1 }),
@@ -118,7 +123,7 @@ pub const TOP_OR_BOTTOM: &[Scenario] =
                 Action::answer(P1, DecisionKind::YesNo, Pick::No),
                 Action::assert(Assertion::Library {
                     player: P1,
-                    top: &[names::ISLAND, props::CREATURE],
+                    top: &[names::ISLAND, props::FLIER.card],
                 }),
                 Action::assert(Assertion::Stack { count: 0 }),
             ]),

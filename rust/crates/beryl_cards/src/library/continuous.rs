@@ -18,8 +18,8 @@ pub const SCENARIOS: &[Scenario] =
     &[
         Scenario::new("A rule changed by an effect is changed in the turn it resolves")
             .permanents(P0, &[Permanent::new(TEFERI), Permanent::new(names::PLAINS)])
-            .hand(P0, &[props::SORCERY])
-            .permanents(P1, &[Permanent::new(props::CREATURE)])
+            .hand(P0, &[props::SORCERY.card])
+            .permanents(P1, &[Permanent::new(props::FLIER.card)])
             .library(P0, &[names::ISLAND, names::ISLAND])
             .library(P1, &[names::PLAINS, names::ISLAND])
             .actions(&[
@@ -29,11 +29,11 @@ pub const SCENARIOS: &[Scenario] =
                     turn: 1,
                     step: TurnStep::BeginningOfCombat,
                 },
-                Action::cast(P0, props::SORCERY),
+                Action::cast(P0, props::SORCERY.card),
                 // Second from the top: its owner has drawn the Plains above it since.
                 Action::assert(Assertion::Library {
                     player: P1,
-                    top: &[props::CREATURE, names::ISLAND],
+                    top: &[props::FLIER.card, names::ISLAND],
                 }),
                 Action::assert(Assertion::Life {
                     player: P1,

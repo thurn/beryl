@@ -32,7 +32,7 @@ pub mod scenarios {
         // stay, tapped. Had the damage stayed marked, the repeated check would destroy them.
         Scenario::new("a shield saves a blocker from lethal combat damage")
             .battlefield(P0, &[Card::Swamp, DRUDGE])
-            .battlefield(P1, &[Prop::SmallCreature])
+            .battlefield(P1, &[Prop::Vanilla])
             .library(P0, &[Card::Island, Card::Island])
             .library(P1, &[Card::Island, Card::Island])
             .actions(&[
@@ -42,14 +42,14 @@ pub mod scenarios {
                 advance_to(2, TurnStep::BeginningOfCombat),
                 THEM.passes(),
                 ME.passes(),
-                THEM.attacks_with(Prop::SmallCreature),
+                THEM.attacks_with(Prop::Vanilla),
                 ME.passes(),
                 ME.chooses(DecisionKind::Blocker, DRUDGE),
                 ME.activates(DRUDGE, 0),
                 advance_to(2, TurnStep::EndOfCombat),
                 ME.controls(DRUDGE, 1),
                 ME.tapped(DRUDGE, 1),
-                THEM.controls(Prop::SmallCreature, 0),
+                THEM.controls(Prop::Vanilla, 0),
             ]),
         // An attacking Skeletons destroyed by Get Lost regenerates and leaves combat (CR
         // 701.19a), so it deals P1 no combat damage.

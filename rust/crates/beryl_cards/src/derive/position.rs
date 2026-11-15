@@ -37,32 +37,32 @@ const LANDS: &[&str] = &[
 /// Player 0's other cards in hand: a land to discard, a sorcery to cast, which a "whenever
 /// you cast" ability waits for and a counterspell answers, a creature spell for a response
 /// that wants one, and a blue card to exile for an evoke.
-const HAND: &[&str] = &[names::PLAINS, props::SORCERY, props::SMALL_CREATURE];
+const HAND: &[&str] = &[names::PLAINS, props::SORCERY.card, props::VANILLA.card];
 
 /// The opponent's permanents: one of each kind a target or a sacrifice may want, among them a
 /// tapped creature of mana value 2. No planeswalker: neither oracle's exporter can say which
 /// a creature put onto the battlefield attacking attacks.
 const OPPONENT_PERMANENTS: &[Permanent] = &[
-    Permanent::new(props::CREATURE),
-    Permanent::new(props::SMALL_CREATURE).tapped(),
-    Permanent::new(props::ARTIFACT),
-    Permanent::new(props::NONBASIC_LAND),
+    Permanent::new(props::FLIER.card),
+    Permanent::new(props::VANILLA.card).tapped(),
+    Permanent::new(props::ARTIFACT.card),
+    Permanent::new(props::NONBASIC_LAND.card),
     Permanent::new(names::ISLAND),
     Permanent::new(names::ISLAND),
 ];
 
 /// The opponent's hand: a look at it, or a discard from it, finds a choice.
-const OPPONENT_HAND: &[&str] = &[props::INSTANT, props::REMOVAL, names::ISLAND];
+const OPPONENT_HAND: &[&str] = &[props::INSTANT.card, props::REMOVAL.card, names::ISLAND];
 
 /// Each library, top first: lands and spells for a draw, a dig or a search to find, and few
 /// enough that drawing seven, as an ultimate may, finds it empty.
 const LIBRARY: &[&str] = &[
     names::ISLAND,
-    props::ARTIFACT,
+    props::ARTIFACT.card,
     names::PLAINS,
-    props::CREATURE,
+    props::FLIER.card,
     names::ISLAND,
-    props::SORCERY,
+    props::SORCERY.card,
 ];
 
 /// The basic lands a mana source of the card's pays beside, one at a time: whichever its
@@ -204,7 +204,7 @@ pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witnes
         hand.extend_from_slice(witness.hand);
         opponent_added = witness.theirs;
     }
-    let mut graveyard = without(&[props::INSTANT], card);
+    let mut graveyard = without(&[props::INSTANT.card], card);
     match place {
         Place::Hand => hand.insert(0, card),
         Place::Battlefield(f) | Place::Mana(f, _) => battlefield.push(permanent(def, f)),
@@ -244,7 +244,7 @@ pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witnes
             hand: leak(without(OPPONENT_HAND, card)),
             battlefield: &[],
             permanents: leak(opponent),
-            graveyard: leak(without(&[props::SORCERY], card)),
+            graveyard: leak(without(&[props::SORCERY.card], card)),
             exile: &[],
             library,
         },

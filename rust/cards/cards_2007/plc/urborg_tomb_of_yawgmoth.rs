@@ -37,36 +37,35 @@ pub mod scenarios {
 
     const URBORG: &str = Card::UrborgTombOfYawgmoth;
 
-    // Damn is a {B}{B} sorcery that destroys target creature; `Prop::Creature` is Elite
-    // Spellbinder, a 3/1 flier. Each scenario has a second creature, so Damn's target is a
+    // Damn is a {B}{B} sorcery that destroys target creature. Each scenario has a second creature, so Damn's target is a
     // choice the scenario names, as the oracles need.
 
     pub const SCENARIOS: &[Scenario] = &[
         // Urborg is a Swamp and so is the Plains: together they pay Damn's {B}{B}.
         Scenario::new("Urborg and another land are Swamps")
             .interaction(&[Card::Damn])
-            .battlefield(P0, &[URBORG, Card::Plains, Prop::SmallCreature])
+            .battlefield(P0, &[URBORG, Card::Plains, Prop::Vanilla])
             .hand(P0, &[Card::Damn])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P1, &[Prop::Flier])
             .actions(&[
                 ME.casts(Card::Damn),
-                ME.targets(Prop::Creature),
+                ME.targets(Prop::Flier),
                 Resolve,
-                THEM.has(Zone::Graveyard, Prop::Creature, 1),
+                THEM.has(Zone::Graveyard, Prop::Flier, 1),
             ]),
         // Each land, whoever controls it: the opponent's Plains taps for {B} too.
         Scenario::new("the opponent's lands are Swamps too")
             .interaction(&[Card::Damn])
-            .battlefield(P0, &[URBORG, Prop::Creature])
-            .battlefield(P1, &[Card::Plains, Card::Plains, Prop::SmallCreature])
+            .battlefield(P0, &[URBORG, Prop::Flier])
+            .battlefield(P1, &[Card::Plains, Card::Plains, Prop::Vanilla])
             .hand(P1, &[Card::Damn])
             .actions(&[
                 ME.done_attacking(),
                 advance_to(2, TurnStep::PrecombatMain),
                 THEM.casts(Card::Damn),
-                THEM.targets(Prop::Creature),
+                THEM.targets(Prop::Flier),
                 Resolve,
-                ME.has(Zone::Graveyard, Prop::Creature, 1),
+                ME.has(Zone::Graveyard, Prop::Flier, 1),
             ]),
         // Dryad Arbor keeps its Forest type and gains Swamp: it taps for {B}, with Urborg's
         // own {B} paying for Damn.
@@ -74,12 +73,12 @@ pub mod scenarios {
             .interaction(&[Card::Damn])
             .battlefield(P0, &[URBORG, Card::DryadArbor])
             .hand(P0, &[Card::Damn])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P1, &[Prop::Flier])
             .actions(&[
                 ME.casts(Card::Damn),
-                ME.targets(Prop::Creature),
+                ME.targets(Prop::Flier),
                 Resolve,
-                THEM.has(Zone::Graveyard, Prop::Creature, 1),
+                THEM.has(Zone::Graveyard, Prop::Flier, 1),
             ]),
     ];
 }

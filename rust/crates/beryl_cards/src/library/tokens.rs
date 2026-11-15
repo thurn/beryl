@@ -66,7 +66,7 @@ pub const COPIES: &[Scenario] =
         )
         .hand(P0, &[names::FRACTURED_IDENTITY])
         .library(P0, &[names::PLAINS])
-        .permanents(P1, &[Permanent::new(props::ARTIFACT)])
+        .permanents(P1, &[Permanent::new(props::ARTIFACT.card)])
         .library(P1, &[names::PLAINS])
         .actions(&[
             Action::cast(P0, names::FRACTURED_IDENTITY),
@@ -74,17 +74,17 @@ pub const COPIES: &[Scenario] =
             Action::assert(Assertion::Count {
                 player: P1,
                 zone: Zone::Exile,
-                card: Some(props::ARTIFACT),
+                card: Some(props::ARTIFACT.card),
                 count: 1,
             }),
             Action::assert(Assertion::Controls {
                 player: P0,
-                card: props::ARTIFACT,
+                card: props::ARTIFACT.card,
                 count: 1,
             }),
             Action::assert(Assertion::Controls {
                 player: P1,
-                card: props::ARTIFACT,
+                card: props::ARTIFACT.card,
                 count: 0,
             }),
         ]),

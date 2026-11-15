@@ -95,7 +95,16 @@ and builders a card definition is made of.
    Forge if a scenario shows what it does. Copy the model card's scenarios. In scenarios:
    - Only implemented cards exist: cards with a file under `rust/cards`, or
      complete from the store, named by `Card::<Card>`, plus the stand-ins in
-     `Prop::` (`Prop::Creature`, `Prop::Artifact`, `Prop::Equipment`, ...).
+     `Prop::` (`Prop::Flier`, `Prop::Vanilla`, `Prop::FlashCreature`,
+     `Prop::Artifact`, `Prop::Equipment`, ...).
+   - A prop stands for its role. Everything a scenario may rely on about it is
+     in its contract in `beryl_card_shared/src/props.rs` (cost, types,
+     subtypes, power and toughness, keywords, a summary of its text), which a
+     test checks against the card. Don't write which card a prop is or restate
+     its stats in a comment: write `ME.pt(Prop::Flier, 3, 1)`, not a comment
+     saying the flier is a 3/1. If a scenario needs something a contract
+     doesn't promise (an enters trigger, a creature type no prop has), name
+     that card and mark it with `Scenario::interaction`, or add a prop.
      If a scenario needs a card nobody has implemented, implement one (see
      "Cards for scenarios") rather than leave the part untested. Today only
      Island, Plains and Swamp are basic lands with files, so a card that needs
@@ -130,7 +139,7 @@ it. We can't wait for every card to be written before a definition has good
 tests. When a part of your card needs another card to happen (an Equipment to
 steal, a creature with a particular ability, a spell to counter):
 
-- Use a prop from `Prop::` if one fits.
+- Use a prop from `Prop::` if its contract gives what the scenario needs.
 - Otherwise pick the simplest real card in the card store that sets the
   situation up (`just card brief` works on any card), and write it as you write
   any card, in its own file with its own scenarios, checked with
@@ -139,7 +148,10 @@ steal, a creature with a particular ability, a spell to counter):
   Skydiver: it is in no deck. Its doc comment says that it was implemented for
   scenarios.
 - If other cards will need the same role, add it to `props.rs` in
-  `beryl_card_shared`, both as a constant and in `Prop`, with a doc comment.
+  `beryl_card_shared`: a `Contract` constant naming the role, its entry in
+  `ALL`, and its `Prop::` name. Prefer a creature whose text is only keywords
+  (its set crate builds it from the card store, with no file), and name the
+  role by what it is, not by the card.
 - Name another card in your scenario with `Scenario::interaction`, unless it is
   a prop.
 

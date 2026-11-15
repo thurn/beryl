@@ -73,7 +73,7 @@ pub mod scenarios {
         // goes on. The other planeswalker is a destination no one picks.
         Scenario::new("combat damage removes Teferi while other attacks remain")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, &[Prop::Creature, Prop::SmallCreature])
+            .battlefield(P0, &[Prop::Flier, Prop::Vanilla])
             .battlefield(P1, &[TEFERI, Prop::Planeswalker])
             .library(P1, &[Card::Plains, Card::Island])
             .actions(&[
@@ -82,9 +82,9 @@ pub mod scenarios {
                 THEM.has_loyalty(TEFERI, 1),
                 advance_to(3, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Prop::Creature),
+                ME.attacks_with(Prop::Flier),
                 ME.chooses(DecisionKind::AttackTarget, TEFERI),
-                ME.attacks_with(Prop::SmallCreature),
+                ME.attacks_with(Prop::Vanilla),
                 ME.answers(DecisionKind::AttackTarget, Pick::DefendingPlayer),
                 advance_to(3, TurnStep::EndOfCombat),
                 THEM.has(Zone::Graveyard, TEFERI, 1),
@@ -96,7 +96,7 @@ pub mod scenarios {
         // declared (by-w8gv.21.57).
         Scenario::new("combat damage removes Teferi while the other planeswalker is attacked")
             .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, &[Prop::Creature, Prop::SmallCreature])
+            .battlefield(P0, &[Prop::Flier, Prop::Vanilla])
             .battlefield(P1, &[TEFERI, Prop::Planeswalker])
             .library(P1, &[Card::Plains, Card::Island])
             .actions(&[
@@ -104,9 +104,9 @@ pub mod scenarios {
                 THEM.target_count(0),
                 advance_to(3, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Prop::Creature),
+                ME.attacks_with(Prop::Flier),
                 ME.chooses(DecisionKind::AttackTarget, TEFERI),
-                ME.attacks_with(Prop::SmallCreature),
+                ME.attacks_with(Prop::Vanilla),
                 ME.chooses(DecisionKind::AttackTarget, Prop::Planeswalker),
                 advance_to(3, TurnStep::EndOfCombat),
                 THEM.has(Zone::Graveyard, TEFERI, 1),
@@ -117,8 +117,8 @@ pub mod scenarios {
         // with an empty stack.
         Scenario::new("an opponent's flash spell waits for sorcery timing")
             .battlefield(P0, &[TEFERI])
-            .hand(P1, &[Prop::SmallCreature])
-            .battlefield(P1, &[Card::Island, Card::Island])
+            .hand(P1, &[Prop::FlashCreature])
+            .battlefield(P1, &[Card::Swamp, Card::Island, Card::Island])
             .library(P0, &[Card::Island, Card::Island])
             .library(P1, &[Card::Plains, Card::Island])
             .actions(&[
@@ -127,9 +127,9 @@ pub mod scenarios {
                 THEM.deciding(DecisionKind::Priority, 1),
                 // The stack empty in its main phase: sorcery timing.
                 advance_to(2, TurnStep::PrecombatMain),
-                THEM.casts(Prop::SmallCreature),
+                THEM.casts(Prop::FlashCreature),
                 Resolve,
-                THEM.controls(Prop::SmallCreature, 1),
+                THEM.controls(Prop::FlashCreature, 1),
             ]),
         Scenario::new("−3 returns an opposing artifact and draws a card")
             .battlefield(P0, &[TEFERI])
@@ -147,7 +147,7 @@ pub mod scenarios {
         Scenario::new("+1 lets a sorcery be cast on the opponent's turn, until the next")
             .battlefield(P0, &[TEFERI, Card::Plains])
             .hand(P0, &[Card::Oust, Card::Oust])
-            .battlefield(P1, &[Prop::Creature])
+            .battlefield(P1, &[Prop::Flier])
             .library(P0, &[Card::Island, Card::Island])
             .library(P1, &[Card::Plains, Card::Island])
             .actions(&[
@@ -160,7 +160,7 @@ pub mod scenarios {
                 // Second from the top: P1 has drawn the Plains above it since, and stops in their
                 // main phase with it to play.
                 THEM.has(Zone::Hand, Card::Plains, 1),
-                THEM.library_top(&[Prop::Creature, Card::Island]),
+                THEM.library_top(&[Prop::Flier, Card::Island]),
                 THEM.life(23),
                 // "Until your next turn": in its controller's next upkeep the other Oust waits for
                 // a main phase.

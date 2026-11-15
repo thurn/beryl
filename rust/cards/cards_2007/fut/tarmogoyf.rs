@@ -71,7 +71,7 @@ pub mod scenarios {
             .interaction(&[Card::GoldMyr])
             .battlefield(P0, &[GOYF])
             .graveyard(P0, &[Card::GoldMyr, Card::GoldMyr])
-            .graveyard(P1, &[Prop::Creature])
+            .graveyard(P1, &[Prop::Flier])
             .actions(&[ME.pt(GOYF, 2, 3)]),
         // A creature and a sorcery make it 2/3. Lightning Bolt is in its owner's graveyard by
         // the time state-based actions look at the 3 damage, and as a third card type it makes
@@ -81,7 +81,7 @@ pub mod scenarios {
             .battlefield(P0, BOLTER)
             .hand(P0, BOLTER_HAND)
             .battlefield(P1, &[GOYF])
-            .graveyard(P1, &[Prop::Creature, Prop::Sorcery])
+            .graveyard(P1, &[Prop::Flier, Prop::Sorcery])
             .actions(&[
                 THEM.pt(GOYF, 2, 3),
                 ME.casts(BOLT),
@@ -96,7 +96,7 @@ pub mod scenarios {
             .battlefield(P0, BOLTER)
             .hand(P0, BOLTER_HAND)
             .battlefield(P1, &[GOYF])
-            .graveyard(P1, &[Prop::Creature, Prop::Instant])
+            .graveyard(P1, &[Prop::Flier, Prop::Instant])
             .actions(&[
                 ME.casts(BOLT),
                 ME.targets(GOYF),
@@ -114,7 +114,7 @@ pub mod scenarios {
             .battlefield(P0, BOLTER)
             .hand(P0, BOLTER_HAND)
             .battlefield(P1, &[GOYF, Card::StripMine])
-            .graveyard(P1, &[Prop::Creature, Prop::Instant])
+            .graveyard(P1, &[Prop::Flier, Prop::Instant])
             .actions(&[
                 ME.casts(BOLT),
                 ME.targets(GOYF),
@@ -145,7 +145,7 @@ pub mod scenarios {
         Scenario::new("Tarmogoyf under Dress Down")
             .interaction(&[Card::DressDown])
             .battlefield(P0, &[Card::DressDown, GOYF])
-            .graveyard(P0, &[Prop::Creature, Prop::Sorcery])
+            .graveyard(P0, &[Prop::Flier, Prop::Sorcery])
             .actions(&[ME.pt(GOYF, 0, 1)]),
     ];
 }

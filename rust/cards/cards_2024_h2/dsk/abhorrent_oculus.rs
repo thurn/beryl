@@ -83,7 +83,7 @@ pub mod scenarios {
                 Resolve,
                 ME.pt(OCULUS, 5, 5),
             ]),
-        // Snapcaster Mage is manifested and Counterspell, the other card looked at, goes to the
+        // The creature is manifested and Counterspell, the other card looked at, goes to the
         // graveyard. Player 0's own upkeep triggers nothing.
         Scenario::new("Abhorrent Oculus manifests dread on each opponent's upkeep only")
             .at(1, P0, TurnStep::PostcombatMain)
@@ -91,7 +91,7 @@ pub mod scenarios {
             .library(
                 P0,
                 &[
-                    Card::SnapcasterMage,
+                    Prop::Vanilla,
                     Card::Counterspell,
                     Card::Island,
                     Card::Island,
@@ -103,10 +103,10 @@ pub mod scenarios {
                 stack(1),
                 Resolve,
                 ME.deciding(DecisionKind::ChooseObject, 2),
-                ME.picks(Card::SnapcasterMage),
-                ME.face_down(Card::SnapcasterMage, 1),
+                ME.picks(Prop::Vanilla),
+                ME.face_down(Prop::Vanilla, 1),
                 // CR 708.2a: a 2/2 creature, whatever its card.
-                ME.pt(Card::SnapcasterMage, 2, 2),
+                ME.pt(Prop::Vanilla, 2, 2),
                 ME.has(Zone::Graveyard, Card::Counterspell, 1),
                 ME.library_top(&[Card::Island, Card::Island]),
                 advance_to(3, TurnStep::Upkeep),
@@ -116,7 +116,7 @@ pub mod scenarios {
         Scenario::new("Manifest dread with one card in the library manifests it")
             .at(1, P0, TurnStep::PostcombatMain)
             .battlefield(P0, OCULUS_WITH_FLASH_MANA)
-            .hand(P0, &[Card::SnapcasterMage])
+            .hand(P0, &[Prop::Vanilla])
             .library(P1, &[Card::Plains])
             .actions(&[
                 TO_THEIR_UPKEEP,
@@ -128,7 +128,7 @@ pub mod scenarios {
         Scenario::new("Manifest dread with an empty library does nothing")
             .at(1, P0, TurnStep::PostcombatMain)
             .battlefield(P0, OCULUS_WITH_FLASH_MANA)
-            .hand(P0, &[Card::SnapcasterMage])
+            .hand(P0, &[Prop::Vanilla])
             .library(P0, &[])
             .library(P1, &[Card::Plains])
             .actions(&[
@@ -143,6 +143,7 @@ pub mod scenarios {
         // Mage's enters trigger, which Counterspell in the graveyard would give a target, doesn't
         // trigger (CR 708.8).
         Scenario::new("A manifested creature turns face up for its mana cost, entering no more")
+            .interaction(&[Card::SnapcasterMage])
             .at(1, P0, TurnStep::PostcombatMain)
             .battlefield(P0, &[OCULUS, Card::Island, Card::Island])
             .graveyard(P0, &[Card::Counterspell])
@@ -162,11 +163,11 @@ pub mod scenarios {
                 stack(0),
             ]),
         // CR 701.40b: a face-down Counterspell is a 2/2 creature, but its card isn't a creature
-        // card, so it can't be turned face up: player 0 may only pass or cast Snapcaster Mage.
+        // card, so it can't be turned face up: player 0 may only pass or cast `Prop::FlashCreature`.
         Scenario::new("A manifested noncreature card can't be turned face up")
             .at(1, P0, TurnStep::PostcombatMain)
-            .battlefield(P0, &[OCULUS, Card::Island, Card::Island])
-            .hand(P0, &[Card::SnapcasterMage])
+            .battlefield(P0, &[OCULUS, Card::Swamp, Card::Island, Card::Island])
+            .hand(P0, &[Prop::FlashCreature])
             .library(P0, &[Card::Counterspell, Card::Island])
             .library(P1, &[Card::Plains])
             .actions(&[
@@ -176,35 +177,35 @@ pub mod scenarios {
                 ME.creature(Card::Counterspell, true),
                 ME.deciding(DecisionKind::Priority, 2),
             ]),
-        // CR 708.9: Oust puts the face-down Snapcaster Mage second from the top of its owner's
+        // CR 708.9: Oust puts the face-down creature second from the top of its owner's
         // library, revealed as it goes. Its controller gains the 3 life.
         Scenario::new("A face-down permanent leaving the battlefield is revealed")
             .at(1, P0, TurnStep::PostcombatMain)
             .battlefield(P0, &[OCULUS])
-            .library(P0, &[Card::SnapcasterMage, Card::Island, Card::Island])
+            .library(P0, &[Prop::Vanilla, Card::Island, Card::Island])
             .battlefield(P1, &[Card::Plains])
             .hand(P1, &[Card::Oust])
             .library(P1, &[Card::Plains])
             .actions(&[
                 TO_THEIR_UPKEEP,
                 Resolve,
-                ME.picks(Card::SnapcasterMage),
+                ME.picks(Prop::Vanilla),
                 advance_to(2, TurnStep::PrecombatMain),
                 THEM.casts(Card::Oust),
-                THEM.targets(Card::SnapcasterMage),
+                THEM.targets(Prop::Vanilla),
                 Resolve,
-                ME.library_top(&[Card::Island, Card::SnapcasterMage]),
+                ME.library_top(&[Card::Island, Prop::Vanilla]),
                 ME.life(23),
                 // On to combat: the tests read what each player knows here.
                 THEM.passes(),
             ]),
-        // CR 708.2: the copy Fractured Identity makes of the face-down Snapcaster Mage is a 2/2
+        // CR 708.2: the copy Fractured Identity makes of the face-down creature is a 2/2
         // with no text, for player 1, the one player other than its controller.
         Scenario::new("Fractured Identity copies a face-down permanent as a 2/2")
             .interaction(&[Card::FracturedIdentity])
             .at(1, P0, TurnStep::PostcombatMain)
             .battlefield(P0, &[OCULUS])
-            .library(P0, &[Card::SnapcasterMage, Card::Island, Card::Island])
+            .library(P0, &[Prop::Vanilla, Card::Island, Card::Island])
             .battlefield(
                 P1,
                 &[
@@ -220,12 +221,12 @@ pub mod scenarios {
             .actions(&[
                 TO_THEIR_UPKEEP,
                 Resolve,
-                ME.picks(Card::SnapcasterMage),
+                ME.picks(Prop::Vanilla),
                 advance_to(2, TurnStep::PrecombatMain),
                 THEM.casts(Card::FracturedIdentity),
-                THEM.targets(Card::SnapcasterMage),
+                THEM.targets(Prop::Vanilla),
                 Resolve,
-                ME.has(Zone::Exile, Card::SnapcasterMage, 1),
+                ME.has(Zone::Exile, Prop::Vanilla, 1),
                 THEM.has_cards(Zone::Battlefield, 6),
                 // On to combat: the tests read the copy here.
                 THEM.passes(),

@@ -27,15 +27,15 @@ pub static CARD: CardDef = Printed::Oust
 pub mod scenarios {
     use crate::prelude::*;
 
-    const SPELLBINDER: &str = Card::EliteSpellbinder;
+    const FLIER: &str = Prop::Flier;
 
-    /// P0 casts Oust on P1's Elite Spellbinder, whose library is `top`. The Plains left in P0's
+    /// P0 casts Oust on P1's flier, whose library is `top`. The Plains left in P0's
     /// hand keeps the game in P0's main phase once Oust has resolved.
     const fn oust_onto(name: &'static str, top: &'static [&'static str]) -> Scenario {
         Scenario::new(name)
             .battlefield(P0, &[Card::Plains])
             .hand(P0, &[Card::Oust, Card::Plains])
-            .battlefield(P1, &[SPELLBINDER])
+            .battlefield(P1, &[FLIER])
             .library(P1, top)
     }
 
@@ -59,7 +59,7 @@ pub mod scenarios {
         )
         .actions(&[
             ME.casts(Card::Oust),
-            THEM.library_top(&[SPELLBINDER]),
+            THEM.library_top(&[FLIER]),
             THEM.life(23),
             ME.life(20),
         ]),
@@ -69,7 +69,7 @@ pub mod scenarios {
         )
         .actions(&[
             ME.casts(Card::Oust),
-            THEM.library_top(&[Card::Island, SPELLBINDER]),
+            THEM.library_top(&[Card::Island, FLIER]),
         ]),
         oust_onto(
             "Oust puts the creature second from the top and its controller gains 3",
@@ -77,8 +77,8 @@ pub mod scenarios {
         )
         .actions(&[
             ME.casts(Card::Oust),
-            THEM.library_top(&[Card::Island, SPELLBINDER, Card::Plains]),
-            THEM.has(Zone::Battlefield, SPELLBINDER, 0),
+            THEM.library_top(&[Card::Island, FLIER, Card::Plains]),
+            THEM.has(Zone::Battlefield, FLIER, 0),
             ME.has(Zone::Graveyard, Card::Oust, 1),
             THEM.life(23),
         ]),
@@ -87,14 +87,14 @@ pub mod scenarios {
         Scenario::new("Oust beneath an opposing counterspell")
             .battlefield(P0, &[Card::Plains, Card::Island, Card::Island])
             .hand(P0, &[Card::Oust, Prop::Instant, Card::Plains])
-            .battlefield(P1, &[SPELLBINDER, Card::Island, Card::Island])
+            .battlefield(P1, &[FLIER, Card::Island, Card::Island])
             .hand(P1, &[Prop::Instant])
             .actions(&[
                 ME.casts(Card::Oust),
                 ME.passes(),
                 THEM.casts(Prop::Instant),
                 ME.passes(),
-                THEM.controls(SPELLBINDER, 1),
+                THEM.controls(FLIER, 1),
             ]),
     ];
 }

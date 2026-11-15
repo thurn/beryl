@@ -5,7 +5,7 @@
 //! can't look at face-down cards in any other zone or face-down spells or permanents controlled
 //! by another player."
 
-use beryl_cards::{CARDS, names};
+use beryl_cards::{CARDS, names, props};
 use beryl_engine::{Observation, Seat, SlotId, Zone};
 use beryl_session::StopsSetting;
 use beryl_session::protocol::{
@@ -24,8 +24,8 @@ fn oculus_scenario(name: &str) -> &'static beryl_scenario::Scenario {
         .expect("the scenario")
 }
 
-/// The face-down permanent each player sees once Abhorrent Oculus has manifested Snapcaster
-/// Mage, as player 0 (its controller) and player 1.
+/// The face-down permanent each player sees once Abhorrent Oculus has manifested
+/// `props::VANILLA`, as player 0 (its controller) and player 1.
 fn seen() -> [ObjectView; 2] {
     let scenario =
         oculus_scenario("Abhorrent Oculus manifests dread on each opponent's upkeep only");
@@ -60,7 +60,7 @@ fn a_face_down_permanent_is_a_nameless_two_two_to_its_opponent() {
         toughness: 2,
     });
     assert_eq!(mine.slot, theirs.slot);
-    assert_eq!(mine.name.as_deref(), Some(names::SNAPCASTER_MAGE));
+    assert_eq!(mine.name.as_deref(), Some(props::VANILLA.card));
     assert_eq!(theirs.name, None);
     assert_eq!(theirs.controller, Side::Opponent);
     for o in [&mine, &theirs] {
@@ -69,12 +69,12 @@ fn a_face_down_permanent_is_a_nameless_two_two_to_its_opponent() {
     }
 }
 
-/// Fractured Identity's copy of the face-down Snapcaster Mage is a face-up token, since being
+/// Fractured Identity's copy of the face-down creature is a face-up token, since being
 /// face down is a status a copy doesn't copy
 /// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)), of the face-down values
 /// ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)): "Any listed characteristics
 /// are the copiable values of that object's characteristics." Both players see the same
-/// nameless 2/2, and neither the state nor either view of it holds Snapcaster Mage.
+/// nameless 2/2, and neither the state nor either view of it holds that creature's name.
 #[test]
 fn a_copy_of_a_face_down_permanent_is_a_face_up_nameless_two_two() {
     let scenario = oculus_scenario("Fractured Identity copies a face-down permanent as a 2/2");
@@ -88,9 +88,7 @@ fn a_copy_of_a_face_down_permanent_is_a_face_up_nameless_two_two() {
         .copied()
         .find(|&slot| s.object(slot).is_token())
         .expect("the copy");
-    let snapcaster = t
-        .index_of(CARDS.get(names::SNAPCASTER_MAGE).unwrap())
-        .unwrap();
+    let snapcaster = t.index_of(CARDS.get(props::VANILLA.card).unwrap()).unwrap();
     assert_eq!(
         s.copiable(copy).record(&t),
         (

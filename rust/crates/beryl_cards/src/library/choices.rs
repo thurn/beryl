@@ -17,7 +17,7 @@ pub const SCENARIOS: &[Scenario] = &[Scenario::new("A player who may choose a ca
     .hand(P0, &[SPELLBINDER])
     .permanents(P0, &[Permanent::new(names::PLAINS); 3])
     .library(P0, &[names::PLAINS])
-    .hand(P1, &[props::ARTIFACT, names::ISLAND])
+    .hand(P1, &[props::ARTIFACT.card, names::ISLAND])
     .library(P1, &[names::ISLAND])
     .actions(&[
         Action::cast(P0, SPELLBINDER),
@@ -27,7 +27,7 @@ pub const SCENARIOS: &[Scenario] = &[Scenario::new("A player who may choose a ca
         Action::assert(Assertion::Count {
             player: P1,
             zone: Zone::Hand,
-            card: Some(props::ARTIFACT),
+            card: Some(props::ARTIFACT.card),
             count: 1,
         }),
         Action::assert(Assertion::Count {

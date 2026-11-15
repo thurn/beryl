@@ -32,7 +32,7 @@ pub mod scenarios {
 
     const SPHINX: &str = Card::SphinxOfFalseConclusions;
 
-    /// The Sphinx attacks in `turn`, loots, and a Spellbinder blocks it: both die.
+    /// The Sphinx attacks in `turn`, loots, and a flier blocks it: both die.
     macro_rules! traded {
         ($turn:expr) => {
             [
@@ -41,7 +41,7 @@ pub mod scenarios {
                 ME.attacks_with(SPHINX),
                 Resolve,
                 ME.passes(),
-                THEM.chooses(DecisionKind::Blocker, Card::EliteSpellbinder),
+                THEM.chooses(DecisionKind::Blocker, Prop::Flier),
             ]
         };
     }
@@ -52,7 +52,7 @@ pub mod scenarios {
         // The card dies and leaves a token copy behind; the token dies and leaves nothing.
         Scenario::new("Sphinx dies as a card, then as a token")
             .battlefield(P0, &[SPHINX])
-            .battlefield(P1, &[Card::EliteSpellbinder, Card::EliteSpellbinder])
+            .battlefield(P1, &[Prop::Flier, Prop::Flier])
             .library(P0, &[Card::Island, Card::Island, Card::Island])
             .library(P1, &[Card::Plains])
             .actions(&[
@@ -63,13 +63,13 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, Card::Island, 1),
                 TRADES[0][4],
                 TRADES[0][5],
-                // The other Spellbinder stays back.
+                // The other flier stays back.
                 THEM.answers(DecisionKind::Blocker, Pick::Done),
                 advance_to(1, TurnStep::CombatDamage),
                 Resolve,
                 ME.token_pt(SPHINX, 4, 2),
                 ME.has(Zone::Graveyard, SPHINX, 1),
-                // The other Spellbinder stays home in its controller's turn.
+                // The other flier stays home in its controller's turn.
                 advance_to(2, TurnStep::BeginningOfCombat),
                 THEM.passes(),
                 THEM.done_attacking(),
@@ -81,7 +81,7 @@ pub mod scenarios {
                 TRADES[1][5],
                 advance_to(3, TurnStep::EndOfCombat),
                 ME.controls(SPHINX, 0),
-                THEM.has(Zone::Graveyard, Card::EliteSpellbinder, 2),
+                THEM.has(Zone::Graveyard, Prop::Flier, 2),
                 THEM.life(20),
             ]),
     ];

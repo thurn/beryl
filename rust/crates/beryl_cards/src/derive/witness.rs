@@ -51,9 +51,9 @@ const REGENERATION_SHIELD: Witness = Witness {
         Permanent::new(names::DRYAD_ARBOR),
     ],
     theirs: &[],
-    hand: &[props::REGENERATION],
+    hand: &[props::REGENERATION.card],
     prelude: &[
-        ME.casts(props::REGENERATION),
+        ME.casts(props::REGENERATION.card),
         ME.targets(names::DRYAD_ARBOR),
         Resolve,
     ],
@@ -65,8 +65,8 @@ const REGENERATION_SHIELD: Witness = Witness {
 const ABILITY_TO_TARGET: Witness = Witness {
     words: "with an ability to target",
     mine: &[
-        Permanent::new(props::EQUIPMENT),
-        Permanent::new(props::THIEF),
+        Permanent::new(props::EQUIPMENT.card),
+        Permanent::new(props::THIEF.card),
     ],
     theirs: &[],
     hand: &[],
@@ -84,11 +84,11 @@ const STOLEN: Witness = Witness {
         Permanent::new(names::ISLAND),
     ],
     theirs: &[Permanent::new(names::ORNITHOPTER)],
-    hand: &[props::THIEF],
+    hand: &[props::THIEF.card],
     prelude: &[
         Action::Cast {
             player: P0,
-            card: props::THIEF,
+            card: props::THIEF.card,
             face: FaceIx::FRONT,
             costs: Castings::only(0),
         },
@@ -99,13 +99,13 @@ const STOLEN: Witness = Witness {
     ],
 };
 
-/// `Effect::ExchangeControl`: an artifact player 0 controls, Portable Hole, already on the
+/// `Effect::ExchangeControl`: an artifact player 0 controls, `props::ARTIFACT`, already on the
 /// battlefield, so that an exchange has a permanent of each player's to trade. The opening
 /// positions give player 0 lands alone, and an exchange of a permanent "you control" for one
 /// an opponent controls then has nothing to target.
 const OWN_ARTIFACT: Witness = Witness {
     words: "with an artifact of one's own",
-    mine: &[Permanent::new(props::ARTIFACT)],
+    mine: &[Permanent::new(props::ARTIFACT.card)],
     theirs: &[],
     hand: &[],
     prelude: &[],
@@ -115,7 +115,7 @@ const OWN_ARTIFACT: Witness = Witness {
 /// effect on creatures its source's controller controls needs one on that side too.
 const OWN_CREATURE: Witness = Witness {
     words: "with a creature of one's own",
-    mine: &[Permanent::new(props::THIEF)],
+    mine: &[Permanent::new(props::THIEF.card)],
     theirs: &[],
     hand: &[],
     prelude: &[],

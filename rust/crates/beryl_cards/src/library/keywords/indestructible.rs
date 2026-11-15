@@ -15,7 +15,7 @@ pub const INDESTRUCTIBLE: &str = names::DARKSTEEL_MYR;
 /// they ignore the state-based action that checks for lethal damage (see rule 704.5g)."
 pub const SCENARIOS: &[Scenario] = &[
     Scenario::new("An indestructible blocker survives lethal combat damage")
-        .permanents(P0, &[Permanent::new(props::SMALL_CREATURE)])
+        .permanents(P0, &[Permanent::new(props::VANILLA.card)])
         .permanents(P1, &[Permanent::new(INDESTRUCTIBLE)])
         .library(P0, &[names::ISLAND])
         .library(P1, &[names::ISLAND])
@@ -25,7 +25,7 @@ pub const SCENARIOS: &[Scenario] = &[
                 step: TurnStep::BeginningOfCombat,
             },
             Action::pass(P0),
-            Action::choose(P0, DecisionKind::Attacker, props::SMALL_CREATURE),
+            Action::choose(P0, DecisionKind::Attacker, props::VANILLA.card),
             Action::choose(P1, DecisionKind::Blocker, INDESTRUCTIBLE),
             Action::AdvanceTo {
                 turn: 1,

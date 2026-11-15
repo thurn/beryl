@@ -114,7 +114,7 @@ pub mod scenarios {
         Scenario::new("Trinket Mage searches a library without a trinket")
             .hand(P0, &[MAGE])
             .battlefield(P0, &[Card::Island; 3])
-            .library(P0, &[Prop::Creature, Card::Oust, Card::Plains])
+            .library(P0, &[Prop::Flier, Card::Oust, Card::Plains])
             .library(P1, &[Card::Plains])
             .actions(&[
                 ENTER[0],

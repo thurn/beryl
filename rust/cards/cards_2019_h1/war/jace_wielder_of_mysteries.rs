@@ -60,10 +60,10 @@ pub mod scenarios {
 
     const JACE: &str = Card::JaceWielderOfMysteries;
 
-    /// The Islands to flash in the small creature with.
-    const ISLANDS: &[&str] = &[Card::Island, Card::Island];
+    /// The lands to flash in `Prop::FlashCreature` with.
+    const FLASH_MANA: &[&str] = &[Card::Swamp, Card::Island, Card::Island];
 
-    const ISLANDS_AND_JACE: &[&str] = &[JACE, Card::Island, Card::Island];
+    const FLASH_MANA_AND_JACE: &[&str] = &[JACE, Card::Swamp, Card::Island, Card::Island];
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("+1 mills the target player two, then draws")
@@ -94,8 +94,8 @@ pub mod scenarios {
         // A creature with flash gives P0 something to pass in the upkeep.
         Scenario::new("the draw step's draw from an empty library wins")
             .at(3, P0, TurnStep::Upkeep)
-            .battlefield(P0, ISLANDS_AND_JACE)
-            .hand(P0, &[Prop::SmallCreature])
+            .battlefield(P0, FLASH_MANA_AND_JACE)
+            .hand(P0, &[Prop::FlashCreature])
             .library(P0, &[])
             .actions(&[ME.passes(), wins(ME)]),
         // The replacement is Jace's controller's alone: the opponent drawing from an empty
@@ -103,8 +103,8 @@ pub mod scenarios {
         Scenario::new("the opponent's draw from an empty library still loses")
             .at(2, P1, TurnStep::Upkeep)
             .battlefield(P0, &[JACE])
-            .battlefield(P1, ISLANDS)
-            .hand(P1, &[Prop::SmallCreature])
+            .battlefield(P1, FLASH_MANA)
+            .hand(P1, &[Prop::FlashCreature])
             .library(P1, &[])
             .actions(&[THEM.passes(), wins(ME)]),
         // At exactly eight loyalty Jace dies before the ability resolves: no replacement. Five

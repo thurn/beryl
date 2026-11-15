@@ -28,7 +28,7 @@ pub mod scenarios {
     const MYR: &str = Card::GoldMyr;
 
     pub const SCENARIOS: &[Scenario] = &[
-        // The Myr pays for Portable Hole, a {W} artifact, with nothing else to tap.
+        // The Myr pays for `Prop::Artifact`, which costs {W}, with nothing else to tap.
         Scenario::new("its {W} casts a white spell")
             .hand(P0, &[Prop::Artifact])
             .battlefield(P0, &[MYR])

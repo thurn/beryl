@@ -46,9 +46,9 @@ pub mod scenarios {
     /// Four cards, so a dredge 3 leaves one to draw.
     const LIBRARY: &[&str] = &[Card::Island, Card::Plains, Card::Counterspell, Card::Island];
 
-    /// The Islands to flash in the small creature with: something to pass in the upkeep, so
+    /// The lands to flash in `Prop::FlashCreature` with: something to pass in the upkeep, so
     /// the draw step begins on a pass of P0's.
-    const ISLANDS: &[&str] = &[Card::Island, Card::Island];
+    const FLASH_MANA: &[&str] = &[Card::Swamp, Card::Island, Card::Island];
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Life from the Loam returns three lands from its caster's graveyard")
@@ -108,8 +108,8 @@ pub mod scenarios {
         // and Life from the Loam returns to the hand in place of the draw.
         Scenario::new("dredge in the draw step")
             .at(3, P0, TurnStep::Upkeep)
-            .battlefield(P0, ISLANDS)
-            .hand(P0, &[Prop::SmallCreature])
+            .battlefield(P0, FLASH_MANA)
+            .hand(P0, &[Prop::FlashCreature])
             .graveyard(P0, &[LOAM])
             .library(P0, LIBRARY)
             .actions(&[
@@ -124,8 +124,8 @@ pub mod scenarios {
         // Declining, the player draws as they would have.
         Scenario::new("dredge declined")
             .at(3, P0, TurnStep::Upkeep)
-            .battlefield(P0, ISLANDS)
-            .hand(P0, &[Prop::SmallCreature])
+            .battlefield(P0, FLASH_MANA)
+            .hand(P0, &[Prop::FlashCreature])
             .graveyard(P0, &[LOAM])
             .library(P0, LIBRARY)
             .actions(&[
@@ -138,8 +138,8 @@ pub mod scenarios {
         // Each dredge card is a choice of its own; the one not chosen stays.
         Scenario::new("two dredge cards in the graveyard")
             .at(3, P0, TurnStep::Upkeep)
-            .battlefield(P0, ISLANDS)
-            .hand(P0, &[Prop::SmallCreature])
+            .battlefield(P0, FLASH_MANA)
+            .hand(P0, &[Prop::FlashCreature])
             .graveyard(P0, &[LOAM, LOAM])
             .library(P0, LIBRARY)
             .actions(&[
@@ -153,8 +153,8 @@ pub mod scenarios {
         // With two cards in the library dredge 3 can't be used: no choice, a plain draw.
         Scenario::new("dredge with too few cards in the library")
             .at(3, P0, TurnStep::Upkeep)
-            .battlefield(P0, ISLANDS)
-            .hand(P0, &[Prop::SmallCreature])
+            .battlefield(P0, FLASH_MANA)
+            .hand(P0, &[Prop::FlashCreature])
             .graveyard(P0, &[LOAM])
             .library(P0, &[Card::Plains, Card::Island])
             .actions(&[

@@ -4,7 +4,7 @@
 //! process for activating an ability is identical to the process for casting a spell listed in
 //! rules 601.2b-i." It may have resolved by the time a view shows.
 
-use beryl_cards::{CARDS, names};
+use beryl_cards::{CARDS, names, props};
 use beryl_engine::{
     Choice, DecisionKind, Observation, Opt, Replay, Scratch, Seat, Step, apply, next,
 };
@@ -196,7 +196,7 @@ fn a_cast_names_its_spell_and_targets_as_the_stack_showed_them() {
         Seat::new(1),
     );
     let oust = slot(names::OUST);
-    let creature = slot(names::ELITE_SPELLBINDER);
+    let creature = slot(props::FLIER.card);
     let casts: Vec<_> = events
         .iter()
         .filter_map(|e| match e {
@@ -272,7 +272,7 @@ fn a_granted_ability_carries_its_rules_text() {
     else {
         panic!("an ability: {item:?}");
     };
-    assert_eq!(*source, Some(slot(names::SNAPCASTER_MAGE)));
+    assert_eq!(*source, Some(slot(props::VANILLA.card)));
     assert!(granted);
     assert_eq!(text.as_deref(), Some("Crew 5"));
 }

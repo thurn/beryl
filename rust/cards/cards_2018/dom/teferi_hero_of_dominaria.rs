@@ -92,13 +92,13 @@ pub mod scenarios {
         Scenario::new(name)
             .battlefield(P0, &[TEFERI])
             .hand(P0, &[Card::Plains])
-            .battlefield(P1, &[Prop::Creature, Card::Island])
+            .battlefield(P1, &[Prop::Flier, Card::Island])
             .library(P1, before)
             .actions(then)
     }
 
     pub const SCENARIOS: &[Scenario] = &[
-        // P0 taps both Plains for two Portable Holes, which find nothing to exile; P1's Island is
+        // P0 taps both Plains for two `Prop::Artifact`s, which find nothing to exile; P1's Island is
         // tapped too. The delayed ability may untap either player's lands, and P0 takes their own.
         Scenario::new("+1 draws, and at the end step untaps up to two lands")
             .battlefield(P0, &[TEFERI, Card::Plains, Card::Plains])
@@ -125,7 +125,7 @@ pub mod scenarios {
                 ME.tapped(Card::Plains, 0),
             ]),
         // The delayed ability refers to no object, so it untaps lands though Teferi is gone: P0
-        // taps both Plains for two Portable Holes, and P1 returns Teferi to P0's hand with Sink
+        // taps both Plains for two `Prop::Artifact`s, and P1 returns Teferi to P0's hand with Sink
         // into Stupor. P0 untaps one Plains and stops.
         Scenario::new("+1's untap comes at the end step after Teferi has left")
             .battlefield(P0, &[TEFERI, Card::Plains, Card::Plains])
@@ -155,10 +155,10 @@ pub mod scenarios {
             &[Card::Plains, Card::Plains, Card::Island],
             &[
                 ME.activates(TEFERI, 1), // −3
-                ME.targets(Prop::Creature),
+                ME.targets(Prop::Flier),
                 Resolve,
-                THEM.library_top(&[Card::Plains, Card::Plains, Prop::Creature, Card::Island]),
-                THEM.has(Zone::Battlefield, Prop::Creature, 0),
+                THEM.library_top(&[Card::Plains, Card::Plains, Prop::Flier, Card::Island]),
+                THEM.has(Zone::Battlefield, Prop::Flier, 0),
                 ME.has_loyalty(TEFERI, 1),
             ],
         ),
@@ -167,9 +167,9 @@ pub mod scenarios {
             &[Card::Plains],
             &[
                 ME.activates(TEFERI, 1), // −3
-                ME.targets(Prop::Creature),
+                ME.targets(Prop::Flier),
                 Resolve,
-                THEM.library_top(&[Card::Plains, Prop::Creature]),
+                THEM.library_top(&[Card::Plains, Prop::Flier]),
                 ME.has_loyalty(TEFERI, 1),
             ],
         ),
@@ -218,12 +218,7 @@ pub mod scenarios {
             )
             .battlefield(
                 P1,
-                &[
-                    Prop::Creature,
-                    Prop::Artifact,
-                    Prop::SmallCreature,
-                    Card::Island,
-                ],
+                &[Prop::Flier, Prop::Artifact, Prop::Vanilla, Card::Island],
             )
             .actions(&[
                 ME.activates(TEFERI, 2), // −8
@@ -232,9 +227,9 @@ pub mod scenarios {
                 Resolve,
                 ME.picks(Card::Island),
                 ME.picks(Card::Plains),
-                ME.targets(Prop::Creature),
+                ME.targets(Prop::Flier),
                 ME.targets(Prop::Artifact),
-                ME.targets(Prop::SmallCreature),
+                ME.targets(Prop::Vanilla),
                 stack(3),
                 Resolve,
                 Resolve,
@@ -245,14 +240,12 @@ pub mod scenarios {
         // UI regressions by-svq/by-2ml: useful colors among three lands, then undo next turn.
         Scenario::new("+1 untaps a dual land with an instant in hand")
             .battlefield(P0, &[TEFERI, Card::Plains, Card::Island, Card::Tundra])
-            .hand(P0, &[Prop::Instant, Prop::Creature])
+            .hand(P0, &[Prop::Instant, Prop::Flier])
             .library(P0, &[Card::Plains, Card::Island])
             .library(P1, &[Card::Island, Card::Plains])
             .actions(&[
                 // Pay for a spell so these lands are tapped in every engine, after its untap step.
-                // The creature, then its enters trigger, which sees an empty hand.
-                ME.casts(Prop::Creature),
-                Resolve,
+                ME.casts(Prop::Flier),
                 Resolve,
                 ME.activates(TEFERI, 0), // +1
                 Resolve,

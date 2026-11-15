@@ -47,16 +47,13 @@ pub mod scenarios {
 
     const HUMILITY: &str = Card::Humility;
 
-    // `Prop::Creature` is Elite Spellbinder, a 3/1 flier whose enters trigger looks at an
-    // opponent's hand; `Prop::Artifact` is Portable Hole, a {W} artifact.
-
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("every creature is 1/1, on both sides")
             .interaction(&[Card::DrudgeSkeletons])
-            .battlefield(P0, &[HUMILITY, Prop::Creature])
+            .battlefield(P0, &[HUMILITY, Prop::Flier])
             .battlefield(P1, &[Card::DrudgeSkeletons])
             .actions(&[
-                ME.pt(Prop::Creature, 1, 1),
+                ME.pt(Prop::Flier, 1, 1),
                 THEM.pt(Card::DrudgeSkeletons, 1, 1),
             ]),
         // Adeline's power, defined by her own ability, and her vigilance and attack trigger
@@ -75,17 +72,18 @@ pub mod scenarios {
                 ME.controls(Card::AdelineResplendentCathar, 1),
                 THEM.life(19),
             ]),
-        // The Spellbinder enters with no abilities, so its enters trigger never triggers and
-        // the opponent's artifact stays in their hand.
+        // Elite Spellbinder enters with no abilities, so its enters trigger, which would look
+        // at the opponent's hand and exile a card from it, never triggers.
         Scenario::new("a creature entering under it triggers nothing")
-            .hand(P0, &[Prop::Creature])
+            .interaction(&[Card::EliteSpellbinder])
+            .hand(P0, &[Card::EliteSpellbinder])
             .battlefield(P0, &[HUMILITY, Card::Plains, Card::Plains, Card::Plains])
             .hand(P1, &[Prop::Artifact, Card::Island])
             .actions(&[
-                ME.casts(Prop::Creature),
+                ME.casts(Card::EliteSpellbinder),
                 Resolve,
                 stack(0),
-                ME.pt(Prop::Creature, 1, 1),
+                ME.pt(Card::EliteSpellbinder, 1, 1),
                 THEM.has(Zone::Hand, Prop::Artifact, 1),
                 THEM.has_cards(Zone::Exile, 0),
             ]),
@@ -117,36 +115,30 @@ pub mod scenarios {
         // base 1/1.
         Scenario::new("an anthem's bonus applies on top of the base 1/1")
             .interaction(&[Card::GloriousAnthem])
-            .battlefield(P0, &[HUMILITY, Card::GloriousAnthem, Prop::Creature])
-            .actions(&[ME.pt(Prop::Creature, 2, 2)]),
+            .battlefield(P0, &[HUMILITY, Card::GloriousAnthem, Prop::Flier])
+            .actions(&[ME.pt(Prop::Flier, 2, 2)]),
         // The Wandering Emperor's +1 puts a +1/+1 counter on the creature, the one target,
         // which counts on top of the base 1/1.
         Scenario::new("a +1/+1 counter counts on top of the base 1/1")
             .interaction(&[Card::TheWanderingEmperor])
-            .battlefield(
-                P0,
-                &[HUMILITY, Card::TheWanderingEmperor, Prop::SmallCreature],
-            )
+            .battlefield(P0, &[HUMILITY, Card::TheWanderingEmperor, Prop::Vanilla])
             .actions(&[
                 ME.activates(Card::TheWanderingEmperor, 1),
                 ME.target_count(1),
-                ME.counters(Prop::SmallCreature, CounterKind::PlusOne, 1),
-                ME.pt(Prop::SmallCreature, 2, 2),
+                ME.counters(Prop::Vanilla, CounterKind::PlusOne, 1),
+                ME.pt(Prop::Vanilla, 2, 2),
             ]),
-        // Once Humility, the one target, returns to its owner's hand, the Spellbinder is a 3/1
+        // Once Humility, the one target, returns to its owner's hand, the flier is a 3/1
         // again.
         Scenario::new("with it gone, the creatures are themselves again")
             .battlefield(P0, &[HUMILITY])
-            .battlefield(
-                P1,
-                &[Prop::Creature, Card::Island, Card::Island, Card::Island],
-            )
+            .battlefield(P1, &[Prop::Flier, Card::Island, Card::Island, Card::Island])
             .hand(P1, &[Prop::Removal])
             .actions(&[
-                THEM.pt(Prop::Creature, 1, 1),
+                THEM.pt(Prop::Flier, 1, 1),
                 THEM.casts(Prop::Removal),
                 ME.has(Zone::Hand, HUMILITY, 1),
-                THEM.pt(Prop::Creature, 3, 1),
+                THEM.pt(Prop::Flier, 3, 1),
             ]),
     ];
 }

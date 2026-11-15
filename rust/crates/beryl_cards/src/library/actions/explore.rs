@@ -28,13 +28,13 @@ pub const SCENARIOS: &[Scenario] =
             .permanents(
                 P1,
                 &[
-                    Permanent::new(props::CREATURE),
-                    Permanent::new(props::CREATURE),
+                    Permanent::new(props::FLIER.card),
+                    Permanent::new(props::FLIER.card),
                     Permanent::new(names::PLAINS),
                 ],
             )
             .hand(P1, &[names::ISLAND])
-            .library(P1, &[props::NONBASIC_LAND, names::ISLAND])
+            .library(P1, &[props::NONBASIC_LAND.card, names::ISLAND])
             .actions(&[
                 Action::pass(P1),
                 Action::cast(P0, names::GET_LOST),
@@ -42,12 +42,12 @@ pub const SCENARIOS: &[Scenario] =
                 Action::assert(Assertion::Count {
                     player: P1,
                     zone: Zone::Hand,
-                    card: Some(props::NONBASIC_LAND),
+                    card: Some(props::NONBASIC_LAND.card),
                     count: 1,
                 }),
                 Action::assert(Assertion::Counters {
                     player: P1,
-                    card: props::CREATURE,
+                    card: props::FLIER.card,
                     kind: CounterKind::PlusOne,
                     count: 0,
                 }),

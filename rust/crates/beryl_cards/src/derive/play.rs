@@ -51,13 +51,13 @@ pub(super) struct Run {
 
 /// The cards player 0 casts a spell of the card's own in response to: a sorcery, and a
 /// creature spell, which some counters want.
-const LEADS: [&str; 2] = [props::SORCERY, props::SMALL_CREATURE];
+const LEADS: [&str; 2] = [props::SORCERY.card, props::VANILLA.card];
 
 /// The ability player 0 activates for a card that targets an ability on the stack to respond
 /// to: the equip ability of the Equipment the witness for such cards puts on the battlefield
 /// beside one creature of player 0's, its one target, which the runner chooses unasked
 /// ([`super::witness`]).
-const ABILITY_LEAD: Action = Action::activate(P0, props::EQUIPMENT, 1);
+const ABILITY_LEAD: Action = Action::activate(P0, props::EQUIPMENT.card, 1);
 
 /// Every opening of a scenario of `def` starting in `place`, labelled: each action naming the
 /// card its owner can take at the first priority in their main phase, each they can take in
@@ -208,7 +208,7 @@ fn awaited(def: &'static CardDef, f: FaceIx) -> Vec<(String, Vec<Stimulus>)> {
                 }
             }
             TriggerEvent::Casts => {
-                let cast = Stimulus::Act(Action::cast(P0, props::SORCERY));
+                let cast = Stimulus::Act(Action::cast(P0, props::SORCERY.card));
                 out.push(("cast a sorcery".to_owned(), vec![cast]));
             }
             _ => {}

@@ -58,12 +58,12 @@ pub mod scenarios {
         // P0's main phase.
         Scenario::new("Strip Mine's colorless mana")
             .battlefield(P0, &[Card::StripMine, Card::Island])
-            .hand(P0, &[Prop::SmallCreature, Card::Plains])
+            .hand(P0, &[Prop::Vanilla, Card::Plains])
             .actions(&[
-                ME.casts(Prop::SmallCreature),
+                ME.casts(Prop::Vanilla),
                 ME.tapped(Card::StripMine, 1),
                 Resolve,
-                ME.controls(Prop::SmallCreature, 1),
+                ME.controls(Prop::Vanilla, 1),
             ]),
     ];
 }

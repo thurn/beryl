@@ -41,20 +41,20 @@ pub mod scenarios {
             .interaction(&[WISP])
             .battlefield(P0, &[Card::Plains, Card::Plains, Card::Plains])
             .hand(P0, &[WISP])
-            .battlefield(P1, &[Prop::SmallCreature, PRIEST])
+            .battlefield(P1, &[Prop::Vanilla, PRIEST])
             .library(P0, &[Card::Plains])
             .library(P1, &[Card::Plains])
             .actions(&[
                 ME.casts(WISP),
                 Resolve,
                 ME.controls(WISP, 1),
-                ME.targets(Prop::SmallCreature),
+                ME.targets(Prop::Vanilla),
                 Resolve,
-                THEM.has(Zone::Exile, Prop::SmallCreature, 1),
+                THEM.has(Zone::Exile, Prop::Vanilla, 1),
                 advance_to(1, TurnStep::End),
                 Resolve,
-                THEM.controls(Prop::SmallCreature, 0),
-                THEM.has(Zone::Exile, Prop::SmallCreature, 1),
+                THEM.controls(Prop::Vanilla, 0),
+                THEM.has(Zone::Exile, Prop::Vanilla, 1),
             ]),
         // A land is no creature, so it returns.
         Scenario::new("a land Flickerwisp exiled returns")

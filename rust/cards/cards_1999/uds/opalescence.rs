@@ -53,7 +53,7 @@ pub mod scenarios {
 
     const OPALESCENCE: &str = Card::Opalescence;
 
-    // `Prop::SmallCreature` is Snapcaster Mage, a 2/1 for Swift Reconfiguration to enchant.
+    // `Prop::Vanilla` is the creature for Swift Reconfiguration to enchant.
 
     /// Four Plains, after `first`, for one four-mana spell.
     const fn with_plains(first: [&'static str; 2]) -> [&'static str; 6] {
@@ -80,10 +80,10 @@ pub mod scenarios {
                 ME.pt(Card::GloriousAnthem, 4, 4),
                 ME.creature(OPALESCENCE, false),
             ]),
-        // Swift Reconfiguration, an Aura, stays no creature once it enchants the Snapcaster.
+        // Swift Reconfiguration, an Aura, stays no creature once it enchants the creature.
         Scenario::new("an Aura is not made a creature")
             .interaction(&[Card::SwiftReconfiguration])
-            .battlefield(P0, &[OPALESCENCE, Card::Plains, Prop::SmallCreature])
+            .battlefield(P0, &[OPALESCENCE, Card::Plains, Prop::Vanilla])
             .hand(P0, &[Card::SwiftReconfiguration])
             .actions(&[
                 ME.casts(Card::SwiftReconfiguration),

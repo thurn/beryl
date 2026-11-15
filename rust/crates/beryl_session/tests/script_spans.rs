@@ -46,7 +46,7 @@ const TEFERI_FALLS: &str = "combat damage removes Teferi while other attacks rem
 fn an_attack_line_begins_with_its_destination_and_ends_before_that_leaves() {
     let [first, second] = script(names::TEFERI_TIME_RAVELER, TEFERI_FALLS, 7);
     let chosen = text(&[
-        "set #0 (Elite Spellbinder) battlefield 3/1 attacking #256",
+        "set #0 (Geist of the Moors) battlefield 3/1 attacking #256",
         "& +point attack #0 > #256",
     ]);
     assert_eq!(first, chosen);
@@ -54,8 +54,8 @@ fn an_attack_line_begins_with_its_destination_and_ends_before_that_leaves() {
     let [first, second] = script(names::TEFERI_TIME_RAVELER, TEFERI_FALLS, 9);
     let combat = |defender: &str, attacker: &str| {
         text(&[
-            "tap #0 (Elite Spellbinder)".to_owned(),
-            "& tap #2 (Snapcaster Mage)".to_owned(),
+            "tap #0 (Geist of the Moors)".to_owned(),
+            "& tap #2 (Wetland Sambar)".to_owned(),
             format!("set turn 3 {attacker} declareBlockers"),
             format!("set turn 3 {attacker} combatDamage"),
             "strike #0 > #256 3".to_owned(),
@@ -119,7 +119,7 @@ fn a_block_line_lasts_until_combat_damage_is_done() {
     let [first, second] = script(names::SPHINX_OF_FALSE_CONCLUSIONS, name, 7);
     let declared = text(&[
         "set #1 (Sphinx of False Conclusions) battlefield tapped 4/2 attacking",
-        "& set #256 (Elite Spellbinder) battlefield 3/1 blocking #1",
+        "& set #256 (Geist of the Moors) battlefield 3/1 blocking #1",
         "& +point block #256 > #1",
     ]);
     assert_eq!(first, declared);
@@ -137,7 +137,7 @@ fn a_block_line_lasts_until_combat_damage_is_done() {
             "-point block #256 > #1".to_owned(),
             "& -point source a2 > #1".to_owned(),
             "vanish #1 (Sphinx of False Conclusions) battlefield>graveyard stateBased".to_owned(),
-            "& vanish #256 (Elite Spellbinder) battlefield>graveyard stateBased".to_owned(),
+            "& vanish #256 (Geist of the Moors) battlefield>graveyard stateBased".to_owned(),
         ])
     };
     assert_eq!(first, damage("you"));
@@ -267,7 +267,7 @@ fn a_combat_inside_one_script_shows_its_lines() {
             "strike #258 > #512 3",
             "strike #512 > #258 4",
             "-point block #258 > #512",
-            "vanish #258 (Elite Spellbinder) battlefield>graveyard stateBased",
+            "vanish #258 (Geist of the Moors) battlefield>graveyard stateBased",
             "vanish #512 battlefield>gone stateBased",
         ]
     );
@@ -284,7 +284,7 @@ fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
     let returned = text(&[
         "-point hostile-target a1 > #256",
         "& -point hostile-target #4 > #256",
-        "vanish #256 (Snapcaster Mage) battlefield>hand effect <- #4",
+        "vanish #256 (Wetland Sambar) battlefield>hand effect <- #4",
         "vanish #4 (Sink into Stupor) stack>graveyard resolve <- #4",
     ]);
     assert_eq!(first, returned);

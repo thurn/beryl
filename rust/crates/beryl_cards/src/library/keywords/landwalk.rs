@@ -21,7 +21,7 @@ pub const SCENARIOS: &[Scenario] = &[
             P1,
             &[
                 Permanent::new(names::SWAMP),
-                Permanent::new(props::SMALL_CREATURE),
+                Permanent::new(props::VANILLA.card),
             ],
         )
         .library(P0, &[names::ISLAND])
@@ -51,7 +51,7 @@ pub const SCENARIOS: &[Scenario] = &[
             P1,
             &[
                 Permanent::new(names::ISLAND),
-                Permanent::new(props::SMALL_CREATURE),
+                Permanent::new(props::VANILLA.card),
             ],
         )
         .library(P0, &[names::ISLAND])
@@ -63,7 +63,7 @@ pub const SCENARIOS: &[Scenario] = &[
             },
             Action::pass(P0),
             Action::choose(P0, DecisionKind::Attacker, LANDWALKER),
-            Action::choose(P1, DecisionKind::Blocker, props::SMALL_CREATURE),
+            Action::choose(P1, DecisionKind::Blocker, props::VANILLA.card),
             Action::AdvanceTo {
                 turn: 1,
                 step: TurnStep::EndOfCombat,
@@ -75,7 +75,7 @@ pub const SCENARIOS: &[Scenario] = &[
             Action::assert(Assertion::Count {
                 player: P1,
                 zone: Zone::Graveyard,
-                card: Some(props::SMALL_CREATURE),
+                card: Some(props::VANILLA.card),
                 count: 1,
             }),
         ]),

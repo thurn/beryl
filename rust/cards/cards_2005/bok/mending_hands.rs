@@ -56,16 +56,16 @@ pub mod scenarios {
             ]),
         Scenario::new("Mending Hands saves a creature from Lightning Bolt")
             .interaction(&[BOLT])
-            .battlefield(P0, &[Card::Plains, Card::Mountain, Prop::Creature])
+            .battlefield(P0, &[Card::Plains, Card::Mountain, Prop::Flier])
             .hand(P0, &[MENDING, BOLT])
             .actions(&[
                 ME.casts(MENDING),
-                ME.targets(Prop::Creature),
+                ME.targets(Prop::Flier),
                 Resolve,
                 ME.casts(BOLT),
-                ME.targets(Prop::Creature),
+                ME.targets(Prop::Flier),
                 Resolve,
-                ME.has(Zone::Battlefield, Prop::Creature, 1),
+                ME.has(Zone::Battlefield, Prop::Flier, 1),
                 ME.life(20),
             ]),
     ];

@@ -62,16 +62,16 @@ pub mod scenarios {
                 ME.controls(DRESS_DOWN, 1),
             ]),
         // Adeline's power was defined by her own ability, which is gone: her printed power
-        // is *, which is 0. The Spellbinder keeps its printed 3/1.
+        // is *, which is 0. The flier keeps its printed 3/1.
         Scenario::new("creatures keep printed power but lose defined power")
             .interaction(&[Card::AdelineResplendentCathar])
             .battlefield(
                 P0,
-                &[DRESS_DOWN, Card::AdelineResplendentCathar, Prop::Creature],
+                &[DRESS_DOWN, Card::AdelineResplendentCathar, Prop::Flier],
             )
             .actions(&[
                 ME.pt(Card::AdelineResplendentCathar, 0, 4),
-                ME.pt(Prop::Creature, 3, 1),
+                ME.pt(Prop::Flier, 3, 1),
             ]),
         // The Skeletons' regeneration can't be activated: with nothing to do but pass, P0 is
         // given no priority in the main phase, and the first decision is the attack.

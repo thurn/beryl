@@ -74,11 +74,11 @@ pub mod scenarios {
             ]),
         // P0's unblocked 3/1 deals 3 combat damage, doubled to 6.
         Scenario::new("Furnace of Rath doubles combat damage")
-            .battlefield(P0, &[FURNACE, Prop::Creature])
+            .battlefield(P0, &[FURNACE, Prop::Flier])
             .actions(&[
                 advance_to(1, TurnStep::BeginningOfCombat),
                 ME.passes(),
-                ME.attacks_with(Prop::Creature),
+                ME.attacks_with(Prop::Flier),
                 advance_to(1, TurnStep::EndOfCombat),
                 THEM.life(14),
             ]),

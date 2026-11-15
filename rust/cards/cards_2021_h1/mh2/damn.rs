@@ -37,18 +37,18 @@ pub mod scenarios {
     use crate::tokens::HUMAN_TOKEN;
 
     pub const SCENARIOS: &[Scenario] = &[
-        // For {B}{B}, one target: P0 destroys P1's Elite Spellbinder and keeps its own two-drop.
+        // For {B}{B}, one target: P0 destroys P1's flier and keeps its own two-drop.
         Scenario::new("Damn for {B}{B} destroys its target alone")
-            .battlefield(P0, &[Card::Swamp, Card::Swamp, Prop::SmallCreature])
+            .battlefield(P0, &[Card::Swamp, Card::Swamp, Prop::Vanilla])
             .hand(P0, &[Card::Damn])
-            .battlefield(P1, &[Card::EliteSpellbinder])
+            .battlefield(P1, &[Prop::Flier])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.casts(Card::Damn),
-                ME.targets(Card::EliteSpellbinder),
+                ME.targets(Prop::Flier),
                 Resolve,
-                THEM.controls(Card::EliteSpellbinder, 0),
-                ME.controls(Prop::SmallCreature, 1),
+                THEM.controls(Prop::Flier, 0),
+                ME.controls(Prop::Vanilla, 1),
             ]),
         // With only white mana, the overload is the one way to cast it: two candidates, passing
         // and the overloaded cast. It asks for no target and destroys every creature, P0's own
@@ -61,11 +61,11 @@ pub mod scenarios {
                     Card::Plains,
                     Card::Plains,
                     Card::Plains,
-                    Prop::SmallCreature,
+                    Prop::Vanilla,
                 ],
             )
             .hand(P0, &[Card::Damn])
-            .battlefield(P1, &[Card::EliteSpellbinder, Prop::SmallCreature])
+            .battlefield(P1, &[Prop::Flier, Prop::Vanilla])
             .library(P1, &[Card::Island])
             .actions(&[
                 ME.deciding(DecisionKind::Priority, 2),
@@ -76,9 +76,9 @@ pub mod scenarios {
                     costs: Castings::only(0),
                 },
                 Resolve,
-                ME.controls(Prop::SmallCreature, 0),
-                THEM.controls(Card::EliteSpellbinder, 0),
-                THEM.controls(Prop::SmallCreature, 0),
+                ME.controls(Prop::Vanilla, 0),
+                THEM.controls(Prop::Flier, 0),
+                THEM.controls(Prop::Vanilla, 0),
                 THEM.has_cards(Zone::Graveyard, 2),
                 ME.has_cards(Zone::Graveyard, 2),
             ]),
@@ -103,8 +103,8 @@ pub mod scenarios {
             )
             .permanents(P0, &[Permanent::token(HUMAN_TOKEN)])
             .hand(P0, &[Card::Damn])
-            .battlefield(P1, &[Card::EliteSpellbinder])
-            .permanents(P1, &[Permanent::new(Card::SnapcasterMage).face_down()])
+            .battlefield(P1, &[Prop::Flier])
+            .permanents(P1, &[Permanent::new(Prop::Vanilla).face_down()])
             .library(P1, &[Card::Island])
             .actions(&[
                 Action::Cast {
@@ -116,9 +116,9 @@ pub mod scenarios {
                 Resolve,
                 ME.controls(Card::AdelineResplendentCathar, 0),
                 ME.controls(HUMAN_TOKEN, 0),
-                THEM.controls(Card::EliteSpellbinder, 0),
+                THEM.controls(Prop::Flier, 0),
                 ME.has_cards(Zone::Graveyard, 2),
-                THEM.has(Zone::Graveyard, Card::SnapcasterMage, 1),
+                THEM.has(Zone::Graveyard, Prop::Vanilla, 1),
             ]),
         // A creature with a regeneration shield is still destroyed: Damn's "can't be regenerated"
         // keeps the shield from applying (CR 701.19c). Drudge Skeletons is the creature that

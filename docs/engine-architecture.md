@@ -1142,6 +1142,11 @@ are built with a typed builder and serializable with serde. A scenario names its
 own card, that card's tokens, basic lands and the designated props
 (`beryl_cards::props`); one about two particular cards says so with
 `Scenario::interaction`, so one card's change cannot break another card's tests.
+A prop is named by its role (`Prop::Flier`, `Prop::Vanilla`), and its `Contract`
+lists everything a scenario may rely on about it: cost, types, subtypes, power
+and toughness or loyalty, keywords and a summary of its text. A test checks each
+contract against the card, so a scenario never needs to say which card a prop
+is.
 
 - **Setup:** cards by `names::` constant in any zone for either player, life,
   counters, tapped, attachments, the top cards of a library in order, the turn

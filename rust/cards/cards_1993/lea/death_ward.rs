@@ -35,12 +35,7 @@ pub mod scenarios {
             .interaction(&[Card::GetLost])
             .battlefield(
                 P0,
-                &[
-                    Card::Plains,
-                    Card::Plains,
-                    Card::Plains,
-                    Prop::SmallCreature,
-                ],
+                &[Card::Plains, Card::Plains, Card::Plains, Prop::Vanilla],
             )
             .hand(P0, &[WARD, Card::GetLost])
             .library(P1, &[Card::Island])
@@ -49,8 +44,8 @@ pub mod scenarios {
                 Resolve,
                 ME.casts(Card::GetLost),
                 Resolve,
-                ME.controls(Prop::SmallCreature, 1),
-                ME.tapped(Prop::SmallCreature, 1),
+                ME.controls(Prop::Vanilla, 1),
+                ME.tapped(Prop::Vanilla, 1),
                 ME.controls(crate::tokens::MAP_TOKEN, 2),
             ]),
         // Dryad Arbor is a land and a creature, so Death Ward can shield it, and the shield

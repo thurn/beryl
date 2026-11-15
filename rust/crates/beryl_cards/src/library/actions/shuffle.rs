@@ -24,10 +24,10 @@ pub const SCENARIOS: &[Scenario] =
         Scenario::new("Each player's hand and graveyard are shuffled into their own library")
             .permanents(P0, &[Permanent::new(names::ISLAND); 3])
             .hand(P0, &[names::TIMETWISTER, names::PLAINS])
-            .graveyard(P0, &[props::SORCERY])
+            .graveyard(P0, &[props::SORCERY.card])
             .library(P0, &[names::PLAINS; 7])
             .hand(P1, &[names::ISLAND])
-            .graveyard(P1, &[props::INSTANT, props::SORCERY])
+            .graveyard(P1, &[props::INSTANT.card, props::SORCERY.card])
             .library(P1, &[names::ISLAND; 6])
             .actions(&[
                 Action::cast(P0, names::TIMETWISTER),
