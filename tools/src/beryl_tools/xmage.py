@@ -33,7 +33,8 @@ from __future__ import annotations
 
 from typing import cast
 
-from .card_facts import CONTROLLED_TURN, Cards, Json, Unsupported, payment_taps
+from .card_facts import CONTROLLED_TURN, Cards, Json, Unsupported, payment_position
+from .xmage_payment import Payments
 from .xmage_trace import (
     FORCED_ASKED,
     FORCED_CHOICES,
@@ -86,9 +87,8 @@ class Exporter:
         self.trace: list[Position] = []
         self.index = 0
         self.taken: set[int] = set()
-        # Players whose earlier payments were left to XMage (`pay`), so their untapped
-        # sources may differ from Beryl's when paying another cost.
-        self.payment_left_to_xmage: set[str] = set()
+        # Each player's payments, which XMage may pay with sources of its own choosing.
+        self.payments = Payments(self.cards)
         # How many targets of an "up to N" spec are still to come when fewer than N were
         # announced: XMage asks for more until told to stop.
         self.targets_short: int | None = None
@@ -368,7 +368,10 @@ class Exporter:
         if action["face"]:
             raise Unsupported(f"casting {card}'s back face")
         if Position.delves_next(self.trace, self.index):
-            paid = payment_taps(self.actions, [t.taps for t in self.trace], self.index)
+            at = payment_position(
+                self.actions, [t.taps for t in self.trace], self.index
+            )
+            paid = None if at is None else list(self.trace[at].taps)
             self.cards.delve_reachable(self.setup, action["player"], paid)
         costs = cast(int, action["costs"])
         name, costs = self.cards.escape_spell(card, costs)
@@ -444,45 +447,17 @@ class Exporter:
         self.emit(f"activateAbility({self.at(p)}, {who}, {text});")
 
     def pay(self, who: str, p: Position, source: str | None) -> None:
-        """Replay the trace's taps by name and mana ability, excluding the activation's own tap.
-        XMage pays when the stack is occupied or a source can produce several kinds of mana.
-        Sacrificing a source for mana of any color needs a choice the trace doesn't record.
-        """
-        taps = payment_taps(self.actions, [t.taps for t in self.trace], self.index)
-        if taps is None:
+        """Replay the trace's payment for the action at hand (`Payments.pay`), excluding
+        `source`, an activated ability's own tap."""
+        at = payment_position(self.actions, [t.taps for t in self.trace], self.index)
+        if at is None:
+            self.payments.as_made = False
             return
-        if any(self.cards.color_asked(name) for name in taps):
-            raise Unsupported("a payment with mana whose color XMage asks")
-        if p.stack:
-            if who in self.payment_left_to_xmage and taps:
-                raise Unsupported(
-                    "a payment after one XMage chose the sources of, onto a stack"
-                )
-            # XMage chooses these sources, so a later payment may find one already tapped.
-            if taps:
-                self.payment_left_to_xmage.add(who)
-            return
-        if source in taps:
-            taps.remove(source)
-        if not taps:
-            return
-        if self.cards.change_land_types() or any(map(self.cards.mana_choice, taps)):
-            if who in self.payment_left_to_xmage:
-                raise Unsupported("a payment after one XMage chose the sources of")
-            self.payment_left_to_xmage.add(who)
-            return
-        for name in taps:
-            text = self.cards.mana_text(name)
-            if text is not None:
-                if who in self.payment_left_to_xmage:
-                    # XMage paid an earlier spell with sources of its own choosing, and may
-                    # have tapped the one Beryl tapped here, so the command would fail or not
-                    # depending on which it chose.
-                    raise Unsupported(
-                        "a payment tapping a source by name after one XMage chose the "
-                        "sources of"
-                    )
-                self.emit(self.cards.tap_source(self.at(p), who, name, text))
+        taps, mana = list(self.trace[at].taps), list(self.trace[at].mana)
+        for line in self.payments.pay(
+            who, self.at(p), bool(p.stack), taps, mana, source
+        ):
+            self.emit(line)
 
     def cast_targets(self) -> list[Json]:
         """The Target answers of the cast at hand: those that follow it, or else those Beryl
@@ -565,6 +540,9 @@ class Exporter:
         # A forced answer says its own; a scripted one answers the decision open at `p`.
         bending = action.get("purpose", p.purpose) == "waterbend"
         source = cast(str, p.stack[-1]["name"]) if p.stack else None
+        if kind == "PaymentPlan" and self.payments.as_made:
+            # The payment's taps, replayed with the mana each made, chose the plan already.
+            return
         if kind == "YesNo" and source is not None:
             self.unless_pays.pop(source, None)
         # "Include your tapped lands to untap?", XMage's shortcut for untapping them all,
@@ -574,7 +552,7 @@ class Exporter:
         if untaps and kind == "ChooseUpTo":
             # XMage only offers tapped lands. A payment either player delegated may have
             # left a land untapped that Beryl chose here.
-            if card is not None and self.payment_left_to_xmage:
+            if card is not None and self.payments.left_to_xmage:
                 raise Unsupported(
                     "an untap choice after XMage chose a payment's sources"
                 )
@@ -768,7 +746,7 @@ class Exporter:
         if p.kind != "Priority":
             self.export.skipped.append(f"{what}: in the middle of a {p.kind} decision")
             return
-        if what == "Tapped" and self.payment_left_to_xmage:
+        if what == "Tapped" and self.payments.left_to_xmage:
             # XMage paid an earlier cost from sources of its own choosing, which may not be
             # the ones Beryl tapped (Urborg and a Plains where XMage taps a Swamp and a Plains),
             # so which permanents are tapped no longer has to match.

@@ -25,6 +25,7 @@ fn mana<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
         source,
         color,
         amount,
+        restricted,
     } = e
     else {
         unreachable!("a mana event")
@@ -34,6 +35,7 @@ fn mana<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
         source: source.map(|o| o.relayout()),
         color,
         amount,
+        restricted,
     }
 }
 

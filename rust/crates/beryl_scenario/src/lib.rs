@@ -18,7 +18,7 @@ mod setup;
 #[cfg(test)]
 mod tests;
 
-use beryl_engine::card::Purpose;
+use beryl_engine::card::{ManaColor, Purpose};
 use beryl_engine::{DecisionKind, Seat, TurnStep};
 use serde::Serialize;
 
@@ -96,6 +96,10 @@ pub struct Position {
     /// The permanents that became tapped since the previous action began, by name: among
     /// them the mana sources a payment tapped, which an oracle may choose differently.
     pub taps: Vec<&'static str>,
+    /// The mana that permanents and spells made since the previous action began, in order:
+    /// which kind each made, and whether it is restricted mana. An oracle asks the color a
+    /// source of several makes and which of its mana abilities to activate.
+    pub mana: Vec<ManaMade>,
     /// The questions with one answer since the previous action began, which Beryl answers
     /// without asking and an oracle may ask.
     pub forced: Vec<Forced>,
@@ -110,6 +114,23 @@ pub struct Position {
     /// them, as overloaded Winds of Abandon's searches, does anything, where an oracle asks
     /// regardless of the count.
     pub creatures: [u8; 2],
+}
+
+/// One mana that a permanent or a spell made ([CR 106.4]): "When an effect instructs a player
+/// to add mana, that mana goes into a player's mana pool."
+///
+/// [CR 106.4]: https://yawgatog.com/resources/magic-rules/#R1064
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct ManaMade {
+    /// The source by name.
+    pub source: &'static str,
+    #[serde(serialize_with = "json::variant")]
+    pub color: ManaColor,
+    /// Whether the mana remembers a restriction on what it may be spent on ([CR 106.6]):
+    /// "Some spells or abilities that produce mana restrict how that mana can be spent".
+    ///
+    /// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
+    pub restricted: bool,
 }
 
 /// A question with one answer, as the answer a scenario would script, what its prompt was

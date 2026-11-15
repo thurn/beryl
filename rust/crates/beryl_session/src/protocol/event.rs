@@ -285,6 +285,7 @@ fn mana_event<L: Layout>(obs: Observation<'_, L>, e: &Event<L>) -> GameEvent {
         source,
         color,
         amount,
+        ..
     } = e
     else {
         unreachable!("a mana event")

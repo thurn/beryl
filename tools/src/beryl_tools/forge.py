@@ -25,10 +25,12 @@ from .card_facts import (
     CONTROLLED_TURN,
     Cards,
     Unsupported,
+    SYMBOLS,
     cost_text,
     keyword_cost,
+    made_by,
     named_cards,
-    payment_taps,
+    payment_position,
 )
 
 HARNESS: Path = paths.TOOLS / "oracles" / "BerylForgeHarness.java"
@@ -328,32 +330,87 @@ def taps(
     index: int,
     cards: Cards,
     lands: set[str],
-) -> list[str]:
+) -> list[str | JsonObject]:
     """The mana sources Beryl tapped to pay for the cast or activation `action`, at
     `actions[index]`, which the harness taps for mana before Forge's AI pays the rest: those
     that only tap for one mana, less the activated card itself. A land with no printed
     mana ability can still tap for one mana when it gains a basic land type.
+
+    A source of restricted mana, as Cavern of Souls, is an object `{"card", "color",
+    "restricted"}` with the mana the trace records it made, so that the harness activates
+    the same one of its mana abilities for the same color: Forge spends the restricted mana
+    only on what its restriction allows, and that spell gets its rider.
     """
-    found = payment_taps(
+    at = payment_position(
         actions, [cast(list[str], t.get("taps", [])) for t in trace], index
     )
-    if found is None:
+    if at is None:
         return []
-    if any(cards.restricted_mana(name) for name in found):
-        raise Unsupported("a payment tapping a source of restricted mana")
-    if action["action"] == "Activate" and action["card"] in found:
-        found.remove(cast(str, action["card"]))
+    found = payment(action, actions, trace, index)
+    mana = cast(list[JsonObject], trace[at].get("mana", []))[:]
     land_types_change = cards.change_land_types()
-    return [
-        name
-        for name in found
-        if cards.taps_for_one_mana(name)
-        or (
+    tapped: list[str | JsonObject] = []
+    for name in found:
+        if cards.restricted_mana(name):
+            made = made_by(name, mana)
+            color = SYMBOLS[cast(str, made["color"])].strip("{}")
+            tapped.append(
+                {"card": name, "color": color, "restricted": made["restricted"]}
+            )
+        elif cards.taps_for_one_mana(name) or (
             land_types_change
             and name in lands
             and not any(a["kind"] == "Mana" for a in cards.abilities(name))
-        )
-    ]
+        ):
+            tapped.append(name)
+    return tapped
+
+
+def payment(
+    action: JsonObject,
+    actions: Sequence[JsonObject],
+    trace: Sequence[JsonObject],
+    index: int,
+) -> list[str]:
+    """The names of the permanents Beryl tapped to pay for the cast or activation `action`,
+    at `actions[index]`, less the activated card itself."""
+    at = payment_position(
+        actions, [cast(list[str], t.get("taps", [])) for t in trace], index
+    )
+    found = [] if at is None else cast(list[str], trace[at].get("taps", []))[:]
+    if action["action"] == "Activate" and action["card"] in found:
+        found.remove(cast(str, action["card"]))
+    return found
+
+
+def resolved_in_cast(trace: Sequence[JsonObject], index: int) -> int:
+    """How many objects resolved while Beryl played the Cast action at `index`: Beryl gives
+    no priority to a player who could only pass, so a counterspell cast at a player with no
+    answer resolves as it is cast, where the harness waits for a Resolve. Counted where the
+    next position is a priority with the stack before the cast, the spell on top, less what
+    resolved, and no trigger added."""
+    if index + 1 >= len(trace) or trace[index + 1].get("kind") != "Priority":
+        return 0
+    before, after = (
+        [item["name"] for item in cast(list[JsonObject], trace[at].get("stack", []))]
+        for at in (index, index + 1)
+    )
+    cast_onto = len(before) + 1
+    if len(after) < cast_onto and before[: len(after)] == after:
+        return cast_onto - len(after)
+    return 0
+
+
+def replays_plan(action: JsonObject, paid_as_made: bool) -> bool:
+    """Whether `action` answers a choice among the ways to pay ("PaymentPlan") that the
+    harness need not answer: the payment before it tapped every one of its sources for the
+    mana Beryl made, as for a source of restricted mana, so Forge pays from that mana.
+    """
+    return (
+        paid_as_made
+        and action["action"] == "Answer"
+        and action["kind"] == "PaymentPlan"
+    )
 
 
 def export(
@@ -372,6 +429,7 @@ def export(
             described = Cards(cast(JsonObject, entry.get("cards", {})), oracle)
             steps: list[JsonObject] = []
             unchecked = 0
+            paid_as_made = False
             actions = cast(list[JsonObject], entry["actions"])
             trace = cast(list[JsonObject], entry.get("trace", []))
             for i, action in enumerate(actions):
@@ -394,14 +452,37 @@ def export(
                     # The harness finds Forge's flashback spell but fails to play it.
                     raise Unsupported("casting a spell with flashback")
                 purpose = trace[i].get("purpose") if i < len(trace) else None
+                if replays_plan(action, paid_as_made):
+                    # The payment's taps, replayed with the mana each made, chose the plan.
+                    unchecked += 1
+                    continue
                 converted = step(action, described, purpose)
                 if converted is not None and converted["op"] in ("cast", "activate"):
                     tapped = taps(action, actions, trace, i, described, lands)
                     if tapped:
                         converted["taps"] = tapped
+                    paid_as_made = any(isinstance(t, dict) for t in tapped) and len(
+                        tapped
+                    ) == len(payment(action, actions, trace, i))
                 if converted is None:
                     unchecked += 1
                 else:
+                    if (
+                        converted["op"] == "resolve"
+                        and i > 0
+                        and actions[i - 1]["action"] == "Cast"
+                        and resolved_in_cast(trace, i - 1)
+                        and i + 1 < len(trace)
+                        and trace[i + 1].get("kind") == "Priority"
+                    ):
+                        # The spell cast just before resolved as it was cast in Beryl,
+                        # which Forge's stack still holds: the harness resolves it first,
+                        # down to the stack Beryl had as the Resolve began. Only where the
+                        # Resolve ends at a priority: one that stops at a choice while an
+                        # ability resolves leaves the rest of the stack to later steps.
+                        converted["stack"] = len(
+                            cast(list[JsonObject], trace[i].get("stack", []))
+                        )
                     steps.append(converted)
             setup = cast(JsonObject, entry["setup"])
             scenario: JsonObject = {

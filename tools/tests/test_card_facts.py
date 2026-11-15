@@ -4,7 +4,7 @@ stands for a difference between Beryl's questions and XMage's, read from what a 
 
 import pytest
 
-from beryl_tools.card_facts import Cards, Json, Unsupported
+from beryl_tools.card_facts import Cards, Json, Unsupported, payment_position
 
 TAP: Json = {"action": "Tap", "of": "This"}
 SACRIFICE: Json = {"action": "Sacrifice", "of": "This"}
@@ -138,6 +138,29 @@ def test_a_source_sacrificed_for_any_color_cannot_be_replayed() -> None:
     treasure = mana(0, "White", "Blue", parts=[TAP, SACRIFICE])
     assert gadget(treasure).sacrificed_for_mana_of_any_color("Gadget")
     assert not gadget(mana(0, "White")).sacrificed_for_mana_of_any_color("Gadget")
+
+
+def test_a_source_of_restricted_mana_taps_by_the_ability_that_made_it() -> None:
+    # A land like Cavern of Souls: {C}, or restricted mana of any color.
+    restricted = mana(1, "White", "Blue", "Black", "Red", "Green")
+    cavern = gadget(mana(0, "Colorless"), {**restricted, "restricted": True})
+    assert cavern.restricted_mana("Gadget")
+    made: Json = {"source": "Gadget", "color": "Blue", "restricted": True}
+    assert cavern.made_text("Gadget", made) == "{T}: Add one mana of any color"
+    made = {"source": "Gadget", "color": "Colorless", "restricted": False}
+    assert cavern.made_text("Gadget", made) == "{T}: Add {C}"
+    made = {"source": "Gadget", "color": "Blue", "restricted": False}
+    assert cavern.made_text("Gadget", made) is None
+
+
+def test_a_payment_comes_after_the_choices_made_while_casting() -> None:
+    cast: Json = {"action": "Cast", "card": "Elk"}
+    asked: Json = {"action": "Assert", "assertion": {"assert": "Decision"}}
+    plan: Json = {"action": "Answer", "kind": "PaymentPlan"}
+    actions: list[Json] = [cast, asked, plan, asked, {"action": "Resolve"}]
+    taps = [[], [], [], ["Island"], []]
+    # Past the assertion that a plan is asked and the plan's answer.
+    assert payment_position(actions, taps, 0) == 3
 
 
 def test_casting_options_are_asked_by_their_kind_and_cost() -> None:

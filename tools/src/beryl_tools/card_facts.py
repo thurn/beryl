@@ -282,21 +282,33 @@ class Cards:
                 return True
         return False
 
-    def color_asked(self, source: str) -> bool:
-        """Whether tapping `source` for mana makes a choice the oracles ask and Beryl's trace
-        does not record: the color of mana it sacrifices itself for, or whether its
-        restricted mana pays."""
-        return self.sacrificed_for_mana_of_any_color(source) or self.restricted_mana(
-            source
-        )
-
     def restricted_mana(self, source: str) -> bool:
         """Whether a mana ability of `source` makes mana that remembers a restriction, "Spend
-        this mana only ...", as Cavern of Souls' colored mana: the oracles ask its color and
-        whether it pays, which Beryl's trace does not record."""
+        this mana only ...", as Cavern of Souls' colored mana: the oracles ask which of its
+        abilities to activate and the color, which the trace's `mana` records."""
         return any(
             a["kind"] == "Mana" and a.get("restricted") for a in self.abilities(source)
         )
+
+    def made_text(self, source: str, made: Json) -> str | None:
+        """The start of the text of the mana ability of `source` that made the mana `made`
+        (an entry of the trace's `mana`): the one restricted or not as the mana is, whose only
+        cost is `{T}`, that makes one color, as `{T}: Add {C}`, or one mana of any color.
+        None where no such ability says it."""
+        color = cast(str, made["color"])
+        for a in self.abilities(source):
+            if a["kind"] != "Mana" or bool(a.get("restricted")) != made["restricted"]:
+                continue
+            if a.get("cost") != {"parts": [{"action": "Tap", "of": "This"}]}:
+                continue
+            produces = cast(Json, a["produces"])
+            colors = cast(list[str], produces["colors"])
+            amount = cast(int, produces["amount"])
+            if colors == [color]:
+                return "{T}: Add " + SYMBOLS[color] * amount
+            if len(colors) == len(SYMBOLS) - 1 and color in colors and amount == 1:
+                return "{T}: Add one mana of any color"
+        return None
 
     def casting(self, card: str) -> list[Json]:
         """The casting options of a card's front face, in the order of Beryl's `costs` bits."""
@@ -524,16 +536,19 @@ def named_cards(entries: Iterable[Json]) -> list[str]:
 CAST_CHOICES = ("X", "Target", "TargetCount", "ChooseUpTo")
 
 
-def payment_taps(
+def payment_position(
     actions: Sequence[Json], taps: Sequence[Sequence[str]], index: int
-) -> list[str] | None:
-    """The names of the permanents Beryl tapped to pay for the cast or activation at
-    `actions[index]`, from `taps`, the trace's taps by position; None past the trace.
+) -> int | None:
+    """The position of the trace whose taps and mana are those of the payment for the cast
+    or activation at `actions[index]`, from `taps`, the trace's taps by position; None past
+    the trace.
 
     The payment comes after the choices made while casting (601.2b-601.2f: an X, the
-    targets), each a position of its own with nothing tapped yet, so the taps are at the
-    first position past those answers. Reading only the next position left a spell with an X
-    to the oracle's own payment, which could spend a source a later spell needed."""
+    targets) and the choice among the ways to pay (a "PaymentPlan" answer, as where Cavern
+    of Souls' colored or colorless mana could pay), each a position of its own with nothing
+    tapped yet, so the taps are at the first position past those answers.
+    Reading only the next position left a spell with an X to the oracle's own payment,
+    which could spend a source a later spell needed."""
     after = index + 1
     while (
         after < len(actions)
@@ -546,7 +561,7 @@ def payment_taps(
             )
             or (
                 actions[after]["action"] == "Answer"
-                and actions[after]["kind"] in CAST_CHOICES
+                and actions[after]["kind"] in (*CAST_CHOICES, "PaymentPlan")
             )
         )
         and not taps[after]
@@ -554,7 +569,16 @@ def payment_taps(
         after += 1
     if after >= len(taps):
         return None
-    return list(taps[after])
+    return after
+
+
+def made_by(name: str, mana: list[Json]) -> Json:
+    """The first mana in `mana`, entries of the trace's `mana`, that the permanent `name`
+    made, removed from the list so that a second permanent of the name finds its own."""
+    for i, made in enumerate(mana):
+        if made["source"] == name:
+            return mana.pop(i)
+    raise Unsupported(f"a payment tapping {name}, which the trace records no mana of")
 
 
 class Unsupported(Exception):

@@ -269,6 +269,7 @@ impl<L: Layout> State<L> {
             source,
             color,
             amount,
+            restricted: false,
         }
     }
 

@@ -294,3 +294,51 @@ def test_a_payment_names_the_mana_sources_beryl_tapped() -> None:
         "Coast",
         "Land Type Grant",
     ]
+
+
+def test_a_source_of_restricted_mana_is_tapped_for_the_mana_beryl_made() -> None:
+    # A land like Cavern of Souls makes {C}, or restricted mana of any color: the trace
+    # says which it made, so the harness activates the same ability for the same color, and
+    # the payment-plan answer that chose it needs no answer of its own.
+    tap: Json = {"parts": [{"action": "Tap", "of": "This"}]}
+    cavern: Json = {
+        "faces": [
+            {
+                "name": "Cavern",
+                "abilities": [
+                    {
+                        "kind": "Mana",
+                        "cost": tap,
+                        "produces": {"colors": ["Colorless"], "amount": 1},
+                    },
+                    {
+                        "kind": "Mana",
+                        "cost": tap,
+                        "restricted": True,
+                        "produces": {
+                            "colors": ["White", "Blue", "Black", "Red", "Green"],
+                            "amount": 1,
+                        },
+                    },
+                ],
+            }
+        ]
+    }
+    cards = Cards({"Cavern": cavern})
+    cast: Json = {"action": "Cast", "player": 0, "card": "Elk", "costs": 0}
+    plan: Json = {"action": "Answer", "kind": "PaymentPlan", "pick": {"pick": "Plan"}}
+    actions: list[Json] = [cast, plan, {"action": "Resolve"}]
+    made = {"source": "Cavern", "color": "Blue", "restricted": True}
+    trace: list[Json] = [
+        {"taps": []},
+        {"taps": []},
+        {"taps": ["Cavern"], "mana": [made]},
+    ]
+    tapped = forge.taps(cast, actions, trace, 0, cards, set())
+    assert tapped == [{"card": "Cavern", "color": "U", "restricted": True}]
+    assert forge.replays_plan(plan, paid_as_made=True)
+    assert not forge.replays_plan(plan, paid_as_made=False)
+    # A trace with no mana of the source can't say which ability it activated.
+    trace[2]["mana"] = []
+    with pytest.raises(Unsupported):
+        forge.taps(cast, actions, trace, 0, cards, set())

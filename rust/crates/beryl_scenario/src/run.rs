@@ -15,7 +15,8 @@ mod snapshot;
 
 use crate::setup::{Slots, setup};
 use crate::{
-    Action, Assertion, CoinFlip, Ending, Failure, Forced, Pick, Position, Scenario, StackItem,
+    Action, Assertion, CoinFlip, Ending, Failure, Forced, ManaMade, Pick, Position, Scenario,
+    StackItem,
 };
 pub use answer::{answer, describe};
 use answer::{option_index, pick_in, takes, taking};
@@ -378,28 +379,50 @@ impl Runner {
         }
     }
 
-    /// The position an action begins from, for [`trace`]. It takes the coin flips and taps
-    /// since the last position from the recorded events.
-    fn describe_position(&mut self, step: &Step) -> Position {
+    /// The coin flips, the taps and the mana made since the last position, from the recorded
+    /// events, for [`describe_position`].
+    fn take_events(&mut self) -> (Vec<CoinFlip>, Vec<&'static str>, Vec<ManaMade>) {
         let mut flips = Vec::new();
         let mut taps = Vec::new();
+        let mut made = Vec::new();
         for e in self.x.events.drain() {
             match e {
                 Event::CoinFlip { player, won, .. } => flips.push(CoinFlip { player, won }),
                 Event::Tap { object } => taps.push(object),
+                Event::Mana {
+                    source: Some(object),
+                    color,
+                    restricted,
+                    ..
+                } => made.push((object, color, restricted)),
                 _ => {}
             }
         }
-        let taps = taps
+        // A permanent by the name it had when the previous action began, should it have left
+        // the battlefield since, as a source that sacrifices itself for mana.
+        let named = |object| {
+            let was = self.permanents.iter().find(|&&(r, _)| r == object);
+            match was {
+                Some(&(_, name)) if !self.s.is_current(object) => name,
+                _ => self.name(object.slot),
+            }
+        };
+        let taps = taps.into_iter().map(named).collect();
+        let mana = made
             .into_iter()
-            .map(|object| {
-                let was = self.permanents.iter().find(|&&(r, _)| r == object);
-                match was {
-                    Some(&(_, name)) if !self.s.is_current(object) => name,
-                    _ => self.name(object.slot),
-                }
+            .map(|(object, color, restricted)| ManaMade {
+                source: named(object),
+                color,
+                restricted,
             })
             .collect();
+        (flips, taps, mana)
+    }
+
+    /// The position an action begins from, for [`trace`]. It takes the coin flips, taps and
+    /// mana since the last position from the recorded events.
+    fn describe_position(&mut self, step: &Step) -> Position {
+        let (flips, taps, mana) = self.take_events();
         self.permanents = self
             .s
             .battlefield()
@@ -469,6 +492,7 @@ impl Runner {
             kept,
             flips,
             taps,
+            mana,
         }
     }
 

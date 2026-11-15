@@ -186,6 +186,12 @@ pub enum Event<L: Layout = Small> {
         source: Option<ObjectRef<L>>,
         color: ManaColor,
         amount: u8,
+        /// Whether the mana remembers a restriction on what it may be spent on ([CR 106.6]):
+        /// "Some spells or abilities that produce mana restrict how that mana can be spent".
+        /// A scenario's trace records it, so that an oracle can tap the same mana ability.
+        ///
+        /// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
+        restricted: bool,
     },
     /// Mana paid during resolution ([CR 608.2g]): "If an effect gives a player the option to pay
     /// mana, they may activate mana abilities". Names the resolving item so its payment can be

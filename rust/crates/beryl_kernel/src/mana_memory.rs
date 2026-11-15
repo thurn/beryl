@@ -132,6 +132,7 @@ impl<L: Layout> State<L> {
             source,
             color: mana.color,
             amount: 1,
+            restricted: true,
         })
     }
 

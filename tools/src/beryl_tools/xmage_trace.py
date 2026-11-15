@@ -5,7 +5,7 @@ without asking."""
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import cast
 
 from .card_facts import Json, Unsupported
@@ -43,6 +43,8 @@ class Position:
     controller: int | None = None
     # At a copy of a spell's new target, the target it has now, as a pick.
     kept: Json | None = None
+    # The mana permanents and spells made, in order: `source`, `color` and `restricted`.
+    mana: list[Json] = field(default_factory=list)
 
     def check_simultaneous_emblem_triggers(self) -> None:
         """An emblem's triggers on one event, such as Teferi, Hero of Dominaria's for each card
@@ -111,6 +113,7 @@ class Position:
             stack=cast(list[Json], t["stack"]),
             flips=cast(list[Json], t["flips"]),
             taps=cast(list[str], t["taps"]),
+            mana=cast(list[Json], t.get("mana", [])),
             forced=cast(list[Json], t["forced"]),
             flashback=cast(list[str], t.get("flashback", [])),
             face_down=cast(list[str], t.get("face_down", [])),

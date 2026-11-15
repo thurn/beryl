@@ -334,7 +334,7 @@ def test_untap_shortcut_is_optional_before_explicit_land_picks() -> None:
         'setChoice(playerA, "Island");',
     ]
     # The effect can choose an opponent's lands, so their payment can also change the picks.
-    writer.payment_left_to_xmage.add("playerB")
+    writer.payments.left_to_xmage.add("playerB")
     with pytest.raises(
         card_facts.Unsupported, match="an untap choice after XMage chose a payment"
     ):

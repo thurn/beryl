@@ -478,7 +478,7 @@ public final class BerylForgeHarness {
                     if (game.getStack().isEmpty()) {
                         throw new StepFailed("Resolve with an empty stack at step " + (next - 1));
                     }
-                    resolving = game.getStack().peek();
+                    resolving = resolvedLast(step);
                     mode = Mode.RESOLVE;
                     return null;
                 }
@@ -544,6 +544,25 @@ public final class BerylForgeHarness {
                 throw new StepFailed("passed turn " + advanceTurn + " " + advancePhase + " without priority there");
             }
             return turn == advanceTurn && phases.getPhase() == advancePhase;
+        }
+
+        /**
+         * The deepest stack entry a "resolve" step resolves: the top one, or where the step
+         * says how many objects Beryl's stack held as the Resolve began ("stack", n) and
+         * Forge's holds more, the n-th from the bottom. Beryl gives no priority to a player
+         * who could only pass, so a counterspell cast at a player with no answer resolved in
+         * Beryl as it was cast, and Forge's harness resolves it first.
+         */
+        SpellAbilityStackInstance resolvedLast(JsonObject step) {
+            int above = step.has("stack") ? game.getStack().size() - step.get("stack").getAsInt() : 0;
+            SpellAbilityStackInstance last = game.getStack().peek();
+            for (SpellAbilityStackInstance si : game.getStack()) {
+                if (above-- < 0) {
+                    break;
+                }
+                last = si;
+            }
+            return last;
         }
 
         boolean onStack(SpellAbilityStackInstance entry) {
@@ -1098,9 +1117,11 @@ public final class BerylForgeHarness {
          * Taps each mana source Beryl tapped for the payment of `paying`, an untapped permanent
          * of that name this player controls, for mana in the pool. Left to the AI, the payment
          * could tap another source than Beryl did, as Winds of Abandon paid with the only Swamp
-         * left no {B} for Drudge Skeletons' regeneration. The trace does not say which color a
-         * source of several made, so sources of one color go first, and each of several then
-         * makes a color the cost still needs, if any.
+         * left no {B} for Drudge Skeletons' regeneration. A tap is a name, or for a source of
+         * restricted mana an object `{"card", "color", "restricted"}` that says which of its
+         * mana abilities made which color, as the trace recorded it. For the others the trace
+         * does not say which color a source of several made, so sources of one color go first,
+         * and each of several then makes a color the cost still needs, if any.
          */
         void floatTaps(SpellAbility paying) {
             JsonArray names = run.taps;
@@ -1109,35 +1130,47 @@ public final class BerylForgeHarness {
                 return;
             }
             List<Card> sources = new ArrayList<>();
-            for (JsonElement name : names) {
+            Map<Card, JsonObject> made = new java.util.HashMap<>();
+            for (JsonElement tap : names) {
+                JsonObject known = tap.isJsonObject() ? tap.getAsJsonObject() : null;
+                String name = known != null ? known.get("card").getAsString() : tap.getAsString();
                 Card found = null;
                 for (Card card : player.getCardsIn(ZoneType.Battlefield)) {
-                    if (!card.isTapped() && !sources.contains(card) && card.getName().equals(name.getAsString())
+                    if (!card.isTapped() && !sources.contains(card) && card.getName().equals(name)
                             && !card.getManaAbilities().isEmpty()) {
                         found = card;
                         break;
                     }
                 }
                 if (found == null) {
-                    throw new StepFailed("Forge has no untapped " + name.getAsString() + " to tap for mana");
+                    throw new StepFailed("Forge has no untapped " + name + " to tap for mana");
                 }
                 sources.add(found);
+                if (known != null) {
+                    made.put(found, known);
+                }
             }
             sources.sort(java.util.Comparator.comparingInt(card -> manaOptions(card).size()));
             for (Card card : sources) {
                 List<Map.Entry<SpellAbility, String>> options = manaOptions(card);
                 Map.Entry<SpellAbility, String> pick = options.get(0);
-                for (Map.Entry<SpellAbility, String> option : options) {
-                    if (needs(paying, option.getValue())) {
-                        pick = option;
-                        break;
+                if (made.containsKey(card)) {
+                    pick = recorded(card, options, made.get(card));
+                } else {
+                    for (Map.Entry<SpellAbility, String> option : options) {
+                        if (needs(paying, option.getValue())) {
+                            pick = option;
+                            break;
+                        }
                     }
                 }
                 SpellAbility mana = pick.getKey();
                 // The ability keeps the player last offered it, who gets its mana.
                 mana.setActivatingPlayer(player);
-                if (mana.getManaPart().isComboMana()) {
-                    mana.getManaPart().setExpressChoice(pick.getValue());
+                forge.game.spellability.AbilityManaPart part = mana.getManaPart();
+                if (part.isComboMana() || made.containsKey(card) && part.isAnyMana()) {
+                    // Forge offers mana of any color only in the colors of the express choice.
+                    part.setExpressChoice(pick.getValue());
                 }
                 if (!ComputerUtil.playNoStack(player, mana, getGame(), true)) {
                     throw new StepFailed("Forge could not tap " + card + " for mana");
@@ -1146,6 +1179,25 @@ public final class BerylForgeHarness {
             if (System.getenv("BERYL_FORGE_TRACE") != null) {
                 run.notes.add("floated for " + paying.getHostCard() + ": " + player.getManaPool().totalMana() + " cost " + paying.getPayCosts());
             }
+        }
+
+        /**
+         * The mana ability of `card` and the color, among `options`, that made the mana the
+         * trace recorded in `made`: of the color it names, restricted ("Spend this mana only
+         * ...") or not as it says. Mana of any color ("Any") is made as the color named.
+         */
+        static Map.Entry<SpellAbility, String> recorded(
+                Card card, List<Map.Entry<SpellAbility, String>> options, JsonObject made) {
+            String color = made.get("color").getAsString();
+            boolean restricted = made.get("restricted").getAsBoolean();
+            for (Map.Entry<SpellAbility, String> option : options) {
+                forge.game.spellability.AbilityManaPart part = option.getKey().getManaPart();
+                boolean kind = part.getManaRestrictions().isEmpty() != restricted;
+                if (kind && (option.getValue().equals(color) || part.isAnyMana() && !color.equals("C"))) {
+                    return Map.entry(option.getKey(), color);
+                }
+            }
+            throw new StepFailed("Forge's " + card + " has no mana ability that makes " + made);
         }
 
         /** Each mana ability of `card` with each color it can make, as a short color name. */
