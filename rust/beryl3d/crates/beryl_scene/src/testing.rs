@@ -173,12 +173,11 @@ pub fn object(slot: ObjectId, zone: ZoneName, side: Side, name: Option<&str>) ->
 /// A script with these beats and timing, and no reset unless `reset` is given.
 #[must_use]
 pub fn script(reset: Option<Reset>, beats: Vec<Vec<Step>>, timing: Vec<StepTiming>) -> Script {
-    Script {
-        reset,
-        beats,
-        timing,
-        ..Script::empty()
-    }
+    let mut script = Script::empty();
+    script.reset = reset;
+    script.beats = beats;
+    script.timing = timing;
+    script
 }
 
 /// The timing of a step that plays for `duration` milliseconds as its turn comes, easing out, and
