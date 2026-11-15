@@ -49,6 +49,13 @@
       "Elite Spellbinder: when ~ enters , look at target opponent's hand . you may [-exile-] {+choose+} a nonland card [-from-] {+in that player's hand . exile+} it . for as long as that card remains exiled , its owner may play it . a spell cast this way costs {2} more to cast ."
     ]
   },
+  "Glasspool Mimic // Glasspool Shore": {
+    "reason": "wording",
+    "note": "\"A creature you control\" and \"any creature you control on the battlefield\" name the same permanents, since a creature you control is on the battlefield. Oracle lists the two added subtypes in one phrase; the renderer says them as two exceptions. The copy is a Shapeshifter and a Rogue in addition to its other types either way.",
+    "diff": [
+      "Glasspool Mimic: you may have ~ enter as a copy of [-a-] {+any+} creature you control {+on the battlefield+} , except it's a Shapeshifter {+in addition to its other types and it's a+} Rogue in addition to its other types ."
+    ]
+  },
   "Jace, Vryn's Prodigy // Jace, Telepath Unbound": {
     "reason": "wording",
     "note": "\"Exile Jace, then return him\" and \"Exile ~. Return it\" are the same two instructions in order; \"card in your graveyard\" and \"card from your graveyard\" name the same target.",
