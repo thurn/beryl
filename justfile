@@ -51,11 +51,6 @@ table-pair *args:
 smoke *args:
     {{ by }} smoke "$@"
 
-# The Beryl 3D prototype: a real game on a 3D table in a window (humans), or --stats live|stress-255|stress-1024, or --png <ms> <path>
-[group('app')]
-proto3d *args:
-    {{ by }} proto3d "$@"
-
 # Beryl 3D's commands (docs/beryl-3d.md): `just b3d` lists them, `just b3d <command> --help` explains one
 [group('app')]
 b3d *args:

@@ -131,33 +131,6 @@ def smoke(args: argparse.Namespace) -> int:
     return run.returncode
 
 
-PROTO3D: Path = paths.RUST / "prototypes" / "beryl3d"
-
-
-def proto3d(args: argparse.Namespace) -> int:
-    """The throwaway Beryl 3D prototype: a window for humans, `--stats` and `--png` for anyone."""
-    rest: list[str] = args.extra
-    headless = "--stats" in rest or "--png" in rest
-    if paths.is_agent() and not headless:
-        print(
-            "proto3d: agents never open a window; use --stats <board> or --png <ms> <path>",
-            file=sys.stderr,
-        )
-        return 2
-    target = paths.cache_root() / "proto3d" / "target"
-    env = {**os.environ, "CARGO_TARGET_DIR": str(target)}
-    build = subprocess.run(
-        [system.which("cargo"), "build", "--release"],
-        cwd=PROTO3D,
-        env=env,
-        check=False,
-    )
-    if build.returncode != 0:
-        return checks.CANNOT_RUN
-    binary = system.exe(target / "release" / "beryl3d")
-    return subprocess.run([str(binary), *rest], check=False).returncode
-
-
 def bundle(args: argparse.Namespace) -> int:
     kind, folder = ("nsis", "nsis") if system.WINDOWS else ("app", "macos")
     code = tauri("build", "--bundles", kind, "--features", "iroh")
@@ -194,8 +167,3 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     sub.add_parser(
         "bundle", help="the release Beryl.app, or Windows installer"
     ).set_defaults(func=bundle)
-    p = sub.add_parser(
-        "proto3d",
-        help="the Beryl 3D prototype: a window (humans), or --stats <board> / --png <ms> <path>",
-    )
-    p.set_defaults(func=proto3d, passthrough=True)
