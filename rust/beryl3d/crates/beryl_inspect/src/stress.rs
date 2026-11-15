@@ -49,6 +49,7 @@ fn board(count: u16) -> Stress {
     first.script = Some(Script {
         reset: Some(Reset::default()),
         beats: Vec::new(),
+        timing: Vec::new(),
     });
 
     // Each moved permanent joins the end of the battlefield, after the ones that stay.
@@ -75,6 +76,7 @@ fn board(count: u16) -> Stress {
     second.script = Some(Script {
         reset: None,
         beats: vec![beat],
+        timing: Vec::new(),
     });
 
     Stress {

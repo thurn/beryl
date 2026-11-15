@@ -120,6 +120,7 @@ impl ScriptBuilder {
             script: Script {
                 reset: Some(Reset::default()),
                 beats: Vec::new(),
+                timing: Vec::new(),
             },
         }
     }
@@ -186,6 +187,8 @@ pub fn object(slot: ObjectId, zone: ZoneName, side: Side, name: Option<&str>) ->
         face: FaceName::Front,
         named_counters: Vec::new(),
         doesnt_untap: false,
+        custom_colors: None,
+        token_printing: None,
     }
 }
 
