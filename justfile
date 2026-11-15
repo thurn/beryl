@@ -183,7 +183,7 @@ scale *args:
 speed *args:
     {{ by }} speed "$@"
 
-# Record where the CPU goes, by session and kind of work (sample [--interval S --duration S], report [--hours H])
+# Record where the CPU goes, by session and kind of work (install, uninstall, sample [--interval S --duration S], report [--hours H])
 [group('bench')]
 cpu *args:
     {{ by }} cpu "$@"

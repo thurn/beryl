@@ -15,28 +15,40 @@ executable names of everything classified `other/other`, so the report can list 
 consumers that no rule names.
 
 A process's CPU is counted from the sample after it first appears, in full (it was born between
-two samples), and processes alive when the sampler starts are only a baseline. The CPU a process
-used between its last sample and its exit is lost, which is about a fifth of all work, so each
-row also records `top`'s own busy figure for the minute (`top_cores`). Report both: the sampled
-sum should be within about a fifth of `top`'s. `peak_cores` is the highest rate seen between two
-consecutive samples, for bursts shorter than a minute.
+two samples), and processes alive when the sampler starts are only a baseline. On macOS each
+process's own and reaped-children CPU come from `proc_pid_rusage` ([`read_rusage`]). When a
+process exits, the CPU already counted for it is owed to its parent: the parent's
+reaped-children total later grows by the child's whole lifetime, and only the growth beyond what
+is owed is counted ([`Sampler`]). So the CPU a process used between its last sample and its exit,
+and every process too short-lived to be sampled at all, is still counted, charged to the exited
+child's context or else the parent's. Root-owned processes cannot be read that way, so their
+own CPU comes from `ps` and a child that outlives its parent (re-parented to `launchd`) loses
+its last few seconds. Each row also records `top`'s own busy figure for the minute
+(`top_cores`); the sampled sum should be close to it. `peak_cores` is the highest rate seen
+between two consecutive samples, for bursts shorter than a minute.
+
+`by cpu install` keeps the sampler running as a launchd agent, and `by cpu uninstall` removes it.
 """
 
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
+import plistlib
 import re
+import shutil
 import statistics
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from re import Pattern
 from typing import TypedDict
 
-from . import paths
+from . import nightly, paths
 
 # The classification of one process: (context, kind, worktree).
 Key = tuple[str, str, str]
@@ -142,6 +154,8 @@ class Process:
     exe: str
     args: str
     cwd: str = ""
+    # CPU seconds of the children this process has reaped, or None where it cannot be read.
+    children: float | None = None
 
 
 def parse_cputime(text: str) -> float:
@@ -230,7 +244,8 @@ def _run(command: list[str]) -> str:
 
 def read_processes() -> dict[int, Process]:
     """Every process: pid, parent, cumulative CPU, executable and arguments. The two `ps` calls
-    are joined by pid; a process gone between them is dropped."""
+    are joined by pid; a process gone between them is dropped. Where `proc_pid_rusage` can read
+    a process, its CPU and its reaped children's come from there."""
     table: dict[int, Process] = {}
     for row in _run(["ps", "-axo", "pid=,ppid=,cputime=,comm="]).splitlines():
         parts = row.split(None, 3)
@@ -242,7 +257,49 @@ def read_processes() -> dict[int, Process]:
         parts = row.split(None, 1)
         if len(parts) == 2 and int(parts[0]) in table:
             table[int(parts[0])].args = parts[1]
+    # Parents before children: a child read alive and then reaped before its parent is read
+    # would be counted twice, once itself and once in its parent's reaped total.
+    for pid in Sampler._parents_first(table):
+        proc = table[pid]
+        found = read_rusage(proc.pid)
+        if found is not None:
+            proc.cpu, proc.children = found
     return table
+
+
+class _Timebase(ctypes.Structure):
+    _fields_ = [("numer", ctypes.c_uint32), ("denom", ctypes.c_uint32)]
+
+
+_LIBSYSTEM: ctypes.CDLL | None = None
+_TICK_SECONDS: float = 0.0
+# `RUSAGE_INFO_V2` in <sys/resource.h>, and the 64-bit word offsets of the fields read from
+# `struct rusage_info_v2`: after the 16-byte UUID come ri_user_time and ri_system_time, then
+# eight other fields, then ri_child_user_time and ri_child_system_time.
+_RUSAGE_INFO_V2 = 2
+_USER, _SYSTEM, _CHILD_USER, _CHILD_SYSTEM = 2, 3, 12, 13
+
+
+def read_rusage(pid: int) -> tuple[float, float] | None:
+    """(own CPU seconds, reaped children's CPU seconds) of `pid` from macOS's
+    `proc_pid_rusage`, or None off macOS or for a process this user cannot read (root's). Its
+    times are mach ticks, which `mach_timebase_info` converts to nanoseconds."""
+    global _LIBSYSTEM, _TICK_SECONDS
+    if sys.platform != "darwin":
+        return None
+    library = _LIBSYSTEM
+    if library is None:
+        library = ctypes.CDLL("/usr/lib/libSystem.B.dylib")
+        base = _Timebase()
+        library.mach_timebase_info(ctypes.byref(base))
+        _TICK_SECONDS = base.numer / base.denom / 1e9
+        _LIBSYSTEM = library
+    info = (ctypes.c_uint64 * 40)()
+    if library.proc_pid_rusage(pid, _RUSAGE_INFO_V2, info) != 0:
+        return None
+    own = (info[_USER] + info[_SYSTEM]) * _TICK_SECONDS
+    children = (info[_CHILD_USER] + info[_CHILD_SYSTEM]) * _TICK_SECONDS
+    return own, children
 
 
 def read_cwds(pids: list[int]) -> dict[int, str]:
@@ -268,11 +325,23 @@ def top_busy_cores() -> float:
 
 
 class Sampler:
-    """Turns successive process tables into CPU seconds per [`Key`]."""
+    """Turns successive process tables into CPU seconds per [`Key`].
+
+    Besides each live process's own CPU, it counts the growth of each process's reaped-children
+    total. When a process exits, the CPU already counted for it (its own, its reaped children's
+    and what its own exited children were still owed) is recorded in `owed` against its parent,
+    and the parent's next growth in reaped-children CPU pays that first. Only the rest is new:
+    the exited child's last seconds and processes that never lived through a sample. That rest
+    is charged to the most recently exited child's key (`tail`), or to the parent's own.
+    """
 
     def __init__(self) -> None:
         self.last: dict[int, float] = {}
+        self.last_children: dict[int, float] = {}
+        self.parents: dict[int, int] = {}
         self.keys: dict[int, Key] = {}
+        self.owed: dict[int, float] = {}
+        self.tail: dict[int, Key] = {}
         self.primed = False
 
     def step(
@@ -284,27 +353,75 @@ class Sampler:
             proc.cwd = cwds.get(proc.pid, "")
         used: dict[Key, float] = {}
         unnamed: dict[str, float] = {}
+
+        def charge(key: Key, exe: str, seconds: float) -> None:
+            used[key] = used.get(key, 0.0) + seconds
+            if key[0] == "other" and key[1] == "other":
+                name = os.path.basename(exe)
+                unnamed[name] = unnamed.get(name, 0.0) + seconds
+
+        # Exits first: a child that exited and was reaped since the previous step shows up in its
+        # parent's reaped total in this step, so what it is owed must be recorded before then.
+        self._forget(set(self.last) - set(table))
         for pid in self._parents_first(table):
             proc = table[pid]
             if pid not in self.keys:
                 self.keys[pid] = classify(proc, self.keys.get(proc.ppid))
-            before = self.last.get(pid)
-            if before is None:
-                delta = proc.cpu if self.primed else 0.0
-            else:
-                delta = proc.cpu - before if proc.cpu >= before else proc.cpu
+            key = self.keys[pid]
+            self.parents[pid] = proc.ppid
+            delta = self._growth(self.last.get(pid), proc.cpu)
             self.last[pid] = proc.cpu
             if delta > 0:
-                key = self.keys[pid]
-                used[key] = used.get(key, 0.0) + delta
-                if key[0] == "other" and key[1] == "other":
-                    name = os.path.basename(proc.exe)
-                    unnamed[name] = unnamed.get(name, 0.0) + delta
-        for gone in set(self.last) - set(table):
-            del self.last[gone]
-            self.keys.pop(gone, None)
+                charge(key, proc.exe, delta)
+            children = proc.children
+            if children is None:
+                continue
+            grown = self._growth(self.last_children.get(pid), children)
+            self.last_children[pid] = children
+            owed = self.owed.get(pid, 0.0)
+            paid = min(owed, grown)
+            if owed:
+                self.owed[pid] = owed - paid
+            if grown - paid > 0:
+                charge(self.tail.get(pid, key), proc.exe, grown - paid)
+            if pid in self.tail and not self.owed.get(pid):
+                del self.tail[pid]
         self.primed = True
         return used, unnamed
+
+    def _growth(self, before: float | None, now: float) -> float:
+        """How much a cumulative figure grew. A process first seen after the baseline was born
+        since the previous sample, so all of it is new; a figure that shrank belongs to a new
+        process that reused the pid."""
+        if before is None:
+            return now if self.primed else 0.0
+        return now - before if now >= before else now
+
+    def _forget(self, gone: set[int]) -> None:
+        """Drops exited processes, children before parents, and records what was counted for
+        each against its parent. Only a parent whose reaped-children CPU can be read will ever
+        pay it back."""
+
+        def depth(pid: int) -> int:
+            levels = 0
+            while pid in self.parents and levels < 256:
+                pid = self.parents[pid]
+                levels += 1
+            return levels
+
+        for pid in sorted(gone, key=depth, reverse=True):
+            counted = (
+                self.last.pop(pid)
+                + self.last_children.pop(pid, 0.0)
+                + self.owed.pop(pid, 0.0)
+            )
+            parent = self.parents.pop(pid, 0)
+            key = self.keys.pop(pid, None)
+            self.tail.pop(pid, None)
+            if parent in self.last_children:
+                self.owed[parent] = self.owed.get(parent, 0.0) + counted
+                if key is not None:
+                    self.tail[parent] = key
 
     @staticmethod
     def _parents_first(table: dict[int, Process]) -> list[int]:
@@ -324,19 +441,47 @@ class Sampler:
         return order
 
 
+# Rows older than this are dropped when the sampler starts, so the file stays a few hundred MB.
+KEEP_DAYS = 30
+LABEL = "ca.thurn.beryl.cpu"
+
+
+def drop_old_rows(path: Path, now: float) -> None:
+    """Rewrites `path` without the rows from before the last [`KEEP_DAYS`] days."""
+    if not path.exists():
+        return
+    since = now - KEEP_DAYS * 86400
+    lines = path.read_text().splitlines(keepends=True)
+    kept = [
+        line
+        for line in lines
+        if line.strip() and float(json.loads(line).get("time", 0)) >= since
+    ]
+    if len(kept) < len(lines):
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text("".join(kept))
+        tmp.replace(path)
+
+
 def sample(args: argparse.Namespace) -> int:
     """Appends a row each minute until killed (or after --duration seconds)."""
     out = samples_file()
+    drop_old_rows(out, time.time())
     sampler = Sampler()
     cores = os.cpu_count() or 1
     deadline = time.monotonic() + args.duration if args.duration else None
-    minute_start = time.time()
+    # A row covers the time between two samples' process reads, so its CPU and its seconds
+    # match; the `top` call after a row is written falls inside the next row.
+    minute_start: float | None = None
     total: dict[str, float] = {}
     unnamed_total: dict[str, float] = {}
     peak = 0.0
     previous = time.monotonic()
     while deadline is None or time.monotonic() < deadline:
         table = read_processes()
+        stamp = time.time()
+        if minute_start is None:
+            minute_start = stamp
         fresh = [p for p in table if p not in sampler.keys]
         used, unnamed = sampler.step(table, read_cwds(fresh))
         now = time.monotonic()
@@ -348,10 +493,10 @@ def sample(args: argparse.Namespace) -> int:
             total[name] = total.get(name, 0.0) + seconds
         for name, seconds in unnamed.items():
             unnamed_total[name] = unnamed_total.get(name, 0.0) + seconds
-        if time.time() - minute_start >= 60:
+        if stamp - minute_start >= 60:
             row = {
                 "time": minute_start,
-                "seconds": time.time() - minute_start,
+                "seconds": stamp - minute_start,
                 "cores": cores,
                 "cpu": {k: round(v, 3) for k, v in total.items()},
                 "unnamed": {k: round(v, 3) for k, v in unnamed_total.items()},
@@ -361,7 +506,7 @@ def sample(args: argparse.Namespace) -> int:
             }
             with out.open("a") as handle:
                 handle.write(json.dumps(row) + "\n")
-            minute_start, total, unnamed_total, peak = time.time(), {}, {}, 0.0
+            minute_start, total, unnamed_total, peak = stamp, {}, {}, 0.0
         time.sleep(args.interval)
     return 0
 
@@ -392,7 +537,7 @@ def summarize(rows: list[Row]) -> str:
     executables, per-minute and burst figures, and `top`'s figure beside the sampled one.
     """
     if not rows:
-        return "no samples: run `just cpu sample`"
+        return "no samples: run `just cpu install`, or `just cpu sample`"
     elapsed: float = sum(float(r["seconds"]) for r in rows)
     by_context: dict[str, float] = {}
     by_kind: dict[str, float] = {}
@@ -443,6 +588,75 @@ def report(args: argparse.Namespace) -> int:
     return 0
 
 
+def plist_path() -> Path:
+    return Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
+
+
+def agent_plist(main: Path, uv: str) -> dict[str, object]:
+    """The launchd agent: `by cpu sample` from the main checkout's tools, started at login and
+    restarted whenever it exits, at low priority. Its paths are POSIX's, as launchd's are.
+    """
+    log = samples_file().parent / "launchd.log"
+    return {
+        "Label": LABEL,
+        "ProgramArguments": [
+            uv,
+            "run",
+            "--quiet",
+            "--project",
+            (main / "tools").as_posix(),
+            "by",
+            "cpu",
+            "sample",
+        ],
+        "WorkingDirectory": main.as_posix(),
+        "RunAtLoad": True,
+        "KeepAlive": True,
+        "ThrottleInterval": 60,
+        "ProcessType": "Background",
+        "Nice": 10,
+        "EnvironmentVariables": nightly.agent_environment(),
+        "StandardOutPath": log.as_posix(),
+        "StandardErrorPath": log.as_posix(),
+    }
+
+
+def install(args: argparse.Namespace) -> int:
+    if sys.platform != "darwin":
+        print(
+            "cpu install: the launchd agent is supported on macOS only; nothing to do"
+        )
+        return 0
+    main = paths.main_checkout()
+    uv = shutil.which("uv")
+    if main is None or uv is None:
+        print("cpu install: needs the main checkout and uv", file=sys.stderr)
+        return 1
+    path = plist_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(plistlib.dumps(agent_plist(main, uv)))
+    nightly.launchctl("bootout", f"{nightly.domain()}/{LABEL}")
+    loaded = nightly.launchctl("bootstrap", nightly.domain(), str(path))
+    if loaded.returncode:
+        print(f"cpu install: launchctl: {loaded.stderr.strip()}", file=sys.stderr)
+        return 1
+    print(
+        f"cpu install: {path} loaded: `by cpu sample` from {main} runs from now on and at "
+        f"each login, writing {samples_file()}; rerun this after the sampler changes, and "
+        "`just cpu uninstall` removes it"
+    )
+    return 0
+
+
+def uninstall(args: argparse.Namespace) -> int:
+    if sys.platform != "darwin":
+        return 0
+    nightly.launchctl("bootout", f"{nightly.domain()}/{LABEL}")
+    plist_path().unlink(missing_ok=True)
+    print(f"cpu uninstall: {LABEL} unloaded, {plist_path()} removed")
+    return 0
+
+
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "cpu", help="record where the CPU goes, by session and kind of work"
@@ -450,7 +664,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     commands = p.add_subparsers(dest="cpu_command", required=True)
     s = commands.add_parser("sample", help="append one row per minute until killed")
     s.add_argument(
-        "--interval", type=float, default=2.0, help="seconds between samples"
+        "--interval", type=float, default=5.0, help="seconds between samples"
     )
     s.add_argument(
         "--duration", type=float, default=0, help="stop after this many seconds"
@@ -459,3 +673,9 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     r = commands.add_parser("report", help="sum the recorded rows")
     r.add_argument("--hours", type=float, default=1.0, help="how far back to sum")
     r.set_defaults(func=report)
+    i = commands.add_parser(
+        "install", help="keep the sampler running as a launchd agent (macOS)"
+    )
+    i.set_defaults(func=install)
+    u = commands.add_parser("uninstall", help="unload and remove the launchd agent")
+    u.set_defaults(func=uninstall)

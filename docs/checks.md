@@ -368,14 +368,17 @@ lowest-value groups whose removal brings a full run under that budget.
 
 ## Recording CPU use
 
-`just cpu sample` samples every process's CPU time every 2 seconds and appends
-one row per minute to `$BERYL_CACHE/cpu/samples.jsonl`; leave it running in a
-terminal while agents work. `just cpu report --hours 3` sums the rows into cores
-used by context (slow CI, fast check, session, editor, desktop, browser, other),
-kind of work (compile, Rust test, browser, oracle, simulator, editor, desktop),
-worktree and the largest executables no rule names, with per-minute and burst
-figures and `top`'s own busy figure for comparison. `cpu.py` explains how
-processes are attributed.
+`just cpu install` keeps a launchd agent running `by cpu sample`, which samples
+every process's CPU time every 5 seconds and appends one row per minute to
+`$BERYL_CACHE/cpu/samples.jsonl`, keeping 30 days; `just cpu uninstall` removes
+the agent, and `just cpu sample` runs the sampler in a terminal instead. Each
+process's own CPU and the CPU of the children it has reaped come from
+`proc_pid_rusage`, so processes that exit between two samples are still counted.
+`just cpu report --hours 3` sums the rows into cores used by context (slow CI,
+fast check, session, editor, desktop, browser, other), kind of work (compile,
+Rust test, browser, oracle, simulator, editor, desktop), worktree and the
+largest executables no rule names, with per-minute and burst figures and `top`'s
+own busy figure for comparison. `cpu.py` explains how processes are attributed.
 
 ## Shared machine resources
 

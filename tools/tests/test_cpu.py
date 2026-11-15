@@ -89,3 +89,62 @@ def test_report_sums_rows(own_cache: object) -> None:
     assert "slow_ci" in text and "mystery" in text
     assert "named 95%" in text
     assert cpu.summarize([]).startswith("no samples")
+
+
+def test_reaped_growth_pays_what_is_owed_before_counting_the_rest() -> None:
+    sampler = Sampler()
+    wt = "/Users/x/beryl/.worktrees/by-abc"
+    cargo = proc(10, 1, 1.0, "/usr/bin/cargo", cwd=wt)
+    cargo.children = 0.0
+    test = proc(11, 10, 0.0, "/x/target/debug/deps/beryl-123", cwd=wt)
+    test.children = 0.0
+    sampler.step({10: cargo, 11: test}, {10: wt, 11: wt})  # Baseline.
+    test.cpu = 3.0
+    used, _ = sampler.step({10: cargo, 11: test}, {})
+    assert used == {("session", "rust_test", "by-abc"): 3.0}
+    # The test ran 2 s more and exited; cargo reaped it, and a 4 s child nobody sampled.
+    cargo.children = 5.0 + 4.0
+    used, _ = sampler.step({10: cargo}, {})
+    # 3 s were counted already; the test's last 2 s and the unseen 4 s are charged to the
+    # test's key, the most recently exited child's.
+    assert used == {("session", "rust_test", "by-abc"): 6.0}
+    assert sampler.owed == {10: 0.0} and 10 not in sampler.tail
+
+
+def test_a_parent_and_child_exiting_together_owe_the_grandparent() -> None:
+    sampler = Sampler()
+    shell = proc(5, 1, 0.0, "/bin/zsh")
+    shell.children = 0.0
+    cargo = proc(10, 5, 1.0, "/usr/bin/cargo")
+    cargo.children = 0.0
+    rustc = proc(11, 10, 2.0, "/usr/bin/rustc")
+    rustc.children = 0.0
+    sampler.step({5: shell, 10: cargo, 11: rustc}, {})  # Baseline: 3 s before it.
+    rustc.cpu = 4.0
+    used, _ = sampler.step({5: shell, 10: cargo, 11: rustc}, {})
+    assert sum(used.values()) == 2.0
+    # Both exit; the shell reaps cargo, whose own 1 s and reaped 4 s (rustc) arrive at once.
+    # The owed figures are whole lifetimes, cargo's 1 s and rustc's 4 s, although only rustc's
+    # 2 s since the baseline were reported: the shell's reaped 5 s include the time before the
+    # baseline too, so all of it is paid and nothing is new.
+    shell.children = 1.0 + 4.0
+    used, _ = sampler.step({5: shell}, {})
+    assert used == {} and sampler.owed == {5: 0.0}
+
+
+def test_a_child_reaped_after_a_delay_is_paid_when_the_parent_reaps_it() -> None:
+    sampler = Sampler()
+    cargo = proc(10, 1, 0.0, "/usr/bin/cargo")
+    cargo.children = 0.0
+    rustc = proc(11, 10, 0.0, "/usr/bin/rustc")
+    rustc.children = 0.0
+    sampler.step({10: cargo, 11: rustc}, {})  # Baseline.
+    rustc.cpu = 2.0
+    sampler.step({10: cargo, 11: rustc}, {})
+    # rustc exits, but cargo has not reaped it yet: nothing new, and 2 s are owed.
+    used, _ = sampler.step({10: cargo}, {})
+    assert used == {} and sampler.owed == {10: 2.0}
+    # cargo reaps it: rustc's last 0.5 s is new, and charged to rustc's key.
+    cargo.children = 2.5
+    used, _ = sampler.step({10: cargo}, {})
+    assert used == {("other", "compile", "-"): 0.5}
