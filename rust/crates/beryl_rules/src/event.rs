@@ -197,15 +197,35 @@ pub(crate) fn move_batch_to<L: Layout>(
     entry: Entry<L>,
 ) -> Result<(), Full> {
     layers::refresh(s, t, sink)?;
+    // Moving one object needs neither sorting nor scratch space for a full batch.
+    if let Some(slot) = objects.sole() {
+        return move_ordered::<L, 1>(s, t, sink, &[slot], to, place, reason, entry);
+    }
+    let ordered = s.in_game_order(t, objects)?;
+    move_ordered::<L, 128>(s, t, sink, ordered.as_slice(), to, place, reason, entry)
+}
+
+/// Runs the zone-change pipeline for `ordered`, in the order [`move_batch`] describes.
+#[allow(clippy::too_many_arguments)]
+fn move_ordered<L: Layout, const N: usize>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    ordered: &[L::Slot],
+    to: Zone,
+    place: Place,
+    reason: Reason,
+    entry: Entry<L>,
+) -> Result<(), Full> {
     // Each move as replaced: the object, where it was, where it goes and how it enters. A
     // tuple rather than a `replace::Move`: the queue is filled with defaults first, and
     // filling it with `replace::Move`s cost the rollout benchmark 1% more instructions.
-    let mut moves: L::Queue<(L::Slot, Zone, Zone, Entry<L>), 128> = Default::default();
+    let mut moves: L::Queue<(L::Slot, Zone, Zone, Entry<L>), N> = Default::default();
     let mut returning = Bitboard::EMPTY;
     // Whether the game has an Aura, which may choose what it enchants as it enters and may be
     // attached to a card in a graveyard: a game with none asks neither below.
     let auras = t.subtypes().has(Subtype::Aura).possible();
-    for &slot in s.in_game_order(t, objects)?.as_slice() {
+    for &slot in ordered {
         let o = *s.object(slot);
         // CR 111.8: "A token that has left the battlefield can't move to another zone or
         // come back onto the battlefield. If such a token would change zones, it remains in
@@ -268,7 +288,7 @@ pub(crate) fn move_batch_to<L: Layout>(
     };
     let first = moves.as_slice().as_ptr();
     // The permanents the batch puts onto the battlefield, in the order they move.
-    let mut arrived: L::Queue<L::Slot, 128> = Default::default();
+    let mut arrived: L::Queue<L::Slot, N> = Default::default();
     for each in moves.iter() {
         let &(slot, from, dest, entry) = each;
         if dest == Zone::Battlefield && entry.pay_life {

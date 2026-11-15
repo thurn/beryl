@@ -31,6 +31,9 @@ pub(super) enum From {
 /// them is paid) excludes the face's own.
 pub(super) fn option_sets(face: &Face, alternative: bool) -> impl Iterator<Item = Castings> + '_ {
     Castings::subsets(face).filter(move |&costs| {
+        if costs.is_empty() {
+            return true;
+        }
         let alternatives = costs.paid(face).filter(|o| o.is_alternative()).count();
         alternatives <= usize::from(!alternative)
     })
@@ -42,6 +45,9 @@ pub(super) fn option_sets(face: &Face, alternative: bool) -> impl Iterator<Item 
 /// player cast a spell "while paying neither its mana cost nor an alternative cost that
 /// includes X, then the only legal choice for X is 0."
 pub(super) fn x_range_start(face: &Face, costs: Castings, free: bool) -> Option<u8> {
+    if costs.is_empty() {
+        return (face.cost.x > 0 && !free).then_some(0);
+    }
     let alternative = costs.paid(face).any(CastingOption::is_alternative);
     let in_mana_cost = face.cost.x > 0 && !free && !alternative;
     let mut min = None;
@@ -86,15 +92,29 @@ pub(super) fn spell_cost<L: Layout>(
     increase: u8,
     free: bool,
 ) -> ManaCost {
-    let cost = before_rule_changes(face, costs, x, increase, free);
+    let cost = if costs.is_empty() {
+        mana_cost(face, free)
+    } else {
+        with_options(face, costs, free)
+    };
+    let cost = ManaCost {
+        generic: cost.generic.saturating_add(increase),
+        ..cost
+    }
+    .with_x(x);
     rule_change::spell_cost(s, t, player, face, cost)
 }
 
-/// The part of [`spell_cost`] that reads only the spell: the mana cost or alternative cost,
-/// plus the additional costs and `increase`, with X at its value. Not generic over the
-/// layout, so that one copy serves every caller.
-fn before_rule_changes(face: &Face, costs: Castings, x: u8, increase: u8, free: bool) -> ManaCost {
-    let mut cost = if free { ManaCost::NONE } else { face.cost };
+fn mana_cost(face: &Face, free: bool) -> ManaCost {
+    if free { ManaCost::NONE } else { face.cost }
+}
+
+/// The mana or alternative cost plus any chosen additional costs. Keep the option scans out of
+/// the common path, which pays the mana cost directly.
+#[cold]
+#[inline(never)]
+fn with_options(face: &Face, costs: Castings, free: bool) -> ManaCost {
+    let mut cost = mana_cost(face, free);
     for o in costs.paid(face) {
         if o.is_alternative() {
             cost = o.cost();
@@ -103,7 +123,7 @@ fn before_rule_changes(face: &Face, costs: Castings, x: u8, increase: u8, free: 
     for o in costs.paid(face).filter(|o| !o.is_alternative()) {
         cost = cost.plus(o.cost());
     }
-    cost.plus(ManaCost::generic(increase)).with_x(x)
+    cost
 }
 
 /// The mana still to pay for the spell or ability being cast, once X is announced: its total
