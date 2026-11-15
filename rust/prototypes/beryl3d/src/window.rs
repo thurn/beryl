@@ -59,8 +59,9 @@ struct State {
     /// Whether to wait for the GPU after each frame and report how long it took.
     gpu_wait: bool,
     last_gpu_ms: Option<f64>,
-    /// When the last frame was presented, and whether the core asked for another at once.
-    last_frame: Option<(Instant, bool)>,
+    /// When the last frame was presented, the core's time it showed, and when the motion
+    /// scheduled at that time ends.
+    last_frame: Option<(Instant, u64, u64)>,
     counters: Counters,
     title_at: Instant,
 }
@@ -142,18 +143,15 @@ impl State {
             None
         };
         let previous_gpu_ms = std::mem::replace(&mut self.last_gpu_ms, gpu_ms);
-        let animating = shown.animating(now);
-        // Whether the core wants the next frame straight away. Only then is a long gap before
-        // the next frame late: after a still table, the first frame that an input such as the
-        // pointer starts is not, however long the table was still.
-        let continues = shown.wake(self.now(self.current)) == Wake::Now;
+        // A gap between two frames is late only for as long as motion was scheduled through
+        // it: after the last segment ends, the table is still and needs no frame, however
+        // long it stays still. `due` is how long motion went on after the previous frame.
+        let motion_until = shown.motion_until();
         let at = Instant::now();
-        if let Some((previous, expected)) = self.last_frame
-            && expected
-            && animating
-        {
+        if let Some((previous, previous_now, previous_until)) = self.last_frame {
             let interval = at.duration_since(previous).as_secs_f64();
-            if interval > 1.5 / 60.0 {
+            let due = previous_until.saturating_sub(previous_now) as f64 / 1e9;
+            if interval > 1.5 / 60.0 && due > 1.5 / 60.0 {
                 // Late even for a 60 Hz display: a frame was really dropped. One line each,
                 // saying where its time went.
                 self.counters.late += 1;
@@ -174,14 +172,14 @@ impl State {
                     shown.queued(),
                     measure::load_average(),
                 );
-            } else if interval > 1.5 / self.refresh_hz {
+            } else if interval > 1.5 / self.refresh_hz && due > 1.5 / self.refresh_hz {
                 // On time for 60 Hz but not for the display's highest rate: macOS paced the
                 // window at a lower rate, which it does unless the app asks for more through a
                 // display link, as winit's on-demand redraws do not.
                 self.counters.slow_paced += 1;
             }
         }
-        self.last_frame = Some((at, continues));
+        self.last_frame = Some((at, now, motion_until));
         let c = &mut self.counters;
         c.frames += 1;
         c.core_total += core_ns;
@@ -344,7 +342,9 @@ impl ApplicationHandler<()> for App {
                 "off"
             }
         );
-        println!("keys: 1 live game, 2 stress-255, 3 stress-1024, Space pause, S statistics");
+        println!(
+            "keys: 1 live game, 2 stress-255, 3 stress-1024, Space pause, F fullscreen, S statistics"
+        );
         self.state = Some(State {
             window,
             #[cfg(target_os = "macos")]
@@ -441,6 +441,15 @@ impl ApplicationHandler<()> for App {
                         Some(at) => state.paused_total += at.elapsed(),
                         None => state.paused_at = Some(Instant::now()),
                     },
+                    Key::Character("f" | "F") => {
+                        // Fullscreen, where macOS can show a Metal layer without composing
+                        // it with other windows, to tell compositor stalls from our own.
+                        let full = state.window.fullscreen().is_none();
+                        state.window.set_fullscreen(
+                            full.then_some(winit::window::Fullscreen::Borderless(None)),
+                        );
+                        return;
+                    }
                     Key::Character("s" | "S") => {
                         state.print_stats();
                         return;

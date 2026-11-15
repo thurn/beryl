@@ -269,9 +269,9 @@ impl Core {
         }
     }
 
-    /// Whether anything moves at `now`.
-    pub fn animating(&self, now: u64) -> bool {
-        self.stress.is_some() || now < self.motion_until
+    /// When the last scheduled motion ends, in the core's nanoseconds.
+    pub fn motion_until(&self) -> u64 {
+        self.motion_until
     }
 
     /// Adds a segment to object `id`'s track.
