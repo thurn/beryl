@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -86,16 +87,41 @@ def test_the_sweep_runs_every_step_of_the_lane_each_as_a_lane_of_its_own() -> No
     assert sweep.chosen("clippy", "linux") == []
 
 
-class Runner:
-    """A stand-in for the run in a tree: records the commands it was given, exits `code`."""
+def test_the_quick_part_holds_the_build_and_the_lane_and_the_slow_part_the_vm() -> None:
+    quick = [s.name for s in sweep.chosen(None, sweep.MAC, sweep.QUICK)]
+    assert quick == [s.name for s in lane.steps()] + ["smoke"]
+    assert set(sweep.BUILDS) <= set(quick)
+    assert [s.name for s in sweep.chosen(None, sweep.MAC, sweep.SLOW)] == [
+        "gpu",
+        "frame-counts",
+    ]
+    assert sweep.chosen(None, sweep.WINDOWS, sweep.SLOW) == []
 
-    def __init__(self, code: int = 0) -> None:
+
+class Runner:
+    """A stand-in for the run in a tree: records the commands it was given, exits `code` (or
+    `codes[part]` for a part named there), and runs `during` inside the part `during_part`.
+    """
+
+    def __init__(
+        self,
+        code: int = 0,
+        codes: dict[str, int] | None = None,
+        during: Callable[[], None] | None = None,
+        during_part: str = sweep.SLOW,
+    ) -> None:
         self.code = code
+        self.codes: dict[str, int] = codes or {}
+        self.during = during
+        self.during_part = during_part
         self.runs: list[tuple[str, list[str]]] = []
 
-    def __call__(self, commit: str, command: list[str], output: Path) -> int:
+    def __call__(self, commit: str, command: list[str], output: Path, part: str) -> int:
         self.runs.append((commit, command))
-        return self.code
+        assert command[command.index("--part") + 1] == part
+        if self.during is not None and part == self.during_part:
+            self.during()
+        return self.codes.get(part, self.code)
 
 
 def fire(
@@ -137,6 +163,7 @@ def test_a_firing_sweeps_only_what_is_due_and_bisects_from_the_last_pass() -> No
     assert "nothing since aaa" in str(quiet["reason"])
     failing = Runner(code=1)
     assert fire(failing, tip="ccc")["outcome"] == "failed"
+    # The quick part failed, so the slow part did not run.
     [(commit, command)] = failing.runs
     assert commit == "ccc" and command[-2:] == ["--since", "aaa"]
     assert "load average" in str(fire(Runner(), tip="ddd", load=100.0)["reason"])
@@ -150,8 +177,54 @@ def test_a_step_or_dry_run_is_not_the_last_sweep() -> None:
     fire(runner, tip="aaa", is_due=False, request=request)
     [(_, command)] = runner.runs
     assert command[-3:] == ["--step", "clippy", "--dry-run"]
+    assert command[command.index("--part") + 1] == sweep.QUICK
     assert sweep.last_swept(sweep.read_log()) == "aaa"
     assert len(sweep.read_log()) == 1
+
+
+def test_the_quick_part_runs_first_and_each_part_bisects_from_its_own_last_pass() -> (
+    None
+):
+    runner = Runner()
+    record = fire(runner, tip="aaa")
+    assert [c[c.index("--part") + 1] for _, c in runner.runs] == ["quick", "slow"]
+    parts = record["parts"]
+    assert isinstance(parts, dict)
+    assert {p: sorted(v) for p, v in parts.items()} == {
+        "quick": ["code", "seconds"],
+        "slow": ["code", "seconds"],
+    }
+    # Only the slow part fails at bbb: the next sweep bisects it from aaa, the quick part
+    # from bbb.
+    assert fire(Runner(codes={"slow": 1}), tip="bbb")["outcome"] == "failed"
+    runner = Runner(codes={"slow": 1})
+    fire(runner, tip="ccc")
+    [(_, quick), (_, slow)] = runner.runs
+    assert quick[-2:] == ["--since", "bbb"] and slow[-2:] == ["--since", "aaa"]
+    # A record from before the sweep had parts passed both.
+    old: dict[str, object] = {"commit": "old", "outcome": "ok"}
+    assert sweep.last_passed([old], sweep.SLOW) == "old"
+
+
+def test_a_quick_part_runs_while_another_sweeps_slow_part_holds_its_lock() -> None:
+    inner: list[dict[str, object]] = []
+
+    def second_sweep() -> None:
+        # Fired while the first sweep is in its slow part.
+        inner.append(fire(Runner(), tip="bbb"))
+
+    first = fire(Runner(during=second_sweep), tip="aaa")
+    assert first["outcome"] == "ok"
+    [second] = inner
+    assert second["outcome"] == "ok"
+    parts = second["parts"]
+    assert isinstance(parts, dict)
+    assert parts["quick"]["code"] == 0
+    assert parts["slow"] == {"skipped": "another sweep's slow part is in progress"}
+    # While a quick part runs, a firing is skipped whole.
+    inner.clear()
+    fire(Runner(during=second_sweep, during_part=sweep.QUICK), tip="ccc")
+    assert inner[0]["reason"] == "another sweep is in progress"
 
 
 class FakeBd(verdicts.Beads):

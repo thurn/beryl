@@ -16,18 +16,27 @@ work to fix, never as Steward beads.
   runs every step of [`steps`] that runs on this machine: each step of the `beryl3d` lane in
   full (no time box, as the fast check would give it), then the sweep's own steps. Each step is
   a lane of its own (`b3d-<step>`), so one failing step does not stop the others.
-- **Failures.** A failed step is bisected over the commits since the last sweep that passed,
-  for at most [`SEARCH`] seconds (bisect.py, in a tree of its own), and filed as one P1 bead per
-  step, labelled [`LABEL`], under the epic (`paths.EPIC`). A check that an open sweep bead
-  already names gets a comment instead. Nothing here holds `master`.
+- **Two parts.** The steps run in two parts, each in a tree of its own: the [`QUICK`] part (the
+  lane's steps and `smoke`, minutes) and then the [`SLOW`] part (`gpu` and `frame-counts`, which
+  build and count in the beryl3d-bench virtual machine and can take hours). The quick part
+  saves the build directory and files its failures before the slow part starts. Each part has
+  its own lock, so a later firing runs its quick part while an earlier one's slow part is still
+  going, and skips its own slow part. The slow part runs only after a quick part that passed:
+  when the build is broken, its failures would only repeat the quick part's.
+- **Failures.** A failed step is bisected over the commits since the last sweep whose part
+  passed, for at most [`SEARCH`] seconds per part (bisect.py, in a tree of its own), and filed
+  as one P1 bead per step, labelled [`LABEL`], under the epic (`paths.EPIC`). A check that an
+  open sweep bead already names gets a comment instead. Nothing here holds `master`.
 - **Cost.** Its steps run at utility priority and take CPU tokens as the browser sweep's do, and
   are logged under the script [`SCRIPT`]. Slow CI's CPU budget counts only records of the script
   `ci` (check_value.slow_ci), so the sweep spends none of it.
-- **Cache.** After a sweep whose build passed, it saves the workspace's build directory to
-  `$BERYL_CACHE/b3d/target` ([`save_target`]), which `just b3d` clones into a new worktree.
+- **Cache.** As soon as the quick part's build steps ([`BUILDS`]) pass, it saves the
+  workspace's build directory to `$BERYL_CACHE/b3d/target` ([`save_target`]), which `just b3d`
+  clones into a new worktree.
 
-Its record is this machine's, in `$BERYL_CACHE/b3d/sweep`: `log.jsonl` (one line per firing)
-and `last-output.txt`.
+Its record is this machine's, in `$BERYL_CACHE/b3d/sweep`: `log.jsonl` (one line per firing,
+with each part's seconds and exit code under `parts`) and each part's output,
+`last-quick-output.txt` and `last-slow-output.txt`.
 """
 
 from __future__ import annotations
@@ -85,6 +94,10 @@ EVERY_MACHINE: tuple[str, ...] = (MAC, WINDOWS)
 LINKED: tuple[str, ...] = ("beryl_session", "beryl_cli", "beryl_art")
 # The steps whose passing means the workspace built, so its build directory is worth saving.
 BUILDS: tuple[str, ...] = ("clippy", "cargo-test")
+# The two parts of a sweep, in the order they run.
+QUICK = "quick"
+SLOW = "slow"
+PARTS: tuple[str, ...] = (QUICK, SLOW)
 
 
 @dataclass(frozen=True)
@@ -93,20 +106,22 @@ class SweepStep:
     cmd: tuple[str, ...]
     # The values of `sys.platform` it runs on.
     machines: tuple[str, ...] = EVERY_MACHINE
+    # Which part of the sweep runs it.
+    part: str = QUICK
 
 
 # The sweep's own steps, run after the lane's. A check that only the sweep runs (every
 # interface test on every tick, the counts in the virtual machine, the phone builds) is
-# appended here.
+# appended here, in the [`SLOW`] part when it takes more than a few minutes.
 OWN: tuple[SweepStep, ...] = (
-    # The GPU's work: shader cost, and the fragments shaded counted in the beryl3d-bench
-    # machine. Only this Mac's machine has been shown to count fragments repeatably.
-    SweepStep("gpu", (*BY, "b3d", "gate", "--gpu"), (MAC,)),
     # The app starts with no window and shows its first frame.
     SweepStep("smoke", (*BY, "b3d", "smoke")),
+    # The GPU's work: shader cost, and the fragments shaded counted in the beryl3d-bench
+    # machine. Only this Mac's machine has been shown to count fragments repeatably.
+    SweepStep("gpu", (*BY, "b3d", "gate", "--gpu"), (MAC,), SLOW),
     # Instructions per frame under Callgrind in `beryl3d-bench`, an arm64 Linux machine that
     # only Apple silicon runs (counts.py).
-    SweepStep("frame-counts", (*BY, "b3d", "gate", "--counts"), (MAC,)),
+    SweepStep("frame-counts", (*BY, "b3d", "gate", "--counts"), (MAC,), SLOW),
 )
 
 
@@ -118,9 +133,14 @@ def steps() -> list[SweepStep]:
     ]
 
 
-def chosen(only: str | None, platform: str = sys.platform) -> list[SweepStep]:
-    """The steps a sweep runs on `platform`: those that run there, or only the step `only`."""
+def chosen(
+    only: str | None, platform: str = sys.platform, part: str | None = None
+) -> list[SweepStep]:
+    """The steps a sweep runs on `platform`: those that run there, or only the step `only`;
+    of the part `part` only, when it is given."""
     found = [s for s in steps() if platform in s.machines]
+    if part is not None:
+        found = [s for s in found if s.part == part]
     if only is None:
         return found
     return [s for s in found if s.name == only]
@@ -251,8 +271,25 @@ def last_swept(records: list[dict[str, object]]) -> str:
     return last_commit(records, ("ok", "failed"))
 
 
-def last_passed(records: list[dict[str, object]]) -> str:
-    return last_commit(records, ("ok",))
+def last_passed(records: list[dict[str, object]], part: str) -> str:
+    """The commit of the last full sweep whose part `part` ran and passed, or empty. A record
+    from before the sweep had parts passed both when its outcome is `ok`."""
+    for r in reversed(records):
+        parts = r.get("parts")
+        if isinstance(parts, dict):
+            ran = parts.get(part)
+            passed = isinstance(ran, dict) and ran.get("code") == 0
+        else:
+            passed = r.get("outcome") == "ok"
+        if passed and r.get("commit"):
+            return str(r["commit"])
+    return ""
+
+
+def lock(part: str) -> Path:
+    """The lock a firing holds while it runs the part `part`: `.lock` for the quick part,
+    which [`start_background`] also tests, and `.slow.lock` for the slow part."""
+    return folder() / (".lock" if part == QUICK else f".{part}.lock")
 
 
 # A firing, from the main checkout's tools.
@@ -266,6 +303,8 @@ class Request:
     commit: str = ""
     # Only this step, which also sweeps whether or not one is due.
     step: str | None = None
+    # Only this part ([`PARTS`]), which also sweeps whether or not one is due.
+    part: str | None = None
     # Print the beads it would file instead of filing them, and bisect nothing.
     dry_run: bool = False
     # Sweep even when none is due or the machine is overloaded.
@@ -273,23 +312,41 @@ class Request:
 
     def full(self) -> bool:
         """Whether the run counts as this machine's sweep of its commit in the log."""
-        return self.step is None and not self.dry_run
+        return self.step is None and self.part is None and not self.dry_run
+
+    def parts(self) -> list[str]:
+        """The parts the run runs, in order: the step's own part, or the part asked for, or
+        both. A step that runs on no machine has none."""
+        if self.step is not None:
+            return [s.part for s in steps() if s.name == self.step][:1]
+        return [self.part] if self.part is not None else list(PARTS)
 
 
-def run_command(request: Request, since: str) -> list[str]:
-    """`just b3d sweep-run` for `request`, as the tree of the commit runs it."""
-    command = [sys.executable, "-m", "beryl_tools.cli", "b3d", "sweep-run"]
+def run_command(request: Request, part: str, since: str) -> list[str]:
+    """`just b3d sweep-run` for the part `part` of `request`, as the tree of the commit runs
+    it."""
+    command = [
+        sys.executable,
+        "-m",
+        "beryl_tools.cli",
+        "b3d",
+        "sweep-run",
+        "--part",
+        part,
+    ]
     command += ["--since", since] if since else []
     command += ["--step", request.step] if request.step else []
     return command + (["--dry-run"] if request.dry_run else [])
 
 
-def run_in_tree(commit: str, command: list[str], output: Path) -> int:
+def run_in_tree(commit: str, command: list[str], output: Path, part: str) -> int:
     """`command` in a detached worktree of `commit` at utility priority, its output to `output`
     and to this process's. The tree needs no clone of the main workspace's build directory:
     Beryl 3D's workspace has its own."""
-    # Not the sweep's own folder, whose lock the firing holds while this runs.
-    work = folder() / "work"
+    # Not the sweep's own folder, whose lock the firing holds while this runs, and a folder per
+    # part: coverage.in_tree holds the folder's lock for the whole run and names the tree after
+    # the commit, so two parts in one folder could not run at once.
+    work = folder() / ("work" if part == QUICK else f"work-{part}")
     work.mkdir(exist_ok=True)
     with open(output, "w") as out:
         code = coverage.in_tree(
@@ -306,10 +363,12 @@ def run_sweep(
     cores: Callable[[], int] = lambda: os.cpu_count() or 1,
     tip: Callable[[], str | None] = nightly.fetch_tip,
     pattern: Callable[[], re.Pattern[str]] = inputs,
-    run: Callable[[str, list[str], Path], int] = run_in_tree,
+    run: Callable[[str, list[str], Path, str], int] = run_in_tree,
 ) -> dict[str, object]:
-    """One firing: skips, or sweeps the commit. A full sweep's outcome (`ok`, `failed` or
-    `skipped` with a `reason`) is appended to the log; every outcome is returned."""
+    """One firing: skips, or sweeps the commit, the quick part and then the slow part. A full
+    sweep's outcome (`ok`, `failed` or `skipped` with a `reason`) is appended to the log, with
+    each part's seconds and exit code, or why it was skipped, under `parts`; every outcome is
+    returned."""
     stamp = now().isoformat(timespec="seconds")
     record: dict[str, object] = {"time": stamp, "outcome": "failed"}
     commit = git("rev-parse", "--verify", request.commit) if request.commit else tip()
@@ -320,27 +379,44 @@ def run_sweep(
     records = read_log()
     swept = last_swept(records)
     reason = None
-    if not request.force and request.step is None:
+    if not request.force and request.step is None and request.part is None:
         reason = not_due(commit, swept, pattern())
         if reason is None and load() > nightly.OVERLOAD_PER_CORE * cores():
             per = nightly.OVERLOAD_PER_CORE
             reason = f"load average {load():.1f} over {per:.0f} x {cores()} cores"
     if reason is not None:
         return finish(request, {**record, "outcome": "skipped", "reason": reason})
-    command = run_command(request, last_passed(records))
-    if request.dry_run:
-        names = ", ".join(s.name for s in chosen(request.step))
-        print(f"b3d sweep: dry run of {commit[:10]} in a detached tree: {names}")
-        print(f"b3d sweep: {shlex.join(command)}")
     began = time.monotonic()
-    try:
-        with system.file_lock(folder() / ".lock", timeout=0):
-            code = run(commit, command, folder() / "last-output.txt")
-    except system.LockHeld:
-        reason = "another sweep is in progress"
-        return finish(request, {**record, "outcome": "skipped", "reason": reason})
+    parts: dict[str, dict[str, object]] = {}
+    code = 0
+    for part in request.parts():
+        if code:
+            parts[part] = {"skipped": "an earlier part failed"}
+            continue
+        command = run_command(request, part, last_passed(records, part))
+        if request.dry_run:
+            names = ", ".join(s.name for s in chosen(request.step, part=part))
+            print(f"b3d sweep: dry run of {commit[:10]} in a detached tree: {names}")
+            print(f"b3d sweep: {shlex.join(command)}")
+        part_began = time.monotonic()
+        try:
+            with system.file_lock(lock(part), timeout=0):
+                output = folder() / f"last-{part}-output.txt"
+                part_code = run(commit, command, output, part)
+        except system.LockHeld:
+            if part == QUICK:
+                reason = "another sweep is in progress"
+                return finish(
+                    request, {**record, "outcome": "skipped", "reason": reason}
+                )
+            parts[part] = {"skipped": f"another sweep's {part} part is in progress"}
+            continue
+        seconds = round(time.monotonic() - part_began, 1)
+        parts[part] = {"seconds": seconds, "code": part_code}
+        code = part_code
     record["seconds"] = round(time.monotonic() - began, 1)
     record["code"] = code
+    record["parts"] = parts
     return finish(request, {**record, "outcome": "failed" if code else "ok"})
 
 
@@ -363,7 +439,7 @@ def start_background(
     if reason is not None:
         return f"b3d sweep: not due: {reason}"
     try:
-        with system.file_lock(folder() / ".lock", timeout=0):
+        with system.file_lock(lock(QUICK), timeout=0):
             pass
     except system.LockHeld:
         return "b3d sweep: one is running"
@@ -540,12 +616,13 @@ def failed_by_step(
 
 
 def sweep_run(args: argparse.Namespace) -> int:
-    """Runs the sweep's steps at HEAD; on a failure, bisects it over the commits since
-    `--since` and files it, or with `--dry-run` prints what it would file."""
+    """Runs the steps of one part of the sweep at HEAD, or all of them when no `--part` is
+    given; on a failure, bisects it over the commits since `--since` and files it, or with
+    `--dry-run` prints what it would file."""
     os.environ.setdefault("CHECK_HANG_LIMIT_S", str(HANG_LIMIT_S))
-    found_steps = chosen(args.step)
+    found_steps = chosen(args.step, part=args.part)
     if not found_steps:
-        names = ", ".join(s.name for s in chosen(None))
+        names = ", ".join(s.name for s in chosen(None, part=args.part))
         print(f"b3d sweep-run: no step {args.step!r} here; the steps are {names}")
         return 2
     commit = git("rev-parse", "HEAD")
@@ -590,6 +667,11 @@ def sweep_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--step", help="run only this step, whether or not one is due")
     parser.add_argument(
+        "--part",
+        choices=PARTS,
+        help="run only this part of the sweep, whether or not one is due",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="print the steps and the beads it would file, filing and bisecting nothing",
@@ -602,7 +684,7 @@ def sweep_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def sweep_command(args: argparse.Namespace) -> int:
-    request = Request(args.commit, args.step, args.dry_run, args.force)
+    request = Request(args.commit, args.step, args.part, args.dry_run, args.force)
     record = run_sweep(request)
     print(json.dumps(record))
     return 1 if record["outcome"] == "failed" else 0
@@ -613,4 +695,5 @@ def sweep_run_arguments(parser: argparse.ArgumentParser) -> None:
         "--since", default="", help="the last commit a sweep passed at, to bisect from"
     )
     parser.add_argument("--step", help="run only this step")
+    parser.add_argument("--part", choices=PARTS, help="run only this part's steps")
     parser.add_argument("--dry-run", action="store_true")

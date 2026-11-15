@@ -2778,6 +2778,11 @@ What runs, and when:
   (`just sweep`). It runs at low priority on the staging tip when a Beryl 3D
   path, or a path of the main workspace that Beryl 3D depends on, has changed
   since its last run. Its cost is outside slow CI's budget of CPU time.
+- **Quick steps report first.** The sweep runs the lane's steps and the launch
+  test first, saves the build directory that new worktrees clone, and files
+  their failures. Only then does it run the counts in the virtual machine, which
+  can take hours under a lock of their own, so the next sweep's quick steps do
+  not wait for them.
 - **A step that the fast check cuts off at its time limit** is left to the
   sweep, not to slow CI.
 
