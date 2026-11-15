@@ -13,7 +13,7 @@ const touches = (a: Box, b: Box) =>
 
 export function registerSelection(client: TableClient) {
   client.onCardClick(({ name, action }, { meta }) => {
-    if (!meta) return false;
+    if (!meta && !client.selectingSnapshot()) return false;
     if (action) {
       const selected = new Set(client.selection);
       if (!selected.delete(name)) selected.add(name);
@@ -48,10 +48,15 @@ export function registerSelection(client: TableClient) {
   );
   client.onKey((event) => {
     if (event.key === "Escape") {
-      if (client.sweepSnapshot() || client.selection.size) {
+      if (
+        client.selectingSnapshot() ||
+        client.sweepSnapshot() ||
+        client.selection.size
+      ) {
         event.preventDefault();
         client.cancelGesture();
-        client.setSelection([]);
+        if (client.selectingSnapshot()) client.setSelecting(false);
+        else client.setSelection([]);
       }
     }
   });

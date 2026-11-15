@@ -52,13 +52,16 @@ export interface Drop {
   keys: PointerKeys;
 }
 
-/** A control that can drag a card and still receives its usual native click. */
-export interface DragSource {
-  name: Name;
-  capture: HTMLElement;
-  longPress?: (at: Point) => void;
-  origin: Pick<Pose, "x" | "y" | "width" | "rotation" | "skew" | "opacity">;
-}
+/** A table control keeps its native click. It can also supply a card to drag or
+ * handle a long press even when its pile is empty. */
+export type DragSource = { capture: HTMLElement } & (
+  | {
+      name: Name;
+      origin: Pick<Pose, "x" | "y" | "width" | "rotation" | "skew" | "opacity">;
+      longPress?: (at: Point) => void;
+    }
+  | { name?: never; origin?: never; longPress: (at: Point) => void }
+);
 
 /** What the stage tells its active client. */
 export interface PointerClient {
@@ -366,7 +369,12 @@ export class Pointer {
     if (kind === "secondary") {
       if (moved && name !== undefined)
         this.#client?.aim?.(name, at, under?.(), false);
-    } else if (kind === "primary" && name === undefined && !player) {
+    } else if (
+      kind === "primary" &&
+      name === undefined &&
+      !player &&
+      !press.longPress
+    ) {
       if (moved) this.#client?.sweep?.(start, at, false);
     } else if (name !== undefined && this.#carry(press, name)) {
       this.#client?.over?.(under?.(), at);
@@ -430,8 +438,9 @@ export class Pointer {
       return;
     }
     if (name === undefined) {
-      if (kind === "primary" && moved) this.#client?.sweep?.(start, at, true);
-      return;
+      if (kind === "primary" && moved && !press.longPress)
+        this.#client?.sweep?.(start, at, true);
+      return moved;
     }
     if (press.at.x !== at.x || press.at.y !== at.y) {
       press.at = at;

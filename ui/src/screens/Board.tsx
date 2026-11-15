@@ -10,6 +10,7 @@ type BoardProps = Omit<ComponentProps<typeof StageBoard>, "dimmed"> & {
   children?: ReactNode;
   freeze?: boolean;
   notice?: ReactNode;
+  onSelectionActions?: (element: HTMLElement) => void;
 };
 
 /** The table uses the desktop stage frame or the phone's viewport, with screens over it. */
@@ -19,11 +20,16 @@ export function GameBoard({
   children,
   freeze,
   notice,
+  onSelectionActions,
   ...props
 }: BoardProps) {
   const phone = usePhone();
   const board = phone ? (
-    <PhoneStageBoard {...props} opening={opening} />
+    <PhoneStageBoard
+      {...props}
+      opening={opening}
+      onSelectionActions={onSelectionActions}
+    />
   ) : (
     <StageBoard {...props} dimmed={dimmed} />
   );

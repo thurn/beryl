@@ -1,5 +1,6 @@
 import { useSyncExternalStore, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
+import { Button } from "../components/Controls";
 import type { DomSurface } from "../stage/dom";
 import type { Name } from "../stage/layout";
 import type { ScriptStage } from "../stage/stage";
@@ -14,6 +15,39 @@ export function useTableSelection(client?: TableClient) {
   return useSyncExternalStore(
     client?.subscribeSelection ?? noSubscription,
     client?.selectionSnapshot ?? emptySelection,
+  );
+}
+
+export function useTableSelecting(client?: TableClient) {
+  return useSyncExternalStore(
+    client?.subscribeSelection ?? noSubscription,
+    client?.selectingSnapshot ?? (() => false),
+  );
+}
+
+export const SELECTION_BAR_HEIGHT = 52;
+
+export function TouchSelection({
+  client,
+  actions,
+}: {
+  client: TableClient;
+  actions: (element: HTMLElement) => void;
+}) {
+  const { size } = useTableSelection(client);
+  return (
+    <div className="table-selection-bar">
+      <output aria-label="Selected cards">
+        {size} {size === 1 ? "card" : "cards"}
+      </output>
+      <Button
+        disabled={!size}
+        onClick={(event) => actions(event.currentTarget)}
+      >
+        Actions
+      </Button>
+      <Button onClick={() => client.setSelecting(false)}>Done</Button>
+    </div>
   );
 }
 
@@ -42,6 +76,7 @@ export function Selection({
   surface: DomSurface;
 }) {
   const selected = useTableSelection(client);
+  const selecting = useTableSelecting(client);
   const sweep = useSyncExternalStore(
     client.subscribeSelection,
     client.sweepSnapshot,
@@ -84,7 +119,7 @@ export function Selection({
           }}
         />
       )}
-      {anchor && (
+      {anchor && !selecting && (
         <output
           className="selection-summary"
           aria-label="Selection"

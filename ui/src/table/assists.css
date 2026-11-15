@@ -104,7 +104,7 @@
   transform: translate(-12%, -100%);
 }
 
-.phone-proposals {
+.phone-table-footer {
   position: fixed;
   z-index: 450;
   inset: auto 0 var(--phone-safe-bottom);
@@ -113,22 +113,22 @@
   padding-inline: 8px;
 }
 
-.phone-proposals .table-proposals {
+.phone-table-footer .table-proposals {
   position: static;
   width: auto;
   max-height: 156px;
 }
 
-.phone-proposals .table-proposal-lines {
+.phone-table-footer .table-proposal-lines {
   touch-action: pan-y;
 }
 
-.phone-proposals .table-proposal-lines label {
+.phone-table-footer .table-proposal-lines label {
   align-items: center;
   padding-block: 0;
 }
 
-.phone-proposals .table-proposal-lines input {
+.phone-table-footer .table-proposal-lines input {
   appearance: none;
   width: 40px;
   height: 40px;
@@ -136,7 +136,7 @@
   place-items: center;
 }
 
-.phone-proposals .table-proposal-lines input::before {
+.phone-table-footer .table-proposal-lines input::before {
   content: "";
   width: 18px;
   height: 18px;
@@ -144,14 +144,14 @@
   border-radius: 4px;
 }
 
-.phone-proposals .table-proposal-lines input:checked::before {
+.phone-table-footer .table-proposal-lines input:checked::before {
   content: "✓";
   background: var(--gold);
   color: var(--surface);
   text-align: center;
 }
 
-.phone-proposals .table-proposal .button {
+.phone-table-footer .table-proposal .button {
   min-height: 40px;
 }
 

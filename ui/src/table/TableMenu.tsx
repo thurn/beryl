@@ -6,6 +6,7 @@ import type { LogLine, PlayerView } from "../generated/protocol";
 import { askCards, cardTokens } from "../ipc";
 import { BLANK } from "../game/faces";
 import { Inspect } from "../game/Piles";
+import { isPhone } from "../mobile/phone";
 import type { Point } from "../stage/layout";
 import type { Under } from "../stage/pointer";
 import { desktopDropAreas } from "./dropZones";
@@ -35,7 +36,8 @@ import {
 import { TokenSearch } from "./TokenSearch";
 import type { ActionValues } from "./fill";
 import { sendHistory, type HistoryAction } from "./tableLog";
-import { Menu } from "./Menu";
+import { Menu, type Row } from "./Menu";
+import { DragFace } from "./DragFace";
 import {
   actionReference,
   availableCommands,
@@ -97,6 +99,7 @@ export class TableCommands {
     private readonly showBlockers: (entries?: readonly number[]) => void,
   ) {
     client.onSecondary((target, at, element) => {
+      if (isPhone() && this.overlayOpen) return true;
       if (!target) {
         // The desktop hand has no separate control behind its fan.
         if (
@@ -203,6 +206,13 @@ export class TableCommands {
     context.element = element;
     this.#showWithTokens({ kind: "menu", context, at });
   }
+
+  readonly openSelection = (element: HTMLElement) => {
+    const [name] = this.client.selection;
+    if (name === undefined) return;
+    const target = this.client.card(name) ?? this.client.card(name, true);
+    if (target) this.open(target, { x: 0, y: 0 }, element);
+  };
 
   #showWithTokens(overlay: TableOverlay) {
     this.#set(overlay);
@@ -677,14 +687,49 @@ export function TableMenu({
         contextual={overlay.contextual}
       />
     );
+  const { target, cards } = context;
+  const touchRows: Row[] = [];
+  const faceDown =
+    phone && kindOf(target) === "pile_card"
+      ? availableCommands("pile_card", context).find(
+          (entry) => entry.id === "hand_card.play_face_down",
+        )
+      : undefined;
+  if (faceDown) touchRows.push({ id: faceDown.id, label: faceDown.label });
+  const preview = phone && cards.length === 1 ? cards[0]?.object : undefined;
+  const pile =
+    target.kind === "library" ||
+    target.kind === "graveyard" ||
+    target.kind === "exile"
+      ? target
+      : undefined;
+  if (
+    phone &&
+    "name" in target &&
+    target.action &&
+    !commands.client.selectingSnapshot()
+  )
+    touchRows.push({ id: "touch.select", label: "Select" });
+  if (phone && pile && commands.client.drag?.canTakeBottom(pile))
+    touchRows.push({ id: "touch.bottom", label: "Bottom card" });
   return (
     <Menu
       header={header}
-      groups={groups}
+      preview={preview && <DragFace object={preview} width={144} />}
+      groups={
+        touchRows.length
+          ? [...groups.slice(0, 1), { rows: touchRows }, ...groups.slice(1)]
+          : groups
+      }
       at={overlay.at}
       presentation={phone ? "sheet" : "menu"}
       onClose={commands.close}
-      onChoose={(id, shift) => choose(entries, id, shift)}
+      onChoose={(id, shift) => {
+        if (id === "touch.select") commands.client.setSelecting(true);
+        else if (id === "touch.bottom" && pile)
+          commands.client.drag?.takeBottom(pile);
+        else choose(faceDown ? [...entries, faceDown] : entries, id, shift);
+      }}
     />
   );
 }

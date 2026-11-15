@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import type { Point } from "../stage/layout";
@@ -32,6 +33,7 @@ export interface Group {
 export interface MenuProps {
   header: { title: string; whose: string };
   groups: readonly Group[];
+  preview?: ReactNode;
   /** The opening point in viewport CSS pixels. */
   at: Point;
   presentation: "menu" | "sheet";
@@ -77,12 +79,14 @@ function place(
 export function Menu({
   header,
   groups,
+  preview,
   at,
   presentation,
   onChoose,
   onClose,
 }: MenuProps) {
   const id = useId();
+  const sheet = presentation === "sheet";
   const layer = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const sub = useRef<HTMLDivElement>(null);
@@ -114,6 +118,10 @@ export function Menu({
   useLayoutEffect(() => {
     const root = panel.current;
     if (!root) return;
+    if (sheet) {
+      root.scrollTop = 0;
+      return;
+    }
     const child = sub.current;
     const parent =
       open === undefined
@@ -132,7 +140,7 @@ export function Menu({
       root.removeEventListener("scroll", reposition);
       window.removeEventListener("resize", reposition);
     };
-  }, [at, id, open]);
+  }, [at, id, open, sheet]);
 
   useLayoutEffect(() => {
     const focused = document.getElementById(itemId(id, active));
@@ -207,11 +215,11 @@ export function Menu({
         aria-checked={row.checked}
         aria-haspopup={hasSubmenu ? "menu" : undefined}
         aria-expanded={hasSubmenu ? expanded : undefined}
-        aria-controls={expanded ? `${id}-submenu` : undefined}
+        aria-controls={expanded && !sheet ? `${id}-submenu` : undefined}
         data-active={selected || expanded || undefined}
         className="table-menu-row"
         onPointerEnter={(event) => {
-          if (event.pointerType !== "mouse") return;
+          if (sheet || event.pointerType !== "mouse") return;
           setSelection({
             active: position,
             open:
@@ -229,7 +237,7 @@ export function Menu({
           {row.label}
         </span>
         <span aria-hidden="true" className="table-menu-hint">
-          {row.click ? "click" : row.key}
+          {!sheet && (row.click ? "click" : row.key)}
           {hasSubmenu && (
             <span
               className={
@@ -245,6 +253,8 @@ export function Menu({
   };
 
   let rowIndex = 0;
+  const page =
+    sheet && children?.length && open !== undefined ? open : undefined;
   return createPortal(
     <div
       ref={layer}
@@ -276,23 +286,46 @@ export function Menu({
           <strong>{header.title}</strong>
           <span>{header.whose}</span>
         </div>
-        {groups.map((group, index) => (
+        {sheet && page === undefined && preview && (
+          <div className="table-menu-preview">{preview}</div>
+        )}
+        {page !== undefined ? (
           <div
-            key={index}
-            role="group"
-            aria-label={group.heading}
             className="table-menu-group"
+            role="group"
+            aria-label={rows[page]?.label}
           >
-            {group.heading && (
-              <div className="table-menu-heading" aria-hidden="true">
-                {group.heading}
-              </div>
+            <div
+              className="table-menu-row"
+              role="menuitem"
+              onClick={() => setSelection({ active: { row: page } })}
+            >
+              <span aria-hidden="true">‹</span>
+              <span>Back</span>
+            </div>
+            {children?.map((row, child) =>
+              renderRow(row, { row: page, child }),
             )}
-            {group.rows.map((row) => renderRow(row, { row: rowIndex++ }))}
           </div>
-        ))}
+        ) : (
+          groups.map((group, index) => (
+            <div
+              key={index}
+              role="group"
+              aria-label={group.heading}
+              className="table-menu-group"
+            >
+              {group.heading && (
+                <div className="table-menu-heading" aria-hidden="true">
+                  {group.heading}
+                </div>
+              )}
+              {group.rows.map((row) => renderRow(row, { row: rowIndex++ }))}
+            </div>
+          ))
+        )}
       </div>
-      {children?.length && open !== undefined ? (
+      {!sheet && children?.length && open !== undefined ? (
         <div
           ref={sub}
           className="table-menu"

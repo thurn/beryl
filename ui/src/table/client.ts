@@ -103,6 +103,7 @@ export const sameZone = (
 
 export class TableClient {
   #frozen = false;
+  #selecting = false;
   #selection: ReadonlySet<Name> = new Set();
   #selectionBox?: Box;
   readonly #selectionListeners = new Set<() => void>();
@@ -135,6 +136,7 @@ export class TableClient {
     this.#frozen = frozen;
     if (frozen) {
       this.pointer.cancel();
+      if (this.#selecting) this.setSelecting(false);
       this.#drag?.viewChanged?.();
       this.#aim?.cancel();
     }
@@ -178,6 +180,15 @@ export class TableClient {
 
   get selection() {
     return this.#selection;
+  }
+
+  readonly selectingSnapshot = () => this.#selecting;
+
+  setSelecting(selecting: boolean) {
+    if (selecting === this.#selecting) return;
+    this.#selecting = selecting;
+    if (this.#selection.size) this.#selection = new Set();
+    this.#announceSelection();
   }
 
   readonly selectionSnapshot = () => this.#selection;
@@ -362,6 +373,7 @@ export class TableClient {
       this.frozen ? undefined : this.#drag?.dragSource?.(element, keys, at),
     holdable: (name) =>
       !this.frozen &&
+      !this.#selecting &&
       !this.#aim?.picking() &&
       !!this.#drop &&
       (this.#drag?.canHold?.() ?? true) &&

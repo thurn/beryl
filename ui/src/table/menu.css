@@ -99,3 +99,29 @@
 .table-menu-chevron {
   margin-inline-start: 6px;
 }
+
+.table-menu-layer[data-presentation="sheet"] {
+  background: rgb(10 8 6 / 55%);
+}
+
+[data-presentation="sheet"] .table-menu {
+  inset: auto 0 0;
+  width: 100%;
+  max-width: 430px;
+  max-height: calc(100% - env(safe-area-inset-top, 0px) - 8px);
+  margin-inline: auto;
+  padding-bottom: var(--phone-safe-bottom);
+  border-radius: 10px 10px 0 0;
+  touch-action: pan-y;
+}
+
+.table-menu-preview {
+  display: grid;
+  justify-content: center;
+  padding-bottom: 8px;
+}
+
+[data-presentation="sheet"] .table-menu-row {
+  min-height: 40px;
+  align-items: center;
+}

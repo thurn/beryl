@@ -54,7 +54,12 @@ import {
   PileSheet,
   type PhonePile,
 } from "./PhoneChrome.tsx";
-import { Selection } from "../table/Selection";
+import {
+  SELECTION_BAR_HEIGHT,
+  Selection,
+  TouchSelection,
+  useTableSelecting,
+} from "../table/Selection";
 import type { TableClient } from "../table/client";
 import { TablePileViewer, usePileViewer } from "../table/TableViewer";
 import { counterControls, pickPile } from "../table/controls";
@@ -94,6 +99,7 @@ export function PhoneStageBoard({
   onConcede,
   board = pageStage(),
   client,
+  onSelectionActions,
 }: {
   /** The latest view whose script has played out. */
   view: PlayerView;
@@ -116,6 +122,7 @@ export function PhoneStageBoard({
   onConcede?: () => void;
   board?: BoardStage;
   client?: TableClient;
+  onSelectionActions?: (element: HTMLElement) => void;
 }) {
   const { stage, feed, prompts } = board;
   const prompt = usePrompt(prompts);
@@ -137,7 +144,11 @@ export function PhoneStageBoard({
   const proposals = view.table?.proposals;
   const showProposals = !opening && client && !!proposals?.length;
   // The phone needs a separate strip so the panel cannot cover the card fan.
-  const { ref, viewport, frameStyle } = useViewport(showProposals ? 164 : 0);
+  const selecting =
+    useTableSelecting(client) && !opening && !!onSelectionActions;
+  const { ref, viewport, frameStyle } = useViewport(
+    (showProposals ? 164 : 0) + (selecting ? SELECTION_BAR_HEIGHT : 0),
+  );
   const { layer, surface } = useSurface(
     stage,
     client?.gestures ?? prompts.pointerClient,
@@ -503,9 +514,14 @@ export function PhoneStageBoard({
   return (
     <>
       {screen}
-      {showProposals && proposals && (
-        <div className="phone-proposals">
-          <ProposalPanel proposals={proposals} client={client} />
+      {(showProposals || selecting) && client && (
+        <div className="phone-table-footer">
+          {showProposals && proposals && (
+            <ProposalPanel proposals={proposals} client={client} />
+          )}
+          {selecting && onSelectionActions && (
+            <TouchSelection client={client} actions={onSelectionActions} />
+          )}
         </div>
       )}
     </>

@@ -265,6 +265,7 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
     <GameBoard
       board={board}
       client={client}
+      onSelectionActions={commands.openSelection}
       view={shown.view}
       opening={opening}
       log={log}

@@ -27,6 +27,7 @@ await import("./kept-table-drag.mjs");
 await import("./kept-table-viewers.mjs");
 await import("./kept-table-arrows.mjs");
 await import("./kept-table-menu.mjs");
+await import("./kept-table-touch.mjs");
 await import("./kept-table-cardstate.mjs");
 await import("./kept-table-keys.mjs");
 await import("./kept-table-log.mjs");

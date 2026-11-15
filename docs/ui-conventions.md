@@ -336,7 +336,11 @@ restore the old behavior.
 - **Context menu.** The manual table's context menu names the card or pile and
   whose it is. It lists commands as plain labeled rows with key hints, check
   marks for active switches and at most one submenu level. A command that needs
-  a number opens a prompt when chosen.
+  a number opens a prompt when chosen. On a phone, a long press opens a bottom
+  sheet with the full card above the actions. Submenus replace the rows and
+  offer Back. Select opens a bar with the count, Actions and Done while taps
+  toggle cards. Play face down is available on the card, and Bottom card makes
+  the next drag from that pile take its bottom card.
 - **Command list.** The manual table's command list shows what it acts on and
   filters commands by label as you type. Results are grouped by what they act on
   and show their shortcuts. Up and Down move between results, Return runs the

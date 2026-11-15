@@ -1,9 +1,11 @@
+import type { PlayerView, Side } from "../generated/protocol";
+import { isPhone } from "../mobile/phone";
 import type { Box } from "../game/placement";
 import { named } from "../stage/dom";
 import type { Name, Point } from "../stage/layout";
 import type { Drop, PointerKeys } from "../stage/pointer";
 import type { ScriptStage } from "../stage/stage";
-import type { TableClient } from "./client";
+import type { TableClient, TableTarget } from "./client";
 import { available, dropAction, type DragCard } from "./dropActions";
 import {
   destinationAt,
@@ -11,6 +13,15 @@ import {
   type Destination,
   type DropArea,
 } from "./dropZones";
+
+type PileZone = NonNullable<ReturnType<typeof pileZone>>;
+type DragPile = { side: Side; kind: PileZone };
+
+function pileCards(view: PlayerView, side: Side, zone: PileZone) {
+  return zone === "library" || zone === "graveyard"
+    ? view.players[side][zone]
+    : view.table?.orders[side][zone];
+}
 
 interface Order {
   cards: DragCard[];
@@ -35,7 +46,8 @@ export interface DragDisplay {
 export class TableDrag {
   areas: readonly DropArea[] = [];
   #display: DragDisplay = {};
-  #source?: { name: Name; element: HTMLElement; box: Box };
+  #source?: { name: Name; element: HTMLElement; box: Box; fromBottom: boolean };
+  #bottom?: DragPile;
   #cards: DragCard[] = [];
   #origins = new Map<number, Box>();
   #pending?: object;
@@ -62,6 +74,7 @@ export class TableDrag {
             if (!this.#pending && !this.#display.order) this.#return();
           });
         } else {
+          if (this.#source?.fromBottom) this.#bottom = undefined;
           this.#cards = this.#selected(name);
           const surface = this.client.surface;
           this.#origins = new Map(
@@ -97,7 +110,18 @@ export class TableDrag {
     for (const listener of this.#listeners) listener();
   }
 
+  canTakeBottom({ side, kind }: DragPile) {
+    const { view } = this.client;
+    const slot = view && pileCards(view, side, kind)?.[0];
+    return slot !== undefined && !!this.client.card(slot, true)?.action;
+  }
+
+  takeBottom(pile: DragPile) {
+    this.#bottom = pile;
+  }
+
   #reset() {
+    this.#bottom = undefined;
     this.#pending = undefined;
     this.cancelOrder();
     this.#clear();
@@ -139,13 +163,13 @@ export class TableDrag {
     const side = pile?.dataset.side;
     const zone = pileZone(pile?.dataset.pile);
     let name: Name | undefined;
+    let fromBottom = false;
     if (viewerCard) name = Number(viewerCard.dataset.viewerSlot);
     else if (zone && (side === "you" || side === "opponent")) {
-      const ids =
-        zone === "library" || zone === "graveyard"
-          ? view.players[side][zone]
-          : view.table?.orders[side][zone];
-      name = alt ? ids?.[0] : ids?.at(-1);
+      const bottom = this.#bottom;
+      fromBottom = bottom?.side === side && bottom.kind === zone;
+      const ids = pileCards(view, side, zone);
+      name = alt || fromBottom ? ids?.[0] : ids?.at(-1);
     }
     let control = viewerCard ?? pile;
     // The scrim still closes on an ordinary click. A drag can pick up a card
@@ -160,10 +184,33 @@ export class TableDrag {
         control = node;
       }
     }
-    if (!control || name === undefined) return;
-    const target = this.client.card(name, true);
-    if (!target?.action) return;
-    this.#source = { name, element: control, box: surface.bounds(control) };
+    if (!control) return;
+    const pileTarget: TableTarget | undefined =
+      isPhone() &&
+      pile &&
+      (side === "you" || side === "opponent") &&
+      (zone === "library" || zone === "graveyard" || zone === "exile")
+        ? { kind: zone, side }
+        : undefined;
+    const pilePress =
+      pile && pileTarget
+        ? (point: Point) =>
+            this.client.secondary(
+              pileTarget,
+              surface.viewportPoint(point),
+              pile,
+            )
+        : undefined;
+    const target =
+      name === undefined ? undefined : this.client.card(name, true);
+    if (name === undefined || !target?.action)
+      return pilePress && { capture: control, longPress: pilePress };
+    this.#source = {
+      name,
+      element: control,
+      box: surface.bounds(control),
+      fromBottom,
+    };
     const { left, top, right } = this.#source.box;
     return {
       name,
@@ -175,7 +222,7 @@ export class TableDrag {
       longPress: viewerCard
         ? (at: Point) =>
             this.client.secondary(target, surface.viewportPoint(at), viewerCard)
-        : undefined,
+        : pilePress,
       origin: {
         x: left,
         y: top,
