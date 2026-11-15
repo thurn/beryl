@@ -390,6 +390,7 @@
 //! | state triggers (the rules' `trigger::match_states`, at each state-based check) | one AND of [`event::EventKind::State`] with the kinds any card listens to | as the match of an event, then for each such ability a pass over the waiting triggers and the stack for the same source and ability, so nothing is stored to say it triggered |
 //! | the layers' search for the rules static abilities change for players | one AND of the replacement mask the pass has just folded from the permanents ([`event::Replaces::PLAYER_RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
 //! | the characteristics of an object off the battlefield ([`State::colors`], [`State::types`] and the rest) | one test of the length of the list of effects that reach other zones ([`elsewhere`]) | out of line, the copiable values and then each effect in the list whose filter accepts the object |
+//! | the power and toughness of an object off the battlefield ([`State::power`], [`State::toughness`]) | one AND of the table's capabilities ([`table::Capability::DefinesPt`]) | out of line, the copiable values and then each characteristic-defining ability of the object's face, its amount evaluated ([`defined`]) |
 //! | a permanent's protection, read by damage, targets, blocks and attachments ([`State::protection`]) | one AND of the state's replacement mask ([`event::Replaces::PROTECTION`]), which the layers set when an effect that gives protection applied | the permanent's layer result read, and the source's colors |
 //! | a tracker or a count ([`State::track`], [`State::tracked`], [`State::count`], [`State::counted`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set or zero | a bit set or tested, or a byte written or read |
 //! | a count of counters ([`State::counters_of`]) | of a kind the object keeps in a field, one read; of any other, one bit test of the keyed slots | one pass over the table's rows, at most 32 of 3 bytes |
@@ -583,7 +584,7 @@
 //! | the definition and face it has the values of, for what the card table keeps per definition and no copy exception changes | [`State::definition`], a [`definition::Definition`]; its power and toughness before the other layers, [`State::copiable_pt`] |
 //! | its mana value: a spell's with its X (CR 202.3e), a transformed permanent's front face's and a copied back face's 0 (CR 712.6d) | [`State::mana_value`] |
 //! | who controls it: a permanent's layer result, a spell's caster, elsewhere the owner (CR 108.4a) | [`State::controller`] |
-//! | its power and toughness: the layer results on the battlefield, the copiable values elsewhere | [`State::power`], [`State::toughness`] |
+//! | its power and toughness: the layer results on the battlefield, elsewhere the copiable values and then its characteristic-defining abilities, which work in every zone (CR 604.3, [`defined`]) | [`State::power`], [`State::toughness`] |
 //! | its colors, card types, supertypes and subtypes: the layer results on the battlefield, elsewhere the copiable values and then the continuous effects that reach other zones ([`elsewhere`]) | [`State::colors`], [`State::types`], [`State::supertypes`], [`State::has_subtype`] |
 //! | its keywords: the layer results on the battlefield, the copiable values elsewhere | [`State::keywords`] |
 //! | whether it has an ability of its face: a permanent may have lost it (CR 613.1f); elsewhere it has them all | [`State::has_ability`], [`State::has_every_ability`] |
@@ -724,6 +725,7 @@ pub mod chosen;
 mod copiable;
 pub mod counters;
 pub mod decision;
+pub mod defined;
 pub mod definition;
 pub mod derive;
 pub mod effects;

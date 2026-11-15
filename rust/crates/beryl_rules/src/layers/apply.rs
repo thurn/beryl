@@ -445,32 +445,9 @@ fn defined<L: Layout>(
         Amount::Count(&Objects::All { filter, .. }) => (0..s.battlefield().len())
             .filter(|&i| passes(s, t, filter, i, by))
             .count(),
-        Amount::CardTypesAmong(_) => card_types_in_graveyards(s, t),
+        Amount::CardTypesAmong(_) => s.card_types_in_graveyards(t),
         _ => unreachable!("the card table refuses an amount the layers cannot read"),
     }
-}
-
-/// The number of card types among the cards in all graveyards ([CR 300.1]): "The card types
-/// are artifact, battle, conspiracy, creature, dungeon, enchantment, instant, kindred, land,
-/// phenomenon, plane, planeswalker, scheme, sorcery, and vanguard." Each type counts once,
-/// however many cards have it. A token in a graveyard is not a card ([CR 108.2]) and counts
-/// for nothing in the moment before it ceases to exist ([CR 111.7]): "A token that's in a
-/// zone other than the battlefield ceases to exist." The player each graveyard belongs to is
-/// nothing to the count, so they are read in seat order.
-///
-/// [CR 300.1]: https://yawgatog.com/resources/magic-rules/#R3001
-/// [CR 108.2]: https://yawgatog.com/resources/magic-rules/#R1082
-/// [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
-fn card_types_in_graveyards<L: Layout>(s: &Rederive<'_, L>, t: &GameTable) -> usize {
-    let mut types = Types::NONE;
-    for player in s.players_in_seat_order(s.players()) {
-        for &slot in s.graveyard(player) {
-            if !s.object(slot).is_token() {
-                types = types.union(s.definition(slot).face(t).types);
-            }
-        }
-    }
-    types.0.count_ones() as usize
 }
 
 /// Whether the permanent at battlefield position `i` passes `filter`, read by `by`: what

@@ -416,6 +416,16 @@ pub enum Assertion {
         card: &'static str,
         colors: Colors,
     },
+    /// The power and toughness of the first object named `card` in `zone`, found as for
+    /// [`Assertion::Colors`]: off the battlefield, what a characteristic-defining ability
+    /// defines there, such as Tarmogoyf's in a graveyard.
+    PtIn {
+        player: Seat,
+        zone: Zone,
+        card: &'static str,
+        power: i8,
+        toughness: i8,
+    },
     /// How many spells and abilities are on the stack.
     Stack {
         count: u8,

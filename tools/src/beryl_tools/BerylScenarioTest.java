@@ -382,6 +382,16 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
         Assert.assertEquals("colors of " + name + " in " + zone, Arrays.asList(colors), names);
     }
 
+    /**
+     * The first object named `name` in `zone`, found as by {@link #assertColorsIn}, has this power
+     * and toughness: off the battlefield, what a characteristic-defining ability defines there.
+     */
+    protected void assertPtIn(Player player, Zone zone, String name, int power, int toughness) {
+        MageObject object = objectIn(player, zone, name);
+        Assert.assertEquals("power of " + name + " in " + zone, power, object.getPower().getValue());
+        Assert.assertEquals("toughness of " + name + " in " + zone, toughness, object.getToughness().getValue());
+    }
+
     private MageObject objectIn(Player player, Zone zone, String name) {
         List<? extends MageObject> found;
         switch (zone) {

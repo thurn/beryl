@@ -308,6 +308,15 @@ enum AssertionDef {
         #[serde(serialize_with = "color_names")]
         colors: Colors,
     },
+    PtIn {
+        #[serde(serialize_with = "seat")]
+        player: Seat,
+        #[serde(serialize_with = "variant")]
+        zone: Zone,
+        card: &'static str,
+        power: i8,
+        toughness: i8,
+    },
     Stack {
         count: u8,
     },

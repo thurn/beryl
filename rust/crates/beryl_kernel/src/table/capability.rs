@@ -1,6 +1,8 @@
 //! [`Capability`]: what a game's cards may make the stores keep.
 
-use beryl_card::{Amount, Condition, Draws, Face, Node, Replaced, Replacement, Rewrite};
+use beryl_card::{
+    Amount, Condition, Draws, Face, Modification, Node, Replaced, Replacement, Rewrite,
+};
 
 use crate::static_ability::Inputs;
 
@@ -63,6 +65,11 @@ pub enum Capability {
     /// so pools may hold mana that remembers ([`crate::mana_memory`]) and the mana solver
     /// looks for it.
     RemembersMana,
+    /// A card has a characteristic-defining ability that defines its power or toughness
+    /// ([`beryl_card::Modification::SetPower`], [`beryl_card::Modification::SetPt`]), which
+    /// works in every zone, so a read of the power of an object off the battlefield looks for
+    /// one ([`crate::defined`]).
+    DefinesPt,
 }
 
 impl Capability {
@@ -102,6 +109,12 @@ impl Capability {
                 && matches!(spec.affected, beryl_card::Objects::Everywhere(_))
             {
                 found |= Capability::ReachesElsewhere.bit();
+            }
+            if let Some(spec) = a.layer()
+                && (spec.modifications.iter())
+                    .any(|m| matches!(m, Modification::SetPower(_) | Modification::SetPt(..)))
+            {
+                found |= Capability::DefinesPt.bit();
             }
             if a.spend().is_some() {
                 found |= Capability::RemembersMana.bit();

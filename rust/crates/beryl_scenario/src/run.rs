@@ -644,6 +644,20 @@ impl Runner {
                     format!("{colors:?}"),
                 )
             }
+            Assertion::PtIn {
+                player,
+                zone,
+                card,
+                power,
+                toughness,
+            } => {
+                if let Step::Over(o) = position {
+                    return Err(format!("no power to read: the game is over ({o:?})"));
+                }
+                let slot = self.object_in(player, zone, card)?;
+                let (p, t) = (s.power(&self.t, slot), s.toughness(&self.t, slot));
+                (format!("{p}/{t}"), format!("{power}/{toughness}"))
+            }
             Assertion::Stack { count } => (s.stack().len().to_string(), count.to_string()),
             Assertion::Library { player, top } => {
                 let library = s.library(player).iter().rev().take(top.len());

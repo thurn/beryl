@@ -287,7 +287,8 @@ impl<L: Layout> State<L> {
     }
 
     /// The power of the object in `slot`: a permanent's after continuous effects ([CR 613.4]), and
-    /// elsewhere its copiable value ([`Copiable::power`]).
+    /// elsewhere its copiable value ([`Copiable::power`]) or what a characteristic-defining
+    /// ability defines, which works in every zone ([`crate::defined`]).
     ///
     /// [CR 613.4]: https://yawgatog.com/resources/magic-rules/#R6134
     #[inline]
@@ -296,7 +297,7 @@ impl<L: Layout> State<L> {
         if o.zone == Zone::Battlefield {
             self.derived(slot).power
         } else {
-            self.copiable_pt(t, slot).0
+            self.pt_elsewhere(t, slot).0
         }
     }
 
@@ -412,7 +413,7 @@ impl<L: Layout> State<L> {
         if o.zone == Zone::Battlefield {
             self.derived(slot).toughness
         } else {
-            self.copiable_pt(t, slot).1
+            self.pt_elsewhere(t, slot).1
         }
     }
 

@@ -96,6 +96,14 @@ pub mod scenarios {
                 // The Spellbinder's 3 and the Human's 1.
                 THEM.life(16),
             ]),
+        // Her power is defined in every zone (CR 604.3). In a hand she has no controller, so
+        // "creatures you control" are her owner's (CR 108.4a): the Spellbinder, not P1's
+        // creature, and she is 1/4.
+        Scenario::new("Adeline in a hand counts her owner's creatures")
+            .hand(P0, &[ADELINE])
+            .battlefield(P0, &[Card::EliteSpellbinder])
+            .battlefield(P1, &[Prop::Creature])
+            .actions(&[ME.pt_in(Zone::Hand, ADELINE, 1, 4)]),
         // "Attacking that player or a planeswalker they control": its controller picks the
         // planeswalker (CR 508.4), whom the Human's damage then removes loyalty from (CR 120.3c).
         Scenario::new("Adeline's Human attacks a planeswalker")

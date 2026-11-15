@@ -6,6 +6,21 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- Tarmogoyf in a graveyard, hand or library read as 0/1, its printed values,
+  where CR 604.3 says its characteristic-defining ability works in every zone;
+  Adeline, Resplendent Cathar off the battlefield had power 0. `State::power`
+  and `State::toughness` answered an object off the battlefield with its
+  copiable values, because only the rules could evaluate the ability's amount
+  and the kernel cannot call the rules. A filter such as "power 2 or less" over
+  cards in a graveyard would have accepted a large Tarmogoyf. Fixed by
+  evaluating, in the kernel (`beryl_kernel::defined`), the amounts the card
+  table admits in a characteristic-defining ability, behind one test of
+  `Capability::DefinesPt`. Prevention: a kernel query that answers "elsewhere"
+  with a fallback names in its doc comment which rules the fallback ignores, so
+  a reader sees the gap; a card whose ability defines a characteristic gets a
+  scenario that reads it off the battlefield (`Assertion::PtIn`,
+  `Assertion::Colors`).
+
 - An ability activated before any text change was in force read its source's
   text as it was when the ability resolved, not as it was when the ability went
   on the stack. Circle of Protection: Red's ability, with Mind Bend changing

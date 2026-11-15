@@ -553,8 +553,9 @@ Built by by-bajq.3.10:
   that query, not a change to each reader.
 - **Characteristic-defining abilities** (CR 604.3) work in every zone and are
   read the same way: Tarmogoyf's power in a graveyard is its amount, computed
-  when asked. Not built yet: the kernel cannot evaluate an amount, so
-  `State::power` off the battlefield is still the copiable value.
+  when asked. The kernel evaluates the amounts a characteristic-defining ability
+  can say (`beryl_kernel::defined`), behind one capability test, so
+  `State::power` off the battlefield applies them.
 - **Words.** A color word, a basic land type and a creature type inside an
   ability become values of private types. The only way to the value takes the
   word changes of the object the ability is printed on. Filters, parameterized

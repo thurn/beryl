@@ -216,6 +216,9 @@ def assertion_code(a: Json, who: str) -> str:
         zone = cast(str, a["zone"]).upper()
         colors = "".join(f", {java_string(c)}" for c in cast(list[str], a["colors"]))
         return f"assertColorsIn({who}, Zone.{zone}, {name}{colors})"
+    if what == "PtIn":
+        zone = cast(str, a["zone"]).upper()
+        return f"assertPtIn({who}, Zone.{zone}, {name}, {a['power']}, {a['toughness']})"
     if what == "Stack":
         return f"assertStackSize({count})"
     if what == "Library":

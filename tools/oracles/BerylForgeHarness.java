@@ -918,6 +918,11 @@ public final class BerylForgeHarness {
                         expected = colors;
                         actual = colorNames(in(player(a), a.get("zone").getAsString(), a.get("card").getAsString()));
                     }
+                    case "PtIn" -> {
+                        Card card = in(player(a), a.get("zone").getAsString(), a.get("card").getAsString());
+                        expected = a.get("power").getAsInt() + "/" + a.get("toughness").getAsInt();
+                        actual = card.getNetPower() + "/" + card.getNetToughness();
+                    }
                     case "Stack" -> {
                         expected = a.get("count").getAsInt();
                         actual = game.getStack().size();

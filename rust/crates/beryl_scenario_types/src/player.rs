@@ -273,6 +273,18 @@ impl Player {
         })
     }
 
+    /// The first object named `card` in `zone` has this power and toughness: a permanent they
+    /// control, a spell they control on the stack, or a card they own elsewhere.
+    pub const fn pt_in(self, zone: Zone, card: &'static str, power: i8, toughness: i8) -> Action {
+        Action::assert(Assertion::PtIn {
+            player: self.0,
+            zone,
+            card,
+            power,
+            toughness,
+        })
+    }
+
     /// Whether the first permanent named `card` they control is a creature.
     pub const fn creature(self, card: &'static str, creature: bool) -> Action {
         Action::assert(Assertion::Creature {

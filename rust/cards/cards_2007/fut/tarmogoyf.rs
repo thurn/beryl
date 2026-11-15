@@ -102,6 +102,9 @@ pub mod scenarios {
                 ME.targets(GOYF),
                 THEM.controls(GOYF, 0),
                 THEM.has(Zone::Graveyard, GOYF, 1),
+                // Its ability works in the graveyard too, where it counts the creature and
+                // the two instants again: 2/3.
+                THEM.pt_in(Zone::Graveyard, GOYF, 2, 3),
             ]),
         // The same, but P1 sacrifices Strip Mine in response: a land in the graveyard makes
         // Tarmogoyf 3/4 before Lightning Bolt resolves, and it survives the 3 damage. With
@@ -122,6 +125,21 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, BOLT, 1),
                 THEM.pt(GOYF, 3, 4),
             ]),
+        // A characteristic-defining ability works in every zone (CR 604.3), so Tarmogoyf in a
+        // graveyard counts the card types there, its own creature type among them: with a
+        // sorcery in the other graveyard, it is 2/3. The Mountain in P0's hand is a land still
+        // to play, which keeps the game in P0's main phase.
+        Scenario::new("Tarmogoyf in a graveyard counts itself")
+            .hand(P0, &[Card::Mountain])
+            .graveyard(P0, &[GOYF])
+            .graveyard(P1, &[Prop::Sorcery])
+            .actions(&[ME.pt_in(Zone::Graveyard, GOYF, 2, 3)]),
+        // In a hand it counts the graveyards as well: a land and an instant make it 2/3.
+        Scenario::new("Tarmogoyf in a hand counts the graveyards")
+            .hand(P0, &[GOYF, Card::Mountain])
+            .graveyard(P0, &[Card::Mountain])
+            .graveyard(P1, &[Prop::Instant])
+            .actions(&[ME.pt_in(Zone::Hand, GOYF, 2, 3)]),
         // Dress Down's creatures lose all abilities in layer 6, before Tarmogoyf's ability would
         // apply in layer 7a, so it has its printed */1+*: 0/1.
         Scenario::new("Tarmogoyf under Dress Down")
