@@ -11,7 +11,9 @@ The limits on each board:
 - `handle_allocations`: the heap allocations made in `Client::handle` over the playback.
 - `frame_allocations`: those made in any `Client::frame`, which is always 0.
 
-Every count is exact and the same on every run, so a count over its limit by one fails.
+Every count is exact and the same on every run, so a count over its limit by one fails. So
+does a count under its limit: a change that cut the work lowers the limit in the same commit
+with `--update`, or the room it left would let a later change add the work back unseen.
 `--update` lowers each limit to what was measured and never raises one. A limit rises only by
 hand, when the work itself changed or a compiler or dependency upgrade moved the count, with the
 old and new numbers in the commit body (rust/beryl3d/AGENTS.md).
@@ -161,8 +163,8 @@ def number(key: str, value: float) -> int | float:
 
 
 def failures(boards: list[Board], limits: dict[str, dict[str, Any]]) -> list[str]:
-    """One line for each number over its limit or with no limit, and the backtrace of a frame's
-    first allocation."""
+    """One line for each number over its limit, under it or with no limit, and the backtrace
+    of a frame's first allocation."""
     lines: list[str] = []
     for board in boards:
         board_limits = limits.get(board.name, {})
@@ -175,8 +177,13 @@ def failures(boards: list[Board], limits: dict[str, dict[str, Any]]) -> list[str
                     f"{where}: {m.key} is {shown} with no limit;"
                     " `just b3d gate --update` sets it"
                 )
-            elif number(m.key, m.value) > limit:
+            elif shown > limit:
                 lines.append(f"{where}: {m.key} is {shown}, over its limit {limit}")
+            elif shown < limit:
+                lines.append(
+                    f"{where}: {m.key} is {shown}, under its limit {limit};"
+                    " `just b3d gate --update` lowers it"
+                )
         if board.first_allocation:
             frame, backtrace = board.first_allocation
             lines.append(

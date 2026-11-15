@@ -79,3 +79,15 @@ def test_a_count_with_no_limit_fails() -> None:
     boards = gate.parse(output([3]))
     lines = gate.failures(boards, {})
     assert any("worst_frame_records is 3 with no limit" in line for line in lines)
+
+
+def test_a_count_under_its_limit_fails_until_the_limit_is_lowered() -> None:
+    # A count left under its limit is room a later change could fill without anyone seeing.
+    boards = gate.parse(output([3, 5]))
+    limits = gate.lowered(boards, {})
+    limits["stress-255"]["total_records"] = 9
+    assert gate.failures(boards, limits) == [
+        "stress-255 in total: total_records is 8, under its limit 9;"
+        " `just b3d gate --update` lowers it"
+    ]
+    assert gate.failures(boards, gate.lowered(boards, limits)) == []
