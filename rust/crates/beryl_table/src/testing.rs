@@ -301,6 +301,7 @@ impl Generator {
                 count: 1,
                 attached_to: None,
                 note: None,
+                face_down: false,
             },
             Kind::Marker => Action::Marker {
                 selection: self.select(table, battlefield, |_| true)?,

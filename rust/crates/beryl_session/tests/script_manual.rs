@@ -173,6 +173,7 @@ fn manual_view_with_ordered_zones() -> PlayerView {
         top_known: false,
         manual_stats: vec![],
         last_draw: None,
+        deck_tokens: Vec::new(),
         prompt: None,
     });
 

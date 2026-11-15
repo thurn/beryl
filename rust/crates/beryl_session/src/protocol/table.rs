@@ -248,6 +248,10 @@ pub struct TableView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub last_draw: Option<u32>,
+    /// The viewer's deck tokens, in deck list order, for the ten numbered shortcuts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<_>")]
+    pub deck_tokens: Vec<crate::ipc::decks::CardTokenLink>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub prompt: Option<TablePrompt>,

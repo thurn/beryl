@@ -95,6 +95,7 @@ impl<Id> Action<Id> {
                 count,
                 attached_to,
                 note,
+                face_down,
             } => Action::Token {
                 card,
                 count,
@@ -102,6 +103,7 @@ impl<Id> Action<Id> {
                     .map(|object| object.try_map(resolve))
                     .transpose()?,
                 note,
+                face_down,
             },
             Self::Marker { selection, text } => Action::Marker {
                 selection: selection.try_map(resolve)?,

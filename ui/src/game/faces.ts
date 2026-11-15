@@ -58,7 +58,7 @@ export function tone(
 
 /** The face `o` was printed with, from its card face `face`: a token's own where it has one. */
 export const printedFace = (o: ObjectView, face: CardFace): CardFace =>
-  (o.token && o.name !== null && tokenFace(o.name)) || face;
+  (o.token && !o.tokenPrinting && o.name !== null && tokenFace(o.name)) || face;
 
 /** The toughness drawn for `o`: less its marked damage, as Arena draws it, and never below 0,
  * as damage past lethal only destroys it (CR 704.5g: "the total damage marked on it is greater
@@ -79,7 +79,7 @@ export function frameFace(o: ObjectView, art: CardArt): FrameFace {
   const pt = onField ? (o.pt ?? undefined) : undefined;
   const printed = printedFace(o, face);
   return {
-    name: face.name,
+    name: o.tokenPrinting ? (o.name ?? face.name) : face.name,
     typeLine: o.typeLine ?? face.type_line,
     colors: face.colors.filter((c): c is Color => "WUBRG".includes(c)),
     manaCost: face.mana_cost || undefined,
@@ -194,13 +194,23 @@ export const SCAN = "large";
 
 /** The scan of the face the view names, or the second face on a manual table. */
 export function useObjectArt(o: ObjectView): CardArt | undefined {
-  return useCardArt(o.name ?? "", o.face === "back" ? 1 : undefined, SCAN);
+  const key = o.customColors ? "" : (o.tokenPrinting ?? o.name ?? "");
+  return useCardArt(key, o.face === "back" ? 1 : undefined, SCAN);
 }
 
 /** The frame for object `o`, as the game draws it. */
 export function useFace(o: ObjectView): FrameFace {
   const art = useObjectArt(o);
   const copyArt = useNamelessTokenArt(o);
+  if (o.customColors)
+    return {
+      ...namelessFace(o),
+      name: o.name ?? "",
+      typeLine: o.typeLine || "Token",
+      colors: o.customColors.filter((color): color is Color =>
+        /^[WUBRG]$/.test(color),
+      ),
+    };
   if (isNamelessToken(o)) return { ...namelessFace(o), art: copyArt };
   if (art) return frameFace(o, art);
   return o.name === "" ? namelessFace(o) : unknownFace(o.name ?? "");

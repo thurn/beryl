@@ -953,6 +953,11 @@
       "rule": "The stage uses its existing step banner for a manual shuffle, roll, phase, turn, rewind or game start. It reads Shuffled, Rolled 4 (d6), Heads, the phase name, the active player's name followed by 's turn, Rewound to 41, or Game 2. The banner fades on the stage's clock."
     },
     {
+      "kind": "no-equivalent",
+      "name": "Creating tokens on a manual table",
+      "rule": "The token chooser uses the command list layout and offers the selected card's tokens first. Typing searches the card store by name. Custom token opens a form for the token's name, type line, colors, power, toughness and note. Shift while choosing a token creates it face down."
+    },
+    {
       "kind": "not-seen",
       "name": "Notes on manual cards",
       "rule": "A card shows its table note on one line, with an ellipsis when it runs out of room. Its inspection panel shows the full note."
@@ -965,7 +970,7 @@
     {
       "kind": "no-equivalent",
       "name": "Manual counters and untap flags",
-      "rule": "Named counters use the existing counter badges with shortened names. Player counters appear beside the mana pool. A permanent marked as skipping untap shows a lock in its corner."
+      "rule": "Named counters use the existing counter badges with shortened names. Add counter offers six common names above the text field. Player counters appear beside the mana pool. A permanent marked as skipping untap shows a lock in its corner."
     },
     {
       "kind": "not-seen",

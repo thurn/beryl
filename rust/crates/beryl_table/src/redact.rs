@@ -235,12 +235,8 @@ fn redact_projected_card(card: &mut Card, names: &HiddenNames) {
 // A label attached to an unidentified card can disclose that card's identity.
 // Counters elsewhere can independently use the same word.
 fn mentions_card(label: &str, card: &Card) -> bool {
-    match card {
-        Card::Named(name) | Card::Custom { name, .. } => {
-            !name.is_empty() && label.to_lowercase().contains(&name.to_lowercase())
-        }
-        Card::Hidden => false,
-    }
+    card.name()
+        .is_some_and(|name| !name.is_empty() && label.to_lowercase().contains(&name.to_lowercase()))
 }
 
 fn unknown_card(object: Option<&Object>, seat: Seat) -> Option<&Card> {
@@ -385,10 +381,12 @@ fn redact_action(
                 text.clear();
             }
         }
-        Action::Token { card, note, .. } => {
-            names.redact_token(card);
-            names.redact_note(note);
-        }
+        Action::Token {
+            card,
+            note,
+            face_down,
+            ..
+        } => names.redact_token(card, note, *face_down),
         Action::Reveal {
             objects: Some(ids), ..
         } => ids.retain(|&id| knows(table, id, seat)),
@@ -451,16 +449,16 @@ fn redact_deck(cards: &mut Vec<(String, u16)>, owner: Seat, viewer: Seat) {
 struct HiddenNames(BTreeSet<String>);
 
 impl HiddenNames {
-    fn redact_token(&self, card: &mut Card) {
-        match card {
-            Card::Named(name) | Card::Custom { name, .. } if self.mentions_hidden(name) => {
+    fn redact_token(&self, card: &mut Card, note: &mut Option<String>, face_down: bool) {
+        if face_down {
+            *card = Card::Hidden;
+            *note = None;
+        } else {
+            if card.name().is_some_and(|name| self.mentions_hidden(name)) {
                 *card = Card::Hidden;
             }
-            Card::Custom { types, colors, .. } => {
-                self.redact_text(types);
-                colors.retain(|color| !self.mentions_hidden(color));
-            }
-            Card::Named(_) | Card::Hidden => {}
+            redact_projected_card(card, self);
+            self.redact_note(note);
         }
     }
 
@@ -472,11 +470,10 @@ impl HiddenNames {
 
     fn include_table(&mut self, table: &Table, seat: Seat) {
         for object in table.objects.values() {
-            if !object.known_to.contains(&seat) {
-                match &object.card {
-                    Card::Named(name) | Card::Custom { name, .. } => self.insert(name),
-                    Card::Hidden => {}
-                }
+            if !object.known_to.contains(&seat)
+                && let Some(name) = object.card.name()
+            {
+                self.insert(name);
             }
         }
         for (state, owner) in table.game_match.seats.iter().zip(table.seats()) {

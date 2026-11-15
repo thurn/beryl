@@ -11,16 +11,23 @@ import "./commandList.css";
 export interface CommandListEntry {
   id: string;
   label: string;
+  detail?: string;
   group: string;
   key?: string;
 }
 
 export interface CommandListProps {
   commands: readonly CommandListEntry[];
-  acting: string;
+  acting?: string;
   presentation: "panel" | "fullscreen";
   initialQuery?: string;
-  onRun: (id: string) => void;
+  onRun: (id: string, shift: boolean) => void;
+  search?: {
+    label: string;
+    query: string;
+    onQuery: (query: string) => void;
+    busy?: boolean;
+  };
   onBind?: (id: string) => void;
   captureBinding?: (id: string, event: globalThis.KeyboardEvent) => boolean;
   bindable?: (id: string) => boolean;
@@ -44,6 +51,7 @@ export function CommandList({
   presentation,
   initialQuery = "",
   onRun,
+  search: externalSearch,
   onBind,
   captureBinding,
   bindable,
@@ -56,9 +64,13 @@ export function CommandList({
   const keyCapture = useRef<HTMLButtonElement>(null);
   const [capturing, setCapturing] = useState<string>();
   const activeOption = useRef<HTMLDivElement>(null);
-  const [query, setQuery] = useState(initialQuery);
+  const [localQuery, setQuery] = useState(initialQuery);
+  const query = externalSearch?.query ?? localQuery;
   const [selected, setSelected] = useState<string>();
-  const groups = groupCommands(match(query, commands));
+  const groups = groupCommands(
+    externalSearch ? commands : match(query, commands),
+  );
+  const name = externalSearch?.label ?? "Search commands";
   // Keyboard movement follows the displayed rows after matches are grouped.
   const rows = groups.flatMap(([, commands]) => commands);
   const activeIndex = Math.max(
@@ -115,8 +127,8 @@ export function CommandList({
       }
       case "Enter":
         event.preventDefault();
-        if (!active) return;
-        if (!event.altKey) onRun(active.id);
+        if (!active || (externalSearch?.busy && !selected)) return;
+        if (!event.altKey) onRun(active.id, event.shiftKey);
         else if (bindable?.(active.id) !== false) {
           if (captureBinding) setCapturing(active.id);
           else onBind?.(active.id);
@@ -129,7 +141,7 @@ export function CommandList({
     <dialog
       ref={dialog}
       className="command-list"
-      aria-label="Command list"
+      aria-label={externalSearch ? name : "Command list"}
       data-presentation={presentation}
       onKeyDown={onKeyDown}
       onCancel={(event) => {
@@ -142,35 +154,40 @@ export function CommandList({
           ref={search}
           type="text"
           role="combobox"
-          aria-label="Search commands"
-          aria-describedby={`${id}-acting`}
+          aria-label={name}
+          aria-describedby={acting ? `${id}-acting` : undefined}
           aria-autocomplete="list"
           aria-expanded="true"
           aria-controls={`${id}-results`}
           aria-activedescendant={active && optionId(active)}
           autoComplete="off"
-          placeholder="Search commands"
+          placeholder={name}
           value={query}
           onChange={(event) => {
-            setQuery(event.currentTarget.value);
+            (externalSearch?.onQuery ?? setQuery)(event.currentTarget.value);
             setSelected(undefined);
           }}
         />
-        <span id={`${id}-acting`} className="command-list-acting">
-          {acting}
-        </span>
+        {acting && (
+          <span id={`${id}-acting`} className="command-list-acting">
+            {acting}
+          </span>
+        )}
       </div>
       <div
         id={`${id}-results`}
         role="listbox"
-        aria-label="Commands"
+        aria-busy={externalSearch?.busy || undefined}
+        aria-label={externalSearch ? name : "Commands"}
         className="command-list-results"
       >
         {groups.map(([group, commands]) => (
           <div key={group} role="group" aria-label={group}>
-            <div className="command-list-heading" aria-hidden="true">
-              {group}
-            </div>
+            {group && (
+              <div className="command-list-heading" aria-hidden="true">
+                {group}
+              </div>
+            )}
             {commands.map((command) => {
               const selected = command.id === active?.id;
               return (
@@ -182,9 +199,10 @@ export function CommandList({
                   aria-selected={selected}
                   className="command-list-row"
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => onRun(command.id)}
+                  onClick={(event) => onRun(command.id, event.shiftKey)}
                 >
                   <span>{command.label}</span>
+                  {command.detail && <small>{command.detail}</small>}
                   {command.key && <kbd>{command.key}</kbd>}
                 </div>
               );
@@ -209,8 +227,8 @@ export function CommandList({
       )}
       {notice && <div role="status">{notice}</div>}
       <footer className="command-list-hints">
-        <span>↵ run</span>
-        <span>⌥↵ bind a key</span>
+        <span>{externalSearch ? "↵ choose" : "↵ run"}</span>
+        {!externalSearch && <span>⌥↵ bind a key</span>}
         <span>Esc close</span>
       </footer>
     </dialog>

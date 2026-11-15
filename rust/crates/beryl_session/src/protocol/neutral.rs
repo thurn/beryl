@@ -94,6 +94,8 @@ impl ObjectView {
             chosen: None,
             text: None,
             type_line: None,
+            custom_colors: None,
+            token_printing: None,
             combat: None,
             note: None,
             pinned: None,

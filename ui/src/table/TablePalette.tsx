@@ -45,7 +45,7 @@ export function TablePalette({
       commands={rows}
       presentation={phone ? "fullscreen" : "panel"}
       onClose={commands.close}
-      onRun={(id) => {
+      onRun={(id, shift) => {
         if (id === reset) {
           bindings.reset();
           setNotice("Shortcuts reset.");
@@ -56,7 +56,7 @@ export function TablePalette({
         if (!selected) return;
         commands.close();
         void commands
-          .run(selected.entry, selected.context)
+          .run(selected.entry, selected.context, shift)
           .catch(commands.reportError);
       }}
       captureBinding={(id, event) => {

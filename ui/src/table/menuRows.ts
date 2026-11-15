@@ -14,6 +14,7 @@ import {
   type Assist,
   type Command,
 } from "./commands.ts";
+import { counterSlots, type TokenChoice } from "./cardState.ts";
 import { uses } from "./fill.ts";
 import { manaColor } from "./players.ts";
 import type { Row } from "./Menu.tsx";
@@ -26,6 +27,7 @@ export interface MenuContext {
   /** Object references in the order the player selected them. */
   cards: readonly CardTarget[];
   tokens?: readonly CardTokenLink[];
+  lastToken?: TokenChoice;
   printed?: ReadonlyMap<number, PrintedCard>;
   element?: HTMLElement;
   pointed?: Element | null;
@@ -117,18 +119,10 @@ export function allowed(
 }
 
 export function counterNames(object?: ObjectView, printed?: PrintedCard) {
-  if (object?.types.includes("creature")) return ["+1/+1", "-1/-1", "generic"];
-  if (object?.types.includes("planeswalker"))
-    return ["loyalty", "charge", "generic"];
-  const text = printed?.card.faces[printed.face]?.oracle_text ?? "";
-  const names = [...text.matchAll(/\b([a-z]+|[+-]\d+\/[+-]\d+) counters?\b/gi)]
-    .map((match) => match[1]!.toLowerCase())
-    .filter(
-      (name) =>
-        !["a", "an", "the", "each", "that", "those", "many"].includes(name),
-    );
-  const [first, second] = [...new Set([...names, "charge", "time"])];
-  return [first, second, "generic"];
+  return counterSlots(
+    object?.types,
+    printed?.card.faces[printed.face]?.oracle_text,
+  );
 }
 
 function conditions({
@@ -139,6 +133,7 @@ function conditions({
   viewer,
   tokens = [],
   logEntry,
+  lastToken,
 }: MenuContext) {
   const object = "name" in target ? target.object : undefined;
   const result = new Set<string>();
@@ -177,7 +172,10 @@ function conditions({
     result.add("related_cards");
     result.add("card_tokens");
   }
-  if (tokens.length > 1) result.add("multiple_card_tokens");
+  if (lastToken) result.add("last_token");
+  view.table?.deckTokens?.forEach((_, index) =>
+    result.add(`deck_token_${index + 1}`),
+  );
   if (view.table?.lastDraw !== undefined) result.add("last_draw");
   if (
     object?.token ||
@@ -334,7 +332,10 @@ export function menuRows(kind: AppliesTo, context: MenuContext) {
   };
   const entries = availableCommands(kind, context)
     .filter(
-      ({ command, id }) => command.menu && (!logEntry || id === "table.rewind"),
+      ({ command, id }) =>
+        command.menu &&
+        (!logEntry || id === "table.rewind") &&
+        (id !== "token.all" || (context.tokens?.length ?? 0) > 1),
     )
     .sort((a, b) => a.command.menu!.order - b.command.menu!.order);
   const groups: { heading?: string; rows: Row[] }[] = [];

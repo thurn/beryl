@@ -320,9 +320,15 @@ restore the old behavior.
   manual shuffle, roll, phase, turn, rewind or game start. It reads Shuffled,
   Rolled 4 (d6), Heads, the phase name, the active player's name followed by 's
   turn, Rewound to 41, or Game 2. The banner fades on the stage's clock.
+- **Creating tokens on a manual table.** The token chooser uses the command list
+  layout and offers the selected card's tokens first. Typing searches the card
+  store by name. Custom token opens a form for the token's name, type line,
+  colors, power, toughness and note. Shift while choosing a token creates it
+  face down.
 - **Manual counters and untap flags.** Named counters use the existing counter
-  badges with shortened names. Player counters appear beside the mana pool. A
-  permanent marked as skipping untap shows a lock in its corner.
+  badges with shortened names. Add counter offers six common names above the
+  text field. Player counters appear beside the mana pool. A permanent marked as
+  skipping untap shows a lock in its corner.
 
 ## Not seen in Arena
 

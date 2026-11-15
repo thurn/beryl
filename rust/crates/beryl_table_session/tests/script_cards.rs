@@ -164,6 +164,7 @@ fn card_changes_use_the_expected_verbs_for_both_seats() {
                 count: 2,
                 attached_to: None,
                 note: None,
+                face_down: false,
             },
             Verb::Appear,
         ),

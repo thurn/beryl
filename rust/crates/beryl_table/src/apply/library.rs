@@ -116,7 +116,7 @@ pub(super) fn stack_until(table: &Table, seat: Seat, query: &str, hits: u16) -> 
         count += 1;
         let card = &table.objects[id].card;
         let matches = match card {
-            Card::Named(name) => {
+            Card::Named(name) | Card::Token { name, .. } => {
                 name.to_lowercase() == query
                     || card_record(card).is_some_and(|record| {
                         record
@@ -421,7 +421,7 @@ pub(super) fn sort_hand(table: &Table, seat: Seat, by: SortBy) -> Changes {
     let mut ids = zone_cards(table, zone)?.to_vec();
     match by {
         SortBy::Name => ids.sort_by_cached_key(|id| match &table.objects[id].card {
-            card @ Card::Named(name) => card_record(card)
+            card @ (Card::Named(name) | Card::Token { name, .. }) => card_record(card)
                 .map_or_else(|| name.to_lowercase(), |record| record.name.to_lowercase()),
             Card::Custom { name, .. } => name.to_lowercase(),
             Card::Hidden => String::new(),
@@ -429,7 +429,7 @@ pub(super) fn sort_hand(table: &Table, seat: Seat, by: SortBy) -> Changes {
         SortBy::Type => ids.sort_by_cached_key(|id| match &table.objects[id].card {
             Card::Custom { types, .. } => types.to_lowercase(),
             Card::Hidden => String::new(),
-            card @ Card::Named(_) => card_record(card)
+            card @ (Card::Named(_) | Card::Token { .. }) => card_record(card)
                 .and_then(|record| {
                     record
                         .faces

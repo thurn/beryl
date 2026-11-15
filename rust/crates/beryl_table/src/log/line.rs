@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::action::{
     Adjustment, ComputedDestination, Destination, Portion, Position, Selection, Target,
 };
-use crate::state::{Card, Face, ObjectId, Phase, Zone};
+use crate::state::{Face, ObjectId, Phase, Zone};
 use crate::{Action, Change, Entry, Seat, Table};
 
 /// Connection events come from the adapter and do not mutate the table.
@@ -485,7 +485,7 @@ impl Cards<'_> {
             else {
                 continue;
             };
-            if let Card::Named(name) | Card::Custom { name, .. } = &object.card
+            if let Some(name) = object.card.name()
                 && !name.is_empty()
                 && label.to_lowercase().contains(&name.to_lowercase())
             {
@@ -512,7 +512,7 @@ impl Cards<'_> {
                 .get(&id)
                 .or_else(|| self.before.objects.get(&id))
             && object.known_to.contains(&self.viewer)
-            && let Card::Named(name) | Card::Custom { name, .. } = &object.card
+            && let Some(name) = object.card.name()
         {
             self.record_name(name);
             return name;

@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::apply::{AppliedChanges, Presentation, commit, next_entry, perform, perform_history};
 use crate::change::Edit;
-use crate::state::{Card, ObjectId};
+use crate::state::ObjectId;
 use crate::{Action, Chance, Change, Entry, Refusal, Seat, Table, apply, permissions, undo};
 
 mod line;
@@ -46,13 +46,6 @@ pub struct Log {
     prior_ids: BTreeMap<ObjectId, ObjectId>,
 }
 
-fn card_name(card: &Card) -> Option<&str> {
-    match card {
-        Card::Named(name) | Card::Custom { name, .. } => Some(name),
-        Card::Hidden => None,
-    }
-}
-
 impl Log {
     pub fn new(initial: &Table) -> Self {
         Self {
@@ -91,13 +84,13 @@ impl Log {
             .objects
             .values()
             .filter(|object| object.known_to.contains(&viewer))
-            .filter_map(|object| card_name(&object.card))
+            .filter_map(|object| object.card.name())
             .collect();
         let hidden: BTreeSet<_> = table
             .objects
             .values()
             .filter(|object| !object.known_to.contains(&viewer))
-            .filter_map(|object| card_name(&object.card))
+            .filter_map(|object| object.card.name())
             .filter(|name| !visible.contains(name))
             .map(str::to_owned)
             .collect();

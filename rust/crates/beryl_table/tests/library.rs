@@ -46,9 +46,11 @@ fn names(table: &Table, zone: Zone) -> Vec<&str> {
         .zone(zone)
         .unwrap()
         .iter()
-        .map(|id| match &table.objects[id].card {
-            Card::Named(name) | Card::Custom { name, .. } => name.as_str(),
-            Card::Hidden => panic!("expected an unredacted card"),
+        .map(|id| {
+            table.objects[id]
+                .card
+                .name()
+                .expect("expected an unredacted card")
         })
         .collect()
 }

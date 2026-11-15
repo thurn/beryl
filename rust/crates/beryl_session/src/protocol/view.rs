@@ -302,6 +302,14 @@ pub struct ObjectView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub type_line: Option<String>,
+    /// A custom token's colors, including an empty list for colorless tokens.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub custom_colors: Option<Box<[String]>>,
+    /// The record key of an exact token printing on a manual table.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub token_printing: Option<Box<str>>,
     pub combat: Option<Combat>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

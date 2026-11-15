@@ -227,7 +227,9 @@ fn destination_zone(
 ) -> Result<Zone, Refusal> {
     let type_line = match &card.card {
         Card::Custom { types, .. } => types,
-        Card::Named(_) => printed.map_or("", |printed| printed.type_line.as_str()),
+        Card::Named(_) | Card::Token { .. } => {
+            printed.map_or("", |printed| printed.type_line.as_str())
+        }
         Card::Hidden => "",
     };
     match destination {
@@ -677,6 +679,7 @@ pub(super) fn token(
     count: u16,
     host: Option<SeenObject>,
     note: Option<&str>,
+    face_down: bool,
 ) -> Changes {
     let attached_to = host.map(|host| attachment_host(table, host)).transpose()?;
     let record = match card {
@@ -688,12 +691,21 @@ pub(super) fn token(
                 .next()
                 .ok_or(Refusal::INVALID)?,
         ),
+        Card::Token { name, scryfall_id } => Some(
+            STORE
+                .token_printing(name, scryfall_id)
+                .ok_or(Refusal::INVALID)?,
+        ),
         Card::Custom { .. } => None,
     };
     (0..usize::from(count))
         .map(|index| {
             let id = table.fresh_id(index).ok_or(Refusal::INVALID)?;
             let mut token = Object::new(id, card.clone(), by, Zone::Battlefield);
+            if face_down {
+                token.face = Face::Down;
+                token.known_to.push(by);
+            }
             token.attached_to = attached_to;
             token.note = note.map(str::to_owned);
             Ok(create_token(table, token, index, record.as_ref()))

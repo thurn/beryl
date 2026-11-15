@@ -34,7 +34,7 @@ export interface MenuProps {
   /** The opening point in viewport CSS pixels. */
   at: Point;
   presentation: "menu" | "sheet";
-  onChoose: (id: string) => void;
+  onChoose: (id: string, shift: boolean) => void;
   onClose: () => void;
 }
 
@@ -143,24 +143,24 @@ export function Menu({
     }
   }, [active, id]);
 
-  const choose = (row: SubmenuRow | Row) => {
+  const choose = (row: SubmenuRow | Row, shift: boolean) => {
     onClose();
-    onChoose(row.id);
+    onChoose(row.id, shift);
   };
-  const select = (position: MenuPosition) => {
+  const select = (position: MenuPosition, shift: boolean) => {
     const row = rows[position.row];
     if (!row) return;
     const { child } = position;
     if (child !== undefined) {
       const command = row.submenu?.[child];
-      if (command) choose(command);
+      if (command) choose(command, shift);
     } else if (row.submenu?.length) {
       setSelection({
         active: { row: position.row, child: 0 },
         open: position.row,
       });
     } else {
-      choose(row);
+      choose(row, shift);
     }
   };
 
@@ -183,7 +183,7 @@ export function Menu({
         onClose();
         break;
       case "choose":
-        select(action.position);
+        select(action.position, event.shiftKey);
         break;
       case "move":
         scrollToActive.current = true;
@@ -219,7 +219,7 @@ export function Menu({
                 : undefined,
           });
         }}
-        onClick={() => select(position)}
+        onClick={(event) => select(position, event.shiftKey)}
       >
         <span aria-hidden="true" className="table-menu-check">
           {row.checked ? "✓" : null}

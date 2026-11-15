@@ -365,6 +365,7 @@ fn creates_named_and_custom_tokens_with_a_host_and_note() {
                 count: 2,
                 attached_to: Some(host),
                 note: Some("test note".into()),
+                face_down: false,
             },
         );
         for id in &table.battlefield[..2] {

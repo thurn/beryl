@@ -122,6 +122,11 @@ pub fn fixture_message(messages: &[FixtureMessage]) -> FixtureMessage {
     FixtureMessage::response(CARD_RECORDS, &card_records_among(found))
 }
 
+/// Key the card-record lookup by exact token printing when names are shared.
+pub fn token_printing_key(name: &str, scryfall_id: &str) -> String {
+    format!("token:{name}:{scryfall_id}")
+}
+
 fn records_in(store: &Store, names: &[String]) -> CardRecords {
     let mut out = CardRecords {
         card_back: back(CARD_BACK_ID),
@@ -130,6 +135,14 @@ fn records_in(store: &Store, names: &[String]) -> CardRecords {
         tokens: BTreeMap::new(),
     };
     for name in names {
+        if let Some((token_name, id)) = name
+            .strip_prefix("token:")
+            .and_then(|key| key.rsplit_once(':'))
+            && let Some(printing) = store.token_printing(token_name, id)
+        {
+            out.tokens.insert(name.clone(), entry(printing));
+            continue;
+        }
         if let Some(card) = store.card_ignoring_case(name) {
             out.cards.insert(name.clone(), entry(card));
         }

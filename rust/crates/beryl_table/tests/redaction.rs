@@ -453,10 +453,8 @@ fn assert_hidden_names(table: &Table, seat: Seat, json: &str, index: usize) {
 }
 
 fn name(card: &Card) -> &str {
-    match card {
-        Card::Named(name) | Card::Custom { name, .. } => name,
-        Card::Hidden => panic!("a host table should always have card identities"),
-    }
+    card.name()
+        .expect("a host table should always have card identities")
 }
 
 #[test]

@@ -1018,8 +1018,14 @@
     "key": { "mac": "Cmd+Shift+T", "other": "Ctrl+Shift+T" },
     "menu": { "group": "Tokens", "order": 270 },
     "group": "Tokens",
-    "also_applies_to": { "their_permanent": true, "stack_entry": true },
-    "when": "multiple_card_tokens"
+    "also_applies_to": {
+      "their_permanent": true,
+      "stack_entry": true,
+      "hand_card": false,
+      "pile_card": false,
+      "viewer_card": false
+    },
+    "when": "card_tokens"
   },
   {
     "id": "hand.sort_name",

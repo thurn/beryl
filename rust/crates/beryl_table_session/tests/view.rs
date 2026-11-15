@@ -353,16 +353,14 @@ fn one_thousand_random_actions_keep_unknown_names_out_of_each_view() {
             let (view, _) = view(&table, &log, seat, slots).unwrap();
             let json = serde_json::to_string(&view).unwrap();
             for object in table.objects.values() {
-                let (Card::Named(name) | Card::Custom { name, .. }) = &object.card else {
-                    panic!("host is missing a card identity");
-                };
+                let name = object.card.name().expect("host is missing a card identity");
                 let shown = view
                     .objects
                     .iter()
                     .find(|shown| Some(shown.slot) == slots.get(object.id))
                     .unwrap();
                 if object.known_to.contains(&seat) {
-                    assert_eq!(shown.name.as_ref(), Some(name));
+                    assert_eq!(shown.name.as_deref(), Some(name));
                 } else {
                     assert!(shown.name.is_none());
                     assert!(
@@ -381,4 +379,68 @@ fn one_thousand_random_actions_keep_unknown_names_out_of_each_view() {
             }
         }
     }
+}
+
+#[test]
+fn deck_shortcuts_follow_only_the_viewers_deck() {
+    let mut table = Table::new(2);
+    table.game_match.seats[0].deck = vec![
+        ("Thraben Inspector".into(), 1),
+        ("Academy Manufactor".into(), 2),
+    ];
+    table.game_match.seats[1].deck = vec![("Urza's Saga".into(), 1)];
+    let log = Log::new(&table);
+    let for_seat = |seat| {
+        let (view, _) = view(&table, &log, seat, &mut Slots::default()).unwrap();
+        view.table.unwrap().deck_tokens
+    };
+    let host = for_seat(HOST);
+    assert_eq!(host[0].name, "Clue Token");
+    assert_eq!(host[1].name, "Treasure Token");
+    assert!(host.iter().all(|token| token.name != "Construct Token"));
+    let guest = for_seat(GUEST);
+    assert_eq!(guest.len(), 1);
+    assert_eq!(guest[0].name, "Construct Token");
+}
+
+#[test]
+fn a_face_down_custom_token_hides_its_printed_details_and_note() {
+    let mut table = Table::new(2);
+    let before = table.clone();
+    let mut log = Log::new(&table);
+    let entry = log
+        .apply(
+            &mut table,
+            HOST,
+            &Action::Token {
+                card: Card::Custom {
+                    name: "Private token".into(),
+                    types: "Token Creature — Secret".into(),
+                    colors: vec!["U".into()],
+                    stats: Some((7, 8)),
+                },
+                count: 1,
+                attached_to: None,
+                note: Some("Private annotation".into()),
+                face_down: true,
+            },
+            &mut Chance::fresh(1),
+        )
+        .unwrap();
+    let redacted = beryl_table::redact::entry_seen_by(entry, &before, GUEST);
+    let text = serde_json::to_string(&redacted.action).unwrap();
+    assert!(!text.contains("Private"));
+    assert!(!text.contains("Secret"));
+    let (guest, _) = view(&table, &log, GUEST, &mut Slots::default()).unwrap();
+    let hidden = &guest.objects[0];
+    assert_eq!(hidden.face, FaceName::Down);
+    assert!(hidden.token);
+    assert!(hidden.name.is_none() && hidden.note.is_none());
+    assert!(hidden.custom_colors.is_none() && hidden.type_line.is_none());
+
+    let (host, _) = view(&table, &log, HOST, &mut Slots::default()).unwrap();
+    let known = &host.objects[0];
+    assert_eq!(known.face, FaceName::Down);
+    assert_eq!(known.name.as_deref(), Some("Private token"));
+    assert_eq!(known.note.as_deref(), Some("Private annotation"));
 }

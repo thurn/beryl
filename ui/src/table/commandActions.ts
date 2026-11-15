@@ -1,5 +1,11 @@
 import { counterName } from "../game/log";
-import type { ObjectView, TableAction, TableZone } from "../generated/protocol";
+import type { TableAction, TableZone } from "../generated/protocol";
+import {
+  baseStats,
+  statValue,
+  storeToken,
+  type TokenChoice,
+} from "./cardState";
 import { sameZone, type CardTarget } from "./client";
 import { fill, uses, type ActionValues } from "./fill";
 import { advancePhase, untapPermanents } from "./turn";
@@ -11,25 +17,6 @@ import {
   type MenuCommand,
   type MenuContext,
 } from "./menuRows";
-
-export function counterValue(object: ObjectView | undefined, name: string) {
-  return (
-    object?.counters.find(
-      ({ kind }) => counterName(kind).replaceAll("−", "-") === name,
-    )?.count ??
-    object?.namedCounters?.find((counter) => counter.name === name)?.count ??
-    0
-  );
-}
-
-export function baseStats(object?: ObjectView) {
-  if (!object?.pt) return { power: 0, toughness: 0 };
-  const bonus = counterValue(object, "+1/+1") - counterValue(object, "-1/-1");
-  return {
-    power: object.pt.power - bonus,
-    toughness: object.pt.toughness - bonus,
-  };
-}
 
 const statChanges: Record<string, readonly [number, number]> = {
   "stats.power_up": [1, 0],
@@ -54,9 +41,10 @@ export function commandActions(
   entry: MenuCommand,
   context: MenuContext,
   values: ActionValues = {},
+  faceDown = false,
 ): TableAction[] {
   const { target, view } = context;
-  const { command, token } = entry;
+  const { command } = entry;
   if (command.id === "table.untap_all" || command.id === "phase.untap_active")
     return [untapPermanents(view)];
   if (command.id === "phase.next" || command.id === "phase.next_with_action")
@@ -65,11 +53,6 @@ export function commandActions(
   if (!template) return [];
   const side = "side" in target ? target.side : "you";
   const seat = seatOf(view, side);
-  const object = "name" in target ? target.object : undefined;
-  const [first_counter, second_counter, third_counter] = counterNames(
-    object,
-    object && context.printed?.get(object.slot),
-  );
   const handSize = view.table?.orders[side].hand.length ?? 0;
   const args: ActionValues = {
     seat,
@@ -80,10 +63,6 @@ export function commandActions(
     text: target.kind === "counter" ? target.counter : null,
     on: !checked(command, context),
     tapped: context.cards.some(({ object }) => !object?.tapped),
-    first_counter,
-    second_counter,
-    third_counter,
-    card: token ? { named: token.name } : undefined,
     target:
       command.id === "token.attached" && "name" in target && target.action
         ? actionReference(target.action)
@@ -108,7 +87,7 @@ export function commandActions(
     );
   }
   if (command.id === "counter.increment_all") {
-    args.actions = context.cards.flatMap(({ action, object }) => {
+    return context.cards.flatMap(({ action, object }) => {
       if (!action || !object) return [];
       const names = [
         ...object.counters.map(({ kind }) =>
@@ -121,10 +100,27 @@ export function commandActions(
       }));
     });
   }
-  if (command.id === "token.all") {
-    args.actions = (context.tokens ?? []).map(({ name }) => ({
-      token: { card: { named: name }, count: 1, attached_to: null, note: null },
+  if (command.id === "token.all")
+    return (context.tokens ?? []).map((token) => ({
+      token: {
+        card: storeToken(token).card,
+        count: 1,
+        attached_to: null,
+        note: null,
+        face_down: faceDown,
+      },
     }));
+
+  if ("token" in template) {
+    const token = tokenChoice(entry, context);
+    const action = fill(template, {
+      ...args,
+      card: token?.card,
+      text: token?.note ?? args.text,
+      ...values,
+    });
+    if ("token" in action && faceDown) action.token.face_down = true;
+    return [action];
   }
 
   if (!uses(template, "objects")) {
@@ -182,10 +178,37 @@ export function commandActions(
           ...args,
           objects: [action.reference],
           in: action.zone,
-          stats: [power + adjust[0], toughness + adjust[1]],
+          stats: [
+            statValue(power + adjust[0]),
+            statValue(toughness + adjust[1]),
+          ],
         }),
       ];
     });
+
+  if (
+    uses(template, "first_counter") ||
+    uses(template, "second_counter") ||
+    uses(template, "third_counter")
+  ) {
+    return cards.flatMap(({ object, action }) => {
+      if (!action) return [];
+      const [first_counter, second_counter, third_counter] = counterNames(
+        object,
+        object && context.printed?.get(object.slot),
+      );
+      return [
+        fill(template, {
+          ...args,
+          objects: [action.reference],
+          in: action.zone,
+          first_counter,
+          second_counter,
+          third_counter,
+        }),
+      ];
+    });
+  }
 
   const groups: Array<{
     zone: TableZone;
@@ -227,4 +250,17 @@ export function commandActions(
       face,
     }),
   );
+}
+
+function tokenChoice(
+  entry: MenuCommand,
+  context: MenuContext,
+): TokenChoice | undefined {
+  if (entry.token) return storeToken(entry.token);
+  if (entry.id === "token.repeat") return context.lastToken;
+  if (entry.id.startsWith("token.deck_")) {
+    const index = Number(entry.id.slice("token.deck_".length)) - 1;
+    const token = context.view.table?.deckTokens?.[index];
+    if (token) return storeToken(token);
+  }
 }

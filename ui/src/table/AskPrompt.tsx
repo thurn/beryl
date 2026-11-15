@@ -11,6 +11,7 @@ interface Entry<T> {
   onCancel: () => void;
   fieldLabel?: string;
   autoFocus?: boolean;
+  suggestions?: readonly string[];
 }
 
 interface Bounds {
@@ -85,6 +86,7 @@ function AskEntry<T>({
   onCancel,
   fieldLabel,
   autoFocus = true,
+  suggestions,
   read,
   format,
   step,
@@ -157,6 +159,27 @@ function AskEntry<T>({
         <Button variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
+        {suggestions && (
+          <div
+            className="table-ask-suggestions"
+            role="group"
+            aria-label="Common counters"
+          >
+            {suggestions.map((name) => (
+              <Button
+                key={name}
+                variant="secondary"
+                size="small"
+                onClick={() => {
+                  const value = read(name);
+                  if (value !== undefined) onConfirm(value);
+                }}
+              >
+                {name}
+              </Button>
+            ))}
+          </div>
+        )}
         <div className="prompt-stepper">
           {stepButton(-1, "−", "Less")}
           <input

@@ -5,6 +5,10 @@ mod slots;
 
 pub use slots::Slots;
 
+use std::collections::HashSet;
+
+use beryl_card_store::{STORE, facts};
+use beryl_session::ipc::decks::CardTokenLink;
 use beryl_session::protocol::{
     AssistsView, CardHandling, LogLine, ManualOrders, ManualPiles, NamedCounter, ObjectId as Slot,
     PlayerState, PlayerView, Side, StackItem, Step, TableActionRefs, TableArrow, TablePhase,
@@ -91,9 +95,26 @@ pub fn view(
             .filter_map(|card| slots.get(card.id))
             .collect(),
         last_draw: log.last_draw(table, seat),
+        deck_tokens: deck_tokens(&projected, seat),
         prompt: None,
     });
     Ok((view, refs))
+}
+
+fn deck_tokens(table: &Table, seat: Seat) -> Vec<CardTokenLink> {
+    let mut seen = HashSet::new();
+    table.game_match.seats[usize::from(seat.0)]
+        .deck
+        .iter()
+        .filter_map(|(name, _)| STORE.card_ignoring_case(name))
+        .flat_map(|record| facts::tokens_made(&record).to_vec())
+        .filter(|token| seen.insert(token.scryfall_id.clone()))
+        .take(10)
+        .map(|token| CardTokenLink {
+            name: token.name,
+            scryfall_id: token.scryfall_id,
+        })
+        .collect()
 }
 
 #[derive(Clone, Copy)]

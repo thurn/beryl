@@ -28,6 +28,7 @@ pub(crate) fn card_record(card: &Card) -> Option<Record> {
         Card::Named(name) => STORE
             .card_ignoring_case(name)
             .or_else(|| STORE.tokens(name).into_iter().next()),
+        Card::Token { name, scryfall_id } => STORE.token_printing(name, scryfall_id),
         Card::Hidden | Card::Custom { .. } => None,
     }
 }

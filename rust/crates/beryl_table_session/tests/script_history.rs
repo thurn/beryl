@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use beryl_session::protocol::{Why, ZoneName};
 use beryl_session::script::{Act, Mark, Notice, Script, Span, Verb};
 use beryl_table::action::{Destination, Position};
-use beryl_table::state::{Assist, Card, Face, Line, LineVisibility, ObjectId, Proposal, Zone};
+use beryl_table::state::{Assist, Face, Line, LineVisibility, ObjectId, Proposal, Zone};
 use beryl_table::testing::{ASSIST_AND_LOG, CORE, Generator, Kind};
 use beryl_table::{Action, Refusal, Table};
 use beryl_table_session::script::proposal_marks;
@@ -299,10 +299,7 @@ fn every_script_replays_and_names_nothing_hidden() {
                     .values()
                     .filter(|object| !object.known_to.contains(&seat))
                 {
-                    let name = match &object.card {
-                        Card::Named(name) | Card::Custom { name, .. } => name,
-                        Card::Hidden => unreachable!("host card"),
-                    };
+                    let name = object.card.name().expect("host card");
                     let slot = slots.get(object.id).unwrap();
                     assert!(
                         view.objects
@@ -317,7 +314,7 @@ fn every_script_replays_and_names_nothing_hidden() {
                         "{action:?} named hidden slot {slot:?}"
                     );
                     assert!(
-                        visible.contains(name.as_str()) || !json.contains(name),
+                        visible.contains(name) || !json.contains(name),
                         "{action:?} leaked {name} to {seat:?}"
                     );
                 }

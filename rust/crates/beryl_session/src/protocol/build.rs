@@ -378,6 +378,8 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         chosen: obs.memos(slot).chosen().map(|value| value.name(t)),
         text,
         type_line,
+        custom_colors: None,
+        token_printing: None,
         combat: match *o.combat() {
             CombatRole::Attacking {
                 target, blocked, ..

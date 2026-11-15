@@ -204,6 +204,9 @@ pub enum Action<Id = ObjectId> {
         count: u16,
         attached_to: Option<SeenObject<Id>>,
         note: Option<String>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
+        face_down: bool,
     },
     Marker {
         #[serde(flatten)]

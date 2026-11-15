@@ -137,6 +137,13 @@ impl<'a> Store<'a> {
         self.records(Kind::Card, name).into_iter().next()
     }
 
+    /// Finds the exact token or emblem printing named by a card's token link.
+    pub fn token_printing(&self, name: &str, scryfall_id: &str) -> Option<Record> {
+        self.tokens(name)
+            .into_iter()
+            .find(|printing| printing.scryfall_id == scryfall_id)
+    }
+
     /// The tokens and emblems named `name`, each printing the store has, in its order.
     pub fn tokens(&self, name: &str) -> Vec<Record> {
         self.records(Kind::Token, name)

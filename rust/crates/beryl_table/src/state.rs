@@ -18,6 +18,10 @@ pub struct ObjectId(pub u32);
 pub enum Card {
     Hidden,
     Named(String),
+    Token {
+        name: String,
+        scryfall_id: String,
+    },
     Custom {
         name: String,
         types: String,
@@ -25,6 +29,15 @@ pub enum Card {
         colors: Vec<String>,
         stats: Option<(i32, i32)>,
     },
+}
+
+impl Card {
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            Self::Named(name) | Self::Token { name, .. } | Self::Custom { name, .. } => Some(name),
+            Self::Hidden => None,
+        }
+    }
 }
 
 #[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(rename = "TableFace"))]

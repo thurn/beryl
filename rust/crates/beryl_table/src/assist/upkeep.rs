@@ -34,7 +34,7 @@ pub fn proposal(table: &Table, seat: Seat) -> Option<Proposal> {
     let mut lines = Vec::new();
     for card in untap_targets(table, seat) {
         let (text, visibility) = match &card.card {
-            Card::Named(name) | Card::Custom { name, .. }
+            Card::Named(name) | Card::Token { name, .. } | Card::Custom { name, .. }
                 if card.face != Face::Down && card.known_to.contains(&seat) =>
             {
                 (

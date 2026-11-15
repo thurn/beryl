@@ -344,7 +344,15 @@ chosen?: string,
  * The rules text and type line as a text-changing effect changed them (CR 612.1), in
  * place of its card's printed ones; none while they read as printed.
  */
-text?: string, typeLine?: string, combat: Combat | null, note?: string, pinned?: RowName, 
+text?: string, typeLine?: string, 
+/**
+ * A custom token's colors, including an empty list for colorless tokens.
+ */
+customColors?: Array<string>, 
+/**
+ * The record key of an exact token printing on a manual table.
+ */
+tokenPrinting?: string, combat: Combat | null, note?: string, pinned?: RowName, 
 /**
  * Which face the manual table is showing. The engine uses `name` and `facing`.
  */
@@ -885,7 +893,11 @@ manualStats?: Array<ObjectId>,
 /**
  * The viewer's latest draw, even when another entry blocks undo.
  */
-lastDraw?: number, prompt?: TablePrompt, arrows?: Array<TableArrow>, };
+lastDraw?: number, 
+/**
+ * The viewer's deck tokens, in deck list order, for the ten numbered shortcuts.
+ */
+deckTokens?: Array<CardTokenLink>, prompt?: TablePrompt, arrows?: Array<TableArrow>, };
 
 export type TableArrow = { arrow: Arrow, from: Subject, to: Subject, own: boolean, };
 
@@ -913,7 +925,7 @@ export type ZoneRef = { side: Side, zone: ZoneName, };
 
 export type TablePrompt = { "kind": "none" };
 
-export type TableActionOf<Id> = { "move": { to: TableDestination, position?: TablePosition, face?: TableFace, tapped?: boolean, objects: Array<Id>, in: TableZone, } } | { "reorder": { position: TablePosition, objects: Array<Id>, in: TableZone, } } | { "pin": { row: TableRow, objects: Array<Id>, in: TableZone, } } | { "give": { to: TableSeat, objects: Array<Id>, in: TableZone, } } | { "tap": { tapped: boolean, objects: Array<Id>, in: TableZone, } } | { "face": { face: TableFace, objects: Array<Id>, in: TableZone, } } | { "flag": { doesnt_untap: boolean, objects: Array<Id>, in: TableZone, } } | { "peek": { objects: Array<Id>, in: TableZone, } } | { "counter": { name: string, objects: Array<Id>, in: TableZone, } & ({ "add": number } | { "set": number }) } | { "stats": { stats: [number, number] | null, objects: Array<Id>, in: TableZone, } } | { "damage": { damage: number, objects: Array<Id>, in: TableZone, } } | { "note": { note: string | null, objects: Array<Id>, in: TableZone, } } | { "attach": { host: TableSeenObject<Id>, objects: Array<Id>, in: TableZone, } } | { "unattach": { objects: Array<Id>, in: TableZone, } } | { "clone": { objects: Array<Id>, in: TableZone, } } | { "token": { card: TableCard, count: number, attached_to: TableSeenObject<Id> | null, note: string | null, } } | { "marker": { text: string, objects: Array<Id>, in: TableZone, } } | { "remove": { objects: Array<Id>, in: TableZone, } } | { "stack_until": { seat: TableSeat, query: string, hits: number, } } | { "draw": { seat: TableSeat, count: number, } } | { "mulligan": { seat: TableSeat, count: number, } } | { "shuffle": { seat: TableSeat, portion: TablePortion, } } | { "look": { seat: TableSeat, portion: TablePortion, } } | { "close_look": Record<symbol, never> } | { "reveal": { in: TableZone, 
+export type TableActionOf<Id> = { "move": { to: TableDestination, position?: TablePosition, face?: TableFace, tapped?: boolean, objects: Array<Id>, in: TableZone, } } | { "reorder": { position: TablePosition, objects: Array<Id>, in: TableZone, } } | { "pin": { row: TableRow, objects: Array<Id>, in: TableZone, } } | { "give": { to: TableSeat, objects: Array<Id>, in: TableZone, } } | { "tap": { tapped: boolean, objects: Array<Id>, in: TableZone, } } | { "face": { face: TableFace, objects: Array<Id>, in: TableZone, } } | { "flag": { doesnt_untap: boolean, objects: Array<Id>, in: TableZone, } } | { "peek": { objects: Array<Id>, in: TableZone, } } | { "counter": { name: string, objects: Array<Id>, in: TableZone, } & ({ "add": number } | { "set": number }) } | { "stats": { stats: [number, number] | null, objects: Array<Id>, in: TableZone, } } | { "damage": { damage: number, objects: Array<Id>, in: TableZone, } } | { "note": { note: string | null, objects: Array<Id>, in: TableZone, } } | { "attach": { host: TableSeenObject<Id>, objects: Array<Id>, in: TableZone, } } | { "unattach": { objects: Array<Id>, in: TableZone, } } | { "clone": { objects: Array<Id>, in: TableZone, } } | { "token": { card: TableCard, count: number, attached_to: TableSeenObject<Id> | null, note: string | null, face_down?: boolean, } } | { "marker": { text: string, objects: Array<Id>, in: TableZone, } } | { "remove": { objects: Array<Id>, in: TableZone, } } | { "stack_until": { seat: TableSeat, query: string, hits: number, } } | { "draw": { seat: TableSeat, count: number, } } | { "mulligan": { seat: TableSeat, count: number, } } | { "shuffle": { seat: TableSeat, portion: TablePortion, } } | { "look": { seat: TableSeat, portion: TablePortion, } } | { "close_look": Record<symbol, never> } | { "reveal": { in: TableZone, 
 /**
  * With neither objects nor a count, reveal the whole zone.
  */
@@ -947,7 +959,7 @@ export type TableSortBy = "name" | "type" | "mana_value";
 
 export type TableAssist = "turn_upkeep" | "combat" | "state_nudges" | "library_flows" | "ability_menus";
 
-export type TableCard = "hidden" | { "named": string } | { "custom": { name: string, types: string, colors: Array<string>, stats: [number, number] | null, } };
+export type TableCard = "hidden" | { "named": string } | { "token": { name: string, scryfall_id: string, } } | { "custom": { name: string, types: string, colors: Array<string>, stats: [number, number] | null, } };
 
 export type TableFace = "front" | "back" | "down";
 

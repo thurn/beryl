@@ -62,7 +62,22 @@ export function listenTableKeys(commands: TableCommands) {
       document.documentElement.classList.contains("page-frozen")
     )
       return;
-    const id = resolve(event, "table", bindings);
+    let id = resolve(event, "table", bindings);
+    if (!id && event.shiftKey) {
+      const unshifted = resolve(
+        {
+          code: event.code,
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+          altKey: event.altKey,
+          shiftKey: false,
+          isComposing: event.isComposing,
+        },
+        "table",
+        bindings,
+      );
+      if (unshifted?.startsWith("token.")) id = unshifted;
+    }
     if (
       id !== "viewer.hide_revealed" &&
       event.target instanceof Element &&
@@ -82,7 +97,9 @@ export function listenTableKeys(commands: TableCommands) {
       const target = id.startsWith("life.")
         ? pointedTarget(client)
         : currentTarget(client);
-      void commands.shortcut(id, target).catch(commands.reportError);
+      void commands
+        .shortcut(id, target, event.shiftKey)
+        .catch(commands.reportError);
     }
   };
   window.addEventListener("keydown", keydown, true);

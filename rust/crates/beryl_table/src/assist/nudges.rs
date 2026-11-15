@@ -80,7 +80,7 @@ pub fn labels(table: &Table) -> Vec<Label> {
             Card::Custom {
                 name, types, stats, ..
             } => (name, types, *stats, false),
-            Card::Named(_) => {
+            Card::Named(_) | Card::Token { .. } => {
                 record = card_record(&card.card);
                 let Some((record, face)) = record
                     .as_ref()

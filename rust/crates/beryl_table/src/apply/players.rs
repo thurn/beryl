@@ -76,7 +76,7 @@ fn has_type(object: &Object, name: &str, front: fn(&beryl_card_store::Record) ->
     let types = match &object.card {
         Card::Custom { types, .. } => types,
         Card::Hidden => return false,
-        Card::Named(_) => {
+        Card::Named(_) | Card::Token { .. } => {
             record = card_record(&object.card);
             let Some(record) = &record else { return false };
             if object.face == Face::Front {

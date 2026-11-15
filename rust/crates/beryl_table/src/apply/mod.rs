@@ -459,7 +459,16 @@ fn plan_action(
             count,
             attached_to,
             note,
-        } => cards::token(table, by, card, *count, *attached_to, note.as_deref()),
+            face_down,
+        } => cards::token(
+            table,
+            by,
+            card,
+            *count,
+            *attached_to,
+            note.as_deref(),
+            *face_down,
+        ),
         Action::Marker { selection, text } => cards::marker(table, selection, text),
         Action::Remove { selection } => cards::remove(table, selection),
         Action::StackUntil { seat, query, hits } => {

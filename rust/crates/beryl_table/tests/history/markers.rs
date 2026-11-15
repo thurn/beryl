@@ -2,19 +2,7 @@ use beryl_table::state::{AbilityMarker, Face};
 
 use super::*;
 
-#[test]
-fn replay_keeps_each_ability_source_after_it_leaves_the_battlefield() {
-    let mut table = Table::new(2);
-    add(
-        &mut table,
-        1,
-        "Public Permanent",
-        BATTLEFIELD,
-        &[HOST, GUEST],
-    );
-    add(&mut table, 2, "Private Permanent", BATTLEFIELD, &[HOST]);
-    table.objects.get_mut(&ObjectId(2)).unwrap().face = Face::Down;
-    let mut game = Game::new(table);
+fn create_public_token(game: &mut Game) -> (ObjectId, Card) {
     let token = Card::Custom {
         name: "Public Token".into(),
         types: "Artifact".into(),
@@ -28,9 +16,26 @@ fn replay_keeps_each_ability_source_after_it_leaves_the_battlefield() {
             count: 1,
             attached_to: None,
             note: None,
+            face_down: false,
         },
     );
-    let token_id = game.table.battlefield[0];
+    (game.table.battlefield[0], token)
+}
+
+#[test]
+fn replay_keeps_each_ability_source_after_it_leaves_the_battlefield() {
+    let mut table = Table::new(2);
+    add(
+        &mut table,
+        1,
+        "Public Permanent",
+        BATTLEFIELD,
+        &[HOST, GUEST],
+    );
+    add(&mut table, 2, "Private Permanent", BATTLEFIELD, &[HOST]);
+    table.objects.get_mut(&ObjectId(2)).unwrap().face = Face::Down;
+    let mut game = Game::new(table);
+    let (token_id, token) = create_public_token(&mut game);
     let select = |id| Selection {
         objects: vec![id],
         zone: BATTLEFIELD,

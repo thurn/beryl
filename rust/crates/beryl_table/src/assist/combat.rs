@@ -33,7 +33,7 @@ impl Creature {
         let record = card_record(&card.card);
         let (types, printed, printed_keywords) = match &card.card {
             Card::Custom { types, stats, .. } => (types.as_str(), *stats, Vec::new()),
-            Card::Named(_) => {
+            Card::Named(_) | Card::Token { .. } => {
                 let record = record.as_ref()?;
                 let face = printed_face(record, card.face)?;
                 (
@@ -351,7 +351,7 @@ fn valid_target(table: &Table, target: ArrowTarget) -> bool {
         ArrowTarget::Object(id) => {
             battlefield_card(table, id).is_some_and(|card| match &card.card {
                 Card::Custom { types, .. } => facts::is_planeswalker_type_line(types),
-                Card::Named(_) => card_record(&card.card)
+                Card::Named(_) | Card::Token { .. } => card_record(&card.card)
                     .as_ref()
                     .and_then(|record| printed_face(record, card.face))
                     .is_some_and(|face| facts::is_planeswalker_type_line(&face.type_line)),
@@ -362,10 +362,7 @@ fn valid_target(table: &Table, target: ArrowTarget) -> bool {
 }
 
 fn name(card: &Object) -> &str {
-    match &card.card {
-        Card::Named(name) | Card::Custom { name, .. } => name,
-        Card::Hidden => "A card",
-    }
+    card.card.name().unwrap_or("A card")
 }
 
 fn add<Key: Ord>(totals: &mut BTreeMap<Key, i32>, key: Key, amount: i32) {

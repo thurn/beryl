@@ -2,7 +2,7 @@ import { useLayoutEffect } from "react";
 import { requestBugReport } from "../components/BugReport";
 import { cardRecords } from "../cardRecords";
 import { useCardRecords } from "../cards";
-import type { LogLine, PlayerView, TableCard } from "../generated/protocol";
+import type { LogLine, PlayerView } from "../generated/protocol";
 import { askCards, cardTokens } from "../ipc";
 import { BLANK } from "../game/faces";
 import { Inspect } from "../game/Piles";
@@ -18,12 +18,17 @@ import { selectAt } from "./select";
 import { playerCounterValue } from "./players";
 import { describe } from "./shortcuts";
 import { TablePalette } from "./TablePalette";
+import { commandActions, pileSlots } from "./commandActions";
 import {
   baseStats,
-  commandActions,
+  counterSuggestions,
   counterValue,
-  pileSlots,
-} from "./commandActions";
+  MAX_INT,
+  MIN_INT,
+  normalizedCounter,
+  type TokenChoice,
+} from "./cardState";
+import { TokenSearch } from "./TokenSearch";
 import type { ActionValues } from "./fill";
 import { sendHistory, type HistoryAction } from "./tableLog";
 import { Menu } from "./Menu";
@@ -46,7 +51,12 @@ export type TableOverlay =
       settings?: boolean;
       contextual?: boolean;
     }
-  | { kind: "related"; name: string; context: MenuContext };
+  | { kind: "related"; name: string; context: MenuContext }
+  | {
+      kind: "tokens";
+      context: MenuContext;
+      choose: (token: TokenChoice, shift: boolean) => void;
+    };
 
 const table: TableTarget = { kind: "table" };
 const defaults: readonly TableTarget[] = [
@@ -66,13 +76,9 @@ const applies = (command: Command, target: TableTarget) => {
   );
 };
 
-const MIN_INT = -2147483648;
-const MAX_INT = 2147483647;
-
 export class TableCommands {
   #overlay?: TableOverlay;
-  /** Token search installs this when its overlay is available. */
-  openTokenSearch?: (choose: (card: TableCard) => void) => void;
+  #lastToken?: TokenChoice;
   /** Pile viewers install their client-only commands here. */
   readonly clients = new Map<string, (context: MenuContext) => void>();
 
@@ -146,8 +152,12 @@ export class TableCommands {
         : [target];
     const printed = new Map(
       cards.flatMap(({ object }) => {
-        const found = object?.name && cardRecords.find(object.name);
-        return object && found ? [[object.slot, found] as const] : [];
+        if (!object?.name || object.customColors) return [];
+        const found = cardRecords.find(object.tokenPrinting ?? object.name);
+        if (!found) return [];
+        const face =
+          object.tokenPrinting && object.face === "back" ? 1 : found.face;
+        return [[object.slot, { card: found.card, face }] as const];
       }),
     );
     const viewer =
@@ -159,6 +169,7 @@ export class TableCommands {
       view,
       cards,
       printed,
+      lastToken: this.#lastToken,
       viewer: viewer && {
         revealed: viewer.zone === "revealed",
         wholeLibrary: viewer.zone === "library" && viewer.portion === "all",
@@ -202,7 +213,8 @@ export class TableCommands {
 
   async #withTokens(context: MenuContext): Promise<MenuContext> {
     const { target } = context;
-    if (!("name" in target) || context.tokens) return context;
+    if (!("name" in target) || context.tokens || target.object?.customColors)
+      return context;
     const card = target.object;
     const marker =
       !card && typeof target.name === "string"
@@ -221,7 +233,6 @@ export class TableCommands {
   }
 
   #supports({ command }: MenuCommand) {
-    if (command.asks === "token" && !this.openTokenSearch) return false;
     return (
       !command.client ||
       this.clients.has(command.client) ||
@@ -246,7 +257,13 @@ export class TableCommands {
         : [table];
     const entries = [
       context,
-      ...targets.flatMap((target) => this.context(target) ?? []),
+      ...targets.flatMap((target) => {
+        const next = this.context(target);
+        if (!next) return [];
+        return [
+          target.kind === "table" ? { ...next, tokens: context.tokens } : next,
+        ];
+      }),
     ].flatMap((context) =>
       availableCommands(kindOf(context.target), context)
         .filter(
@@ -271,7 +288,15 @@ export class TableCommands {
     if (context) this.#showWithTokens({ kind: "list", context, settings });
   }
 
-  async shortcut(id: string, pointed?: TableTarget) {
+  async shortcut(id: string, pointed?: TableTarget, shift = false) {
+    if (id === "token.all") {
+      // Shift belongs to the All tokens binding. With no token-making card,
+      // the same chord opens a chooser for one face-down token.
+      if (pointed && (await this.runAt(id, pointed))) return;
+      if (!this.overlayOpen)
+        await this.runAt("token.create", table, undefined, shift);
+      return;
+    }
     if (id === "table.command_list") {
       this.openList(pointed);
       return;
@@ -286,10 +311,15 @@ export class TableCommands {
       pointed && applies(command, pointed)
         ? pointed
         : [table, ...defaults].find((target) => applies(command, target));
-    if (target) await this.runAt(id, target);
+    if (target) await this.runAt(id, target, undefined, shift);
   }
 
-  async runAt(id: string, target: TableTarget, element?: HTMLElement) {
+  async runAt(
+    id: string,
+    target: TableTarget,
+    element?: HTMLElement,
+    shift = false,
+  ) {
     let context = this.context(target);
     if (!context) return;
     context.element = element;
@@ -299,19 +329,20 @@ export class TableCommands {
     );
     if (!entry) return;
     if (id === "table.leave") this.quit();
-    else await this.run(entry, context);
+    else await this.run(entry, context, shift);
+    return true;
   }
 
-  async run(entry: MenuCommand, context: MenuContext) {
+  async run(entry: MenuCommand, context: MenuContext, shift = false) {
     const { client } = this;
     if (context.view !== client.view) return;
     const { command, token } = entry;
     const { target } = context;
     const source = "name" in target ? target : undefined;
     const object = source?.object;
-    const send = (values?: ActionValues) => {
+    const send = (values?: ActionValues, faceDown = shift) => {
       if (context.view !== client.view) return;
-      const actions = commandActions(entry, context, values);
+      const actions = commandActions(entry, context, values, faceDown);
       const [first] = actions;
       if (first && "look" in first && client.viewers) {
         void client.viewers
@@ -325,6 +356,14 @@ export class TableCommands {
             actions.length === 1 ? first : { batch: { actions } },
             context.element ?? source?.name,
           )
+          .then((reply) => {
+            const last = actions.at(-1);
+            if ("ok" in reply && last && "token" in last)
+              this.#lastToken = {
+                card: last.token.card,
+                note: last.token.note,
+              };
+          })
           .catch(this.report);
     };
 
@@ -386,9 +425,19 @@ export class TableCommands {
     }
 
     if (command.asks === "token") {
-      this.openTokenSearch?.((card) =>
-        send({ card, text: null, number: 1, target: null }),
-      );
+      const previous = this.#overlay;
+      const related = !context.tokens && currentTarget(client);
+      const picked = related && this.context(related, context.view);
+      const { tokens } = picked ? await this.#withTokens(picked) : context;
+      if (context.view !== client.view || previous !== this.#overlay) return;
+      this.#set({
+        kind: "tokens",
+        context: { ...context, tokens },
+        choose: ({ card, note }, chosenWithShift) => {
+          this.close();
+          send({ card, text: note }, shift || chosenWithShift);
+        },
+      });
       return;
     }
 
@@ -425,8 +474,10 @@ export class TableCommands {
       });
     } else if (command.asks === "text" || command.asks === "text_and_number") {
       const stackUntil = command.id === "library.stack_until";
+      const namedCounter = command.id === "counter.add_named";
       show({
         kind: "text",
+        suggestions: namedCounter ? counterSuggestions : undefined,
         start: command.id === "permanent.note" ? (object?.note ?? "") : "",
         fieldLabel: stackUntil ? "Card name or type" : label,
         label: () =>
@@ -437,6 +488,11 @@ export class TableCommands {
               : label,
         onCancel: this.close,
         onConfirm: (text) => {
+          if (namedCounter) {
+            const name = normalizedCounter(text);
+            if (name) confirm({ text: name });
+            return;
+          }
           if (command.asks === "text_and_number" && !text.trim()) return;
           if (command.asks === "text_and_number") {
             show({
@@ -479,7 +535,7 @@ export class TableCommands {
       const name =
         counterNames(object, object && context.printed?.get(object.slot))[
           counterSlot
-        ] ?? "generic";
+        ] ?? "counter";
       const current = counter
         ? counterValue(object, name)
         : (life ?? playerValue);
@@ -572,10 +628,20 @@ export function TableMenu({
     );
   if (overlay.kind === "related")
     return <RelatedCard name={overlay.name} onClose={commands.close} />;
+  if (overlay.kind === "tokens")
+    return (
+      <TokenSearch
+        related={context.tokens}
+        onChoose={overlay.choose}
+        onClose={commands.close}
+        phone={phone}
+      />
+    );
   const { header, groups, entries } = menuRows(kindOf(context.target), context);
-  const choose = (entries: MenuCommand[], id: string) => {
+  const choose = (entries: MenuCommand[], id: string, shift: boolean) => {
     const entry = entries.find((entry) => entry.id === id);
-    if (entry) void commands.run(entry, context).catch(commands.reportError);
+    if (entry)
+      void commands.run(entry, context, shift).catch(commands.reportError);
   };
   if (overlay.kind === "list")
     return (
@@ -594,7 +660,7 @@ export function TableMenu({
       at={overlay.at}
       presentation={phone ? "sheet" : "menu"}
       onClose={commands.close}
-      onChoose={(id) => choose(entries, id)}
+      onChoose={(id, shift) => choose(entries, id, shift)}
     />
   );
 }

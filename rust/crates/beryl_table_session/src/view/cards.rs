@@ -1,5 +1,8 @@
-use beryl_card_store::facts::{self, Row3};
-use beryl_session::card_records::record;
+use beryl_card_store::{
+    STORE,
+    facts::{self, Row3},
+};
+use beryl_session::card_records::{record, token_printing_key};
 use beryl_session::protocol::{
     CardType, Counter, CounterView, FaceName, Facing, Keyword, MarkerPreview, NamedCounter,
     ObjectId as Slot, ObjectView, PowerToughness, RowName, Side, StackItem, ZoneName,
@@ -15,17 +18,15 @@ pub(crate) fn object(card: &Object, slot: Slot, slots: &Slots, viewer: Viewer) -
     let controller = viewer.side(card.controller);
     let printed = match &card.card {
         Card::Named(name) => record(name, card.token),
+        Card::Token { name, scryfall_id } => STORE.token_printing(name, scryfall_id),
         _ => None,
     };
-    let name = match &card.card {
-        Card::Named(name) | Card::Custom { name, .. } => Some(name),
-        Card::Hidden => None,
-    };
+    let name = card.card.name();
     let named_face = printed
         .as_ref()
         .and_then(|record| printed_face(record, face_for_preview(card.face)));
     let mut object = if let Some(name) = name {
-        let display_name = named_face.map_or(name.as_str(), |face| &face.name);
+        let display_name = named_face.map_or(name, |face| &face.name);
         ObjectView::card(slot, display_name, zone, controller, owner)
     } else {
         ObjectView::hidden(slot, zone, controller, owner)
@@ -39,6 +40,16 @@ pub(crate) fn object(card: &Object, slot: Slot, slots: &Slots, viewer: Viewer) -
         object.facing = Facing::Down;
     }
     object.token = card.token;
+    match &card.card {
+        Card::Custom { types, colors, .. } => {
+            object.type_line = Some(types.clone());
+            object.custom_colors = Some(colors.clone().into_boxed_slice());
+        }
+        Card::Token { name, scryfall_id } => {
+            object.token_printing = Some(token_printing_key(name, scryfall_id).into_boxed_str());
+        }
+        Card::Named(_) | Card::Hidden => {}
+    }
     object.tapped = card.tapped;
     object.damage = card.damage;
     object.note.clone_from(&card.note);
@@ -170,10 +181,7 @@ pub(crate) fn marker(
     viewer: Viewer,
 ) -> StackItem {
     let preview = marker.display_source.as_ref().and_then(|source| {
-        let name = match &source.card {
-            Card::Named(name) | Card::Custom { name, .. } => name.clone(),
-            Card::Hidden => return None,
-        };
+        let name = source.card.name()?.to_owned();
         Some(MarkerPreview {
             name,
             face: face(source.face),
