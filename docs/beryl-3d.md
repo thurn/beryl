@@ -1508,6 +1508,15 @@ adds to some of them.
 | `loss`     | The life total's text is tinted red, and a flat-layer text element showing the amount sinks away and fades. | Nothing            |
 | `gain`     | The life total's text is tinted green, and a flat-layer text element showing the amount rises and fades.    | Nothing            |
 
+- **When an effect plays.** As a script is compiled, each `StepEffect` of a
+  step's timing becomes an `EffectRun` on the script's clock, timed as
+  `Effects::begin` in `ui/src/stage/effects.ts` times it: it begins at the
+  step's start or end, plus `into` times the step's length, plus `delay`, and
+  lasts its `duration` or the step's length. It is on `on`, or else on the
+  step's subject. As the script starts, the show takes its runs in real time and
+  holds each until it ends, past the end of its script, without holding up the
+  next script or a prompt. A later run of the same effect on the same thing cuts
+  the earlier one short, and a script with a reset drops them all.
 - **The shapes of light** (a soft disc, a burst with rays, a ring, a cone, a
   comet) are sprites that `beryl_assets` draws once at startup into the atlas.
   No image file holds them.

@@ -11,6 +11,7 @@ mod checks;
 mod common;
 mod contract;
 mod driver;
+mod effects;
 mod faces;
 mod flat_layer;
 mod light;

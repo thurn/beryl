@@ -1,7 +1,7 @@
 //! A frame that ends one script and starts the next allocates nothing (docs/beryl-3d.md, "The
 //! frame": no allocation): scripts are compiled when their updates arrive. This binary counts
-//! every heap allocation, so it holds one test, which also checks that `Lit::advance` allocates
-//! nothing.
+//! every heap allocation, so it holds one test, which also checks that the effects a starting
+//! script begins and `Lit::advance` allocate nothing.
 
 mod common;
 
@@ -9,7 +9,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use beryl_protocol::protocol::ObjectId;
-use beryl_protocol::script::{Mark, Subject};
+use beryl_protocol::script::{Curve, Edge, Mark, StepEffect, Subject};
 use beryl_scene::frame::FrameBuilder;
 use beryl_scene::light::{Lit, MarkSpan, Span};
 use beryl_scene::play::record::{Plant, Planted};
@@ -48,7 +48,22 @@ static GLOBAL: Counting = Counting;
 #[test]
 fn a_frame_that_starts_a_script_allocates_nothing() {
     let (start, cards) = before();
-    let (after, timings) = three_beats(&start, cards);
+    let (after, mut timings) = three_beats(&start, cards);
+    // Twenty effects begin with the script's first step, so that the frame that starts it
+    // also gives the show twenty effect runs.
+    timings[0].effects = (0..20)
+        .map(|at| StepEffect {
+            name: if at % 2 == 0 { "glow" } else { "settle" }.to_owned(),
+            when: Edge::Start,
+            on: Some(Subject::Object {
+                slot: ObjectId(u16::try_from(at).expect("few slots")),
+            }),
+            into: None,
+            duration: Some(2000.0),
+            delay: 0.0,
+            curve: Curve::Linear,
+        })
+        .collect();
     let mut show = show();
     let mut frame = empty_frame();
     // A span that begins with the token's step, so that a frame also gives the table's `Lit` a
@@ -81,6 +96,7 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
         1,
         "the planted span reached the table"
     );
+    assert_eq!(show.effects().len(), 20, "the effects outlive the script");
 
     // Forgetting the spans that have gone allocates nothing.
     let mut lit = Lit::with_capacity(4);

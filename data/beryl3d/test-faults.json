@@ -307,17 +307,17 @@
     "b3d:combat-attackers/you/1600x900": {
       "no-jumps": 215,
       "rest-placement": 9,
-      "step-shown": 7
+      "step-shown": 9
     },
     "b3d:combat-attackers/you/1920x1080": {
       "no-jumps": 215,
       "rest-placement": 9,
-      "step-shown": 7
+      "step-shown": 9
     },
     "b3d:combat-attackers/you/2560x1080": {
       "no-jumps": 215,
       "rest-placement": 9,
-      "step-shown": 14
+      "step-shown": 17
     },
     "b3d:combat-blockers/you/2560x1080": {
       "step-shown": 1
@@ -903,15 +903,15 @@
     },
     "b3d:late-game/you/1600x900": {
       "no-jumps": 86,
-      "step-shown": 14
+      "step-shown": 16
     },
     "b3d:late-game/you/1920x1080": {
       "no-jumps": 86,
-      "step-shown": 14
+      "step-shown": 16
     },
     "b3d:late-game/you/2560x1080": {
       "no-jumps": 86,
-      "step-shown": 19
+      "step-shown": 21
     },
     "b3d:life-from-the-loam/dredge-a-draw-after-the-same-ability-milled-it/you/2560x1080": {
       "step-shown": 1
@@ -1799,15 +1799,15 @@
     },
     "b3d:stack-tall/you/1600x900": {
       "no-jumps": 7,
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:stack-tall/you/1920x1080": {
       "no-jumps": 7,
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:stack-tall/you/2560x1080": {
       "no-jumps": 7,
-      "step-shown": 17
+      "step-shown": 18
     },
     "b3d:staff-of-the-storyteller/bounced/opponent/2560x1080": {
       "step-shown": 1

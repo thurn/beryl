@@ -102,11 +102,9 @@ struct Playing {
     start: u64,
     /// How many times faster than real time its clock runs.
     rate: u64,
-    /// How many of its `compiled.spans` and `compiled.streaks` have reached the table's `Lit`,
-    /// and of its `compiled.effects` the show's effects.
+    /// How many of its `compiled.spans` and `compiled.streaks` have reached the table's `Lit`.
     spans_given: usize,
     streaks_given: usize,
-    effects_given: usize,
 }
 
 impl Playing {
@@ -128,9 +126,9 @@ impl Playing {
         }
     }
 
-    /// Gives `lit` each span change and streak, and `effects` each effect run, of the script
-    /// whose real time is at or before `now`, in order, that it has not given yet.
-    fn light(&mut self, now: u64, lit: &mut Lit, effects: &mut Vec<EffectRun>) {
+    /// Gives `lit` each span change and streak of the script whose real time is at or before
+    /// `now`, in order, that it has not given yet.
+    fn light(&mut self, now: u64, lit: &mut Lit) {
         while let Some(change) = self.compiled.spans.get(self.spans_given) {
             let over = self.real_interval(change.over);
             if over.from > now {
@@ -150,21 +148,49 @@ impl Playing {
             lit.streak(StreakRun { over, ..*run });
             self.streaks_given += 1;
         }
-        while let Some(run) = self.compiled.effects.get(self.effects_given) {
+    }
+
+    /// Adds each of its effect runs to `effects`, in real time, as the script starts.
+    fn affect(&self, effects: &mut Vec<EffectRun>) {
+        for run in &self.compiled.effects {
             let over = self.real_interval(Interval {
                 from: run.start,
                 to: run.start + run.duration,
             });
-            if over.from > now {
-                break;
-            }
-            effects.push(EffectRun {
-                start: over.from,
-                duration: over.duration(),
-                ..*run
-            });
-            self.effects_given += 1;
+            begin(
+                effects,
+                EffectRun {
+                    start: over.from,
+                    duration: over.duration(),
+                    ..*run
+                },
+            );
         }
+    }
+}
+
+/// Adds `run` to `effects`, the runs the show holds. As on the web stage
+/// (`Effects::begin` in ui/src/stage/effects.ts), a run of the same effect on the same thing
+/// gives way to it: one yet to begin is dropped, and one under way ends as `run` begins. When
+/// the list is full, `run` replaces the run that ends first, so that it allocates nothing.
+fn begin(effects: &mut Vec<EffectRun>, run: EffectRun) {
+    effects.retain_mut(|other| {
+        if other.effect != run.effect || other.on != run.on {
+            return true;
+        }
+        if other.start >= run.start {
+            return false;
+        }
+        other.duration = other.duration.min(run.start - other.start);
+        true
+    });
+    if effects.len() < LIGHTS {
+        effects.push(run);
+    } else if let Some(first) = effects
+        .iter_mut()
+        .min_by_key(|other| other.start + other.duration)
+    {
+        *first = run;
     }
 }
 
@@ -231,6 +257,14 @@ impl Show {
             effects: Vec::with_capacity(LIGHTS),
             pointer: Pointer::default(),
         }
+    }
+
+    /// The effects the show holds, each in nanoseconds since the client started: those under
+    /// way and those that begin later, until each ends. An effect outlives the script that
+    /// began it, and a script with a reset drops them all.
+    #[must_use]
+    pub fn effects(&self) -> &[EffectRun] {
+        &self.effects
     }
 
     /// The spans and streaks the table shows.
@@ -345,6 +379,7 @@ impl Show {
                 .collect(),
             segments: compiled.segments.clone(),
             finals: compiled.final_poses(),
+            effects: compiled.effects.clone(),
         };
         match history.get_mut(index) {
             // Compiled again for a window of a new shape: it keeps when it started.
@@ -517,7 +552,7 @@ impl Show {
                 ended = Some(real);
                 self.rested = real;
                 if let Some(playing) = &mut self.playing {
-                    playing.light(real, &mut self.lit, &mut self.effects);
+                    playing.light(real, &mut self.lit);
                 }
                 self.finish();
             }
@@ -533,6 +568,7 @@ impl Show {
             let moves = !waiting.compiled.tracks.is_empty();
             if waiting.compiled.reset {
                 self.lit.clear();
+                self.effects.clear();
             }
             let start = ended.unwrap_or(now);
             self.record_start(waiting.number, start, rate);
@@ -546,17 +582,20 @@ impl Show {
                 rate,
                 spans_given: 0,
                 streaks_given: 0,
-                effects_given: 0,
             });
+            if let Some(playing) = &self.playing {
+                playing.affect(&mut self.effects);
+            }
             if !moves {
                 self.show_playing();
             }
         }
         if let Some(playing) = &mut self.playing {
-            playing.light(now, &mut self.lit, &mut self.effects);
+            playing.light(now, &mut self.lit);
         }
         self.lit.advance(now);
-        self.effects.retain(|run| run.start + run.duration >= now);
+        // A run is under way from its start until, not at, its end, as on the web stage.
+        self.effects.retain(|run| run.start + run.duration > now);
         let Some(shown) = self.shown.as_ref().map(|update| &update.view) else {
             return;
         };
@@ -648,11 +687,30 @@ impl Show {
         }
     }
 
-    /// When the next frame is needed: now while a segment is under way or a script is waiting
-    /// to start, at the start of the next segment or the end of the script while the script
-    /// holds still, and never when nothing plays.
+    /// When the next frame is needed: now while a segment or an effect is under way or a script
+    /// is waiting to start, at the start of the next segment or effect or the end of the script
+    /// while all holds still, and never when nothing plays.
     #[must_use]
     pub fn wake(&self, now: u64) -> Wake {
+        let mut next = None::<u64>;
+        for run in &self.effects {
+            if run.start > now {
+                next = Some(next.map_or(run.start, |next| next.min(run.start)));
+            } else if now < run.start + run.duration {
+                return Wake::Now;
+            }
+        }
+        match (self.script_wake(now), next) {
+            (Wake::Now, _) => Wake::Now,
+            (Wake::At(at), Some(next)) => Wake::At(at.min(next)),
+            (Wake::At(at), None) => Wake::At(at),
+            (Wake::Never, Some(next)) => Wake::At(next),
+            (Wake::Never, None) => Wake::Never,
+        }
+    }
+
+    /// When the scripts need the next frame, as `wake` says, leaving the effects aside.
+    fn script_wake(&self, now: u64) -> Wake {
         let Some(playing) = &self.playing else {
             return if self.waiting.is_empty() {
                 Wake::Never

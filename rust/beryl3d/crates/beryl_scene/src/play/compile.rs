@@ -11,17 +11,17 @@
 
 use beryl_protocol::protocol::{PlayerView, StackItem};
 use beryl_protocol::script::{
-    Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of, replay,
+    Edge, Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of, replay,
 };
 
 use super::record::{MoveKey, Plant, Planted, SegmentRecord, StepRecord};
 use super::step::{Motion, add};
 use crate::beat::{Laid, beat};
-use crate::effects::EffectRun;
+use crate::effects::{Effect, EffectRun};
 use crate::light::{MarkSpan, Span, SpanChange, StreakRun};
 use crate::motion::Track;
 use crate::notice::NoticeRun;
-use crate::pose::Pose;
+use crate::pose::{Curve, Pose};
 use crate::table::{SceneObject, Table};
 use crate::verbs::{self, Interval};
 
@@ -60,8 +60,8 @@ pub(crate) struct Compiled {
     /// The banners and pills its verbs show, ordered by when each begins on its clock, and as its steps wrote them
     /// where two begin together.
     pub notices: Vec<NoticeRun>,
-    /// The effects its verbs play, ordered by when each begins on its clock. No verb plays one
-    /// yet, so it is empty.
+    /// The effects its steps begin (`StepTiming::effects`), ordered by when each begins on its
+    /// clock, and as its steps wrote them where two begin together.
     pub effects: Vec<EffectRun>,
 }
 
@@ -165,14 +165,18 @@ pub(crate) fn compile<'a>(
         .filter(|_| script.reset.is_none())
         .map(|(before, played)| Motion::new(before, played.clone(), table, records, shown));
     let mut steps = Vec::new();
+    let mut number = 0;
+    let effects = &mut compiled.effects;
     compiled.end = lay_out(
         script,
         timings,
         &mut compiled.unbuilt,
         |(beat, index), step, timing, laid| {
             if let Some(motion) = &mut motion {
-                motion.step(steps.len(), step, timing, laid);
+                motion.step(number, step, timing, laid);
             }
+            effects_of(number, step, timing, laid, effects);
+            number += 1;
             if !records {
                 return;
             }
@@ -190,6 +194,8 @@ pub(crate) fn compile<'a>(
         },
     );
     compiled.steps = steps;
+    // The steps of a beat need not begin in the order they are written, nor their effects.
+    compiled.effects.sort_by_key(|run| run.start);
     let Some(motion) = motion else {
         compiled.finals = at_rest();
         return (
@@ -260,6 +266,49 @@ fn lay_out(
         first += steps.len();
     }
     nanoseconds(at)
+}
+
+/// Adds to `runs` the effects that `step`, the script's step `number`, begins, on the script's
+/// clock, as the web stage begins them (`Effects::begin` in ui/src/stage/effects.ts). Each is on
+/// what its `on` names, or else on the step's subject; with neither it is dropped. It begins
+/// at the edge of the step its `when` names, `into` the step's length after that, and then
+/// `delay` later, and it lasts its `duration`, or the step's length where it has none. One that
+/// would last no time is dropped.
+fn effects_of(
+    number: usize,
+    step: &Step,
+    timing: &StepTiming,
+    laid: &Laid,
+    runs: &mut Vec<EffectRun>,
+) {
+    let span = laid.to - laid.from;
+    for effect in &timing.effects {
+        let Some(on) = effect.on.or_else(|| mover_of(&step.act)) else {
+            continue;
+        };
+        let Some(named) = Effect::from_name(&effect.name) else {
+            debug_assert!(false, "no effect is named {:?}", effect.name);
+            continue;
+        };
+        let at = match effect.when {
+            Edge::Start => laid.from,
+            Edge::End => laid.to,
+        };
+        let from = at + effect.delay + effect.into.unwrap_or(0.0) * span;
+        let to = from + effect.duration.unwrap_or(span);
+        let (start, end) = (nanoseconds(from), nanoseconds(to));
+        if end <= start {
+            continue;
+        }
+        runs.push(EffectRun {
+            effect: named,
+            on,
+            start,
+            duration: end - start,
+            curve: Curve::named(effect.curve),
+            step: number,
+        });
+    }
 }
 
 /// The slot of the scene object `step` moves, if it moves one.

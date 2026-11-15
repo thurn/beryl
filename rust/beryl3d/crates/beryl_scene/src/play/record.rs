@@ -8,6 +8,7 @@ use beryl_protocol::protocol::{Why, ZoneName};
 use beryl_protocol::script::{Act, Verb};
 use glam::Vec3;
 
+use crate::effects::EffectRun;
 use crate::motion::pose_at;
 use crate::pose::{Pose, Segment};
 
@@ -132,6 +133,8 @@ pub struct ScriptRecord {
     /// Where each object rests in the view the script leads to, by slot; `None` for an object
     /// the view does not show.
     pub finals: Vec<Option<Pose>>,
+    /// The effects its steps begin, on its own clock, ordered by when each begins.
+    pub effects: Vec<EffectRun>,
 }
 
 impl ScriptRecord {

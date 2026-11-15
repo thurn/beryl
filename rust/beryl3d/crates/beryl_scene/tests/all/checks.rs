@@ -222,6 +222,7 @@ fn script(steps: Vec<StepRecord>, segments: Vec<SegmentRecord>) -> ScriptRecord 
         steps,
         segments,
         finals: Vec::new(),
+        effects: Vec::new(),
     }
 }
 

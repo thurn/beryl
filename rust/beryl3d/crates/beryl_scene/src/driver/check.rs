@@ -332,6 +332,11 @@ fn times(given_at: &[u64], history: &[ScriptRecord], end: u64) -> Vec<u64> {
             times.insert(real(step.from));
             times.insert(real(step.to));
         }
+        for run in &script.effects {
+            times.insert(real(run.start));
+            times.insert(real(run.start + run.duration / 2));
+            times.insert(real(run.start + run.duration));
+        }
     }
     times.into_iter().filter(|&t| t <= end).collect()
 }
