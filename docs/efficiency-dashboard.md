@@ -1,0 +1,1207 @@
+# Efficiency dashboard
+
+Project Beryl is built almost entirely by AI agent sessions: 1,828 commits
+landed in its first week. This document designs a tool that shows where those
+sessions' time, the machine's CPU and the LLM tokens go, for every unit of work,
+so that the project can be made faster and cheaper on evidence.
+
+The tool has two faces over one set of numbers:
+
+- A command, `just efficiency`, whose output an agent can read.
+- A local web page that draws the same results for a person, with detail hidden
+  until it is opened.
+
+Three requirements shape everything below:
+
+- **Collection must cost agents nothing noticeable.** Almost every number is
+  derived afterwards from logs that already exist. Only two things are added:
+  one field on a log line that is already written, and one appended line each
+  time a build or test command finishes using its share of the CPU.
+- **The page shows nothing the command cannot print.** Every section of the page
+  is a rendering of one query, and the same query is a command with a `--json`
+  flag.
+- **The page is quiet.** It shows a few numbers and bars. Words, tables and
+  per-request detail appear only when the reader opens a section.
+
+Figures in the examples are illustrative, to show the shape of a result. The
+only measured figures are in
+[What a first measurement showed](#what-a-first-measurement-showed).
+
+## Related information
+
+- Epic `by-ig5e` (`bd show by-ig5e`) tracks the work and records the decisions
+  taken with the user on 2026-11-15.
+- [`docs/checks.md`](checks.md) describes the fast check, slow CI, the run log
+  and the CPU sampler that this design reads.
+- `tools/src/beryl_tools/runlog.py` defines the run log, one line per check per
+  run.
+- `tools/src/beryl_tools/cpu.py` defines the CPU sampler and its row format.
+- `tools/src/beryl_tools/tokens.py` defines the pool of CPU tokens that builds
+  and tests draw from.
+- `tools/src/beryl_tools/check_value.py` and `verdicts.py` define what a check
+  costs, what it caught and how each failure is judged. They are behind the
+  existing reports `just ci-value` (each check's catches per CPU second) and
+  `just ci-report` (each check's runs, failures and seconds).
+- `~/enact/docs/design.md` describes Enact, the tool that manages worktrees, the
+  task queue and CI.
+- Epic `by-bajq` (109 beads) is the example project used throughout.
+
+## Background: how work is organized
+
+This section names the things the dashboard counts. A reader who knows the
+project can skip it.
+
+Tasks and sessions:
+
+- A **bead** is one task in the project's task tracker (`bd`). An **epic** is a
+  bead that groups child beads into a project.
+- Beads carry labels. `tier:<name>` picks which of three Claude models works the
+  bead: `fable`, `opus` or `sonnet`, from largest and dearest to smallest and
+  cheapest. `role:<name>` says what the session does: an `executor` implements,
+  a `warden` reviews, a `steward` repairs CI. `lane:<name>` groups beads that
+  one session works through in order.
+- A **provider** is the agent program that runs a session. There are two: Claude
+  Code and Codex. Each keeps its own log of every session, called a
+  **transcript** here.
+- **Enact** starts one agent session per bead or per group of beads. It records
+  on the bead which session worked it (`enact_session`), which worktree it used
+  (`enact_worktree`) and which commits it landed (`enact_commits`).
+- An **orchestrator session** runs an epic: it starts worker sessions, waits for
+  them and does no implementation itself. Enact calls it the vizier, and records
+  its id on each bead it started as `enact_vizier`.
+- A **worktree** is a separate checkout under `.worktrees/` in which one session
+  makes one change. Its directory name is usually the bead's id.
+- A **host** is a machine. Work happens on three: the main development Mac
+  (named `jarvis` in bead records), a second Mac and a Windows PC.
+
+Checks:
+
+- The **fast check** runs before every push and takes about a minute. **Slow
+  CI** runs on the shared `staging` branch afterwards; `master` advances only
+  when it passes.
+- Both are split into **check lanes**, one per kind of file or test (`rust`,
+  `ui`, `oracle` and so on). This document always says "check lane" for these,
+  to keep them apart from the `lane:` label on beads.
+- A check lane is a sequence of **steps**, each one command, such as "run the
+  Rust tests". A step reports the individual **checks** it ran, such as one Rust
+  test or one screenshot.
+- The **oracle** check lane plays card scenarios in XMage and Forge, two other
+  Magic rules engines written in Java, and compares the results with Beryl's.
+- Three other programs run checks on a schedule or on demand: the **browser
+  sweep** runs every browser check every three hours, the **nightly** runs the
+  slowest checks once a day, and **bisection** reruns checks on older commits to
+  find which commit broke slow CI.
+- The **run log** is a file with one JSON line per check per run. Its `script`
+  field says which of those five programs made the run: `check` for the fast
+  check, `ci` for slow CI, and one value each for the sweep, the nightly and
+  bisection.
+- Every check that has ever failed has its own closed bead, labeled `ci-check`,
+  on which each failure is recorded as a comment.
+- A **Steward bead** is filed automatically when slow CI fails. It names the
+  range of commits that broke it (`enact_ci_range`) and a session with the role
+  `steward` fixes it.
+
+The machine:
+
+- The **CPU sampler** is a background process that records, each minute, the CPU
+  used by each worktree and each kind of work.
+- A **CPU token** is permission to use one core. A build, test or check command
+  takes a **lease** of several CPU tokens before it starts, and waits if none
+  are free. This document calls such a command a **heavy command**. Where
+  "token" appears without "CPU", it means an LLM token.
+
+## What a first measurement showed
+
+Before designing, one pass was made over the 1,111 Claude Code transcripts on
+the main development Mac (2026-11-15, six days of work). It shows that the data
+already exists and where the large costs are.
+
+Token volume across 85,000 model requests:
+
+```text
+cache read     19,340,000,000   about 227,000 per request
+cache write       195,000,000
+output             60,000,000
+uncached input        180,000
+requests by model: Opus 79%, Fable 16%, Sonnet 5%
+```
+
+Almost all token volume is the model reading its own earlier context again.
+Output is a third of one percent. The levers are therefore the size of the
+context and the number of requests per bead, not how much the model writes.
+
+Time that sessions spent waiting for tools totals 389 hours:
+
+```text
+ 78 h  orchestrator sessions waiting for workers
+ 62 h  commands this first pass could not classify
+ 46 h  41,000 small shell reads (grep, sed, ls), 4 s each
+ 34 h  Rust tests
+ 30 h  enact push (rebase, fast check, push)
+ 27 h  browser checks
+ 19 h  waiting for slow CI
+ 16 h  cargo build, check and clippy
+ 11 h  waiting for the user to answer a question
+ 66 h  everything else (git, card tools, session bookkeeping)
+```
+
+These figures are rough. Parallel tool calls are counted twice, Codex sessions
+and two other machines are missing, and 62 hours could not be classified. The
+tool designed here removes each of those limitations.
+
+## Design overview
+
+The tool reads existing logs into one local database, answers every question
+with a named query over it, and renders each query's result as text, JSON or
+HTML.
+
+- **Sources** are files that other tools already write: session transcripts,
+  bead records, the git history, the run log, the CPU sampler's rows.
+- **Ingest** reads only the bytes added to each source since the last ingest and
+  writes rows to the store.
+- **The store** is one SQLite file in the Beryl cache directory. It is the
+  long-term record, because providers delete old transcripts.
+- **Queries** are functions from a time range and filters to a result. A result
+  is plain data: numbers, rows and the names of the queries that drill into it.
+- **Renderers** turn a result into a text table, JSON or an HTML fragment.
+  Because both the command and the page render the same result, they cannot
+  disagree.
+- **Findings** are rules that run queries and report the largest sources of
+  waste, each with an estimate of what fixing it would save.
+
+One query is mentioned often before its own section: `just efficiency coverage`
+reports everything the tool does not know, such as hosts with no data and
+commands it could not classify.
+
+The code is Python using only the standard library. It lives in its own
+directory with its own check lane, described under [Isolation](#isolation), so
+that changing it can affect nothing else.
+
+## Units
+
+Efficiency is resources divided by output. This section fixes both.
+
+The unit of output is the **closed bead**. Every number can be shown per bead,
+and rolled up by epic, by label or over the whole project.
+
+- A **cohort** is a set of beads chosen by filters, such as "closed in the last
+  7 days, `tier:sonnet`, `role:executor`". Any bead label can be a filter, so a
+  label such as `exp:short-brief` on some beads is enough to compare an
+  experiment against the rest.
+- **Cards** are a cohort: the beads whose commits add a file under
+  `rust/cards/`. For those beads the tool also divides by the number of card
+  files added, to give cost per card.
+- Work done in a session that names no bead is reported under "(no bead)", so
+  totals always add up to the whole.
+
+Four resources are measured for each bead:
+
+- **Agent minutes**: wall-clock time during which a session was working on the
+  bead, split by what the session was doing. See
+  [Time accounting](#time-accounting).
+- **Core minutes**: CPU time used in the bead's worktree. See
+  [CPU accounting](#cpu-accounting).
+- **Dollars**: every request's tokens multiplied by that model's published API
+  price. See [Token accounting](#token-accounting). The figure is a common unit
+  for comparing models, whether or not the account is billed that way.
+- **Rework**: the cost of later fixes that the bead's commits caused, shown
+  beside the direct cost and never added into it. See [Rework](#rework).
+
+Two further measures describe the flow of work and not its cost:
+
+- **Lead time**: from a bead's creation to its start (time in the queue), from
+  start to close (time being worked), and from its last commit reaching
+  `staging` to that commit reaching `master`.
+- **Throughput**: beads closed per day.
+
+Medians are used for per-bead figures, with the 90th percentile available on
+drill-down, because a few very large beads dominate any mean.
+
+## Sources
+
+Each source is listed with what is read from it. None of the eight costs agents
+anything, because other tools already write them.
+
+- **Claude Code transcripts** (`~/.claude/projects/<project>/<id>.jsonl`, and
+  `<id>/subagents/*.jsonl` for subagents). Each assistant message carries a
+  message id, the model, a timestamp and a `usage` object with the four token
+  classes. Each tool call and each tool result has a timestamp, the tool's name
+  and its input, such as a shell command.
+- **Claude desktop session records** (one JSON file per session in the desktop
+  app's data directory). Each maps the session id that Enact records on a bead
+  (`local_<uuid>`) to its current transcript id (`cliSessionId`) and its earlier
+  ones (`priorCliSessionIds`, with the time each ended). A session that Enact
+  clears between beads gets a new transcript each time.
+- **Codex session logs** (`~/.codex/sessions/<date>/rollout-*.jsonl`). The
+  `session_meta` line gives the working directory and each `token_count` event
+  gives the tokens of the last request and the running total. Tool calls and
+  their outputs are timestamped.
+- **Beads**, read with `bd list --all --json`: ids, parents, labels, creation,
+  start and close times, and the Enact metadata named above.
+- **Git history** of `staging` and `master`: each commit's time, subject and
+  changed paths.
+- **The run log** (`ci/runs.jsonl` in the cache). Each line has `time`, `host`,
+  `commit`, `script`, `lane`, `check`, `outcome` (`pass`, `fail` or `skip`),
+  `seconds`, `cpu_seconds` and `load`.
+- **CPU sampler rows** (`cpu/samples.jsonl` in the cache). Each row covers about
+  a minute and has `time`, `seconds`, `cores` (how many the machine has), `cpu`
+  (CPU seconds keyed by who asked for the work, the kind of work and the
+  worktree), `peak_cores` and `load`. The sampler's name for "who asked for the
+  work" is the context; this document calls it the **owner**, to keep "context"
+  for what a model reads. Owners include a session, the fast check and slow CI.
+- **Check verdicts**. On the bead of a check that has failed, each failure is a
+  comment holding a JSON object with the commit and a `verdict`. See
+  [CI accounting](#ci-accounting) for the verdicts.
+
+The design adds two things to what is collected, and three small data files.
+
+- The run log gains a `worktree` field on each line: the name of the checkout
+  the run was made in. Without it a fast-check run cannot be tied to a bead.
+- The CPU token pool appends one line per lease when the lease is released. See
+  [CPU accounting](#cpu-accounting) for the format.
+- `data/efficiency-prices.json` holds model prices,
+  `data/efficiency-command-kinds.json` names kinds of shell command, and
+  `data/efficiency-changes.json` lists changes made to improve efficiency. Each
+  is described where it is used.
+
+### Collection budget
+
+The rule for anything new is that it may cost a heavy command one file append,
+and may cost any other command nothing.
+
+- No hook runs inside an agent session, and nothing is added to a prompt.
+- No command is wrapped in a timer. Durations come from the timestamps the
+  session transcript already has.
+- Ingest never runs inside a session's command. It runs at background priority
+  when a query needs fresher data, or from `just efficiency ingest`.
+- The tool measures itself: `just efficiency coverage` reports the CPU seconds
+  and wall seconds of each ingest and of the sampler, as a share of the
+  machine's total.
+
+## Attributing sessions to beads
+
+A session often works several beads one after another, and an orchestrator works
+none. This section says which bead each second and each request belongs to.
+
+A **bead window** is the span of one transcript during which the session was
+working one bead. Ingest finds windows from the session's own shell commands.
+
+- A window for a bead opens at the first tool call that runs
+  `enact start <bead>` or `enact claim <bead>`. A later `start` or `claim` of
+  the same bead inside its open window changes nothing.
+- A window closes at `enact close <bead>`, at the opening of another bead's
+  window, or at the end of the transcript, whichever comes first.
+- `enact close <bead> --continue` closes that bead and claims the next bead in
+  its lane. Enact prints the claimed bead's id in the command's result, and the
+  next window opens at that result.
+- Requests and tool calls before the first window in a transcript belong to that
+  first window, since they are the session reading its instructions for it.
+- Activity after a window closes and before another opens belongs to "(no
+  bead)".
+- A close with no open window for that bead is ignored and counted by
+  `coverage`.
+- A subagent's transcript belongs to the window that contains the tool call
+  which started it. Its requests add to the bead's dollars. Its time adds
+  nothing: it runs inside the parent's `Agent` tool call, which is already
+  counted, and is shown as a breakdown of that call.
+- A bead worked by several sessions, or by one session in several transcripts,
+  has several windows. Its cost is their sum.
+
+Here is one transcript that worked two beads in a lane:
+
+```text
+07:03:45  enact start by-bajq.6.9             window by-bajq.6.9 opens
+07:38:21  enact close by-bajq.6.9 --continue  it closes; the result names
+                                              by-bajq.6.13, whose window opens
+08:10:02  enact close by-bajq.6.13            window closes
+08:10:02  onwards                             "(no bead)"
+```
+
+Sessions that never open a window are attributed in this order:
+
+- An orchestrator session, recognised by `enact_vizier` on the beads it started.
+  Its whole cost goes to that epic under the heading **orchestration**, not to
+  any one bead.
+- A session that ran `enact worktree create <name>` is listed under "(no bead)"
+  with that name.
+- Any other session is listed under "(no bead)" with its title.
+
+Every row in the store carries the host and the provider (`claude` or `codex`).
+A bead whose metadata says it ran on a host with no data in the store is shown
+as "no data", never as zero. See [Other machines](#other-machines).
+
+## Time accounting
+
+This section splits each bead window so that every second falls in exactly one
+category, and the categories sum to the window's length.
+
+At any instant a window is in exactly one of six categories. Where more than one
+could apply, the first in this list wins.
+
+- **Waiting on a person**: a question put to the user is unanswered, or the
+  session ended its turn and the next event is a message that a person typed.
+  The tool call that asks the question counts here and not as a tool. There is
+  no upper limit: a question left overnight is all waiting on a person.
+- **Queued for cores**: a tool call is running and its command is waiting for a
+  CPU lease. It is subdivided by kind of command. See
+  [Command kinds](#command-kinds).
+- **Tool**: a tool call is running, from the call to its result. It is
+  subdivided by kind of command.
+- **Model**: the model is generating, from a tool result or a message to the
+  next assistant message. This applies whether or not a background command is
+  also running.
+- **Waiting on background work**: the session ended its turn, and the next event
+  is a notification that a command it started in the background, or another
+  session, has finished. It is subdivided by the kind of that command.
+- **Idle**: the session ended its turn and the next event is anything else, such
+  as a scheduled wake-up.
+
+**Agent minutes** are queued for cores, tool, model and waiting on background
+work. Waiting on a person and idle are reported beside them and are not part of
+agent minutes, because no agent or machine is working during them.
+
+When several tool calls run at once, the overlapping seconds are divided equally
+among the calls running at that instant, so a window's categories still sum to
+its wall-clock length.
+
+Two kinds of tool time are split one level further, because the split decides
+what to optimise:
+
+- **Compile against run.** Cargo prints `Finished ... in 42.10s` when a build
+  ends. Ingest reads that line from the tool result and counts that many seconds
+  of the command as compile and the rest as run. This applies to every command
+  that builds before it runs. A command that prints several such lines has their
+  seconds added together.
+- **Inside a push.** `enact push` rebases, runs the fast check and pushes. The
+  run-log lines with the same worktree and a time inside the tool call give the
+  seconds of each check lane. What remains is rebase, waiting and push.
+
+The example below shows one bead's split. Indented lines divide the line above
+them and are not added again.
+
+```text
+bead by-bajq.6.9    34.6 agent min
+  model                     11.2
+  tool: rust tests           7.9
+      compile                5.1
+      run                    2.8
+  tool: push                 3.5
+      fast check             3.0
+      rebase and push        0.5
+  tool: read and search      3.8
+  tool: build                3.1
+  tool: slow CI wait         2.2
+  tool: other                2.0
+  queued for cores: push     0.9
+beside agent minutes: waiting on a person 0.0, idle 0.0
+```
+
+### Command kinds
+
+A shell command is given a kind by an ordered table of patterns in
+`data/efficiency-command-kinds.json`, so that a new command can be named without
+changing code. The first matching pattern wins. This excerpt shows the format:
+
+```json
+[
+  { "kind": "push", "pattern": "enact(\\.py)? push\\b" },
+  { "kind": "slow CI wait", "pattern": "enact(\\.py)? ci --wait" },
+  { "kind": "orchestration wait", "pattern": "enact(\\.py)? (next|wait)\\b" },
+  { "kind": "rust tests", "pattern": "just test-rust|cargo (nextest|test)\\b" },
+  { "kind": "build", "pattern": "cargo (build|check|clippy)\\b" },
+  { "kind": "read and search", "pattern": "^(rg|grep|sed|cat|ls|head|tail)\\b" }
+]
+```
+
+- The pattern is matched against the command with leading `cd <path> &&` and
+  environment assignments removed, so a path that happens to contain a word such
+  as `enact` does not decide the kind.
+- A command that chains several heavy commands with `&&` is given the kind of
+  the first heavy one, and is flagged as chained, since its parts cannot be
+  timed apart.
+- Tools other than the shell are their own kinds: `Read`, `Edit`, `Agent` (a
+  subagent), and so on.
+- Commands that match nothing are kind **other**. The `coverage` query lists the
+  most expensive unmatched commands, so the table can be extended. The share of
+  tool time that is "other" should stay under 5%.
+
+## Token accounting
+
+Dollars are computed per request and then summed. This section defines the
+price, and then splits a request's cost by what was in its context, because the
+context is where the money goes.
+
+### Price
+
+Each request has four token classes: uncached input, cache write, cache read and
+output. `data/efficiency-prices.json` gives a price per million tokens for each
+class of each model, copied from the provider's published price list on the date
+it records.
+
+```json
+{
+  "as_of": "2026-11-15",
+  "source": "the address of the provider's price page",
+  "models": {
+    "example-model": {
+      "input": 3.0, "cache_write": 6.0, "cache_read": 0.3, "output": 15.0
+    }
+  }
+}
+```
+
+- A request by a model that is not in the table has an unknown price. Its tokens
+  are still counted, its dollars are null, and `coverage` lists the model. A sum
+  that includes such requests is marked as a lower bound.
+- A price change adds a new dated table and keeps the old one. A request is
+  priced by the table in force on its date, so past figures do not move.
+- The transcript repeats one assistant message on several lines, one per content
+  block. Ingest counts each message id once.
+
+### Parts of the context
+
+A request's **context** is everything the model reads for it: its uncached
+input, cache write and cache read tokens together. Ingest divides each request's
+context into three parts that do not overlap and that sum to the context.
+
+- The **fixed prefix** is the context of the first request in a transcript: the
+  system prompt, the tool definitions and the project's instruction files. It
+  includes the session's first prompt. Its size is measured once per transcript
+  and is the same for every request in it. A session that is cleared starts a
+  new transcript, which has its own prefix.
+- **New content** is what arrived since the previous request: tool results and
+  user messages. Its size is this request's context, less the previous request's
+  context, less the previous request's output, and never less than zero. Where
+  the context shrank by less than half, new content is zero and carried content
+  is whatever remains after the prefix.
+- **Carried content** is the rest: everything after the prefix that an earlier
+  request had already read, including the model's own earlier output.
+
+```text
+request 30   context 181,000   output 400
+request 31   context 189,600
+  new content      189,600 - 181,000 - 400 = 8,200
+  fixed prefix      81,000   (measured at request 1)
+  carried content  189,600 - 81,000 - 8,200 = 100,400
+```
+
+Two rules complete the split:
+
+- **Who added it.** A request's new content is assigned to the tool calls whose
+  results arrived since the previous request, in proportion to the size of their
+  results in bytes. A user message is assigned to "user".
+- **Compaction.** When a request's context is less than half of the previous
+  request's context, the provider has replaced the conversation with a summary.
+  At that request the whole context beyond the fixed prefix is new content
+  assigned to "compaction", and everything carried before it stops being
+  carried.
+
+### Carrying cost
+
+The **carrying cost** of a tool result is what it costs to read that result
+again on every later request. It is the number of tokens the result added,
+multiplied by the number of later requests in the same transcript up to the next
+compaction, multiplied by the model's cache-read price per token.
+
+```text
+tool result: `just test-rust` output, 8,200 tokens, at request 31 of 164
+later requests, with no compaction before the transcript ends: 133
+tokens read again: 8,200 x 133 = 1,090,600
+carrying cost: 1,090,600 x the cache-read price per token
+```
+
+Carrying cost is an estimate attached to the tool call that produced the result,
+wherever the later requests fall. It is used to rank tool results and by the
+findings. It is not a fourth way of dividing a bead's dollars: those are always
+the actual dollars of the requests in the bead's windows.
+
+This is the number that explains expensive beads. A long test log printed early
+in a long session costs far more than the test run itself.
+
+### Three ways to split dollars
+
+Dollars for any bead or cohort can be split in three independent ways. Each
+split sums to the total.
+
+- **By class**: cache read, cache write, output, uncached input.
+- **By source**: output, plus the three parts of the context. A request's
+  input-side dollars (everything but output) are divided among its fixed prefix,
+  its carried content and its new content in proportion to their token counts.
+  Carried content is further divided by the kind of tool that added it.
+- **By purpose**: **wake-up requests** against working requests. A wake-up
+  request is one that makes at least one tool call, all of the kinds
+  "orchestration wait" or "slow CI wait": the session woke, found nothing to do
+  and went back to waiting.
+
+This example shows the split by source for one epic:
+
+```text
+by-bajq    $412 direct, by source
+  fixed prefix                  $118    29%
+  carried: test and build logs  $ 96    23%
+  carried: file reads           $ 71    17%
+  carried: everything else      $ 58    14%
+  output                        $ 38     9%
+  new content                   $ 31     8%
+```
+
+For Codex, the log gives input, cached input and output per request, and its
+input figure includes the cached part. Cached input is treated as cache read,
+input less cached input as uncached input, and the same three splits apply.
+
+## CPU accounting
+
+Core minutes come from the CPU sampler, which attributes each minute's CPU to an
+owner, a kind of work (compile, test, browser, oracle) and a worktree.
+
+Each minute of a worktree's CPU is given to one bead by these rules, in order:
+
+- The bead whose `enact_worktree` names that worktree and which had a window
+  open at that minute.
+- Otherwise, the bead whose `enact_worktree` names that worktree and whose start
+  and close times contain that minute. This covers a command still running after
+  the session ended its turn. If several beads qualify, the one that started
+  most recently gets it.
+- Otherwise it is **shared** CPU, reported under the worktree's name.
+
+The worktree decides, not the owner: the CPU of a fast check that ran in a
+bead's worktree belongs to that bead.
+
+Shared CPU also includes everything outside a bead's worktree: slow CI, the
+browser sweep, the nightly, bisection, editors and the desktop apps. It is
+reported per day, by owner and kind, and also divided by beads closed that day.
+The sampler's own CPU and each ingest's CPU are listed as their own lines.
+
+The machine being busy is measured two ways, since a busy machine is what stops
+more sessions running in parallel.
+
+- **Saturation** is the share of minutes in which the average cores in use (the
+  row's CPU seconds divided by its seconds) were at least 90% of the cores the
+  machine has.
+- **Queued for cores** is exact: the CPU token pool writes one line when a lease
+  is released, with how long the command waited to get it.
+
+```json
+{"time": "2026-11-15T14:25:49Z", "class": "agent", "worktree": "by-bajq.6.9",
+ "command": "test-rust", "cores": 6, "wanted": 12, "waited_s": 41.2,
+ "held_s": 97.0}
+```
+
+- `cores` is how many CPU tokens the lease got and `wanted` is how many the
+  command would have used on an idle machine. The difference shows commands
+  running narrower than they could.
+- `class` is the pool's priority class: `push` for the fast check of a push,
+  `agent` for a command an agent ran by hand, `ci` for slow CI and `queue` for a
+  check that Enact's merge queue runs.
+- `waited_s` joins to the tool call that was running in that worktree at that
+  time. Those seconds move from the tool category to "queued for cores".
+- The line is written under the pool's existing lock, by the process that
+  already holds it, so it adds no new contention.
+
+From these the tool reports a **parallel capacity estimate** for a cohort: the
+machine's cores divided by the mean cores a session of that cohort uses, rounded
+down. A bead's cores are its core minutes divided by its agent minutes. For the
+card cohort this says how many card-writing sessions the machine can run at once
+before they queue, which is the figure that matters for running thirty in
+parallel.
+
+```text
+cards, last 7 days
+  cores per session            1.9 mean, 5.2 at the 90th percentile
+  machine                      18 cores
+  parallel capacity estimate   9 sessions (18 / 1.9)
+```
+
+## CI accounting
+
+CI is the largest shared cost, and the question is not only what it costs but
+what each part of it buys. This section defines the cost of a check, its value,
+and the costs that follow a failure.
+
+Every check run is already in the run log with its CPU seconds, and every
+failure already has a **verdict**:
+
+- **catch**: the failure was fixed by changing product code. The check found a
+  real bug.
+- **stale**: the failure was fixed by changing the check itself.
+- **flaky**: the check failed and then passed on the same code.
+- **miss**: slow CI failed a check that the fast check had not chosen to run for
+  the commit at fault. A miss is recorded in addition to the catch or stale
+  verdict that the fix later brings.
+
+The store keeps one row per check per day per script, with runs, failures by
+verdict, CPU seconds and wall seconds. It does not copy the run log's individual
+lines, which already exceed 700 MB. Fast-check runs are the exception, because
+each must be tied to a push: the store also keeps one row per fast-check run per
+check lane, with its worktree, start time, wall seconds, CPU seconds and
+outcome.
+
+### Cost and value of checks
+
+Checks form a tree that the page and the command drill into: script, check lane,
+**family**, check. A family groups related checks, and is derived from the
+check's name by these rules:
+
+- A name beginning `rust:` belongs to the family `rust:<binary>`, the text up to
+  the first `::`.
+- A name beginning `oracle:` belongs to `oracle:<engine>`, where the engine is
+  the text after the last `/`.
+- Any other name belongs to the family named by the text before its first `:`,
+  or by the whole name if it has none.
+
+```text
+rust:beryl_cli::longthink::stops_cost_nothing   family rust:beryl_cli
+oracle:Subtlety/generated 9/forge               family oracle:forge
+oracle:Subtlety/generated 9/xmage               family oracle:xmage
+ui-test:Enter on the start screen starts a game family ui-test
+verb:draw/yours/phone                           family verb
+```
+
+At every level of the tree the same figures are shown:
+
+- **CPU seconds** spent in the range, and the median for one run.
+- **Runs**, and the share of runs in which it was skipped.
+- **Catches**, **stale failures**, **flaky failures** and **misses**.
+- **CPU per catch**: CPU spent divided by catches. A family with no catch shows
+  "never", with the date of its first run so that a new check is not judged too
+  early.
+- **Flake cost**: the CPU and wall seconds of the reruns that flaky failures
+  caused. The cost of the sessions that worked the beads filed for flaky checks
+  is shown beside it, in dollars.
+
+```text
+slow CI, last 7 days      431 runs    141 core h
+  check lane   core h  catches  flaky  stale  misses  core h per catch
+  rust           71       38      6      9      4          1.9
+  oracle         34       11      0      2      1          3.1
+    forge        21        4      0      1      0          5.3
+    xmage        13        7      0      1      1          1.9
+  script         14       22      1      4      2          0.6
+  ui-smoke        9        0      3      0      0         never
+  other lanes    13        5      0      1      0          2.6
+```
+
+### What kind of process the CPU went to
+
+The run log says which check used the CPU. The sampler says which kind of
+process used it: `compile`, `test`, `oracle` (the Java virtual machines that run
+XMage and Forge), `browser`, `node` and so on. The two are joined by owner and
+minute.
+
+- For each script and check lane, the tool shows CPU by kind of process. This
+  answers "how much of slow CI is Java" and "how much of the fast check is
+  compiling" directly.
+- For the oracle check lane, the cost is also split by engine from the check
+  names, and into scenarios that ran against scenarios that were skipped because
+  an earlier run had recorded their outcome.
+
+```text
+slow CI CPU by kind of process, last 7 days
+  compile    52 core h   37%
+  test       41 core h   29%
+  oracle     34 core h   24%   (Java: Forge 21, XMage 13)
+  browser     9 core h    6%
+  other       5 core h    4%
+```
+
+### The fast check
+
+The fast check runs on every push, so its cost is paid by each bead.
+
+- **Per push**: wall seconds, CPU seconds, seconds queued for cores, and which
+  check lanes ran.
+- **Left out**: the steps that the fast check did not finish because it reached
+  its time limit and handed them to slow CI, by step.
+- **Repeats**: pushes that lost the race to `staging`, meaning another push
+  landed first, and had to rebase and check again, with what the repeats cost.
+- **Failures before a push** are counted by verdict in the same way as slow CI,
+  so a fast check lane's catches can be set against its cost.
+
+### What a slow-CI failure costs
+
+A failure of slow CI has costs that no check's own figures show.
+
+- **The Steward bead**: the agent minutes, core minutes and dollars of the
+  session that fixed it.
+- **Bisection**: the CPU of the reruns that found the commit at fault.
+- **Time behind**: the time during which `master` stayed behind `staging`
+  because of the failure, from the failing run's end to the next passing run's
+  end.
+- **Misses**: each miss is listed with its check, since it argues for changing
+  what the fast check selects.
+
+These are summed per failure and per day. The Steward's cost is also shown as
+rework on the beads at fault, as the next section describes.
+
+## Rework
+
+A bead's direct cost says what it took to land. Rework says what it cost
+afterwards. Only cases that can be traced without guessing are counted.
+
+Rework is a second view of costs that are already counted once as some other
+bead's direct cost. Project totals sum direct costs only, so nothing is counted
+twice.
+
+**Slow-CI breakages.** A Steward bead names a commit range. The beads with
+commits in that range are the candidates.
+
+- The Steward's fixing commits are the commits the Steward bead landed. A
+  Steward bead is never itself a candidate.
+- The candidates at fault are those whose commits in the range changed at least
+  one file that the fixing commits also changed.
+- If no candidate qualifies, all candidates are at fault.
+- The Steward bead's whole cost is divided equally among the beads at fault.
+
+**Fixes to cards.** A later commit whose subject begins with `fix` and that
+changes a card file is rework for the bead whose commit added that file. Commits
+landed by a Steward bead are counted only under the first rule.
+
+- The fixing bead may have done other work too. The part of its cost that is
+  rework is its cost multiplied by the card files its `fix` commits changed,
+  divided by all files its commits changed. A file counts once however many
+  commits changed it.
+- That part is divided equally among those card files, and each share goes to
+  the bead that added the file.
+
+A bead is never charged with rework from its own commits. A bead's rework can
+grow after it closes. Its direct cost cannot.
+
+The example compares cards written on two tiers. Rework is shown per card in
+dollars, and `fixed later` is the share of cards that a later `fix` commit
+changed.
+
+```text
+cards by tier, last 7 days       per card
+  tier     cards   direct   rework   agent min   fixed later
+  opus       61    $4.10     $0.60      22          11%
+  sonnet     38    $0.95     $0.70      19          24%
+```
+
+That comparison, direct cost with rework beside it, is what decides whether a
+smaller model is really cheaper for a kind of work.
+
+## Efficiency changes
+
+When someone changes the project to save time or tokens, the dashboard should
+show whether it worked. Such a change is recorded as an entry in
+`data/efficiency-changes.json`, in the same commit that makes it. An entry names
+what the change was, the metric it was meant to move and the direction:
+
+```json
+{
+  "label": "Slow CI reuses one worktree and keeps its target directory",
+  "metric": "slow-ci.cpu-seconds-per-run",
+  "expect": "down"
+}
+```
+
+- The change's commit is the one that added the entry to the file, which the
+  tool finds from the file's history. An entry may instead carry a `commit`
+  field naming an earlier commit on `staging`, for changes made before the file
+  existed.
+- `metric` names one of a fixed set of series, which `just efficiency metrics`
+  lists. Examples: `bead.dollars`, `bead.agent-minutes`, `push.wall-seconds`,
+  `fast-check.cpu-seconds`, `card.dollars`, `request.context-tokens`,
+  `machine.queued-core-hours-per-day`.
+- A metric may carry a cohort filter, such as `bead.dollars[tier=sonnet]`.
+- The dashboard marks the commit on that metric's trend line, and shows the
+  median of the samples in the seven days before the moment the commit reached
+  `staging` and in the seven days after it, with the number of samples on each
+  side.
+- A sample is dated by when its unit began: a bead by its start time, a push or
+  a CI run by its start, a request by its time, a per-day figure by its day. A
+  bead that started before the change and closed after it counts as before.
+- With fewer than five samples on either side, the entry is shown as "too few
+  samples" and no direction is given.
+- A change whose metric did not move in the expected direction is listed as
+  such. This is information, not a failure.
+- A test validates the file: each `commit` given is on `staging`, each metric is
+  known and each label is one sentence.
+
+The list is seeded with the optimisations already made in the project's first
+week, found from the commit history.
+
+## Findings
+
+A finding is a named rule that points at waste and estimates what removing it
+would save. Findings give an agent a place to start, and they keep each reader
+from repeating the same analysis.
+
+Every finding has the same shape:
+
+```json
+{
+  "rule": "carried-logs",
+  "summary": "Test and build logs over 2,000 tokens are read again 40 times at the median",
+  "saving_per_week": { "dollars": 310.0 },
+  "evidence": "efficiency dollars --by source --since 7d",
+  "examples": ["by-bajq.6.9", "by-bajq.8.2"]
+}
+```
+
+- `saving_per_week` is the cost over the last seven days above the rule's
+  **reference**, the level the cost would fall to if the waste were removed. It
+  is in one unit: dollars, agent hours or core hours.
+- `evidence` is the command that prints the numbers behind it.
+- Findings are listed in three groups, one per unit, each sorted by saving. No
+  unit is converted into another.
+- Findings never file beads. An agent is told to work one.
+
+The rules, each with its unit and its reference:
+
+- **wake-ups** (dollars): the cost of wake-up requests. Reference: zero.
+- **fixed-prefix** (dollars): the cost of the fixed prefix, by role. Reference:
+  the same requests with a prefix at the 10th percentile of that role's sessions
+  in the range.
+- **carried-logs** (dollars): the carrying cost of tool results over 2,000
+  tokens, by command kind. Reference: the same results at 2,000 tokens each.
+- **small-reads** (dollars): the cost of requests in runs of three or more
+  consecutive requests whose only tool calls are of kind "read and search".
+  Reference: the cost of the last request of each run.
+- **tier-gap** (dollars): for two cohorts that differ only in tier, the direct
+  cost plus rework of the dearer one. Reference: the same number of beads at the
+  cheaper cohort's direct cost plus rework. Reported only when each cohort has
+  at least twenty beads.
+- **outlier-beads** (dollars): beads costing more than five times their cohort's
+  median. Reference: the cohort's median for each.
+- **queued** (agent hours): time queued for cores, by command kind. Reference:
+  zero.
+- **compile-share** (agent hours): compile time inside tests and checks.
+  Reference: the same commands at the 10th percentile compile time of commands
+  of the same kind in the range.
+- **repeated-command** (agent hours): time in a command kind in beads that ran
+  it more often than the 90th percentile of their cohort. Reference: the same
+  beads at the cohort's median count, at each bead's own mean duration for that
+  command.
+- **waiting-on-person** (agent hours, although outside agent minutes): time
+  spent waiting on a person. Reference: zero.
+- **chained-commands** (agent hours): time in commands flagged as chained. This
+  rule reports a measurement gap, not waste, and its saving is shown as unknown.
+- **narrow-leases** (core hours): for leases that got fewer cores than they
+  wanted, the cores missing multiplied by the seconds held. Reference: zero.
+- **never-caught** (core hours): CPU spent on check families with no catch after
+  at least 100 runs. Reference: zero.
+- **flake-cost** (core hours): the reruns caused by flaky failures, by check.
+  Reference: zero.
+- **misses** (core hours): for each miss, the bisection and the slow-CI runs
+  that failed because of it. Reference: zero.
+
+## The store
+
+The store is one SQLite file in the Beryl cache directory. It is private to the
+machine and is never committed.
+
+The tables, each keyed so that ingesting the same bytes twice changes nothing:
+
+- **requests**: one row per model request, with host, provider, transcript,
+  time, model, the four token classes, dollars, context size, prefix size, new
+  content size and the bead window it falls in.
+- **tool_calls**: one row per tool call, with start and end times, the tool, the
+  command kind, the first 300 characters of the command, the result's size, the
+  tokens it added to the context and its carrying cost.
+- **windows**: one row per bead window.
+- **beads**: the latest state of each bead and its labels.
+- **commits**: each commit on `staging`, its subject, paths and the bead that
+  landed it.
+- **checks**: one row per check per day per script, as described under
+  [CI accounting](#ci-accounting).
+- **cpu**: one row per minute per owner, kind and worktree.
+- **leases**: one row per CPU lease.
+- **sources**: for each source file, the byte offset already ingested and a
+  fingerprint of its first bytes.
+
+Ingest behaviour:
+
+- Each source file is read from its recorded offset. A file whose first bytes no
+  longer match its fingerprint was replaced, and is read again from the start.
+- A last line with no newline is left for the next ingest.
+- Only one ingest runs at a time, under a lock file. A second one waits for the
+  first and then finds nothing to do.
+- Ingest runs at background priority and takes no CPU tokens.
+- A query runs an ingest first when the store is more than 60 seconds old. The
+  flag `--no-ingest` skips that, and the page shows the age of its data.
+- A malformed line is skipped and counted. `coverage` reports the count per
+  source. Ingest never stops for one bad line.
+- `just efficiency ingest --rebuild` recreates the store from the sources. It
+  warns first that transcripts older than the providers' retention are gone and
+  that their rows will be lost.
+
+Privacy:
+
+- The store holds commands and file paths. It holds no message text, no file
+  contents and no tool output beyond its size.
+- The repository is public, so tests use synthetic transcripts and beads. No
+  real session data is ever committed.
+
+## The command
+
+`just efficiency <query>` prints a compact text table. `--json` prints the query
+result as JSON, which is exactly what the page renders. All queries take
+`--since` (for example `24h`, `7d`, `all`, or a date) and cohort filters.
+
+```text
+just efficiency summary --since 24h
+just efficiency epic by-bajq
+just efficiency bead by-bajq.6.9
+just efficiency session local_ce2b4aa8
+just efficiency time --by kind --where tier=sonnet
+just efficiency dollars --by source --epic by-bajq
+just efficiency cards --by tier
+just efficiency machine --since 7d
+just efficiency ci --lane oracle
+just efficiency changes
+just efficiency findings
+just efficiency coverage
+```
+
+- `summary` is the first screen: beads closed, the four per-bead medians with
+  their trends, the time split, the dollar split and the epics.
+- `epic`, `bead` and `session` are the drill-down levels. `session` lists each
+  request and tool call in order.
+- `time` and `dollars` take `--by` with any of: `kind`, `class`, `source`,
+  `purpose`, `model`, `tier`, `role`, `lane`, `epic`, `day`.
+- `machine` shows cores in use, saturation, queued core hours and shared CPU.
+- `ci` shows the tree described under [CI accounting](#ci-accounting).
+- `coverage` reports what is missing or unknown: hosts with no data, models with
+  no price, unmatched commands, skipped lines, closes with no open window, and
+  the tool's own cost.
+- `metrics` lists the metric names. `sql '<query>'` runs a read-only SQL query
+  against the store, for questions no named query answers.
+- `serve` starts the page. `ingest` updates the store.
+
+Text output is written for a model to read as well as a person. This is the
+`bead` query:
+
+```text
+$ just efficiency bead by-bajq.6.9
+by-bajq.6.9  Spell copies are never scripted onto the stack
+closed 2026-11-15 07:38   tier:opus   claude on jarvis
+agent min 34.6   core min 51.2   dollars 6.40   rework 0.00
+requests 164   median context 212k   fixed prefix 81k
+
+time      model 11.2 | rust tests 7.9 | read 3.8 | push 3.5 | build 3.1
+          slow CI wait 2.2 | other 2.0 | queued for cores 0.9
+dollars   prefix 2.10 | carried logs 1.90 | carried reads 1.20
+          new content 0.60 | output 0.60
+
+more: efficiency session local_ce2b4aa8 --bead by-bajq.6.9
+```
+
+Every result ends with a `more:` line naming the queries that drill into it. The
+JSON carries the same list, and the page turns each into a section that can be
+opened.
+
+## The page
+
+`just efficiency serve` starts a server that listens on `127.0.0.1` only and
+serves one page. Python renders all HTML and draws the charts as inline SVG.
+
+- The server answers `GET` requests only and changes nothing except the store,
+  through ingest.
+- Each address is a query: `/bead/by-bajq.6.9?since=7d` renders the same result
+  as `just efficiency bead by-bajq.6.9 --since 7d`.
+- The same address with `.json` appended returns the JSON.
+- The page needs no build step and no JavaScript beyond one small script that
+  fetches a section's content the first time it is opened.
+
+What the first screen shows, top to bottom:
+
+- A time range control with three choices: 24 hours, 7 days, all. It applies to
+  everything on the page.
+- Beads closed in the range.
+- Four numbers, each a per-bead median with a small trend line under it: agent
+  minutes, core minutes, dollars, and rework as a share of direct cost.
+- One horizontal bar showing where agent time went, and one showing where
+  dollars went, by source. Segments are labelled only when wide enough. The rest
+  are named on hover.
+- The epics active in the range, one line each: id, title, beads closed out of
+  total, dollars, agent hours. "(no bead)" and "orchestration" are lines too.
+- Five words that lead to the other views: Cards, Machine, CI, Changes,
+  Findings.
+
+Rules that keep the page quiet:
+
+- A number is shown without a sentence around it. Its column or row heading is
+  the only label.
+- Nothing is explained on screen. Each heading has a definition that appears on
+  hover, taken from the query's own description.
+- Every line that has more detail opens in place when clicked. Opening an epic
+  shows its time bar, its dollar bar and its beads. Opening a bead shows its
+  bars, a strip of its timeline and its sessions. Opening a session shows its
+  requests and commands.
+- A trend line that has an efficiency change on it shows a mark at that commit.
+  The mark's label and the before and after medians appear on hover.
+- Each opened section has one small control that copies the equivalent command,
+  so the reader can hand the same view to an agent.
+- Unknown values are shown as a dash, never as zero.
+- The page follows the system's light or dark appearance and uses one accent
+  colour per category, the same colour for a category everywhere.
+
+The bead view's timeline strip is one bar, as wide as the bead's wall-clock
+time, coloured by category from left to right. Under it, a line shows the
+context size at each request. Together they show at a glance a session that sat
+in a long test run, or one whose context climbed to the limit and was compacted.
+
+## Other machines
+
+Beads are also worked on a second Mac and on a Windows PC. The store on each
+machine holds only what ran there.
+
+- Every row carries its host. A query over beads that ran elsewhere reports them
+  as "no data" and says how many, so no total is silently short.
+- `just efficiency export --since <date>` writes the store's rows for this host
+  to one compressed file. `just efficiency import <file>` on another machine
+  adds them. Rows are keyed by host and source, so importing a file twice
+  changes nothing.
+- An export contains commands and paths, as the store does, and is passed
+  between the user's own machines. It is never committed or published.
+- Ingest finds the providers' directories from the user's home directory on each
+  platform and never assumes a path separator.
+
+## Isolation
+
+The dashboard must be changeable without risk to anything else, and changes to
+anything else must not run its checks.
+
+- Its code, its tests and its page live in one directory that nothing else
+  imports. It reads other tools' files by their documented formats and does not
+  import their modules.
+- It has one check lane of its own. The lane runs only when a file in that
+  directory, or one of its three data files, changes. A change confined to those
+  files runs no other check lane except the repository-wide formatting checks.
+- The lane's steps are formatting, type-checking and unit tests. It has no
+  browser step, because headless browser slots are scarce and shared.
+- The two additions to other tools, the `worktree` field in the run log and the
+  lease line in the token pool, are separate small changes in those tools, each
+  with its own test there.
+
+What the lane's tests cover, all against small synthetic sources:
+
+- **Ingest**: windows are found, parallel tool calls are divided, repeated
+  message lines are counted once, and a second ingest reads zero bytes.
+- **Sums**: for every bead in the fixture, the six time categories sum to the
+  window length, the three context parts sum to each request's context, and each
+  of the three dollar splits sums to the bead's dollars.
+- **Parity**: for every query, each number in the rendered HTML and in the text
+  output equals the number in the JSON.
+- **Pages**: every page and every section renders as well-formed HTML for the
+  fixture, including the empty store.
+- **Data files**: the price table, the command kinds and the efficiency changes
+  are valid.
+
+For looking at the page while developing it, `just efficiency shot <address>`
+renders one address to a PNG with a headless browser. It is a development aid
+and is not part of any check.
+
+## Alternatives considered
+
+- **Hooks inside each agent session** that report tokens and timings as they
+  happen. Rejected: they add work to every session, they need changes to every
+  provider's configuration, and the transcripts already hold the same facts.
+- **Wrapping commands in a timer.** Rejected for the same reason. The one place
+  where a command reports something itself is the CPU lease, which only the pool
+  knows.
+- **A route inside the game's own web UI.** Rejected: it would put developer
+  tooling into the game's bundle, its check lanes and its screenshots.
+- **A static report file.** Rejected: detail below bead level would have to be
+  left out or embedded in full, and the report would be stale when opened.
+- **Raw token counts instead of dollars.** Rejected as the main unit: a raw sum
+  is 98.7% cache reads and cannot show a move from a large model to a small one.
+  Raw counts remain available by class.
+- **Filing beads automatically from findings.** Rejected for now by decision:
+  the rules will be imprecise at first, and weak beads would cost tokens to
+  work.
+
+## Manual QA
+
+Start with one check that crosses every boundary, before testing anything
+broadly.
+
+- On the main development Mac, run `just efficiency ingest`, then
+  `just efficiency bead by-bajq.6.9`. The bead is closed, ran in a Claude
+  session on this machine, and landed two commits. Expect non-zero agent
+  minutes, dollars and requests, a time split whose parts sum to the agent
+  minutes, and a `more:` line.
+- Run `just efficiency serve` and open the address it prints. Find by-bajq, open
+  it, open by-bajq.6.9. The four numbers must equal the command's output.
+
+Then check each area.
+
+Totals and attribution:
+
+- `just efficiency summary --since all` followed by `just efficiency coverage`.
+  The dollars of all epics, "(no bead)" and "orchestration" must sum to the
+  total. Coverage must list the second Mac and the Windows PC as hosts with no
+  data, with a count of their beads.
+- Pick a session that worked several beads in a lane. `efficiency session` must
+  show one window per bead with no overlap, each opening where the one before it
+  closed.
+- Pick an orchestrator session. Its cost must appear under its epic's
+  "orchestration" line and under no bead.
+- Run `just efficiency sql 'select count(*) from requests'`, run
+  `just efficiency ingest` again, and repeat. The count must not change.
+
+Time:
+
+- For a bead that pushed, the "push" kind must show a fast-check part. Its
+  seconds must match `just ci-report` for that worktree and time.
+- For a bead that ran Rust tests after an edit, the tests must show a compile
+  part and a run part.
+- Start a heavy command while the machine is saturated, then find it with
+  `efficiency session`. It must show seconds queued for cores, and
+  `efficiency machine` must count them.
+- Find a session that asked the user a question. The wait must appear as waiting
+  on a person and must not be part of its agent minutes.
+
+Tokens:
+
+- For one transcript, sum the four token classes by hand from its `usage`
+  objects, counting each message id once. `efficiency session` must match.
+- Remove a model from the price table. `coverage` must name it, and sums that
+  include it must be marked as lower bounds. Restore it.
+- Find a session whose context was compacted. Its context line on the page must
+  drop, and carrying costs must stop at the drop.
+- For one bead, `efficiency dollars --by class`, `--by source` and
+  `--by purpose` must each sum to the bead's dollars.
+
+CI:
+
+- `just efficiency ci --since 7d` must report the same number of slow-CI runs
+  and the same total CPU seconds as `just ci-value --days 7`, and the same
+  catches per check lane.
+- Open the oracle check lane. Forge and XMage must appear separately, and the
+  "oracle" line of CPU by kind of process must be close to their sum.
+- Find a check with a `flaky` verdict in `just ci-report`. It must appear under
+  flake cost with its reruns.
+- Find a closed Steward bead. Its cost must appear under "what a slow-CI failure
+  costs" and as rework on at least one bead in its commit range.
+
+Changes and findings:
+
+- `just efficiency changes` must list each seeded change with a median before
+  and after and a sample count. The page must show a mark on the matching trend.
+- Add an entry with an unknown metric name. The check lane must fail. Remove it.
+- `just efficiency findings` must print three ranked groups. Run the `evidence`
+  command of the top finding in each and confirm it prints the numbers the
+  finding cites.
+
+The page:
+
+- With the range set to 24 hours, 7 days and all, every number must change
+  together and no section may keep an old range.
+- Open and close sections several levels deep. Nothing may move except the
+  section opened. Use the copy control on a section, paste the command into a
+  terminal and compare the output with the section.
+- Stop the server, delete the store and start it again. The page must render an
+  empty state, start an ingest and fill in, without an error.
+- View the page in light and dark appearance and at a narrow window width. Bars
+  and numbers must stay readable and nothing may overlap.
+
+Isolation and cost:
+
+- Make a change only inside the dashboard's directory and run `just check`. Only
+  its own check lane and the repository-wide formatting checks may run.
+- Make a change only in the Rust workspace and run `just check`. The dashboard's
+  check lane must not run.
+- After a day of normal work, `just efficiency coverage` must show the sampler
+  and all ingests together under 1% of the machine's CPU for the day.
