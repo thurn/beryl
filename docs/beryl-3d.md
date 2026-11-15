@@ -1354,7 +1354,7 @@ as many pixels opaque as it can.
 - **The face is sampled before the branch.** WGSL allows `textureSample` only in
   uniform control flow, and a record's material varies from one instance to the
   next, so the shader samples the face array before it branches on the material
-  (as the prototype does). Every table and shadow pixel then pays for one unused
+  (as the prototype did). Every table and shadow pixel then pays for one unused
   texture fetch. On the floor that is the cost to watch; the alternative is
   `textureSampleLevel` inside the card branch, which needs no derivatives and so
   may branch, at the price of choosing the mipmap level by hand.
@@ -2548,12 +2548,13 @@ thousands of measurements, so the gate finds its candidates first.
 
 - **The same frames are chosen on every run**, because the work counters are
   deterministic.
-- **A test checks that the counters rank frames correctly.** On the stress
-  boards it counts every frame of a short stretch under Callgrind
-  (`gate::STRETCH`, the last frames at rest, the first frames of the flight and
-  a few after) and requires the true worst frame to be among the 8 the counters
-  ranked highest. `just b3d gate --counts` runs it with the gate, as a step of
-  the Beryl 3D sweep.
+- **A test checks that the counters rank frames correctly.** On every gated
+  board it counts each frame of a short stretch under Callgrind
+  (`gate::stretch`: 16 frames from 4 before the frame the counters rank first,
+  which on a stress board are the last frames at rest, the first frames of the
+  flight and a few after) and requires the true worst frame of the stretch to be
+  among the 8 the counters ranked highest. `just b3d gate --counts` runs it with
+  the gate, as a step of the Beryl 3D sweep.
 - **The work counters are also limited natively**, on every tick, in the check
   that runs before each push. That catches most regressions without the virtual
   machine.
@@ -2561,12 +2562,16 @@ thousands of measurements, so the gate finds its candidates first.
 The native gate is `just b3d gate`, a step of the `beryl3d` lane
 (`tools/src/beryl_tools/beryl3d/gate.py`). The `gate` binary of `beryl_inspect`
 plays each gated board as a host would at 60 frames a second
-(`beryl_inspect::gate::Playback`): the first view and 30 frames at rest, then
-the next view and frames until its script has played out. It prints every
-frame's work counters, its load and the allocations made inside `Client::frame`,
-which a counting global allocator sees, and the allocations made in
-`Client::handle` over the board. The gate holds them to these limits under
-`frames.<board>` in `data/beryl3d/gates.json`:
+(`beryl_inspect::gate::Playback`). The first view is handed over before the
+first frame, and each later one once 30 frames have passed since the one before
+and the table has nothing left to animate, so every view's script plays out. A
+recorded view that the session follows unasked arrives with the views after it,
+as the test driver hands them over. The gated boards are `stress-255`,
+`stress-1024`, `verbs-zones` and `pay-default`. It prints every frame's work
+counters, its load and the allocations made inside `Client::frame`, which a
+counting global allocator sees, and the allocations made in `Client::handle`
+over the board. The gate holds them to these limits under `frames.<board>` in
+`data/beryl3d/gates.json`:
 
 - `worst_frame_<counter>` and `total_<counter>` for each work counter
   (`elements`, `segments`, `records`, `layout_nodes`, `text_runs`);
@@ -2611,108 +2616,155 @@ Counted work predicts a frame's cost. It does not measure a real device.
 
 ### Measurements
 
-These were taken 2026-11-14 on the development machine, an Apple M5 Max, at a
-load average of 5 to 8 from other jobs, by the prototype in
-`rust/prototypes/beryl3d` (`just proto3d --stats <board>`). The prototype is not
-Beryl 3D: it is a throwaway program that keeps the doc's central split (a core
-with no GPU, clock or thread that writes draw records (64 bytes each in the
-prototype, 80 in the design since), and a `wgpu` renderer that draws them) and
-leaves out text, prompts and the flat layer. Its numbers are replaced by the
-real client's when it exists.
+Every number here was measured from Beryl 3D itself on the development machine,
+an Apple M5 Max with 18 cores, on 2026-11-15, with the machine's load average
+beside each. The load came from other sessions' builds and tests. The prototype
+that measured the design before Beryl 3D existed has been deleted.
 
-The times from a one-line edit to the output of `just b3d tree` and
-`just b3d png`, measured from Beryl 3D itself, are in
-[Edit-to-output time](#edit-to-output-time).
+The boards are the four gated boards, played as `beryl_inspect::gate::Playback`
+plays them: a host's frames at 60 a second, each later view handed over once the
+table has rested for 30 frames.
 
-Each number is the median of five runs, with the worst of the five beside it.
-The frames are 1920 by 1080, drawn into a texture.
+- **`stress-255`** and **`stress-1024`**: battlefields of 255 and 1,024 cards
+  that each get a second view in which 40 of them fly to the end of the row. 127
+  frames.
+- **`verbs-zones`**: the recorded game whose scripts move cards between every
+  zone, from the first seat. 1,093 frames.
+- **`pay-default`**: the recorded game that opens prompts, from the first seat.
+  84 frames.
 
-- **live** is a real game, the WU Control mirror between the `mcts-hidden` agent
-  and an `expert` agent answering for the viewer, played by `Sessions` with the
-  AI's search threads running, 1,800 frames paced at 60 frames a second.
-- **stress-255** and **stress-1024** are battlefields of 255 and 1,024 cards in
-  overlapping rows, with 40 cards in flight at any time, 1,200 frames drawn back
-  to back.
+**Instructions per frame**, counted under Callgrind in `beryl3d-bench` by
+`just b3d gate --counts`. A frame's count is its `handle` calls and its `frame`
+call. Three runs gave identical counts.
 
-| Measure                                   | live         | stress-255   | stress-1024  |
-| ----------------------------------------- | ------------ | ------------ | ------------ |
-| Core time per frame, mean                 | 22 µs (22)   | 12 µs (12)   | 31 µs (32)   |
-| Core time, worst single frame             | 241 µs (490) | 22 µs (43)   | 62 µs (66)   |
-| Encode and submit per frame, mean         | 279 µs (283) | 36 µs (38)   | 40 µs (43)   |
-| Heap allocations per core frame after 1 s | 0            | 0            | 0            |
-| Draw records, most in a frame             | 126          | 296          | 1,065        |
-| Draw calls, most in a frame               | 2            | 2            | 2            |
-| Opaque records' screen area, mean         | 1.68 screens | 3.02 screens | 9.23 screens |
-| Blended records' screen area, most        | 0.42 screens | 0.67 screens | 0.73 screens |
-| Submit to GPU done, as built              | 439 µs       | 225 µs       | 259 µs       |
-| Submit to GPU done, all blended, no depth | 539 µs       | 282 µs       | 423 µs       |
+| Board         | Worst frame           | Total, every frame | Target for the worst frame |
+| ------------- | --------------------- | -----------------: | -------------------------- |
+| `stress-255`  | 3,453,495 (frame 30)  |         53,391,042 | 2,000,000: not met         |
+| `stress-1024` | 13,394,223 (frame 30) |        200,546,807 | 4,000,000: not met         |
+| `verbs-zones` | 955,192 (frame 30)    |        101,327,683 | 2,000,000: met             |
+| `pay-default` | 357,443 (frame 30)    |          4,629,334 | 2,000,000: met             |
 
-What these show:
+- **The worst frame is the one whose `handle` takes a view with a script.**
+  Compiling the script still re-places part of a battlefield row for each step
+  that moves a card in it. by-q44s.22 continues that work. Every other frame is
+  within its target: a flight frame of `stress-1024` takes under 2 million
+  instructions.
+- **`pay-default`'s worst frame lays out a prompt.** Its frame 30 takes a view
+  that opens one, and of its 357,443 instructions, counted as each function's
+  own, taffy's are 7,000 (2.0%) and parley's 56,508 (15.8%), or 129,618 (36.3%)
+  with the font crates parley calls (harfrust, read-fonts and fontique). Most of
+  the rest is the script compile and its allocations.
+- **The 2 million target** is the one the doc gives `stress-255` and the
+  'Threads' section gives every frame. The recorded boards have no limit of
+  their own beyond their measured counts.
 
-- **`frame` allocates nothing**, on every board, including the frames in which a
-  new script starts and is turned into segments. The core sizes its arrays at
-  startup and plays scripts from small copies of the records it needs.
-- **Two draw calls a frame**, because the table and the shadows are the card
-  mesh scaled. The doc's limit of 16 is far off.
-- **The opaque pass with a depth buffer is faster on this GPU too.** The same
-  frame drawn all blended, back to front, with no depth buffer took 1.2 to 1.6
-  times as long to finish. The gap grows with overlap: stress-1024's opaque
-  records cover 9.2 screens before the depth test, and Apple's GPU shades only
-  what is in front. The floor's GPUs do the same for opaque pixels, so this
-  confirms the direction of the Baseline table's estimate, not its numbers.
-- **Blended area stays inside the 0.75-screen limit**, but stress-1024 comes
-  within 3% of it with shadows alone, before any mark, glow or flat layer. The
-  real client's stress boards will exceed it, and the limit or the shadows' size
-  will need a decision from a measurement.
-- **The worst core frame is the one that starts a script.** It walks every
-  object slot several times (placement once per beat), which the prototype sized
-  for 1,100 objects whatever the board. Walking only the live objects, as the
-  real client should, removes most of it.
-- **Paced frames cost several times what back-to-back frames do.** live is paced
-  like a window; the stress boards are not. Run paced at 60 frames a second
-  (`BERYL3D_PACED=1`), stress-255's core time rose from 12 to 42 µs, its encode
-  and submit from 36 to 354 µs, and its time to a finished frame from 225 to 433
-  µs, at a load of 5 to 7. The processor and the GPU lower their clocks while
-  the thread sleeps between frames. Asking for the user-interactive scheduling
-  class (`QOS_CLASS_USER_INTERACTIVE`) did not change this: live measured 257 µs
-  to encode and submit without it and 279 µs with it, within the runs' spread. A
-  frame's cost must therefore be timed paced, and the instruction counts the
-  gates use are unaffected by clocks, which is one more reason to gate on them.
-- **The AI's search did not lengthen frames.** In live, the longest frame (core
-  plus encode) while the AI searched was 0.70 ms (worst run 1.9 ms), and while
-  it did not, 1.15 ms (2.6 ms), over about 580 frames drawn during search per
-  run. The search threads ran at their default priority. The machine was lightly
-  loaded, so this does not yet test decision C9's priorities.
-- **In the window, macOS paced frames at 60 Hz on a 120 Hz display.** Run by the
-  project's owner on a ProMotion Mac at load 20, about 25 of 31 frames flagged
-  late had waited 16.3 ms for the drawable, with the core and encode under 0.3
-  ms: the window was simply presented at 60 Hz. macOS keeps a window at its
-  highest rate only when the app asks through a display link, and `winit`'s
-  on-demand redraws with `wgpu`'s FIFO presentation do not ask. The desktop host
-  therefore needs a display link on macOS (`NSView`'s display link with a
-  preferred frame rate range), as the iOS host already plans with
-  `CADisplayLink`.
-- **Frames are drawn only on the display link's ticks.** The prototype first
-  drew a frame for every mouse move and every session update as well as on each
-  tick, submitting frames faster than the display showed them. It used up
-  macOS's three drawables and then waited whole display intervals for the next.
-  With frames drawn only on ticks, inputs only reach the core, and its wake
-  keeps the link running. The late frames left in the owner's runs, at a load of
-  42 to 51, waited 17 to 90 ms for a drawable while the GPU finished each frame
-  in about 1 ms and the core and encode took under 1 ms. That points at the
-  window server under the machine's load, outside the app. The real client's
-  frame log should record the wait for a drawable apart from its own work, so a
-  late frame on a player's machine can be attributed the same way.
-- **Search threads inherit the frame thread's priority unless started from
-  elsewhere.** A macOS thread inherits the scheduling class of the thread that
-  creates it, and neither the session nor the search pool sets one. The
-  prototype first started its game from the frame thread after putting that
-  thread in the user-interactive class, so every search thread ran level with
-  drawing, and the same run showed a few stalls of 50 to 230 ms. The game is now
-  started from a thread in the utility class. The real client must set the
-  search threads' class explicitly rather than rely on where they are started.
-- **The floor's limits.** Every board drew on a device created with
-  `wgpu::Limits::downlevel_webgl2_defaults()` with no validation error.
+**Time per frame, natively**, by beryl_render's `frame_times` example in a
+release build, paced at 60 frames a second, five runs. Each figure is the median
+of the five runs, with the worst of the five in brackets. `client` is the
+`handle` calls and `Client::frame`; `encode` is `Renderer::render`, which writes
+the records, encodes the frame and submits it; `done` is the wall-clock time
+from the submission to the GPU finishing, because GPU timestamps do not work on
+this Mac. The target is the gates' 2880 by 1800 pixels, with no card faces
+uploaded.
+
+| Board                   | Load  | `client` mean | `client` worst | `encode` mean | `encode` worst | `done` mean    |
+| ----------------------- | ----- | ------------- | -------------- | ------------- | -------------- | -------------- |
+| `stress-255`            | 26-27 | 56 µs (91)    | 784 µs (4,878) | 342 µs (460)  | 1.98 ms (5.59) | 2.37 ms (3.34) |
+| `stress-1024`           | 26-27 | 195 µs (642)  | 3.73 ms (13.7) | 419 µs (535)  | 4.29 ms (7.35) | 2.21 ms (3.64) |
+| `verbs-zones`           | 23-29 | 27 µs (89)    | 1.74 ms (47.9) | 334 µs (417)  | 7.11 ms (14.3) | 2.20 ms (2.66) |
+| `pay-default`           | 20    | 14 µs (19)    | 166 µs (356)   | 223 µs (244)  | 456 µs (2,494) | 2.36 ms (2.50) |
+| `stress-255`, 1920x1080 | 19    | 35 µs (39)    | 472 µs (784)   | 181 µs (223)  | 441 µs (1,429) | 1.39 ms (2.09) |
+
+The runs shared the machine with Callgrind and a build in `beryl3d-bench`, which
+the load average of the Mac does not show, so the worst times are high. They
+were taken before commit 417c9da07 halved the instructions of the stress boards'
+frame 30, so that frame's `client` times are now lower than shown.
+
+- **The worst `client` frame is the same frame 30**, the script compile: 3.7 ms
+  on this machine for `stress-1024`, a fifth of a frame on a CPU many times
+  faster than the floor's. by-q44s.22 continues the fix.
+- **A paced frame costs more than a back-to-back one.** `frame_abba`, which
+  plays frames back to back with each board's setup spread over its frames,
+  measured 22 µs a frame for `stress-255` and 96 µs for `stress-1024`, against
+  56 and 195 µs paced: the processor lowers its clocks while the thread sleeps
+  between frames. Frame times are therefore taken paced, and the gates count
+  instructions, which clocks do not change.
+- **The worst times are single interruptions** by the machine's load: the
+  medians of the means are steady, and one run's worst in a board is often many
+  times the others'.
+
+**The draw list's load**, from `just b3d gate`, the most in any frame, and the
+fragments shaded from `just b3d gate --gpu`, the most in any of a board's 8
+ranked frames, in screens of 2880 by 1800 (Mesa's llvmpipe Vulkan driver in
+`beryl3d-bench`, the same on two runs).
+
+| Board          | Draw calls | Instances | Upload bytes | Blended area | Fragments |
+| -------------- | ---------: | --------: | -----------: | -----------: | --------: |
+| `stress-255`   |          1 |       256 |       20,480 |            0 |     1.000 |
+| `stress-1024`  |          1 |     1,025 |       82,000 |            0 |     1.000 |
+| `verbs-zones`  |          2 |        48 |        3,840 |       0.0414 |     1.000 |
+| `pay-default`  |          2 |        27 |        2,160 |       0.0287 |     1.029 |
+| Baseline limit |         16 |           |      327,680 |         0.75 |      1.75 |
+
+- **Every board is within the Baseline tier's limits.** The stress boards draw
+  no shadows or edges yet, so they have no blended area, and the recorded
+  boards' blended area is the flat layer's prompt bar and text.
+- **No board has card faces, marks, glows or shadows yet**, so these are far
+  below what the tier will carry once milestone 2's verbs and effects land.
+- **Every gated board draws within the floor's limits.** beryl_render's
+  `downlevel` test draws each board's 8 ranked frames on a device made with
+  wgpu's downlevel limits, in a 1920 by 1080 target, the largest those limits
+  allow, and a validation error fails it. It runs in the lane's tests.
+
+**The app**, `beryl3d`:
+
+| Measure                              | Result                               | Load  |
+| ------------------------------------ | ------------------------------------ | ----- |
+| Release executable, stripped         | 38.2 MB                              |       |
+| Memory once started, a game resumed  | 37 MB, of which 24 MB is the GPU's   | 57    |
+| Peak memory                          | 360 MB, of which 344 MB is the GPU's | 33-71 |
+| Launch to the first frame, no window | 26 ms median (343, 43, 25, 26, 23)   | 33-71 |
+
+- **Most of the executable is the game.** Linking `beryl_session` brings the
+  engine, the cards, the card store and the search.
+- **The app holds 344 MB of GPU memory for about its first 1.3 seconds** and
+  then 24 MB, which is within the 32 MB the doc allows for face textures ('Card
+  faces'). The peak is not explained yet, and on a 2 GB phone it would matter;
+  by-q44s.1.55 finds and removes it.
+- **The game in these runs waited for the player.** The app resumes the newest
+  unfinished game, and nothing answers for the player in a run with no window.
+  The search threads were measured against the frame thread in whole games that
+  `--agent` plays, under "The search threads against the frame thread" below.
+- **The first frame is the windowless host's**, read from the app's own
+  `beryl3d: first frame shown` line. The first run paid for loading the
+  executable from disk.
+
+**What earlier beads measured**, given in full in their own sections:
+
+| Measure                                            | Result                                                        | Budget                    |
+| -------------------------------------------------- | ------------------------------------------------------------- | ------------------------- |
+| `just b3d tree` after a one-line edit              | 2.5 s median, load 43-47                                      | 3 s: met                  |
+| `just b3d png` after a one-line edit               | 6.4 s and 12.4 s medians, an hour apart, load 52-68 and 22-25 | 6 s: met some of the time |
+| 127 board faces cold, ASTC                         | 1.9 s, load 55-57                                             |                           |
+| 127 board faces from the compressed cache          | 8 ms                                                          |                           |
+| 150 board faces, compressed                        | 18.5 MB                                                       | 18 MB, about              |
+| Frame delivery, background window, 16 busy threads | 0 late frames of 1,302                                        |                           |
+| Frame delivery, simple fullscreen, settled         | 1 late frame of 1,287                                         |                           |
+
+The edit-to-output times are under [Edit-to-output time](#edit-to-output-time),
+and the card faces and frame delivery below.
+
+What carries over from the prototype, which measured the design on 2026-11-14:
+
+- **The opaque pass with a depth buffer is cheaper.** The same frame drawn all
+  blended, back to front, took 1.2 to 1.6 times as long to finish on this GPU,
+  and the fragment counts above show the depth test rejecting every hidden pixel
+  of the stress boards.
+- **GPU timestamps do not work on this Mac.** `wgpu` 30 offers
+  `Features::TIMESTAMP_QUERY` on Metal, but a render pass's end timestamp came
+  back earlier than its start, so frame times here use the wall clock.
+- **Paced frames cost more**, as measured above, and the window must be driven
+  by a display link, which the desktop host now is (decision C18).
 
 Frame delivery was then measured by Beryl 3D itself, on 2026-11-15, by an agent
 with no person at the window (decision C16): the `hover-hand` drive script over
@@ -2771,29 +2823,6 @@ average of 50 to 62, with the rate rule of decision C18 in place.
 - **The step down works with no window.** The windowless host at 60 Hz with
   `--slow-gpu 24ms` stepped down to 30 Hz once its frames settled and had no
   late frame after.
-
-| Measure                                   | Result                          |
-| ----------------------------------------- | ------------------------------- |
-| Release executable, stripped              | 33.7 MB                         |
-| Peak memory                               | 109 MB in live, 90 MB in stress |
-| Start to first frame, 39 scans decoded    | about 130 ms                    |
-| Card faces at 256 by 360, uncompressed    | 41 layers, 15 MB                |
-| Release build of the prototype from clean | about 65 seconds                |
-
-- **Most of the executable is the game, not the client.** The earlier `wgpu`
-  prototype with no game was 4.6 MB. Linking `beryl_session` brings the engine,
-  the cards, the card store and the search.
-- **Peak memory includes the session and the AI.** The faces are 15 MB of it.
-- **GPU timestamps do not work on this Mac.** `wgpu` 30 offers
-  `Features::TIMESTAMP_QUERY` on Metal, but a render pass's end timestamp comes
-  back 0.2 to 0.3 ms earlier than its start. The table above therefore gives the
-  wall-clock time from submitting a frame to the GPU finishing it, which
-  includes the driver's latency. GPU time on the Mac needs Xcode's tools.
-- **What earlier prototypes measured.** Two throwaway programs before this one
-  timed a frame's inner loop with no GPU (54 µs for 600 cards, with no sorting
-  of real poses) and compared `wgpu` used directly with the Bevy engine (Bevy:
-  41.7 MB, 185 MB of memory, 24 threads, a 546-second build). Those were the
-  numbers that chose `wgpu`; this prototype's replace their frame times.
 
 **The search threads against the frame thread** (decision C9, the budget in
 [Threads](#threads)), measured 2026-11-15 by Beryl 3D itself on the same Mac,
@@ -3174,10 +3203,11 @@ the reasons are not rediscovered.
   which conflicts with decisions C3, C7 and C12. Every frame, even one that only
   animates, would run Bevy's scheduler and its copy of the scene into the
   renderer, third-party code that cannot be held to a counted, allocation-free
-  budget. In the prototypes under [Measurements](#measurements) it used about
-  twenty times the CPU per frame, four times the memory and nine times the
-  executable size of `wgpu` used directly. It releases a breaking version every
-  three to four months.
+  budget. In a throwaway prototype of 2026-11-14 that compared the two, it used
+  about twenty times the CPU per frame, four times the memory (185 MB) and nine
+  times the executable size (41.7 MB) of `wgpu` used directly, with 24 threads
+  and a 546-second build. It releases a breaking version every three to four
+  months.
 - **Porting the web interface's 2D coordinates.** Layout code would port line
   for line, and a check could compare the two clients' positions exactly. But
   perspective, shadows and lighting would stay imitations for good.
