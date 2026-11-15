@@ -356,7 +356,17 @@ tokenPrinting?: string, combat: Combat | null, note?: string, pinned?: RowName,
 /**
  * Which face the manual table is showing. The engine uses `name` and `facing`.
  */
-face?: FaceName, namedCounters?: Array<NamedCounter>, doesntUntap?: boolean, };
+face?: FaceName, namedCounters?: Array<NamedCounter>, doesntUntap?: boolean, 
+/**
+ * In a hand: its player picked it in a hidden pick of the resolution that is paused,
+ * which puts the cards picked onto the battlefield once every player has picked. Which
+ * card was picked is public; the card itself is not, so it is drawn set apart from the
+ * hand, face down for a viewer who does not know it ([CR 101.4a]): "each player must
+ * clearly indicate which face-down card they are choosing."
+ *
+ * [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
+ */
+hiddenPick?: boolean, };
 
 export type Facing = "up" | "down";
 

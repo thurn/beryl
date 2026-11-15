@@ -27,6 +27,7 @@ mod face_down;
 mod full_control;
 mod game_over;
 mod games_ledger;
+mod hidden_picks;
 mod modes;
 mod own_turn;
 mod paid_costs;

@@ -357,8 +357,9 @@ export function phoneLayout(view: PlayerView, viewport: Viewport): PhoneLayout {
     placeRow(groups, band.height - 8, width, band.top, band.height);
   // What you can play from outside your hand waits at the right of the fan, as on the desktop.
   const bySlot = new Map(view.objects.map((o) => [o.slot, o]));
+  // A card picked in a hidden pick lies apart from the hand (stage/phone.ts).
   const hand = [
-    ...zoneCards(view, "you", "hand"),
+    ...zoneCards(view, "you", "hand").filter((o) => !o.hiddenPick),
     ...playableElsewhere(view).flatMap((s) => bySlot.get(s) ?? []),
   ];
   const cards = [

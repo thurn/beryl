@@ -191,7 +191,9 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
       dress: dressed(object.zone, "hand", spot.width),
     });
   }
-  const theirs = zoneCards(view, "opponent", "hand");
+  const theirs = zoneCards(view, "opponent", "hand").filter(
+    (o) => !o.hiddenPick,
+  );
   theirs.forEach((object, i) => {
     const place = backSpot(bands, viewport.width, i, theirs.length);
     out.set(object.slot, {
@@ -236,6 +238,27 @@ function rest(table: Table, viewport: Viewport, left?: ReadonlySet<Name>) {
         object,
         pose: upright(place, DEPTH.backs + i, "back"),
         dress: dressed(zoneHeld, "handling", PILE.width, true),
+      });
+    });
+  }
+  // A card picked in a hidden pick (`ObjectView.hiddenPick`, CR 101.4a) lies apart from its
+  // hand where the cards a player looks at lie, beside their library toward the table: face
+  // up for its player, face down for the other (UI Conventions, "A card picked face down").
+  for (const side of ["opponent", "you"] as const) {
+    const spot = pileSpot(bands, side, "library");
+    const toward = side === "you" ? -1 : 1;
+    const picked = zoneCards(view, side, "hand").filter((o) => o.hiddenPick);
+    picked.forEach((object, i) => {
+      const face = side === "you" ? faceOf(object) : "back";
+      const place = {
+        ...spot,
+        x: spot.x + i * LIFTED.step,
+        y: spot.y + toward * (PILE.height + LIFTED.gap),
+      };
+      out.set(object.slot, {
+        object,
+        pose: upright(place, DEPTH.backs + i, face),
+        dress: dressed("hand", "handling", PILE.width, face === "back"),
       });
     });
   }

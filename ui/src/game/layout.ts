@@ -78,6 +78,19 @@ function handlingPlacements(
   });
 }
 
+/** Each card a player has picked in a hidden pick of the resolution that is paused
+ * (`ObjectView.hiddenPick`, CR 101.4a), lifted out of its hand to where the cards a player
+ * handles from their hand lie: face up for its player, face down for the other. Arena's
+ * recordings show no such pick (UI Conventions, "A card picked face down"). */
+function pickedPlacements(view: PlayerView): Placement[] {
+  return (["opponent", "you"] as const).flatMap((side) =>
+    handlingPlacements(
+      { ...view, handling: { zone: "hand", side } },
+      zoneCards(view, side, "hand").filter((o) => o.hiddenPick),
+    ),
+  );
+}
+
 /** The parked layers and their positions are also the start/end points for card flights. A
  * borrowed card keeps a home for its handoff, while the cards left on the table settle. */
 function pileCards(
@@ -155,7 +168,10 @@ export function layout(
   const named = referenced(view);
   const behindHost = new Set([...attached.values()].flat().map((o) => o.slot));
 
-  out.push(...heldPlacements(zoneCards(view, "opponent", "hand")));
+  // A card picked in a hidden pick lies apart from its hand (`pickedPlacements`).
+  const hand = (side: Side) =>
+    zoneCards(view, side, "hand").filter((o) => !o.hiddenPick);
+  out.push(...heldPlacements(hand("opponent")));
   // Blockers stand across from their attackers, which stand where they would anyway: only the
   // defending side's row depends on the other's.
   const groups = new Map(
@@ -195,11 +211,7 @@ export function layout(
   };
   out.push(
     ...handLifts(
-      handPlacements(
-        [...zoneCards(view, "you", "hand"), ...elsewhere],
-        hold,
-        view.stack.length,
-      ),
+      handPlacements([...hand("you"), ...elsewhere], hold, view.stack.length),
       yours.filter(backRow).map(footprint),
     ),
   );
@@ -255,6 +267,7 @@ export function layout(
     });
   });
   out.push(...handlingPlacements(view, handled));
+  out.push(...pickedPlacements(view));
   return new Map(out.map((p) => [p.slot, p]));
 }
 

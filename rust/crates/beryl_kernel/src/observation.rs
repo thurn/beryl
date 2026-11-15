@@ -255,6 +255,22 @@ impl<'a, L: Layout> Observation<'a, L> {
         s
     }
 
+    /// The slots the paused resolution's hidden picks have picked so far, known card or not
+    /// ([`crate::state::Resolving::hidden_picks`]). Which slot was picked is public and the
+    /// card is not ([CR 101.4a]): "those cards may remain face down as they're chosen.
+    /// However, each player must clearly indicate which face-down card they are choosing."
+    ///
+    /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
+    pub fn hidden_picks(&self) -> Bitboard<L::Slot> {
+        let mut slots = Bitboard::EMPTY;
+        if let Pending::Resolving(r) = self.root.pending() {
+            for slot in r.hidden_picks() {
+                slots.insert(slot);
+            }
+        }
+        slots
+    }
+
     /// The hidden picks of the paused resolution whose cards the viewer does not know, and
     /// the filter each passed ([`HiddenPicks`]); none where there are none.
     fn unseen_hidden_picks(&self, t: &GameTable) -> Option<HiddenPicks<L>> {

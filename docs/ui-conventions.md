@@ -337,6 +337,12 @@ recordings do not show them.
 
 - **Notes on manual cards.** A card shows its table note on one line, with an
   ellipsis when it runs out of room. Its inspection panel shows the full note.
+- **A card picked face down.** While the other player still has to pick, as for
+  Show and Tell, a card a player has picked from their hand lies apart from that
+  hand where the cards a player handles lie: face up for its player, face down
+  for the other. On the phone it lies beside its owner's library, toward the
+  table, as the cards the opponent looks at do. Arena's recordings show no such
+  pick.
 - **Inspecting a face-down manual card.** The table shows a card back. Pointing
   at the card opens a face preview only if the viewer knows the card's identity.
 - **Paying with permanents.** Waterbend, convoke, crew. Start with no payment

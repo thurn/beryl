@@ -401,6 +401,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         face: super::FaceName::Front,
         named_counters: Vec::new(),
         doesnt_untap: false,
+        hidden_pick: obs.hidden_picks().contains(slot),
     }
 }
 

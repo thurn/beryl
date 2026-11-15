@@ -102,6 +102,7 @@ impl ObjectView {
             face: FaceName::Front,
             named_counters: Vec::new(),
             doesnt_untap: false,
+            hidden_pick: false,
         }
     }
 }

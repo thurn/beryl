@@ -2,8 +2,7 @@
 
 use beryl_engine::event::{Event, Recipient, Tagged};
 use beryl_engine::{
-    Large, Observation, Outcome, Relayout, Seat, paused_events, two_player::TwoPlayerSeat as _,
-    view,
+    Large, Outcome, Relayout, Seat, observe, paused_events, two_player::TwoPlayerSeat as _,
 };
 
 use crate::preview;
@@ -132,8 +131,10 @@ impl Game {
                 },
                 (At::Stopped, _) => Moment::Stopped,
             };
-            let shown = view(&b.state, &self.table, &mut b.scratch);
-            let obs = Observation::new(shown, viewer);
+            // Rooted at the committed state, whose paused resolution says which cards hidden
+            // picks have picked (`ObjectView::hidden_pick`).
+            let obs = observe(&b.state, &self.table, &mut b.scratch, viewer);
+            let shown = obs.shown();
             let mut view = player_view(&self.table, obs, moment, self.stops, &events);
             // The stack as the engine's events name it: what the position shows, and the
             // resolving entry where it was.
