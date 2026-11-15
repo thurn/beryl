@@ -10,7 +10,7 @@ from ..lanes import BY, Lane, Step
 from .. import paths
 
 NAME = "beryl3d"
-PURITY = [sys.executable, "-m", "beryl_tools.beryl3d.purity"]
+PURITY: list[str] = [sys.executable, "-m", "beryl_tools.beryl3d.purity"]
 
 
 def steps() -> list[Step]:

@@ -76,6 +76,11 @@ def test_command(packages: list[str], filters: list[str], nextest: bool) -> list
     return ["test", "-q", *scope, *filters]
 
 
+def test_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("-p", "--package", action="append", default=[])
+    parser.add_argument("filter", nargs="*")
+
+
 def run_cargo_test(args: argparse.Namespace) -> int:
     nextest = shutil.which("cargo-nextest") is not None
     return cargo(test_command(args.package, args.filter, nextest))
@@ -123,10 +128,8 @@ COMMANDS: tuple[Command, ...] = (
             ),
         ),
         run_cargo_test,
-        lambda p: (
-            p.add_argument("-p", "--package", action="append", default=[]),
-            p.add_argument("filter", nargs="*"),
-        ),
+        test_arguments,
+    ),
     ),
     Command(
         "clippy",
