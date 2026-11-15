@@ -4,14 +4,14 @@ mod member;
 mod proposals;
 mod spans;
 
-use beryl_session::protocol::{ObjectId, PlayerView};
+use beryl_session::protocol::{CardHandling, ObjectId, PlayerView};
 use beryl_session::script::{
     Act, Notice, Open, Reset, Script, Span, Step, Subject, Table as Stage, replay,
 };
 use beryl_table::redact::{AnimationEvent, ResetReason, visit_animation};
 use beryl_table::{Entry, Refusal, Seat, Table};
 
-use crate::view::{Slots, Viewer};
+use crate::view::{Slots, Viewer, handling};
 
 pub(super) use proposals::proposal_marks;
 
@@ -42,6 +42,12 @@ pub(super) fn script_with_proposal_marks(
         stage: start.clone(),
         spans: open.clone(),
         beats: Vec::new(),
+        // A prompt's lift is outside gameplay. Carry a surviving lift across
+        // this action's intermediate members on the observer's stage.
+        prompt_lift: before.handling.filter(|&lift| {
+            after.handling == Some(lift)
+                && entry.is_some_and(|(_, table)| handling(table, viewer) != Some(lift))
+        }),
         cause: entry.map(|(entry, _)| Subject::Player {
             player: viewer.side(entry.by),
         }),
@@ -156,6 +162,7 @@ struct Builder {
     spans: Vec<Open>,
     beats: Vec<Vec<Step>>,
     cause: Option<Subject>,
+    prompt_lift: Option<CardHandling>,
     error: Option<String>,
 }
 

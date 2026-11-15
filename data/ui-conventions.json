@@ -1330,6 +1330,11 @@
       "rule": "A permanent that is a copy shows the copied card's face with a \"Copy\" label where a token shows \"Token\" (the phone, which shows neither label, shows the copied card's scan). Its inspection panel names the card it really is."
     },
     {
+      "kind": "no-equivalent",
+      "name": "Manual table prompts",
+      "rule": "A guided choice on the manual table uses the same sorting tray or list as an engine game. The seat answering it sees the cards or choices. Across the table a library sort lifts only a packet of cards, which returns when the tray closes."
+    },
+    {
       "kind": "not-seen",
       "name": "Controlling another player",
       "rule": "While the viewer controls the opponent's turn, each decision they make for the opponent says \"For opponent\" before what it asks; a priority says only that."

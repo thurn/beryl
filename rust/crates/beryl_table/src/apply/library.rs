@@ -12,7 +12,19 @@ use crate::{Action, Chance, Change, Refusal, Seat, Table};
 
 use super::{AppliedChanges, Changes, Presentation, cards, perform};
 
-super::unimplemented_actions!(flow);
+/// Opening a sorting tray teaches the player the cards. The live session
+/// holds the tray and its lift, which disappear independently of the log.
+pub(super) fn flow(table: &Table, by: Seat, seat: Seat, count: u16) -> Changes {
+    if count == 0 {
+        return Err(Refusal::INVALID);
+    }
+    let ids = zone_cards(table, Zone::Library(seat))?;
+    Ok(ids
+        .iter()
+        .take(usize::from(count))
+        .filter_map(|id| learn(&table.objects[id], by))
+        .collect())
+}
 
 /// Closing a viewer doesn't revoke permission to use a lent pile or forget
 /// cards the player has seen. A changed pile drops its lift before its cards

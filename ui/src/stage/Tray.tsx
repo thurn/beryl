@@ -21,7 +21,7 @@ import type {
 import { abilityText, BLANK, useAbilityFace } from "../game/faces";
 import { DRAG_THRESHOLD } from "./pointer.ts";
 import { trayOf, waysOf, type Asked, type Prompts } from "./prompt.ts";
-import { laidOut, type Box, type TraySpace } from "./tray.ts";
+import { laidOut, type Box, type Laid, type TraySpace } from "./tray.ts";
 
 /** Whether `prompt` lays the tray's shade over the table: it holds cards up, or lists an
  * order's row, the ways to use a card or a catalog's entries over the same shade (`OrderRow`,
@@ -53,16 +53,36 @@ export function TrayUnder({
   if (!shades(prompt) || !layer) return null;
   const piles = state?.shape === "split" ? state.piles : [];
   const laid = tray && laidOut(tray, space);
-  const library = laid?.library;
-  const boxes = laid?.boxes ?? [];
   return createPortal(
     <div className="stage-tray" data-purpose={prompt?.purpose}>
+      {laid && (
+        <TrayPiles
+          laid={laid}
+          labels={piles.map(({ label }) => label)}
+          heading={space.heading}
+        />
+      )}
+    </div>,
+    layer,
+  );
+}
+
+export function TrayPiles({
+  laid: { library, boxes },
+  labels,
+  heading,
+}: {
+  laid: Laid;
+  labels: readonly (string | undefined)[];
+  heading: number;
+}) {
+  return (
+    <>
       {library && <Library box={library} />}
       {boxes.map((box, at) => (
         <div
           key={at}
-          // A put-back's piles are the library and the hand as they lie, with no edge drawn
-          // round them: Arena's player picks the cards out of the hand itself.
+          // A put-back's piles are the library and hand. They have no box.
           className="stage-tray-pile"
           data-pile={at}
           style={{
@@ -70,15 +90,14 @@ export function TrayUnder({
             top: box.y,
             width: box.width,
             height: box.height,
-            ["--heading" as string]: `${space.heading}px`,
+            ["--heading" as string]: `${heading}px`,
             ...(library && { border: "none", background: "none" }),
           }}
         >
-          <span className="stage-tray-label">{piles[at]?.label}</span>
+          <span className="stage-tray-label">{labels[at]}</span>
         </div>
       ))}
-    </div>,
-    layer,
+    </>
   );
 }
 

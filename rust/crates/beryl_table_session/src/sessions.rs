@@ -9,9 +9,10 @@ use beryl_link::guest::{self, Event, Guest};
 use beryl_link::host::Sender;
 use beryl_link::wire::Hello;
 use beryl_link::{Link, LinkError, PING_INTERVAL};
-use beryl_session::ipc::{SavedTable, TABLE_LINK, TABLE_LOBBY};
-use beryl_session::protocol::{LinkState, TableAction};
+use beryl_session::ipc::{SavedTable, TABLE_LINK, TABLE_LOBBY, TableAnswerRequest};
+use beryl_session::protocol::{Answer, LinkState, TableAction};
 use beryl_session::{GameUpdate, SessionId, SessionIds, WIRE_HASH};
+use beryl_table::action::Flow;
 use beryl_table::deck::Deck;
 use beryl_table::save::SaveError;
 use beryl_table::{Action, Chance, Log, Refusal, Seat, Table};
@@ -19,6 +20,7 @@ use serde_json::Value;
 
 use crate::guest::GuestSession;
 use crate::host::HostSession;
+use crate::prompt::{PromptState, Request};
 use crate::publication::PublishedTable;
 use crate::saves::{self, HostSettings, Save};
 
@@ -310,22 +312,84 @@ impl TableSessions {
     }
 
     pub fn act(&self, action: TableAction) -> Result<(), Refusal> {
+        self.send(Request::Action(action))
+    }
+
+    /// Takes a local click. Joined sessions relay it to the host, which
+    /// supplies the authenticated seat.
+    pub fn answer(&self, answer: Answer) -> Result<(), Refusal> {
+        self.send(Request::Answer(TableAnswerRequest { answer }))
+    }
+
+    /// Open a prompt for one seat on the authoritative table.
+    pub fn open_prompt(
+        &self,
+        seat: Seat,
+        prompt: PromptState,
+        on_done: impl Fn(&PromptState) -> Result<Action, Refusal> + Send + Sync + 'static,
+    ) -> Result<(), Refusal> {
+        self.open_with(seat, |_| Ok(prompt), on_done)
+    }
+
+    /// Build a sort using the latest library under the same lock that opens it.
+    pub fn open_library_prompt(
+        &self,
+        seat: Seat,
+        title: String,
+        flow: Flow,
+        count: u16,
+        on_done: impl Fn(&PromptState) -> Result<Action, Refusal> + Send + Sync + 'static,
+    ) -> Result<(), Refusal> {
+        self.open_with(
+            seat,
+            |table| PromptState::library_sort(table, seat, title, flow, count),
+            on_done,
+        )
+    }
+
+    fn open_with(
+        &self,
+        seat: Seat,
+        build: impl FnOnce(&Table) -> Result<PromptState, Refusal>,
+        on_done: impl Fn(&PromptState) -> Result<Action, Refusal> + Send + Sync + 'static,
+    ) -> Result<(), Refusal> {
         let mut current = self.lock();
         match current.as_mut().ok_or(Refusal::Stale)? {
             Current::Solo(solo) => {
-                solo.table.apply_client(SOLO, action)?;
+                let state = build(solo.table.table())?;
+                solo.table.open_prompt(seat, state, on_done, |_| Ok(()))?;
+                (self.emit)(solo.update());
+                Ok(())
+            }
+            Current::Hosted(host) => host.open_prompt(seat, build, on_done),
+            Current::Joined(_) => Err(Refusal::Permission),
+        }
+    }
+
+    fn send(&self, request: Request) -> Result<(), Refusal> {
+        let mut current = self.lock();
+        match current.as_mut().ok_or(Refusal::Stale)? {
+            Current::Solo(solo) => {
+                match request {
+                    Request::Action(action) => {
+                        solo.table.apply_client(SOLO, action)?;
+                    }
+                    Request::Answer(request) => {
+                        solo.table.answer(SOLO, request.answer, |_| Ok(()))?;
+                    }
+                }
                 (self.emit)(solo.update());
                 Ok(())
             }
             Current::Hosted(host) => {
                 let apply = host.local_action();
                 drop(current);
-                apply(action)
+                apply(request)
             }
             Current::Joined(guest) => {
                 let apply = guest.local_action();
                 drop(current);
-                apply(action)
+                apply(request)
             }
         }
     }

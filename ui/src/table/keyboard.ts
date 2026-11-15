@@ -79,6 +79,11 @@ export function listenTableKeys(commands: TableCommands) {
       if (unshifted?.startsWith("token.")) id = unshifted;
     }
     if (
+      event.target instanceof Element &&
+      event.target.closest(".table-prompt-dialog")
+    )
+      return;
+    if (
       id !== "viewer.hide_revealed" &&
       event.target instanceof Element &&
       event.target.closest("input, textarea, select, [contenteditable], dialog")

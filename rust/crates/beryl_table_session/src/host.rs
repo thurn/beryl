@@ -12,9 +12,10 @@ use beryl_link::wire::RefusalReason;
 use beryl_link::{Link, LinkError, PING_INTERVAL, PeerInfo, Route};
 use beryl_session::protocol::{LinkState, TableAction};
 use beryl_session::{GameUpdate, SessionId, WIRE_HASH};
-use beryl_table::{Action, Refusal, Seat};
+use beryl_table::{Action, Entry, Refusal, Seat, Table};
 use serde_json::Value;
 
+use crate::prompt::{PromptState, Request};
 use crate::publication::PublishedTable;
 use crate::refusal::to_wire;
 use crate::saves::Save;
@@ -90,9 +91,27 @@ impl HostSession {
         self.0.lock().save.id() == id
     }
 
-    pub(super) fn local_action(&self) -> impl FnOnce(TableAction) -> Result<(), Refusal> + use<> {
+    pub(super) fn local_action(&self) -> impl FnOnce(Request) -> Result<(), Refusal> + use<> {
         let table = Arc::clone(&self.0);
         move |action| table.lock().apply(LOCAL, action)
+    }
+
+    pub(super) fn open_prompt(
+        &self,
+        seat: Seat,
+        build: impl FnOnce(&Table) -> Result<PromptState, Refusal>,
+        on_done: impl Fn(&PromptState) -> Result<Action, Refusal> + Send + Sync + 'static,
+    ) -> Result<(), Refusal> {
+        let mut host = self.0.lock();
+        if host.stopped {
+            return Err(Refusal::Stale);
+        }
+        let state = build(host.table.table())?;
+        let all = state.observer_lift().is_some();
+        let HostedTable { table, save, .. } = &mut *host;
+        table.open_prompt(seat, state, on_done, |entry| save_entry(save, entry))?;
+        host.publish((!all).then_some(seat));
+        Ok(())
     }
 
     pub(super) fn current(&self) -> GameUpdate {
@@ -136,33 +155,49 @@ struct HostedTable {
 impl HostedTable {
     // Both IPC and the authenticated link call this with the same table
     // queue lock held until both views have been sent or queued.
-    fn apply(&mut self, seat: Seat, action: TableAction) -> Result<(), Refusal> {
+    fn apply(&mut self, seat: Seat, request: Request) -> Result<(), Refusal> {
         if self.stopped
             || (self.sender.is_none() && (seat != LOCAL || self.link != LinkState::Alone))
         {
             return Err(Refusal::Stale);
         }
-        check_lobby_actor(seat, &action)?;
-        self.table.apply_client_checked(seat, action, |entry| {
-            self.save.append(entry).map_err(|error| {
-                eprintln!("Cannot save table {}: {error}", self.save.id());
-                Refusal::INVALID
-            })
-        })?;
-        self.show_script = true;
-        if let Some(sender) = &self.sender {
+        let all = match request {
+            Request::Action(action) => {
+                check_lobby_actor(seat, &action)?;
+                self.table.apply_client_checked(seat, action, |entry| {
+                    save_entry(&mut self.save, entry)
+                })?;
+                true
+            }
+            Request::Answer(request) => self.table.answer(seat, request.answer, |entry| {
+                save_entry(&mut self.save, entry)
+            })?,
+        };
+        self.publish((!all).then_some(seat));
+        Ok(())
+    }
+
+    fn publish(&mut self, only: Option<Seat>) {
+        if only != Some(LOCAL)
+            && let Some(sender) = &self.sender
+        {
             let guest = self.update(GUEST, self.link_state(), true);
             if sender.update(serialize(&guest)).is_err() {
-                // The entry is already durable. The guest will get it in the
-                // next snapshot. Freeze before another local action can run.
+                // The guest will get the current state in the next snapshot.
                 sender.disconnect();
                 self.sender = None;
+                if only == Some(GUEST) {
+                    self.link_changed(LinkState::Reconnecting);
+                    return;
+                }
                 self.link = LinkState::Reconnecting;
                 (self.emit_event)(TableEvent::Link(self.link));
             }
         }
-        self.emit_local();
-        Ok(())
+        if only != Some(GUEST) {
+            self.show_script = true;
+            self.emit_local();
+        }
     }
 
     fn update(&self, seat: Seat, link: LinkState, show_script: bool) -> GameUpdate {
@@ -260,6 +295,13 @@ impl Hosted for HostedTable {
         self.sender = None;
         self.link_changed(LinkState::Reconnecting);
     }
+}
+
+fn save_entry(save: &mut Save, entry: &Entry) -> Result<(), Refusal> {
+    save.append(entry).map_err(|error| {
+        eprintln!("Cannot save table {}: {error}", save.id());
+        Refusal::INVALID
+    })
 }
 
 fn check_lobby_actor(seat: Seat, action: &TableAction) -> Result<(), Refusal> {

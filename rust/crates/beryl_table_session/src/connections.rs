@@ -14,7 +14,7 @@ use beryl_session::ipc::{
     Platform, SavedTable, TableActReply, TableConnectionError, TableHostReply, TableHostRequest,
     TableJoinRequest, TableLink, TableRefused, TableResumeRequest, TableSettings, TableSoloRequest,
 };
-use beryl_session::protocol::TableAction;
+use beryl_session::protocol::{Answer, TableAction};
 use beryl_session::{GameUpdate, SessionId, SessionIds};
 
 use crate::{HostSettings, TableEvent, TableSessions};
@@ -66,6 +66,27 @@ impl TableConnections {
 
     pub fn act(&self, action: TableAction) -> TableActReply {
         self.tables.act(action).into()
+    }
+
+    pub fn answer(&self, answer: Answer) -> TableActReply {
+        self.tables.answer(answer).into()
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn open_test_sort(&self) -> TableActReply {
+        use crate::prompt::PromptState;
+        use beryl_table::action::Flow;
+        use beryl_table::assist::text::{Flow as Effect, flow_result};
+        use beryl_table::{Refusal, Seat};
+
+        self.tables
+            .open_library_prompt(Seat(0), "Scry".into(), Flow::Scry, 2, |state| {
+                let PromptState::Sort(sort) = state else {
+                    return Err(Refusal::INVALID);
+                };
+                flow_result(Effect::Scry(2), sort.cards(), &sort.choice())
+            })
+            .into()
     }
 
     pub fn current(&self) -> Option<GameUpdate> {

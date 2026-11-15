@@ -1,3 +1,4 @@
+import { TablePromptView } from "../table/TablePromptView";
 import { DropTargets } from "../table/DropTargets";
 import { desktopDropAreas } from "../table/dropZones";
 // The game's table drawn on the stage: the cloth, one node an object or ability
@@ -308,6 +309,14 @@ export function StageBoard({
           prompts={prompts}
           space={desktopTray()}
         />
+        {client && view.table?.prompt && (
+          <TablePromptView
+            client={client}
+            view={view}
+            prompt={view.table.prompt}
+            space={desktopTray()}
+          />
+        )}
         {client?.drag && surface && (
           <DropTargets
             client={client}

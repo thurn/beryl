@@ -204,6 +204,30 @@ export function Entries({
   const state = prompt?.body;
   if (state?.shape !== "catalog") return null;
   return (
+    <ChoiceList
+      items={state.entries}
+      chosen={state.chosen}
+      sending={sending}
+      pick={(index) => prompts.entry(index)}
+      space={space}
+    />
+  );
+}
+
+export function ChoiceList({
+  items,
+  chosen,
+  sending,
+  pick,
+  space,
+}: {
+  items: readonly string[];
+  chosen?: number | null;
+  sending: boolean;
+  pick: (index: number) => void;
+  space: TraySpace;
+}) {
+  return (
     <div
       className="stage-choose stage-entries"
       style={{
@@ -214,15 +238,15 @@ export function Entries({
       }}
     >
       <ul>
-        {state.entries.map((entry, index) => (
+        {items.map((entry, index) => (
           <li key={index}>
             <button
               type="button"
               className="stage-entry"
               data-entry={index}
-              aria-pressed={state.chosen === index}
+              aria-pressed={chosen === index}
               disabled={sending}
-              onClick={() => prompts.entry(index)}
+              onClick={() => pick(index)}
             >
               {entry}
             </button>

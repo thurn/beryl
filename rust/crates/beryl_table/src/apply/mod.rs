@@ -162,18 +162,6 @@ fn edit<T: PartialEq, C>(before: T, after: T, change: impl FnOnce(Edit<T>) -> C)
     (before != after).then(|| change(Edit { before, after }))
 }
 
-/// The reserved actions still have a dispatch target so they can be
-/// implemented independently in the module that owns their state.
-macro_rules! unimplemented_actions {
-    ($($name:ident),+ $(,)?) => {
-        $(pub(super) fn $name(_action: &Action) -> Changes {
-            Err(crate::Refusal::INVALID)
-        })+
-    };
-}
-
-use unimplemented_actions;
-
 /// Applies an ordinary action or batch without keeping a log. History actions
 /// use [`crate::Log::apply`].
 pub fn apply(
@@ -589,7 +577,7 @@ fn plan_action(
         }
         Action::CloseLook {} => Ok(Vec::new()),
         Action::SetAssist { assist, on } => Ok(game::set_assist(table, by, *assist, *on)),
-        Action::Flow { .. } => library::flow(action),
+        Action::Flow { seat, count, .. } => library::flow(table, by, *seat, *count),
         Action::Undo { .. } | Action::Rewind { .. } | Action::Batch { .. } => Err(Refusal::INVALID),
     }?;
     let mut applied = AppliedChanges::default();

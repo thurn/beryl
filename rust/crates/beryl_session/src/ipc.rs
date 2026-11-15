@@ -154,6 +154,12 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             never.clone(),
         ),
         (
+            TABLE_ANSWER,
+            request(name::<TableAnswerRequest>(cfg)),
+            name::<TableActReply>(cfg),
+            never.clone(),
+        ),
+        (
             TABLE_CURRENT,
             "Record<string, never>".to_owned(),
             name::<Option<GameUpdate>>(cfg),

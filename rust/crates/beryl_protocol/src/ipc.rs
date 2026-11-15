@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::GameUpdate;
-use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting, TableAction};
+use crate::protocol::{Answer, CandidateIndex, DecisionId, SessionId, StopsSetting, TableAction};
 
 pub mod decks;
 mod table;
@@ -54,6 +54,8 @@ pub const STAGE_TIMINGS: &str = "stage_timings";
 pub const TABLE_SOLO: &str = "table_solo";
 /// Applies one manual action using references from the published view.
 pub const TABLE_ACT: &str = "table_act";
+/// Answers the authenticated seat's current host-held prompt.
+pub const TABLE_ANSWER: &str = "table_answer";
 /// Returns the manual table's latest update, if any.
 pub const TABLE_CURRENT: &str = "table_current";
 /// Closes the current manual table.
@@ -167,6 +169,11 @@ pub struct TableSoloRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct TableActRequest {
     pub action: TableAction,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TableAnswerRequest {
+    pub answer: Answer,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

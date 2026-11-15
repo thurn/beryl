@@ -3,9 +3,9 @@
 use std::path::PathBuf;
 
 use beryl_session::ipc::{
-    Platform, SavedTable, TableActReply, TableActRequest, TableConnectionError, TableHostReply,
-    TableHostRequest, TableJoinRequest, TableRefusalReason, TableRefused, TableResumeRequest,
-    TableSettings, TableSoloRequest,
+    Platform, SavedTable, TableActReply, TableActRequest, TableAnswerRequest, TableConnectionError,
+    TableHostReply, TableHostRequest, TableJoinRequest, TableRefusalReason, TableRefused,
+    TableResumeRequest, TableSettings, TableSoloRequest,
 };
 use beryl_session::{GameUpdate, SessionId, SessionIds};
 use beryl_table_session::connections::TableConnections;
@@ -38,6 +38,18 @@ pub fn table_solo(
 pub async fn table_act(app: AppHandle, request: TableActRequest) -> TableActReply {
     tauri::async_runtime::spawn_blocking(move || {
         app.state::<TableConnections>().act(request.action)
+    })
+    .await
+    .unwrap_or(TableActReply::Refused(TableRefused {
+        refused: TableRefusalReason::Stale,
+        blocked_by: None,
+    }))
+}
+
+#[tauri::command]
+pub async fn table_answer(app: AppHandle, request: TableAnswerRequest) -> TableActReply {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<TableConnections>().answer(request.answer)
     })
     .await
     .unwrap_or(TableActReply::Refused(TableRefused {

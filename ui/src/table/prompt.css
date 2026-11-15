@@ -1,0 +1,19 @@
+.table-prompt-dialog > h2 {
+  position: absolute;
+  top: 7%;
+  width: 100%;
+  text-align: center;
+  pointer-events: none;
+}
+
+.table-sort-tray {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+}
+
+.table-prompt-controls {
+  display: flex;
+  align-items: center;
+  bottom: max(4%, env(safe-area-inset-bottom));
+}

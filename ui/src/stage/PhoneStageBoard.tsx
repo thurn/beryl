@@ -1,3 +1,4 @@
+import { TablePromptView } from "../table/TablePromptView";
 import { DropTargets } from "../table/DropTargets";
 import { phoneDropAreas } from "../table/dropZones";
 // The phone's game screen drawn on the stage: the phone's strips
@@ -350,6 +351,14 @@ export function PhoneStageBoard({
           />
           <Shares asked={asked} prompts={prompts} stage={stage} />
         </>
+      )}
+      {client && view.table?.prompt && table && viewport && (
+        <TablePromptView
+          client={client}
+          view={view}
+          prompt={view.table.prompt}
+          space={phoneTray(table, viewport)}
+        />
       )}
       {client?.drag && surface && table && bands && viewport && (
         <DropTargets

@@ -17,6 +17,7 @@ import type {
   Platform,
   SessionId,
   StopsSetting,
+  Answer,
   TableAction,
   TableDeck,
   TableHostSettings,
@@ -600,6 +601,8 @@ export const onTableLobby = async (
 
 export const tableAct = (action: TableAction) =>
   call("table_act", { request: { action } });
+export const tableAnswer = (answer: Answer) =>
+  call("table_answer", { request: { answer } });
 
 /** Takes up the open manual table with its visible cards' records cached. */
 export const tableCurrent = async () => {

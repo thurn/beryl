@@ -45,14 +45,15 @@ impl Builder {
                 .any(|event| matches!(event, AnimationEvent::MulliganReturn)),
         };
         let beat = self.member_steps(&member, events);
-        let mut wanted = spans::wanted(handling(table, viewer), &arrows(table, slots, viewer));
+        let lift = self.prompt_lift.or_else(|| handling(table, viewer));
+        let mut wanted = spans::wanted(lift, &arrows(table, slots, viewer));
         wanted.extend(self.spans.iter().copied().filter(|span| {
             matches!(span, beryl_session::script::Open::Mark { on: Subject::Object { slot }, .. } if self.stage.objects.contains_key(slot))
         }));
         let new_look = events
             .iter()
             .any(|event| matches!(event, AnimationEvent::Look { .. }));
-        self.end_spans(&wanted, &beat, new_look);
+        self.end_spans(&wanted, &beat, new_look && self.prompt_lift.is_none());
         self.finish(beat);
         self.begin_spans(&wanted);
         Ok(())

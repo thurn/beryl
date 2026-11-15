@@ -9,9 +9,9 @@ use crate::card_records::{CardEntry, CardFace, CardImages, CardRecords, CardReco
 use crate::ipc::{
     AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, PassOnRequest,
     Platform, SavedTable, SetStopsRequest, ShareBugRequest, StageAnimatingRequest, TableActReply,
-    TableActRequest, TableConnectionError, TableHostReply, TableHostRequest, TableHostSettings,
-    TableJoinRequest, TableKeysRequest, TableLink, TableRefusalReason, TableRefused,
-    TableResumeRequest, TableSettings, TableSoloRequest, UndoRequest,
+    TableActRequest, TableAnswerRequest, TableConnectionError, TableHostReply, TableHostRequest,
+    TableHostSettings, TableJoinRequest, TableKeysRequest, TableLink, TableRefusalReason,
+    TableRefused, TableResumeRequest, TableSettings, TableSoloRequest, UndoRequest,
 };
 use crate::journal::Level;
 use crate::prompt::{
@@ -27,9 +27,10 @@ use crate::protocol::{
     ZoneName,
 };
 use crate::protocol::{
-    AssistsView, FaceName, LabelView, LinkState, LogLine, ManualAbility, ManualOrders, ManualPiles,
-    NamedCounter, ProposalLine, ProposalView, RowName, TableArrow, TableCardCommands,
-    TableObjectAction, TableObjectRef, TablePhase, TablePrompt, TableView, ZoneRef,
+    Answer, AssistsView, FaceName, LabelView, LinkState, LogLine, ManualAbility, ManualOrders,
+    ManualPiles, NamedCounter, PileName, ProposalLine, ProposalView, RowName, TableArrow,
+    TableCardCommands, TableObjectAction, TableObjectRef, TablePhase, TablePrompt, TableView,
+    ZoneRef,
 };
 use crate::script::{
     Act, Arrow, Curve, Edge, Fact, Mark, Notice, OwnStep, OwnTiming, OwnTimings, Reset, Script,
@@ -62,7 +63,7 @@ fn prompt_decls(cfg: &Config) -> [String; 18] {
 }
 
 /// Types used by manual table views and their scripts.
-fn table_decls(cfg: &Config) -> [String; 20] {
+fn table_decls(cfg: &Config) -> [String; 22] {
     [
         FaceName::decl(cfg),
         ManualAbility::decl(cfg),
@@ -84,6 +85,8 @@ fn table_decls(cfg: &Config) -> [String; 20] {
         TablePhase::decl(cfg),
         ZoneRef::decl(cfg),
         TablePrompt::decl(cfg),
+        PileName::decl(cfg),
+        Answer::decl(cfg),
     ]
 }
 
@@ -145,6 +148,7 @@ fn session_decls(cfg: &Config) -> impl IntoIterator<Item = String> {
         TableConnectionError::decl(cfg),
         TableKeysRequest::decl(cfg),
         TableActRequest::decl(cfg),
+        TableAnswerRequest::decl(cfg),
         TableActReply::decl(cfg),
         TableRefusalReason::decl(cfg),
         TableRefused::decl(cfg),

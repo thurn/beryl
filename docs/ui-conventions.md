@@ -329,6 +329,10 @@ restore the old behavior.
   badges with shortened names. Add counter offers six common names above the
   text field. Player counters appear beside the mana pool. A permanent marked as
   skipping untap shows a lock in its corner.
+- **Manual table prompts.** A guided choice on the manual table uses the same
+  sorting tray or list as an engine game. The seat answering it sees the cards
+  or choices. Across the table a library sort lifts only a packet of cards,
+  which returns when the tray closes.
 
 ## Not seen in Arena
 

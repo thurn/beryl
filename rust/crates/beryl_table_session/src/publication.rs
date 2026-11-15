@@ -1,9 +1,10 @@
 //! Commits manual table actions only when every seat can publish the result.
 
-use beryl_session::protocol::{ObjectId as Slot, PlayerView, TableAction, TableActionRefs};
+use beryl_session::protocol::{Answer, ObjectId as Slot, PlayerView, TableAction, TableActionRefs};
 use beryl_table::state::{ObjectId, Proposal};
 use beryl_table::{Action, Chance, Entry, Log, Refusal, Seat, Table};
 
+use crate::prompt::{OpenPrompt, Progress, PromptState};
 pub use crate::script::ProposalMarks;
 use crate::script::{proposal_marks, script_with_proposal_marks, snapshot};
 use crate::view::{Slots, attach_history, project};
@@ -73,12 +74,38 @@ impl SeatPublication {
         attach_history(&mut self.view, log, table, self.seat, names);
     }
 
+    fn project_prompts(
+        view: &mut PlayerView,
+        seat: Seat,
+        slots: &Slots,
+        table: &Table,
+        prompts: &[Option<OpenPrompt>],
+    ) {
+        view.handling = crate::view::handling(table, crate::view::Viewer(seat));
+        let mut own = None;
+        for (actor, prompt) in table.seats().zip(prompts) {
+            let Some(prompt) = prompt
+                .as_ref()
+                .filter(|prompt| prompt.state.valid(table, actor))
+            else {
+                continue;
+            };
+            if actor == seat {
+                own = prompt.state.view(|id| slots.get(id));
+            } else if let Some(lift) = prompt.state.observer_lift() {
+                view.handling = Some(lift);
+            }
+        }
+        view.table.as_mut().expect("manual publication").prompt = own;
+    }
+
     fn advance(
         &self,
         table_before: &Table,
         staged: &Table,
         entry: &Entry,
         marks: ProposalMarks<'_>,
+        prompts: &[Option<OpenPrompt>],
     ) -> Result<Self, Refusal> {
         let mut next = Self::project(
             staged,
@@ -86,6 +113,7 @@ impl SeatPublication {
             self.seat,
             self.slots.clone(),
         )?;
+        Self::project_prompts(&mut next.view, next.seat, &next.slots, staged, prompts);
         next.view.script = Some(script_with_proposal_marks(
             &self.view,
             Some((entry, table_before)),
@@ -107,6 +135,7 @@ pub struct PublishedTable {
     chance: Chance,
     seats: Vec<SeatPublication>,
     names: Vec<Option<String>>,
+    prompts: Vec<Option<OpenPrompt>>,
 }
 
 enum Request<'a> {
@@ -124,12 +153,14 @@ impl PublishedTable {
             .seats()
             .map(|seat| SeatPublication::new(&table, &log, seat))
             .collect::<Result<_, _>>()?;
+        let prompts = table.seats().map(|_| None).collect();
         Ok(Self {
             table,
             log,
             chance,
             seats,
             names: Vec::new(),
+            prompts,
         })
     }
 
@@ -160,8 +191,131 @@ impl PublishedTable {
             .ok_or(Refusal::Stale)?;
         let mut reset =
             SeatPublication::snapshot(&self.table, &self.log, seat, Slots::default(), &self.names)?;
+        SeatPublication::project_prompts(
+            &mut reset.view,
+            seat,
+            &reset.slots,
+            &self.table,
+            &self.prompts,
+        );
         reset.view.script = Some(snapshot(&reset.view));
         *publication = reset;
+        Ok(())
+    }
+
+    /// Open an authoritative prompt and publish its redacted view. A sort learns
+    /// the cards through the log so knowledge survives a cancellation and a save.
+    pub(crate) fn open_prompt(
+        &mut self,
+        seat: Seat,
+        state: PromptState,
+        on_done: impl Fn(&PromptState) -> Result<Action, Refusal> + Send + Sync + 'static,
+        save: impl FnOnce(&Entry) -> Result<(), Refusal>,
+    ) -> Result<(), Refusal> {
+        let index = usize::from(seat.0);
+        let current = self.prompts.get(index).ok_or(Refusal::Stale)?;
+        if current.is_some() || !state.valid(&self.table, seat) {
+            return Err(Refusal::INVALID);
+        }
+        let peek = state.peek();
+        self.prompts[index] = Some(OpenPrompt {
+            state,
+            complete: Box::new(on_done),
+        });
+        let result = if let Some(action) = peek {
+            self.apply(
+                seat,
+                Request::Host(&action),
+                |_| ProposalMarks::default(),
+                save,
+            )
+            .map(|_| ())
+        } else {
+            self.republish_prompts(Some(seat))
+        };
+        if result.is_err() {
+            self.prompts[index] = None;
+        }
+        result
+    }
+
+    /// The return value indicates whether other seats also need an update.
+    pub(crate) fn answer(
+        &mut self,
+        seat: Seat,
+        answer: Answer,
+        save: impl FnOnce(&Entry) -> Result<(), Refusal>,
+    ) -> Result<bool, Refusal> {
+        let index = usize::from(seat.0);
+        let current = self
+            .prompts
+            .get(index)
+            .and_then(Option::as_ref)
+            .ok_or(Refusal::Stale)?;
+        let publication = &self.seats[index];
+        let mut state = current.state.clone();
+        match state.answer(answer, publication)? {
+            Progress::Editing => {
+                let previous = std::mem::replace(
+                    &mut self.prompts[index].as_mut().expect("open prompt").state,
+                    state,
+                );
+                if let Err(error) = self.republish_prompts(Some(seat)) {
+                    self.prompts[index].as_mut().expect("open prompt").state = previous;
+                    return Err(error);
+                }
+                Ok(false)
+            }
+            Progress::Complete => {
+                let action = (current.complete)(&state)?;
+                let previous = self.prompts[index].take();
+                if let Err(error) = self.apply(
+                    seat,
+                    Request::Host(&action),
+                    |_| ProposalMarks::default(),
+                    save,
+                ) {
+                    self.prompts[index] = previous;
+                    return Err(error);
+                }
+                Ok(true)
+            }
+            Progress::Cancel => {
+                let all = current.state.observer_lift().is_some();
+                let previous = self.prompts[index].take();
+                if let Err(error) = self.republish_prompts((!all).then_some(seat)) {
+                    self.prompts[index] = previous;
+                    return Err(error);
+                }
+                Ok(all)
+            }
+        }
+    }
+
+    fn republish_prompts(&mut self, only: Option<Seat>) -> Result<(), Refusal> {
+        let mut prepared = Vec::new();
+        for (index, publication) in self.seats.iter().enumerate() {
+            if only.is_some_and(|seat| publication.seat != seat) {
+                continue;
+            }
+            let slots = &publication.slots;
+            let seat = publication.seat;
+            let mut view = publication.view.clone();
+            SeatPublication::project_prompts(&mut view, seat, slots, &self.table, &self.prompts);
+            view.script = Some(script_with_proposal_marks(
+                &publication.view,
+                None,
+                &view,
+                seat,
+                slots,
+                slots,
+                ProposalMarks::default(),
+            )?);
+            prepared.push((index, view));
+        }
+        for (index, view) in prepared {
+            self.seats[index].view = view;
+        }
         Ok(())
     }
 
@@ -215,6 +369,7 @@ impl PublishedTable {
                     staged,
                     entry,
                     marks(publication.seat),
+                    &self.prompts,
                 )?);
             }
             save(entry)
@@ -235,6 +390,14 @@ impl PublishedTable {
         };
         for publication in &mut prepared {
             publication.attach_history(&self.log, &self.table, &self.names);
+        }
+        for (seat, prompt) in self.table.seats().zip(&mut self.prompts) {
+            if prompt
+                .as_ref()
+                .is_some_and(|prompt| !prompt.state.valid(&self.table, seat))
+            {
+                *prompt = None;
+            }
         }
         self.seats = prepared;
         Ok(self.log.entries().last().expect("action recorded an entry"))

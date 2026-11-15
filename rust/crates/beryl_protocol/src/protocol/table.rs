@@ -168,11 +168,67 @@ pub struct AssistsView {
     pub ability_menus: bool,
 }
 
-/// The wire tag reserved for a host-held prompt.
+/// Destinations shown by a manual sorting tray.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum PileName {
+    Top,
+    Bottom,
+    Graveyard,
+}
+
+/// A host-held prompt as seen by the seat answering it. Card IDs are stage
+/// slots from that seat's view. In a sort, each row in `placed` is ordered
+/// first card first and belongs to the pile at the same index.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum TablePrompt {
+    Sort {
+        title: String,
+        cards: Vec<ObjectId>,
+        piles: Vec<PileName>,
+        placed: Vec<Vec<ObjectId>>,
+    },
+    Choose {
+        title: String,
+        options: Vec<String>,
+        selected: Option<usize>,
+    },
+    Opening {
+        hand: Vec<ObjectId>,
+        mulligans: u16,
+        to_bottom: Option<u16>,
+        bottom: Vec<ObjectId>,
+    },
+}
+
+/// A click in the authenticated seat's current prompt. A placement index
+/// counts cards in the destination after removing the card being placed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
-pub enum TablePrompt {
-    None,
+pub enum Answer {
+    Place {
+        card: ObjectId,
+        pile: PileName,
+        index: usize,
+    },
+    Unplace {
+        card: ObjectId,
+    },
+    Pick {
+        option: usize,
+    },
+    Keep,
+    Mulligan,
+    Bottom {
+        card: ObjectId,
+    },
+    Done,
+    Cancel,
 }
 
 /// A player's ordered slots for the zones whose order is specific to manual play.
