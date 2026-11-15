@@ -208,7 +208,7 @@ await check(
         assert.equal(repeated.length, 2);
         assert.ok(repeated.every(({ note }) => note === "Can crew"));
     },
-    tabletop,
+    { ...tabletop, viewport: { width: 1024, height: 600 } },
 );
 
 await check(

@@ -214,41 +214,42 @@ await check(
             const view = reply.ok.view;
             view.table.seats = 2;
             view.players.opponent.life = 20;
-            view.objects.find(({ zone }) => zone === "battlefield").owner =
-                "opponent";
+            for (const card of view.objects) {
+                if (card.zone === "battlefield") card.owner = "opponent";
+            }
             delete view.script;
             await route.fulfill({ response, json: reply });
         });
+        const moveCreature = (view) => ({
+            move: {
+                to: "battlefield",
+                ...tableActionRef(view, {
+                    kind: "object",
+                    slot: view.table.orders.you.hand.at(-1),
+                }),
+            },
+        });
+        const setPower = (index, power) => (view) => ({
+            stats: {
+                stats: [power, 3],
+                ...tableActionRef(view, {
+                    kind: "object",
+                    slot: view.battlefield[index],
+                }),
+            },
+        });
         const mod = await setup(page, [
-            (view) => ({
-                move: {
-                    to: "battlefield",
-                    ...tableActionRef(view, {
-                        kind: "object",
-                        slot: view.table.orders.you.hand.at(-1),
-                    }),
-                },
-            }),
-            (view) => ({
-                stats: {
-                    stats: [3, 3],
-                    ...tableActionRef(view, {
-                        kind: "object",
-                        slot: view.objects.find(
-                            ({ zone }) => zone === "battlefield",
-                        ).slot,
-                    }),
-                },
-            }),
+            moveCreature,
+            moveCreature,
+            setPower(0, 3),
+            setPower(1, -2),
         ]);
         const initial = await tableView();
-        const creature = initial.objects.find(
-            ({ zone }) => zone === "battlefield",
-        );
-        const card = page.locator(
-            `.card-layer > [data-slot="${creature.slot}"]`,
-        );
-        await card.click({ modifiers: [mod] });
+        for (const slot of initial.battlefield) {
+            await page
+                .locator(`.card-layer > [data-slot="${slot}"]`)
+                .click({ modifiers: [mod] });
+        }
         await life(page, "opponent").hover();
         const response = page.waitForResponse((response) =>
             response.url().endsWith("/invoke/table_act"),

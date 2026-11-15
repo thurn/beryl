@@ -2,6 +2,7 @@ import { counterName } from "../game/log";
 import type { TableAction, TableZone } from "../generated/protocol";
 import {
   baseStats,
+  MIN_INT,
   statValue,
   storeToken,
   type TokenChoice,
@@ -75,11 +76,12 @@ export function commandActions(
   if (command.id === "permanent.reduce_life_by_power") {
     const reductions = new Map<number, number>();
     for (const { object } of context.cards) {
-      if (!object?.pt) continue;
+      if (!object?.pt || object.pt.power <= 0) continue;
+      const { power } = object.pt;
       const recipient = 1 - seatOf(view, object.owner);
       reductions.set(
         recipient,
-        (reductions.get(recipient) ?? 0) - object.pt.power,
+        Math.max(MIN_INT, (reductions.get(recipient) ?? 0) - power),
       );
     }
     return [...reductions].map(([seat, number]) =>

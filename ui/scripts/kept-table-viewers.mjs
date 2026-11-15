@@ -219,7 +219,7 @@ await check(
         );
         assert.equal(kept.handling, undefined);
     },
-    live,
+    { ...live, viewport: { width: 1024, height: 600 } },
 );
 
 await check(

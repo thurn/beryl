@@ -1,7 +1,12 @@
 // These checks need live host replies to tell which action was undone, what
 // knowledge was kept, and which numbered entries block undo.
 import assert from "node:assert/strict";
-import { screenFaults } from "./capture.mjs";
+import {
+    clippedText,
+    crowdedControls,
+    screenFaults,
+    stageFaults,
+} from "./capture.mjs";
 import { check } from "./kept-harness.mjs";
 import {
     clickTable,
@@ -129,7 +134,10 @@ await check(
             ),
             "line-through",
         );
+        assert.deepEqual(await clippedText(page), []);
         assert.deepEqual(await screenFaults(page), []);
+        assert.deepEqual(await crowdedControls(page), []);
+        assert.deepEqual(await stageFaults(page), []);
 
         await struck.hover();
         const restoredShuffle = await clickTable(
@@ -142,7 +150,7 @@ await check(
             false,
         );
     },
-    live,
+    { ...live, viewport: { width: 1024, height: 600 } },
 );
 
 await check(
