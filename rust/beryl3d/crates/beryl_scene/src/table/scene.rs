@@ -206,40 +206,9 @@ impl Table {
             .max(self.objects.len());
         for slot in 0..slots {
             builder.visit();
-            let resting = self.objects.get(slot).copied().flatten();
-            let track = motion.and_then(|motion| {
-                let track = motion.tracks.get(slot)?;
-                (!track.segments().is_empty()).then_some((motion, track))
-            });
-            let moving = track.and_then(|(motion, track)| {
-                builder.segment();
-                let pose = track.pose_at(motion.t);
-                let under_way = track.moving(motion.t);
-                let last = motion.finals.get(slot).copied().flatten();
-                // A card a row has scrolled out of view rests undrawn at the row's end, above
-                // the last card shown. One that is out of view both before the script and after
-                // it stays undrawn while it slides, or it would cover that card.
-                let seen = [resting, last]
-                    .iter()
-                    .flatten()
-                    .any(|object| object.visible);
-                match last {
-                    Some(object) => Some((object, motion.view, pose, under_way, seen)),
-                    None => resting.map(|object| (object, view, pose, under_way, seen)),
-                }
-            });
-            let (object, view, under_way) = match (moving, resting) {
-                (Some((object, view, pose, under_way, seen)), _) => (
-                    SceneObject {
-                        pose,
-                        visible: seen && pose.opacity > 0.0,
-                        ..object
-                    },
-                    view,
-                    under_way,
-                ),
-                (None, Some(object)) => (object, view, false),
-                (None, None) => continue,
+            let Some((object, view, under_way)) = self.object_at(slot, view, motion, builder)
+            else {
+                continue;
             };
             if !object.visible {
                 continue;
@@ -309,6 +278,46 @@ impl Table {
             Vec3::new(0.0, 0.0, CLOTH_HEIGHT),
         );
         builder.draw(Band::Opaque, Draw::table(cloth, CLOTH_TINT));
+    }
+
+    /// The object in `slot` as this frame draws it, the view that names it, and whether it is
+    /// moving: at rest in `view`, or at its pose on its track while a script plays. `None` for a
+    /// slot with no object.
+    fn object_at<'v>(
+        &self,
+        slot: usize,
+        view: &'v PlayerView,
+        motion: Option<Motion<'v>>,
+        builder: &mut FrameBuilder,
+    ) -> Option<(SceneObject, &'v PlayerView, bool)> {
+        let resting = self.objects.get(slot).copied().flatten();
+        let track = motion.and_then(|motion| {
+            let track = motion.tracks.get(slot)?;
+            (!track.segments().is_empty()).then_some((motion, track))
+        });
+        let Some((motion, track)) = track else {
+            return resting.map(|object| (object, view, false));
+        };
+        builder.segment();
+        let pose = track.pose_at(motion.t);
+        let last = motion.finals.get(slot).copied().flatten();
+        // A card a row has scrolled out of view rests undrawn at the row's end, above the last
+        // card shown. One that is out of view both before the script and after it stays
+        // undrawn while it slides, or it would cover that card.
+        let seen = [resting, last]
+            .iter()
+            .flatten()
+            .any(|object| object.visible);
+        let (object, view) = match last {
+            Some(object) => (object, motion.view),
+            None => (resting?, view),
+        };
+        let object = SceneObject {
+            pose,
+            visible: seen && pose.opacity > 0.0,
+            ..object
+        };
+        Some((object, view, track.moving(motion.t)))
     }
 
     /// A card's corners on screen, in logical points: bottom left, bottom right, top right and
