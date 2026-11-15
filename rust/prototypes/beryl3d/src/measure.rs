@@ -88,3 +88,16 @@ pub fn interactive() -> bool {
         libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_USER_INTERACTIVE, 0) == 0
     }
 }
+
+/// Puts this thread in the utility scheduling class, below the frame thread. Threads it creates
+/// inherit the class. `BERYL3D_NO_QOS` leaves it unchanged, for comparison.
+#[allow(unsafe_code)]
+pub fn utility() {
+    if std::env::var_os("BERYL3D_NO_QOS").is_some() {
+        return;
+    }
+    // SAFETY: pthread_set_qos_class_self_np only changes the calling thread's scheduling class.
+    unsafe {
+        libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_UTILITY, 0);
+    }
+}

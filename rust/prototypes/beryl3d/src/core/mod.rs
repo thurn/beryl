@@ -211,10 +211,14 @@ impl Core {
     /// Builds the frame at `now`.
     pub fn frame(&mut self, now: u64) -> &draw::DrawList {
         self.finished.clear();
-        while now >= self.busy_until {
+        // At most a few updates start in one frame. A backlog of updates with empty scripts
+        // would otherwise all be compiled in one frame, which took 3 ms in the window.
+        let mut started = 0;
+        while now >= self.busy_until && started < 4 {
             let Some(update) = self.pending.pop_front() else {
                 break;
             };
+            started += 1;
             let start = self.busy_until.max(self.last_now);
             // The stand-in answers the human seat at once, so the session can run far ahead
             // of the animation. A backlog plays faster until it has caught up.

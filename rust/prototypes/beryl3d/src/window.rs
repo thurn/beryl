@@ -1,6 +1,7 @@
 //! The window: winit 0.30 on the Mac. It draws only when the core says something animates, the
 //! pointer moved or a session update arrived, and shows in its title what the last frame cost on
-//! the CPU, how many frames were late and whether the AI is searching.
+//! the CPU, how many frames were late (missed even a 60 Hz deadline), how many were paced at
+//! 60 Hz on a faster display, and whether the AI is searching.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -23,6 +24,8 @@ const BOARDS: [Board; 3] = [Board::Live, Board::Stress(255), Board::Stress(1024)
 struct Counters {
     frames: u64,
     late: u64,
+    /// Frames on time for 60 Hz but not for the display's highest rate.
+    slow_paced: u64,
     core_total: f64,
     core_worst: f64,
     encode_total: f64,
@@ -130,24 +133,29 @@ impl State {
         if let Some((previous, expected)) = self.last_frame
             && expected
             && animating
-            && at.duration_since(previous).as_secs_f64() > 1.5 / self.refresh_hz
         {
-            self.counters.late += 1;
-            // One line per late frame, saying where its time went, so a person running the
-            // window can tell drawing cost from presentation and scheduling.
-            eprintln!(
-                "late frame {}: {:.1} ms since the last (display {:.1} ms); waited {:.2} ms for \
-                 the drawable, core {:.3} ms, encode and submit {:.3} ms; {} updates waiting; \
-                 load {:.1}",
-                self.counters.late,
-                at.duration_since(previous).as_secs_f64() * 1e3,
-                1e3 / self.refresh_hz,
-                acquire_ns / 1e6,
-                core_ns / 1e6,
-                encode_ns / 1e6,
-                shown.queued(),
-                measure::load_average(),
-            );
+            let interval = at.duration_since(previous).as_secs_f64();
+            if interval > 1.5 / 60.0 {
+                // Late even for a 60 Hz display: a frame was really dropped. One line each,
+                // saying where its time went.
+                self.counters.late += 1;
+                eprintln!(
+                    "late frame {}: {:.1} ms since the last; waited {:.2} ms for the drawable, \
+                     core {:.3} ms, encode and submit {:.3} ms; {} updates waiting; load {:.1}",
+                    self.counters.late,
+                    interval * 1e3,
+                    acquire_ns / 1e6,
+                    core_ns / 1e6,
+                    encode_ns / 1e6,
+                    shown.queued(),
+                    measure::load_average(),
+                );
+            } else if interval > 1.5 / self.refresh_hz {
+                // On time for 60 Hz but not for the display's highest rate: macOS paced the
+                // window at a lower rate, which it does unless the app asks for more through a
+                // display link, as winit's on-demand redraws do not.
+                self.counters.slow_paced += 1;
+            }
         }
         self.last_frame = Some((at, continues));
         let c = &mut self.counters;
@@ -169,10 +177,11 @@ impl State {
     fn retitle(&self) {
         let searching = self.boards[0].as_ref().is_some_and(|b| b.core.thinking);
         let title = format!(
-            "Beryl 3D prototype · {} · CPU {:.3} ms · late {} · AI {}{}",
+            "Beryl 3D prototype · {} · CPU {:.3} ms · late {} · at 60 Hz {} · AI {}{}",
             BOARDS[self.current].name(),
             self.counters.last_cpu / 1e6,
             self.counters.late,
+            self.counters.slow_paced,
             if searching { "searching" } else { "idle" },
             if self.paused_at.is_some() {
                 " · paused"
@@ -190,9 +199,10 @@ impl State {
         let s = shown.draw.stats;
         println!("--- {} ---", BOARDS[self.current].name());
         println!(
-            "frames drawn {}  late {}  display {:.0} Hz  load {:.1}",
+            "frames drawn {}  late {}  at 60 Hz {}  display {:.0} Hz  load {:.1}",
             c.frames,
             c.late,
+            c.slow_paced,
             self.refresh_hz,
             measure::load_average()
         );

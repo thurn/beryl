@@ -28,8 +28,22 @@ pub fn start(
         opponent: "mcts-hidden".to_owned(),
         stops: StopsSetting::SMART,
     };
-    let id = sessions
-        .start_game(&start, Some("expert"))
-        .expect("the game starts");
+    // A macOS thread inherits the scheduling class of the thread that creates it, and neither
+    // the session nor the search pool sets one. Started from the frame thread, whose class is
+    // user-interactive, every search thread ran level with drawing. Started from a thread in the
+    // utility class, the session thread and the search threads it creates run one class below
+    // drawing, as decision C9 in docs/beryl-3d.md says.
+    let (sessions, id) = std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                crate::measure::utility();
+                let id = sessions
+                    .start_game(&start, Some("expert"))
+                    .expect("the game starts");
+                (sessions, id)
+            })
+            .join()
+            .expect("the game starts")
+    });
     (sessions, id, receiver)
 }

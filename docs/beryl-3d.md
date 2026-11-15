@@ -1917,6 +1917,23 @@ What these show:
   it did not, 1.15 ms (2.6 ms), over about 580 frames drawn during search per
   run. The search threads ran at their default priority. The machine was lightly
   loaded, so this does not yet test decision C9's priorities.
+- **In the window, macOS paced frames at 60 Hz on a 120 Hz display.** Run by the
+  project's owner on a ProMotion Mac at load 20, about 25 of 31 frames flagged
+  late had waited 16.3 ms for the drawable, with the core and encode under 0.3
+  ms: the window was simply presented at 60 Hz. macOS keeps a window at its
+  highest rate only when the app asks through a display link, and `winit`'s
+  on-demand redraws with `wgpu`'s FIFO presentation do not ask. The desktop host
+  therefore needs a display link on macOS (`NSView`'s display link with a
+  preferred frame rate range), as the iOS host already plans with
+  `CADisplayLink`.
+- **Search threads inherit the frame thread's priority unless started from
+  elsewhere.** A macOS thread inherits the scheduling class of the thread that
+  creates it, and neither the session nor the search pool sets one. The
+  prototype first started its game from the frame thread after putting that
+  thread in the user-interactive class, so every search thread ran level with
+  drawing, and the same run showed a few stalls of 50 to 230 ms. The game is now
+  started from a thread in the utility class. The real client must set the
+  search threads' class explicitly rather than rely on where they are started.
 - **The floor's limits.** Every board drew on a device created with
   `wgpu::Limits::downlevel_webgl2_defaults()` with no validation error.
 
