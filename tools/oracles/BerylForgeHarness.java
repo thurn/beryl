@@ -211,6 +211,8 @@ public final class BerylForgeHarness {
         boolean stopped;
         // The first scripted priority action in Beryl came after any setup triggers resolved.
         boolean settleSetupStack;
+        // The script's answer to a target requested by the opening stack, if any.
+        int setupTarget;
 
         // Beryl's coin flips, in order, and the random source that replays them.
         final java.util.ArrayDeque<JsonObject> flips = new java.util.ArrayDeque<>();
@@ -222,6 +224,7 @@ public final class BerylForgeHarness {
 
         Run(JsonObject scenario) {
             this.scenario = scenario;
+            setupTarget = scenario.has("setup_target") ? scenario.get("setup_target").getAsInt() : -1;
             settleSetupStack = scenario.has("settle_setup_stack")
                     && scenario.get("settle_setup_stack").getAsBoolean();
             for (JsonElement step : scenario.getAsJsonArray("steps")) {
@@ -439,6 +442,12 @@ public final class BerylForgeHarness {
             if (System.getenv("BERYL_FORGE_TRACE") != null) {
                 notes.add("priority p" + seat(player) + " " + where() + " mode " + mode + " next " + next);
             }
+            if (next <= setupTarget && game.getStack().isEmpty()) {
+                // Loading a GameState can move permanents to the graveyard before the
+                // triggers they cause are registered, so the opening target never comes up.
+                throw new Unsupported("a setup trigger whose target Forge did not ask for");
+            }
+            setupTarget = -1;
             if (settleSetupStack) {
                 // Forge gives both players priority on setup triggers that Beryl already
                 // resolved while advancing to its first scripted action. Pass until that
@@ -1617,6 +1626,17 @@ public final class BerylForgeHarness {
                         }
                     }
                 }
+            }
+            // The legend rule can ask before the script's next target or card choice.
+            if (sa != null && sa.getApi() == ApiType.InternalLegendaryRule) {
+                JsonObject pick = run.takeFollowingFor(player, "legend-rule");
+                if (pick != null) {
+                    @SuppressWarnings("unchecked")
+                    T chosen = (T) run.resolvePick(pick, List.copyOf(options));
+                    lastPicks.add(chosen);
+                    return chosen;
+                }
+                return super.chooseSingleEntityForEffect(options, delayedReveal, sa, title, isOptional, targetedPlayer, params);
             }
             // The permanent a copy effect copies is Beryl's one pick of it, whatever the count.
             boolean copying = sa != null && sa.getApi() == ApiType.Clone;

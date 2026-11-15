@@ -82,6 +82,18 @@ def test_a_command_after_the_opponents_spell_passes_priority_first() -> None:
     assert lines.count(passing) == 1
 
 
+def test_xmage_cannot_start_the_main_phase_with_a_setup_trigger_pending() -> None:
+    name = "Get Lost on a creature gives two Maps; one explores a land into hand"
+    entry = next(e for e in json.loads(FIXTURE.read_text()) if e["name"] == name)
+    entry["trace"][0]["stack"] = [
+        {"name": "Elite Spellbinder", "spell": False, "controller": 0}
+    ]
+    faces = xmage_java.Faces.load(card_store.STORE)
+    export = xmage_export.export_one(entry, 1, faces, XMAGE_CARDS)
+    assert export.unsupported == "a setup trigger pending at the first main phase"
+    assert export.body == []
+
+
 def test_a_decision_answered_for_a_controlled_player_is_scripted_as_theirs() -> None:
     # While player 1 (playerA) controls player 0 (CR 724.5), the scenario names player 1 as
     # the one who casts Mana Drain, but XMage's test players act for themselves, so playerB

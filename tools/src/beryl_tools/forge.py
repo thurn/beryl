@@ -439,6 +439,7 @@ def export(
             described = Cards(cast(JsonObject, entry.get("cards", {})), oracle)
             steps: list[JsonObject] = []
             unchecked = 0
+            setup_target = None
             paid_as_made = False
             trace = cast(list[JsonObject], entry.get("trace", []))
             actions = [
@@ -460,6 +461,7 @@ def export(
                         )
                         for forced in cast(list[JsonObject], trace[i].get("forced", []))
                         if forced["kind"] in ("Target", "X", "DamageDivision")
+                        or forced.get("purpose") == "legend-rule"
                     )
                 flashback = (
                     cast(list[str], trace[i].get("flashback", []))
@@ -501,6 +503,13 @@ def export(
                         converted["stack"] = len(
                             cast(list[JsonObject], trace[i].get("stack", []))
                         )
+                    if (
+                        i == 0
+                        and trace
+                        and trace[0].get("stack")
+                        and converted.get("kind") == "Target"
+                    ):
+                        setup_target = len(steps)
                     steps.append(converted)
             setup = cast(JsonObject, entry["setup"])
             scenario: JsonObject = {
@@ -511,6 +520,8 @@ def export(
                 "steps": steps,
                 "unchecked": unchecked,
             }
+            if setup_target is not None:
+                scenario["setup_target"] = setup_target
             if (
                 trace
                 and trace[0].get("kind") == "Priority"

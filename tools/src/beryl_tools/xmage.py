@@ -166,6 +166,14 @@ class Exporter:
         self.arrange()
         raw = cast(list[Json], self.entry["trace"])
         trace = [Position.of(t) for t in raw]
+        if (
+            trace
+            and trace[0].stack
+            and trace[0].step == self.setup["step"] == "PrecombatMain"
+        ):
+            # XMage starts at the beginning of the turn and processes setup triggers
+            # before the first main phase, where Beryl's script expects them to resolve.
+            raise Unsupported("a setup trigger pending at the first main phase")
         self.trace = trace
         self.actions = actions = [
             as_their_own(a, raw[i].get("decides_for")) if i < len(raw) else a

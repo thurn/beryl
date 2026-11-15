@@ -114,6 +114,34 @@ def test_a_decision_answered_for_a_controlled_player_is_scripted_as_theirs() -> 
     assert steps(scenarios[0])[0]["player"] == 0
 
 
+def test_legend_rule_pick_precedes_the_trigger_target() -> None:
+    entry = dumped()[0]
+    legend = {
+        "action": "Answer",
+        "kind": "ChooseObject",
+        "player": 0,
+        "pick": {"pick": "Card", "card": "Jace, Vryn's Prodigy"},
+        "purpose": "legend-rule",
+    }
+    target = {
+        "action": "Answer",
+        "kind": "Target",
+        "player": 0,
+        "pick": {"pick": "Player", "player": 1},
+    }
+    entry["actions"] = [target]
+    entry["trace"] = [
+        {"kind": "Target", "stack": [{"spell": False}], "flips": [], "forced": [legend]}
+    ]
+    scenarios, skipped = forge.export([entry], card_store.STORE)
+    assert skipped == []
+    assert scenarios[0]["setup_target"] == 1
+    legend_step, target_step = steps(scenarios[0])
+    assert legend_step["purpose"] == "legend-rule"
+    assert legend_step["pick"] == legend["pick"]
+    assert target_step["pick"] == target["pick"]
+
+
 def test_scenarios_outside_the_vocabulary_are_unsupported() -> None:
     entry = dumped()[0]
     actions = list(cast(list[Json], entry["actions"]))
