@@ -788,7 +788,10 @@ There are four hosts.
   draws only on the link's ticks: an input or a session update reaches the
   client core at once and is drawn on the next tick. In the prototype, `winit`'s
   own redraw requests left a 120 Hz display at 60 Hz, and drawing on every input
-  used up macOS's three drawables.
+  used up macOS's three drawables. On Windows, `winit`'s redraw requests are the
+  ticks. F11, and ⌃⌘F on macOS, leave and re-enter fullscreen. The `background`
+  window mode makes the app an accessory app on macOS, with no Dock icon, so its
+  window never becomes active and never gets the keyboard.
 - **The iOS host** is a Swift app of a few hundred lines. It owns a
   `CAMetalLayer` and a `CADisplayLink`, asks for the display's highest refresh
   rate, and calls the Rust library through C functions.

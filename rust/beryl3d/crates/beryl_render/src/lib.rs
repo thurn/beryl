@@ -5,10 +5,12 @@ mod mesh;
 mod pipeline;
 mod renderer;
 mod runs;
+mod surface;
 mod target;
 mod textures;
 
 pub use mesh::CARD_RADIUS;
 pub use renderer::{Drawn, Limits, Renderer};
+pub use surface::{Presented, Surface};
 pub use target::Target;
 pub use textures::{BACK_LAYER, GLOW_SPRITE};

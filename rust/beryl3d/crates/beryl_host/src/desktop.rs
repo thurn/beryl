@@ -1,0 +1,471 @@
+//! The desktop host on winit 0.30 (docs/beryl-3d.md, "Hosts"): it opens the window and its
+//! surface, turns winit's events into `Input`s, draws on the display's ticks and carries out the
+//! client's `Request`s. On macOS a display link supplies the ticks; elsewhere winit's redraw
+//! requests do.
+
+use std::path::Path;
+use std::process::Command;
+use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender, channel};
+use std::time::{Duration, Instant};
+
+use beryl_render::{Renderer, Surface};
+use beryl_scene::Client;
+use beryl_scene::command::Request;
+use beryl_scene::frame::Frame;
+use beryl_scene::input::{Input, Lifecycle};
+use winit::application::ApplicationHandler;
+use winit::dpi::{LogicalPosition, LogicalSize};
+use winit::event::{ElementState, KeyEvent, WindowEvent};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
+use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::window::{Fullscreen, Window, WindowId};
+
+use crate::events::Translator;
+use crate::frames::{Draw, FrameLoop, Sleep, Ticks};
+
+/// What the window is (decision C15: the faster choice is the default).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowMode {
+    /// A window that opens behind the other windows and never takes focus or keyboard input,
+    /// for runs an agent starts while a person works.
+    Background,
+    /// An ordinary window.
+    Foreground,
+    /// The whole display, where the system can show the surface without composing it with
+    /// other windows. A key leaves and re-enters it (`is_fullscreen_key`).
+    Fullscreen,
+}
+
+/// How the desktop host opens its window.
+#[derive(Clone, Debug)]
+pub struct Options {
+    pub mode: WindowMode,
+    pub title: String,
+    /// The window's size in logical points when it is not fullscreen.
+    pub size: (f64, f64),
+}
+
+/// What other threads and the display link send the event loop.
+#[derive(Debug)]
+pub enum UserEvent {
+    /// The display link fired: the display is ready for a frame.
+    #[cfg(target_os = "macos")]
+    Tick,
+    /// Inputs are waiting in the inbox.
+    Inbox,
+}
+
+/// Hands inputs to the host from other threads: session updates, finished assets and replies.
+/// Each one wakes the event loop, so a still table responds at once.
+#[derive(Clone)]
+pub struct Inbox {
+    sender: Sender<Input>,
+    proxy: EventLoopProxy<UserEvent>,
+}
+
+impl Inbox {
+    /// Sends `input` to the client. False once the host has ended.
+    pub fn send(&self, input: Input) -> bool {
+        self.sender.send(input).is_ok() && self.proxy.send_event(UserEvent::Inbox).is_ok()
+    }
+}
+
+/// The desktop host before it runs.
+pub struct Desktop {
+    event_loop: EventLoop<UserEvent>,
+    options: Options,
+    sender: Sender<Input>,
+    receiver: Receiver<Input>,
+}
+
+impl Desktop {
+    pub fn new(options: Options) -> Result<Self, String> {
+        let mut builder = EventLoop::<UserEvent>::with_user_event();
+        #[cfg(target_os = "macos")]
+        if options.mode == WindowMode::Background {
+            use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
+            // An accessory app has no Dock icon and is never made the active app, so its
+            // window stays behind the active app's windows and never gets the keyboard.
+            builder
+                .with_activation_policy(ActivationPolicy::Accessory)
+                .with_activate_ignoring_other_apps(false);
+        }
+        let event_loop = builder
+            .build()
+            .map_err(|error| format!("no event loop: {error}"))?;
+        let (sender, receiver) = channel();
+        Ok(Self {
+            event_loop,
+            options,
+            sender,
+            receiver,
+        })
+    }
+
+    /// A handle other threads use to send inputs.
+    pub fn inbox(&self) -> Inbox {
+        Inbox {
+            sender: self.sender.clone(),
+            proxy: self.event_loop.create_proxy(),
+        }
+    }
+
+    /// Runs `client` in the window until it is closed. `setup` prepares the renderer (its card
+    /// faces, say) before the first frame.
+    pub fn run(self, client: Client, setup: impl FnOnce(&mut Renderer)) -> Result<(), String> {
+        let mut app = App {
+            options: self.options,
+            #[cfg(target_os = "macos")]
+            proxy: self.event_loop.create_proxy(),
+            inbox: self.receiver,
+            client: Some(client),
+            setup: Some(setup),
+            running: None,
+            started: Instant::now(),
+            error: None,
+        };
+        self.event_loop
+            .run_app(&mut app)
+            .map_err(|error| format!("the event loop failed: {error}"))?;
+        app.error.map_or(Ok(()), Err)
+    }
+}
+
+/// Whether a key press leaves or re-enters fullscreen: F11, or ⌃⌘F on macOS. The client never
+/// sees it.
+pub fn is_fullscreen_key(key: PhysicalKey, control: bool, command: bool) -> bool {
+    match key {
+        PhysicalKey::Code(KeyCode::F11) => true,
+        PhysicalKey::Code(KeyCode::KeyF) => cfg!(target_os = "macos") && control && command,
+        _ => false,
+    }
+}
+
+struct App<S> {
+    options: Options,
+    /// Where the display link sends its ticks.
+    #[cfg(target_os = "macos")]
+    proxy: EventLoopProxy<UserEvent>,
+    inbox: Receiver<Input>,
+    /// The client until the window opens, when it moves into `running`.
+    client: Option<Client>,
+    setup: Option<S>,
+    running: Option<Running>,
+    /// The client's time 0.
+    started: Instant,
+    error: Option<String>,
+}
+
+/// The host once its window is open.
+struct Running {
+    window: Arc<Window>,
+    frames: FrameLoop<Pacer>,
+    screen: Screen,
+    translator: Translator,
+}
+
+/// Where frames are drawn.
+struct Screen {
+    renderer: Renderer,
+    surface: Surface,
+    window: Arc<Window>,
+}
+
+impl Draw for Screen {
+    fn draw(&mut self, frame: &Frame) {
+        let window = &self.window;
+        self.renderer
+            .present(frame, &mut self.surface, || window.pre_present_notify());
+    }
+}
+
+/// Where ticks come from.
+enum Pacer {
+    /// A macOS display link: its ticks arrive as `UserEvent::Tick`.
+    #[cfg(target_os = "macos")]
+    Link(crate::macos::DisplayLink),
+    /// winit's redraw requests: each `RedrawRequested` is a tick, and while frames are wanted
+    /// every pass of the event loop asks for the next.
+    Redraw(Arc<Window>),
+}
+
+impl Ticks for Pacer {
+    fn set_running(&mut self, running: bool) {
+        match self {
+            #[cfg(target_os = "macos")]
+            Pacer::Link(link) => link.set_running(running),
+            Pacer::Redraw(window) => {
+                if running {
+                    window.request_redraw();
+                }
+            }
+        }
+    }
+}
+
+impl<S: FnOnce(&mut Renderer)> App<S> {
+    fn now(&self) -> u64 {
+        self.started.elapsed().as_nanos() as u64
+    }
+
+    fn open(&mut self, event_loop: &ActiveEventLoop) -> Result<Running, String> {
+        let (width, height) = self.options.size;
+        let mut attributes = Window::default_attributes()
+            .with_title(self.options.title.clone())
+            .with_inner_size(LogicalSize::new(width, height));
+        attributes = match self.options.mode {
+            WindowMode::Background => attributes.with_active(false),
+            WindowMode::Foreground => attributes,
+            WindowMode::Fullscreen => {
+                attributes.with_fullscreen(Some(Fullscreen::Borderless(None)))
+            }
+        };
+        let window = Arc::new(
+            event_loop
+                .create_window(attributes)
+                .map_err(|error| format!("no window: {error}"))?,
+        );
+        let size = window.inner_size();
+        let (mut renderer, surface) =
+            Renderer::for_window(Arc::clone(&window), size.width, size.height)?;
+        if let Some(setup) = self.setup.take() {
+            setup(&mut renderer);
+        }
+        let mut client = self.client.take().ok_or("the window opened twice")?;
+        let translator = Translator::new(size, window.scale_factor());
+        client.handle(translator.surface());
+        // Windows has no class to ask for that safe code can reach; its frame thread keeps
+        // the main thread's normal priority.
+        #[cfg(target_os = "macos")]
+        crate::macos::interactive_thread();
+        let pacer = self.pacer(&window);
+        Ok(Running {
+            frames: FrameLoop::new(client, pacer),
+            screen: Screen {
+                renderer,
+                surface,
+                window: Arc::clone(&window),
+            },
+            translator,
+            window,
+        })
+    }
+
+    #[cfg_attr(not(target_os = "macos"), expect(clippy::unused_self))]
+    fn pacer(&self, window: &Arc<Window>) -> Pacer {
+        #[cfg(target_os = "macos")]
+        if let Some(link) =
+            crate::macos::DisplayLink::new(window, self.proxy.clone(), highest_rate(window))
+        {
+            return Pacer::Link(link);
+        }
+        Pacer::Redraw(Arc::clone(window))
+    }
+
+    fn tick(&mut self) {
+        let now = self.now();
+        let Some(running) = &mut self.running else {
+            return;
+        };
+        if running.frames.tick(now, &mut running.screen) {
+            while let Some(request) = running.frames.client().next_request() {
+                carry_out(&running.window, request);
+            }
+        }
+    }
+}
+
+impl<S: FnOnce(&mut Renderer)> ApplicationHandler<UserEvent> for App<S> {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(running) = &mut self.running {
+            running.frames.handle(Input::Lifecycle(Lifecycle::Resumed));
+            return;
+        }
+        match self.open(event_loop) {
+            Ok(mut running) => {
+                // Inputs sent before the window opened woke a loop with no client to take them.
+                for input in self.inbox.try_iter() {
+                    running.frames.handle(input);
+                }
+                self.running = Some(running);
+            }
+            Err(error) => {
+                self.error = Some(error);
+                event_loop.exit();
+            }
+        }
+    }
+
+    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(running) = &mut self.running {
+            running
+                .frames
+                .handle(Input::Lifecycle(Lifecycle::Suspended));
+        }
+    }
+
+    fn memory_warning(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(running) = &mut self.running {
+            running
+                .frames
+                .handle(Input::Lifecycle(Lifecycle::LowMemory));
+        }
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
+        match event {
+            #[cfg(target_os = "macos")]
+            UserEvent::Tick => self.tick(),
+            UserEvent::Inbox => {
+                if let Some(running) = &mut self.running {
+                    for input in self.inbox.try_iter() {
+                        running.frames.handle(input);
+                    }
+                }
+            }
+        }
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        if matches!(event, WindowEvent::RedrawRequested) {
+            let redraw = self
+                .running
+                .as_mut()
+                .is_some_and(|running| matches!(running.frames.ticks(), Pacer::Redraw(_)));
+            if redraw {
+                self.tick();
+            }
+            return;
+        }
+        let mode = self.options.mode;
+        let Some(running) = &mut self.running else {
+            return;
+        };
+        match &event {
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+                return;
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key,
+                        state,
+                        repeat,
+                        ..
+                    },
+                ..
+            } => {
+                if mode == WindowMode::Background {
+                    return;
+                }
+                let modifiers = running.translator.modifiers();
+                if is_fullscreen_key(*physical_key, modifiers.control, modifiers.command) {
+                    if *state == ElementState::Pressed && !repeat {
+                        let fullscreen = running.window.fullscreen().is_none();
+                        running
+                            .window
+                            .set_fullscreen(fullscreen.then_some(Fullscreen::Borderless(None)));
+                    }
+                    return;
+                }
+                if let Some(input) = running.translator.key(*physical_key, *state, *repeat) {
+                    running.frames.handle(input);
+                }
+                return;
+            }
+            _ => {}
+        }
+        if let Some(input) = running.translator.window_event(&event) {
+            if matches!(input, Input::Surface { .. }) {
+                let size = running.translator.size();
+                running.screen.renderer.resize(
+                    &mut running.screen.surface,
+                    size.width,
+                    size.height,
+                );
+            }
+            running.frames.handle(input);
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let now = self.now();
+        let Some(running) = &mut self.running else {
+            return;
+        };
+        let flow = match running.frames.schedule(now) {
+            Sleep::UntilEvent => ControlFlow::Wait,
+            Sleep::Until(at) => ControlFlow::WaitUntil(self.started + Duration::from_nanos(at)),
+        };
+        event_loop.set_control_flow(flow);
+    }
+}
+
+/// The display's highest refresh rate in frames a second, or 60 where it is unknown.
+#[cfg(target_os = "macos")]
+fn highest_rate(window: &Window) -> f32 {
+    let millihertz = window.current_monitor().and_then(|monitor| {
+        monitor
+            .video_modes()
+            .map(|mode| mode.refresh_rate_millihertz())
+            .max()
+            .or_else(|| monitor.refresh_rate_millihertz())
+    });
+    millihertz.unwrap_or(60_000) as f32 / 1000.0
+}
+
+/// Carries out one of the client's requests. A desktop has no haptics, and its text fields are
+/// edited in place, so text entry only turns the input method on over the field.
+fn carry_out(window: &Window, request: Request) {
+    match request {
+        Request::BeginTextEntry { rect, .. } => {
+            window.set_ime_allowed(true);
+            window.set_ime_cursor_area(
+                LogicalPosition::new(rect.x, rect.y),
+                LogicalSize::new(rect.width, rect.height),
+            );
+        }
+        Request::EndTextEntry => window.set_ime_allowed(false),
+        Request::Share { path } => reveal(&path),
+        Request::OpenUrl(url) => open_url(url),
+        Request::Haptic(_) => {}
+    }
+}
+
+/// Shows the file at `path` in the system's file browser, on a thread of its own so that the
+/// frame thread never waits for it.
+fn reveal(path: &Path) {
+    #[cfg(target_os = "macos")]
+    let command = ("open", vec!["-R".into(), path.as_os_str().to_owned()]);
+    #[cfg(not(target_os = "macos"))]
+    let command = (
+        "explorer",
+        vec![{
+            let mut argument = std::ffi::OsString::from("/select,");
+            argument.push(path.as_os_str());
+            argument
+        }],
+    );
+    spawn(command.0, command.1);
+}
+
+/// Opens `url` in the default browser, on a thread of its own.
+fn open_url(url: String) {
+    #[cfg(target_os = "macos")]
+    spawn("open", vec![url.into()]);
+    #[cfg(not(target_os = "macos"))]
+    spawn(
+        "cmd",
+        vec!["/C".into(), "start".into(), "".into(), url.into()],
+    );
+}
+
+fn spawn(program: &'static str, arguments: Vec<std::ffi::OsString>) {
+    std::thread::spawn(move || {
+        if let Err(error) = Command::new(program).args(&arguments).status() {
+            eprintln!("{program} failed: {error}");
+        }
+    });
+}

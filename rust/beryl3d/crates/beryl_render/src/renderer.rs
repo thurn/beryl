@@ -159,7 +159,17 @@ impl Renderer {
 
     /// Draws `frame` into `target`, cleared to black first.
     pub fn render(&mut self, frame: &Frame, target: &mut Target) -> Drawn {
-        let (width, height) = (target.width, target.height);
+        self.render_view(frame, &target.view, target.width, target.height)
+    }
+
+    /// Draws `frame` into `view`, `width` by `height` physical pixels, cleared to black first.
+    pub(crate) fn render_view(
+        &mut self,
+        frame: &Frame,
+        view: &wgpu::TextureView,
+        width: u32,
+        height: u32,
+    ) -> Drawn {
         let mut uniforms = [0.0_f32; (UNIFORMS / 4) as usize];
         uniforms[..16].copy_from_slice(&frame.view_projection.to_cols_array());
         uniforms[16..].copy_from_slice(&[
@@ -187,7 +197,7 @@ impl Renderer {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("frame"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &target.view,
+                    view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
