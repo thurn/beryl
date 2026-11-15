@@ -168,6 +168,10 @@ class Run:
     tree: str = ""
     place: str = ""
     host: str = field(default_factory=platform.node)
+    # The name of the checkout directory the run was made in (a worktree's name under
+    # `.worktrees/`, or the main checkout's), which the efficiency dashboard joins to the CPU
+    # sampler's worktrees and to a bead's `enact_worktree`.
+    worktree: str = paths.REPO.name
     # Why a check ran, unless its step says (`label`): slow CI runs them all.
     chosen: str = "all"
     logged: list[dict[str, object]] = field(default_factory=list)
@@ -243,6 +247,7 @@ class Run:
             {
                 "time": now,
                 "host": self.host,
+                "worktree": self.worktree,
                 "commit": self.commit,
                 "tree": self.tree,
                 "script": self.script,

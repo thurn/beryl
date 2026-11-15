@@ -422,6 +422,16 @@ def test_checks_share_a_steps_cpu_time_evenly_when_none_has_wall_time() -> None:
         assert "cpu_seconds" not in run.records("rust", "fmt", True, 1.0, path)[0]
 
 
+def test_each_record_names_the_checkout_it_ran_in() -> None:
+    for run, expected in (
+        (runlog.Run("check"), paths.REPO.name),
+        (runlog.Run("check", worktree="by-x.1"), "by-x.1"),
+    ):
+        with run.step({}) as (_, path):
+            records = run.records("repo", "fmt", True, 1.0, path)
+        assert records[0]["worktree"] == expected
+
+
 def test_a_pytest_rerun_runs_only_the_tests_that_failed() -> None:
     output = (
         "F.\n=== short test summary info ===\n"
