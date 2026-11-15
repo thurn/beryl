@@ -165,7 +165,11 @@ fn manual_view_with_ordered_zones() -> PlayerView {
         },
         arrows: vec![],
         acting: vec![],
+        lent_hand: false,
         object_actions: vec![],
+        top_revealed: false,
+        manual_stats: vec![],
+        last_draw: None,
         prompt: None,
     });
 

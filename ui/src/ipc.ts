@@ -468,7 +468,7 @@ let fixtureCards: ((names: string[]) => CardRecords) | undefined;
 
 /** The card store's records for `names`: a fixture's in the same tick, so that a replay's
  * timing is what it was recorded with, else the app's or the server's answer. */
-const askCards = (names: string[]) =>
+export const askCards = (names: string[]) =>
   fixtureCards?.(names) ?? call("card_records", { request: { names } });
 
 /** `inner`, every message logged for bug reports (diagnostics.ts), and its events held until

@@ -13,7 +13,7 @@ import { shapeOf, type Reach } from "../stage/lines";
 import type { Under } from "../stage/pointer";
 import { keyOf } from "../stage/spans";
 import type { ScriptStage } from "../stage/stage";
-import { Bindings } from "./bindings";
+import type { Bindings } from "./bindings";
 import type { CardTarget, TableClient, TableTarget } from "./client";
 import { resolve } from "./shortcuts";
 
@@ -85,6 +85,7 @@ function drawActions(
 /** The table owns the aim shared by a right-drag and a menu command. */
 export class TableArrows {
   #finishPick?: (target?: Under) => void;
+  #acceptPick?: (target: Under) => boolean;
   #dragging = false;
   #traces = 0;
 
@@ -92,7 +93,7 @@ export class TableArrows {
     private readonly client: TableClient,
     private readonly stage: ScriptStage,
     report: (error: unknown) => void,
-    bindings = new Bindings(/Mac/.test(navigator.platform) ? "macos" : "linux"),
+    bindings: Bindings,
   ) {
     client.onAim({
       drag: (from, at, over, done) => {
@@ -113,7 +114,13 @@ export class TableArrows {
         if (!this.#finishPick) return false;
         const hit = under(target);
         const view = client.view;
-        if (hit && view && destination(hit, view)) this.#finishPick(hit);
+        if (
+          hit &&
+          view &&
+          destination(hit, view) &&
+          (this.#acceptPick?.(hit) ?? true)
+        )
+          this.#finishPick(hit);
         return true;
       },
     });
@@ -173,7 +180,10 @@ export class TableArrows {
   }
 
   /** Start a menu's aim. The click is consumed before normal table actions run. */
-  pickTarget(from: Name): Promise<Under | undefined> {
+  pickTarget(
+    from: Name,
+    accept?: (target: Under) => boolean,
+  ): Promise<Under | undefined> {
     this.#cancel();
     const surface = this.client.surface;
     if (
@@ -182,11 +192,13 @@ export class TableArrows {
       !this.client.card(from, true)?.action
     )
       return Promise.resolve(undefined);
+    this.#acceptPick = accept;
     return new Promise((resolve) => {
       const stop = surface.followPointer((at) => this.#trace([from], at));
       const close = this.client.pushOpen(() => this.#finishPick?.());
       this.#finishPick = (target) => {
         this.#finishPick = undefined;
+        this.#acceptPick = undefined;
         stop();
         close();
         this.#trace([]);
@@ -196,7 +208,11 @@ export class TableArrows {
   }
 
   /** Submit the same action for a right drag or the Draw arrow menu row. */
-  async draw(from: CardTarget, target: Under) {
+  async draw(
+    from: CardTarget,
+    target: Under,
+    selected: readonly Name[] = sources(this.client, from),
+  ) {
     const { client } = this;
     const view = client.view;
     if (
@@ -207,8 +223,9 @@ export class TableArrows {
       return;
     let to = destination(target, view);
     if (!to) return;
-    const cards = sources(client, from).filter(
-      (name) => !("name" in target && name === target.name),
+    const cards = selected.filter(
+      (name): name is number =>
+        typeof name === "number" && !("name" in target && name === target.name),
     );
     const moves: TableAction[] = cards.flatMap((name) => {
       const action = client.card(name)?.action;

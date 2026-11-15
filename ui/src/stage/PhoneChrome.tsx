@@ -132,6 +132,7 @@ export function PileButtons({
         data-side={pile.side}
         onPointerDown={draggable ? undefined : (e) => e.stopPropagation()}
         onClick={(event) => onOpen(pile, event)}
+        onContextMenu={draggable ? (event) => onOpen(pile, event) : undefined}
       />
     );
   });
@@ -280,6 +281,7 @@ export function PileSheet({
               pressed.current = object;
             })
           }
+          onContextMenu={onPlay && ((event) => onPlay(object, event))}
           onClick={(e) => {
             e.stopPropagation();
             if (onPlay) {

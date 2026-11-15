@@ -226,8 +226,24 @@ pub struct TableView {
     pub orders: ManualOrders,
     /// Hidden zones lent or revealed to this viewer.
     pub acting: Vec<ZoneRef>,
+    /// The opposing hand was lent to the viewer as a zone.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(optional, as = "Option<_>")]
+    pub lent_hand: bool,
     /// References for actionable objects and stack markers shown in this view.
     pub object_actions: Vec<TableObjectAction>,
+    /// The viewer's library has Keep top card revealed enabled.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(optional, as = "Option<_>")]
+    pub top_revealed: bool,
+    /// Visible slots whose power and toughness were set by a player.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<_>")]
+    pub manual_stats: Vec<super::ObjectId>,
+    /// The viewer's latest draw, when it can be undone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub last_draw: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub prompt: Option<TablePrompt>,

@@ -100,14 +100,17 @@ export class DomSurface implements Surface {
     };
   }
 
-  /** Elements under a point in stage coordinates, front first. */
-  hits(at: Point): Element[] {
+  /** A point in stage coordinates expressed in viewport CSS pixels. */
+  viewportPoint(at: Point): Point {
     const box = this.#layer.getBoundingClientRect();
     const scale = box.width / this.#layer.offsetWidth || 1;
-    return this.#layer.ownerDocument.elementsFromPoint(
-      box.left + at.x * scale,
-      box.top + at.y * scale,
-    );
+    return { x: box.left + at.x * scale, y: box.top + at.y * scale };
+  }
+
+  /** Elements under a point in stage coordinates, front first. */
+  hits(at: Point): Element[] {
+    const { x, y } = this.viewportPoint(at);
+    return this.#layer.ownerDocument.elementsFromPoint(x, y);
   }
 
   pointed(): Element | null {
@@ -367,9 +370,7 @@ export class DomSurface implements Surface {
     };
     window.addEventListener("pointermove", where, { passive: true });
     this.#repoint = () => {
-      const here = this.#pointer;
-      if (here && !pointer.held)
-        pointer.over(nameOf(document.elementFromPoint(here.x, here.y)));
+      if (this.#pointer && !pointer.held) pointer.over(nameOf(this.pointed()));
     };
     // Bare felt, where a double tap with one finger opens the bug report
     // (mobile/report-taps.ts).

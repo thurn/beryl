@@ -23,7 +23,7 @@ import type { TableDrag } from "./drag";
 
 type ObjectKind =
   "permanent" | "their_permanent" | "hand_card" | "stack_entry" | "viewer_card";
-type PileKind = "library" | "graveyard" | "exile";
+type PileKind = "library" | "graveyard" | "exile" | "hand";
 
 export interface CardTarget {
   kind: ObjectKind;
@@ -278,10 +278,17 @@ export class TableClient {
 
   #under(under: Under | Name | undefined): TableTarget | undefined {
     if (under === undefined) return undefined;
-    if (typeof under !== "object") return this.card(under);
-    return "player" in under
-      ? { kind: "life", side: under.player }
-      : this.card(under.name);
+    if (typeof under === "object" && "player" in under)
+      return { kind: "life", side: under.player };
+    const card = this.card(typeof under === "object" ? under.name : under);
+    if (
+      card?.kind === "hand_card" &&
+      !card.action &&
+      card.object &&
+      (card.object.zoneSide ?? card.object.owner) === "opponent"
+    )
+      return { kind: "hand", side: "opponent" };
+    return card;
   }
 
   hasClick(kind: TableTarget["kind"]): boolean {

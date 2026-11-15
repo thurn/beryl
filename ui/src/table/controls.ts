@@ -1,7 +1,7 @@
 import type { MouseEvent } from "react";
 import type { ObjectView, Side, Step } from "../ipc";
 import type { PointerKeys } from "../stage/pointer";
-import type { TableClient } from "./client";
+import type { TableClient, TableTarget } from "./client";
 
 type ClickEvent = MouseEvent<HTMLElement>;
 
@@ -22,7 +22,9 @@ export function pickPile(
     client &&
     (zone === "library" || zone === "graveyard" || zone === "exile")
   ) {
-    client.click({ kind: zone, side, open }, keys(event), event.currentTarget);
+    const target: TableTarget = { kind: zone, side, open };
+    if (event.type === "contextmenu") secondaryControl(client, target, event);
+    else client.click(target, keys(event), event.currentTarget);
   } else open();
 }
 
@@ -32,8 +34,9 @@ export function pickViewerCard(
   event: ClickEvent,
 ) {
   const target = client.card(object.slot, true);
-  if (target?.object === object)
-    client.click(target, keys(event), event.currentTarget);
+  if (target?.object !== object) return;
+  if (event.type === "contextmenu") secondaryControl(client, target, event);
+  else client.click(target, keys(event), event.currentTarget);
 }
 
 export function counterControls(client: TableClient | undefined, side: Side) {
@@ -58,4 +61,18 @@ export function pickStep(
   event: ClickEvent,
 ) {
   client.click({ kind: "step", side, step }, keys(event), event.currentTarget);
+}
+
+function secondaryControl(
+  client: TableClient,
+  target: TableTarget,
+  event: ClickEvent,
+) {
+  event.preventDefault();
+  event.stopPropagation();
+  client.secondary(
+    target,
+    { x: event.clientX, y: event.clientY },
+    event.currentTarget,
+  );
 }

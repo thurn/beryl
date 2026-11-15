@@ -736,9 +736,25 @@ seat?: number, orders: ManualOrders,
  */
 acting: Array<ZoneRef>, 
 /**
+ * The opposing hand was lent to the viewer as a zone.
+ */
+lentHand?: boolean, 
+/**
  * References for actionable objects and stack markers shown in this view.
  */
-objectActions: Array<TableObjectAction>, prompt?: TablePrompt, arrows?: Array<TableArrow>, };
+objectActions: Array<TableObjectAction>, 
+/**
+ * The viewer's library has Keep top card revealed enabled.
+ */
+topRevealed?: boolean, 
+/**
+ * Visible slots whose power and toughness were set by a player.
+ */
+manualStats?: Array<ObjectId>, 
+/**
+ * The viewer's latest draw, when it can be undone.
+ */
+lastDraw?: number, prompt?: TablePrompt, arrows?: Array<TableArrow>, };
 
 export type TableArrow = { arrow: Arrow, from: Subject, to: Subject, own: boolean, };
 

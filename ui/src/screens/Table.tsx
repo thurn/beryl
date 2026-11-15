@@ -12,6 +12,12 @@ import {
 } from "../stage/playback";
 import type { Name } from "../stage/layout";
 import type { Under } from "../stage/pointer";
+import { Bindings } from "../table/bindings";
+import {
+  TableCommands,
+  TableMenu,
+  type TableOverlay,
+} from "../table/TableMenu";
 import { TableArrows } from "../table/arrows";
 import { registerClicks } from "../table/click";
 import { TableClient } from "../table/client";
@@ -25,18 +31,20 @@ import { Stage } from "../game/Stage";
 export function TableScreen() {
   const [error, setError] = useState<string>();
   const [ready, setReady] = useState(false);
-  const [{ board, client }] = useState(() => {
+  const [overlay, setOverlay] = useState<TableOverlay>();
+  const [{ board, client, commands }] = useState(() => {
     const board = createBoardStage(false);
     const client = new TableClient(board.stage.pointer);
-    client.drag = new TableDrag(client, board.stage, (failure) =>
-      setError(String(failure)),
+    const bindings = new Bindings(
+      /Mac/.test(navigator.platform) ? "macos" : "linux",
     );
-    client.arrows = new TableArrows(client, board.stage, (failure) =>
-      setError(String(failure)),
-    );
-    registerSelection(client);
-    registerClicks(client, (failure) => setError(String(failure)));
-    return { board, client };
+    const report = (failure: unknown) => setError(String(failure));
+    client.drag = new TableDrag(client, board.stage, report);
+    client.arrows = new TableArrows(client, board.stage, report, bindings);
+    registerSelection(client, bindings);
+    registerClicks(client, report);
+    const commands = new TableCommands(client, bindings, setOverlay, report);
+    return { board, client, commands };
   });
   const { stage, feed } = board;
   const { shown, log } = useSyncExternalStore(feed.subscribe, feed.fed);
@@ -138,6 +146,12 @@ export function TableScreen() {
       stops={shown.view.stops}
       onLeave={leave}
     >
+      <TableMenu
+        commands={commands}
+        overlay={overlay}
+        view={shown.view}
+        phone={phone}
+      />
       {error && (
         <p className="game-error game-toast" role="alert">
           {error}

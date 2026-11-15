@@ -62,9 +62,11 @@ const pileTip = (zone: string, count: number) =>
 export function PileButton({
   pile,
   onOpen,
+  onSecondary,
 }: {
   pile: ZonePile;
   onOpen(event: MouseEvent<HTMLButtonElement>): void;
+  onSecondary?(event: MouseEvent<HTMLButtonElement>): void;
 }) {
   const { look, cards } = pile;
   const height = look.width / CARD_ASPECT;
@@ -89,6 +91,7 @@ export function PileButton({
         data-pile={pile.zone}
         data-side={pile.side}
         onClick={onOpen}
+        onContextMenu={onSecondary}
       />
       <Tip side={pile.side === "you" ? "over" : "below"}>
         {pileTip(pile.zone, pile.count ?? cards.length)}
@@ -298,6 +301,12 @@ function ViewerCard({
         onPlay &&
         (() => {
           pressed.current = object;
+        })
+      }
+      onContextMenu={
+        onPlay &&
+        ((event) => {
+          if (!closing) onPlay(object, event);
         })
       }
       onClick={

@@ -23,6 +23,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import type { MouseEvent } from "react";
 import { Button, Tip } from "../components/Controls";
 import { LifeOrb, ManaPool, PlayerBadge, Thinking } from "../components/Player";
 import { StepStops } from "../components/Steps";
@@ -400,8 +401,12 @@ export function Controls({
   return (
     <>
       {/* Over the cards on them: a pile is opened, never pointed at card by card. */}
-      {piles.map(
-        (pile) =>
+      {piles.map((pile) => {
+        const open = (event: MouseEvent<HTMLButtonElement>) =>
+          pickPile(client, pile, event, () =>
+            setViewing({ side: pile.side, zone: pile.zone }),
+          );
+        return (
           (pile.cards.length > 0 ||
             (pile.zone === "library" &&
               (!client ||
@@ -410,14 +415,12 @@ export function Controls({
             <PileButton
               key={`${pile.side}-${pile.zone}`}
               pile={pile}
-              onOpen={(event) =>
-                pickPile(client, pile, event, () =>
-                  setViewing({ side: pile.side, zone: pile.zone }),
-                )
-              }
+              onOpen={open}
+              onSecondary={client ? open : undefined}
             />
-          ),
-      )}
+          )
+        );
+      })}
       <div className="turn-controls">
         {stops.fullControl && (
           <span className="full-control has-tip">

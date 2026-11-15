@@ -68,6 +68,8 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
         .map(|(n, name)| (name.into(), n as i32 + 1))
         .collect();
     table.assists[0] = vec![Assist::Combat];
+    table.always_reveal_top.push(GUEST);
+    table.lent_zones.push((Zone::Hand(HOST), GUEST));
     table.lent_zones.push((Zone::Library(HOST), GUEST));
     table.arrows.push(TableArrow {
         from: creature,
@@ -125,6 +127,9 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
         assert_eq!(manual.phase, TablePhase::SecondMain);
         assert_eq!(manual.seats, 2);
         assert_eq!(manual.seat.unwrap_or_default(), seat.0);
+        assert_eq!(manual.top_revealed, seat == GUEST);
+        assert_eq!(manual.lent_hand, seat == GUEST);
+        assert_eq!(manual.manual_stats, [slot(creature)]);
         assert_eq!(host.life, 12);
         assert_eq!(
             [
@@ -175,7 +180,7 @@ fn both_seats_get_ordered_piles_and_relative_table_state() {
         );
         assert_eq!(manual.log[0].text, "Put an ability on the stack.");
         assert_eq!(refs.actions(), manual.object_actions);
-        assert_eq!(manual.acting.len(), usize::from(seat == GUEST));
+        assert_eq!(manual.acting.len(), if seat == GUEST { 2 } else { 0 });
         let action = |id| {
             refs.actions()
                 .iter()

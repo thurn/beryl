@@ -3,7 +3,7 @@ import type { Box } from "../game/placement";
 import { named } from "../stage/dom";
 import type { Name } from "../stage/layout";
 import { sweepBox } from "../stage/overlay";
-import { Bindings } from "./bindings";
+import type { Bindings } from "./bindings";
 import { sameZone, type TableClient } from "./client";
 import { resolve } from "./shortcuts";
 
@@ -13,10 +13,7 @@ const touches = (a: Box, b: Box) =>
   a.top <= b.bottom &&
   a.bottom >= b.top;
 
-export function registerSelection(client: TableClient) {
-  const bindings = new Bindings(
-    /Mac/.test(navigator.platform) ? "macos" : "linux",
-  );
+export function registerSelection(client: TableClient, bindings: Bindings) {
   client.onCardClick(({ name, action }, { meta }) => {
     if (!meta) return false;
     if (action) {

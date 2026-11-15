@@ -78,7 +78,20 @@ pub fn view(
         },
         arrows: arrows(&projected, slots, viewer),
         acting: acting(&projected, viewer),
+        lent_hand: projected
+            .lent_zones
+            .contains(&(Zone::Hand(Seat(1 - seat.0)), seat)),
         object_actions: refs.actions().to_vec(),
+        top_revealed: projected.always_reveal_top.contains(&seat),
+        manual_stats: projected
+            .objects
+            .values()
+            .filter(|card| card.stats.is_some() && card.zone == Zone::Battlefield)
+            .filter_map(|card| slots.get(card.id))
+            .collect(),
+        last_draw: log
+            .last_draw(table, seat)
+            .filter(|&entry| log.undo_target(table, seat, Some(entry)).is_ok()),
         prompt: None,
     });
     Ok((view, refs))

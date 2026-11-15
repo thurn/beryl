@@ -24,7 +24,7 @@ export type Assist =
 export type CommandKey = { mac: string; other: string };
 export type MenuPlacement = { group: string; order: number; submenu?: string };
 
-type Template =
+export type Template =
   | string
   | number
   | boolean
