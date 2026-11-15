@@ -28,7 +28,7 @@ from typing import Any
 
 from .. import bench
 from .. import paths as repo_paths
-from . import paths, source, vm
+from . import counts, paths, source, vm
 
 # The Baseline tier's target: no gated frame shades more than this many screens.
 TARGET_SCREENS = 1.75
@@ -183,8 +183,8 @@ def fragments_script(names: list[str]) -> str:
 set -e
 {source.take_in_script()}cd {source.SOURCE}/rust/beryl3d
 export CARGO_TARGET_DIR="{VM_TARGET}"
-cargo run --locked -q -p beryl_record --bin record
-cargo build --locked -q -p beryl_render --example fragments
+cargo run --locked -q -j {counts.JOBS} -p beryl_record --bin record
+cargo build --locked -q -j {counts.JOBS} -p beryl_render --example fragments
 "$CARGO_TARGET_DIR/debug/examples/fragments" {boards}
 "$CARGO_TARGET_DIR/debug/examples/fragments" {boards}
 """)
