@@ -47,6 +47,14 @@ beside the two browser lanes, took 6 of 18 tokens, and ran nextest 6 tests wide 
 those lanes ended about 20 s in, with 12 cores idle. A command inside a lease can take the tokens
 free at a later point without waiting (`top_up`), as the tests step does once its build is done.
 
+When a lease that owns tokens is released, the pool appends one line to `leases.jsonl` beside the
+tokens ([`LEASE_LOG`]): when, the class, the worktree, the command, the tokens it got (`cores`)
+and wanted, and the seconds it waited and held them. The efficiency dashboard reads it for the
+time commands queued for cores (efficiency/, "CPU accounting" in docs/efficiency-dashboard.md).
+The line is written under the pool's lock, which the releasing process takes anyway to return
+its tokens, and a failed write is reported without failing the command. An inherited lease and
+a top-up (extra tokens for a lease already logged, taken without waiting) write nothing.
+
 Browser pages keep their own slots (ui/scripts/slots.mjs). The step that opens them, such as
 `ui-test`, holds tokens for the build and the Node side, and a page holds a slot for a few
 seconds at a time from Node, which would need the same protocol written again there.
@@ -55,6 +63,7 @@ seconds at a time from Node, which would need the same protocol written again th
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import random
 import subprocess
@@ -84,6 +93,11 @@ CLASS_ENV = "BERYL_CPU_CLASS"
 
 # `0` turns the pool off: every lease is granted at once, with every core.
 POOL_ENV = "BERYL_CPU_POOL"
+
+# The file in the pool's directory that gets one line per released lease (see the module
+# comment), and how many days of lines it keeps, as many as the CPU sampler's rows (cpu.py).
+LEASE_LOG = "leases.jsonl"
+LEASE_LOG_DAYS = 30
 
 # A check's steps that run many threads (`lane:step`), which each want a share of the pool
 # (`step_tokens`). Every other step is a script that keeps one core busy at most and takes none.
@@ -169,6 +183,11 @@ class Lease:
     inherited: bool = False
     # The class it was taken for: empty for an inherited lease or one granted with the pool off.
     klass: str = ""
+    # What the lease's line in the pool's log names; a lease with no `log` writes none.
+    command: str = ""
+    wanted: int = 0
+    granted: float = 0.0
+    log: Path | None = None
 
     def env(self) -> dict[str, str]:
         """Environment variables that hold a command and its children to the lease."""
@@ -185,6 +204,15 @@ class Lease:
         }
 
     def release(self) -> None:
+        log = self.log
+        if not self.files or log is None:
+            self._return_files()
+            return
+        with _THREADS, system.file_lock(log.parent / "lock"):
+            self._return_files()
+            self._write_log(log)
+
+    def _return_files(self) -> None:
         for f in self.files:
             try:
                 f.unlink()
@@ -192,11 +220,57 @@ class Lease:
                 pass  # Taken back as stale already.
         self.files = []
 
+    def _write_log(self, log: Path) -> None:
+        """Appends this lease's line to `log`, first dropping the lines older than
+        [`LEASE_LOG_DAYS`] when the oldest is; reports a failure instead of raising it.
+        """
+        now = time.time()
+        line = {
+            "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+            "class": self.klass,
+            "worktree": paths.REPO.name,
+            "command": self.command,
+            "cores": self.size,
+            "wanted": self.wanted,
+            "waited_s": round(self.waited, 1),
+            "held_s": round(time.monotonic() - self.granted, 1),
+        }
+        try:
+            drop_old_lines(log, now)
+            with log.open("a") as handle:
+                handle.write(json.dumps(line) + "\n")
+        except (OSError, ValueError) as error:
+            print(f"tokens: could not log the lease to {log}: {error}", file=sys.stderr)
+
     def __enter__(self) -> Lease:
         return self
 
     def __exit__(self, *_exc: object) -> None:
         self.release()
+
+
+def drop_old_lines(log: Path, now: float) -> None:
+    """Rewrites `log` without its lines from before the last [`LEASE_LOG_DAYS`] days, when its
+    first line is that old. Lines are appended in time order, so reading the first is enough to
+    know."""
+    try:
+        with log.open() as handle:
+            first = handle.readline()
+    except FileNotFoundError:
+        return
+    since = time.strftime(
+        "%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - LEASE_LOG_DAYS * 86400)
+    )
+    if not first.strip() or str(json.loads(first).get("time", "")) >= since:
+        return
+    kept = [
+        line
+        for line in log.read_text().splitlines(keepends=True)
+        if line.strip() and str(json.loads(line).get("time", "")) >= since
+    ]
+    tmp = log.with_suffix(".tmp")
+    tmp.write_text("".join(kept))
+    tmp.replace(log)
 
 
 class Pool:
@@ -266,9 +340,11 @@ class Pool:
         klass: str,
         want: int,
         give_up: Callable[[], bool] = lambda: False,
+        command: str = "",
     ) -> Lease | None:
         """A lease of between one and `want` tokens of `klass`, waiting while none is free;
         None if `give_up` turns true first. Inside another lease (`LEASE_ENV`), that lease.
+        Its release writes a line naming `command` to the pool's log (`LEASE_LOG`).
         """
         inherited = os.environ.get(LEASE_ENV, "")
         if inherited.isdigit() and int(inherited) > 0:
@@ -284,8 +360,16 @@ class Pool:
                 with _THREADS, system.file_lock(self.root / "lock"):
                     files = self.grant(klass, want, me)
                     if files:
+                        now = time.monotonic()
                         return Lease(
-                            len(files), files, time.monotonic() - started, klass=klass
+                            len(files),
+                            files,
+                            now - started,
+                            klass=klass,
+                            command=command,
+                            wanted=want,
+                            granted=now,
+                            log=self.root / LEASE_LOG,
                         )
                     if not me.exists():
                         me.write_text(f"{os.getpid()} {klass}")
@@ -322,16 +406,21 @@ def top_up(want: int) -> Lease:
 
 
 def acquire(
-    klass: str, want: int, give_up: Callable[[], bool] = lambda: False
+    klass: str,
+    want: int,
+    give_up: Callable[[], bool] = lambda: False,
+    command: str = "",
 ) -> Lease | None:
     """A lease from the machine's pool (`Pool.acquire`)."""
-    return Pool().acquire(klass, want, give_up)
+    return Pool().acquire(klass, want, give_up, command)
 
 
-def lease(klass: str, want: int, give_up: Callable[[], bool]) -> Lease | None:
+def lease(
+    klass: str, want: int, give_up: Callable[[], bool], command: str = ""
+) -> Lease | None:
     """A check step's lease (`acquire`): with `want` zero, an empty one that holds the step to
     nothing, at once."""
-    return acquire(klass, want, give_up) if want else Lease(0, [])
+    return acquire(klass, want, give_up, command) if want else Lease(0, [])
 
 
 def script_class(script: str) -> str:
@@ -367,7 +456,11 @@ def run(args: argparse.Namespace) -> int:
     if not command:
         print("tokens run: no command", file=sys.stderr)
         return 2
-    lease = acquire(args.klass, args.cores or largest(pool_size()))
+    lease = acquire(
+        args.klass,
+        args.cores or largest(pool_size()),
+        command=Path(command[0]).name,
+    )
     assert lease is not None
     with lease:
         env = {**os.environ, **lease.env()}

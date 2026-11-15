@@ -656,7 +656,9 @@ def test_a_wait_for_tokens_does_not_count_towards_the_hang_limit(
     steps = checks.Steps(clock, klass="ci")
     gave_up: list[bool] = []
 
-    def slow_lease(klass: str, want: int, give_up: Callable[[], bool]) -> tokens.Lease:
+    def slow_lease(
+        klass: str, want: int, give_up: Callable[[], bool], command: str = ""
+    ) -> tokens.Lease:
         # The wait takes 100 s, far past the step's hang limit of 1 s.
         clock.t += 100.0
         gave_up.append(give_up())

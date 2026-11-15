@@ -115,16 +115,18 @@ class Steps:
         env: dict[str, str],
         cores: int = 0,
         limit: float | None = None,
+        command: str = "",
     ) -> tuple[int | None, str]:
         """The step's exit code, None when it was killed, and its output. The output goes to a
         file, not a pipe, so a killed step's straggler cannot hold up reading it. It first waits
         for up to `cores` CPU tokens (tokens.py), and the wait is recorded in `waits`. Then it
         runs until it exits, the run is stopped, the wall limit passes, or it has run `limit`
         adjusted seconds, its hang limit (hang.py); the output of a step killed at its hang
-        limit ends with the processes it left running.
+        limit ends with the processes it left running. `command` names the step in the pool's
+        log of leases.
         """
         began, wall = self.clock.now(), self.clock.wall()
-        lease = tokens.lease(self.klass, cores, self.cut)
+        lease = tokens.lease(self.klass, cores, self.cut, command)
         if cores:
             with self.lock:
                 me = threading.get_ident()

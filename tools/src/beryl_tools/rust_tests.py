@@ -562,7 +562,9 @@ def session_tests(args: argparse.Namespace) -> int:
     warm.ensure_target(paths.REPO, tauri=False)
     cmd = session_command(args.extra, shutil.which("cargo-nextest") is not None)
     # The build and the tests run with as many threads as the machine's CPU tokens allow.
-    lease = tokens.acquire("agent", tokens.largest(tokens.pool_size()))
+    lease = tokens.acquire(
+        "agent", tokens.largest(tokens.pool_size()), command="test-rust"
+    )
     assert lease is not None
     with lease:
         os.environ.update(lease.env())

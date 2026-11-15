@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -195,3 +196,74 @@ def test_heavy_lanes_running_at_once_share_the_pool() -> None:
     # A lane alone takes at most two thirds, and never less than one token.
     assert tokens.step_tokens("rust", "tests", 1, 18) == 12
     assert tokens.step_tokens("rust", "tests", 30, 18) == 1
+
+
+def leases_logged(root: Path) -> list[dict[str, object]]:
+    log = root / tokens.LEASE_LOG
+    if not log.exists():
+        return []
+    return [json.loads(line) for line in log.read_text().splitlines()]
+
+
+def test_a_released_lease_logs_one_line(tmp_path: Path) -> None:
+    pool = Pool(tmp_path, 8)
+    blocker = pool.acquire("agent", 5, never)
+    assert blocker is not None
+    # Agents may hold six of eight tokens, so this lease gets one of the four it wants.
+    lease = pool.acquire("agent", 4, never, command="test-rust")
+    assert lease is not None and lease.size == 1
+    lease.release()
+    lease.release()
+    lines = leases_logged(tmp_path)
+    assert len(lines) == 1
+    first = lines[0]
+    assert first["class"] == "agent"
+    assert first["command"] == "test-rust"
+    assert first["cores"] == 1
+    assert first["wanted"] == 4
+    assert isinstance(first["waited_s"], float)
+    assert isinstance(first["held_s"], float)
+    assert first["worktree"] == tokens.paths.REPO.name
+
+
+def test_inherited_and_top_up_leases_log_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pool = Pool(tmp_path, 8)
+    held = pool.acquire("push", 2, never)
+    assert held is not None
+    pool.top_up("push", 2, 6).release()
+    monkeypatch.setenv(tokens.LEASE_ENV, "3")
+    inner = pool.acquire("agent", 8, once)
+    assert inner is not None and inner.inherited
+    inner.release()
+    assert leases_logged(tmp_path) == []
+    held.release()
+    assert len(leases_logged(tmp_path)) == 1
+
+
+def test_a_failed_log_write_does_not_fail_the_release(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pool = Pool(tmp_path, 8)
+    (tmp_path / tokens.LEASE_LOG).mkdir()
+    lease = pool.acquire("agent", 2, never)
+    assert lease is not None
+    lease.release()
+    assert not list(tmp_path.glob("[0-9]*"))
+    assert "could not log the lease" in capsys.readouterr().err
+
+
+def test_the_lease_log_drops_lines_older_than_it_keeps(tmp_path: Path) -> None:
+    log = tmp_path / tokens.LEASE_LOG
+    log.write_text(
+        json.dumps({"time": "2000-01-01T00:00:00Z"})
+        + "\n"
+        + json.dumps({"time": "2999-01-01T00:00:00Z"})
+        + "\n"
+    )
+    lease = Pool(tmp_path, 8).acquire("agent", 2, never)
+    assert lease is not None
+    lease.release()
+    times = [line["time"] for line in leases_logged(tmp_path)]
+    assert times[0] == "2999-01-01T00:00:00Z" and len(times) == 2

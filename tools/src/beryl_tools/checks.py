@@ -240,7 +240,12 @@ def lane_steps(
         cpu = steps.cpu_used()
         with run.step(env) as (step_env, results):
             code, output = steps.run(
-                cmd, step.cwd, step_env, steps.tokens(lane.name, step.name), limit
+                cmd,
+                step.cwd,
+                step_env,
+                steps.tokens(lane.name, step.name),
+                limit,
+                f"{lane.name}:{step.name}",
             )
             # The wait for tokens is reported apart and left out of the step's time.
             after = steps.waited()
