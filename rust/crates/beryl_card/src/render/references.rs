@@ -463,7 +463,10 @@ impl Ctx {
                     }
                     None => (self.objects(objects), Kind::Card(None)),
                 };
-                let noun = self.noun(filter, kind).indefinite(kind);
+                let noun = self.noun(filter, kind);
+                let noun = noun
+                    .adjectives_only()
+                    .unwrap_or_else(|| noun.indefinite(kind));
                 format!("{} {noun}", be(&what, self.is_plural(objects), true))
             }
             Condition::EnteredThisTurn(objects) => {
@@ -497,9 +500,9 @@ impl Ctx {
             Condition::Paid(kind) => self.paid_condition(kind, false),
             Condition::Is(objects, filter) => {
                 let what = self.objects(objects);
-                let noun = self
-                    .noun(filter, Kind::Card(None))
-                    .indefinite(Kind::Card(None));
+                let noun = self.noun(filter, Kind::Card(None));
+                let noun =
+                    (noun.adjectives_only()).unwrap_or_else(|| noun.indefinite(Kind::Card(None)));
                 format!("{} {noun}", be(&what, self.is_plural(objects), false))
             }
             Condition::EnteredThisTurn(objects) => {

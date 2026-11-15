@@ -3,7 +3,9 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{CastingOption, Castings, Face, ManaCost};
+use crate::ids::Seat;
 use crate::layout::Layout;
+use crate::rule_change;
 use crate::state::{Casting, Pending, StackEntry, StackItem, State};
 use crate::table::GameTable;
 
@@ -58,18 +60,40 @@ pub(super) fn x_range_start(face: &Face, costs: Castings, free: bool) -> Option<
     min
 }
 
-/// A spell's total cost ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f)):
-/// "The total cost is the mana cost or alternative cost (as determined in rule 601.2b), plus
-/// all additional costs and cost increases, and minus all cost reductions." `increase` is
-/// the generic mana of the cost increases: a permission's, read of the permission before the
-/// spell is cast and of the cost changes on the spell after (§6.3).
-pub(super) fn spell_cost(
+/// A spell's total cost ([CR 601.2f]), the one place it is found, in the rule's order: "The
+/// total cost is the mana cost or alternative cost (as determined in rule 601.2b), plus all
+/// additional costs and cost increases, and minus all cost reductions." Then the effects that
+/// set a minimum, which affect the total directly, last. `increase` is the generic mana of a
+/// permission's cost increase, read of the permission before the spell is cast and of the
+/// cost changes on the spell after; the rule changes in force add theirs
+/// ([`rule_change::spell_cost`]). X counts at its announced value.
+///
+/// The total is locked in ([CR 601.2f]): "Once the total cost is determined, any effects that
+/// directly affect the total cost are applied. Then the resulting total cost becomes 'locked
+/// in.'" The casting machine reads it only before any of it is paid: the mana is paid first,
+/// whole, and a spell's other parts after it read no total.
+///
+/// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
+#[allow(clippy::too_many_arguments)]
+#[inline]
+pub(super) fn spell_cost<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
     face: &Face,
     costs: Castings,
     x: u8,
     increase: u8,
     free: bool,
 ) -> ManaCost {
+    let cost = before_rule_changes(face, costs, x, increase, free);
+    rule_change::spell_cost(s, t, player, face, cost)
+}
+
+/// The part of [`spell_cost`] that reads only the spell: the mana cost or alternative cost,
+/// plus the additional costs and `increase`, with X at its value. Not generic over the
+/// layout, so that one copy serves every caller.
+fn before_rule_changes(face: &Face, costs: Castings, x: u8, increase: u8, free: bool) -> ManaCost {
     let mut cost = if free { ManaCost::NONE } else { face.cost };
     for o in costs.paid(face) {
         if o.is_alternative() {
@@ -93,7 +117,7 @@ pub(super) fn total_cost<L: Layout>(
     match (entry.item, entry.ability()) {
         (StackItem::Spell { object, costs, .. }, _) => {
             let increase = s.cost_increase(object);
-            spell_cost(face, costs, entry.x, increase, c.free())
+            spell_cost(s, t, c.player, face, costs, entry.x, increase, c.free())
         }
         (_, Some(ability)) => {
             let mut cost = face.ability(ability).cost().mana.with_x(entry.x);

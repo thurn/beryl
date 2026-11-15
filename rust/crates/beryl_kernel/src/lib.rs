@@ -493,6 +493,12 @@
 //!   once for the game like any other. Its check finds the permanents that make it only
 //!   once it is in force for the player, and reads each one's [`State::chosen`]. Only a
 //!   static ability may make one: the table refuses an effect that would start it.
+//! - A change to what casting some spells costs ([`rule_changes::RuleKind::SpellCost`]: an
+//!   increase, a reduction or a floor) applies to players but is asked of the permanents
+//!   that make it, since its condition ("as long as this artifact is untapped") is the
+//!   ability's and the layers read none. In a game whose cards make none, the total cost
+//!   asks one test of the table's set; in one whose cards do, it walks the battlefield
+//!   for the makers. Only a static ability may make one.
 //! - "Can't" beats "can" ([CR 101.2])
 //!   in the rules that read two changes together, not here: each rule is its own bit.
 //! - Which permanent makes a change, to tell a player why, is asked only once it is known

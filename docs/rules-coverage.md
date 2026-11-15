@@ -674,9 +674,13 @@ Built by by-bajq.3.10:
 - **The total cost** (CR 601.2f) is computed in one place, in the order the rule
   gives: the mana cost or an alternative cost, then additional costs and
   increases, then reductions, then an effect that sets a floor, which says of
-  itself that it applies last. A static cost change is a rule change the game
-  numbers, so with none in force the check is the one AND the rule sets already
-  give. Delve pays generic mana while the cost is paid, so it can pay a floor.
+  itself that it applies last (built: `cast::costs::spell_cost`, Trinisphere and
+  Thalia). A static cost change is a rule change the game numbers
+  (`Governed::SpellCosts`, `RuleKind::SpellCost`). It is asked of the permanents
+  that make it, not kept in the players' rule sets, because Trinisphere's "as
+  long as this artifact is untapped" is a condition the layers don't read. In a
+  game whose cards make none, the check is one test of the table's set. Delve
+  pays generic mana while the cost is paid, so it can pay a floor.
 - **Prohibitions.** `Governed::ActivateAbilities` is activating the abilities of
   the sources a `Named` names, with or without mana abilities, under
   `When::Never` (built for Pithing Needle). A filter has no permanent to read a

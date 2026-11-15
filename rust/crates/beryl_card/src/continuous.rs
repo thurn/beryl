@@ -63,6 +63,39 @@ pub enum Governed {
     ///
     /// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
     Counter(Objects),
+    /// What casting the spells a filter accepts costs, read of each spell's own
+    /// characteristics, as "Noncreature spells cost {1} more to cast." says. It changes the
+    /// total cost ([CR 601.2f]): "The total cost is the mana cost or alternative cost (as
+    /// determined in rule 601.2b), plus all additional costs and cost increases, and minus
+    /// all cost reductions." Made with [`When::AsUsual`]: the spells are cast when they
+    /// always may be.
+    ///
+    /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
+    SpellCosts { spells: Filter, change: SpellCost },
+}
+
+/// How a [`Governed::SpellCosts`] changes a spell's total cost ([CR 601.2f]).
+///
+/// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SpellCost {
+    /// "Cost {N} more to cast": a cost increase of N generic mana.
+    More(u8),
+    /// "Cost {N} less to cast": a cost reduction, which reduces only generic mana and never
+    /// below none ([CR 601.2f]): "If the mana component of the total cost is reduced to
+    /// nothing by cost reduction effects, it is considered to be {0}. It can't be reduced to
+    /// less than {0}."
+    ///
+    /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
+    Less(u8),
+    /// "Each spell that would cost less than N mana to cast costs N mana to cast": a floor on
+    /// the total mana, X counted at its value, applied after every increase and reduction,
+    /// as an effect that directly affects the total cost ([CR 601.2f]): "Once the total
+    /// cost is determined, any effects that directly affect the total cost are applied."
+    /// The difference is generic mana, which any type of mana pays.
+    ///
+    /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
+    AtLeast(u8),
 }
 
 /// The sources a [`Governed::ActivateAbilities`] names, by their names.
@@ -91,9 +124,22 @@ pub enum When {
     /// "Can't": never, a restriction that beats any permission (CR 101.2), as "This
     /// creature can't block." is.
     Never,
+    /// When the rules already have it done: the change is to something else about it, as a
+    /// [`Governed::SpellCosts`] is to what a spell costs.
+    AsUsual,
 }
 
 impl RuleChange {
+    /// "[Spells] [players] cast cost ...": a change to what casting the spells `spells`
+    /// accepts costs `players` ([`Governed::SpellCosts`]).
+    pub const fn spell_costs(players: Players, spells: Filter, change: SpellCost) -> RuleChange {
+        RuleChange {
+            players,
+            what: Governed::SpellCosts { spells, change },
+            when: When::AsUsual,
+        }
+    }
+
     /// The change in words, said of who it applies to, as in "player 1 casting sorceries
     /// as though they had flash": how a description of a game names it, as a save's record
     /// of what a checkpoint would lose does.
@@ -136,6 +182,21 @@ impl RuleChange {
             (Governed::Counter(_), When::OnlyAsSorcery | When::AsInstant) => {
                 "with a spell countered at a changed time".to_owned()
             }
+            (
+                Governed::SpellCosts {
+                    spells: filter,
+                    change,
+                },
+                _,
+            ) => {
+                let spells = spells(filter);
+                match change {
+                    SpellCost::More(n) => format!("paying {n} more for {spells}"),
+                    SpellCost::Less(n) => format!("paying {n} less for {spells}"),
+                    SpellCost::AtLeast(n) => format!("paying at least {n} for {spells}"),
+                }
+            }
+            (_, When::AsUsual) => "with a rule changed in no way".to_owned(),
         }
     }
 }

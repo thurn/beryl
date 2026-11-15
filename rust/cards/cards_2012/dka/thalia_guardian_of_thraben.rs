@@ -1,0 +1,87 @@
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Thalia, Guardian of Thraben {1}{W}
+//! Legendary Creature — Human Soldier, 2/1
+//!
+//! First strike
+//! Noncreature spells cost {1} more to cast.
+// End of the generated card header.
+
+use crate::prelude::*;
+
+/// First strike ([CR 702.7b]): "If at least one attacking or blocking creature has first
+/// strike ... as the combat damage step begins, the only creatures that assign combat damage
+/// in that step are those with first strike or double strike."
+///
+/// "Noncreature spells cost {1} more to cast." A rule change for every player, their own
+/// spells included, that increases a spell's total cost ([CR 601.2f]): "The total cost is the
+/// mana cost or alternative cost (as determined in rule 601.2b), plus all additional costs and
+/// cost increases, and minus all cost reductions." It increases an alternative cost too, such
+/// as flashback, and it leaves the spell's mana value as it was.
+///
+/// [CR 702.7b]: https://yawgatog.com/resources/magic-rules/#R7027b
+/// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
+pub static CARD: CardDef = Printed::ThaliaGuardianOfThraben
+    .keywords(Keywords::FIRST_STRIKE)
+    .abilities(&[Ability::rule_change(&RuleChange::spell_costs(
+        Players::EachPlayer,
+        Filter::Not(&Filter::Types(Types::CREATURE)),
+        SpellCost::More(1),
+    ))])
+    .card();
+
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use crate::prelude::*;
+
+    const THALIA: &str = Card::ThaliaGuardianOfThraben;
+    const BOLT: &str = Card::LightningBolt;
+    const MOTHER: &str = Card::MotherOfRunes;
+
+    pub const SCENARIOS: &[Scenario] = &[
+        // Lightning Bolt costs {1}{R}: two of P0's three Mountains pay it.
+        Scenario::new("Thalia: Lightning Bolt costs one more")
+            .interaction(&[BOLT])
+            .battlefield(
+                P0,
+                &[THALIA, Card::Mountain, Card::Mountain, Card::Mountain],
+            )
+            .hand(P0, &[BOLT])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                ME.tapped(Card::Mountain, 2),
+                Resolve,
+                THEM.life(17),
+            ]),
+        // The second ruling: the opponent's spells cost more too. P1's Counterspell costs
+        // {1}{U}{U}, three of their four Islands. The Plains in P0's hand keeps P0's main
+        // phase a decision afterward, before P1's Islands untap.
+        Scenario::new("Thalia: an opponent's Counterspell costs one more")
+            .interaction(&[BOLT])
+            .battlefield(P0, &[THALIA, Card::Mountain, Card::Mountain])
+            .hand(P0, &[BOLT, Card::Plains])
+            .battlefield(P1, &[Card::Island; 4])
+            .hand(P1, &[Card::Counterspell])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                // The Bolt is the one target, and P0, with no mana left, only passes, so the
+                // Counterspell resolves.
+                THEM.casts(Card::Counterspell),
+                THEM.tapped(Card::Island, 3),
+                ME.has(Zone::Graveyard, BOLT, 1),
+                THEM.life(20),
+            ]),
+        // A creature spell costs what it did: Mother of Runes takes one Plains.
+        Scenario::new("Thalia: a creature spell costs no more")
+            .interaction(&[MOTHER])
+            .battlefield(P0, &[THALIA, Card::Plains, Card::Plains])
+            .hand(P0, &[MOTHER])
+            .actions(&[
+                ME.casts(MOTHER),
+                ME.tapped(Card::Plains, 1),
+                Resolve,
+                ME.controls(MOTHER, 1),
+            ]),
+    ];
+}

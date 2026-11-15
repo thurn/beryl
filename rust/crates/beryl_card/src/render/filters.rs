@@ -320,6 +320,13 @@ impl Noun {
         words.join(" ")
     }
 
+    /// Its adjectives alone, when it says nothing else of what it describes: "untapped", as
+    /// "as long as this artifact is untapped" says it.
+    pub(super) fn adjectives_only(&self) -> Option<String> {
+        (self.kinds.is_empty() && self.suffixes.is_empty() && !self.adjectives.is_empty())
+            .then(|| self.adjectives.join(" "))
+    }
+
     /// One of them: "nonland permanent an opponent controls".
     pub(super) fn singular(&self, kind: Kind) -> String {
         self.phrase(kind, false)

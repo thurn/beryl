@@ -162,7 +162,7 @@ fn refused<L: Layout, const TARGETS: bool>(
     // [CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183): "A player can't pay a
     // cost without having the necessary resources to pay it fully."
     let x = x_range_start(face, costs, free).unwrap_or(0);
-    let cost = spell_cost(face, costs, x, increase, free);
+    let cost = spell_cost(s, t, player, face, costs, x, increase, free);
     if !now.funds(s, t).is_some_and(|f| {
         f.pays(s, t, cost, Bitboard::EMPTY)
             || (f.may_restrict() && restricted_pays(s, t, f, cost, slot, face_index))

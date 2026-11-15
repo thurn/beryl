@@ -3,7 +3,8 @@
 
 use super::Ctx;
 use super::filters::Kind;
-use crate::continuous::{Governed, Named, RuleChange, When};
+use super::words::number;
+use crate::continuous::{Governed, Named, RuleChange, SpellCost, When};
 use crate::effect::Players;
 use crate::mana::ManaRestriction;
 
@@ -57,6 +58,39 @@ impl Ctx {
                     _ => format!("{spells} can be countered only at a changed time"),
                 };
             }
+            // Of the spells, not of who casts them: "Noncreature spells cost {1} more to
+            // cast."
+            Governed::SpellCosts { spells, change } => {
+                let cast = match rule.players {
+                    Players::EachPlayer => String::new(),
+                    Players::You => " you cast".to_owned(),
+                    Players::EachOpponent => " your opponents cast".to_owned(),
+                    _ => format!(" {who} casts"),
+                };
+                let noun = self.noun(spells, Kind::Spell);
+                return match change {
+                    SpellCost::More(n) => {
+                        format!(
+                            "{}{cast} cost {{{n}}} more to cast",
+                            noun.plural(Kind::Spell)
+                        )
+                    }
+                    SpellCost::Less(n) => {
+                        format!(
+                            "{}{cast} cost {{{n}}} less to cast",
+                            noun.plural(Kind::Spell)
+                        )
+                    }
+                    SpellCost::AtLeast(n) => {
+                        let n = number(n);
+                        format!(
+                            "each {}{cast} that would cost less than {n} mana to cast costs \
+                             {n} mana to cast",
+                            noun.singular(Kind::Spell)
+                        )
+                    }
+                };
+            }
         };
         match (rule.when, rule.what) {
             (When::Never, _) => format!("{who} can't {what}"),
@@ -67,6 +101,7 @@ impl Ctx {
                 format!("{who} may {what} any time {they} could cast an instant")
             }
             (When::AsInstant, _) => format!("{who} may {what} as though they had flash"),
+            (When::AsUsual, _) => format!("{who} {what} as usual"),
         }
     }
 

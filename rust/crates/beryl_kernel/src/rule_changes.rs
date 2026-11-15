@@ -22,7 +22,8 @@ pub enum Unchecked {
     /// It governs what no check reads: the loyalty abilities of permanents other than the
     /// one with the ability, or their timing as the rules have it already; casting that no
     /// one can do; blocking with creatures other than the one with the ability, or when
-    /// rather than whether one blocks; or an effect starts one that is asked of a permanent.
+    /// rather than whether one blocks; what a spell costs together with when it is cast; or
+    /// an effect starts one that is asked of a permanent.
     Rule,
     /// It governs casting the spells a filter accepts, and the filter asks for more than a
     /// spell's own characteristics.
@@ -149,10 +150,17 @@ pub enum RuleKind {
     ///
     /// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
     CantBeCountered,
+    /// What casting some spells costs some players changes ([CR 601.2f]): "The total cost is
+    /// the mana cost or alternative cost (as determined in rule 601.2b), plus all additional
+    /// costs and cost increases, and minus all cost reductions." Asked of each permanent
+    /// whose static ability makes one, with its condition, as the total cost is found.
+    ///
+    /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
+    SpellCost,
 }
 
 impl RuleKind {
-    const COUNT: usize = 6;
+    const COUNT: usize = 7;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
@@ -170,8 +178,20 @@ impl RuleKind {
                 Ok(match when {
                     When::OnlyAsSorcery => RuleKind::CastOnlyAsSorcery,
                     When::AsInstant => RuleKind::CastAsInstant,
-                    When::Never => return Err(Unchecked::Rule),
+                    When::Never | When::AsUsual => return Err(Unchecked::Rule),
                 })
+            }
+            (Governed::SpellCosts { spells, .. }, When::AsUsual) => {
+                if !of_a_spells_characteristics(spells) {
+                    return Err(Unchecked::Filter);
+                }
+                if !matches!(
+                    rule.players,
+                    Players::You | Players::EachOpponent | Players::EachPlayer
+                ) {
+                    return Err(Unchecked::Players);
+                }
+                Ok(RuleKind::SpellCost)
             }
             // Only its controller activates a permanent's abilities (CR 606.3), so the
             // change is asked of the permanent, and is for "you" or for nobody.
@@ -219,13 +239,14 @@ impl RuleKind {
             }
             // Other permanents' loyalty abilities or blocks, a restriction to the timing the
             // rules have already, a change to when a creature blocks, mana abilities or the
-            // timing of named sources' abilities, and countering spells other than the one it
-            // is on.
+            // timing of named sources' abilities, countering spells other than the one it is
+            // on, and a change to what a spell costs said with a change to when it is cast.
             (
                 Governed::ActivateLoyaltyAbilities(_)
                 | Governed::Block(_)
                 | Governed::ActivateAbilities { .. }
-                | Governed::Counter(_),
+                | Governed::Counter(_)
+                | Governed::SpellCosts { .. },
                 _,
             ) => Err(Unchecked::Rule),
         }
@@ -594,5 +615,28 @@ mod tests {
             activate(Players::EachPlayer, false, When::AsInstant),
             Err(Unchecked::Rule)
         );
+    }
+
+    /// A change to what a spell costs is asked of the permanent that makes it, so its
+    /// condition is kept; one said with a change of timing, or whose filter reads more than
+    /// a spell's own characteristics, is refused.
+    #[test]
+    fn a_cost_change_is_asked_of_its_permanent() {
+        use beryl_card::SpellCost;
+        let rule = RuleChange::spell_costs(Players::EachPlayer, Filter::Any, SpellCost::AtLeast(3));
+        assert_eq!(RuleKind::of(&rule), Ok(RuleKind::SpellCost));
+        assert!(!RuleKind::SpellCost.of_players());
+        let timed = RuleChange {
+            when: When::AsInstant,
+            ..rule
+        };
+        assert_eq!(RuleKind::of(&timed), Err(Unchecked::Rule));
+        let tapped = RuleChange::spell_costs(Players::You, Filter::Tapped, SpellCost::More(1));
+        assert_eq!(RuleKind::of(&tapped), Err(Unchecked::Filter));
+        let cast_as_usual = RuleChange {
+            what: Governed::CastSpells(Filter::Any),
+            ..rule
+        };
+        assert_eq!(RuleKind::of(&cast_as_usual), Err(Unchecked::Rule));
     }
 }
