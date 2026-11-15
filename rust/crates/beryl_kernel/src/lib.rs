@@ -243,8 +243,9 @@
 //! rows of 56 bytes, 112. It is 20,144 since the state counts resolutions in a row with no choice
 //! and keeps the hash a loop of mandatory actions is compared with ([`repeats`]): a `u16` and a
 //! `u64`, 16 with padding. It is 20,184 since a [`query::Copiable`] holds three copy exceptions,
-//! 40 bytes more in all. It is 20,216 since the set of phased-out permanents
-//! ([`phasing`]), 32 bytes. The limit is 20,480. Each bead may change the size at its own push by at
+//! 40 bytes more in all. It was 20,216 when phasing began (32 bytes that no change reported
+//! came between), and is 20,248 since the set of phased-out permanents ([`phasing`]), 32 bytes.
+//! The limit is 20,480. Each bead may change the size at its own push by at
 //! most its allotment, whatever landed before it, and reports the size as it reports the count:
 //!
 //! | Bead | Allotment | Why |
