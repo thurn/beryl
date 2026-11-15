@@ -636,7 +636,7 @@ await check(
         const stats = await node(marked).locator(".card-pt").boundingBox();
         assert.ok(!overlap(custom, stats));
         const playerCounter = page.locator(
-            ".manual-pool [data-pool] + .named-counter",
+            '[data-counter="Poison"] .named-counter',
         );
         assert.equal(
             await playerCounter.getAttribute("aria-label"),
@@ -664,7 +664,12 @@ await check(
         await listed.hover();
         await page.getByLabel(`${buried.name}, inspected`).waitFor();
     },
-    { fixture: "table-drawn", at: manualViews.length, ready: ".stack-ability" },
+    {
+        fixture: "table-drawn",
+        at: manualViews.length,
+        ready: ".stack-ability",
+        hash: "#/table",
+    },
 );
 
 // The stage audits can see that the card has a slot. Check the contents of its
@@ -707,5 +712,10 @@ await check(
         );
         assert.equal(await card.locator(".card-scan").count(), 0);
     },
-    { fixture: "unknown-card-frame", at: 1, ready: unknownCard },
+    {
+        fixture: "unknown-card-frame",
+        at: 1,
+        ready: unknownCard,
+        hash: "#/table",
+    },
 );

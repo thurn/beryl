@@ -73,7 +73,7 @@ export function TableScreen() {
       feed.arrive(update, past);
     });
     void unlisten
-      .then(tableCurrent)
+      .then(() => (heard ? undefined : tableCurrent()))
       .then((update) => {
         if (!mounted) return;
         if (update && !heard) feed.arrive(update, true);

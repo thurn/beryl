@@ -170,7 +170,7 @@
     },
     {
       "name": "table-drawn",
-      "route": "/?fixture=table-drawn#/game",
+      "route": "/?fixture=table-drawn#/table",
       "width": 1600,
       "height": 900,
       "expect": ".stack-ability"

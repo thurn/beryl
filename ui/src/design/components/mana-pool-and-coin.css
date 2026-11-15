@@ -132,6 +132,12 @@
   max-width: 240px;
 }
 
+/* On the desktop the six manual mana controls use the old pool's whole
+   width. Leave room beside them for named counters, above the lands. */
+.stage .manual-pool {
+  max-width: 380px;
+}
+
 .manual-counter-button {
   color: inherit;
   font: inherit;
