@@ -36,3 +36,14 @@ gungraun = "0.20.0"
 [[bench]]
 name = "frame_counts"
 harness = false
+
+# Times one host frame of the gated boards old against new, with the main workspace's ABBA
+# harness compiled in by path.
+[[bench]]
+name = "frame_abba"
+harness = false
+
+# The ABBA harness's request for the fastest cores (`beryl_bench::cores`), which sets the
+# thread's scheduling class through libc on macOS.
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+libc = "0.2.191"

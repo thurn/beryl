@@ -205,6 +205,15 @@ impl Renderer {
             .map(|counter| counter.read(&self.device))
     }
 
+    /// Blocks until the GPU has finished every frame submitted so far, for timing a frame from
+    /// its submission to its end with the wall clock (docs/beryl-3d.md, "Measurements": GPU
+    /// timestamps do not work on the Mac). The app never calls it.
+    pub fn finish(&self) {
+        self.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("the GPU finishes the frame");
+    }
+
     /// The compressed formats the device samples, in the order they are preferred. The face
     /// arrays are made in the first of them (`Format::choose`), and `beryl_assets`' workers are
     /// asked for the same one.

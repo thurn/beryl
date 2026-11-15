@@ -2,6 +2,7 @@
 //! to be a binary of its own, and every one of them linked the crate and its dependencies again
 //! after each edit.
 
+mod downlevel;
 mod faces;
 mod render;
 mod shader_cost;

@@ -306,6 +306,7 @@ dependencies = [
  "beryl_protocol",
  "beryl_scene",
  "gungraun",
+ "libc",
  "miniz_oxide 0.8.9",
  "postcard",
  "serde",
