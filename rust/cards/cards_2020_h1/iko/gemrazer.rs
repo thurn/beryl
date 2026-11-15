@@ -448,7 +448,7 @@ pub mod scenarios {
             // With no cast offered, the only decision before combat is whether to attack with the
             // Hired Blade, so the game passes priority on its own.
             .actions(&[ME.deciding(DecisionKind::Attacker, 2)]),
-        // CR 702.140a: "non-Human creature you own". A creature P1 owns is not a legal target even
+        // CR 702.140a: "targets a non-Human creature with the same owner as this spell". A creature P1 owns is not a legal target even
         // under P0's control, and a creature P1 controls and owns certainly isn't.
         Scenario::new("Gemrazer can't mutate onto an opponent's creature")
             .battlefield(P0, &[Card::Forest, Card::Forest, Card::Forest])

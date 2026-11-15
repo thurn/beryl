@@ -206,7 +206,8 @@ pub mod scenarios {
                 Resolve,
                 ME.has(Zone::Graveyard, IMAGE, 1),
             ]),
-        // Counters are not copiable ([CR 707.2]): an Image of a Mother of Runes with three
+        // Counters are not copiable
+        // ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)): an Image of a Mother of Runes with three
         // +1/+1 counters is a 1/1 with no counters, an Illusion in addition to its types.
         Scenario::new("an Image does not copy counters")
             .interaction(&[MOTHER])
@@ -227,7 +228,7 @@ pub mod scenarios {
                 THEM.pt(MOTHER, 4, 4),
             ]),
         // The Image of a Marit Lage token is a 20/20 card-less copy; copying copiable values of
-        // a token ([CR 707.2]) doesn't make the Image a token.
+        // a token ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)) doesn't make the Image a token.
         Scenario::new("an Image copies a token's characteristics but is not a token")
             .interaction(&[Card::DarkDepths])
             .battlefield(P0, &[Card::Island, Card::Island])

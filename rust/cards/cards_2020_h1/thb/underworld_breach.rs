@@ -377,7 +377,7 @@ pub mod scenarios {
                 ME.controls(BREACH, 0),
                 ME.has(Zone::Graveyard, BREACH, 1),
             ]),
-        // [CR 107.3a]: "the player announces the value of X" as the spell is cast, and an
+        // [CR 107.3a]: the caster "chooses and announces the value of X" as the spell is cast, and an
         // escaped spell's cost is its mana cost, so {X}{U}{U} with X = 2 is four mana.
         //
         // [CR 107.3a]: https://yawgatog.com/resources/magic-rules/#R1073a

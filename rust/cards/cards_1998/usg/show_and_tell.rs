@@ -195,8 +195,8 @@ pub mod scenarios {
                 ME.plays(Card::Plains),
                 ME.controls(Card::Plains, 2),
             ]),
-        // A permanent that enters as a copy chooses among permanents already on the battlefield
-        // (CR 614.12): "the permanent can't copy something entering simultaneously". P0's
+        // A permanent that enters as a copy chooses among permanents already on the battlefield,
+        // so it can't copy one entering at the same time (CR 614.12). P0's
         // Phantasmal Image has nothing to copy, so it enters as a 0/0 and dies; P1's creature
         // stays.
         Scenario::new("Show and Tell: a clone can't copy a creature entering with it")

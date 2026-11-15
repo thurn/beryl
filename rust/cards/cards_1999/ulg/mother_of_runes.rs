@@ -164,9 +164,9 @@ pub mod scenarios {
             THEM.has(Zone::Graveyard, Prop::Flier, 1),
             THEM.life(20),
         ]),
-        // [CR 602.5a]: "A creature's activated ability with the tap symbol in its activation
-        // cost can't be activated unless the creature has been under its controller's control
-        // continuously since their most recent turn began." Only passing and playing the
+        // [CR 602.5a]: "A creature's activated ability with the tap symbol ({T}) or the untap
+        // symbol ({Q}) in its activation cost can't be activated unless the creature has been
+        // under its controller's control since the start of their most recent turn." Only passing and playing the
         // Island are offered.
         //
         // [CR 602.5a]: https://yawgatog.com/resources/magic-rules/#R6025a
@@ -195,7 +195,7 @@ pub mod scenarios {
                 Resolve,
                 ME.deciding(DecisionKind::Priority, 2),
             ]),
-        // [CR 514.2]: "all 'until end of turn' effects end", so on the opponent's turn the
+        // [CR 514.2]: "all "until end of turn" and "this turn" effects end", so on the opponent's turn the
         // creature can be targeted by a red spell again.
         //
         // [CR 514.2]: https://yawgatog.com/resources/magic-rules/#R5142
@@ -275,9 +275,9 @@ pub mod scenarios {
                 Resolve,
                 ME.has(Zone::Graveyard, Prop::Vanilla, 1),
             ]),
-        // [CR 702.16d]: "Equipment ... that has the stated quality can't be equipped to
-        // creatures with protection from the stated quality", and it becomes unattached as a
-        // state-based action ([CR 704.5n]). Painter's Servant makes the colorless Equipment red.
+        // [CR 702.16d]: "A permanent with protection can't be equipped by Equipment that have
+        // the stated quality", and the Equipment becomes unattached as a state-based action
+        // ([CR 704.5n]). Painter's Servant makes the colorless Equipment red.
         //
         // [CR 702.16d]: https://yawgatog.com/resources/magic-rules/#R70216d
         // [CR 704.5n]: https://yawgatog.com/resources/magic-rules/#R7045n

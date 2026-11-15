@@ -168,7 +168,8 @@ pub mod scenarios {
                 ME.tapped(Card::Mountain, 3),
             ]),
         // Fork costs {R}{R}, three under Trinisphere ({1}{R}{R}); the copy it makes is not cast
-        // and costs nothing ([CR 707.10]). Bolt, Fork: six Mountains.
+        // and costs nothing
+        // ([CR 707.10](https://yawgatog.com/resources/magic-rules/#R70710)). Bolt, Fork: six Mountains.
         Scenario::new("Trinisphere: Fork costs three and its copy is free")
             .interaction(&[BOLT, Card::Fork])
             .battlefield(

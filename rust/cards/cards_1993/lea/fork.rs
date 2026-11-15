@@ -161,8 +161,8 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, GEYSER, 1),
             ]),
         // Fork copies Tendrils of Agony: the copy is not cast, so its storm does not trigger
-        // again ([CR 702.40c](https://yawgatog.com/resources/magic-rules/#R70240c)): "storm
-        // ... triggers when you cast this spell". Only the Tendrils' own storm trigger (storm
+        // again ([CR 702.40a](https://yawgatog.com/resources/magic-rules/#R70240a)): "When you
+        // cast this spell, copy it". Only the Tendrils' own storm trigger (storm
         // count 0, so no copies) is on the stack; the copy and the original each drain 2.
         Scenario::new("Fork copies Tendrils of Agony without a second storm trigger")
             .battlefield(
