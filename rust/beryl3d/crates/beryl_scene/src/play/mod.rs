@@ -40,7 +40,7 @@ use crate::light::{self, Lit, StreakRun};
 use crate::motion::Track;
 use crate::pointer::Pointer;
 use crate::pose::Pose;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Motion, Table, Window};
+use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Motion, Table, Window, ability_track};
 use crate::verbs::Interval;
 
 /// How many spans, streaks and effects the show holds before holding more allocates.
@@ -279,20 +279,21 @@ impl Show {
         &mut self.lit
     }
 
-    /// Where `subject` is at `now` and how large: a card where `pose` has it, a player at their
-    /// anchor (`Table::player_pose`). An ability has no scene object yet.
+    /// Where `subject` is at `now` and how large: a card where `pose` has it, an ability on
+    /// the stack where `ability_pose` has it, a player at their anchor (`Table::player_pose`).
     #[must_use]
     pub fn reach(&self, subject: Subject, now: u64) -> Option<Reach> {
+        let card = |pose: Pose| Reach {
+            pose,
+            half: Vec2::new(CARD_WIDTH, CARD_HEIGHT) * 0.5 * pose.scale,
+        };
         match subject {
-            Subject::Object { slot } => self.pose(usize::from(slot.0), now).map(|pose| Reach {
-                pose,
-                half: Vec2::new(CARD_WIDTH, CARD_HEIGHT) * 0.5 * pose.scale,
-            }),
+            Subject::Object { slot } => self.pose(usize::from(slot.0), now).map(card),
             Subject::Player { player } => Some(Reach {
                 pose: self.table.player_pose(player),
                 half: Vec2::ZERO,
             }),
-            Subject::Ability { .. } => None,
+            Subject::Ability { id } => self.ability_pose(id, now).map(card),
         }
     }
 
@@ -462,6 +463,20 @@ impl Show {
         self.table.rest(slot)
     }
 
+    /// Where the ability numbered `id` is at `now`, as `pose` gives a card's: on its track while
+    /// the playing script moves it, and otherwise where it rests on the stack of the view shown.
+    #[must_use]
+    pub fn ability_pose(&self, id: u32, now: u64) -> Option<Pose> {
+        if let Some(playing) = &self.playing
+            && playing.update.is_some()
+            && let Some(track) = ability_track(&playing.compiled.ability_tracks, id)
+            && !track.segments().is_empty()
+        {
+            return Some(track.pose_at(playing.clock(now)));
+        }
+        self.table.ability_rest(id)
+    }
+
     /// How many updates wait for the playing script to end.
     #[must_use]
     pub fn waiting(&self) -> usize {
@@ -565,7 +580,8 @@ impl Show {
                 n if n > catch_up::DOUBLE => 2,
                 _ => 1,
             };
-            let moves = !waiting.compiled.tracks.is_empty();
+            let moves =
+                !waiting.compiled.tracks.is_empty() || !waiting.compiled.ability_tracks.is_empty();
             if waiting.compiled.reset {
                 self.lit.clear();
                 self.effects.clear();
@@ -603,6 +619,7 @@ impl Show {
             let update = playing.update.as_ref()?;
             Some(Motion {
                 tracks: &playing.compiled.tracks,
+                ability_tracks: &playing.compiled.ability_tracks,
                 t: playing.clock(now),
                 finals: &playing.compiled.finals,
                 view: &update.view,
@@ -679,6 +696,20 @@ impl Show {
                 record.segment.through(t, pose);
             }
         }
+        for (id, track) in &mut compiled.ability_tracks {
+            let Some(was) = ability_track(&playing.compiled.ability_tracks, *id)
+                .filter(|old| !old.segments().is_empty())
+            else {
+                continue;
+            };
+            let pose = was.pose_at(t);
+            let begun = track
+                .segments()
+                .partition_point(|segment| segment.start <= t);
+            if let Some(latest) = begun.checked_sub(1) {
+                track.segments_mut()[latest].through(t, pose);
+            }
+        }
         let number = playing.number;
         playing.compiled = compiled;
         if let Some(playing) = self.playing.take() {
@@ -724,7 +755,13 @@ impl Show {
         let t = playing.clock(now);
         let compiled = &playing.compiled;
         let mut next = compiled.end;
-        for segment in compiled.tracks.iter().flat_map(Track::segments) {
+        let abilities = compiled.ability_tracks.iter().map(|(_, track)| track);
+        for segment in compiled
+            .tracks
+            .iter()
+            .chain(abilities)
+            .flat_map(Track::segments)
+        {
             if segment.start <= t && t < segment.end() {
                 return Wake::Now;
             }

@@ -10,11 +10,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use beryl_protocol::protocol::ObjectId;
 use beryl_protocol::script::{Curve, Edge, Mark, StepEffect, Subject};
-use beryl_scene::frame::FrameBuilder;
+use beryl_scene::frame::{FrameBuilder, Role};
 use beryl_scene::light::{Lit, MarkSpan, Span};
 use beryl_scene::play::record::{Plant, Planted};
 use beryl_scene::verbs::Interval;
-use common::{MS, before, empty_frame, show, three_beats};
+use common::{MS, before, emerge, empty_frame, resolve, show, three_beats};
 
 /// The system allocator, counting the allocations it makes.
 struct Counting;
@@ -64,6 +64,7 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
             curve: Curve::Linear,
         })
         .collect();
+    let after_three = after.clone();
     let mut show = show();
     let mut frame = empty_frame();
     // A span that begins with the token's step, so that a frame also gives the table's `Lit` a
@@ -97,6 +98,37 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
         "the planted span reached the table"
     );
     assert_eq!(show.effects().len(), 20, "the effects outlive the script");
+
+    // An ability that goes on the stack and resolves: the frames that start, draw and end
+    // each script allocate nothing either.
+    let (emerged, timings) = emerge(&after_three, cards, 5);
+    let (resolved, resolve_timings) = resolve(&emerged, 5);
+    show.push(Box::new(emerged), timings);
+    // The emerge plays from 1000 to 1200 ms, putting the ability on the stack at its start, and
+    // the ability rests there after it. The resolution arrives then and plays from 1400 ms;
+    // the ability is gone from its start.
+    for now in [1_000 * MS, 1_100 * MS, 1_300 * MS, 1_400 * MS, 1_700 * MS] {
+        if now == 1_400 * MS {
+            show.push(Box::new(resolved.clone()), resolve_timings.clone());
+        }
+        let before = ALLOCATIONS.load(Ordering::Relaxed);
+        let mut builder = FrameBuilder::new(&mut frame);
+        show.frame(now, &mut builder);
+        let ability = builder
+            .finish()
+            .resolved
+            .iter()
+            .any(|element| element.role == Role::Ability);
+        let after = ALLOCATIONS.load(Ordering::Relaxed);
+        assert_eq!(
+            after - before,
+            0,
+            "allocations in the frame at {} ms",
+            now / MS
+        );
+        let shown = now < 1_400 * MS;
+        assert_eq!(ability, shown, "the ability is drawn at {} ms", now / MS);
+    }
 
     // Forgetting the spans that have gone allocates nothing.
     let mut lit = Lit::with_capacity(4);

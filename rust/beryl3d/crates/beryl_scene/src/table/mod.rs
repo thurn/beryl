@@ -10,6 +10,7 @@ mod camera;
 mod place;
 mod rows;
 mod scene;
+mod stack;
 
 use glam::{Vec2, Vec3};
 
@@ -17,8 +18,8 @@ pub use camera::{Camera, CameraData};
 pub(crate) use place::{Group, Zones};
 pub use place::{Placement, ROWS, Rest, Scroll, place};
 pub(crate) use rows::NameIds;
-pub(crate) use scene::SceneObject;
-pub use scene::{Dress, Look, Motion, Table};
+pub use scene::{ABILITY_IDS, Dress, Look, Motion, Table};
+pub(crate) use scene::{Objects, ability_track};
 
 use crate::data::space;
 use crate::input::{Insets, Size};

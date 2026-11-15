@@ -2,7 +2,7 @@
 //! (docs/beryl-3d.md, "Interface checks" and "Test speed"), on the three-beat script of the
 //! script clock's tests, played by the test driver.
 
-use crate::common::{MS, before, three_beats};
+use crate::common::{MS, before, emerge, resolve, three_beats};
 use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{Side, Why, ZoneName};
@@ -333,4 +333,26 @@ fn the_check_times_find_every_fault_that_every_tick_finds() {
     eprintln!(
         "frames evaluated on the three-beat script: {sparse} at the check times, {every} on every tick"
     );
+}
+
+#[test]
+fn an_ability_that_goes_on_the_stack_and_resolves_has_no_fault() {
+    // Rest equals placement and no duplicates hold for the ability's card at every check time.
+    let (start, cards) = before();
+    let (mut emerged, timings) = emerge(&start, cards, 5);
+    emerged.view.script.as_mut().expect("a script").timing = timings;
+    let (mut resolved, timings) = resolve(&emerged, 5);
+    resolved.view.script.as_mut().expect("a script").timing = timings;
+    let mut messages = vec![
+        FixtureMessage::game_update(&start),
+        FixtureMessage::game_update(&emerged),
+        FixtureMessage::game_update(&resolved),
+    ];
+    messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
+    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Desktop, SIZE)
+        .expect("the views can be read")
+        .named("abilities");
+    let checked = page.check_all(Mode::AtCheckTimes);
+    let printed: Vec<String> = checked.faults.iter().map(printed).collect();
+    assert!(printed.is_empty(), "{}", printed.join("\n"));
 }

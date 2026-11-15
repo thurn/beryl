@@ -2,7 +2,7 @@
 //! and what a verb is given (`StepIn`, `Places`) and what it writes (`StepOut`)
 //! (docs/beryl-3d.md, "Verbs").
 
-use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, ZoneName};
+use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, StackItem, ZoneName};
 use beryl_protocol::script::{Act, Room, Step, StepTiming, Subject, Table as Played, mover_of};
 
 use super::compile::{nanoseconds, subject_of};
@@ -12,8 +12,13 @@ use crate::light::{SpanChange, StreakRun};
 use crate::motion::Track;
 use crate::notice::NoticeRun;
 use crate::pose::{Curve, Pose, Segment};
-use crate::table::{Camera, Group, Layout, NameIds, Placement, Rest, Table, Zones};
+use crate::table::{Group, NameIds, Placement, Rest, Table, Zones};
 use crate::verbs::{self, Interval};
+
+mod abilities;
+mod places;
+
+pub use places::Places;
 
 /// What a verb is given for one step.
 pub struct StepIn<'a> {
@@ -41,57 +46,14 @@ pub struct StepIn<'a> {
     pub places: &'a Places<'a>,
 }
 
-/// Where things are as a script's steps so far have them, for a verb that needs more than its
-/// own subject's poses.
-pub struct Places<'a> {
-    motion: &'a Motion<'a>,
-    /// The groups the step placed again, by `Group::index`.
-    dirty: &'a [bool],
-}
-
-impl Places<'_> {
-    /// Where `subject` is at `t` on the script's clock, as the steps so far have it: a card on
-    /// its track or where it rested before the script, a player at their anchor. An ability has
-    /// no scene object yet.
-    #[must_use]
-    pub fn pose(&self, subject: Subject, t: u64) -> Option<Pose> {
-        match subject {
-            Subject::Object { slot } => self.motion.placed(usize::from(slot.0), t),
-            Subject::Player { player } => Some(self.motion.table.player_pose(player)),
-            Subject::Ability { .. } => None,
-        }
-    }
-
-    /// Where `subject` rests after this step's act.
-    #[must_use]
-    pub fn rest(&self, subject: Subject) -> Option<Pose> {
-        match subject {
-            Subject::Object { slot } => self
-                .motion
-                .now(usize::from(slot.0), self.dirty)
-                .map(|rest| rest.pose),
-            Subject::Player { player } => Some(self.motion.table.player_pose(player)),
-            Subject::Ability { .. } => None,
-        }
-    }
-
-    #[must_use]
-    pub fn layout(&self) -> &Layout {
-        self.motion.table.layout()
-    }
-
-    #[must_use]
-    pub fn camera(&self) -> &Camera {
-        self.motion.table.camera()
-    }
-}
-
 /// What the verbs of a script have written so far, beside the segments `Motion` adds to its
 /// tracks. Kept between steps, so that a step need not allocate it.
 #[derive(Default)]
 pub(crate) struct Written {
     /// The segments of the step being played, by slot, until `Motion` adds them to its tracks.
     segments: Vec<(usize, Segment)>,
+    /// The same for abilities, by number.
+    ability_segments: Vec<(u32, Segment)>,
     pub spans: Vec<SpanChange>,
     pub streaks: Vec<StreakRun>,
     pub notices: Vec<NoticeRun>,
@@ -108,11 +70,13 @@ pub struct StepOut<'a> {
 }
 
 impl StepOut<'_> {
-    /// Gives `subject` `segment`, made by this step's verb. Only a card has a scene object to
-    /// move yet: a segment for a player or an ability is dropped.
+    /// Gives `subject` `segment`, made by this step's verb. A player has no scene object to
+    /// move: a segment for one is dropped.
     pub fn segment(&mut self, subject: Subject, segment: Segment) {
-        if let Subject::Object { slot } = subject {
-            self.written.segments.push((usize::from(slot.0), segment));
+        match subject {
+            Subject::Object { slot } => self.written.segments.push((usize::from(slot.0), segment)),
+            Subject::Ability { id } => self.written.ability_segments.push((id, segment)),
+            Subject::Player { .. } => {}
         }
     }
 
@@ -186,11 +150,19 @@ pub(crate) struct Motion<'a> {
     /// The slots `affected` gives, kept between steps so that a step need not allocate them.
     affected: Vec<usize>,
     pub tracks: Vec<Track>,
+    /// One track for each ability that moves, sorted by number.
+    pub ability_tracks: Vec<(u32, Track)>,
+    /// The abilities a step changed the resting place of, with where each rested before and
+    /// rests after, kept between steps so that a step need not allocate them.
+    moved: Vec<(u32, Option<Rest>, Option<Rest>)>,
     /// Every segment added to `tracks`, in order, with why, if it keeps `records`.
     pub segments: Vec<SegmentRecord>,
     records: bool,
     /// The spans, streaks and notices the verbs wrote.
     pub written: Written,
+    /// When the latest slide of what closed up after a step's subject left ends, in
+    /// milliseconds on the script's clock, until `take_closed` reads it.
+    closed: Option<f64>,
 }
 
 impl<'a> Motion<'a> {
@@ -205,7 +177,7 @@ impl<'a> Motion<'a> {
         let rests = if shown {
             table.rests()
         } else {
-            table.placement(before)
+            table.placement(before, &numbers_of(&played))
         };
         // Each object's group, read from where it rests.
         let mut members = vec![Vec::new(); Group::ALL.len()];
@@ -236,9 +208,12 @@ impl<'a> Motion<'a> {
             marks: Vec::new(),
             affected: Vec::new(),
             tracks,
+            ability_tracks: Vec::new(),
+            moved: Vec::new(),
             segments: Vec::new(),
             records,
             written: Written::default(),
+            closed: None,
         }
     }
 
@@ -294,13 +269,14 @@ impl<'a> Motion<'a> {
     /// over should end as that view stands, so each group that holds the same objects in both
     /// keeps the resting places the steps left, and only the others are placed again. After a
     /// step the table could not take, `rests` may not match the table, so every group is.
-    pub(crate) fn placement_of(&self, view: &PlayerView) -> Placement {
+    /// `abilities` numbers the abilities on `view`'s stack.
+    pub(crate) fn placement_of(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
         if self.whole {
-            return self.table.placement(view);
+            return self.table.placement(view, abilities);
         }
         let played = Zones::of_table(&self.played);
         self.table
-            .placement_reusing(&Zones::of_view(view), (&played, &self.rests))
+            .placement_reusing(&Zones::of_view(view, abilities), (&played, &self.rests))
     }
 
     /// Where the object in `slot` rests after the step, given the groups `dirty` it placed again.
@@ -372,6 +348,9 @@ impl<'a> Motion<'a> {
                 }
             }
         }
+        // Every step places the stack again.
+        std::mem::swap(&mut self.rests.abilities, &mut self.fresh.abilities);
+        self.fresh.abilities.clear();
         let placed = dirty.iter().enumerate().filter(|(_, dirty)| **dirty);
         for (group, _) in placed {
             for &slot in &self.next[group] {
@@ -455,24 +434,51 @@ impl<'a> Motion<'a> {
             }
             let segment = self.follow(slot, (rested, now), number, own, (room, regroup));
             if let Some((segment, cause)) = segment {
+                if matches!(cause, Cause::Slide(_)) && segment.end() == room.to {
+                    self.note_closing(timing, laid);
+                }
                 self.push(slot, segment, cause);
             }
         }
         // A step that moves no card (a player's, an ability's, a span's) still has its verb
         // play it.
         if !played {
+            let poses = match mover {
+                Some(Subject::Ability { id }) => self.ability_poses(id, own.from),
+                _ => (None, None),
+            };
             self.play(
                 number,
                 step,
                 timing,
                 own,
                 (mover, was.as_ref()),
-                (None, None),
+                poses,
                 &dirty,
             );
         }
         self.affected = affected;
+        if self.follow_abilities(mover, own, room) {
+            self.note_closing(timing, laid);
+        }
         self.commit(&dirty);
+    }
+
+    /// Notes that something slid over the room of a step with this `timing`, `laid` out so. If
+    /// that room is what closes up after the step's subject left (`StepTiming::closes`), the
+    /// beat lasts until it has closed, as the web stage's does (`closedBy` in
+    /// `ui/src/stage/tracks.ts`).
+    fn note_closing(&mut self, timing: &StepTiming, laid: &Laid) {
+        if let (None, Some(closes)) = (laid.opens, timing.closes) {
+            let end = laid.to + closes;
+            self.closed = Some(self.closed.map_or(end, |closed| closed.max(end)));
+        }
+    }
+
+    /// When the latest slide of what closed up after a step since the last call ends, in
+    /// milliseconds on the script's clock, if any did.
+    pub(crate) fn take_closed(&mut self) -> Option<f64> {
+        self.closed.take()
     }
 
     /// The segment that carries the object in `slot`, which the `number`th step does not move
@@ -581,6 +587,11 @@ impl<'a> Motion<'a> {
             self.push(slot, segment, Cause::Verb(number));
         }
         written.segments = segments;
+        let mut segments = std::mem::take(&mut written.ability_segments);
+        for (id, segment) in segments.drain(..) {
+            self.push_ability(id, segment);
+        }
+        written.ability_segments = segments;
         self.written = written;
     }
 
@@ -743,8 +754,20 @@ pub(crate) fn add(tracks: &mut Vec<Track>, slot: usize, segment: Segment) {
     }
 }
 
-/// Whether `a` and `b` give every slot the same resting place.
+/// Whether `a` and `b` give every slot and every ability the same resting place.
 fn same(a: &Placement, b: &Placement) -> bool {
-    (0..a.rests.len().max(b.rests.len()))
-        .all(|slot| a.rests.get(slot).copied().flatten() == b.rests.get(slot).copied().flatten())
+    a.abilities == b.abilities
+        && (0..a.rests.len().max(b.rests.len())).all(|slot| {
+            a.rests.get(slot).copied().flatten() == b.rests.get(slot).copied().flatten()
+        })
+}
+
+/// The numbers of the abilities on `played`'s stack, bottom first.
+pub(crate) fn numbers_of(played: &Played) -> Vec<u32> {
+    played
+        .stack
+        .iter()
+        .filter(|entry| matches!(entry.item, StackItem::Ability { .. }))
+        .filter_map(|entry| entry.id)
+        .collect()
 }

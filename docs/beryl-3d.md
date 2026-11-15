@@ -1048,6 +1048,11 @@ flight start exactly where the card was.
   permanents cannot fit any other way. Arena's recordings show no board this
   large, so UI Conventions lists the behavior among those not seen in Arena.
   Cards scrolled out of view are not drawn.
+- **An ability on the stack is a scene object like a spell.** It is drawn as a
+  card showing its source's face, at its place among the stack's items, and
+  arrows, marks and steps reach it by its number, which the session's scripts
+  give it (a view's stack names no ability). The table keeps those numbers from
+  a reset, from each `emerge` and from the table each script ends with.
 - **Hands, the stack and cards being read keep their place on screen.** Their
   positions are given relative to the camera, not the table, so they are the
   same size and in the same place at any window shape. They are still 3D
@@ -1143,7 +1148,8 @@ pub struct StepTiming {
     pub opens: bool,            // its act is applied as its delay begins
     pub ahead: bool,            // its act is applied with the step before's
     pub closes: Option<f64>,    // how long what it left room for takes to
-                                // close up after it
+                                // close up after it; when anything does,
+                                // its beat lasts until it has
     pub room: Room,             // how what it makes room among goes to its
                                 // new place
     pub phases: Vec<Phase>,     // where each named phase of its motion

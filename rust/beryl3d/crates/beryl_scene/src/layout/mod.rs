@@ -31,7 +31,8 @@ const DOCK_RIGHT: f32 = 39.0;
 const DOCK_BOTTOM: f32 = 87.0;
 
 /// A flat-layer element's id is this plus a count of the elements that have entered the tree,
-/// so that it never equals a card's, which is its object's slot in the view.
+/// so that it never equals a card's, which is its object's slot in the view, or an ability's
+/// on the stack (`table::ABILITY_IDS`).
 const FIRST_ID: u32 = 1 << 16;
 
 /// What taffy's measure function needs of a node that shows text.
@@ -507,4 +508,17 @@ fn contains(rect: Rect, point: glam::Vec2) -> bool {
 /// screen.
 fn has_panel(role: Role, top: bool) -> bool {
     role == Role::Button || top
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FIRST_ID;
+    use crate::frame::LAYER_ELEMENTS;
+    use crate::table::ABILITY_IDS;
+
+    #[test]
+    fn no_flat_layer_id_reaches_the_abilities_ids() {
+        let last = u64::from(FIRST_ID) + LAYER_ELEMENTS as u64;
+        assert!(last < u64::from(ABILITY_IDS));
+    }
 }

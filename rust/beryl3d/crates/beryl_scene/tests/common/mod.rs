@@ -3,8 +3,10 @@
 #![allow(dead_code)] // Each test binary uses part of it.
 
 use beryl_protocol::GameUpdate;
-use beryl_protocol::protocol::{CardType, ObjectId, ObjectView, PlayerView, Side, Why, ZoneName};
-use beryl_protocol::script::{Act, Fact, StepTiming};
+use beryl_protocol::protocol::{
+    CardType, ObjectId, ObjectView, PlayerView, Side, StackItem, Why, ZoneName,
+};
+use beryl_protocol::script::{Act, Fact, StepTiming, Subject};
 use beryl_scene::frame::{Frame, FrameBuilder};
 use beryl_scene::input::{Insets, Size};
 use beryl_scene::play::Show;
@@ -218,5 +220,70 @@ pub fn draw(before: &GameUpdate, cards: Cards) -> (GameUpdate, Vec<StepTiming>) 
             view,
         },
         vec![timing(400.0)],
+    )
+}
+
+/// A triggered ability of the viewer's Serra Angel in `source`, as a view's stack lists it.
+pub fn ability(source: ObjectId) -> StackItem {
+    StackItem::Ability {
+        source: Some(source),
+        ability: 0,
+        granted: false,
+        name: "Serra Angel".to_owned(),
+        triggered: true,
+        taps_to_pay: None,
+        nth: 0,
+        text: None,
+        controller: Side::You,
+        manual: None,
+        targets: Vec::new(),
+        x: 0,
+    }
+}
+
+/// One beat in which the Angel's ability, numbered `id`, goes on top of the stack, for 200 ms.
+pub fn emerge(before: &GameUpdate, cards: Cards, id: u32) -> (GameUpdate, Vec<StepTiming>) {
+    let mut view = before.view.clone();
+    view.stack.push(ability(cards.angel));
+    view.script = Some(
+        ScriptBuilder::default()
+            .beat([Act::Emerge {
+                id,
+                item: ability(cards.angel),
+                at: None,
+            }])
+            .build(),
+    );
+    (
+        GameUpdate {
+            session: before.session,
+            view,
+        },
+        vec![timing(200.0)],
+    )
+}
+
+/// One beat in which the ability on top of the stack, numbered `id`, resolves and leaves it,
+/// for 200 ms.
+pub fn resolve(before: &GameUpdate, id: u32) -> (GameUpdate, Vec<StepTiming>) {
+    let mut view = before.view.clone();
+    view.stack.pop();
+    view.script = Some(
+        ScriptBuilder::default()
+            .beat([Act::Vanish {
+                subject: Subject::Ability { id },
+                from: ZoneName::Stack,
+                why: Why::Resolve,
+                object: None,
+                at: None,
+            }])
+            .build(),
+    );
+    (
+        GameUpdate {
+            session: before.session,
+            view,
+        },
+        vec![timing(200.0)],
     )
 }

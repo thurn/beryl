@@ -237,12 +237,15 @@ pub const RECORDS_PER_OBJECT: usize = 4;
 /// The most records the flat layer writes: the glyphs and panels of a prompt, a card browser and
 /// the text around the table.
 pub const LAYER_RECORDS: usize = 4096;
+/// The most abilities on the stack a frame draws as cards.
+pub const ABILITIES: usize = 64;
 /// The most records a frame holds, so that ordering the largest board allocates nothing.
-pub const DRAWS: usize = OBJECTS * RECORDS_PER_OBJECT + LAYER_RECORDS;
+pub const DRAWS: usize = (OBJECTS + ABILITIES) * RECORDS_PER_OBJECT + LAYER_RECORDS;
 /// The most elements of the flat layer a frame holds.
 pub const LAYER_ELEMENTS: usize = 3072;
-/// The most resolved elements a frame holds: one for each card, and the flat layer's.
-pub const ELEMENTS: usize = OBJECTS + LAYER_ELEMENTS;
+/// The most resolved elements a frame holds: one for each card and each ability on the stack,
+/// and the flat layer's.
+pub const ELEMENTS: usize = OBJECTS + ABILITIES + LAYER_ELEMENTS;
 /// The most bytes of names a frame holds: 32 bytes for each element, which a card's name
 /// rarely exceeds.
 pub const NAME_BYTES: usize = ELEMENTS * 32;

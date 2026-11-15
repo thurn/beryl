@@ -1,7 +1,9 @@
 //! The script clock: scripts compiled whole, played in order and coming to rest where placement
 //! puts every object, whatever the frames between (docs/beryl-3d.md, "Determinism" and "Verbs").
 
-use crate::common::{MS, before, discard, draw, empty_frame, frame, show, three_beats, window};
+use crate::common::{
+    MS, before, discard, draw, emerge, empty_frame, frame, resolve, show, three_beats, window,
+};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{Side, StackItem, Why, ZoneName};
 use beryl_protocol::script::{Act, Fact, Step, Subject, Verb};
@@ -12,7 +14,9 @@ use beryl_scene::testing::{ScriptBuilder, timing};
 
 /// Every object of `update`'s view stands where placement puts it in the show's window.
 fn at_rest(show: &Show, update: &GameUpdate, now: u64) {
-    let placement = show.table().placement(&update.view);
+    let placement = show
+        .table()
+        .placement(&update.view, show.table().abilities());
     for object in &update.view.objects {
         let slot = usize::from(object.slot.0);
         let rest = placement.get(object.slot).map(|rest| rest.pose);
@@ -41,8 +45,8 @@ fn a_script_of_three_beats_plays_to_its_end() {
     let (mut show, after, cards) = three_beat_show();
     let land = usize::from(cards.land.0);
     let token = usize::from(cards.token.0);
-    let placement_before = show.table().placement(&start.view);
-    let placement_after = show.table().placement(&after.view);
+    let placement_before = show.table().placement(&start.view, &[]);
+    let placement_after = show.table().placement(&after.view, &[]);
     let held = placement_before.get(cards.land).expect("in the hand").pose;
     let landed = placement_after
         .get(cards.land)
@@ -124,7 +128,7 @@ fn an_update_that_arrives_during_a_script_plays_after_it() {
     frame(&mut show, &mut scratch, 100 * MS);
     let in_hand = show
         .table()
-        .placement(&after.view)
+        .placement(&after.view, &[])
         .get(cards.discard)
         .map(|r| r.pose);
     show.push(Box::new(next.clone()), timings);
@@ -150,7 +154,7 @@ fn an_update_that_arrives_during_a_script_plays_after_it() {
             && flying
                 != show
                     .table()
-                    .placement(&next.view)
+                    .placement(&next.view, &[])
                     .get(cards.discard)
                     .map(|r| r.pose),
         "halfway through the second script the Counterspell is on its way"
@@ -172,7 +176,7 @@ fn a_resize_in_mid_flight_keeps_the_pose_and_arrives_at_the_new_place() {
     let card = usize::from(cards.top.0);
     let old_place = show
         .table()
-        .placement(&drawn.view)
+        .placement(&drawn.view, &[])
         .get(cards.top)
         .map(|r| r.pose);
 
@@ -190,7 +194,7 @@ fn a_resize_in_mid_flight_keeps_the_pose_and_arrives_at_the_new_place() {
     );
     let new_place = show
         .table()
-        .placement(&drawn.view)
+        .placement(&drawn.view, &[])
         .get(cards.top)
         .map(|r| r.pose);
     assert_ne!(old_place, new_place, "the hand moved with the window");
@@ -240,7 +244,7 @@ fn the_hand_regroups_in_the_time_its_room_gives_whatever_the_draw_takes() {
     show.push(Box::new(start.clone()), Vec::new());
     show.push(Box::new(after.clone()), timings);
     frame(&mut show, &mut empty_frame(), 0);
-    let placement = show.table().placement(&after.view);
+    let placement = show.table().placement(&after.view, &[]);
     let held: Vec<_> = start
         .view
         .objects
@@ -423,7 +427,7 @@ fn a_later_script_finds_the_ability_an_earlier_script_numbered() {
     let slot = usize::from(cards.discard.0);
     let rest = show
         .table()
-        .placement(&resolved.view)
+        .placement(&resolved.view, &[])
         .get(cards.discard)
         .map(|r| r.pose);
     let flying = show.pose(slot, 500 * MS);
@@ -460,4 +464,41 @@ fn a_fading_card_is_drawn_with_the_blended_records() {
         1,
         "the fading token is among the blended records"
     );
+}
+
+#[test]
+fn an_ability_that_emerges_ends_on_the_stack_and_one_that_vanishes_leaves_it() {
+    let (start, cards) = before();
+    let (emerged, emerge_timings) = emerge(&start, cards, 5);
+    let (resolved, resolve_timings) = resolve(&emerged, 5);
+    let mut show = show();
+    show.push(Box::new(start), Vec::new());
+    show.push(Box::new(emerged.clone()), emerge_timings);
+    let mut scratch = empty_frame();
+    // The emerge plays from 0 to 200 ms.
+    frame(&mut show, &mut scratch, 0);
+    frame(&mut show, &mut scratch, 300 * MS);
+    assert_eq!(show.table().abilities(), [5]);
+    let rest = show
+        .table()
+        .placement(&emerged.view, &[5])
+        .ability(5)
+        .map(|rest| rest.pose);
+    assert!(rest.is_some(), "the ability has a place on the stack");
+    assert_eq!(show.ability_pose(5, 300 * MS), rest);
+    assert_eq!(
+        show.reach(Subject::Ability { id: 5 }, 300 * MS)
+            .map(|reach| reach.pose),
+        rest,
+        "light reaches the ability where it rests"
+    );
+    at_rest(&show, &emerged, 300 * MS);
+
+    show.push(Box::new(resolved.clone()), resolve_timings);
+    for ms in (300..=700).step_by(50) {
+        frame(&mut show, &mut scratch, ms * MS);
+    }
+    assert!(show.table().abilities().is_empty());
+    assert_eq!(show.ability_pose(5, 700 * MS), None);
+    at_rest(&show, &resolved, 700 * MS);
 }

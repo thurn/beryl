@@ -1,10 +1,16 @@
 //! The table at rest: the camera's fit, and where each zone's cards are placed.
 
-use beryl_protocol::protocol::{CardType, ObjectId, PlayerView, RowName, Side, ZoneName};
+use beryl_protocol::protocol::{
+    CardType, ObjectId, PlayerView, RowName, Side, StackItem, ZoneName,
+};
+use beryl_protocol::script::Reset;
+use beryl_scene::agent::checks::duplicates;
+use beryl_scene::agent::tree::{TreeOptions, tree};
+use beryl_scene::agent::{Context, Layout};
 use beryl_scene::frame::{Frame, Place, Role};
 use beryl_scene::input::{Input, Insets, Size};
-use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Window, place};
-use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
+use beryl_scene::table::{ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Window, place};
+use beryl_scene::testing::{ScriptBuilder, ViewBuilder, script};
 use beryl_scene::{Client, Config};
 use glam::{Vec2, Vec3};
 
@@ -77,7 +83,7 @@ fn every_zone_of_both_sides_gets_its_cards() {
     assert!(frame.resolved.iter().any(|r| r.place == stack));
     // The opponent's library is the viewer's turned half a turn about the table's centre.
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(&view, &DESKTOP, &camera, &Default::default());
+    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
     let library = |side: Side| {
         let player = match side {
             Side::You => &view.players.you,
@@ -95,8 +101,8 @@ fn every_zone_of_both_sides_gets_its_cards() {
 fn placement_is_the_same_for_the_same_view_and_window() {
     let view = ViewBuilder::sample().build();
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let first = place(&view, &DESKTOP, &camera, &Default::default());
-    let again = place(&view, &DESKTOP, &camera, &Default::default());
+    let first = place(&view, &[], &DESKTOP, &camera, &Default::default());
+    let again = place(&view, &[], &DESKTOP, &camera, &Default::default());
     assert_eq!(first, again);
 }
 
@@ -124,7 +130,7 @@ fn crowded() -> PlayerView {
 fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovered() {
     let view = crowded();
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(&view, &DESKTOP, &camera, &Default::default());
+    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
     let [low, high] = DESKTOP.camera.required;
     let mut drawn = 0;
     for object in &view.objects {
@@ -291,7 +297,7 @@ fn lands_stand_untapped_first_with_each_name_together_in_first_appearance_order(
     }
     let view = builder.build();
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(&view, &DESKTOP, &camera, &Default::default());
+    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
     let mut slots: Vec<u16> = view.objects.iter().map(|object| object.slot.0).collect();
     slots.sort_by(|&a, &b| {
         let x = |slot: u16| placement.get(ObjectId(slot)).unwrap().pose.position.x;
@@ -307,4 +313,94 @@ fn desktop_camera_is_the_data_in_space_json() {
         .as_f64()
         .unwrap();
     assert!((f64::from(DESKTOP.camera.pitch_degrees) - pitch).abs() < 1e-6);
+}
+
+#[test]
+fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
+    // A spell and then two abilities, which the reset numbers 3 and 4: a view's stack names
+    // no ability, so the numbers come from the script.
+    let mut builder = ViewBuilder::new();
+    let angel = builder.card(ZoneName::Battlefield, Side::You, "Serra Angel");
+    angel.types = vec![CardType::Creature];
+    let angel = angel.slot;
+    builder.card(ZoneName::Stack, Side::You, "Lightning Bolt");
+    let mut update = builder.update();
+    let ability = |controller| StackItem::Ability {
+        source: Some(angel),
+        ability: 0,
+        granted: false,
+        name: "Serra Angel".to_owned(),
+        triggered: true,
+        taps_to_pay: None,
+        nth: 0,
+        text: None,
+        controller,
+        manual: None,
+        targets: Vec::new(),
+        x: 0,
+    };
+    update.view.stack.push(ability(Side::You));
+    update.view.stack.push(ability(Side::Opponent));
+    update.view.script = Some(script(
+        Some(Reset {
+            abilities: vec![3, 4],
+        }),
+        Vec::new(),
+        Vec::new(),
+    ));
+    let view = update.view.clone();
+    let mut client = client();
+    client.handle(Input::Surface {
+        size: Size {
+            width: 1440.0,
+            height: 900.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    });
+    client.handle(Input::Update(Box::new(update)));
+    let frame = client.frame(0).clone();
+
+    let abilities: Vec<_> = frame
+        .resolved
+        .iter()
+        .filter(|r| r.role == Role::Ability)
+        .collect();
+    let ids: Vec<u32> = abilities.iter().map(|r| r.id.0).collect();
+    assert_eq!(ids, [ABILITY_IDS + 3, ABILITY_IDS + 4]);
+    assert_eq!(frame.name(abilities[0].name), "Serra Angel");
+    let sides: Vec<Place> = abilities.iter().map(|r| r.place).collect();
+    let on_stack = |side| Place::Card {
+        zone: ZoneName::Stack,
+        side,
+        row: None,
+    };
+    assert_eq!(sides, [on_stack(Side::You), on_stack(Side::Opponent)]);
+
+    // The spell is the stack's bottom item and the abilities its second and third.
+    let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
+    let placement = place(&view, &[3, 4], &DESKTOP, &camera, &Default::default());
+    let at = |index: f32| DESKTOP.stack + DESKTOP.stack_step * index;
+    let spell = view.objects.iter().find(|o| o.zone == ZoneName::Stack);
+    let spell = placement.get(spell.expect("a spell").slot).expect("placed");
+    assert_eq!(spell.pose.position, at(0.0));
+    assert_eq!(placement.ability(3).expect("placed").pose.position, at(1.0));
+    assert_eq!(placement.ability(4).expect("placed").pose.position, at(2.0));
+
+    // `just b3d tree` prints a line for each, and no two elements share an id.
+    let printed = tree(&frame, &TreeOptions::default()).expect("a tree");
+    let lines = printed.lines().filter(|line| line.contains("ability"));
+    assert_eq!(lines.count(), 2, "{printed}");
+    let context = Context {
+        recording: "abilities".to_owned(),
+        seat: Side::You,
+        layout: Layout::Desktop,
+        size: Size {
+            width: 1440.0,
+            height: 900.0,
+        },
+        safe_area: Insets::default(),
+        at: 0,
+    };
+    assert!(duplicates(&frame, &context).is_empty());
 }

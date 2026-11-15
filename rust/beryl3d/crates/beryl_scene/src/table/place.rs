@@ -3,12 +3,13 @@
 //! camera fitted to the window and the rows' scroll offsets, and nothing else.
 
 use beryl_protocol::protocol::{
-    CardType, ObjectId, ObjectView, PlayerState, PlayerView, RowName, Side, StackItem, ZoneName,
+    CardType, ObjectId, ObjectView, PlayerState, PlayerView, RowName, Side, ZoneName,
 };
 use beryl_protocol::script::{Piles, Table as Played};
 use glam::{Quat, Vec2, Vec3};
 
 use super::rows::{Laid, NameIds, RowRules, SameName, face_up, lay_row};
+use super::stack::{OnStack, on_stack, place_stack, spells};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, LAYER, Layout};
 use crate::frame::Place;
 use crate::pose::Pose;
@@ -25,18 +26,30 @@ pub struct Rest {
 /// The rows of one side, in the order of `Placement::scroll`'s entries.
 pub const ROWS: [RowName; 3] = [RowName::Creatures, RowName::Lands, RowName::Others];
 
-/// Every object's resting place, by slot.
+/// Every object's resting place, by slot, and every ability's on the stack, by number.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Placement {
     /// Indexed by `ObjectId`; none for an object the table does not show (in a sideboard, or
     /// nowhere).
     pub rests: Vec<Option<Rest>>,
+    /// The abilities on the stack, sorted by number.
+    pub abilities: Vec<(u32, Rest)>,
 }
 
 impl Placement {
     #[must_use]
     pub fn get(&self, slot: ObjectId) -> Option<&Rest> {
         self.rests.get(usize::from(slot.0))?.as_ref()
+    }
+
+    /// Where the ability numbered `id` rests, if it is on the stack.
+    #[must_use]
+    pub fn ability(&self, id: u32) -> Option<&Rest> {
+        let at = self
+            .abilities
+            .binary_search_by_key(&id, |(number, _)| *number)
+            .ok()?;
+        Some(&self.abilities[at].1)
     }
 
     /// Forgets where the object in `slot` rests.
@@ -59,10 +72,18 @@ impl Placement {
 /// opponent, each in the order of `ROWS`.
 pub type Scroll = [[usize; 3]; 2];
 
-/// Every object's resting place in `view`, seen through `camera`.
+/// Every object's resting place in `view`, seen through `camera`. `abilities` numbers the
+/// abilities on the view's stack, bottom first, which the view does not name; an ability past
+/// its end is not placed, though it keeps its place on the stack.
 #[must_use]
-pub fn place(view: &PlayerView, layout: &Layout, camera: &Camera, scroll: &Scroll) -> Placement {
-    place_zones(&Zones::of_view(view), layout, camera, scroll)
+pub fn place(
+    view: &PlayerView,
+    abilities: &[u32],
+    layout: &Layout,
+    camera: &Camera,
+    scroll: &Scroll,
+) -> Placement {
+    place_zones(&Zones::of_view(view, abilities), layout, camera, scroll)
 }
 
 /// Every object's resting place in `zones`, seen through `camera`.
@@ -75,7 +96,7 @@ pub(crate) fn place_zones(
     let mut placement = Placement::default();
     for (group, objects) in Group::ALL.into_iter().zip(all_members(zones)) {
         let rules = (layout, camera, scroll, None);
-        lay(group, &objects, rules, &mut placement);
+        lay(group, &objects, &zones.stack, rules, &mut placement);
     }
     placement
 }
@@ -93,20 +114,27 @@ pub(crate) fn place_reusing(
 ) -> Placement {
     let mut placement = Placement {
         rests: Vec::with_capacity(known.rests.len()),
+        abilities: Vec::new(),
     };
     let groups = Group::ALL.into_iter().zip(all_members(zones));
     for ((group, objects), was) in groups.zip(all_members(known_zones)) {
-        let same = objects.len() == was.len() && objects.iter().zip(&was).all(|(a, b)| a == b);
+        let same = objects.len() == was.len()
+            && objects.iter().zip(&was).all(|(a, b)| a == b)
+            && (group != Group::Stack || zones.stack == known_zones.stack);
         if same {
             for object in objects {
                 if let Some(rest) = known.get(object.slot) {
                     placement.set(object.slot, *rest);
                 }
             }
+            if group == Group::Stack {
+                placement.abilities.clone_from(&known.abilities);
+            }
         } else {
             lay(
                 group,
                 &objects,
+                &zones.stack,
                 (layout, camera, scroll, None),
                 &mut placement,
             );
@@ -128,7 +156,7 @@ pub(crate) fn place_group(
     let objects = members(zones, group);
     placed.clear();
     placed.extend(objects.iter().map(|object| object.slot));
-    lay(group, &objects, rules, placement);
+    lay(group, &objects, &zones.stack, rules, placement);
 }
 
 /// What placement follows besides the objects: the layout, the camera, the rows' scroll offsets
@@ -297,14 +325,15 @@ pub(crate) struct Zones<'a> {
     slots: Vec<Option<&'a ObjectView>>,
     /// Permanents, in the order they entered.
     battlefield: &'a [ObjectId],
-    /// The spells on the stack, bottom first.
-    spells: Vec<ObjectId>,
+    /// The spells and numbered abilities on the stack, bottom first.
+    stack: Vec<OnStack>,
     /// Each side's library and graveyard, bottom first: the viewer's and then the opponent's.
     piles: [[&'a [ObjectId]; 2]; 2],
 }
 
 impl<'a> Zones<'a> {
-    pub(crate) fn of_view(view: &'a PlayerView) -> Self {
+    /// The zones of `view`, whose stack's abilities `abilities` numbers, bottom first.
+    pub(crate) fn of_view(view: &'a PlayerView, abilities: &[u32]) -> Self {
         let player = |player: &'a PlayerState| [&player.library[..], &player.graveyard[..]];
         let end = view
             .objects
@@ -316,7 +345,7 @@ impl<'a> Zones<'a> {
             in_view_order: Some(&view.objects),
             slots: by_slot(end, view.objects.iter()),
             battlefield: &view.battlefield,
-            spells: spells(view.stack.iter()),
+            stack: on_stack(view.stack.iter().map(|item| (item, None)), abilities),
             piles: [player(&view.players.you), player(&view.players.opponent)],
         }
     }
@@ -333,7 +362,7 @@ impl<'a> Zones<'a> {
             in_view_order: None,
             slots: by_slot(end, table.objects.values()),
             battlefield: &table.battlefield,
-            spells: spells(table.stack.iter().map(|entry| &entry.item)),
+            stack: on_stack(table.stack.iter().map(|entry| (&entry.item, entry.id)), &[]),
             piles: [piles(&table.you), piles(&table.opponent)],
         }
     }
@@ -380,16 +409,6 @@ fn by_slot<'a>(
     slots
 }
 
-/// The slots of the spells among `stack`'s items, in order.
-fn spells<'a>(stack: impl Iterator<Item = &'a StackItem>) -> Vec<ObjectId> {
-    stack
-        .filter_map(|item| match item {
-            StackItem::Spell { slot, .. } => Some(*slot),
-            StackItem::Ability { .. } => None,
-        })
-        .collect()
-}
-
 /// The objects of `group`, in the order it lays them out from.
 fn members<'a>(zones: &Zones<'a>, group: Group) -> Vec<&'a ObjectView> {
     match group {
@@ -414,7 +433,7 @@ fn members<'a>(zones: &Zones<'a>, group: Group) -> Vec<&'a ObjectView> {
             );
             found
         }
-        Group::Stack => zones.listed(&zones.spells),
+        Group::Stack => zones.listed(&spells(&zones.stack)),
     }
 }
 
@@ -445,12 +464,19 @@ fn all_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
         };
         all[group.index()].push(object);
     }
-    all[Group::Stack.index()] = zones.listed(&zones.spells);
+    all[Group::Stack.index()] = zones.listed(&spells(&zones.stack));
     all
 }
 
-/// Places `objects`, the members of `group`, into `placement`.
-fn lay(group: Group, objects: &[&ObjectView], rules: Rules, placement: &mut Placement) {
+/// Places `objects`, the members of `group`, into `placement`. The stack's group places every
+/// item of `stack`.
+fn lay(
+    group: Group,
+    objects: &[&ObjectView],
+    stack: &[OnStack],
+    rules: Rules,
+    placement: &mut Placement,
+) {
     let (layout, camera, scroll, ids) = rules;
     match group {
         Group::Pile { side, zone } => {
@@ -479,7 +505,7 @@ fn lay(group: Group, objects: &[&ObjectView], rules: Rules, placement: &mut Plac
                 ids,
             );
         }
-        Group::Stack => stack(placement, objects, layout),
+        Group::Stack => place_stack(placement, objects, stack, layout),
     }
 }
 
@@ -502,7 +528,7 @@ fn turned(at: Vec2, side: Side) -> Vec2 {
 }
 
 /// The turn of a card that shows its face (0) or its back (1).
-fn turn(object: &ObjectView) -> f32 {
+pub(super) fn turn(object: &ObjectView) -> f32 {
     if face_up(object) { 0.0 } else { 1.0 }
 }
 
@@ -689,30 +715,4 @@ fn lands_in_order<'a>(
         }
     }
     (order, SameName::from_previous(previous))
-}
-
-/// The stack's spells, `spells` bottom first, raised above the table at its right: each one
-/// nearer the viewer and higher than the one beneath. Abilities on the stack are drawn by the
-/// flat layer.
-fn stack(placement: &mut Placement, spells: &[&ObjectView], layout: &Layout) {
-    for (index, object) in spells.iter().enumerate() {
-        let pose = Pose {
-            position: layout.stack + layout.stack_step * index as f32,
-            turn: turn(object),
-            ..Pose::default()
-        };
-        let place = Place::Card {
-            zone: ZoneName::Stack,
-            side: object.controller,
-            row: None,
-        };
-        placement.set(
-            object.slot,
-            Rest {
-                pose,
-                place,
-                visible: true,
-            },
-        );
-    }
 }

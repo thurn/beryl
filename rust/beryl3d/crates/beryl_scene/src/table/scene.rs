@@ -1,7 +1,7 @@
 //! The table's scene objects: one per game object, keyed by the object's slot in the view and
 //! kept across updates, so that a card moving between zones is one object throughout.
 
-use beryl_protocol::protocol::{ObjectId, PlayerView, Side};
+use beryl_protocol::protocol::{ObjectId, PlayerView, Side, StackItem};
 use beryl_protocol::script::Subject;
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
@@ -33,7 +33,7 @@ pub(crate) struct SceneObject {
     place: Place,
     visible: bool,
     tapped: bool,
-    /// Its index in the view's `objects`, for its name.
+    /// Its index in the view's `objects`, for its name; for an ability, in the view's `stack`.
     view_index: u32,
 }
 
@@ -44,14 +44,53 @@ impl SceneObject {
     }
 }
 
-/// What moves while a script plays: a track for each object that moves, by slot, the time on
-/// the script's clock, and the scene objects at rest in the view the script leads to.
+/// The scene objects of one view: a card for each game object the table shows, by slot, and
+/// one for each ability on the stack, by number, with the numbers of the stack's abilities.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct Objects {
+    pub cards: Vec<Option<SceneObject>>,
+    /// Sorted by number.
+    pub abilities: Vec<(u32, SceneObject)>,
+    /// The numbers of the abilities on the view's stack, bottom first, which the view itself
+    /// does not give.
+    pub numbers: Vec<u32>,
+}
+
+impl Objects {
+    /// The scene object of the ability numbered `id`.
+    pub(crate) fn ability(&self, id: u32) -> Option<SceneObject> {
+        let at = self
+            .abilities
+            .binary_search_by_key(&id, |(number, _)| *number)
+            .ok()?;
+        Some(self.abilities[at].1)
+    }
+}
+
+/// What moves while a script plays: a track for each object that moves, by slot, and for each
+/// ability that moves, by number; the time on the script's clock; and the scene objects at
+/// rest in the view the script leads to.
 #[derive(Clone, Copy, Debug)]
 pub struct Motion<'a> {
     pub tracks: &'a [Track],
+    /// Sorted by number.
+    pub ability_tracks: &'a [(u32, Track)],
     pub t: u64,
-    pub(crate) finals: &'a [Option<SceneObject>],
+    pub(crate) finals: &'a Objects,
     pub view: &'a PlayerView,
+}
+
+/// The id of the resolved element of the ability numbered `number`: past every card's and
+/// every flat-layer element's. The numbers a table made from a view alone gives count down from
+/// `u32::MAX`, and are folded into the same range.
+pub const ABILITY_IDS: u32 = 1 << 20;
+
+/// The track of the ability numbered `id` in `tracks`, sorted by number, if it has one.
+pub(crate) fn ability_track(tracks: &[(u32, Track)], id: u32) -> Option<&Track> {
+    let at = tracks
+        .binary_search_by_key(&id, |(number, _)| *number)
+        .ok()?;
+    Some(&tracks[at].1)
 }
 
 /// How one card is drawn in a frame: made from its pose, face and state, and then changed in
@@ -88,8 +127,7 @@ pub struct Table {
     layout: Layout,
     camera: Camera,
     scroll: Scroll,
-    /// Indexed by the object's slot.
-    objects: Vec<Option<SceneObject>>,
+    objects: Objects,
 }
 
 impl Default for Table {
@@ -105,7 +143,7 @@ impl Table {
             layout,
             camera: Camera::fit(layout.camera, window),
             scroll: Scroll::default(),
-            objects: Vec::new(),
+            objects: Objects::default(),
         }
     }
 
@@ -143,21 +181,48 @@ impl Table {
     /// Where the object in `slot` rests in the view the table shows, if it shows it.
     #[must_use]
     pub fn rest(&self, slot: usize) -> Option<Pose> {
-        Some(self.objects.get(slot).copied().flatten()?.pose)
+        Some(self.objects.cards.get(slot).copied().flatten()?.pose)
     }
 
-    /// Every object's resting place in `view`, for this window.
+    /// Where the ability numbered `id` rests in the view the table shows, if it is on its stack.
     #[must_use]
-    pub fn placement(&self, view: &PlayerView) -> Placement {
-        place(view, &self.layout, &self.camera, &self.scroll)
+    pub fn ability_rest(&self, id: u32) -> Option<Pose> {
+        Some(self.objects.ability(id)?.pose)
+    }
+
+    /// The numbers of the abilities on the stack of the view the table shows, bottom first.
+    #[must_use]
+    pub fn abilities(&self) -> &[u32] {
+        &self.objects.numbers
+    }
+
+    /// Every object's resting place in `view`, whose stack's abilities `abilities` numbers,
+    /// bottom first, for this window.
+    #[must_use]
+    pub fn placement(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
+        place(view, abilities, &self.layout, &self.camera, &self.scroll)
     }
 
     /// Every object's resting place in the view the table shows, which it holds already: the
     /// same as `placement` of that view, for nothing but a copy.
     pub(crate) fn rests(&self) -> Placement {
         Placement {
+            abilities: self
+                .objects
+                .abilities
+                .iter()
+                .map(|(id, object)| {
+                    let rest = Rest {
+                        pose: object.pose,
+                        place: object.place,
+                        visible: object.visible,
+                    };
+                    (*id, rest)
+                })
+                .collect(),
             rests: self
                 .objects
+                .cards
                 .iter()
                 .map(|object| {
                     object.map(|object| Rest {
@@ -202,14 +267,49 @@ impl Table {
     /// Puts every object of `view` at its resting place, and forgets the objects it no longer
     /// holds, as an update with a reset script must.
     pub fn apply(&mut self, view: &PlayerView) {
-        self.objects = Self::objects_for(view, &self.placement(view));
+        let numbers = std::mem::take(&mut self.objects.numbers);
+        let placement = self.placement(view, &numbers);
+        self.objects = Self::objects_for(view, numbers, &placement);
     }
 
-    /// The scene objects of `view`, each at its resting place in `placement`, by slot.
+    /// The scene objects of `view`, whose stack's abilities `numbers` numbers, each at its
+    /// resting place in `placement`.
     pub(crate) fn objects_for(
         view: &PlayerView,
+        numbers: Vec<u32>,
         placement: &Placement,
-    ) -> Vec<Option<SceneObject>> {
+    ) -> Objects {
+        let mut abilities = Vec::with_capacity(placement.abilities.len());
+        let stack = view
+            .stack
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| matches!(item, StackItem::Ability { .. }));
+        for ((index, _), &id) in stack.zip(&numbers) {
+            let Some(rest) = placement.ability(id) else {
+                continue;
+            };
+            abilities.push((
+                id,
+                SceneObject {
+                    pose: rest.pose,
+                    place: rest.place,
+                    visible: rest.visible,
+                    tapped: false,
+                    view_index: u32::try_from(index).expect("a stack holds fewer than 2^32 items"),
+                },
+            ));
+        }
+        abilities.sort_unstable_by_key(|(id, _)| *id);
+        Objects {
+            cards: Self::cards_for(view, placement),
+            abilities,
+            numbers,
+        }
+    }
+
+    /// The scene objects of `view`'s cards, each at its resting place in `placement`, by slot.
+    fn cards_for(view: &PlayerView, placement: &Placement) -> Vec<Option<SceneObject>> {
         let mut objects = Vec::new();
         for (index, object) in view.objects.iter().enumerate() {
             let Some(rest) = placement.get(object.slot) else {
@@ -232,7 +332,7 @@ impl Table {
 
     /// Exchanges the scene objects for `objects`, which `objects_for` made for the view the
     /// table now shows. Nothing is allocated, so a script can end inside a frame.
-    pub(crate) fn swap_objects(&mut self, objects: &mut Vec<Option<SceneObject>>) {
+    pub(crate) fn swap_objects(&mut self, objects: &mut Objects) {
         std::mem::swap(&mut self.objects, objects);
     }
 
@@ -256,7 +356,7 @@ impl Table {
         builder.camera(self.camera.view_projection);
         let slots = motion
             .map_or(0, |motion| motion.tracks.len())
-            .max(self.objects.len());
+            .max(self.objects.cards.len());
         for slot in 0..slots {
             builder.visit();
             let Some((object, view, under_way)) = self.object_at(slot, view, motion, builder)
@@ -274,6 +374,7 @@ impl Table {
                 builder,
             );
         }
+        self.write_abilities(view, motion, faces, (back, dress), builder);
         let cloth = Affine3A::from_scale_rotation_translation(
             Vec3::new(CLOTH / CARD_WIDTH, CLOTH / CARD_HEIGHT, 1.0),
             glam::Quat::IDENTITY,
@@ -292,7 +393,7 @@ impl Table {
         motion: Option<Motion<'v>>,
         builder: &mut FrameBuilder,
     ) -> Option<(SceneObject, &'v PlayerView, bool)> {
-        let resting = self.objects.get(slot).copied().flatten();
+        let resting = self.objects.cards.get(slot).copied().flatten();
         let track = motion.and_then(|motion| {
             let track = motion.tracks.get(slot)?;
             (!track.segments().is_empty()).then_some((motion, track))
@@ -302,7 +403,7 @@ impl Table {
         };
         builder.segment();
         let pose = track.pose_at(motion.t);
-        let last = motion.finals.get(slot).copied().flatten();
+        let last = motion.finals.cards.get(slot).copied().flatten();
         // A card a row has scrolled out of view rests undrawn at the row's end, above the last
         // card shown. One that is out of view both before the script and after it stays
         // undrawn while it slides, or it would cover that card.
@@ -367,15 +468,39 @@ impl Table {
         effects::card::look(dress.effects, on, dress.now, &mut look);
         light::marks::look(dress.lit, on, dress.now, &mut look);
         pointer::look(dress.pointer, slot, &mut look);
+        self.write_look(
+            name,
+            (
+                ElementId(u32::try_from(slot).expect("slots are u16")),
+                Role::Card,
+            ),
+            object.place,
+            &look,
+            back,
+            builder,
+        );
+    }
+
+    /// Writes the resolved element and the draw record of a card named `name` with this `id`
+    /// and `role`, resting at `place` and drawn as `look` says, with its back from layer `back`.
+    fn write_look(
+        &self,
+        name: &str,
+        (id, role): (ElementId, Role),
+        place: Place,
+        look: &Look,
+        back: u16,
+        builder: &mut FrameBuilder,
+    ) {
         let transform = look.pose.transform();
         builder.resolved(
             name,
             Resolved {
-                id: ElementId(u32::try_from(slot).expect("slots are u16")),
+                id,
                 parent: u32::MAX,
-                role: Role::Card,
+                role,
                 name: crate::frame::NameRef::default(),
-                place: object.place,
+                place,
                 corners: self.corners(transform),
                 depth: self.camera.depth(look.pose.position),
                 opacity: look.pose.opacity,
@@ -406,6 +531,114 @@ impl Table {
                 look.dissolve,
                 look.whiten,
             ),
+        );
+    }
+
+    /// Writes each ability on the stack as a card: those of the view the table shows, and
+    /// while a script plays, those it leads to and those it moves on their way.
+    fn write_abilities(
+        &self,
+        view: &PlayerView,
+        motion: Option<Motion<'_>>,
+        faces: &Faces,
+        (back, dress): (u16, &Dress<'_>),
+        builder: &mut FrameBuilder,
+    ) {
+        let shown = self.objects.abilities.iter().map(|(id, _)| *id);
+        let finals = motion.map_or(&[][..], |motion| &motion.finals.abilities[..]);
+        let moved = motion.map_or(&[][..], |motion| motion.ability_tracks);
+        // Each ability once: those shown, then those only the script's view holds, then those
+        // only a track holds.
+        let finals = finals
+            .iter()
+            .map(|(id, _)| *id)
+            .filter(|id| self.objects.ability(*id).is_none());
+        let moved = moved.iter().map(|(id, _)| *id).filter(|id| {
+            self.objects.ability(*id).is_none()
+                && motion.is_none_or(|motion| motion.finals.ability(*id).is_none())
+        });
+        for id in shown.chain(finals).chain(moved) {
+            builder.visit();
+            let Some((object, view, under_way)) = self.ability_at(id, view, motion, builder) else {
+                continue;
+            };
+            if object.visible {
+                self.write_ability(
+                    id,
+                    (&object, view, under_way),
+                    faces,
+                    (back, dress),
+                    builder,
+                );
+            }
+        }
+    }
+
+    /// The ability numbered `id` as this frame draws it, as `object_at` gives a card.
+    fn ability_at<'v>(
+        &self,
+        id: u32,
+        view: &'v PlayerView,
+        motion: Option<Motion<'v>>,
+        builder: &mut FrameBuilder,
+    ) -> Option<(SceneObject, &'v PlayerView, bool)> {
+        let resting = self.objects.ability(id);
+        let track = motion.and_then(|motion| {
+            let track = ability_track(motion.ability_tracks, id)?;
+            (!track.segments().is_empty()).then_some((motion, track))
+        });
+        let Some((motion, track)) = track else {
+            return resting.map(|object| (object, view, false));
+        };
+        builder.segment();
+        let pose = track.pose_at(motion.t);
+        let (object, view) = match motion.finals.ability(id) {
+            Some(object) => (object, motion.view),
+            None => (resting?, view),
+        };
+        let object = SceneObject {
+            pose,
+            visible: pose.opacity > 0.0,
+            ..object
+        };
+        Some((object, view, track.moving(motion.t)))
+    }
+
+    /// Writes the resolved element and the draw record of the ability numbered `id`: `object`
+    /// as `view`'s stack shows it, moving if `under_way`, drawn as a card with the board-size
+    /// face of its source's name, or the blank layer 0 when it has no source.
+    fn write_ability(
+        &self,
+        id: u32,
+        (object, view, under_way): (&SceneObject, &PlayerView, bool),
+        faces: &Faces,
+        (back, dress): (u16, &Dress<'_>),
+        builder: &mut FrameBuilder,
+    ) {
+        let StackItem::Ability { source, name, .. } = &view.stack[object.view_index as usize]
+        else {
+            return;
+        };
+        let face = source.and_then(|_| faces.board_layer(name));
+        let mut look = Look {
+            pose: object.pose,
+            tint: [255, 255, 255],
+            dissolve: 0.0,
+            whiten: 0.0,
+            face,
+            state: if under_way { StateBits::MOVING } else { 0 },
+            interactive: false,
+        };
+        let on = Subject::Ability { id };
+        effects::card::look(dress.effects, on, dress.now, &mut look);
+        light::marks::look(dress.lit, on, dress.now, &mut look);
+        self.write_look(
+            name,
+            (ElementId(ABILITY_IDS + id % ABILITY_IDS), Role::Ability),
+            object.place,
+            &look,
+            back,
+            builder,
         );
     }
 

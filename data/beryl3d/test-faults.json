@@ -79,6 +79,9 @@
     "b3d:animate-dead/destroyed-the-creature-is-sacrificed/opponent/2560x1080": {
       "step-shown": 1
     },
+    "b3d:animate-dead/flickered-enchants-a-creature-card-as-it-returns/you/2560x1080": {
+      "step-shown": 1
+    },
     "b3d:animate-dead/the-creature-flickered-animate-dead-falls-off/you/2560x1080": {
       "step-shown": 1
     },
@@ -119,6 +122,9 @@
       "step-shown": 1
     },
     "b3d:bloodghast/it-cant-block/you/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:brain-freeze/does-not-count-copies/you/2560x1080": {
       "step-shown": 1
     },
     "b3d:brain-freeze/with-storm-1/you/2560x1080": {
@@ -2018,7 +2024,7 @@
     "b3d:stifle/counters-a-delayed-trigger-3/opponent/2560x1080": {
       "step-shown": 1
     },
-    "b3d:stifle/counters-a-delayed-trigger/opponent/2560x1080": {
+    "b3d:stifle/counters-an-enters-trigger/opponent/2560x1080": {
       "step-shown": 1
     },
     "b3d:stifle/follows-its-target-down-the-stack/opponent/2560x1080": {
@@ -2344,12 +2350,6 @@
       "step-shown": 1
     },
     "b3d:teferis-protection/lightning-bolt-cant-target-a-player-with-protection-from-everything/opponent/2560x1080": {
-      "step-shown": 1
-    },
-    "b3d:tendrils-of-agony/countered-under-its-storm-trigger-is-still-copied/you/2560x1080": {
-      "step-shown": 1
-    },
-    "b3d:tendrils-of-agony/with-storm-2/you/2560x1080": {
       "step-shown": 1
     },
     "b3d:the-wandering-emperor/1s-first-strike-wins-a-combat-pass/opponent/2560x1080": {
