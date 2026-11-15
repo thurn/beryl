@@ -70,6 +70,9 @@ YES_NO_KINDS = ("YesNo", "CastOffer")
 # The colors by the number Beryl gives each, in the order of CR 105.1 ("white, blue, black,
 # red, and green"), as XMage's color choice names them.
 COLORS = ("White", "Blue", "Black", "Red", "Green")
+# The name XMage chooses for Beryl's "another card", which stands for every name no card of the
+# game has: a real card that no scenario uses.
+ANOTHER_CARD = "Black Lotus"
 
 
 class Exporter:
@@ -663,6 +666,10 @@ class Exporter:
         elif kind == "TriggerOrder" and card and self.cards.first_trigger_text(card):
             text = java_string(cast(str, self.cards.first_trigger_text(card)))
             self.emit(f"setChoice({who}, {text});")
+        elif action.get("purpose", p.purpose) == "card-name":
+            # XMage asks for the name (`ChooseACardNameEffect`); Beryl offers the game's names
+            # by number, and one number for every other name.
+            self.emit(f"setChoice({who}, {java_string(card or ANOTHER_CARD)});")
         elif action.get("purpose", p.purpose) == "color" and what == "Number":
             # XMage names the color (`ChoiceColor`); Beryl numbers it as CR 105.1 does.
             self.emit(f"setChoice({who}, {java_string(COLORS[cast(int, pick['n'])])});")

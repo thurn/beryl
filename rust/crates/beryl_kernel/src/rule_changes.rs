@@ -10,8 +10,8 @@
 //! one is does a check read what it says.
 
 use beryl_card::{
-    Ability, AbilityKind, CardDef, Condition, Face, Filter, Governed, Objects, Players, RuleChange,
-    When,
+    Ability, AbilityKind, CardDef, Condition, Face, Filter, Governed, Named, Objects, Players,
+    RuleChange, When,
 };
 
 use crate::event::Replaces;
@@ -136,10 +136,17 @@ pub enum RuleKind {
     ///
     /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
     CantBlock,
+    /// Some players can't activate the activated abilities other than mana abilities of the
+    /// sources with the card name the permanent that makes the change chose as it entered
+    /// ([CR 602.5]): "A player can't begin to activate an ability that's prohibited from
+    /// being activated."
+    ///
+    /// [CR 602.5]: https://yawgatog.com/resources/magic-rules/#R6025
+    CantActivateNamed,
 }
 
 impl RuleKind {
-    const COUNT: usize = 4;
+    const COUNT: usize = 5;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
@@ -178,9 +185,32 @@ impl RuleKind {
                     Err(Unchecked::Players)
                 }
             }
+            // Mana abilities are activated while a cost is paid, which reads no rule change.
+            (
+                Governed::ActivateAbilities {
+                    sources: Named::Chosen,
+                    mana_abilities: false,
+                },
+                When::Never,
+            ) => {
+                if matches!(
+                    rule.players,
+                    Players::You | Players::EachOpponent | Players::EachPlayer
+                ) {
+                    Ok(RuleKind::CantActivateNamed)
+                } else {
+                    Err(Unchecked::Players)
+                }
+            }
             // Other permanents' loyalty abilities or blocks, a restriction to the timing the
-            // rules have already, and a change to when a creature blocks.
-            (Governed::ActivateLoyaltyAbilities(_) | Governed::Block(_), _) => Err(Unchecked::Rule),
+            // rules have already, a change to when a creature blocks, and mana abilities or
+            // the timing of named sources' abilities.
+            (
+                Governed::ActivateLoyaltyAbilities(_)
+                | Governed::Block(_)
+                | Governed::ActivateAbilities { .. },
+                _,
+            ) => Err(Unchecked::Rule),
         }
     }
 
@@ -188,7 +218,17 @@ impl RuleKind {
     /// change of any other kind is asked of the permanent with the ability.
     #[inline]
     pub const fn of_players(self) -> bool {
-        matches!(self, RuleKind::CastOnlyAsSorcery | RuleKind::CastAsInstant)
+        matches!(
+            self,
+            RuleKind::CastOnlyAsSorcery | RuleKind::CastAsInstant | RuleKind::CantActivateNamed
+        )
+    }
+
+    /// Whether a change of this kind reads a value the permanent that makes it chose as it
+    /// entered, so that only a static ability may make it.
+    #[inline]
+    const fn reads_a_chosen_value(self) -> bool {
+        matches!(self, RuleKind::CantActivateNamed)
     }
 }
 
@@ -329,6 +369,7 @@ impl RuleChanges {
     pub(crate) fn of_players(&self) -> Rules {
         self.of_kind(RuleKind::CastOnlyAsSorcery)
             .union(self.of_kind(RuleKind::CastAsInstant))
+            .union(self.of_kind(RuleKind::CantActivateNamed))
     }
 }
 
@@ -353,9 +394,12 @@ fn named_by(ability: &Ability, rules: &mut RuleChanges) -> Result<Replaces, Unch
     };
     let first = rules.id(rule).is_none();
     let id = rules.number(rule)?;
-    let of_players = RuleKind::of(rule)?.of_players();
+    let kind = RuleKind::of(rule)?;
+    let of_players = kind.of_players();
     match (ability.kind() == AbilityKind::Static, of_players) {
         (true, true) if ability.condition().is_some() => Err(Unchecked::Condition),
+        // A resolved effect has no permanent whose chosen value it could read.
+        (false, _) if kind.reads_a_chosen_value() => Err(Unchecked::Rule),
         (true, true) => Ok(Replaces::PLAYER_RULE_CHANGE),
         // Asked of the permanent, with its condition, as the rule is applied.
         (true, false) => {
@@ -488,5 +532,33 @@ mod tests {
             when: When::Never,
         };
         assert_eq!(RuleKind::of(&cast_none), Err(Unchecked::Rule));
+    }
+
+    /// "Activated abilities of sources with the chosen name can't be activated unless they're
+    /// mana abilities" applies to players; mana abilities, or a change to when the abilities
+    /// may be activated, are refused.
+    #[test]
+    fn a_prohibition_on_named_sources_applies_to_players() {
+        let activate = |players, mana_abilities, when| {
+            RuleKind::of(&RuleChange {
+                players,
+                what: Governed::ActivateAbilities {
+                    sources: Named::Chosen,
+                    mana_abilities,
+                },
+                when,
+            })
+        };
+        let kind = activate(Players::EachPlayer, false, When::Never);
+        assert_eq!(kind, Ok(RuleKind::CantActivateNamed));
+        assert!(kind.unwrap().of_players());
+        assert_eq!(
+            activate(Players::EachPlayer, true, When::Never),
+            Err(Unchecked::Rule)
+        );
+        assert_eq!(
+            activate(Players::EachPlayer, false, When::AsInstant),
+            Err(Unchecked::Rule)
+        );
     }
 }

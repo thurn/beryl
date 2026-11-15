@@ -42,7 +42,7 @@ pub use ability::{Ability, AbilityKind, Behavior, Custom, Says, Timing};
 pub use characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes, Supertypes, Types};
 pub use check::Malformed;
 pub use continuous::{
-    ChosenKind, Draws, Duration, Governed, Layer, LayerSpec, MODIFY_PARTS, Modification,
+    ChosenKind, Draws, Duration, Governed, Layer, LayerSpec, MODIFY_PARTS, Modification, Named,
     Protection, Replaced, Replacement, Rewrite, RuleChange, When,
 };
 pub use cost::{
@@ -72,11 +72,11 @@ pub mod prelude {
     pub use crate::effect::build::*;
     pub use crate::{
         Ability, Amount, BasicLandTypes, CardDef, CastTerms, CastingKind, CastingOption, Castings,
-        Colors, Comparison, Condition, Cost, CostAction, CostPart, CounterKind, Duration, Effect,
-        Face, FaceIx, Filter, Found, Governed, Keywords, LayerSpec, LibraryOrder, LibraryPosition,
-        ManaColor, ManaCost, ManaSet, Modification, Objects, Place, Players, Prevention, Prompt,
-        Protection, Purpose, Recipients, Replacement, RuleChange, Subtype, Subtypes, Supertypes,
-        Taken, TargetKind, TargetSpec, Trigger, TriggerEvent, TurnStep, Types, When, Zone, card,
-        mana,
+        ChosenKind, Colors, Comparison, Condition, Cost, CostAction, CostPart, CounterKind,
+        Duration, Effect, Face, FaceIx, Filter, Found, Governed, Keywords, LayerSpec, LibraryOrder,
+        LibraryPosition, ManaColor, ManaCost, ManaSet, Modification, Named, Objects, Place,
+        Players, Prevention, Prompt, Protection, Purpose, Recipients, Replacement, RuleChange,
+        Subtype, Subtypes, Supertypes, Taken, TargetKind, TargetSpec, Trigger, TriggerEvent,
+        TurnStep, Types, When, Zone, card, mana,
     };
 }

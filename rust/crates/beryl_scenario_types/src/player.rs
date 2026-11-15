@@ -123,6 +123,17 @@ impl Player {
         self.answers(DecisionKind::ChooseObject, Pick::Number { n })
     }
 
+    /// Chooses the card name `card`, as "choose a card name" asks.
+    pub const fn names(self, card: &'static str) -> Action {
+        self.answers(DecisionKind::ChooseObject, Pick::Card { card })
+    }
+
+    /// Chooses a card name no card of the game has: "another card", the last candidate,
+    /// numbered 255.
+    pub const fn names_another_card(self) -> Action {
+        self.answers(DecisionKind::ChooseObject, Pick::Number { n: u8::MAX })
+    }
+
     /// Chooses the value of X.
     pub const fn x(self, n: u8) -> Action {
         self.answers(DecisionKind::X, Pick::Number { n })

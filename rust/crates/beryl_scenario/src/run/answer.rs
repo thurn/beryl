@@ -1,5 +1,7 @@
 //! The choice a scripted action names, found among a decision's candidates.
 
+use beryl_engine::card::{ChosenKind, Purpose};
+use beryl_engine::chosen::ChosenValue;
 use beryl_engine::{Choice, Decision, GameTable, Layout, Opt, State};
 
 use crate::{Action, Pick};
@@ -76,6 +78,13 @@ pub(super) fn pick_in<L: Layout>(
     pick: Pick,
 ) -> Option<Choice> {
     let wanted = match pick {
+        // A card name is offered by number, as a catalog lists it.
+        Pick::Card { card } if d.prompt.purpose == Purpose::CardName => {
+            return option_index(d, |o| {
+                matches!(o, Opt::Number(n) if ChosenValue::<L>::of_number(ChosenKind::CardName, n)
+                    .is_some_and(|value| value.name(t) == card))
+            });
+        }
         Pick::Card { card } => {
             return (0..d.len() as u16).map(Choice).find(|&c| {
                 d.candidates

@@ -12,6 +12,7 @@ import forge.ai.ComputerUtilCost;
 import forge.ai.LobbyPlayerAi;
 import forge.ai.PlayerControllerAi;
 import forge.card.CardStateName;
+import forge.card.ICardFace;
 import forge.deck.Deck;
 import forge.game.Game;
 import forge.game.GameEntity;
@@ -59,6 +60,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -961,6 +963,8 @@ public final class BerylForgeHarness {
         private static final Set<String> DAMAGE_DIVISION = Set.of("DamageDivision");
         /** The colors by Beryl's number for each, as Forge names them in lower case. */
         private static final String[] COLORS = {"white", "blue", "black", "red", "green"};
+        /** The name chosen for Beryl's "another card": a real card that no scenario uses. */
+        private static final String ANOTHER_CARD = "Black Lotus";
         private static final Set<String> OBJECTS = Set.of("ChooseObject", "ChooseUpTo", "Target", "AttackTarget", "CastOffer");
         private static final Set<String> OPTIONAL_OBJECTS = Set.of("ChooseObject", "ChooseUpTo", "Target", "AttackTarget", "CastOffer", "YesNo");
 
@@ -1133,6 +1137,32 @@ public final class BerylForgeHarness {
                 throw new StepFailed("protection from " + color + " among " + choices);
             }
             return color;
+        }
+
+        /**
+         * Beryl's answer to a choice of a card name (its purpose "card-name"), as Pithing
+         * Needle asks as it enters: the card's name, or for "another card", which stands for
+         * every name no card of the game has, a name no scenario uses.
+         */
+        @Override
+        public String chooseCardName(SpellAbility sa, Predicate<ICardFace> cpp, String valid, String message) {
+            String name = scriptedCardName();
+            return name != null ? name : super.chooseCardName(sa, cpp, valid, message);
+        }
+
+        @Override
+        public String chooseCardName(SpellAbility sa, List<ICardFace> faces, String message) {
+            String name = scriptedCardName();
+            return name != null ? name : super.chooseCardName(sa, faces, message);
+        }
+
+        /** The name Beryl's next answer chooses, if it answers a choice of a card name. */
+        private String scriptedCardName() {
+            JsonObject pick = run.takeFollowingFor(player, "card-name");
+            if (pick == null) {
+                return null;
+            }
+            return pick.has("card") ? pick.get("card").getAsString() : ANOTHER_CARD;
         }
 
         @Override

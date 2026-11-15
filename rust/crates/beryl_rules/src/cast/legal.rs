@@ -428,6 +428,15 @@ fn activation_options<L: Layout, const TARGETS: bool>(
     let objects = objects.filter(|slot| {
         facts(slot).activates() || (granted_any && s.has(slot, ObjectAbility::Granted(0)))
     });
+    // CR 602.5: "A player can't begin to activate an ability that's prohibited from being
+    // activated." Asked once of the player, and of the objects only while such a rule change
+    // is in force for them.
+    let prohibited = rule_change::prohibitions(s, t, player);
+    let objects = if prohibited.is_empty() {
+        objects
+    } else {
+        rule_change::unprohibited(s, t, prohibited, player, objects)
+    };
     // Candidates are listed in the candidate order, which a `Choice` counts in.
     for slot in s.in_candidate_order(collapse(s, objects)) {
         // Of its own abilities, only the activated ones can be activated (CR 602.1), so the

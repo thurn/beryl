@@ -11,7 +11,7 @@ use super::words::{
 };
 use crate::ability::{Ability, AbilityKind, Behavior, Timing};
 use crate::continuous::{
-    ChosenKind, Draws, Governed, LayerSpec, Modification, Replaced, Replacement, Rewrite,
+    ChosenKind, Draws, Governed, LayerSpec, Modification, Named, Replaced, Replacement, Rewrite,
     RuleChange, When,
 };
 use crate::cost::{CastingKind, Chosen, Cost, CostAction, CostPart, Measure};
@@ -587,6 +587,20 @@ impl Ctx {
                 return match rule.when {
                     When::Never => format!("{creatures} can't block"),
                     _ => format!("{creatures} can block only at a changed time"),
+                };
+            }
+            // Of the abilities, not of who would activate them.
+            Governed::ActivateAbilities {
+                sources: Named::Chosen,
+                mana_abilities,
+            } => {
+                let sources = "activated abilities of sources with the chosen name";
+                return match (rule.when, mana_abilities) {
+                    (When::Never, false) => {
+                        format!("{sources} can't be activated unless they're mana abilities")
+                    }
+                    (When::Never, true) => format!("{sources} can't be activated"),
+                    _ => format!("{sources} can be activated only at a changed time"),
                 };
             }
         };

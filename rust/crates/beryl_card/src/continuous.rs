@@ -44,6 +44,28 @@ pub enum Governed {
     ///
     /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
     Block(Objects),
+    /// Activating the activated abilities of the sources these name, as "Activated
+    /// abilities of sources with the chosen name can't be activated unless they're mana
+    /// abilities." says ([CR 602.5]): "A player can't begin to activate an ability that's
+    /// prohibited from being activated." With `mana_abilities` false, mana abilities are
+    /// the exception.
+    ///
+    /// [CR 602.5]: https://yawgatog.com/resources/magic-rules/#R6025
+    ActivateAbilities {
+        sources: Named,
+        mana_abilities: bool,
+    },
+}
+
+/// The sources a [`Governed::ActivateAbilities`] names, by their names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Named {
+    /// Those with the card name the permanent with the ability chose as it entered
+    /// ([`Replacement::choose_as_enters`]), read from each source's copiable values: a copy
+    /// of a card of that name has it, and a face-down permanent has no name
+    /// ([CR 708.2a](https://yawgatog.com/resources/magic-rules/#R7082a)): it "becomes a 2/2
+    /// face-down creature with no text, no name, no subtypes, and no mana cost."
+    Chosen,
 }
 
 /// When a [`RuleChange`] has what it governs done.
@@ -93,6 +115,12 @@ impl RuleChange {
             (Governed::Block(_), When::Never) => "with creatures that can't block".to_owned(),
             (Governed::Block(_), When::OnlyAsSorcery | When::AsInstant) => {
                 "with creatures that block at a changed time".to_owned()
+            }
+            (Governed::ActivateAbilities { .. }, When::Never) => {
+                "unable to activate the abilities of sources with a chosen name".to_owned()
+            }
+            (Governed::ActivateAbilities { .. }, When::OnlyAsSorcery | When::AsInstant) => {
+                "with abilities of named sources to activate at a changed time".to_owned()
             }
         }
     }

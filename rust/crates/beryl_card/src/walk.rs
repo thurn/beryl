@@ -182,6 +182,7 @@ impl Ability {
                 Governed::ActivateLoyaltyAbilities(objects) | Governed::Block(objects) => {
                     objects.walk(visit);
                 }
+                Governed::ActivateAbilities { .. } => {}
             }
         }
         if let Some(filter) = &self.only_if_you_control() {

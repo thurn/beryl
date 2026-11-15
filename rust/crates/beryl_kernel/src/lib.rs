@@ -479,6 +479,11 @@
 //!   a face-down permanent has none of. The Effects store keeps entries on an object too
 //!   ([`State::effect_rules_on`]), which no card starts: the table refuses an ability
 //!   whose effect would.
+//! - A change whose meaning depends on a value its permanent chose as it entered, as "sources
+//!   with the chosen name" does ([`rule_changes::RuleKind::CantActivateNamed`]), is numbered
+//!   once for the game like any other. Its check finds the permanents that make it only
+//!   once it is in force for the player, and reads each one's [`State::chosen`]. Only a
+//!   static ability may make one: the table refuses an effect that would start it.
 //! - "Can't" beats "can" ([CR 101.2])
 //!   in the rules that read two changes together, not here: each rule is its own bit.
 //! - Which permanent makes a change, to tell a player why, is asked only once it is known
