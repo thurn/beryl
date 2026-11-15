@@ -121,6 +121,20 @@ pub const FAMILIES: &[Family] = &[
             (2, names::MOUNTAIN, names::PLAINS),
         ],
     },
+    // The copies family: Phantasmal Image and Quicksilver Gargantuan (a permanent that enters as
+    // a copy of a creature, with a rewrite of entering), Thespian's Stage (a land that becomes
+    // a copy of another land) and Fork (a copy of a spell on the stack). Copies are
+    // permanents whose characteristics come from another object's through layer 1.
+    Family {
+        name: "copies",
+        swaps: &[
+            (1, names::PHANTASMAL_IMAGE, names::REPRIEVE),
+            (1, names::PHANTASMAL_IMAGE, names::OUST),
+            (1, names::QUICKSILVER_GARGANTUAN, names::PORTABLE_HOLE),
+            (1, names::THESPIANS_STAGE, names::TRINKET_MAGE),
+            (1, names::FORK, names::NO_MORE_LIES),
+        ],
+    },
 ];
 
 /// The family called `name`.
@@ -288,14 +302,27 @@ impl InTable {
 /// permanent and spell of the family becomes its stand-in, and every effect a card of the
 /// family created ends. Nothing else changes. `None` if the recompute had no room.
 pub fn control(s: &State, t: &GameTable, family: &InTable) -> Option<State> {
+    // A question about which of several legendary permanents to keep is asked of a state with
+    // such a group, which the control has no longer if a copy by the family was in it.
+    if matches!(s.pending(), beryl_engine::state::Pending::LegendRule { .. })
+        && s.effects()
+            .iter()
+            .any(|e| family.stand_in_of(e.source).is_some())
+    {
+        return None;
+    }
     let mut c = *s;
-    let objects = family.objects(s);
+    let mut board = c.board();
+    for &(card, _) in &family.pairs {
+        board.end_effects_from(card);
+    }
+    // After the effects end: a permanent that was a copy by a card of the family is that card
+    // again, and is swapped like any other.
+    rederive(&mut c, t).ok()?;
+    let objects = family.objects(&c);
     let mut board = c.board();
     for (slot, stand_in) in objects {
         board.set_card(slot, stand_in);
-    }
-    for &(card, _) in &family.pairs {
-        board.end_effects_from(card);
     }
     rederive(&mut c, t).ok()?;
     Some(c)

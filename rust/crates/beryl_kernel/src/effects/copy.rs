@@ -71,6 +71,22 @@ impl<L: Layout> State<L> {
         }
     }
 
+    /// The objects under a copy effect that a spell or ability of the game-table card `source`
+    /// created.
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn copies_by(&self, source: L::Card) -> Vec<L::Slot> {
+        self.effects
+            .of(Kinds::COPY)
+            .iter()
+            .filter(|e| e.source == source)
+            .filter_map(|e| match (e.affected, e.payload) {
+                (Affects::Object { slot, .. }, Payload::Copy(_)) => Some(slot),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The copy effect a token keeps as it changes zones, read before the move ends what the
     /// stores hold about it: a token copy is a copy wherever it is until it ceases to exist
     /// ([CR 111.3]), which is what its values were defined as.

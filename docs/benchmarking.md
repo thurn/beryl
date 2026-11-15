@@ -115,6 +115,10 @@ it is in play. The present-cost gate measures what it costs while one is:
   Spray and Underworld Breach (and Mountains, so Breach can be cast): a color
   added in every zone, text-changing effects and casting from the graveyard.
   Gungraun ids cannot hold hyphens, so its benchmarks are `zones_and_text`.
+  `copies` swaps in Phantasmal Image, Quicksilver Gargantuan, Thespian's Stage
+  and Fork. In its control a permanent that was a copy by a card of the family
+  is the card it really is again, then its stand-in; a step at a legend-rule
+  question is left out when such a copy was in the group.
 - **Its corpus** is cut from seeded games between greedy agents playing the
   family's deck in both seats: the first decision with a card of the family on
   the battlefield, on the stack or the source of an effect in force, which is

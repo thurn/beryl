@@ -358,7 +358,21 @@ impl<L: Layout> Board<'_, L> {
     /// Ends every entry of the Effects store that a spell or ability of the game-table card
     /// `source` created ([`crate::effects::ContinuousEffect::source`]), as though it had
     /// never resolved.
+    ///
+    /// A card that is a copy by such an effect is the card it really is again
+    /// ([`Memo::Really`]), face up, as it is when it leaves the battlefield.
     pub fn end_effects_from(&mut self, source: L::Card) {
+        for slot in self.0.copies_by(source) {
+            let o = self.0.object(slot);
+            if o.is_token() {
+                continue;
+            }
+            let card = self.0.really_is(slot);
+            let o = self.0.object_mut(slot);
+            o.card = card;
+            o.face = FaceIx::FRONT;
+            o.flags.set(Flag::Copy, false);
+        }
         let done = self.0.effects.end(|e| e.source != source);
         self.0.settle_ended(done);
     }
