@@ -90,9 +90,7 @@ pub fn view(
             .filter(|card| card.stats.is_some() && card.zone == Zone::Battlefield)
             .filter_map(|card| slots.get(card.id))
             .collect(),
-        last_draw: log
-            .last_draw(table, seat)
-            .filter(|&entry| log.undo_target(table, seat, Some(entry)).is_ok()),
+        last_draw: log.last_draw(table, seat),
         prompt: None,
     });
     Ok((view, refs))

@@ -2264,6 +2264,7 @@
     "scope": "table",
     "asks": "none",
     "action": { "rewind": { "to": "$entry" } },
+    "menu": { "group": "Primary", "order": 10 },
     "group": "Table",
     "when": "log_entry"
   },

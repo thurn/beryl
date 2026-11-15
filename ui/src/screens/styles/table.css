@@ -363,3 +363,46 @@
 .game-log-counter {
   color: #ffab7c;
 }
+
+.game-log-manual .game-log-list {
+  position: relative;
+  mask-image: none;
+}
+.game-log-manual .game-log-entry[data-blocks-undo] {
+  border-radius: 4px;
+  background: rgb(214 192 150 / 22%);
+  color: var(--text);
+}
+.table-log-number {
+  font-variant-numeric: tabular-nums;
+}
+.table-log-struck {
+  text-decoration: line-through;
+}
+.table-log-actions {
+  display: flex;
+  gap: 8px;
+}
+.table-log-actions button {
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--gold);
+  font: inherit;
+  cursor: pointer;
+}
+.table-log-actions button:hover {
+  color: var(--text);
+}
+@media (hover: hover) {
+  .game-log-entry:not(:hover):not(:focus-within) .table-log-rewind {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .game-log-entry:not(:hover):not(:focus-within)
+    .table-log-actions:not([data-batch]) {
+    height: 0;
+    overflow: hidden;
+  }
+}

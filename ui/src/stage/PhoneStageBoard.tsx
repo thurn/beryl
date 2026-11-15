@@ -67,6 +67,7 @@ import {
 import { REVEALED, revealedIn, useRevealedOpen } from "./Revealed.tsx";
 import { OrderRow, shades, TrayUnder } from "./Tray.tsx";
 import { landing } from "./tray.ts";
+import type { TableLogControls } from "../table/tableLog";
 import "./stage.css";
 import "./effects.css";
 import "./heft.css";
@@ -81,6 +82,7 @@ export function PhoneStageBoard({
   onLeave,
   onShortcuts,
   log,
+  tableLog,
   undo,
   stops,
   setStops,
@@ -99,6 +101,7 @@ export function PhoneStageBoard({
   onLeave(): void;
   onShortcuts?: () => void;
   log: LogEntry[];
+  tableLog?: TableLogControls;
   /** Takes back the player's latest answer. */
   undo?(): void;
   stops: StopsSetting;
@@ -151,6 +154,10 @@ export function PhoneStageBoard({
   const [sheet, setSheet] = useState<
     "menu" | "log" | Pick<PhonePile, "side" | "zone">
   >();
+  const blockers = tableLog?.blocked;
+  useLayoutEffect(() => {
+    if (blockers?.length) setSheet("log");
+  }, [blockers]);
   useEffect(() => {
     const back = (event: Event) => {
       event.stopPropagation();
@@ -409,7 +416,12 @@ export function PhoneStageBoard({
         />
       )}
       {sheet === "log" && (
-        <LogSheet log={log} onClose={() => setSheet(undefined)} />
+        <LogSheet
+          log={log}
+          rows={view.table?.log}
+          tableLog={tableLog}
+          onClose={() => setSheet(undefined)}
+        />
       )}
       {manualPile && client && (
         <TablePileViewer

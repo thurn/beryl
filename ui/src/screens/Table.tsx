@@ -55,6 +55,7 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
   const [error, setError] = useState<string>();
   const [ready, setReady] = useState(false);
   const [overlay, setOverlay] = useState<TableOverlay>();
+  const [blocked, showBlockers] = useState<readonly number[]>();
   const [{ board, client, commands, leave }] = useState(() => {
     const board = createBoardStage(false);
     const client = new TableClient(board.stage.pointer);
@@ -82,6 +83,7 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       report,
       leave,
       quit,
+      showBlockers,
     );
     client.viewers.register(commands);
     return { board, client, commands, leave };
@@ -171,6 +173,14 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       client={client}
       view={shown.view}
       log={log}
+      tableLog={{
+        blocked,
+        act: commands.history,
+        context: commands.openLogLine,
+      }}
+      undo={() =>
+        void commands.shortcut("table.undo").catch(commands.reportError)
+      }
       waiting={false}
       stops={shown.view.stops}
       onLeave={leave}

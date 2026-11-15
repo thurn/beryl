@@ -32,6 +32,8 @@ import { InspectAt, inspectorPlace } from "../game/Inspector";
 import { Incoming, LifeChange } from "../game/Life";
 import type { LogEntry } from "../game/log";
 import { GameLog, opponentActing } from "../game/Narration";
+import { TableLog } from "../table/TableLog.tsx";
+import type { TableLogControls } from "../table/tableLog";
 import { PileButton, ZoneViewer } from "../game/Piles";
 import { useStageWidth } from "../game/Stage";
 import { StepBanner, useBannerUp } from "../game/StepBanner";
@@ -104,6 +106,7 @@ export function Hud({
   asked,
   lost,
   log,
+  tableLog,
   waiting,
   logOpen,
   onLog,
@@ -122,6 +125,7 @@ export function Hud({
   /** The view last played out. */
   view: PlayerView;
   log: LogEntry[];
+  tableLog?: TableLogControls;
   waiting: boolean;
   logOpen: boolean;
   onLog(): void;
@@ -252,7 +256,17 @@ export function Hud({
           />
         )}
       </NoticeSlot>
-      <GameLog log={log} folded open={logOpen} onToggle={onLog} />
+      {view.table && tableLog ? (
+        <TableLog
+          rows={view.table.log}
+          controls={tableLog}
+          folded
+          open={logOpen}
+          onToggle={onLog}
+        />
+      ) : (
+        <GameLog log={log} folded open={logOpen} onToggle={onLog} />
+      )}
       <NoticeSlot>
         {turn && (
           <TurnAnnouncement key={table.turn.number} side={turn.notice.active} />

@@ -1,6 +1,7 @@
 import type {
   CardEntry,
   CardTokenLink,
+  LogLine,
   ObjectView,
   PlayerView,
   Side,
@@ -27,6 +28,7 @@ export interface MenuContext {
   printed?: ReadonlyMap<number, PrintedCard>;
   element?: HTMLElement;
   pointed?: Element | null;
+  logEntry?: LogLine;
   viewer?: { revealed: boolean; wholeLibrary: boolean };
   key?: (id: string) => string | undefined;
 }
@@ -131,9 +133,11 @@ function conditions({
   printed,
   viewer,
   tokens = [],
+  logEntry,
 }: MenuContext) {
   const object = "name" in target ? target.object : undefined;
   const result = new Set<string>();
+  if (logEntry) result.add("log_entry");
   if (viewer) result.add("open_viewer");
   if (viewer?.revealed) result.add("revealed_cards");
   if (viewer?.wholeLibrary) result.add("whole_library");
@@ -260,7 +264,7 @@ export function availableCommands(
 }
 
 export function menuRows(kind: AppliesTo, context: MenuContext) {
-  const { target, view, cards, key } = context;
+  const { target, view, cards, key, logEntry } = context;
   const ability =
     "name" in target && typeof target.name === "string"
       ? view.stack.find(
@@ -297,14 +301,16 @@ export function menuRows(kind: AppliesTo, context: MenuContext) {
         : view.players[side].library.length
       : undefined;
   const header = {
-    title:
-      cards.length > 1
+    title: logEntry
+      ? String(logEntry.n)
+      : cards.length > 1
         ? `${cards.length} cards`
         : card?.name ||
           (ability?.kind === "ability" ? ability.name : pile) ||
           (target.kind === "table" ? "Table" : "Card"),
-    whose:
-      count !== undefined
+    whose: logEntry
+      ? logEntry.by
+      : count !== undefined
         ? `${count} ${count === 1 ? "card" : "cards"}${
             kind === "library"
               ? side === "you"
@@ -319,7 +325,9 @@ export function menuRows(kind: AppliesTo, context: MenuContext) {
             : "",
   };
   const entries = availableCommands(kind, context)
-    .filter(({ command }) => command.menu)
+    .filter(
+      ({ command, id }) => command.menu && (!logEntry || id === "table.rewind"),
+    )
     .sort((a, b) => a.command.menu!.order - b.command.menu!.order);
   const groups: { heading?: string; rows: Row[] }[] = [];
   for (const { id, command, label } of entries) {

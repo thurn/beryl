@@ -761,7 +761,7 @@ topKnown?: boolean,
  */
 manualStats?: Array<ObjectId>, 
 /**
- * The viewer's latest draw, when it can be undone.
+ * The viewer's latest draw, even when another entry blocks undo.
  */
 lastDraw?: number, prompt?: TablePrompt, arrows?: Array<TableArrow>, };
 

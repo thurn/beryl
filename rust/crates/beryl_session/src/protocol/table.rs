@@ -244,7 +244,7 @@ pub struct TableView {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(optional, as = "Option<_>")]
     pub manual_stats: Vec<super::ObjectId>,
-    /// The viewer's latest draw, when it can be undone.
+    /// The viewer's latest draw, even when another entry blocks undo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub last_draw: Option<u32>,

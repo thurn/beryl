@@ -1,6 +1,6 @@
 // What the board says about the game playing on: who is acting (the opponent's badge)
 // and the game log.
-import { memo, useEffect, useLayoutEffect, useRef } from "react";
+import { memo, useLayoutEffect, useRef, type ReactNode } from "react";
 import type { PlayerView } from "../generated/protocol";
 import type { LogEntry } from "./log";
 
@@ -28,25 +28,56 @@ export const GameLog = memo(function GameLog({
   open: boolean;
   onToggle(): void;
 }) {
+  return (
+    <LogPanel folded={folded} open={open} onToggle={onToggle}>
+      {log.map((e) => (
+        <li
+          key={e.key}
+          className={`game-log-entry game-log-${e.kind} game-log-${e.side}`}
+        >
+          {e.text}
+        </li>
+      ))}
+    </LogPanel>
+  );
+});
+
+export function LogPanel({
+  children,
+  folded,
+  open,
+  onToggle,
+  manual = false,
+  blocked,
+}: {
+  children: ReactNode;
+  folded: boolean;
+  open: boolean;
+  onToggle(): void;
+  manual?: boolean;
+  blocked?: readonly number[];
+}) {
   const list = useRef<HTMLOListElement>(null);
   const shown = !folded || open;
-  const toNewest = () => {
+  useLayoutEffect(() => {
     const el = list.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  };
-  useLayoutEffect(toNewest, [log, shown]);
-  // A box laid out empty loses its scroll: hidden by an ancestor, or not yet sized. It
-  // scrolls to the newest entry again once it has its size.
-  useEffect(() => {
-    const el = list.current;
-    if (!el) return;
-    const observer = new ResizeObserver(toNewest);
+    if (!shown || !el) return;
+    const scroll = () => {
+      const first = blocked?.length
+        ? el.querySelector<HTMLElement>("[data-blocks-undo]")
+        : null;
+      el.scrollTop = first
+        ? first.offsetTop - (el.clientHeight - first.offsetHeight) / 2
+        : el.scrollHeight;
+    };
+    scroll();
+    const observer = new ResizeObserver(scroll);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [children, shown, blocked]);
   return (
     <section
-      className={`game-log${folded ? " game-log-folded" : ""}`}
+      className={`game-log${folded ? " game-log-folded" : ""}${manual ? " game-log-manual" : ""}`}
       aria-label="Game log"
     >
       {folded && (
@@ -63,15 +94,8 @@ export const GameLog = memo(function GameLog({
         </button>
       )}
       <ol ref={list} className="game-log-list" hidden={!shown}>
-        {log.map((e) => (
-          <li
-            key={e.key}
-            className={`game-log-entry game-log-${e.kind} game-log-${e.side}`}
-          >
-            {e.text}
-          </li>
-        ))}
+        {children}
       </ol>
     </section>
   );
-});
+}

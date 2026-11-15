@@ -846,6 +846,11 @@
     },
     {
       "kind": "no-equivalent",
+      "name": "Manual table log",
+      "rule": "The log shows numbered entries with their actors. Rewinding strikes the entries after the chosen line. Cmd+Z and the undo button undo the viewer's latest action. Cmd+Shift+D undoes the viewer's latest draw. When later entries block an undo, the log opens and highlights them. Either player can undo a batch from its line or rewind from any line."
+    },
+    {
+      "kind": "no-equivalent",
       "name": "Manual table: drawing and removing arrows",
       "rule": "Right-drag from a card to a card or life total to draw an arrow. A selected source draws an arrow from each selected card. A hand card plays first. A command that asks for a target starts the same aim and a click chooses the target. Escape cancels the aim. Right-click a drawn arrow to remove it, or use Cmd+R to remove all the arrows you drew."
     },

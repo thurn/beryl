@@ -2,7 +2,7 @@ import { useLayoutEffect } from "react";
 import { requestBugReport } from "../components/BugReport";
 import { cardRecords } from "../cardRecords";
 import { useCardRecords } from "../cards";
-import type { PlayerView, TableCard } from "../generated/protocol";
+import type { LogLine, PlayerView, TableCard } from "../generated/protocol";
 import { askCards, cardTokens } from "../ipc";
 import { BLANK } from "../game/faces";
 import { Inspect } from "../game/Piles";
@@ -24,6 +24,7 @@ import {
   pileSlots,
 } from "./commandActions";
 import type { ActionValues } from "./fill";
+import { sendHistory, type HistoryAction } from "./tableLog";
 import { Menu } from "./Menu";
 import {
   actionReference,
@@ -81,6 +82,7 @@ export class TableCommands {
     private readonly report: (error: unknown) => void,
     private readonly leave: () => void,
     private readonly quit: () => void,
+    private readonly showBlockers: (entries?: readonly number[]) => void,
   ) {
     client.onSecondary((target, at, element) => {
       if (!target) {
@@ -117,6 +119,15 @@ export class TableCommands {
 
   readonly close = () => this.#set();
   readonly reportError = (error: unknown) => this.report(error);
+
+  readonly history = (action: HistoryAction) =>
+    sendHistory(this.client, action, this.showBlockers).catch(this.report);
+
+  readonly openLogLine = (logEntry: LogLine, at: Point) => {
+    const context = this.context(table);
+    if (context)
+      this.#set({ kind: "menu", context: { ...context, logEntry }, at });
+  };
 
   context(
     target: TableTarget,
@@ -300,6 +311,8 @@ export class TableCommands {
         void client.viewers
           .look(first, context.view, context.element)
           .catch(this.report);
+      } else if (first && ("undo" in first || "rewind" in first)) {
+        void this.history(first);
       } else if (first)
         void client
           .send(

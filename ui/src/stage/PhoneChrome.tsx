@@ -14,6 +14,7 @@ import {
 import { requestBugReport } from "../components/BugReport";
 import { Button } from "../components/Controls";
 import type {
+  LogLine,
   ObjectView,
   PlayerView,
   Side,
@@ -22,6 +23,8 @@ import type {
 import { FullControlIcon, Settings, UndoButton } from "../game/Corner";
 import type { LogEntry } from "../game/log";
 import { GameLog } from "../game/Narration";
+import { TableLog } from "../table/TableLog.tsx";
+import type { TableLogControls } from "../table/tableLog";
 import {
   Inspect,
   pileName,
@@ -244,14 +247,28 @@ const never = () => {};
 /** The game log, whole. */
 export function LogSheet({
   log,
+  rows,
+  tableLog,
   onClose,
 }: {
   log: LogEntry[];
+  rows?: LogLine[];
+  tableLog?: TableLogControls;
   onClose(): void;
 }) {
   return (
     <Sheet label="Game log" className="phone-sheet" onClose={onClose}>
-      <GameLog log={log} folded={false} open onToggle={never} />
+      {rows && tableLog ? (
+        <TableLog
+          rows={rows}
+          controls={tableLog}
+          folded={false}
+          open
+          onToggle={never}
+        />
+      ) : (
+        <GameLog log={log} folded={false} open onToggle={never} />
+      )}
     </Sheet>
   );
 }

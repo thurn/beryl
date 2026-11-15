@@ -253,6 +253,11 @@ restore the old behavior.
   exile viewer. Shift-click plays face down. Click a mana symbol or a player
   counter to add one, or right-click to remove one. The press shows immediately.
   A refused action shakes what was clicked.
+- **Manual table log.** The log shows numbered entries with their actors.
+  Rewinding strikes the entries after the chosen line. Cmd+Z and the undo button
+  undo the viewer's latest action. Cmd+Shift+D undoes the viewer's latest draw.
+  When later entries block an undo, the log opens and highlights them. Either
+  player can undo a batch from its line or rewind from any line.
 - **Manual table: drawing and removing arrows.** Right-drag from a card to a
   card or life total to draw an arrow. A selected source draws an arrow from
   each selected card. A hand card plays first. A command that asks for a target

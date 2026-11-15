@@ -75,7 +75,7 @@ export function commandActions(
     seat,
     other_seat: 1 - seatOf(view, "you"),
     owner: seat,
-    entry: view.table?.lastDraw,
+    entry: context.logEntry?.n ?? view.table?.lastDraw,
     count: 1,
     text: target.kind === "counter" ? target.counter : null,
     on: !checked(command, context),

@@ -40,6 +40,7 @@ import { DESKTOP_REVEALED, desktopTray, desktopWith } from "./desktop.ts";
 import { DESKTOP, Faces } from "./Faces.tsx";
 import { useSurface } from "./mount.ts";
 import { Selection } from "../table/Selection";
+import type { TableLogControls } from "../table/tableLog";
 import type { TableClient } from "../table/client";
 import { nextPhaseLabel } from "../table/turn";
 import { type BoardStage, pageStage } from "./playback.ts";
@@ -61,6 +62,7 @@ import "./heft.css";
 export function StageBoard({
   view,
   log,
+  tableLog,
   waiting,
   onSkip,
   cancel,
@@ -79,6 +81,7 @@ export function StageBoard({
   view: PlayerView;
   /** What has happened in the game up to it, oldest first. */
   log: LogEntry[];
+  tableLog?: TableLogControls;
   /** An answer is on its way, or the game plays on without the player. */
   waiting: boolean;
   /** Plays out at once the views still to show; none when none wait. */
@@ -109,6 +112,10 @@ export function StageBoard({
   const width = useStageWidth();
   const [settings, setSettings] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const blockers = tableLog?.blocked;
+  useLayoutEffect(() => {
+    if (blockers?.length) setLogOpen(true);
+  }, [blockers]);
   const toggleLog = useCallback(() => setLogOpen((open) => !open), []);
   // The Revealed Cards the player dismissed.
   const [cleared, setCleared] = useState<ReadonlySet<ObjectView>>();
@@ -133,7 +140,7 @@ export function StageBoard({
   }, [prompts]);
   const decision =
     view.status.kind === "deciding" ? view.status.decision : undefined;
-  const undoable = !waiting && (decision?.undo ?? 0) > 0;
+  const undoable = !waiting && (tableLog || (decision?.undo ?? 0) > 0);
   const { pay, suggest } = usePaying(asked);
   const { press, lost } = useLostMana(
     asked,
@@ -238,6 +245,7 @@ export function StageBoard({
           asked={asked}
           lost={lost}
           log={log}
+          tableLog={tableLog}
           waiting={waiting}
           logOpen={logOpen}
           onLog={toggleLog}
