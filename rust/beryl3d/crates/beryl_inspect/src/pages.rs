@@ -3,12 +3,12 @@
 //! on every tick of a recording. A name is a fixture's, a card spec moment's as
 //! `<card>/<moment>`, or a stress board's ([`crate::stress`]).
 
-use beryl_scene::agent::{Layout, Rule};
+use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Page, Recording, TICK};
 use beryl_scene::input::Size;
 use beryl_session::ipc::FixtureMessage;
 use beryl_session::protocol::Side;
-use beryl_session::{GameUpdate, Seat, SessionId};
+use beryl_session::{GameUpdate, Seat, SessionId, card_records};
 
 use crate::recordings;
 use crate::stress::stress;
@@ -93,19 +93,17 @@ pub fn recording(name: &str, seat: Side) -> Result<Recording, String> {
             ));
         }
         let session = SessionId(1);
-        let messages = board
+        let mut messages: Vec<FixtureMessage> = board
             .views
             .into_iter()
             .map(|view| FixtureMessage::game_update(&GameUpdate { session, view }))
             .collect();
+        // Like every recording in the pack, it starts with the records of the cards it shows.
+        messages.insert(0, card_records::fixture_message(&messages));
         return Ok(Recording(messages));
     }
     recordings::find(name, seat).map(|messages| Recording(messages.to_vec()))
 }
-
-/// The rules [`check_recording`] does not run. The client gives no card a face layer yet
-/// (`Resolved::face` is always `None`), so every card would fail `blank-card`.
-pub const LEFT_OUT: [Rule; 1] = [Rule::BlankCard];
 
 /// What [`check_recording`] played.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -118,7 +116,7 @@ pub struct Checked {
 
 /// Plays the recording `name` from each seat it is recorded for, in each of
 /// [`DESKTOP_WINDOWS`], from its start to its end on its own clock, and runs every interface
-/// check but those of [`LEFT_OUT`] on the frame of every tick.
+/// check on the frame of every tick.
 ///
 /// # Panics
 ///
@@ -144,7 +142,7 @@ pub fn check_recording(name: &str) -> Checked {
                 panic!("{why}");
             });
             loop {
-                page.check_without(&LEFT_OUT);
+                page.check();
                 checked.frames += 1;
                 if page.ended() {
                     break;

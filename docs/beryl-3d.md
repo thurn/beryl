@@ -706,6 +706,7 @@ platform.
 ```rust
 pub enum Input {
     Update(Box<GameUpdate>),                 // from the session
+    Cards(Box<CardRecords>),                 // the match's cards, listed as faces
     Surface { size: Size, scale: f32, safe_area: Insets },
     Pointer(Pointer),                        // mouse, touch or pen
     Key(Key),
@@ -1476,7 +1477,10 @@ uploads that happen during play are small and limited.
 
 Before a match's opening hand is shown:
 
-1. The client lists every face of both decklists and their tokens.
+1. The client lists every face of both decklists and their tokens, from the card
+   store's records that the host gives it (`Input::Cards`). The host reads the
+   list (`Client::faces`) and hands it to the workers, so a face's `FaceId` is
+   the same on both sides.
 2. For each face, a worker looks for the compressed texture in the disk cache,
    keyed by the image's id, the size, the format and the encoder's version. A
    hit is a file read.

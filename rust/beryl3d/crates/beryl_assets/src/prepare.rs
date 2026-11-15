@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use beryl_art::{ArtCache, Fetch};
+use beryl_scene::faces::FaceList;
 use beryl_scene::input::{AssetReady, FaceId, FaceSize};
 
 use crate::cache::{self, CacheKey};
@@ -166,16 +167,12 @@ impl Preparer {
         }
     }
 
-    /// Lists every face of `decklists` and their tokens and queues each at board size, in the
-    /// first format of `supported` that is compressed (see [`Format::choose`]). Each face
-    /// arrives on the returned channel as it is ready, in layer `FaceId.0` of the board-size
-    /// array. Jobs of an earlier match still queued are dropped, and the full-size layers
-    /// are emptied.
-    pub fn prepare_match(
-        &mut self,
-        decklists: &[&[(u8, &str)]],
-        supported: &[Format],
-    ) -> Receiver<Prepared> {
+    /// Queues every face of `list` at board size, in the first format of `supported` that is
+    /// compressed (see [`Format::choose`]). `list` is the client's (`Client::faces`), so that
+    /// each face arrives on the returned channel as it is ready, in layer `FaceId.0` of the
+    /// board-size array, under the `FaceId` the client knows it by. Jobs of an earlier match
+    /// still queued are dropped, and the full-size layers are emptied.
+    pub fn prepare_match(&mut self, list: &FaceList, supported: &[Format]) -> Receiver<Prepared> {
         let format = Format::choose(supported);
         if format == Format::Rgba8 {
             eprintln!(
@@ -189,7 +186,7 @@ impl Preparer {
         let (results, received) = mpsc::channel();
         let game = Arc::new(Match {
             number: self.counter,
-            faces: MatchFaces::list(decklists),
+            faces: MatchFaces::new(list),
             format,
             results,
         });

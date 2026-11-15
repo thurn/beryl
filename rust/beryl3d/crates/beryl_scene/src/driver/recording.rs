@@ -9,6 +9,7 @@
 use std::collections::{BTreeMap, VecDeque};
 
 use beryl_session::GameUpdate;
+use beryl_session::card_records::CardRecords;
 use beryl_session::ipc::{
     self, CancelRequest, ConcedeRequest, FixtureMessage, PassOnRequest, SetStopsRequest,
     UndoRequest,
@@ -43,6 +44,28 @@ impl Recording {
                 _ => None,
             })
             .collect()
+    }
+}
+
+impl Recording {
+    /// The card store's records that the recording answered `card_records` with, if it holds
+    /// them: every recording in the pack starts with them (`card_records::fixture_message`).
+    ///
+    /// # Errors
+    ///
+    /// When the recorded answer is not card records.
+    pub fn card_records(&self) -> Result<Option<CardRecords>, String> {
+        let Some(value) = self.0.iter().find_map(|message| match message {
+            FixtureMessage::Response { command, value, .. } if command == ipc::CARD_RECORDS => {
+                Some(value)
+            }
+            _ => None,
+        }) else {
+            return Ok(None);
+        };
+        serde_json::from_value(value.clone())
+            .map(Some)
+            .map_err(|error| format!("the recorded `card_records` answer is not one: {error}"))
     }
 }
 

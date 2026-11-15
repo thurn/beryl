@@ -6,6 +6,7 @@ use glam::{Affine3A, Vec2, Vec3};
 
 use super::place::{Placement, Scroll};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, Window, place};
+use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{Band, Draw, ElementId, FrameBuilder, Place, Resolved, Role, StateBits};
 use crate::input::FaceSize;
 use crate::motion::Track;
@@ -138,8 +139,17 @@ impl Table {
     /// Writes a resolved element and a draw record for every visible card, and one draw record
     /// for the cloth, which comes last among the opaque records. `view` is the view the table
     /// shows. While a script plays, `motion` gives the objects that move their poses, and the
-    /// records of the view the script leads to.
-    pub fn write(&self, view: &PlayerView, motion: Option<Motion<'_>>, builder: &mut FrameBuilder) {
+    /// records of the view the script leads to. Each card is drawn from the board-size layer
+    /// of its face in `faces`, or from layer 0 while that face has no layer or the viewer does
+    /// not know the card's name. Its back is drawn from the card back's layer.
+    pub fn write(
+        &self,
+        view: &PlayerView,
+        motion: Option<Motion<'_>>,
+        faces: &Faces,
+        builder: &mut FrameBuilder,
+    ) {
+        let back = faces.board_layer_of(CARD_BACK).unwrap_or(0);
         builder.camera(self.camera.view_projection);
         let slots = motion
             .map_or(0, |motion| motion.tracks.len())
@@ -177,10 +187,15 @@ impl Table {
                 continue;
             }
             let transform = object.pose.transform();
-            let name = view.objects[object.view_index as usize]
-                .name
+            let shown = &view.objects[object.view_index as usize];
+            let name = shown.name.as_deref().unwrap_or("");
+            // A token's printing tells apart tokens that share a name, so its face is found by
+            // that first.
+            let face = shown
+                .token_printing
                 .as_deref()
-                .unwrap_or("");
+                .and_then(|printing| faces.board_layer(printing))
+                .or_else(|| faces.board_layer(name));
             let mut state = 0;
             if object.tapped {
                 state |= StateBits::TAPPED;
@@ -205,8 +220,7 @@ impl Table {
                     clip: None,
                     interactive: false,
                     state: StateBits(state),
-                    // Card faces are not loaded yet, so every card is drawn from layer 0.
-                    face: None,
+                    face,
                 },
             );
             let opacity = (object.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -216,8 +230,8 @@ impl Table {
                     transform,
                     [255, 255, 255, opacity],
                     FaceSize::Board,
-                    0,
-                    0,
+                    face.unwrap_or(0),
+                    back,
                     0.0,
                     0.0,
                 ),

@@ -3,7 +3,8 @@
 //! worker sends what it finishes as a [`Prepared`], whose pixels go to the renderer and whose
 //! [`AssetReady`] goes to the client core.
 //!
-//! A match's faces are listed when it loads ([`MatchFaces`]). The face workers ([`Preparer`])
+//! The client core lists a match's faces when it loads (`beryl_scene::faces::FaceList`), and
+//! [`MatchFaces`] says where each is found. The face workers ([`Preparer`])
 //! read each from the compressed cache ([`CacheKey`]) or, on a miss, decode its scan from
 //! `beryl_art`'s scan cache, scale it to board or full size, compress it with its mipmaps
 //! ([`Format`]) and cache the result. A face with no downloaded scan is drawn as its name on a
@@ -21,7 +22,7 @@ use beryl_scene::input::AssetReady;
 
 pub use cache::CacheKey;
 pub use encode::{ENCODER_VERSION, EncodeError, Format, Layer, decode, dimensions, encode};
-pub use faces::{CARD_BACK, MatchFace, MatchFaces};
+pub use faces::{CARD_BACK, MatchFace, MatchFaces, decklist_faces};
 pub use placeholder::placeholder;
 pub use prepare::{
     Config, FULL_LAYERS, Full, Preparer, Source, default_workers, faces_built_on_this_thread,

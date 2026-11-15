@@ -3,6 +3,7 @@
 //! (docs/beryl-3d.md, "Hosts" and "Determinism").
 
 use beryl_session::GameUpdate;
+use beryl_session::card_records::CardRecords;
 use glam::Vec2;
 
 use crate::command::Reply;
@@ -12,6 +13,10 @@ use crate::command::Reply;
 pub enum Input {
     /// A view from the session, boxed because it is far larger than every other input.
     Update(Box<GameUpdate>),
+    /// The card store's records of every card and token the match can show, from which the
+    /// client makes the match's list of faces (`Client::faces`) when the match loads. Boxed
+    /// because it is far larger than every other input.
+    Cards(Box<CardRecords>),
     /// The drawing surface's size in logical points, how many physical pixels make one point,
     /// and the part of it that system bars and rounded corners leave clear.
     Surface {
@@ -213,7 +218,7 @@ pub struct GlyphCell {
     pub bearing: [i16; 2],
 }
 
-/// An index into the list of faces the client made when the match loaded.
+/// An index into the list of faces the client made when the match loaded (`faces::FaceList`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FaceId(pub u16);
 

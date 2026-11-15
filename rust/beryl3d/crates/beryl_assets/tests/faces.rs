@@ -11,7 +11,7 @@ use std::time::Duration;
 use beryl_art::{ArtCache, Origins};
 use beryl_assets::{
     CacheKey, Config, ENCODER_VERSION, Format, Full, Layer, Prepared, Preparer, Source, Upload,
-    faces_built_on_this_thread,
+    decklist_faces, faces_built_on_this_thread,
 };
 use beryl_cards::decks::WU_CONTROL;
 use beryl_scene::input::{AssetReady, FaceId, FaceSize};
@@ -107,11 +107,11 @@ fn the_cache_key_changes_with_the_encoder_version() {
 fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
     let scratch = Scratch::new("second");
     cache_every_scan(&scratch.0);
-    let decks = [WU_CONTROL, WU_CONTROL];
+    let faces = decklist_faces(&[WU_CONTROL, WU_CONTROL]);
     let formats = [Format::Etc2Rgba8];
 
     let mut first = preparer(&scratch.0);
-    let results = first.prepare_match(&decks, &formats);
+    let results = first.prepare_match(&faces, &formats);
     let count = first.faces().unwrap().faces.len();
     assert!(count > 20, "only {count} faces listed");
     let prepared = receive(&results, count);
@@ -121,7 +121,7 @@ fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
     // The scans go: a face read from anywhere but the compressed cache would be a placeholder.
     fs::remove_dir_all(scratch.0.join("art")).unwrap();
     let mut second = preparer(&scratch.0);
-    let results = second.prepare_match(&decks, &formats);
+    let results = second.prepare_match(&faces, &formats);
     let again = receive(&results, count);
     assert!(again.iter().all(|p| face_layer(p).1 == Source::Cache));
 
@@ -146,7 +146,7 @@ fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
 fn a_face_with_no_scan_is_a_placeholder_and_is_not_cached() {
     let scratch = Scratch::new("placeholder");
     let mut assets = preparer(&scratch.0);
-    let results = assets.prepare_match(&[WU_CONTROL], &[Format::Etc2Rgba8]);
+    let results = assets.prepare_match(&decklist_faces(&[WU_CONTROL]), &[Format::Etc2Rgba8]);
     let count = assets.faces().unwrap().faces.len();
     let prepared = receive(&results, count);
     for prepared in &prepared {
@@ -166,7 +166,7 @@ fn a_face_with_no_scan_is_a_placeholder_and_is_not_cached() {
 fn the_seventeenth_full_size_face_drops_the_least_recently_used() {
     let scratch = Scratch::new("full");
     let mut assets = preparer(&scratch.0);
-    let results = assets.prepare_match(&[WU_CONTROL], &[Format::Etc2Rgba8]);
+    let results = assets.prepare_match(&decklist_faces(&[WU_CONTROL]), &[Format::Etc2Rgba8]);
     let board = assets.faces().unwrap().faces.len();
     assert!(board > 17);
     for face in 1..=16 {

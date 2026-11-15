@@ -120,7 +120,7 @@ pub fn three_beats(before: &GameUpdate, cards: Cards) -> (GameUpdate, Vec<StepTi
         cards.token,
         ZoneName::Battlefield,
         Side::You,
-        Some("Soldier"),
+        Some("Soldier Token"),
     );
     token.token = true;
     token.types = vec![CardType::Creature];

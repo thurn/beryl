@@ -11,6 +11,7 @@ use beryl_session::script::Verb;
 
 use crate::command::{Reply, Request, SessionCommand};
 use crate::element::{Press, prompt_bar};
+use crate::faces::{FaceList, Faces};
 use crate::frame::{self, ElementId, Frame, FrameBuilder, Wake};
 use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerKind, PointerPhase};
 use crate::layout::Layer;
@@ -121,6 +122,12 @@ impl Client {
                 self.show_prompt();
             }
             Input::Pointer(pointer) => self.point(pointer),
+            Input::Cards(records) => {
+                *self.show.faces_mut() = Faces::new(FaceList::from_records(&records));
+            }
+            Input::Assets(AssetReady::Face { face, size, layer }) => {
+                self.show.faces_mut().arrived(face, size, layer);
+            }
             Input::Assets(AssetReady::Glyphs { page, glyphs }) => {
                 self.layer.glyphs_mut().add(page, &glyphs);
             }
@@ -230,6 +237,13 @@ impl Client {
     #[must_use]
     pub fn rested(&self) -> u64 {
         self.show.rested()
+    }
+
+    /// The match's faces, which the host's asset workers prepare: each arrives as an
+    /// `AssetReady::Face` naming its index in this list.
+    #[must_use]
+    pub fn faces(&self) -> &FaceList {
+        self.show.faces().list()
     }
 
     /// The table, for tests and tools that read the camera.

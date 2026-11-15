@@ -17,6 +17,7 @@ mod recording;
 use std::fmt::{self, Write};
 
 use beryl_session::GameUpdate;
+use beryl_session::card_records::CardRecords;
 use beryl_session::protocol::{Side, Status, ZoneName};
 use beryl_session::script::Verb;
 use glam::Vec2;
@@ -26,11 +27,11 @@ pub use check::{Checked, Mode, StepMoment};
 pub use moment::{Duration, Moment, Name, Offset, ParseError};
 pub use recording::{Answer, Recording, Responses, plays_on};
 
-use crate::agent::{self, Context, Fault, Layout, Rule, TreeOptions, locate, uncovered};
+use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
 use crate::frame::{Frame, Place, Role, StateBits, Wake};
 use crate::input::{
-    Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Rect, Size, TextChange,
+    AssetReady, Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind,
+    PointerPhase, Rect, Size, TextChange,
 };
 use crate::play::record::Plant;
 use crate::{Client, Config};
@@ -96,6 +97,8 @@ impl Element {
 pub struct Page {
     recording: Recording,
     views: Vec<GameUpdate>,
+    /// The card records the recording starts with, from which the client lists its faces.
+    cards: Option<CardRecords>,
     responses: Responses,
     name: String,
     seat: Side,
@@ -137,10 +140,12 @@ impl Page {
         size: Size,
     ) -> Result<Self, DriverError> {
         let views = recording.views().map_err(DriverError)?;
+        let cards = recording.card_records().map_err(DriverError)?;
         let mut page = Self {
             recording: recording.clone(),
             responses: Responses::new(recording),
             views,
+            cards,
             name: "recording".to_owned(),
             seat,
             layout,
@@ -259,17 +264,7 @@ impl Page {
     ///
     /// When a check finds a fault, with every fault and the clock's state.
     pub fn check(&mut self) {
-        self.check_without(&[]);
-    }
-
-    /// Runs every interface check but those of `rules` on the present frame.
-    ///
-    /// # Panics
-    ///
-    /// When a check finds a fault, with every fault and the clock's state.
-    pub fn check_without(&mut self, rules: &[Rule]) {
-        let mut faults = self.faults();
-        faults.retain(|fault| !rules.contains(&fault.rule));
+        let faults = self.faults();
         if faults.is_empty() {
             return;
         }
@@ -551,7 +546,10 @@ impl Page {
         self.client.handle(input);
     }
 
-    /// Sets the client up and gives it the recording's first views.
+    /// Sets the client up and gives it the recording's first views. The driver acts as a host
+    /// whose asset workers have every face ready at the start: it gives the client the
+    /// recording's card records, then every face of the list the client made from them
+    /// (`FaceList::all_ready`).
     fn begin(&mut self) {
         if self.records {
             self.client.record();
@@ -564,6 +562,13 @@ impl Page {
             scale: 1.0,
             safe_area: Insets::default(),
         });
+        if let Some(cards) = &self.cards {
+            self.give(Input::Cards(Box::new(cards.clone())));
+            let ready: Vec<AssetReady> = self.client.faces().all_ready().collect();
+            for ready in ready {
+                self.give(Input::Assets(ready));
+            }
+        }
         self.release();
         self.render();
     }
@@ -672,6 +677,7 @@ impl Page {
         let mut page = Self {
             recording: self.recording.clone(),
             views: self.views.clone(),
+            cards: self.cards.clone(),
             responses: Responses::new(&self.recording),
             name: self.name.clone(),
             seat: self.seat,

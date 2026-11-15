@@ -28,6 +28,7 @@ use beryl_session::script::{StepTiming, Verb};
 use self::compile::{Compiled, bit, compile};
 use self::record::{Plant, ScriptRecord};
 use crate::data::space::catch_up;
+use crate::faces::Faces;
 use crate::frame::{FrameBuilder, Wake};
 use crate::motion::Track;
 use crate::pose::Pose;
@@ -73,6 +74,8 @@ impl Playing {
 /// The table and the scripts that lead it from view to view.
 pub struct Show {
     table: Table,
+    /// The match's faces and their layers, which the table draws each card from.
+    faces: Faces,
     /// The view the table shows at rest.
     shown: Option<Box<GameUpdate>>,
     playing: Option<Playing>,
@@ -101,6 +104,7 @@ impl Show {
     pub fn new(table: Table) -> Self {
         Self {
             table,
+            faces: Faces::default(),
             shown: None,
             playing: None,
             waiting: VecDeque::new(),
@@ -202,6 +206,16 @@ impl Show {
     #[must_use]
     pub fn table(&self) -> &Table {
         &self.table
+    }
+
+    /// The match's faces and their layers.
+    #[must_use]
+    pub fn faces(&self) -> &Faces {
+        &self.faces
+    }
+
+    pub fn faces_mut(&mut self) -> &mut Faces {
+        &mut self.faces
     }
 
     /// The latest view: the last to arrive, which the table shows once every script before it
@@ -348,7 +362,7 @@ impl Show {
                 view: &update.view,
             })
         });
-        self.table.write(shown, motion, builder);
+        self.table.write(shown, motion, &self.faces, builder);
     }
 
     /// Ends the playing script: the table shows its view, at rest.

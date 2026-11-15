@@ -9,6 +9,7 @@ pub mod data;
 #[cfg(feature = "driver")]
 pub mod driver;
 pub mod element;
+pub mod faces;
 pub mod frame;
 pub mod input;
 pub mod layout;

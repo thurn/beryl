@@ -10,7 +10,6 @@ use serde_json::{Value, json};
 
 use super::options::{Options, Usage};
 use super::{Printed, milliseconds, open};
-use crate::pages::LEFT_OUT;
 
 /// How many faults `check` prints before it gives a count of the rest.
 const MOST_FAULTS: usize = 20;
@@ -34,9 +33,6 @@ pub(super) fn check(options: &Options) -> Result<Printed, Usage> {
     let checked = page.check_all(Mode::EveryTick);
     let mut found: Vec<Found> = Vec::new();
     for fault in checked.faults {
-        if LEFT_OUT.contains(&fault.rule) {
-            continue;
-        }
         let same = found.iter_mut().find(|known| {
             known.fault.rule == fault.rule
                 && known
@@ -60,12 +56,10 @@ pub(super) fn check(options: &Options) -> Result<Printed, Usage> {
         at: 0,
     };
     let seconds = started.elapsed().as_secs_f64();
-    let left_out: Vec<&str> = LEFT_OUT.iter().map(|rule| rule.word()).collect();
     let closing = format!(
-        "1 test, {} frames, {} faults in {seconds:.1}s ({} left out)",
+        "1 test, {} frames, {} faults in {seconds:.1}s",
         checked.frames,
-        found.len(),
-        left_out.join(", ")
+        found.len()
     );
     let fault = !found.is_empty();
     if options.json {

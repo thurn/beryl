@@ -10,6 +10,7 @@ use beryl_scene::driver::{Checked, Mode, Page, Recording};
 use beryl_scene::input::{Insets, Size};
 use beryl_scene::play::record::{Cause, MoveKey, Planted, ScriptRecord, SegmentRecord, StepRecord};
 use beryl_scene::pose::{Curve, Pose, Segment};
+use beryl_session::card_records;
 use beryl_session::ipc::FixtureMessage;
 use beryl_session::protocol::{Side, Why, ZoneName};
 use beryl_session::script::Verb;
@@ -33,10 +34,12 @@ fn page() -> Page {
         .as_mut()
         .expect("the three-beat view has a script")
         .timing = timings;
-    let recording = Recording(vec![
+    let mut messages = vec![
         FixtureMessage::game_update(&start),
         FixtureMessage::game_update(&after),
-    ]);
+    ];
+    messages.insert(0, card_records::fixture_message(&messages));
+    let recording = Recording(messages);
     Page::new(&recording, Side::You, Layout::Desktop, SIZE)
         .expect("the views can be read")
         .named("three-beats")
@@ -89,13 +92,7 @@ fn keys(checked: &Checked) -> Vec<(Rule, Vec<String>)> {
 #[test]
 fn the_three_beat_script_has_no_fault() {
     let checked = page().check_all(Mode::AtCheckTimes);
-    // The driver loads no card pictures, so every card it draws is blank.
-    let printed: Vec<String> = checked
-        .faults
-        .iter()
-        .filter(|fault| fault.rule != Rule::BlankCard)
-        .map(printed)
-        .collect();
+    let printed: Vec<String> = checked.faults.iter().map(printed).collect();
     assert!(printed.is_empty(), "{}", printed.join("\n"));
 }
 
