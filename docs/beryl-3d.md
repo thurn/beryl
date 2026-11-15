@@ -1926,6 +1926,17 @@ What these show:
   therefore needs a display link on macOS (`NSView`'s display link with a
   preferred frame rate range), as the iOS host already plans with
   `CADisplayLink`.
+- **Frames are drawn only on the display link's ticks.** The prototype first
+  drew a frame for every mouse move and every session update as well as on each
+  tick, submitting frames faster than the display showed them. It used up
+  macOS's three drawables and then waited whole display intervals for the next.
+  With frames drawn only on ticks, inputs only reach the core, and its wake
+  keeps the link running. The late frames left in the owner's runs, at a load of
+  42 to 51, waited 17 to 90 ms for a drawable while the GPU finished each frame
+  in about 1 ms and the core and encode took under 1 ms. That points at the
+  window server under the machine's load, outside the app. The real client's
+  frame log should record the wait for a drawable apart from its own work, so a
+  late frame on a player's machine can be attributed the same way.
 - **Search threads inherit the frame thread's priority unless started from
   elsewhere.** A macOS thread inherits the scheduling class of the thread that
   creates it, and neither the session nor the search pool sets one. The
