@@ -452,6 +452,7 @@ fn redact_action(
         | Action::Concede { .. }
         | Action::SetAssist { .. }
         | Action::Flow { .. }
+        | Action::FlowResult { .. }
         | Action::Undo { .. }
         | Action::Rewind { .. } => {}
     }

@@ -19,6 +19,7 @@ import { playerCounterValue } from "./players";
 import { describe } from "./shortcuts";
 import { TablePalette } from "./TablePalette";
 import { commandActions } from "./commandActions";
+import { flowLabel, usesLookSort } from "./flows";
 import { canUseZone } from "./zoneAccess";
 import {
   baseStats,
@@ -576,7 +577,10 @@ export class TableCommands {
               : Math.max(1, Math.min(65535, count ?? 65535)),
         fieldLabel:
           command.id === "library.draw_cards" ? "Cards to draw" : label,
-        label: (number) => `${verb} ${number}`,
+        label: (number) =>
+          command.id === "library.look_top" && usesLookSort(context)
+            ? flowLabel({ kind: "look_at_top", count: number })
+            : `${verb} ${number}`,
         onCancel: this.close,
         onConfirm: (number) => confirm({ number }),
       });

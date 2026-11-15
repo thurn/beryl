@@ -334,6 +334,16 @@ pub enum Action<Id = ObjectId> {
         seat: Seat,
         flow: Flow,
         count: u16,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "ts", ts(optional))]
+        source: Option<SeenObject<Id>>,
+    },
+    /// The host's completed sort, applied and undone as one batch of moves.
+    FlowResult {
+        flow: Flow,
+        seat: Seat,
+        on_top: Vec<Id>,
+        elsewhere: Vec<Id>,
     },
     Undo {
         /// A seat can name its own draw or a batch from either seat.

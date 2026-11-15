@@ -274,6 +274,27 @@ fn apply_action<Id>(
     }
     let action = resolve(table, action)?;
     permissions::check_with_reveals(table, by, &action, reveals)?;
+    if let Action::FlowResult {
+        flow,
+        seat,
+        on_top,
+        elsewhere,
+    } = &action
+    {
+        let library = table.zone(Zone::Library(*seat)).ok_or(Refusal::Stale)?;
+        let actions = crate::assist::text::flow_moves(*flow, *seat, on_top, elsewhere, library)?;
+        let mut resolved: fn(&Table, Action) -> Result<Action, Refusal> = |_, action| Ok(action);
+        let (_, changes) = apply_action(
+            table,
+            by,
+            Action::Batch { actions },
+            chance,
+            touches,
+            reveals,
+            &mut resolved,
+        )?;
+        return Ok((action, changes));
+    }
     let mut applied = plan_action(table, by, &action, chance, reveals)?;
     library::settle_handling(table, by, &action, &mut applied);
     let len = applied.changes.len();
@@ -580,7 +601,10 @@ fn plan_action(
         Action::CloseLook {} | Action::Keep {} => Ok(Vec::new()),
         Action::SetAssist { assist, on } => Ok(game::set_assist(table, by, *assist, *on)),
         Action::Flow { seat, count, .. } => library::flow(table, by, *seat, *count),
-        Action::Undo { .. } | Action::Rewind { .. } | Action::Batch { .. } => Err(Refusal::INVALID),
+        Action::Undo { .. }
+        | Action::Rewind { .. }
+        | Action::Batch { .. }
+        | Action::FlowResult { .. } => Err(Refusal::INVALID),
     }?;
     let mut applied = AppliedChanges::default();
     applied.record(changes, None);

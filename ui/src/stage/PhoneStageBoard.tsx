@@ -462,7 +462,7 @@ export function PhoneStageBoard({
           onClose={() => setSheet(undefined)}
         />
       )}
-      {manualPile && client && (
+      {manualPile && client && view.table?.prompt?.kind !== "sort" && (
         <TablePileViewer
           key={manualPile.key}
           client={client}

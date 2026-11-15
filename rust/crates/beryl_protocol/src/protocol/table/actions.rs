@@ -61,6 +61,21 @@ impl TableActionRefs {
         &self.actions
     }
 
+    /// Identify a card from the exact reference issued in this view.
+    pub fn card_slot(
+        &self,
+        source: &beryl_table::action::SeenObject<TableObjectRef>,
+    ) -> Option<super::ObjectId> {
+        let entry = self.actions.get(source.id.handle as usize)?;
+        if entry.reference != source.id || entry.zone != source.zone {
+            return None;
+        }
+        match entry.subject {
+            Subject::Object { slot } => Some(slot),
+            _ => None,
+        }
+    }
+
     /// Resolve against the authenticated seat's current mapping, then use the
     /// normal permission checks and transactional log application for the action.
     pub fn apply<'log>(
@@ -100,6 +115,9 @@ impl TableActionRefs {
     }
 
     fn resolve_action(&self, staged: &Table, mut action: TableAction) -> Result<Action, Refusal> {
+        if matches!(action, Action::Flow { .. } | Action::FlowResult { .. }) {
+            return Err(Refusal::Permission);
+        }
         if let Action::Arrow { selection, .. } = &mut action
             && selection
                 .objects

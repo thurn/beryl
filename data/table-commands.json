@@ -1809,7 +1809,13 @@
     },
     "menu": { "group": "Assists", "order": 200 },
     "group": "Library",
-    "also_applies_to": { "permanent": true },
+    "also_applies_to": {
+      "permanent": true,
+      "their_permanent": true,
+      "hand_card": true,
+      "pile_card": true,
+      "viewer_card": true
+    },
     "assist": "library_flows",
     "when": "card_scry"
   },
@@ -1824,7 +1830,13 @@
     },
     "menu": { "group": "Assists", "order": 210 },
     "group": "Library",
-    "also_applies_to": { "permanent": true },
+    "also_applies_to": {
+      "permanent": true,
+      "their_permanent": true,
+      "hand_card": true,
+      "pile_card": true,
+      "viewer_card": true
+    },
     "assist": "library_flows",
     "when": "card_surveil"
   },
@@ -1839,7 +1851,13 @@
     },
     "menu": { "group": "Assists", "order": 220 },
     "group": "Library",
-    "also_applies_to": { "permanent": true },
+    "also_applies_to": {
+      "permanent": true,
+      "their_permanent": true,
+      "hand_card": true,
+      "pile_card": true,
+      "viewer_card": true
+    },
     "assist": "library_flows",
     "when": "card_look_at_top"
   },

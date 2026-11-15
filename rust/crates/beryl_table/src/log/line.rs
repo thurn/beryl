@@ -417,6 +417,12 @@ fn game(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
         Action::SetAssist { on: false, .. } => "Disabled an assist".into(),
         Action::CloseLook {} => "Closed the pile viewer".into(),
         Action::Flow { .. } => "Opened a library flow".into(),
+        Action::FlowResult {
+            flow,
+            on_top,
+            elsewhere,
+            ..
+        } => crate::assist::text::flow_summary(*flow, on_top.len(), elsewhere.len()),
         Action::Undo { .. } => "Undid an action".into(),
         Action::Rewind { to } => format!("Rewound to entry {to}"),
         Action::Batch { actions } if paired_rolls(actions) => summary

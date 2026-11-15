@@ -59,6 +59,10 @@ enum Reference {
 }
 
 impl Reference {
+    fn use_library(seat: Seat) -> Self {
+        Self::UseZone(Zone::Library(seat))
+    }
+
     fn validate(&self, table: &Table) -> Result<(), Refusal> {
         match *self {
             Self::Seat(seat) | Self::OwnSeat(seat) => {
@@ -221,13 +225,14 @@ fn action_references(action: &Action, references: &mut Vec<Reference>) {
             references.extend(to.map(target_reference));
         }
         Action::Draw { seat, .. } | Action::Mulligan { seat, .. } => references.extend([
-            Reference::UseZone(Zone::Library(*seat)),
+            Reference::use_library(*seat),
             Reference::UseZone(Zone::Hand(*seat)),
         ]),
         Action::Shuffle { seat, .. }
         | Action::Look { seat, .. }
         | Action::StackUntil { seat, .. }
-        | Action::Flow { seat, .. } => references.push(Reference::UseZone(Zone::Library(*seat))),
+        | Action::Flow { seat, .. }
+        | Action::FlowResult { seat, .. } => references.push(Reference::use_library(*seat)),
         Action::SortHand { seat, .. } => references.push(Reference::UseZone(Zone::Hand(*seat))),
         Action::Reveal {
             zone, objects, to, ..

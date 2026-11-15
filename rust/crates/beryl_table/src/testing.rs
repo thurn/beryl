@@ -440,6 +440,7 @@ impl Generator {
             Kind::Flow if !table.zones[usize::from(by.0)].library.is_empty() => Action::Flow {
                 seat: by,
                 flow: Flow::Scry,
+                source: None,
                 count: 1,
             },
             Kind::Undo => Action::Undo { entry: None },

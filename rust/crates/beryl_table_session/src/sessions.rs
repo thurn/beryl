@@ -409,7 +409,7 @@ impl TableSessions {
                 let was_playing = solo.table.table().game_match.in_game;
                 match request {
                     Request::Action(action) => {
-                        solo.table.apply_client(SOLO, action)?;
+                        solo.table.dispatch_action(SOLO, action, |_| Ok(()))?;
                     }
                     Request::Lobby(request) => {
                         solo.table

@@ -322,6 +322,13 @@ restore the old behavior.
   step down and a step up. A sign changes the current value where one exists.
   The button says what it will do, such as Draw 3. Return confirms and Escape
   cancels.
+- **Manual table library flows.** When Library flows is on, the player's library
+  menu offers Scry and Surveil under Assists. These and Look at top cards ask
+  for a count, then open the shared sorting tray. A known card's Assists menu
+  offers the library instructions on its visible face with the printed count.
+  The other player sees the lifted cards and their destinations. A hidden card's
+  identity stays private unless the other player already knew it or the card
+  goes to a public zone.
 - **Manual table pile viewers.** The existing pile browser can be searched,
   grouped by card type, and sorted by name or mana value. The other player sees
   how many cards are lifted from a library during a look. Closing a full library

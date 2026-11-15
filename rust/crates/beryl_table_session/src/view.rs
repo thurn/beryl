@@ -42,12 +42,13 @@ pub(super) fn project(
     let (opponent, theirs) = piles(&projected, Seat(1 - seat.0), slots);
     let mut view = PlayerView::neutral(you, opponent);
     let mut refs = TableActionRefs::new(table, seat);
+    let assists = assists(&projected, seat);
     let mut card_commands = BTreeMap::new();
     for (&id, object) in &projected.objects {
         let slot = slots.get(id).expect("slot assigned to each displayed card");
         let card = cards::CardProjection::new(object);
         view.objects.push(card.object(slot, slots, viewer));
-        if let Some(commands) = card.commands() {
+        if let Some(commands) = card.commands(assists.library_flows) {
             card_commands.insert(slot, commands);
         }
         refs.expose(table, Subject::Object { slot }, id);
@@ -74,7 +75,7 @@ pub(super) fn project(
         proposals: Vec::new(),
         proposal_marks: None,
         labels: Vec::new(),
-        assists: assists(&projected, seat),
+        assists,
         phase,
         seats: projected.players.len() as u8,
         link: LinkState::Alone,

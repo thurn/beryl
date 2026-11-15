@@ -1,9 +1,6 @@
 use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
-use std::sync::mpsc::{Receiver, channel, sync_channel};
 
-use beryl_link::memory;
 use beryl_session::protocol::{
     Answer, CardHandling, ObjectId as Slot, PileName, Side, TablePrompt, ZoneName,
 };
@@ -13,13 +10,13 @@ use beryl_table::action::{Adjustment, Flow};
 use beryl_table::assist::text::{Flow as Effect, flow_result};
 use beryl_table::deck::Deck;
 use beryl_table::state::Zone;
-use beryl_table::{Action, Refusal, Seat, save};
+use beryl_table::{Action, Refusal, save};
+use beryl_table_session::TableSessions;
 use beryl_table_session::prompt::PromptState;
-use beryl_table_session::{HostSettings, TableSessions};
 
-const HOST: Seat = Seat(0);
-const GUEST: Seat = Seat(1);
-const SECRET: &str = "3mxd";
+mod prompt_common;
+
+use prompt_common::{GUEST, HOST, Linked};
 const PRIVATE: &str = "Ancestral Recall";
 
 fn sort(update: &GameUpdate) -> (&[Slot], &[Vec<Slot>]) {
@@ -53,74 +50,15 @@ fn has_lift(update: &GameUpdate, span: Span) -> bool {
         })
 }
 
-fn linked_table(
-    path: &Path,
-) -> (
-    TableSessions,
-    TableSessions,
-    Receiver<GameUpdate>,
-    Receiver<GameUpdate>,
-) {
-    let (host_emit, host_views) = channel();
-    let (guest_emit, guest_views) = channel();
-    let host = TableSessions::with_data_dir(SessionIds::default(), path, move |update| {
-        host_emit.send(update).unwrap();
-    });
-    let guest = TableSessions::new(SessionIds::default(), move |update| {
-        guest_emit.send(update).unwrap();
-    });
-    let (send, links) = sync_channel(1);
-    let (host_link, guest_link) = memory::pair();
-    host.host(
-        links,
-        HostSettings {
-            name: "Host".into(),
-            invite: "beryl-local:52114:3mxd".into(),
-            secret: SECRET.into(),
-            starting_life: 20,
-            starting_hand_size: 7,
-        },
-    )
-    .unwrap();
-    host_views.recv().unwrap();
-    send.send(host_link).unwrap();
-    let mut guest_link = Some(guest_link);
-    guest
-        .join_checked(
-            move || guest_link.take().ok_or(beryl_link::LinkError::Closed),
-            "Guest".into(),
-            SECRET.into(),
-        )
-        .unwrap();
-    host_views.recv().unwrap();
-    guest_views.recv().unwrap();
-
-    for (tables, seat, name) in [(&host, HOST, "Island"), (&guest, GUEST, PRIVATE)] {
-        tables
-            .act(Action::LoadDeck {
-                seat,
-                main: vec![(name.into(), 12)],
-                side: vec![],
-            })
-            .unwrap();
-        host_views.recv().unwrap();
-        guest_views.recv().unwrap();
-    }
-    host.act(Action::Start {
-        first: HOST,
-        opening: false,
-    })
-    .unwrap();
-    host_views.recv().unwrap();
-    guest_views.recv().unwrap();
-
-    (host, guest, host_views, guest_views)
-}
-
 #[test]
 fn guest_sorts_privately_and_done_records_one_undoable_batch() {
     let dir = tempfile::tempdir().unwrap();
-    let (host, guest, host_views, guest_views) = linked_table(dir.path());
+    let Linked {
+        host,
+        guest,
+        host_views,
+        guest_views,
+    } = Linked::new(dir.path(), PRIVATE, 12);
     let open = || {
         host.open_library_prompt(GUEST, "Scry".into(), Flow::Scry, 3, |prompt| {
             let PromptState::Sort(sort) = prompt else {
@@ -185,7 +123,10 @@ fn guest_sorts_privately_and_done_records_one_undoable_batch() {
     assert_eq!(log.entries().len(), before_log.entries().len() + 1);
     assert!(matches!(
         log.entries().last().unwrap().action,
-        Action::Batch { .. }
+        Action::FlowResult {
+            flow: Flow::Scry,
+            ..
+        }
     ));
     let expected = [library[2], library[1]]
         .into_iter()

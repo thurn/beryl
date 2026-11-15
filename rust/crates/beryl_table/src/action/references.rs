@@ -173,7 +173,31 @@ impl<Id> Action<Id> {
             Self::NextGame { winner } => Action::NextGame { winner },
             Self::Concede {} => Action::Concede {},
             Self::SetAssist { assist, on } => Action::SetAssist { assist, on },
-            Self::Flow { seat, flow, count } => Action::Flow { seat, flow, count },
+            Self::Flow {
+                seat,
+                flow,
+                count,
+                source,
+            } => Action::Flow {
+                seat,
+                flow,
+                count,
+                source: source.map(|source| source.try_map(resolve)).transpose()?,
+            },
+            Self::FlowResult {
+                flow,
+                seat,
+                on_top,
+                elsewhere,
+            } => {
+                let library = Zone::Library(seat);
+                Action::FlowResult {
+                    flow,
+                    seat,
+                    on_top: resolve_all(on_top, library, resolve)?,
+                    elsewhere: resolve_all(elsewhere, library, resolve)?,
+                }
+            }
             Self::Undo { entry } => Action::Undo { entry },
             Self::Rewind { to } => Action::Rewind { to },
             Self::Batch { actions } => Action::Batch {

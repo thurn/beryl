@@ -6,7 +6,7 @@ use beryl_session::card_records::{record, token_printing_key};
 use beryl_session::protocol::{
     CardType, Counter, CounterView, FaceName, Facing, Keyword, MarkerPreview, NamedCounter,
     ObjectId as Slot, ObjectView, PowerToughness, RowName, Side, StackItem, TableCardCommands,
-    ZoneName,
+    TableFlowOption, ZoneName,
 };
 use beryl_table::helpers::{counter, printed_face};
 use beryl_table::state::{AbilityMarker, Card, Face, Object, ObjectId, Row, Zone};
@@ -51,10 +51,23 @@ impl<'a> CardProjection<'a> {
         self.active_face().and_then(facts::printed_stats)
     }
 
-    pub(super) fn commands(&self) -> Option<TableCardCommands> {
+    pub(super) fn commands(&self, library_flows: bool) -> Option<TableCardCommands> {
+        let flows = if library_flows {
+            self.active_face()
+                .map(beryl_table::assist::text::flows)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|effect| TableFlowOption {
+                    kind: effect.kind(),
+                    count: effect.count(),
+                })
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
         let type_line = self.type_line().unwrap_or_default();
         let auto_attach = facts::is_attachment_type_line(type_line);
-        if self.card.zone != Zone::Battlefield && !auto_attach {
+        if self.card.zone != Zone::Battlefield && !auto_attach && flows.is_empty() {
             return None;
         }
         let oracle_text = self
@@ -69,6 +82,7 @@ impl<'a> CardProjection<'a> {
                 .map(|(power, toughness)| PowerToughness { power, toughness }),
             counter_names: facts::quick_counter_names(type_line, oracle_text),
             auto_attach,
+            flows,
         })
     }
 

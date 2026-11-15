@@ -500,15 +500,19 @@ export function Controls({
           }
         />
       )}
-      {manualPile && client && view && !dimmed && (
-        <TablePileViewer
-          key={manualPile.key}
-          client={client}
-          view={view}
-          pile={manualPile}
-          reveals={manualPile.zone === "revealed" ? revealedIn(resting) : []}
-        />
-      )}
+      {manualPile &&
+        client &&
+        view &&
+        !dimmed &&
+        view.table?.prompt?.kind !== "sort" && (
+          <TablePileViewer
+            key={manualPile.key}
+            client={client}
+            view={view}
+            pile={manualPile}
+            reveals={manualPile.zone === "revealed" ? revealedIn(resting) : []}
+          />
+        )}
       {viewed && !dimmed && (
         <ZoneViewer
           key={viewedKey}

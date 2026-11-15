@@ -1,3 +1,4 @@
+import type { TableFlowOption } from "../generated/protocol";
 import type {
   CardEntry,
   CardTokenLink,
@@ -15,6 +16,7 @@ import {
 } from "./commands.ts";
 import { counterNames, type TokenChoice } from "./cardState.ts";
 import { uses } from "./fill.ts";
+import { cardFlows, flowCondition, flowLabel } from "./flows.ts";
 import { manaColor } from "./players.ts";
 import type { Row } from "./Menu.tsx";
 import { canMoveInto, canUseZone, isHiddenZone } from "./zoneAccess.ts";
@@ -41,6 +43,7 @@ export interface MenuCommand {
   command: Command;
   label: string;
   token?: CardTokenLink;
+  flow?: TableFlowOption;
 }
 
 export const seatOf = (view: PlayerView, side: Side) => {
@@ -147,6 +150,12 @@ export function allowed(
       command.id === "library.undo_draw"
     )
       return side === "you";
+    if ("flow" in action)
+      return (
+        kind === "library" &&
+        side === "you" &&
+        view.players.you.library.length > 0
+      );
     if (
       kind === "library" &&
       uses(command.action, "objects") &&
@@ -170,7 +179,9 @@ function conditions({
   lastToken,
 }: MenuContext) {
   const object = "name" in target ? target.object : undefined;
-  const result = new Set<string>();
+  const result = new Set<string>(
+    cardFlows({ target, view, cards }).map(({ kind }) => flowCondition(kind)),
+  );
   if (logEntry) result.add("log_entry");
   if (viewer) result.add("open_viewer");
   if (viewer?.revealed) result.add("revealed_cards");
@@ -273,6 +284,22 @@ export function availableCommands(
     )
       return [];
     const { id, label } = command;
+    if (command.assist === "library_flows" && command.when) {
+      const flows = cardFlows(context).filter(
+        ({ kind }) => flowCondition(kind) === command.when,
+      );
+      return flows
+        .filter(
+          (flow, index) =>
+            flows.findIndex(({ count }) => count === flow.count) === index,
+        )
+        .map((flow, index) => ({
+          id: index === 0 ? id : `${id}:${flow.count}`,
+          label: flowLabel(flow),
+          command,
+          flow,
+        }));
+    }
     if (
       id === "token.from_card" ||
       id === "token.attached" ||

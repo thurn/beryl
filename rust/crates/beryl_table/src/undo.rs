@@ -35,7 +35,11 @@ impl<'a> Targets<'a> {
     fn named(&self, by: Seat, n: u32) -> Option<&'a Entry> {
         let index = self.live.binary_search_by_key(&n, |entry| entry.n).ok()?;
         let entry = self.live[index];
-        (matches!(entry.action, Action::Batch { .. }) || own_draw(entry, by)).then_some(entry)
+        (matches!(
+            entry.action,
+            Action::Batch { .. } | Action::FlowResult { .. }
+        ) || own_draw(entry, by))
+        .then_some(entry)
     }
 
     pub(crate) fn target(&self, by: Seat, requested: Option<u32>) -> Result<&'a Entry, Refusal> {
@@ -51,7 +55,10 @@ impl<'a> Targets<'a> {
     }
 
     pub(crate) fn batch_control(&self, by: Seat, entry: &Entry) -> Option<UndoControl> {
-        if !matches!(entry.action, Action::Batch { .. }) {
+        if !matches!(
+            entry.action,
+            Action::Batch { .. } | Action::FlowResult { .. }
+        ) {
             return None;
         }
         self.named(by, entry.n).map(|target| self.control(target))

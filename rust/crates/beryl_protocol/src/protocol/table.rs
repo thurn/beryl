@@ -44,6 +44,16 @@ pub struct TableCardCommands {
     pub base_stats: Option<PowerToughness>,
     pub counter_names: [String; 3],
     pub auto_attach: bool,
+    /// Library instructions printed on the visible face, when the assist is on.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<_>")]
+    pub flows: Vec<TableFlowOption>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TableFlowOption {
+    pub kind: beryl_table::action::Flow,
+    pub count: u16,
 }
 
 /// A battlefield row explicitly chosen by a player.

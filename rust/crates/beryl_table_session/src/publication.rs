@@ -9,6 +9,8 @@ use crate::prompt::{Completion, OpenPrompt, Progress, PromptState};
 
 #[path = "flow.rs"]
 mod flow;
+#[path = "flows.rs"]
+mod flows;
 pub use crate::script::ProposalMarks;
 use crate::script::{proposal_marks, script_with_proposal_marks, snapshot};
 use crate::view::{Slots, attach_history, project};

@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use beryl_card_store::Face;
 
-use crate::action::{Adjustment, Destination, Position, Selection};
+use crate::action::{Adjustment, Destination, Flow as FlowKind, Position, Selection};
 use crate::state::{ObjectId, Zone};
 use crate::{Action, Refusal, Seat};
 
@@ -182,7 +182,26 @@ pub enum Flow {
 }
 
 impl Flow {
-    fn count(self) -> u16 {
+    #[must_use]
+    pub fn new(kind: FlowKind, count: u16) -> Self {
+        match kind {
+            FlowKind::Scry => Self::Scry(count),
+            FlowKind::Surveil => Self::Surveil(count),
+            FlowKind::LookAtTop => Self::LookTop(count),
+        }
+    }
+
+    #[must_use]
+    pub fn kind(self) -> FlowKind {
+        match self {
+            Self::Scry(_) => FlowKind::Scry,
+            Self::Surveil(_) => FlowKind::Surveil,
+            Self::LookTop(_) => FlowKind::LookAtTop,
+        }
+    }
+
+    #[must_use]
+    pub fn count(self) -> u16 {
         match self {
             Self::Scry(count) | Self::Surveil(count) | Self::LookTop(count) => count,
         }
@@ -256,21 +275,29 @@ pub struct FlowChoice {
 /// [CR 701.22a]: https://yawgatog.com/resources/magic-rules/#R70122a
 /// [CR 701.25a]: https://yawgatog.com/resources/magic-rules/#R70125a
 pub fn flow_result(flow: Flow, top: &[ObjectId], choice: &FlowChoice) -> Result<Action, Refusal> {
-    let mut remaining: BTreeSet<_> = top.iter().copied().collect();
-    if top.len() > usize::from(flow.count())
-        || remaining.len() != top.len()
-        || choice
-            .on_top
-            .iter()
-            .chain(&choice.elsewhere)
-            .any(|id| !remaining.remove(id))
-        || !remaining.is_empty()
-        || (matches!(flow, Flow::LookTop(_)) && !choice.elsewhere.is_empty())
-    {
+    if top.len() > usize::from(flow.count()) {
         return Err(Refusal::INVALID);
     }
+    validate_flow(flow.kind(), top, &choice.on_top, &choice.elsewhere)?;
+    Ok(Action::FlowResult {
+        flow: flow.kind(),
+        seat: choice.seat,
+        on_top: choice.on_top.clone(),
+        elsewhere: choice.elsewhere.clone(),
+    })
+}
 
-    let library = Zone::Library(choice.seat);
+pub(crate) fn flow_moves(
+    flow: FlowKind,
+    seat: Seat,
+    on_top: &[ObjectId],
+    elsewhere: &[ObjectId],
+    library: &[ObjectId],
+) -> Result<Vec<Action>, Refusal> {
+    let count = on_top.len() + elsewhere.len();
+    let packet = library.get(..count).ok_or(Refusal::Stale)?;
+    validate_flow(flow, packet, on_top, elsewhere)?;
+    let library = Zone::Library(seat);
     let move_cards = |objects: &[ObjectId], to, position| Action::Move {
         selection: Selection {
             objects: objects.to_vec(),
@@ -282,31 +309,54 @@ pub fn flow_result(flow: Flow, top: &[ObjectId], choice: &FlowChoice) -> Result<
         tapped: None,
     };
     let mut actions = Vec::new();
-    if !choice.elsewhere.is_empty() {
+    if !elsewhere.is_empty() {
         let (to, position) = match flow {
-            Flow::Scry(_) => (library, Position::Bottom),
-            Flow::Surveil(_) => (Zone::Graveyard(choice.seat), Position::Top),
-            Flow::LookTop(_) => unreachable!("look-at-top destinations were validated"),
+            FlowKind::Scry => (library, Position::Bottom),
+            FlowKind::Surveil => (Zone::Graveyard(seat), Position::Top),
+            FlowKind::LookAtTop => unreachable!("look-at-top destinations were validated"),
         };
-        actions.push(move_cards(&choice.elsewhere, to, position));
+        actions.push(move_cards(elsewhere, to, position));
     }
-    if !choice.on_top.is_empty() {
-        actions.push(move_cards(&choice.on_top, library, Position::Top));
+    if !on_top.is_empty() {
+        actions.push(move_cards(on_top, library, Position::Top));
     }
-    Ok(Action::Batch { actions })
+    Ok(actions)
+}
+
+fn validate_flow(
+    flow: FlowKind,
+    packet: &[ObjectId],
+    on_top: &[ObjectId],
+    elsewhere: &[ObjectId],
+) -> Result<(), Refusal> {
+    let mut remaining: BTreeSet<_> = packet.iter().copied().collect();
+    if packet.is_empty()
+        || packet.len() != remaining.len()
+        || on_top
+            .iter()
+            .chain(elsewhere)
+            .any(|id| !remaining.remove(id))
+        || !remaining.is_empty()
+        || (flow == FlowKind::LookAtTop && !elsewhere.is_empty())
+    {
+        return Err(Refusal::INVALID);
+    }
+    Ok(())
 }
 
 /// Formats the public summary for a validated library flow.
 #[must_use]
 pub fn flow_line(flow: Flow, choice: &FlowChoice) -> String {
-    let top = choice.on_top.len();
-    let elsewhere = choice.elsewhere.len();
+    flow_summary(flow.kind(), choice.on_top.len(), choice.elsewhere.len())
+}
+
+pub(crate) fn flow_summary(flow: FlowKind, top: usize, elsewhere: usize) -> String {
     let count = top + elsewhere;
     match flow {
-        Flow::Scry(_) => format!("Scried {count}: {top} on top, {elsewhere} on the bottom"),
-        Flow::Surveil(_) => {
+        FlowKind::Scry => format!("Scried {count}: {top} on top, {elsewhere} on the bottom"),
+        FlowKind::Surveil => {
             format!("Surveilled {count}: {top} on top, {elsewhere} in the graveyard")
         }
-        Flow::LookTop(_) => format!("Looked at {count}: {top} on top"),
+        FlowKind::LookAtTop => format!("Looked at {count}: {top} on top"),
     }
 }

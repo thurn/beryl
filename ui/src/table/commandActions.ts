@@ -10,6 +10,7 @@ import {
 } from "./cardState";
 import { sameZone, type CardTarget } from "./client";
 import { fill, uses, type ActionValues } from "./fill";
+import { flowAction } from "./flows";
 import { advancePhase, untapPermanents } from "./turn";
 import {
   actionReference,
@@ -39,6 +40,12 @@ export function commandActions(
 ): TableAction[] {
   const { target, view } = context;
   const { command } = entry;
+  const flow = flowAction(
+    entry,
+    context,
+    typeof values.number === "number" ? values.number : undefined,
+  );
+  if (flow) return [flow];
   if (command.id === "table.untap_all" || command.id === "phase.untap_active")
     return [untapPermanents(view)];
   if (command.id === "phase.next" || command.id === "phase.next_with_action")

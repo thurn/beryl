@@ -183,9 +183,8 @@ impl HostedTable {
         let all = match request {
             Request::Action(action) => {
                 check_lobby_actor(seat, &action)?;
-                self.table.apply_client_checked(seat, action, |entry| {
-                    save_entry(&mut self.save, entry)
-                })?;
+                self.table
+                    .dispatch_action(seat, action, |entry| save_entry(&mut self.save, entry))?;
                 true
             }
             Request::Lobby(request) => {

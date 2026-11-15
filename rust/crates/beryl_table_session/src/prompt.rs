@@ -128,6 +128,7 @@ impl PromptState {
         Some(Action::Flow {
             seat: sort.seat,
             flow: sort.flow,
+            source: None,
             count: u16::try_from(sort.cards.len()).expect("bounded by the requested count"),
         })
     }
