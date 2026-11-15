@@ -38,42 +38,6 @@ const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
          controller to choose new targets for",
     ),
     (
-        "Animate Dead",
-        "ability 1, step 3",
-        "Amount::Fixed(1)",
-        "the delayed trigger it makes (ability 3) sacrifices the object the delay carries and \
-         reads no `Amount::Carried`, so the number the delay carries is never read",
-    ),
-    (
-        "Animate Dead",
-        "granted ability 0, target 0",
-        "optional",
-        "the granted spell ability is an enchant ability of a permanent, never cast, so its spec \
-         chooses no target; what it may enchant reads the spec's kind, filter and \
-         `put_with_this` only",
-    ),
-    (
-        "Flickerwisp",
-        "ability 0, step 1",
-        "Amount::Fixed(1)",
-        "the delayed trigger it makes (ability 1) returns the object the delay carries and reads \
-         no `Amount::Carried`, so the number the delay carries is never read",
-    ),
-    (
-        "Show and Tell",
-        "ability 0, step 1",
-        "linked true",
-        "a permanent remembers that an ability of its source put it onto the battlefield only for \
-         that object's other abilities to find it, and a sorcery has no ability that does",
-    ),
-    (
-        "Teferi, Hero of Dominaria",
-        "ability 0, step 1",
-        "Amount::Fixed(1)",
-        "the delayed trigger it makes (ability 3) untaps two lands and reads no \
-         `Amount::Carried`, so the amount the delay carries is never read",
-    ),
-    (
         "Winds of Abandon",
         "ability 0, step 1",
         "Players::EachOpponent",
@@ -254,4 +218,28 @@ fn a_mutant_of_an_emblem_is_a_mutant_of_its_card() {
     assert!(made.iter().all(|&t| std::ptr::eq(t, mutant.def.tokens[0])));
     assert!(!std::ptr::eq(mutant.def.tokens[0], emblem));
     assert!(killed(mutant.def, &expected));
+}
+
+/// A mutant only changes something a game can read. Show and Tell links what it puts onto the
+/// battlefield, but nothing of a sorcery reads the link, so it has no `linked` mutant, while
+/// Animate Dead, whose granted enchant ability needs the link, keeps its own. And Animate
+/// Dead's granted enchant ability is never cast, so it has no mutants.
+#[test]
+fn mutants_change_only_what_a_game_reads() {
+    let named = |card: &str| -> Vec<String> {
+        let def = CARDS.get(card).expect("the card has a file");
+        mutants(def)
+            .into_iter()
+            .map(|m| format!("{}: {}", m.node, m.neighbour))
+            .collect()
+    };
+    let show_and_tell = named(crate::names::SHOW_AND_TELL);
+    assert!(!show_and_tell.iter().any(|m| m.contains("linked")));
+    let animate_dead = named(crate::names::ANIMATE_DEAD);
+    assert!(animate_dead.iter().any(|m| m.ends_with("linked false")));
+    assert!(
+        !animate_dead
+            .iter()
+            .any(|m| m.starts_with("granted ability"))
+    );
 }

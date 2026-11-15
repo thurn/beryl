@@ -6,8 +6,13 @@
 //! zone, an owner for a controller), an amount one higher or one lower, an optional target
 //! made required and the reverse, a "may" or an "unless" removed, an `If` condition negated,
 //! one element dropped from a `Sequence` and a filter widened to `Filter::Any`.
+//!
+//! A node no game can read makes no mutant, since no scenario could kill it: a delay that
+//! carries no number, the link of a card nothing of which reads it, and a granted spell
+//! ability, which is never cast. A mutant that survives is then a real gap, or a pair of
+//! definitions that `EQUIVALENT` argues always do the same.
 
-use beryl_card::{Duration, Filter, Prevention, PutOnto, Regeneration};
+use beryl_card::{Duration, Filter, Node, Prevention, PutOnto, Regeneration};
 use beryl_engine::Zone;
 use beryl_engine::card::{
     Ability, AbilityKind, Amount, Behavior, CardDef, Condition, Effect, Face, Objects, Players,
@@ -182,6 +187,7 @@ fn replaced(
 /// The mutants of the abilities on `def`'s own faces.
 fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
     let mut out = Vec::new();
+    let reads_link = reads_link(def);
     for (f, face) in def.faces.iter().enumerate() {
         let face_name = if f == 0 {
             String::new()
@@ -190,6 +196,13 @@ fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
         };
         for (granted, list) in [(false, face.abilities), (true, face.grants)] {
             for (i, ability) in list.iter().enumerate() {
+                // A spell is cast from its face's own spell ability (`Face::spell_ability_with`),
+                // never from one granted to it, so a granted spell ability is never cast: it
+                // chooses no target and never resolves. On an Aura it is only an enchant
+                // ability, and what that may enchant reads no part a mutant would change.
+                if granted && ability.kind() == AbilityKind::Spell {
+                    continue;
+                }
                 let what = if granted {
                     "granted ability"
                 } else {
@@ -197,6 +210,9 @@ fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
                 };
                 let at = format!("{face_name}{what} {i}");
                 for (node, neighbour, changed) in ability_neighbours(ability, &at) {
+                    if !reads_link && neighbour.starts_with(LINKED) {
+                        continue;
+                    }
                     let mut abilities = list.to_vec();
                     abilities[i] = changed;
                     let abilities = leak_slice(abilities);
@@ -226,6 +242,29 @@ fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
         }
     }
     out
+}
+
+/// The name a [`PutOnto::linked`] neighbour starts with.
+const LINKED: &str = "linked ";
+
+/// Whether something of `def` reads which objects it put onto the battlefield
+/// ([`PutOnto::linked`]): an [`Objects::PutOntoBattlefieldWithThis`] or a target that must have
+/// been put onto the battlefield with it ([`TargetSpec::put_with_this`]). The game remembers
+/// the link for the abilities of the object that made it alone, so a card with neither has
+/// nothing that tells `linked true` from `linked false`, and no such mutant is made.
+fn reads_link(def: &CardDef) -> bool {
+    let mut reads = false;
+    def.walk(&mut |node| {
+        reads |= matches!(node, Node::Objects(Objects::PutOntoBattlefieldWithThis));
+    });
+    let abilities = def
+        .faces
+        .iter()
+        .flat_map(|f| f.abilities.iter().chain(f.grants));
+    reads
+        || abilities
+            .flat_map(Ability::targets)
+            .any(|spec| spec.put_with_this)
 }
 
 /// `face` with these abilities and granted abilities.
@@ -551,7 +590,7 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
                 },
             );
             put(
-                format!("linked {}", !onto.linked),
+                format!("{LINKED}{}", !onto.linked),
                 PutOnto {
                     linked: !onto.linked,
                     ..*onto
@@ -1022,12 +1061,13 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
             carrying,
             object,
         } => {
-            for (name, carrying) in amounts(carrying) {
+            // A delay that carries no number has none to change.
+            for (name, carrying) in carrying.map(amounts).unwrap_or_default() {
                 add(
                     name,
                     Effect::Delay {
                         ability,
-                        carrying,
+                        carrying: Some(carrying),
                         object,
                     },
                 );

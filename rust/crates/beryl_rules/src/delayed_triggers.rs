@@ -59,10 +59,10 @@ pub fn create<L: Layout>(
 pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     ability: AbilityIx,
-    carrying: Amount,
+    carrying: Option<Amount>,
     object: Option<Objects>,
 ) -> Result<Outcome<L>, Full> {
-    let amount = run.scene().amount(carrying);
+    let amount = carrying.map_or(0, |carrying| run.scene().amount(carrying));
     let object = object.and_then(|object| {
         let s = run.state();
         let slot = s.in_candidate_order(run.scene().objects(object)).next()?;

@@ -590,15 +590,15 @@ pub enum Effect {
     ///
     /// The ability is one of its face's, written with a delayed trigger
     /// ([`crate::Trigger::next`]) and named here by its place among them: a game keeps a
-    /// waiting ability as its card, face and place. `carrying` is a number settled as this
-    /// instruction is reached
+    /// waiting ability as its card, face and place. `carrying` is a number (none carries 0)
+    /// settled as this instruction is reached
     /// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h)), which the delayed
     /// ability reads when it resolves, as "add an amount of {C} equal to that spell's mana
     /// value". `object`, settled the same way, is the one object the delayed ability names
     /// as [`Objects::Carried`]: the first of what the expression names, as it is then.
     Delay {
         ability: AbilityIx,
-        carrying: Amount,
+        carrying: Option<Amount>,
         object: Option<Objects>,
     },
     /// "[Player] gets an emblem with [abilities]"

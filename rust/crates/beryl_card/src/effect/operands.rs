@@ -271,9 +271,12 @@ impl Effect {
             }
             Effect::Delay {
                 carrying, object, ..
-            } => match object {
-                Some(object) => Operands::of_objects(object).amount(carrying),
-                None => Operands::NONE.amount(carrying),
+            } => Operands {
+                amount: carrying.as_ref(),
+                ..match object {
+                    Some(object) => Operands::of_objects(object),
+                    None => Operands::NONE,
+                }
             },
         }
     }

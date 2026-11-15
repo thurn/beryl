@@ -660,7 +660,7 @@ pub const fn add_mana_of_kind(player: Players, kind: ManaColor, amount: Amount) 
 pub const fn delay_carrying(ability: u8, carrying: Amount) -> Effect {
     Effect::Delay {
         ability: AbilityIx::new(ability),
-        carrying,
+        carrying: Some(carrying),
         object: None,
     }
 }
@@ -670,7 +670,7 @@ pub const fn delay_carrying(ability: u8, carrying: Amount) -> Effect {
 pub const fn delay_with(ability: u8, object: Objects) -> Effect {
     Effect::Delay {
         ability: AbilityIx::new(ability),
-        carrying: Amount::Fixed(0),
+        carrying: None,
         object: Some(object),
     }
 }
@@ -749,7 +749,7 @@ pub const fn untap_up_to(player: Players, count: u8, permanents: Objects) -> Eff
 pub const fn delay(ability: u8) -> Effect {
     Effect::Delay {
         ability: AbilityIx::new(ability),
-        carrying: Amount::Fixed(0),
+        carrying: None,
         object: None,
     }
 }

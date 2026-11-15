@@ -234,7 +234,7 @@ fn the_operands_of_every_entry_are_checked() {
     const CARRYING: &[Ability] = &[
         Ability::spell().effect(&Effect::Delay {
             ability: crate::index::AbilityIx::new(1),
-            carrying: Amount::ManaValue(target()),
+            carrying: Some(Amount::ManaValue(target())),
             object: None,
         }),
         Ability::triggered(&Trigger::main_phase(you()).next()).effect(&draw(you(), 1)),

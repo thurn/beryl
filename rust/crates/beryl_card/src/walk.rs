@@ -1,6 +1,6 @@
-//! Walking a definition: every [`Filter`], [`Amount`] and [`Condition`] it holds, wherever it
-//! holds one, for a check that must see them all, and every [`Subtype`](crate::Subtype) it
-//! names.
+//! Walking a definition: every [`Filter`], [`Amount`], [`Condition`] and [`Objects`] it
+//! holds, wherever it holds one, for a check that must see them all, and every
+//! [`Subtype`](crate::Subtype) it names.
 
 use crate::ability::{Ability, Behavior};
 use crate::characteristics::{BasicLandTypes, Subtypes};
@@ -12,13 +12,14 @@ use crate::filter::Filter;
 use crate::trigger::Subject;
 use crate::words::Words;
 
-/// A part of a definition a walk meets: each filter, amount and condition, those inside
-/// another included.
+/// A part of a definition a walk meets: each filter, amount, condition and object
+/// expression, those inside another included.
 #[derive(Clone, Copy, Debug)]
 pub enum Node<'a> {
     Filter(&'a Filter),
     Amount(&'a Amount),
     Condition(&'a Condition),
+    Objects(&'a Objects),
 }
 
 /// What is done with each part met.
@@ -306,6 +307,7 @@ impl Filter {
 
 impl Objects {
     fn walk(&self, visit: Visit) {
+        visit(Node::Objects(self));
         match self {
             Objects::This
             | Objects::Target(_)
