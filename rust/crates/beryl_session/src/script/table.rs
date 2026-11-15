@@ -59,6 +59,35 @@ pub struct Turn {
     pub step: TurnStep,
 }
 
+#[cfg(test)]
+impl Table {
+    /// A table with nothing on it and each player at `life`, in the first main phase of
+    /// your first turn.
+    pub(crate) fn empty(life: i32) -> Table {
+        let piles = || Piles {
+            life,
+            mana: ManaPool::default(),
+            named_counters: Vec::new(),
+            library: Vec::new(),
+            graveyard: Vec::new(),
+            manual: None,
+        };
+        Table {
+            objects: BTreeMap::new(),
+            battlefield: Vec::new(),
+            stack: Vec::new(),
+            you: piles(),
+            opponent: piles(),
+            turn: Turn {
+                number: 1,
+                own_number: 1,
+                active: Side::You,
+                step: TurnStep::PrecombatMain,
+            },
+        }
+    }
+}
+
 impl Piles {
     fn of(player: &PlayerState, manual: Option<&ManualPiles>) -> Piles {
         Piles {

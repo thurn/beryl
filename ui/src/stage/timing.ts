@@ -19,6 +19,7 @@ import {
   meets,
   moverOf,
   STRIKE,
+  verbRules,
 } from "./tracks.ts";
 
 /** The curves the data names, as progress from 0 to 1 (CSS's of the same names); `none` is a
@@ -211,9 +212,10 @@ const NOTICES: Partial<Record<Notice["kind"], string>> = {
 };
 
 /** How long after one card of a batch begins to leave for exile the next does (UI
- * Conventions, "A batch exile": one at a time, about 0.3 s apart). Arena's instances are of
- * single cards, so its data has no stagger for the case. */
-const BATCH_EXILE = 300;
+ * Conventions, "A batch exile": one at a time, about 0.3 s apart): the `vanish` verb's
+ * `stagger` for the case. Arena's instances are of single cards, so the case's own values
+ * have no stagger. */
+const BATCH_EXILE = verbRules("vanish")!.stagger!["exiled"]!;
 
 /** A finished ability's: a cut, after which what it left room for closes up. */
 const FINISHED: Timing = { ...SNAP, closes: CLOSED };

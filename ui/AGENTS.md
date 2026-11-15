@@ -15,6 +15,12 @@ says how Beryl follows MTG Arena.
 - `src/stage/` is the "stage", the code that draws the game table and animates
   it. It plays the session's animation scripts on a clock that tests can step
   through one tick at a time (plan K25).
+- The stage's timing rules (`src/stage/timing.ts`: `caseOf`, `timingOf` and
+  `effectsOf`) are also written in Rust, in `beryl_session`'s
+  `src/script/timing.rs`, which the session will send to both clients. Until the
+  stage plays the session's timing, a change to `timing.ts` must make the same
+  change in `timing.rs`: `just timing-parity` times every step of every fixture
+  and card spec moment both ways and fails on any difference.
 - The UI asks for card records by name through `beryl_session`'s `card_records`
   (printing, artist, text and image URLs for each face), and
   `src/cardRecords.ts` caches them before drawing. The UI bundles no card data

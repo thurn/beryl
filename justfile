@@ -275,6 +275,11 @@ fuzz games="10000":
 motion *args:
     {{ by }} motion "$@"
 
+# The session's step timings held to the web interface's over every fixture and card spec moment from both seats (--fixtures-only: the fixtures alone)
+[group('test')]
+timing-parity *args:
+    {{ by }} timing-parity "$@"
+
 # Every decision sequence from the scenarios' end positions, deeper than the fast check: one card's or all (--depth N, --nodes N per scenario)
 [group('test')]
 exhaust *args:

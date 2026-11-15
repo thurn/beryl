@@ -46,6 +46,9 @@
 //!   `beryl_cli specs-describe [--views] <card> [moment]` prints what each moment shows from
 //!   each seat, each view whole with `--views`; `beryl_cli specs-script <card> [moment]`
 //!   prints each seat's scripts, view by view ([`specs`]).
+//! - `beryl_cli step-timings <definitions.json> <pack.json> [--fixtures-only]` records every
+//!   fixture and spec moment, writes their views to `pack.json` and prints the session's
+//!   timing of each step, for `just timing-parity` ([`step_timings`]).
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -53,7 +56,7 @@ use std::process::ExitCode;
 use beryl_cli::transcript::Transcript;
 use beryl_cli::{
     agreement, anchor_replay, blunders, evalfit, fixture, freeze, game, gate, hunt, ladder, number,
-    positions, review, screen, script_check, serve, specs, tournament, why,
+    positions, review, screen, script_check, serve, specs, step_timings, tournament, why,
 };
 use beryl_search::Budget;
 
@@ -76,6 +79,7 @@ const USAGE: &str = "usage:
   beryl_cli specs-serve [--port N]
   beryl_cli specs-check [card...]
   beryl_cli script-check <definitions.json> [--dump DIR] [check...]
+  beryl_cli step-timings <definitions.json> <pack.json> [--fixtures-only]
   beryl_cli specs-describe [--views] <card> [moment]
   beryl_cli specs-script <card> [moment]
   beryl_cli blunder-hunt [--hours 6] [--out DIR] [--seed N] [--inspect CASE.json]
@@ -126,6 +130,14 @@ fn main() -> ExitCode {
             number(flag, port).and_then(specs::serve::serve)
         }
         [command, cards @ ..] if command == "specs-check" => specs::check_all(cards),
+        [command, definitions, pack] if command == "step-timings" => {
+            step_timings::main(Path::new(definitions), Path::new(pack), false)
+        }
+        [command, definitions, pack, flag]
+            if command == "step-timings" && flag == "--fixtures-only" =>
+        {
+            step_timings::main(Path::new(definitions), Path::new(pack), true)
+        }
         [command, definitions, checks @ ..] if command == "script-check" => {
             script_check::main(Path::new(definitions), checks)
         }

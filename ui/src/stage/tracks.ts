@@ -10,6 +10,19 @@ import { abilityName, type Name, type Point, type Resting } from "./layout.ts";
 import { ALOFT, between, type Pose } from "./pose.ts";
 import { bowed, bowOf, type Bow } from "./bows.ts";
 import type { Table } from "./table.ts";
+import conventions from "../../../data/ui-conventions.json" with { type: "json" };
+
+/** The verb the data names `name`, with the numbers its timing rules read beside its values:
+ * a strike's `phases`, and the `closes` and `stagger` of a case that a rule sets apart from
+ * the case's measured values. */
+export const verbRules = (name: string) =>
+  conventions.verbs.find((verb) => verb.name === name) as
+    | {
+        phases?: { poise: number; hit: number };
+        closes?: Record<string, number>;
+        stagger?: Record<string, number>;
+      }
+    | undefined;
 
 /** How a verb is played, in stage milliseconds: how long its motion takes, how long after its
  * turn comes it begins, how long the next step of its beat waits for it, and its curve from 0
@@ -265,10 +278,10 @@ export const roomIn = (
 export const REGROUP = 170;
 
 /** How long what a finished ability left room for takes to close up (the motion review of
- * vanish, by-w8gv.21.47: a phone's rows, hands and piles closed its band of the table "in
+ * vanish: a phone's rows, hands and piles closed its band of the table "in
  * one frame"; "one move of about 200 to 250 ms, ease-out, starting on the frame after"). The
  * ability itself is cut (UI Conventions, "A finished ability"). */
-export const CLOSED = 225;
+export const CLOSED = verbRules("vanish")!.closes!["ability finished"]!;
 
 /** An entry that goes from sight where it was at `start`, and never travels: slowly at first,
  * while the effect that says how it leaves is seen on it (effects.ts), all at once at the
@@ -421,8 +434,8 @@ const inOut = (progress: number) =>
  * over it before then is held back (enter.ts `awaited`). */
 export const STRIKE = {
   wind: 0.08,
-  poise: 0.32,
-  hit: 0.376,
+  poise: verbRules("strike")!.phases!.poise,
+  hit: verbRules("strike")!.phases!.hit,
   stay: 0.48,
   seen: 0.53,
   home: 0.9,

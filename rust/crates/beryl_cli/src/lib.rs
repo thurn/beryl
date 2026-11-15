@@ -21,6 +21,7 @@ pub mod screen;
 pub mod script_check;
 pub mod serve;
 pub mod specs;
+pub mod step_timings;
 pub mod tournament;
 pub mod transcript;
 mod walk;
