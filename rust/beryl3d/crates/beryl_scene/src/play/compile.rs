@@ -115,6 +115,7 @@ pub(crate) fn compile(
                 return;
             }
             steps.push(StepRecord {
+                view: 0,
                 beat,
                 index,
                 verb: step.act.verb(),

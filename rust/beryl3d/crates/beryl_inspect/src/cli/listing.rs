@@ -3,7 +3,9 @@
 
 use std::fmt::Write;
 
-use beryl_scene::driver::{Moment, Name, Offset, Page};
+use beryl_scene::agent::steps::card_of;
+use beryl_scene::agent::tree::locator_of;
+use beryl_scene::driver::{Duration, Moment, Name, Offset, Page, StepMoment};
 use beryl_scene::frame::Role;
 use serde_json::{Value, json};
 
@@ -11,8 +13,11 @@ use super::options::{self, Options, Usage, quote, seat_word, side_of};
 use super::{Printed, milliseconds, open};
 use crate::recordings;
 
-/// How many lines `info` prints before it cuts the rest, unless `--full`.
-const MOST_MOMENTS: usize = 200;
+/// How many moments `info` prints before it cuts the rest, unless `--full`, so that with its
+/// header and its closing lines it prints at most 100.
+const MOST_MOMENTS: usize = 95;
+/// How many recordings `list` prints before it cuts the rest, unless `--full`.
+const MOST_RECORDINGS: usize = 95;
 
 pub(super) fn list(options: &Options) -> Result<Printed, Usage> {
     let prefix = match options.rest.as_slice() {
@@ -56,8 +61,17 @@ pub(super) fn list(options: &Options) -> Result<Printed, Usage> {
         return Ok(Printed::text(format!("{value}\n")));
     }
     let mut out = format!("{}\n", options.command_line());
-    let width = listed.iter().map(|r| r.name.len()).max().unwrap_or(0);
-    for row in &listed {
+    let shown = if options.switch("--full") {
+        listed.len()
+    } else {
+        listed.len().min(MOST_RECORDINGS)
+    };
+    let width = listed[..shown]
+        .iter()
+        .map(|r| r.name.len())
+        .max()
+        .unwrap_or(0);
+    for row in &listed[..shown] {
         let seat = format!("--seat {}", seat_word(side_of(row.seat)));
         let length = match (&row.failure, row.length_ms) {
             (Some(why), _) => format!("not recorded: {why}"),
@@ -65,6 +79,18 @@ pub(super) fn list(options: &Options) -> Result<Printed, Usage> {
             (None, None) => format!("does not play, {} views", row.views),
         };
         let _ = writeln!(out, "{:<width$}  {seat:<15}  {length}", row.name);
+    }
+    if shown < listed.len() {
+        let _ = writeln!(
+            out,
+            "... {} more (just b3d list {}--full, or a longer prefix)",
+            listed.len() - shown,
+            if prefix.is_empty() {
+                String::new()
+            } else {
+                format!("{} ", quote(prefix))
+            }
+        );
     }
     let _ = writeln!(
         out,
@@ -111,25 +137,7 @@ pub(super) fn info(options: &Options) -> Result<Printed, Usage> {
             value: json!({ "moment": name.to_string(), "t_ms": milliseconds(at.0) }),
         });
     }
-    for step in &steps {
-        let verb = format!("{:?}", step.verb).to_lowercase();
-        listed.push(Listed {
-            moment: step.name.to_string(),
-            at: step.middle,
-            what: format!(
-                "{verb} from {}ms to {}ms",
-                milliseconds(step.from),
-                milliseconds(step.to)
-            ),
-            value: json!({
-                "moment": step.name.to_string(),
-                "t_ms": milliseconds(step.middle),
-                "verb": verb,
-                "from_ms": milliseconds(step.from),
-                "to_ms": milliseconds(step.to),
-            }),
-        });
-    }
+    listed.extend(step_rows(&mut page, &steps)?);
     listed.extend(prompt_rows(&mut page, &prompts)?);
     // In time order; at one time, the order above: a view, its steps, then its prompt.
     listed.sort_by_key(|row| row.at);
@@ -182,9 +190,49 @@ pub(super) fn info(options: &Options) -> Result<Printed, Usage> {
         out,
         "Each line starts with what --at takes, as in: just b3d tree {} --at {}",
         quote(options.name()),
-        listed.last().map_or("end", |row| row.moment.as_str())
+        listed[..shown]
+            .last()
+            .map_or("end", |row| row.moment.as_str())
     );
     Ok(Printed::text(out))
+}
+
+/// Each script step's moment with its verb, the card it moves and its span.
+fn step_rows(page: &mut Page, steps: &[StepMoment]) -> Result<Vec<Listed>, Usage> {
+    let mut listed = Vec::new();
+    for step in steps {
+        let verb = format!("{:?}", step.verb).to_lowercase();
+        // What the step moves, as the tree names it halfway through, so a reader can find the
+        // step that moves a given card.
+        let subject = match step.subject {
+            Some(slot) => {
+                page.seek(&Moment::At(Duration(step.middle)))
+                    .map_err(|error| Usage(error.to_string()))?;
+                let frame = page.frame();
+                card_of(frame, slot).map(|index| locator_of(frame, index))
+            }
+            None => None,
+        };
+        listed.push(Listed {
+            moment: step.name.to_string(),
+            at: step.middle,
+            what: format!(
+                "{verb}{} from {}ms to {}ms",
+                subject.as_ref().map_or(String::new(), |s| format!(" {s}")),
+                milliseconds(step.from),
+                milliseconds(step.to)
+            ),
+            value: json!({
+                "moment": step.name.to_string(),
+                "t_ms": milliseconds(step.middle),
+                "verb": verb,
+                "subject": subject,
+                "from_ms": milliseconds(step.from),
+                "to_ms": milliseconds(step.to),
+            }),
+        });
+    }
+    Ok(listed)
 }
 
 /// Each prompt's moment with the buttons on screen when it is open and still.
@@ -199,7 +247,7 @@ fn prompt_rows(page: &mut Page, prompts: &[(Name, u64)]) -> Result<Vec<Listed>, 
         let frame = page.frame();
         let buttons: Vec<String> = (0..frame.resolved.len() as u32)
             .filter(|&index| frame.resolved[index as usize].role == Role::Button)
-            .map(|index| beryl_scene::agent::tree::locator_of(frame, index))
+            .map(|index| locator_of(frame, index))
             .collect();
         listed.push(Listed {
             moment: name.to_string(),

@@ -156,7 +156,7 @@ fn a_verb_played_short_fails_the_step_time() {
     assert!(
         faults[0]
             .message
-            .contains("moved for 210 ms in step 1.1 (fly), which lasts 420 ms"),
+            .contains("moved for 210 ms in step:2.0.0 (fly), which lasts 420 ms"),
         "{}",
         printed(faults[0])
     );
@@ -169,7 +169,7 @@ fn a_step_whose_subject_is_outside_the_window_fails_every_step_shown() {
     assert_eq!(faults.len(), 1, "{:?}", checked.faults);
     let fault = faults[0];
     assert!(
-        fault.message.contains("step 1.1 (fly)"),
+        fault.message.contains("step:2.0.0 (fly)"),
         "{}",
         printed(fault)
     );
@@ -197,6 +197,7 @@ fn four_moves_beginning_at_once_fail_not_crowded() {
 /// A step of the first beat that starts at `from` milliseconds and flies a card in from `zone`.
 fn flight(from: u64, zone: ZoneName, why: Why) -> StepRecord {
     StepRecord {
+        view: 1,
         beat: 0,
         index: 0,
         verb: Verb::Fly,
@@ -294,7 +295,7 @@ fn two_segments_that_do_not_meet_fail_no_jumps() {
     assert!(
         found[0]
             .message
-            .contains("jumped 10 mm as step 1.1 (fly) began"),
+            .contains("jumped 10 mm as step:1.0.0 (fly) began"),
         "{found:?}"
     );
 }

@@ -14,11 +14,16 @@ BERYL3D: list[str] = [
     "rust/beryl3d/crates/beryl_scene/src/lib.rs",
     "data/beryl3d/gates.json",
     "rust/beryl3d/crates/beryl_3d/ios/App.swift",
+    "rust/beryl3d/Cargo.lock",
+    "rust/beryl3d/AGENTS.md",
 ]
 MAIN: list[list[str]] = [
     ["rust/crates/beryl_session/src/lib.rs"],
     ["ui/src/stage/beat.ts"],
     ["data/ui-conventions.json"],
+    ["rust/Cargo.lock"],
+    ["justfile"],
+    ["docs/beryl-3d.md"],
 ]
 SCRIPT_INPUTS = r"^rust/(Cargo\.(toml|lock)|crates/beryl_cli/|cards/)"
 
@@ -95,7 +100,9 @@ def test_a_beryl3d_path_changes_no_main_lane(monkeypatch: pytest.MonkeyPatch) ->
     for changed in MAIN:
         alone = fast(monkeypatch, changed)
         both = fast(monkeypatch, [*changed, BERYL3D[0]])
-        assert set(both) - {"beryl3d"} == set(alone), changed
+        # Beryl 3D's paths add their own lane and the source rules' (`names`), and no other.
+        assert set(alone) <= set(both), changed
+        assert set(both) - set(alone) <= {"beryl3d", "names"}, changed
         assert rust_packages(both) == rust_packages(alone), changed
         assert set(slow([*changed, *BERYL3D]).why) == set(slow(changed).why), changed
     # Without the split, a path under rust/ in no package of the main workspace would make
@@ -131,3 +138,11 @@ def test_b3d_lists_its_commands_and_names_the_nearest_unknown_one(
         beryl3d_cli.main(["lane", "--help"])
     shown = capsys.readouterr().out
     assert "examples:" in shown and shown.count("just b3d lane") >= 2
+
+
+def test_each_command_has_two_examples_or_a_program_that_prints_its_own() -> None:
+    for command in beryl3d_cli.COMMANDS:
+        if command.passthrough:
+            assert not command.examples, command.name
+        else:
+            assert len(command.examples) == 2, command.name

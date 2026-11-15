@@ -126,30 +126,9 @@ pub fn list(prefix: &str) -> Result<Vec<Listed>, String> {
         .iter()
         .filter(|entry| entry.name.starts_with(prefix))
         .collect();
-    let next = std::sync::atomic::AtomicUsize::new(0);
-    let lengths = Mutex::new(vec![None; entries.len()]);
-    let threads = std::thread::available_parallelism()
-        .map_or(1, std::num::NonZero::get)
-        .min(entries.len().max(1));
-    std::thread::scope(|scope| {
-        for _ in 0..threads {
-            scope.spawn(|| {
-                loop {
-                    let at = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    let Some(entry) = entries.get(at) else {
-                        break;
-                    };
-                    let length = length(entry);
-                    lengths
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)[at] = length;
-                }
-            });
-        }
-    });
-    let lengths = lengths
-        .into_inner()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // `each` keeps the default panic hook quiet, so a recording the client cannot play prints
+    // no panic here; its tests say why.
+    let lengths = crate::runner::each(&entries, |entry| length(entry));
     let mut listed: Vec<Listed> = entries
         .iter()
         .zip(lengths)

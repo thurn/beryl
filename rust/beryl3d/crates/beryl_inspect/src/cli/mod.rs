@@ -71,9 +71,9 @@ const COMMANDS: [Command; 6] = [
         spec: Spec {
             recording: false,
             values: &[],
-            switches: &[],
+            switches: &["--full"],
         },
-        own: &[],
+        own: &[("--full", "every recording, with none cut")],
         run: listing::list,
     },
     Command {
@@ -322,8 +322,8 @@ pub fn time_of(page: &mut Page, options: &Options, moment: &Moment) -> Result<u6
             "{moment} is past the end of {}, which ends at {}ms. Write a time up to {}ms, or a \
              moment's name such as end or view:1; {info}.",
             options.name(),
-            end / 1_000_000,
-            end / 1_000_000,
+            milliseconds(end),
+            milliseconds(end),
         )));
     }
     Ok(time)
@@ -351,7 +351,8 @@ pub fn act(page: &mut Page, options: &Options) -> Result<(), Usage> {
     Ok(())
 }
 
-/// Nanoseconds as whole milliseconds, rounded to the nearest.
+/// Nanoseconds as whole milliseconds, rounded down, so that every time printed can be given
+/// back to `--at`: a recording that ends at 9240.6 ms ends at 9240ms, and 9241ms is past it.
 pub fn milliseconds(nanoseconds: u64) -> u64 {
-    (nanoseconds + 500_000) / 1_000_000
+    nanoseconds / 1_000_000
 }

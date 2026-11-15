@@ -513,7 +513,7 @@ impl Page {
         if !moving.is_empty() {
             let _ = write!(out, " ({})", moving.join(", "));
         }
-        out.push_str(": call still() first?");
+        out.push_str(": do the `still` action first? (`--do still` in `just b3d`)");
         out
     }
 

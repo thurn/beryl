@@ -371,13 +371,19 @@ pub fn known(name: &str, seat: Side) -> Result<(), Usage> {
 }
 
 /// The five of `names` nearest to `name`: those that start with it or contain it first, then by
-/// edit distance.
+/// edit distance to the whole name or to its start, whichever is nearer. The start counts so
+/// that a misspelt prefix of a long name (`winds-of-abandn/exiles`) finds that name rather
+/// than the short names a few edits away from it.
 #[must_use]
 pub fn nearest<'a>(name: &str, names: &[&'a str]) -> Vec<&'a str> {
+    let length = name.chars().count();
     let mut sorted = names.to_vec();
     sorted.sort_by_key(|candidate| {
         let contains = candidate.contains(name) || name.contains(*candidate);
-        (!contains, recordings::distance(candidate, name))
+        let start: String = candidate.chars().take(length).collect();
+        let distance =
+            recordings::distance(candidate, name).min(recordings::distance(&start, name));
+        (!contains, distance)
     });
     sorted.truncate(5);
     sorted

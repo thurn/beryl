@@ -26,7 +26,7 @@ use beryl_protocol::protocol::PlayerView;
 use beryl_protocol::script::{StepTiming, Verb};
 
 use self::compile::{Compiled, bit, compile};
-use self::record::{Plant, ScriptRecord};
+use self::record::{Plant, ScriptRecord, StepRecord};
 use crate::data::space::catch_up;
 use crate::faces::Faces;
 use crate::frame::{FrameBuilder, Wake};
@@ -182,7 +182,15 @@ impl Show {
             start: None,
             rate: 1,
             end: compiled.end,
-            steps: compiled.steps.clone(),
+            // The script at `index` of the history leads to view `index + 1`.
+            steps: compiled
+                .steps
+                .iter()
+                .map(|step| StepRecord {
+                    view: index + 1,
+                    ..step.clone()
+                })
+                .collect(),
             segments: compiled.segments.clone(),
             finals: compiled.final_poses(),
         };

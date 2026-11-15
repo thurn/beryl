@@ -137,9 +137,10 @@ def wait_for_log(
     errors: Callable[[], str],
     label: str,
     limit_s: int = REPLAY_LIMIT_S,
+    pause: Callable[[float], None] = time.sleep,
 ) -> str | None:
-    """Polls the app's frame log with `read` until it holds a summary, which the app writes
-    when the recording's last script has ended, and returns the log's text. Prints the GPU
+    """Polls the app's frame log with `read` every second (`pause`) until it holds a summary,
+    which the app writes when the recording's last script has ended, and returns the log's text. Prints the GPU
     adapter once the log's first line names it. None, after printing why, when the app died or
     the limit passed."""
     deadline = time.monotonic() + limit_s
@@ -163,7 +164,7 @@ def wait_for_log(
             print(f"{label}: FAILED: the app exited before the recording ended")
             print(errors() or f"{label}: the app wrote no error")
             return None
-        time.sleep(1)
+        pause(1)
     print(f"{label}: FAILED: the recording did not end in {limit_s} s")
     print(errors() or f"{label}: the app wrote no error")
     return None

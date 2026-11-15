@@ -29,10 +29,13 @@ just b3d film verbs-zones --from 0ms --to 3s --frames 12   # twelve frames in on
 ```
 
 - **`list [prefix]`** prints each recording's name, its seat (`--seat you` or
-  `--seat opponent`), its length and how many views it has.
+  `--seat opponent`), its length and how many views it has, the first 95 unless
+  `--full`.
 - **`info <recording>`** prints one line per moment, each starting with the text
   `--at` takes: `start`, each `view:N`, each script step `step:V.B.S` with its
-  verb, start and end, each `prompt:N` with its buttons, and `end`.
+  verb, the card it moves, start and end, each `prompt:N` with its buttons, and
+  `end`; the first 95 unless `--full`. A fault names a step by the same
+  `step:V.B.S`.
 - **`tree <recording>`** prints the command, a line that says where in the
   recording it is (`view 6 of 36, t=1500ms, animating, 48 elements`), and the
   elements: role, name, id, place, box and states. `--within <place|locator>`,

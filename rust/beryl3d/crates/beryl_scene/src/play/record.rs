@@ -15,6 +15,9 @@ use crate::pose::{Pose, Segment};
 /// nanoseconds.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StepRecord {
+    /// The view its script leads to, numbered from 1 as a `step:V.B.S` moment numbers it, once
+    /// the script is in a show's history; 0 before.
+    pub view: usize,
     /// Its beat's index in the script, and its own index in the beat, from 0.
     pub beat: usize,
     pub index: usize,
@@ -32,14 +35,15 @@ pub struct StepRecord {
 }
 
 impl StepRecord {
-    /// How a fault names it: `step 2.1 (fly)`, the beat and the step numbered from 1. (A
-    /// `step:V.B.S` moment numbers them from 0.)
+    /// How a fault names it: `step:3.2.0 (fly)`, the moment `just b3d info` lists for it and
+    /// `--at` takes, and its verb.
     #[must_use]
     pub fn describe(&self) -> String {
         format!(
-            "step {}.{} ({})",
-            self.beat + 1,
-            self.index + 1,
+            "step:{}.{}.{} ({})",
+            self.view,
+            self.beat,
+            self.index,
             format!("{:?}", self.verb).to_lowercase()
         )
     }

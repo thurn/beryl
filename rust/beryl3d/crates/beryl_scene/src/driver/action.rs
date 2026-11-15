@@ -32,13 +32,11 @@ impl std::str::FromStr for Action {
 
     fn from_str(line: &str) -> Result<Self, ParseError> {
         let line = line.trim();
-        let expected = |why: &str| {
-            ParseError(format!(
-                "'{line}' is not an action: {why}. The actions are press <locator>, hover \
-                 <locator>, drag <locator> to <locator>, type <locator> \"<text>\", key <name>, \
-                 move <x>,<y>, step <duration> and still"
-            ))
-        };
+        let actions = "The actions are press <locator>, hover <locator>, drag <locator> to \
+                       <locator>, type <locator> \"<text>\", key <name>, move <x>,<y>, step \
+                       <duration> and still";
+        let expected =
+            |why: &str| ParseError(format!("'{line}' is not an action: {why}. {actions}"));
         let (verb, rest) = line.split_once(' ').unwrap_or((line, ""));
         let rest = rest.trim();
         let needs = |what: &str| {
@@ -81,7 +79,10 @@ impl std::str::FromStr for Action {
                 .map(Self::Step)
                 .map_err(|ParseError(why)| expected(&why)),
             "still" if rest.is_empty() => Ok(Self::Still),
-            _ => Err(expected(&format!("'{verb}' is not an action"))),
+            "still" => Err(expected("still takes nothing after it")),
+            _ => Err(ParseError(format!(
+                "'{line}' is not an action: it does not start with one. {actions}"
+            ))),
         }
     }
 }

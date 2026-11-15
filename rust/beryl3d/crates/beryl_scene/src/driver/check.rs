@@ -26,6 +26,9 @@ pub struct StepMoment {
     /// in the beat, counted from 0.
     pub name: Name,
     pub verb: Verb,
+    /// The slot of the scene object it moves, if it moves one, which is its card's id in a
+    /// frame (`agent::steps::card_of`).
+    pub subject: Option<usize>,
     /// When it begins, ends, and is halfway through, in nanoseconds since the recording's start.
     pub from: u64,
     pub to: u64,
@@ -218,6 +221,7 @@ impl Page {
                     steps.push(StepMoment {
                         name: Name::Step(number as u32 + 1, step.beat as u32, step.index as u32),
                         verb: step.verb,
+                        subject: step.subject,
                         from,
                         to,
                         middle: from + (to - from) / 2,

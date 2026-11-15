@@ -31,8 +31,9 @@ class Command:
     name: str
     # The one line `just b3d` lists it with.
     summary: str
-    # Two command lines, each with what it does, for `--help`.
-    examples: tuple[tuple[str, str], tuple[str, str]]
+    # Two command lines, each with what it does, for `--help`; none for a passthrough command,
+    # whose program prints its own.
+    examples: tuple[tuple[str, str], ...]
     run: Callable[[argparse.Namespace], int]
     # Adds the command's own arguments to its parser.
     arguments: Callable[[argparse.ArgumentParser], None] = lambda _parser: None
@@ -155,11 +156,10 @@ def run_b3d(command: str) -> Callable[[argparse.Namespace], int]:
     return run
 
 
-def b3d_command(
-    name: str, summary: str, examples: tuple[tuple[str, str], tuple[str, str]]
-) -> Command:
-    """A text command of the `b3d` program, which reads its own options and `--help`."""
-    return Command(name, summary, examples, run_b3d(name), passthrough=True)
+def b3d_command(name: str, summary: str) -> Command:
+    """A text command of the `b3d` program, which reads its own options and prints its own
+    `--help` (`cli` in `beryl_inspect`)."""
+    return Command(name, summary, (), run_b3d(name), passthrough=True)
 
 
 def run_render(command: str) -> Callable[[argparse.Namespace], int]:
@@ -185,11 +185,10 @@ def run_render(command: str) -> Callable[[argparse.Namespace], int]:
     return run
 
 
-def render_command(
-    name: str, summary: str, examples: tuple[tuple[str, str], tuple[str, str]]
-) -> Command:
-    """A picture command of the `b3d-render` program, which reads its own options and `--help`."""
-    return Command(name, summary, examples, run_render(name), passthrough=True)
+def render_command(name: str, summary: str) -> Command:
+    """A picture command of the `b3d-render` program, which reads its own options and prints
+    its own `--help` (`pictures` in `beryl_3d`)."""
+    return Command(name, summary, (), run_render(name), passthrough=True)
 
 
 def run_clippy(_args: argparse.Namespace) -> int:
@@ -204,93 +203,34 @@ COMMANDS: tuple[Command, ...] = (
     b3d_command(
         "list",
         "every recording whose name starts with a prefix, with its length and views",
-        (
-            ("just b3d list", "every recording"),
-            ("just b3d list verbs", "the recordings whose names start with verbs"),
-        ),
     ),
     b3d_command(
         "info",
         "a recording's moments: views, script steps and prompts with their buttons",
-        (
-            ("just b3d info verbs-zones", "every moment, from the first seat"),
-            ("just b3d info verbs-zones --json", "the same as JSON"),
-        ),
     ),
     b3d_command(
         "tree",
         "the elements on screen at one moment of a recording, as an indented tree",
-        (
-            ("just b3d tree verbs-zones --at 1500ms", "the tree 1.5 s in"),
-            (
-                "just b3d tree verbs-zones --at view:2 --within hand.yours",
-                "your hand once view 2 is still",
-            ),
-        ),
     ),
     b3d_command(
         "diff",
         "the elements that appeared, left, moved or changed state between two moments",
-        (
-            (
-                "just b3d diff verbs-zones --from 800ms --to 1500ms",
-                "what changed between two times",
-            ),
-            (
-                "just b3d diff verbs-zones --from view:1 --to view:1 --do 'hover card #8'",
-                "what hovering a card changes",
-            ),
-        ),
     ),
     b3d_command(
         "check",
         "every interface check on every tick of a recording, and the faults",
-        (
-            ("just b3d check verbs-zones", "every tick, first seat, 1600x900"),
-            (
-                "just b3d check verbs-zones --seat opponent --size 1440x900",
-                "the second seat in a smaller window",
-            ),
-        ),
     ),
     b3d_command(
         "test",
         "every interface test whose name starts with a prefix, at its check times",
-        (
-            ("just b3d test", "every test, at its check times"),
-            (
-                "just b3d test b3d:verbs-zones --every-tick",
-                "one recording's tests, checked on every tick",
-            ),
-        ),
     ),
     render_command(
         "png",
         "draws one moment of a recording offscreen to a PNG file, and with --tree its tree",
-        (
-            (
-                "just b3d png verbs-zones --at 1500ms --tree",
-                "the frame 1.5 s in, and its tree",
-            ),
-            (
-                "just b3d png verbs-zones --at 1500ms --crop 'card \"Island\" #8'",
-                "only the box around one element",
-            ),
-        ),
     ),
     render_command(
         "film",
         "draws up to 24 frames of a recording as a grid in one PNG, a line of text per frame",
-        (
-            (
-                "just b3d film verbs-zones --from 0ms --to 3s --frames 12",
-                "twelve frames over the first three seconds",
-            ),
-            (
-                "just b3d film verbs-zones --from 800ms --to 1500ms --every 100ms --crop 'card #8'",
-                "one card, followed every 100 ms",
-            ),
-        ),
     ),
     Command(
         "lane",

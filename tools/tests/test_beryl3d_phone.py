@@ -16,7 +16,9 @@ def test_the_wait_ends_with_the_log_once_it_holds_a_summary(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     reads = iter([None, RUN, f"{RUN}\n{SUMMARY}\n"])
-    log = phone.wait_for_log(lambda: next(reads), lambda: True, lambda: "", "smoke")
+    log = phone.wait_for_log(
+        lambda: next(reads), lambda: True, lambda: "", "smoke", pause=lambda s: None
+    )
     assert log == f"{RUN}\n{SUMMARY}\n"
     assert "smoke: adapter a GPU (Vulkan)" in capsys.readouterr().out
 

@@ -71,7 +71,7 @@ fn every_tree_line_after_the_header_follows_the_grammar() {
 
 #[test]
 fn every_moment_info_prints_is_accepted_by_at() {
-    let printed = ok(&["info", RECORDING]);
+    let printed = ok(&["info", RECORDING, "--full"]);
     let moments: Vec<&str> = printed
         .lines()
         .skip(2)
@@ -218,4 +218,63 @@ fn check_runs_every_tick_and_closes_with_one_line() {
     );
     let refused = refused(&["check", RECORDING, "--do", "still"]);
     assert!(refused.contains("tree or diff"), "{refused}");
+}
+
+#[test]
+fn every_time_info_prints_is_accepted_by_at() {
+    // Times are printed rounded down, so even the last, the recording's end, lies within it.
+    let printed = ok(&["info", RECORDING, "--full"]);
+    let times: Vec<&str> = printed
+        .lines()
+        .skip(2)
+        .take_while(|line| !line.starts_with("Each line"))
+        .map(|line| line.split_whitespace().nth(1).unwrap())
+        .collect();
+    let end = printed
+        .lines()
+        .nth(1)
+        .and_then(|summary| summary.rsplit_once("ends at "))
+        .unwrap()
+        .1;
+    assert_eq!(times.last(), Some(&end), "{printed}");
+    ok(&["tree", RECORDING, "--at", end]);
+}
+
+#[test]
+fn info_names_the_card_each_moving_step_moves() {
+    let printed = ok(&["info", RECORDING]);
+    let named = printed
+        .lines()
+        .filter(|line| line.starts_with("step:") && line.contains(" card "))
+        .count();
+    assert!(named > 0, "{printed}");
+}
+
+#[test]
+fn list_cuts_its_output_unless_full() {
+    let cut = ok(&["list"]);
+    assert!(cut.lines().count() <= 100, "{} lines", cut.lines().count());
+    assert!(cut.contains("just b3d list --full"), "{cut}");
+    let full = ok(&["list", "--full"]);
+    assert!(full.lines().count() > 100, "{full}");
+}
+
+#[test]
+fn a_misspelt_prefix_of_a_long_name_finds_that_name() {
+    // Missing a letter of a long name's start finds that name, not the short names a few
+    // letters away from the whole text.
+    let names = [
+        "converter-exiled",
+        "table-piles",
+        "winds-of-abandon/exiles-a-token-before-its-controller-searches",
+    ];
+    let near = beryl_inspect::cli::options::nearest("winds-of-abandn/exiles", &names);
+    assert_eq!(near[0], names[2], "{near:?}");
+}
+
+#[test]
+fn an_unknown_action_says_so_once() {
+    let message = refused(&["tree", RECORDING, "--do", "hover:card"]);
+    assert_eq!(message.matches("is not an action").count(), 1, "{message}");
+    assert!(message.contains("The actions are press"), "{message}");
 }
