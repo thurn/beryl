@@ -648,7 +648,8 @@ code usually goes wrong.
 
 - **A new view arrives while a script is playing.** It waits, and takes effect
   when the current script ends: its script plays then, and its prompt and
-  buttons appear then. Scripts never overlap.
+  buttons appear once that script has played out too, as the web interface's
+  prompt opens when its view has played out. Scripts never overlap.
 - **The window changes shape while a card is moving.** Every resting position is
   recomputed for the new shape. A segment in progress keeps its start time and
   duration and takes the new end pose. Its start pose is recomputed so that the

@@ -180,7 +180,7 @@ fn json_output_parses() {
 
 #[test]
 fn hovering_a_tree_line_changes_that_elements_states() {
-    let printed = ok(&["tree", RECORDING, "--at", "1500ms", "--role", "button"]);
+    let printed = ok(&["tree", RECORDING, "--at", "prompt:2", "--role", "button"]);
     let button = printed
         .lines()
         .find(|line| line.trim_start().starts_with("button "))
@@ -189,7 +189,7 @@ fn hovering_a_tree_line_changes_that_elements_states() {
     assert!(!button.contains("hovered"), "{button}");
     let hover = format!("hover {button}");
     let after = ok(&[
-        "tree", RECORDING, "--at", "1500ms", "--role", "button", "--do", &hover,
+        "tree", RECORDING, "--at", "prompt:2", "--role", "button", "--do", &hover,
     ]);
     let locator = button.split(" #").next().unwrap();
     let hovered = after

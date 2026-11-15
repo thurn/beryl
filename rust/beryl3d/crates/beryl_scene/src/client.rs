@@ -52,6 +52,12 @@ pub struct Client {
     layer: Layer,
     /// The open decision and its prompt's latest state, from the view or a click's reply.
     prompt: Option<(DecisionId, PromptView)>,
+    /// Whether the prompt bar is drawn and takes presses. The bar of the latest view is laid out
+    /// as the view arrives, because layout runs in `handle`, but it opens only once that view's
+    /// script and every script before it have played out (`Show::settled`), as the web
+    /// interface's prompt opens when its view has played out. Set by each `frame`, so a press
+    /// reaches only a bar the last frame drew.
+    open: bool,
     /// The element the primary pointer went down on, which a release on it presses.
     pressed: Option<ElementId>,
     /// Where the mouse pointer is, in logical points, while it is over the window. The element
@@ -72,6 +78,7 @@ impl Client {
             show: Show::new(Table::default()),
             layer: Layer::new(),
             prompt: None,
+            open: false,
             pressed: None,
             mouse: None,
             wake: Wake::Never,
@@ -157,7 +164,10 @@ impl Client {
         self.wake = self.show.wake(now);
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
-        self.layer.write(&mut builder, self.show.table().camera());
+        self.open = self.show.settled();
+        if self.open {
+            self.layer.write(&mut builder, self.show.table().camera());
+        }
         builder.finish();
         if let Some(point) = self.mouse
             && let Some(index) = crate::agent::hit(&self.frame, point)
@@ -183,6 +193,10 @@ impl Client {
             };
         }
         let primary = pointer.button == Button::Primary;
+        if !self.open {
+            self.pressed = None;
+            return;
+        }
         match pointer.phase {
             PointerPhase::Down if primary => {
                 self.pressed = self.layer.press_at(pointer.position).map(|(id, ..)| id);

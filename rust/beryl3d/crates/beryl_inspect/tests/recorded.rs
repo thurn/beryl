@@ -8,8 +8,9 @@ use beryl_inspect::pages::{Recorded, check_recording, recording};
 use beryl_inspect::stress;
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Verb;
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::{Page, TICK};
+use beryl_scene::agent::tree::line;
+use beryl_scene::agent::{Layout, locate};
+use beryl_scene::driver::{Duration, Moment, Page, TICK};
 use beryl_scene::frame::{Frame, FrameBuilder, Wake};
 use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::play::Show;
@@ -278,4 +279,31 @@ fn timings(update: &beryl_protocol::GameUpdate) -> Vec<beryl_protocol::script::S
         .as_ref()
         .map(|script| script.timing.clone())
         .unwrap_or_default()
+}
+
+/// Every line of the tree printout, pasted back as a locator, finds the element it was printed
+/// for, at every check time of `verbs-zones` and `pay-default` from both seats (each input, and
+/// each start, middle and end of a segment or step): cards that share a name, cards in flight
+/// and the prompt bar's elements alike.
+#[test]
+fn every_tree_line_locates_its_own_element_at_every_check_time() {
+    for name in ["verbs-zones", "pay-default"] {
+        for seat in SEATS {
+            let mut page = Page::fixture(name, seat, Layout::Desktop);
+            for t in page.check_times() {
+                page.seek(&Moment::At(Duration(t)))
+                    .expect("a time is a moment");
+                let clock = page.clock();
+                let frame = page.frame();
+                for index in 0..frame.resolved.len() as u32 {
+                    let printed = line(frame, index);
+                    assert_eq!(
+                        locate(frame, &printed),
+                        Ok(index),
+                        "{name} {seat:?} {clock}: '{printed}' does not locate its own element"
+                    );
+                }
+            }
+        }
+    }
 }

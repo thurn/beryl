@@ -6,7 +6,9 @@ use beryl_protocol::prompt::Purpose;
 use beryl_protocol::prompt::{
     ButtonId, Click, ClickReply, ClickRequest, PartName, PromptButton, PromptView, ShapeBody, Words,
 };
-use beryl_protocol::protocol::{DecisionId, DecisionView, Kind, SessionId, Side, Status};
+use beryl_protocol::protocol::{
+    DecisionId, DecisionView, Kind, SessionId, Side, Status, Why, ZoneName,
+};
 use beryl_scene::agent::checks::text_fits;
 use beryl_scene::agent::{Context, Layout, Rule};
 use beryl_scene::command::{Reply, SessionCommand};
@@ -18,15 +20,18 @@ use beryl_scene::input::{
 };
 use beryl_scene::layout::Layer;
 use beryl_scene::table::Table;
-use beryl_scene::testing::ViewBuilder;
+use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
 use beryl_scene::text::Text;
 use beryl_scene::text::fonts::Font;
 use beryl_scene::tokens::{space, type_style};
 use beryl_scene::{Client, Config};
+use beryl_protocol::script::Act;
 use glam::Vec2;
 
 const WIDTH: f32 = 1440.0;
 const HEIGHT: f32 = 900.0;
+/// A millisecond, in the nanoseconds `Client::frame` takes.
+const MS: u64 = 1_000_000;
 
 fn client() -> Client {
     let mut client = Client::new(Config {
@@ -411,5 +416,78 @@ fn a_variable_font_is_drawn_at_any_weight() {
     assert!(
         bold_width > regular_width + 1.0,
         "{bold_width} vs {regular_width}"
+    );
+}
+
+#[test]
+fn a_prompt_opens_only_once_its_view_has_played_out() {
+    let mut client = client();
+    client.handle(Input::Update(Box::new(ViewBuilder::sample().update())));
+    client.frame(0);
+    // The next view asks for a payment and arrives with a script in which the viewer draws the
+    // top card of their library, a flight of 400 ms.
+    let Input::Update(mut update) = deciding(prompt("Pay {1}{U}")) else {
+        unreachable!("deciding gives an update");
+    };
+    let view = &mut update.view;
+    let top = view
+        .players
+        .you
+        .library
+        .pop()
+        .expect("the sample has a library");
+    let card = view
+        .objects
+        .iter_mut()
+        .find(|object| object.slot == top)
+        .expect("the library card is an object");
+    card.zone = ZoneName::Hand;
+    card.name = Some("Island".to_owned());
+    let mut script = ScriptBuilder::default()
+        .beat([Act::Fly {
+            from: ZoneName::Library,
+            why: Why::Draw,
+            object: card.clone(),
+            at: None,
+            item: None,
+            origin: None,
+        }])
+        .build();
+    script.timing = vec![timing(400.0)];
+    view.script = Some(script);
+    client.handle(Input::Update(update));
+
+    // While the card flies, the bar is neither drawn nor pressed.
+    let frame = client.frame(MS);
+    assert!(
+        !frame
+            .resolved
+            .iter()
+            .any(|element| element.place == Place::Layer),
+        "no flat-layer element while the draw plays"
+    );
+    let open = {
+        let mut later = self::client();
+        later.handle(deciding(prompt("Pay {1}{U}")));
+        let frame = later.frame(0);
+        centre(frame, find(frame, Role::Button, "Cancel"))
+    };
+    client.handle(pointer(PointerPhase::Down, open));
+    client.handle(pointer(PointerPhase::Up, open));
+    client.frame(200 * MS);
+    assert_eq!(
+        client.next_command(),
+        None,
+        "a hidden button takes no press"
+    );
+
+    // Once the card has landed, the bar is drawn and its buttons take presses.
+    let frame = client.frame(500 * MS);
+    let at = centre(frame, find(frame, Role::Button, "Cancel"));
+    client.handle(pointer(PointerPhase::Down, at));
+    client.handle(pointer(PointerPhase::Up, at));
+    assert!(
+        matches!(client.next_command(), Some(SessionCommand::Click(_))),
+        "the open bar's Cancel queues a click"
     );
 }

@@ -145,6 +145,13 @@ impl Show {
         self.rested
     }
 
+    /// Whether every script given has played out, as of the last `frame`: the table shows the
+    /// latest view at rest, and that view's prompt may open.
+    #[must_use]
+    pub fn settled(&self) -> bool {
+        self.playing.is_none() && self.waiting.is_empty()
+    }
+
     /// Compiles `update`'s script, the `number`th the show is given, played from `before`, with
     /// any fault planted in it.
     fn compile(
