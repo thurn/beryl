@@ -31,6 +31,13 @@ use neighbours::mutants;
 /// why. An entry a scenario kills fails too, so the list stays current.
 const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
     (
+        "Double Major",
+        "ability 0",
+        "new_targets true",
+        "no creature spell in the pool has a target, so a copy of one has nothing for its \
+         controller to choose new targets for",
+    ),
+    (
         "Animate Dead",
         "ability 1, step 3",
         "Amount::Fixed(1)",

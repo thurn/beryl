@@ -1,7 +1,9 @@
 //! Copiable values: a definition, the face of it that is up, and the copy exceptions that
 //! made them ([`crate::additions`]). [`crate::query`] asks them of an object.
 
-use beryl_card::{Ability, AbilityKind, Colors, CopyChange, Face, FaceIx, GrantIx, Words};
+use beryl_card::{
+    Ability, AbilityKind, Colors, CopyChange, Face, FaceIx, GrantIx, Supertypes, Words,
+};
 
 use crate::additions::{Addition, AdditionList};
 use crate::event::{Listens, Replaces};
@@ -244,6 +246,8 @@ impl<L: Layout> Copiable<L> {
     ///   instances can't be told apart ([`interchangeable`]),
     ///   wherever the first one is among the exceptions.
     /// - [`CopyChange::AddSubtype`] adds a subtype the values already have.
+    /// - [`CopyChange::WithoutSupertypes`] removes supertypes the values already lack, and no
+    ///   exception adds one back.
     /// - [`CopyChange::PowerToughness`] and [`CopyChange::Colors`] set a value, and the last
     ///   exception to set it wins ([CR 707.9b]): "The final set of values for that
     ///   characteristic becomes part of the copiable values of the copy." Setting it again to
@@ -261,7 +265,7 @@ impl<L: Layout> Copiable<L> {
         let grants = t.def(addition.card()).face(addition.face()).grants;
         addition.changes(t).iter().all(|change| match *change {
             CopyChange::Has(grant) => interchangeable(&grants[grant.index()]),
-            CopyChange::AddSubtype(_) => true,
+            CopyChange::AddSubtype(_) | CopyChange::WithoutSupertypes(_) => true,
             CopyChange::PowerToughness(..) => last,
             CopyChange::Colors(_) => last && self.read.at(place) == read,
         })
@@ -347,10 +351,34 @@ impl<L: Layout> Copiable<L> {
             .flat_map(|addition| addition.changes(t))
             .fold(printed, |subtypes, change| match *change {
                 CopyChange::AddSubtype(subtype) => subtypes.with(t.subtypes(), subtype),
-                CopyChange::PowerToughness(..) | CopyChange::Colors(_) | CopyChange::Has(_) => {
-                    subtypes
-                }
+                CopyChange::PowerToughness(..)
+                | CopyChange::Colors(_)
+                | CopyChange::WithoutSupertypes(_)
+                | CopyChange::Has(_) => subtypes,
             })
+    }
+
+    /// The supertypes of the face that is up without those the exceptions take away
+    /// ([CR 707.9b]): "Some copy effects modify a characteristic as part of the copying
+    /// process. The final set of values for that characteristic becomes part of the copiable
+    /// values of the copy." What layer 1 gives a copy ([`crate::State::copy_supertypes`]).
+    ///
+    /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
+    #[cold]
+    #[inline(never)]
+    pub fn excepted_supertypes(self, t: &GameTable) -> Supertypes {
+        (self.additions.iter())
+            .flat_map(|addition| addition.changes(t))
+            .fold(
+                self.face(t).supertypes,
+                |supertypes, change| match *change {
+                    CopyChange::WithoutSupertypes(removed) => supertypes.minus(removed),
+                    CopyChange::PowerToughness(..)
+                    | CopyChange::Colors(_)
+                    | CopyChange::AddSubtype(_)
+                    | CopyChange::Has(_) => supertypes,
+                },
+            )
     }
 
     /// The abilities the exceptions of these values give, each with the card and face that
@@ -374,6 +402,7 @@ impl<L: Layout> Copiable<L> {
                         CopyChange::Has(grant) => Some((addition.card(), addition.face(), grant)),
                         CopyChange::PowerToughness(..)
                         | CopyChange::Colors(_)
+                        | CopyChange::WithoutSupertypes(_)
                         | CopyChange::AddSubtype(_) => None,
                     })
             })
@@ -502,9 +531,10 @@ impl<L: Layout> Copiable<L> {
                 CopyChange::Colors(set) => {
                     (self.read.at(place)).unwrap_or_else(|| set.read(&Words::NONE))
                 }
-                CopyChange::PowerToughness(..) | CopyChange::AddSubtype(_) | CopyChange::Has(_) => {
-                    colors
-                }
+                CopyChange::PowerToughness(..)
+                | CopyChange::AddSubtype(_)
+                | CopyChange::WithoutSupertypes(_)
+                | CopyChange::Has(_) => colors,
             },
         )
     }
@@ -539,7 +569,10 @@ impl<L: Layout> Copiable<L> {
             .flat_map(|addition| addition.changes(t))
             .fold(None, |pt, change| match *change {
                 CopyChange::PowerToughness(power, toughness) => Some((power, toughness)),
-                CopyChange::Colors(_) | CopyChange::AddSubtype(_) | CopyChange::Has(_) => pt,
+                CopyChange::Colors(_)
+                | CopyChange::AddSubtype(_)
+                | CopyChange::WithoutSupertypes(_)
+                | CopyChange::Has(_) => pt,
             })
     }
 

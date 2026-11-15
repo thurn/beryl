@@ -1,6 +1,6 @@
 //! The parameters an entry has of its own: where, in what order and on what terms.
 
-use crate::characteristics::{Colors, Subtype};
+use crate::characteristics::{Colors, Subtype, Supertypes};
 #[cfg(doc)]
 use crate::effect::Effect;
 use crate::effect::{Objects, Players};
@@ -101,6 +101,11 @@ impl CopyException {
     /// "Except that the copy is red", as Fork copies a spell.
     pub const RED: CopyException =
         CopyException(&[CopyChange::Colors(ColorWords::new(Colors::RED))]);
+
+    /// "Except it isn't legendary if the spell is legendary", as Double Major copies a
+    /// creature spell.
+    pub const NOT_LEGENDARY: CopyException =
+        CopyException(&[CopyChange::WithoutSupertypes(Supertypes::LEGENDARY)]);
 }
 
 /// One change a [`CopyException`] makes to the values a copy takes.
@@ -117,6 +122,10 @@ pub enum CopyChange {
     Colors(ColorWords),
     /// "Except it's a [subtype] in addition to its other types" (CR 707.9b).
     AddSubtype(Subtype),
+    /// "Except it isn't legendary if the spell is legendary", as Double Major's copy is made
+    /// (CR 707.9b): the copy has none of these supertypes, whether or not the original had
+    /// them, so only the legendary spell's copy is changed.
+    WithoutSupertypes(Supertypes),
     /// "Except it has [the ability at this index of the face's grants]"
     /// ([CR 707.9a](https://yawgatog.com/resources/magic-rules/#R7079a)): "Some copy effects
     /// cause the copy to gain an ability as part of the copying process. This ability becomes

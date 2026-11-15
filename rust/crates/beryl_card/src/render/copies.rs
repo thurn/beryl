@@ -26,7 +26,10 @@ impl Ctx {
             // values for that characteristic becomes part of the copiable values".
             let pt = changes.iter().rev().find_map(|change| match *change {
                 CopyChange::PowerToughness(p, t) => Some((p, t)),
-                CopyChange::Colors(_) | CopyChange::AddSubtype(_) | CopyChange::Has(_) => None,
+                CopyChange::Colors(_)
+                | CopyChange::AddSubtype(_)
+                | CopyChange::WithoutSupertypes(_)
+                | CopyChange::Has(_) => None,
             });
             match (pt, count) {
                 (Some((p, t)), _) => {
@@ -63,21 +66,41 @@ impl Ctx {
                     CopyChange::Colors(colors) => Some(colors.read(&self.words)),
                     CopyChange::PowerToughness(..)
                     | CopyChange::AddSubtype(_)
+                    | CopyChange::WithoutSupertypes(_)
                     | CopyChange::Has(_) => None,
                 })
+            });
+        // The supertypes the changes take away (CR 707.9b).
+        let without = except
+            .and_then(|ix| self.face?.excepts.get(ix.index()))
+            .into_iter()
+            .flat_map(|exception| exception.0)
+            .fold(crate::Supertypes::NONE, |all, change| match *change {
+                CopyChange::WithoutSupertypes(set) => all.union(set),
+                _ => all,
             });
         let the_copy = if count == Amount::Fixed(1) {
             "the copy"
         } else {
             "the copies"
         };
-        let except = colors.map_or(String::new(), |colors| {
+        let mut except = colors.map_or(String::new(), |colors| {
             let words = super::words::colors(colors);
             format!(
                 ", except that {the_copy} is {}",
                 super::words::list(&words, "and")
             )
         });
+        if without.contains(crate::Supertypes::LEGENDARY) {
+            except.push_str(&format!(
+                ", except {} isn't legendary if the spell is legendary",
+                if count == Amount::Fixed(1) {
+                    "it"
+                } else {
+                    "they"
+                }
+            ));
+        }
         let copy = self.acts(("copy", "copies"), spells, &format!("{times}{except}"));
         let mut clauses = vec![copy];
         if new_targets {
@@ -96,6 +119,7 @@ impl Ctx {
                 with_article(subtype.name()),
                 other_types(subtype)
             ),
+            CopyChange::WithoutSupertypes(_) => "it isn't legendary".to_owned(),
             CopyChange::Colors(colors) => {
                 let words = super::words::colors(colors.read(&self.words));
                 format!("it's {}", super::words::list(&words, "and"))

@@ -14,7 +14,7 @@
 //!
 //! [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 
-use beryl_card::{AbilityKind, Colors, Face, FaceIx};
+use beryl_card::{AbilityKind, Colors, Face, FaceIx, Supertypes};
 
 use crate::event::{Listens, Replaces};
 use crate::layout::{Layout, Small};
@@ -134,7 +134,7 @@ impl<L: Layout> State<L> {
     /// What layer 1 gives the permanent in `slot`, which has a copy effect on it
     /// ([`Flag::Copy`]): `printed`, the results its definition's face gives, with the power,
     /// toughness, colors and subtypes of its copiable values, which hold its exceptions
-    /// ([`State::copiable_pt`], [`State::copiable_colors`], [`State::copy_subtypes`]), and the
+    /// ([`State::copiable_pt`], [`State::copiable_colors`], [`State::copy_subtypes`], [`State::copy_supertypes`]), and the
     /// activated abilities they give ([`State::copy_grants`]). A permanent with no copy effect
     /// keeps `printed`, so the layers test the flag once and come here only for a copy.
     #[cold]
@@ -146,6 +146,7 @@ impl<L: Layout> State<L> {
             toughness,
             colors: self.excepted_colors(t, slot),
             subtypes: self.copy_subtypes(t, slot),
+            supertypes: self.copy_supertypes(t, slot),
             granted: self.copy_grants(t, slot),
             ..printed
         }
@@ -177,6 +178,15 @@ impl<L: Layout> State<L> {
     #[inline(never)]
     pub fn copy_subtypes(&self, t: &GameTable, slot: L::Slot) -> GameSubtypes {
         self.copiable(slot).excepted_subtypes(t)
+    }
+
+    /// The supertypes layer 1 gives the object in `slot`, a copy ([`Flag::Copy`]), without those
+    /// its exceptions take away, such as "except it isn't legendary"
+    /// ([`Copiable::excepted_supertypes`]).
+    #[cold]
+    #[inline(never)]
+    pub fn copy_supertypes(&self, t: &GameTable, slot: L::Slot) -> Supertypes {
+        self.copiable(slot).excepted_supertypes(t)
     }
 
     /// The abilities layer 1 gives the object in `slot`, a copy ([`Flag::Copy`]), that its

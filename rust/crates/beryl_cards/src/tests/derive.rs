@@ -16,6 +16,12 @@ const CUSTOM: &[&str] = &[];
 /// a generated scenario exercises fails too, so the list stays current.
 const UNREACHED: &[(&str, &str)] = &[
     (
+        "Reki, the History of Kamigawa: ability 0 (Triggered)",
+        "it triggers on a legendary spell its controller casts, and a generated scenario casts \
+         a sorcery, which is not legendary; the card's hand-written scenarios cast a legendary \
+         creature",
+    ),
+    (
         "Animate Dead: ability 3 (Triggered)",
         "it is the delayed ability the enters ability creates, which triggers as Animate Dead \
          leaves the battlefield, and a generated scenario never makes it leave; the card's \

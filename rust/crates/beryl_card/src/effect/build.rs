@@ -592,6 +592,17 @@ pub const fn copy_spell_except(spells: Objects, except: ExceptIx) -> Effect {
     }
 }
 
+/// [`Effect::CopySpell`] of one copy made with the exception at `except` among those the
+/// ability's face lists, with no choice of new targets: "Copy [spell], except ...."
+pub const fn copy_spell_except_keeping_targets(spells: Objects, except: ExceptIx) -> Effect {
+    Effect::CopySpell {
+        spells,
+        count: Amount::Fixed(1),
+        except: Some(except),
+        new_targets: false,
+    }
+}
+
 /// [`Effect::AddCounters`]: "put [count] [kind] counters on [objects]".
 pub const fn add_counters(objects: Objects, kind: CounterKind, count: u8) -> Effect {
     Effect::AddCounters {
