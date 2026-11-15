@@ -1,7 +1,7 @@
 //! Copiable values: a definition, the face of it that is up, and the copy exceptions that
 //! made them ([`crate::additions`]). [`crate::query`] asks them of an object.
 
-use beryl_card::{Colors, CopyChange, Face, FaceIx, GrantIx, Words};
+use beryl_card::{Ability, AbilityKind, Colors, CopyChange, Face, FaceIx, GrantIx, Words};
 
 use crate::additions::{Addition, AdditionList};
 use crate::event::{Listens, Replaces};
@@ -119,6 +119,42 @@ fn relayout_additions<L: Layout, M: Layout>(additions: L::Additions) -> M::Addit
     moved
 }
 
+/// The colors the exception `addition` sets as read through the text changes `words`, where
+/// they differ from its words as printed ([`ReadColors`]). Only the last change that sets
+/// colors counts (CR 707.9b).
+#[cold]
+#[inline(never)]
+fn read_colors<C: CardId>(addition: Addition<C>, t: &GameTable, words: &Words) -> Option<Colors> {
+    let mut read = None;
+    for change in addition.changes(t) {
+        if let CopyChange::Colors(set) = *change {
+            let colors = set.read(words);
+            if colors != set.read(&Words::NONE) {
+                read = Some(colors);
+            }
+        }
+    }
+    read
+}
+
+/// Whether an object with two instances of `ability` can do nothing that it could not do
+/// with one. By [CR 113.2c], "If an object has multiple instances of the same ability, each
+/// instance functions independently. This may or may not produce more effects than a single
+/// instance". Two instances of a triggered ability trigger twice, and two of a static ability
+/// may apply twice, so they are not interchangeable. An activated ability (mana ability
+/// included) only offers its controller a choice ([CR 113.3b]): "A player may activate such an
+/// ability whenever they have priority." Each instance offers the same activation, for the
+/// same cost, at the same times, so a second instance adds no new choice. That stops being
+/// true for an ability with a limit on how often each instance may be activated, such as
+/// "Activate only once each turn": the vocabulary has no such limit, and one added must make
+/// this return `false` for the abilities that have it.
+///
+/// [CR 113.2c]: https://yawgatog.com/resources/magic-rules/#R1132c
+/// [CR 113.3b]: https://yawgatog.com/resources/magic-rules/#R1133b
+fn interchangeable(ability: &Ability) -> bool {
+    matches!(ability.kind(), AbilityKind::Activated | AbilityKind::Mana)
+}
+
 impl<L: Layout> Copiable<L> {
     /// The copiable values of the card or token at a game index, its front face up: what a card has
     /// wherever it is not a permanent or a spell with another face up ([CR 712.6a]), and what a
@@ -165,6 +201,11 @@ impl<L: Layout> Copiable<L> {
     /// changes `words`: the color words of the exception read through them ([`ReadColors`]),
     /// as they are when the copy is made. One test while the text is as printed.
     ///
+    /// An exception these values already carry, and that would change nothing made again, is
+    /// not added a second time ([`Copiable::repeats`]). So Thespian's Stage, whose copy
+    /// exception gives it the ability that makes the copy, can copy itself, or two of them
+    /// each other, any number of times, and its values keep one exception per Stage.
+    ///
     /// # Errors
     ///
     /// [`Full`] past what the layout holds ([`Layout::Additions`]).
@@ -175,35 +216,55 @@ impl<L: Layout> Copiable<L> {
         t: &GameTable,
         words: &Words,
     ) -> Result<Copiable<L>, Full> {
+        let read = if words.is_none() {
+            None
+        } else {
+            read_colors(addition, t, words)
+        };
+        if self.repeats(addition, read, t) {
+            return Ok(self);
+        }
         let place = self.additions.len();
         let mut values = self.with_addition(addition)?;
-        if !words.is_none() {
-            values.read_colors(addition, place, t, words);
+        if let Some(colors) = read {
+            // A layout holds far fewer than 255 additions.
+            let after = u8::try_from(place + 1).unwrap_or(u8::MAX);
+            values.read = ReadColors { after, colors };
         }
         Ok(values)
     }
 
-    /// Notes the colors the exception `addition`, at `place` among the additions, sets as read
-    /// through `words`, where they differ from its words as printed.
-    #[cold]
-    #[inline(never)]
-    fn read_colors(
-        &mut self,
-        addition: Addition<L::Card>,
-        place: usize,
-        t: &GameTable,
-        words: &Words,
-    ) {
-        for change in addition.changes(t) {
-            if let CopyChange::Colors(set) = *change {
-                let colors = set.read(words);
-                if colors != set.read(&Words::NONE) {
-                    // A layout holds far fewer than 255 additions.
-                    let after = u8::try_from(place + 1).unwrap_or(u8::MAX);
-                    self.read = ReadColors { after, colors };
-                }
-            }
-        }
+    /// Whether these values already carry `addition`, with the colors `read` for its color
+    /// words, such that carrying it twice would make them no different. Each kind of change
+    /// in it must allow that:
+    ///
+    /// - [`CopyChange::Has`] gives an ability, which the values then have twice
+    ///   ([CR 113.2c]): "If an object has multiple instances of the same ability, each instance
+    ///   functions independently." That is only the same as one instance for an ability whose
+    ///   instances can't be told apart ([`interchangeable`]),
+    ///   wherever the first one is among the exceptions.
+    /// - [`CopyChange::AddSubtype`] adds a subtype the values already have.
+    /// - [`CopyChange::PowerToughness`] and [`CopyChange::Colors`] set a value, and the last
+    ///   exception to set it wins ([CR 707.9b]): "The final set of values for that
+    ///   characteristic becomes part of the copiable values of the copy." Setting it again to
+    ///   the same value only changes nothing if the earlier exception is the last one, so no
+    ///   exception between them set it to something else. Colors must also have been read the
+    ///   same way.
+    ///
+    /// [CR 113.2c]: https://yawgatog.com/resources/magic-rules/#R1132c
+    /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
+    fn repeats(&self, addition: Addition<L::Card>, read: Option<Colors>, t: &GameTable) -> bool {
+        let Some(place) = self.additions().position(|a| a == addition) else {
+            return false;
+        };
+        let last = place + 1 == self.additions.len();
+        let grants = t.def(addition.card()).face(addition.face()).grants;
+        addition.changes(t).iter().all(|change| match *change {
+            CopyChange::Has(grant) => interchangeable(&grants[grant.index()]),
+            CopyChange::AddSubtype(_) => true,
+            CopyChange::PowerToughness(..) => last,
+            CopyChange::Colors(_) => last && self.read.at(place) == read,
+        })
     }
 
     /// The exceptions these values carry, in the order the copy effects made them.

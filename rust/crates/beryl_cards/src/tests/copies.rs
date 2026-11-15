@@ -12,10 +12,11 @@
 
 use beryl_engine::state::CounterKind;
 use beryl_engine::{
-    Choice, DecisionKind, GameTable, Opt, Replay, Scratch, Seat, Slot, State, Step, Zone, ZoneKey,
-    apply, next,
+    Choice, DecisionKind, GameTable, Opt, Replay, Scratch, Seat, Slot, State, Step, TurnStep, Zone,
+    ZoneKey, apply, next,
 };
-use beryl_scenario::{Action, P0, Permanent, Pick, Scenario};
+use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
+use beryl_scenario_types::advance_to;
 
 use crate::{CARDS, names};
 
@@ -102,4 +103,58 @@ fn the_stage_that_copies_dark_depths_may_be_kept_and_makes_marit_lage() {
         .map(|&slot| s.name(&t, slot))
         .collect();
     assert!(battlefield.contains(&"Marit Lage"), "{battlefield:?}");
+}
+
+/// Thespian's Stage that becomes a copy of itself takes its own copiable values, which already
+/// carry its copy exception, "except it has this ability", and makes the copy with that
+/// exception again. The ability it gives is an activated ability, and a second instance of
+/// one lets its controller do nothing a single instance doesn't ([CR 113.2c]): "If an object
+/// has multiple instances of the same ability, each instance functions independently." So
+/// the values keep the exception once, however often the Stage copies itself, and the game
+/// stays in the `Small` layout, whose list of copy exceptions is short.
+///
+/// [CR 113.2c]: https://yawgatog.com/resources/magic-rules/#R1132c
+#[test]
+fn a_stage_that_copies_itself_ten_times_keeps_one_copy_exception() {
+    const TIMES: u16 = 10;
+    let mut actions = Vec::new();
+    for i in 0..TIMES {
+        if i > 0 {
+            actions.push(advance_to(2 * i + 1, TurnStep::PrecombatMain));
+        }
+        actions.extend([
+            Action::activate(P0, STAGE, 1),
+            Action::answer(P0, DecisionKind::Target, Pick::Card { card: STAGE }),
+            Action::Resolve,
+        ]);
+    }
+    actions.push(advance_to(2 * TIMES + 1, TurnStep::PrecombatMain));
+    let scenario = Scenario::new("Thespian's Stage copies itself ten times")
+        .battlefield(P0, &[STAGE, names::ISLAND, names::ISLAND])
+        .library(P0, &[names::ISLAND; 12])
+        .library(P1, &[names::ISLAND; 12])
+        .actions(Vec::leak(actions));
+    let (t, _) = beryl_scenario::position(&CARDS, &scenario).unwrap_or_else(|e| panic!("{e}"));
+    let mut last = None;
+    beryl_scenario::visit(&CARDS, &scenario, |_, s, _| last = Some(*s))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let s = last.expect("the scenario has actions");
+    let stage: Slot = (s.battlefield().iter().copied())
+        .find(|&slot| s.definition_name(&t, slot) == STAGE)
+        .expect("the Stage is on the battlefield");
+    assert_eq!(
+        s.name(&t, stage),
+        STAGE,
+        "a copy of itself is still a Stage"
+    );
+    assert_eq!(
+        s.copiable(stage).additions().count(),
+        1,
+        "one copy exception, however often it copied itself"
+    );
+    assert_eq!(
+        s.copiable(stage).given_abilities(&t).count(),
+        1,
+        "the exception gives the ability that makes the copy"
+    );
 }

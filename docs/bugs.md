@@ -635,3 +635,18 @@ fixed in the same session. Newest first.
   Prevention: every value in the card vocabulary that a card's text names as a
   color word or subtype is a word type from `beryl_card::words`, so a reader
   that skips the text changes does not compile.
+
+- **Thespian's Stage copying itself stalled the game after a few turns.** Each
+  time Thespian's Stage became a copy of itself (or two Stages copied each
+  other), its copiable values gained its copy exception, "except it has this
+  ability", once more. The list of exceptions holds three in the `Small` layout
+  and eight in `Large`, so a few activations moved the game to `Large` and the
+  ninth ended it `Stalled(Capacity)`, on a line any rollout or fuzzer can play
+  for {2} a turn. Fixed: `Copiable::with_addition_read` does not add an
+  exception the values already carry when carrying it twice would change
+  nothing. A repeated `Has` is collapsed only for an ability whose instances
+  can't be told apart (activated and mana abilities, CR 113.2c), and a repeated
+  value-setting exception only when it is the last one (CR 707.9b). Prevention:
+  any list that grows each time a repeatable action resolves needs a test that
+  repeats the action past the list's capacity; the fuzzer reaches such lines
+  only by chance.
