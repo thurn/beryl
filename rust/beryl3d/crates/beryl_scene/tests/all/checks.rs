@@ -13,6 +13,7 @@ use beryl_scene::driver::{Checked, Mode, Page, Recording};
 use beryl_scene::input::{Insets, Size};
 use beryl_scene::play::record::{Cause, MoveKey, Planted, ScriptRecord, SegmentRecord, StepRecord};
 use beryl_scene::pose::{Curve, Pose, Segment};
+use beryl_scene::verbs::Interval;
 use glam::Vec3;
 
 const SIZE: Size = Size {
@@ -254,13 +255,16 @@ fn two_segments_that_do_not_meet_fail_no_jumps() {
         position: Vec3::new(x, 0.0, 0.0),
         ..Pose::default()
     };
-    let segment = |start: u64, from: f32, to: f32| Segment {
-        start: start * MS,
-        duration: 200 * MS,
-        curve: Curve::LINEAR,
-        from: pose(from),
-        to: pose(to),
-        arc: 0.0,
+    let segment = |start: u64, from: f32, to: f32| {
+        Segment::between(
+            pose(from),
+            pose(to),
+            Interval {
+                from: start * MS,
+                to: (start + 200) * MS,
+            },
+            Curve::LINEAR,
+        )
     };
     let steps = vec![
         flight(0, ZoneName::Hand, Why::Play),

@@ -13,26 +13,67 @@
 //!   script is compiled again for it. A segment under way keeps its start and duration and takes
 //!   the new end pose, and its start pose is changed so that the object's pose at that instant is
 //!   the same: the card does not jump, and arrives at its new place.
+//! - Each script's spans and streaks reach the table's `Lit` once the script's clock reaches
+//!   them, and a script with a reset drops every span first. Effects, marks, the pointer and
+//!   the shake then change what the table draws.
 //! - When asked to (`record`), the show keeps a record of every script it is given, for the
 //!   interface checks, and a test can plant a fault in a script before it plays (`plant`).
 
 mod compile;
 pub mod record;
+pub(crate) mod step;
 
 use std::collections::VecDeque;
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::PlayerView;
-use beryl_protocol::script::{StepTiming, Table as Played, Verb};
+use beryl_protocol::script::{self, StepTiming, Subject, Table as Played, Verb};
+use glam::Vec2;
 
 use self::compile::{Compiled, bit, compile};
 use self::record::{Plant, ScriptRecord, StepRecord};
 use crate::data::space::catch_up;
+use crate::effects::{self, EffectRun};
 use crate::faces::Faces;
 use crate::frame::{FrameBuilder, Wake};
+use crate::light::{self, Lit, StreakRun};
 use crate::motion::Track;
+use crate::pointer::Pointer;
 use crate::pose::Pose;
-use crate::table::{Motion, Table, Window};
+use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Motion, Table, Window};
+use crate::verbs::Interval;
+
+/// How many spans, streaks and effects the show holds before holding more allocates.
+const LIGHTS: usize = 256;
+
+/// Where something is and how large, for the light drawn to or on it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Reach {
+    pub pose: Pose,
+    /// Half its width and height, in millimetres. A player's anchor is a point.
+    pub half: Vec2,
+}
+
+/// The show as a frame draws it, for the writers of light and effects to ask where things are.
+#[derive(Clone, Copy)]
+pub struct Scene<'a> {
+    show: &'a Show,
+    now: u64,
+}
+
+impl Scene<'_> {
+    /// Where `subject` is at the frame's time (`Show::reach`).
+    #[must_use]
+    pub fn reach(&self, subject: Subject) -> Option<Reach> {
+        self.show.reach(subject, self.now)
+    }
+
+    /// The table, for its camera and layout.
+    #[must_use]
+    pub fn table(&self) -> &Table {
+        &self.show.table
+    }
+}
 
 /// An update and the timings of its script's steps, compiled to play after the scripts before
 /// it.
@@ -61,6 +102,11 @@ struct Playing {
     start: u64,
     /// How many times faster than real time its clock runs.
     rate: u64,
+    /// How many of its `compiled.spans` and `compiled.streaks` have reached the table's `Lit`,
+    /// and of its `compiled.effects` the show's effects.
+    spans_given: usize,
+    streaks_given: usize,
+    effects_given: usize,
 }
 
 impl Playing {
@@ -72,6 +118,53 @@ impl Playing {
     /// The real time at which its clock reads `t`, rounded up.
     fn real(&self, t: u64) -> u64 {
         self.start + t.div_ceil(self.rate)
+    }
+
+    /// `over`, on its clock, in real time.
+    fn real_interval(&self, over: Interval) -> Interval {
+        Interval {
+            from: self.real(over.from),
+            to: self.real(over.to),
+        }
+    }
+
+    /// Gives `lit` each span change and streak, and `effects` each effect run, of the script
+    /// whose real time is at or before `now`, in order, that it has not given yet.
+    fn light(&mut self, now: u64, lit: &mut Lit, effects: &mut Vec<EffectRun>) {
+        while let Some(change) = self.compiled.spans.get(self.spans_given) {
+            let over = self.real_interval(change.over);
+            if over.from > now {
+                break;
+            }
+            match change.end {
+                script::Span::Begin => lit.begin(change.span, over),
+                script::Span::End => lit.end(&change.span, over),
+            }
+            self.spans_given += 1;
+        }
+        while let Some(run) = self.compiled.streaks.get(self.streaks_given) {
+            let over = self.real_interval(run.over);
+            if over.from > now {
+                break;
+            }
+            lit.streak(StreakRun { over, ..*run });
+            self.streaks_given += 1;
+        }
+        while let Some(run) = self.compiled.effects.get(self.effects_given) {
+            let over = self.real_interval(Interval {
+                from: run.start,
+                to: run.start + run.duration,
+            });
+            if over.from > now {
+                break;
+            }
+            effects.push(EffectRun {
+                start: over.from,
+                duration: over.duration(),
+                ..*run
+            });
+            self.effects_given += 1;
+        }
     }
 }
 
@@ -107,6 +200,12 @@ pub struct Show {
     recorded_from: usize,
     /// The faults to plant in scripts not yet given.
     plants: Vec<Plant>,
+    /// The spans and streaks the table shows.
+    lit: Lit,
+    /// The effects playing, in nanoseconds since the client started, until they end.
+    effects: Vec<EffectRun>,
+    /// What the pointer is doing on the table.
+    pointer: Pointer,
 }
 
 impl Show {
@@ -128,6 +227,38 @@ impl Show {
             history: None,
             recorded_from: 0,
             plants: Vec::new(),
+            lit: Lit::with_capacity(LIGHTS),
+            effects: Vec::with_capacity(LIGHTS),
+            pointer: Pointer::default(),
+        }
+    }
+
+    /// The spans and streaks the table shows.
+    #[must_use]
+    pub fn lit(&self) -> &Lit {
+        &self.lit
+    }
+
+    /// The spans and streaks the table shows, for the marks and arrows a prompt begins and ends
+    /// itself.
+    pub fn lit_mut(&mut self) -> &mut Lit {
+        &mut self.lit
+    }
+
+    /// Where `subject` is at `now` and how large: a card where `pose` has it, a player at their
+    /// anchor (`Table::player_pose`). An ability has no scene object yet.
+    #[must_use]
+    pub fn reach(&self, subject: Subject, now: u64) -> Option<Reach> {
+        match subject {
+            Subject::Object { slot } => self.pose(usize::from(slot.0), now).map(|pose| Reach {
+                pose,
+                half: Vec2::new(CARD_WIDTH, CARD_HEIGHT) * 0.5 * pose.scale,
+            }),
+            Subject::Player { player } => Some(Reach {
+                pose: self.table.player_pose(player),
+                half: Vec2::ZERO,
+            }),
+            Subject::Ability { .. } => None,
         }
     }
 
@@ -385,6 +516,9 @@ impl Show {
                 let real = playing.real(end);
                 ended = Some(real);
                 self.rested = real;
+                if let Some(playing) = &mut self.playing {
+                    playing.light(real, &mut self.lit, &mut self.effects);
+                }
                 self.finish();
             }
             let Some(waiting) = self.waiting.pop_front() else {
@@ -397,6 +531,9 @@ impl Show {
                 _ => 1,
             };
             let moves = !waiting.compiled.tracks.is_empty();
+            if waiting.compiled.reset {
+                self.lit.clear();
+            }
             let start = ended.unwrap_or(now);
             self.record_start(waiting.number, start, rate);
             self.playing = Some(Playing {
@@ -407,11 +544,19 @@ impl Show {
                 compiled: waiting.compiled,
                 start,
                 rate,
+                spans_given: 0,
+                streaks_given: 0,
+                effects_given: 0,
             });
             if !moves {
                 self.show_playing();
             }
         }
+        if let Some(playing) = &mut self.playing {
+            playing.light(now, &mut self.lit, &mut self.effects);
+        }
+        self.lit.advance(now);
+        self.effects.retain(|run| run.start + run.duration >= now);
         let Some(shown) = self.shown.as_ref().map(|update| &update.view) else {
             return;
         };
@@ -424,7 +569,20 @@ impl Show {
                 view: &update.view,
             })
         });
-        self.table.write(shown, motion, &self.faces, builder);
+        let dress = Dress {
+            effects: &self.effects,
+            lit: &self.lit,
+            pointer: &self.pointer,
+            now,
+        };
+        self.table
+            .write(shown, motion, &self.faces, &dress, builder);
+        let scene = Scene { show: self, now };
+        light::arrows::write(&self.lit, now, &scene, builder);
+        light::marks::write(&self.lit, now, &scene, builder);
+        light::streaks::write(&self.lit, now, &scene, builder);
+        effects::light::write(&self.effects, now, &scene, builder);
+        builder.shake(effects::shake::offset(&self.effects, now));
     }
 
     /// Ends the playing script: the table shows its view, at rest.

@@ -18,7 +18,7 @@ pub(crate) use place::{Group, Zones};
 pub use place::{Placement, ROWS, Rest, Scroll, place};
 pub(crate) use rows::NameIds;
 pub(crate) use scene::SceneObject;
-pub use scene::{Motion, Table};
+pub use scene::{Dress, Look, Motion, Table};
 
 use crate::data::space;
 use crate::input::{Insets, Size};
@@ -75,6 +75,15 @@ pub struct HandData {
     pub fan: f32,
 }
 
+/// Where one player's parts of the table that are not cards stand on the screen, in normalized
+/// device coordinates: the middle of their life total, and the top left corner of their unspent
+/// mana. A step about a player starts or ends there.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlayerAnchor {
+    pub life: Vec2,
+    pub pool: Vec2,
+}
+
 /// Everything placement needs to know about a layout. Positions are for the viewer's side;
 /// the opponent's are the same turned half a turn about the table's centre.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -102,6 +111,8 @@ pub struct Layout {
     pub stack_step: Vec3,
     pub hand: HandData,
     pub opponent_hand: HandData,
+    /// The viewer's anchors, then the opponent's.
+    pub players: [PlayerAnchor; 2],
 }
 
 use space::layout::desktop;
@@ -153,4 +164,17 @@ pub const DESKTOP: Layout = Layout {
     stack_step: desktop::STACK_STEP,
     hand: hand_data!(hand),
     opponent_hand: hand_data!(opponent_hand),
+    // The web interface's anchors (`anchors` in `ui/src/stage/desktop.ts`): `life(side).middle`
+    // and `pool(side)` on its 1600 by 900 stage, each point converted as `x / 800 - 1` and
+    // `1 - y / 450`.
+    players: [
+        PlayerAnchor {
+            life: Vec2::new(0.000_179, -0.496_672),
+            pool: Vec2::new(-0.861_25, -0.186_667),
+        },
+        PlayerAnchor {
+            life: Vec2::new(0.000_179, 0.769_995),
+            pool: Vec2::new(-0.802_5, 0.503_728),
+        },
+    ],
 };

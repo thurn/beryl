@@ -13,6 +13,7 @@ mod contract;
 mod driver;
 mod faces;
 mod flat_layer;
+mod light;
 mod motion;
 mod play;
 mod table;

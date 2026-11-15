@@ -173,7 +173,8 @@ impl ScriptRecord {
 }
 
 /// A kind of fault a test can plant in a script, one for each rule the segment and step checks
-/// hold.
+/// hold, and one span (`Mark`) that tests of how spans reach the table plant, since no verb
+/// begins one yet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Planted {
     /// The object a step moves jumps 30 millimetres sideways, with no path, and stays there
@@ -187,6 +188,9 @@ pub enum Planted {
     Unseen,
     /// Four moves of different kinds begin with a step, in its beat.
     Crowded,
+    /// Not a fault: the card a step moves is marked `selected` from the step on, as if its verb
+    /// had begun the mark over the step's time.
+    Mark,
 }
 
 /// A fault planted at `t` on the clock of the `script`th script the show is given, counted
@@ -268,6 +272,8 @@ impl Plant {
                 segment.from.position.x += PLANTED_AWAY;
                 segment.to.position.x += PLANTED_AWAY;
             }
+            // `Compiled::plant` adds the span, which neither steps nor segments hold.
+            Planted::Mark => {}
             Planted::Crowded => {
                 let base = steps[step].clone();
                 let zones = [
@@ -295,7 +301,7 @@ impl Plant {
     }
 
     /// The index of the step the fault concerns.
-    fn step(&self, steps: &[StepRecord]) -> Option<usize> {
+    pub(crate) fn step(&self, steps: &[StepRecord]) -> Option<usize> {
         let wants_subject = !matches!(self.kind, Planted::Crowded);
         let fits = |step: &StepRecord| !wants_subject || step.subject.is_some();
         steps

@@ -1,13 +1,19 @@
 //! A frame that ends one script and starts the next allocates nothing (docs/beryl-3d.md, "The
 //! frame": no allocation): scripts are compiled when their updates arrive. This binary counts
-//! every heap allocation, so it holds one test.
+//! every heap allocation, so it holds one test, which also checks that `Lit::advance` allocates
+//! nothing.
 
 mod common;
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use beryl_protocol::protocol::ObjectId;
+use beryl_protocol::script::{Mark, Subject};
 use beryl_scene::frame::FrameBuilder;
+use beryl_scene::light::{Lit, MarkSpan, Span};
+use beryl_scene::play::record::{Plant, Planted};
+use beryl_scene::verbs::Interval;
 use common::{MS, before, empty_frame, show, three_beats};
 
 /// The system allocator, counting the allocations it makes.
@@ -45,6 +51,13 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
     let (after, timings) = three_beats(&start, cards);
     let mut show = show();
     let mut frame = empty_frame();
+    // A span that begins with the token's step, so that a frame also gives the table's `Lit` a
+    // span.
+    show.plant(Plant {
+        kind: Planted::Mark,
+        script: 1,
+        t: 500 * MS,
+    });
     show.push(Box::new(start), Vec::new());
     show.push(Box::new(after), timings);
     // The frame at 0 shows the first view and starts the three-beat script; the frame at 500 ms
@@ -63,4 +76,38 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
             now / MS
         );
     }
+    assert_eq!(
+        show.lit().open().len(),
+        1,
+        "the planted span reached the table"
+    );
+
+    // Forgetting the spans that have gone allocates nothing.
+    let mut lit = Lit::with_capacity(4);
+    for slot in 0..4 {
+        let span = Span::Mark(MarkSpan {
+            mark: Mark::Eligible,
+            on: Subject::Object {
+                slot: ObjectId(slot),
+            },
+        });
+        lit.begin(span, Interval { from: 0, to: MS });
+        if slot % 2 == 0 {
+            lit.end(
+                &span,
+                Interval {
+                    from: MS,
+                    to: 2 * MS,
+                },
+            );
+        }
+    }
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    lit.advance(3 * MS);
+    assert_eq!(
+        ALLOCATIONS.load(Ordering::Relaxed) - before,
+        0,
+        "allocations in `advance`"
+    );
+    assert_eq!(lit.open().len(), 2);
 }

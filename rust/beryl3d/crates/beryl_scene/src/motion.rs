@@ -7,7 +7,8 @@ use std::f32::consts::PI;
 use beryl_protocol::script::Curve as Named;
 use glam::Vec3;
 
-use crate::pose::{Curve, Pose, Segment};
+use crate::pose::{Curve, Pose, Segment, Shape};
+use crate::verbs::Interval;
 
 impl Curve {
     /// CSS's `linear`: progress equals elapsed time.
@@ -131,9 +132,13 @@ impl Segment {
         let elapsed = ((t - self.start) as f64 / self.duration as f64) as f32;
         let u = self.curve.ease(elapsed);
         let (from, to) = (&self.from, &self.to);
-        let lift = self.arc * (PI * elapsed).sin();
+        let position = match self.shape {
+            Shape::Line => {
+                from.position.lerp(to.position, u) + Vec3::Z * self.arc * (PI * elapsed).sin()
+            }
+        };
         Pose {
-            position: from.position.lerp(to.position, u) + Vec3::Z * lift,
+            position,
             rotation: from.rotation.slerp(to.rotation, u),
             scale: from.scale + (to.scale - from.scale) * u,
             opacity: from.opacity + (to.opacity - from.opacity) * u,
@@ -198,8 +203,9 @@ pub fn pose_at(segments: &[Segment], t: u64) -> Pose {
 }
 
 /// The most segments one object holds at once. A script laid out ahead of time can give one
-/// card several that lie in the future: drawn, then cast, then resolved.
-pub const SEGMENTS: usize = 8;
+/// card several that lie in the future: drawn, held up to be read, then cast and resolved, each
+/// with the slides and holds round it.
+pub const SEGMENTS: usize = 16;
 
 /// A track already holds `SEGMENTS` segments and none of them can be dropped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -215,14 +221,12 @@ pub struct Track {
 
 impl Default for Track {
     fn default() -> Self {
-        let rest = Segment {
-            start: 0,
-            duration: 0,
-            curve: Curve::LINEAR,
-            from: Pose::default(),
-            to: Pose::default(),
-            arc: 0.0,
-        };
+        let rest = Segment::between(
+            Pose::default(),
+            Pose::default(),
+            Interval { from: 0, to: 0 },
+            Curve::LINEAR,
+        );
         Self {
             segments: [rest; SEGMENTS],
             len: 0,

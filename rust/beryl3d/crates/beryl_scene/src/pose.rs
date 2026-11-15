@@ -7,6 +7,8 @@ use std::f32::consts::PI;
 
 use glam::{Affine3A, Quat, Vec3};
 
+use crate::verbs::Interval;
+
 /// Where one object is and how it is turned, in the table's space.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Pose {
@@ -56,7 +58,18 @@ pub struct Curve {
     pub y2: f32,
 }
 
-/// One stretch of animation between two poses.
+/// The path a segment takes between its two poses. A verb whose motion is not a straight
+/// line with a rise adds a variant here, and `Segment::pose_at` matches on it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Shape {
+    /// A straight line, rising `Segment::arc` millimetres above it at the middle of its time.
+    #[default]
+    Line,
+}
+
+/// One stretch of animation between two poses. Code outside this file makes one with
+/// `Segment::between` and changes the fields it needs, as `Segment { arc, ..Segment::between(..) }`,
+/// so that a field added later breaks none of it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Segment {
     /// When it begins, in nanoseconds since the client started.
@@ -69,4 +82,21 @@ pub struct Segment {
     /// How far the path rises above the straight line between the two positions, in
     /// millimetres at its middle.
     pub arc: f32,
+    pub shape: Shape,
+}
+
+impl Segment {
+    /// A straight segment from `from` to `to` over `interval` along `curve`, with no rise.
+    #[must_use]
+    pub const fn between(from: Pose, to: Pose, interval: Interval, curve: Curve) -> Self {
+        Self {
+            start: interval.from,
+            duration: interval.duration(),
+            curve,
+            from,
+            to,
+            arc: 0.0,
+            shape: Shape::Line,
+        }
+    }
 }

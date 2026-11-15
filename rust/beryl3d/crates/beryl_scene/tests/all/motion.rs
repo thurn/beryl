@@ -11,6 +11,7 @@ use beryl_scene::beat::{Laid, Opens, beat};
 use beryl_scene::motion::{Full, SEGMENTS, Track, pose_at};
 use beryl_scene::pose::{Curve, Pose, Segment};
 use beryl_scene::testing::object;
+use beryl_scene::verbs::Interval;
 use glam::{Quat, Vec3};
 
 const MS: u64 = 1_000_000;
@@ -27,14 +28,15 @@ fn at(x: f32) -> Pose {
 }
 
 fn segment(start: u64, duration: u64, from: Pose, to: Pose) -> Segment {
-    Segment {
-        start,
-        duration,
-        curve: Curve::EASE_OUT,
+    Segment::between(
         from,
         to,
-        arc: 0.0,
-    }
+        Interval {
+            from: start,
+            to: start + duration,
+        },
+        Curve::EASE_OUT,
+    )
 }
 
 #[test]
@@ -128,7 +130,11 @@ fn a_full_track_drops_ended_segments_but_the_latest() {
         .push(segment(5_000 * MS, 0, at(0.0), at(99.0)), 260 * MS)
         .unwrap();
     let starts: Vec<u64> = track.segments().iter().map(|s| s.start / MS).collect();
-    assert_eq!(starts, [200, 300, 400, 500, 600, 700, 5_000]);
+    let kept: Vec<u64> = (2..SEGMENTS as u64)
+        .map(|i| i * 100)
+        .chain([5_000])
+        .collect();
+    assert_eq!(starts, kept);
     assert_eq!(track.pose_at(270 * MS), at(2.0));
     track
         .push(segment(6_000 * MS, 0, at(0.0), at(0.0)), 260 * MS)

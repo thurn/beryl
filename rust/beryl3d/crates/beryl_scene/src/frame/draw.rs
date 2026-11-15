@@ -79,6 +79,40 @@ pub struct Sprite {
     pub rect: [u16; 4],
 }
 
+/// The shapes on the atlas's first page, which light and effects draw with: a 1024 by 1024 page
+/// cut into 256 by 256 cells, row by row from the top left. The last two cells of the bottom
+/// row are spare.
+pub mod sprites {
+    use super::Sprite;
+
+    /// The atlas page that holds them.
+    pub const PAGE: u16 = 0;
+    /// The side of one cell, in texels.
+    pub const CELL: u16 = 256;
+
+    const fn cell(x: u16, y: u16) -> Sprite {
+        Sprite {
+            page: PAGE,
+            rect: [x, y, CELL, CELL],
+        }
+    }
+
+    pub const DISC: Sprite = cell(0, 0);
+    pub const BURST: Sprite = cell(256, 0);
+    pub const RING: Sprite = cell(512, 0);
+    pub const CONE: Sprite = cell(768, 0);
+    pub const COMET: Sprite = cell(0, 256);
+    pub const RIBBON: Sprite = cell(256, 256);
+    pub const OUTLINE: Sprite = cell(512, 256);
+    pub const HEAD: Sprite = cell(768, 256);
+    pub const WEDGE: Sprite = cell(0, 512);
+    pub const CRESCENT: Sprite = cell(256, 512);
+    pub const TAP: Sprite = cell(512, 512);
+    pub const MOON: Sprite = cell(768, 512);
+    pub const PLAQUE: Sprite = cell(0, 768);
+    pub const COIN: Sprite = cell(256, 768);
+}
+
 const MESH_SHIFT: u8 = 2;
 const MESH_BITS: u8 = 0b1100;
 const CLIP_SHIFT: u8 = 4;

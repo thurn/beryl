@@ -175,6 +175,12 @@ impl Client {
         &self.frame
     }
 
+    /// The spans and streaks the table shows, for the marks and arrows a prompt begins and ends
+    /// itself, timed by the session's `own_timings`.
+    pub fn lit_mut(&mut self) -> &mut crate::light::Lit {
+        self.show.lit_mut()
+    }
+
     /// Rebuilds the prompt bar from the open prompt, or takes it away.
     fn show_prompt(&mut self) {
         let screen = self.prompt.as_ref().map(|(_, prompt)| prompt_bar(prompt));

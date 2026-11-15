@@ -414,7 +414,8 @@ pub struct Frame {
     pub clips: [Rect; 16],        // physical pixels; entry 0 is not used
     pub clips_full: bool,         // a sixteenth clip was asked for: a fault
     pub shake: Vec2,              // physical pixels, see Effects
-    pub sounds: Vec<SoundId>,     // the sounds that begin in this frame
+    pub sounds: Vec<Sound>,       // the sounds that begin in this frame, each
+                                  // with whether it is the opponent's
     pub lines: Vec<TextLine>,     // each laid-out line of text: its element's
                                   // index and its box, for the "text fits" check
     pub load: Load,               // draw calls, instances, upload bytes, and
@@ -665,6 +666,14 @@ pub struct Segment {
     pub from: Pose,
     pub to: Pose,
     pub arc: f32,          // how far the path rises above the straight line
+    pub shape: Shape,      // the path: `Shape::Line`, or a verb's own
+}
+
+impl Segment {
+    // A straight segment with no rise. Other code changes only the fields it
+    // needs, `Segment { arc, ..Segment::between(..) }`, so a new field or
+    // `Shape` breaks none of it.
+    pub const fn between(from: Pose, to: Pose, over: Interval, curve: Curve) -> Self;
 }
 
 fn pose_at(segments: &[Segment], t: u64) -> Pose { /* pure */ }
@@ -1047,7 +1056,9 @@ flight start exactly where the card was.
 ### Verbs
 
 Each of the 16 verbs has one implementation in the client core, which turns a
-script step into segments on the scene objects it concerns.
+script step into segments on the scene objects it concerns. Each verb is a file
+of `beryl_scene`'s `verbs` module with one function, `play`, which is given the
+step (`StepIn`) and writes segments, spans, streaks and notices (`StepOut`).
 
 - **Timing comes from data, through the session.** A verb's duration, delay,
   easing curve and **stagger** (the delay between successive objects when one

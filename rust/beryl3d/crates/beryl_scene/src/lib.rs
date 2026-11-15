@@ -8,13 +8,17 @@ pub mod command;
 pub mod data;
 #[cfg(feature = "driver")]
 pub mod driver;
+pub mod effects;
 pub mod element;
 pub mod faces;
 pub mod frame;
 pub mod input;
 pub mod layout;
+pub mod light;
 pub mod motion;
+pub mod notice;
 pub mod play;
+pub mod pointer;
 pub mod pose;
 pub mod table;
 #[cfg(feature = "driver")]

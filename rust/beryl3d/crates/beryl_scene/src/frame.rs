@@ -8,7 +8,7 @@ mod order;
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use glam::{Mat4, Vec2};
 
-pub use draw::{Draw, Material, Mesh, Sprite, TextureArray};
+pub use draw::{Draw, Material, Mesh, Sprite, TextureArray, sprites};
 
 use crate::input::Rect;
 
@@ -151,9 +151,20 @@ impl StateBits {
     }
 }
 
-/// A sound that begins in a frame.
+/// One of the sounds of the list both clients play from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SoundId(pub u16);
+
+/// A sound that begins in a frame. `theirs` says it is the opponent's, which the web interface
+/// plays 4 dB quieter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Sound {
+    pub id: SoundId,
+    pub theirs: bool,
+}
+
+/// The most sounds a frame holds without allocating.
+const SOUNDS: usize = 16;
 
 /// Numbers that predict the GPU's load, added up while the frame is built.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -261,7 +272,7 @@ pub struct Frame {
     /// How far the whole picture is shaken, in physical pixels.
     pub shake: Vec2,
     /// The sounds that begin in this frame.
-    pub sounds: Vec<SoundId>,
+    pub sounds: Vec<Sound>,
     /// Each laid-out line of text, for the "text fits" check.
     pub lines: Vec<TextLine>,
     pub load: Load,
@@ -297,7 +308,7 @@ impl Frame {
             clips: [Rect::default(); CLIPS],
             clips_full: false,
             shake: Vec2::ZERO,
-            sounds: Vec::new(),
+            sounds: Vec::with_capacity(SOUNDS),
             lines: Vec::with_capacity(elements),
             load: Load::default(),
             work: Work::default(),
@@ -374,6 +385,16 @@ impl<'a> FrameBuilder<'a> {
         self.frame.scratch.push(band, self.frame.draws.len());
         self.frame.draws.push(draw);
         self.frame.work.records += 1;
+    }
+
+    /// Starts `sound` in this frame.
+    pub fn sound(&mut self, sound: Sound) {
+        self.frame.sounds.push(sound);
+    }
+
+    /// Shakes the whole picture, but for the flat layer, by `offset` physical pixels.
+    pub fn shake(&mut self, offset: Vec2) {
+        self.frame.shake = offset;
     }
 
     /// Adds a line of the text of the resolved element at `element`.

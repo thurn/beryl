@@ -1,18 +1,22 @@
 //! The table's scene objects: one per game object, keyed by the object's slot in the view and
 //! kept across updates, so that a card moving between zones is one object throughout.
 
-use beryl_protocol::protocol::{ObjectId, PlayerView};
-use glam::{Affine3A, Vec2, Vec3};
+use beryl_protocol::protocol::{ObjectId, PlayerView, Side};
+use beryl_protocol::script::Subject;
+use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::place::{
     Group, Placement, Rest, Scroll, Zones, place_group, place_reusing, place_zones,
 };
 use super::rows::NameIds;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, Window, place};
+use crate::effects::{self, EffectRun};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{Band, Draw, ElementId, FrameBuilder, Place, Resolved, Role, StateBits};
 use crate::input::FaceSize;
+use crate::light::{self, Lit};
 use crate::motion::Track;
+use crate::pointer::{self, Pointer};
 use crate::pose::Pose;
 
 /// How large the table cloth is, in millimetres: past every edge of any window.
@@ -50,6 +54,34 @@ pub struct Motion<'a> {
     pub view: &'a PlayerView,
 }
 
+/// How one card is drawn in a frame: made from its pose, face and state, and then changed in
+/// turn by the effects on it, the marks on it and the pointer.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Look {
+    pub pose: Pose,
+    /// Multiplies the face's color.
+    pub tint: [u8; 3],
+    /// How far the card has broken up, from 0 to 1.
+    pub dissolve: f32,
+    /// How far its face is replaced by white light, from 0 to 1.
+    pub whiten: f32,
+    /// The board-size layer of its face, if it has one.
+    pub face: Option<u16>,
+    /// `StateBits`.
+    pub state: u16,
+    pub interactive: bool,
+}
+
+/// What changes how the cards are drawn in a frame, beside their poses: the effects playing,
+/// the spans shown, the pointer, and the time.
+#[derive(Clone, Copy, Debug)]
+pub struct Dress<'a> {
+    pub effects: &'a [EffectRun],
+    pub lit: &'a Lit,
+    pub pointer: &'a Pointer,
+    pub now: u64,
+}
+
 /// The 3D table: the camera and every scene object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Table {
@@ -80,6 +112,24 @@ impl Table {
     #[must_use]
     pub fn camera(&self) -> &Camera {
         &self.camera
+    }
+
+    #[must_use]
+    pub fn layout(&self) -> &Layout {
+        &self.layout
+    }
+
+    /// Where `side`'s player is drawn: at their life total's anchor on the screen, at the
+    /// depth and card height of the viewer's hand.
+    #[must_use]
+    pub fn player_pose(&self, side: Side) -> Pose {
+        let anchor = &self.layout.players[match side {
+            Side::You => 0,
+            Side::Opponent => 1,
+        }];
+        let hand = &self.layout.hand;
+        self.camera
+            .screen_pose(anchor.life, hand.depth, Quat::IDENTITY, hand.height)
     }
 
     /// Fits the camera to a window of a new shape and recomputes every resting place.
@@ -191,12 +241,15 @@ impl Table {
     /// shows. While a script plays, `motion` gives the objects that move their poses, and the
     /// records of the view the script leads to. Each card is drawn from the board-size layer
     /// of its face in `faces`, or from layer 0 while that face has no layer or the viewer does
-    /// not know the card's name. Its back is drawn from the card back's layer.
+    /// not know the card's name. Its back is drawn from the card back's layer. How each card
+    /// looks is then changed by `dress`: the effects on it, the marks on it and the pointer, in
+    /// that order.
     pub fn write(
         &self,
         view: &PlayerView,
         motion: Option<Motion<'_>>,
         faces: &Faces,
+        dress: &Dress<'_>,
         builder: &mut FrameBuilder,
     ) {
         let back = faces.board_layer_of(CARD_BACK).unwrap_or(0);
@@ -213,63 +266,12 @@ impl Table {
             if !object.visible {
                 continue;
             }
-            let transform = object.pose.transform();
-            let shown = &view.objects[object.view_index as usize];
-            let name = shown.name.as_deref().unwrap_or("");
-            // A token's printing tells apart tokens that share a name, so its face is found by
-            // that first.
-            let face = shown
-                .token_printing
-                .as_deref()
-                .and_then(|printing| faces.board_layer(printing))
-                .or_else(|| faces.board_layer(name));
-            let mut state = 0;
-            if object.tapped {
-                state |= StateBits::TAPPED;
-            }
-            if object.pose.turn > 0.5 {
-                state |= StateBits::FACE_DOWN;
-            }
-            if under_way {
-                state |= StateBits::MOVING;
-            }
-            builder.resolved(
-                name,
-                Resolved {
-                    id: ElementId(u32::try_from(slot).expect("slots are u16")),
-                    parent: u32::MAX,
-                    role: Role::Card,
-                    name: crate::frame::NameRef::default(),
-                    place: object.place,
-                    corners: self.corners(transform),
-                    depth: self.camera.depth(object.pose.position),
-                    opacity: object.pose.opacity,
-                    clip: None,
-                    interactive: false,
-                    state: StateBits(state),
-                    face,
-                },
-            );
-            let opacity = (object.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
-            // A card fading in or out is partly transparent. The opaque pass neither blends nor
-            // leaves what is behind it to be seen, so such a card would darken toward black
-            // and hide the cards beneath it: it is drawn with the blended records, after them.
-            let band = if opacity == 255 {
-                Band::Opaque
-            } else {
-                Band::TableMarks
-            };
-            builder.draw(
-                band,
-                Draw::card(
-                    transform,
-                    [255, 255, 255, opacity],
-                    FaceSize::Board,
-                    face.unwrap_or(0),
-                    back,
-                    0.0,
-                    0.0,
-                ),
+            self.write_card(
+                slot,
+                (&object, view, under_way),
+                faces,
+                (back, dress),
+                builder,
             );
         }
         let cloth = Affine3A::from_scale_rotation_translation(
@@ -318,6 +320,93 @@ impl Table {
             ..object
         };
         Some((object, view, track.moving(motion.t)))
+    }
+
+    /// Writes the resolved element and the draw record of the card in `slot`: `object` as
+    /// `view` shows it, moving if `under_way`. Its face comes from `faces`, its back from layer
+    /// `back`, and how it looks is changed by `dress`.
+    fn write_card(
+        &self,
+        slot: usize,
+        (object, view, under_way): (&SceneObject, &PlayerView, bool),
+        faces: &Faces,
+        (back, dress): (u16, &Dress<'_>),
+        builder: &mut FrameBuilder,
+    ) {
+        let shown = &view.objects[object.view_index as usize];
+        let name = shown.name.as_deref().unwrap_or("");
+        // A token's printing tells apart tokens that share a name, so its face is found by
+        // that first.
+        let face = shown
+            .token_printing
+            .as_deref()
+            .and_then(|printing| faces.board_layer(printing))
+            .or_else(|| faces.board_layer(name));
+        let mut state = 0;
+        if object.tapped {
+            state |= StateBits::TAPPED;
+        }
+        if object.pose.turn > 0.5 {
+            state |= StateBits::FACE_DOWN;
+        }
+        if under_way {
+            state |= StateBits::MOVING;
+        }
+        let mut look = Look {
+            pose: object.pose,
+            tint: [255, 255, 255],
+            dissolve: 0.0,
+            whiten: 0.0,
+            face,
+            state,
+            interactive: false,
+        };
+        let on = Subject::Object {
+            slot: ObjectId(u16::try_from(slot).expect("slots are u16")),
+        };
+        effects::card::look(dress.effects, on, dress.now, &mut look);
+        light::marks::look(dress.lit, on, dress.now, &mut look);
+        pointer::look(dress.pointer, slot, &mut look);
+        let transform = look.pose.transform();
+        builder.resolved(
+            name,
+            Resolved {
+                id: ElementId(u32::try_from(slot).expect("slots are u16")),
+                parent: u32::MAX,
+                role: Role::Card,
+                name: crate::frame::NameRef::default(),
+                place: object.place,
+                corners: self.corners(transform),
+                depth: self.camera.depth(look.pose.position),
+                opacity: look.pose.opacity,
+                clip: None,
+                interactive: look.interactive,
+                state: StateBits(look.state),
+                face: look.face,
+            },
+        );
+        let opacity = (look.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
+        let [red, green, blue] = look.tint;
+        // A card fading in or out is partly transparent. The opaque pass neither blends nor
+        // leaves what is behind it to be seen, so such a card would darken toward black and
+        // hide the cards beneath it: it is drawn with the blended records, after them.
+        let band = if opacity == 255 {
+            Band::Opaque
+        } else {
+            Band::TableMarks
+        };
+        builder.draw(
+            band,
+            Draw::card(
+                transform,
+                [red, green, blue, opacity],
+                FaceSize::Board,
+                look.face.unwrap_or(0),
+                back,
+                look.dissolve,
+                look.whiten,
+            ),
+        );
     }
 
     /// A card's corners on screen, in logical points: bottom left, bottom right, top right and
