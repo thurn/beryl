@@ -103,3 +103,30 @@ fn identity() {
 fn decisions() {
     family("decisions");
 }
+
+/// Worldgorger Dragon's enters ability exiles 33 Mountains, linking each to the Dragon with a
+/// memo, one more than the 32 memos `Small` holds. The game goes on in `Large`, naming the
+/// memos as the list that filled, and plays on without running out of a capacity there.
+#[test]
+fn a_dragon_exiling_more_than_small_holds_plays_on_in_large() {
+    use beryl_cards::names::{MOUNTAIN, PLAINS, WORLDGORGER_DRAGON};
+    use beryl_engine::{Seat, TurnStep, Zone};
+    let t = GameTable::new(
+        &CARDS,
+        [&[(33, MOUNTAIN), (7, WORLDGORGER_DRAGON)], &[(20, PLAINS)]],
+    )
+    .unwrap();
+    let mut s: State = State::new(&t, 0, Profile::EXACT).unwrap();
+    s.board().begin_at(3, Seat::P0, TurnStep::PrecombatMain);
+    for slot in s.library(Seat::P0).to_vec() {
+        let zone = if s.definition_name(&t, slot) == MOUNTAIN {
+            Zone::Battlefield
+        } else {
+            Zone::Hand
+        };
+        s.board().place(slot, zone).unwrap();
+    }
+    let played = play_widening(&t, s, 0, &mut HashMap::new());
+    assert_ne!(played.outcome, Outcome::Stalled(StallReason::Capacity));
+    assert_eq!(played.filled, Some("the memos"), "{:?}", played.outcome);
+}
