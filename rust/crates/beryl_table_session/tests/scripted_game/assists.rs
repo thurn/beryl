@@ -1,5 +1,5 @@
-use super::{GUEST, HOST, reference, replay, start_linked_game};
-use beryl_session::protocol::{Answer, Side, TargetRef, ZoneName};
+use super::{GUEST, Game, HOST, reference, replay, start_linked_game};
+use beryl_session::protocol::{Answer, ProposalView, Side, TargetRef, ZoneName};
 use beryl_table::action::{Adjustment, SeenObject, Target};
 use beryl_table::state::{Assist, Phase, Zone};
 use beryl_table::{Action, Refusal};
@@ -94,6 +94,22 @@ fn each_seat_can_preview_apply_and_undo_combat() {
         }),
         Err(Refusal::Stale)
     );
+    assert_combat_batch_and_undo(&mut game, &proposed);
+
+    game.accept(GUEST, switch(Assist::Combat, false));
+    assert!(game.table_view(GUEST).proposals.is_empty());
+    assert_eq!(game.proposal(HOST).title, "Combat");
+    game.accept(
+        HOST,
+        Action::ClearArrows {
+            from: None,
+            to: None,
+        },
+    );
+    assert!(game.table_view(HOST).proposals.is_empty());
+}
+
+fn assert_combat_batch_and_undo(game: &mut Game, proposed: &ProposalView) {
     let length = game.table_view(GUEST).log.len();
     game.answer(
         GUEST,
@@ -126,18 +142,6 @@ fn each_seat_can_preview_apply_and_undo_combat() {
         },
     );
     assert_ne!(game.proposal(GUEST).id, proposed.id);
-
-    game.accept(GUEST, switch(Assist::Combat, false));
-    assert!(game.table_view(GUEST).proposals.is_empty());
-    assert_eq!(game.proposal(HOST).title, "Combat");
-    game.accept(
-        HOST,
-        Action::ClearArrows {
-            from: None,
-            to: None,
-        },
-    );
-    assert!(game.table_view(HOST).proposals.is_empty());
 }
 
 #[test]
