@@ -175,7 +175,7 @@ fn only_the_eligible_seat_can_click_a_concession_nudge() {
     assert_eq!(labels[0].on, TargetRef::Player { player: Side::You });
     assert_eq!(labels[0].text, "Concede");
     let answer = Answer::ApplyLabel { id: labels[0].id };
-    assert_eq!(game.host.answer(answer), Err(Refusal::Stale));
+    assert_eq!(game.host.answer(answer.clone()), Err(Refusal::Stale));
     assert!(replay(&game.path).0.game_match.in_game);
     game.answer(GUEST, answer, true);
     assert!(!replay(&game.path).0.game_match.in_game);

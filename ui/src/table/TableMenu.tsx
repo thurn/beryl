@@ -19,6 +19,7 @@ import { playerCounterValue } from "./players";
 import { describe } from "./shortcuts";
 import { TablePalette } from "./TablePalette";
 import { commandActions } from "./commandActions";
+import { activateAbility } from "./abilities";
 import { flowLabel, usesLookSort } from "./flows";
 import { canUseZone } from "./zoneAccess";
 import {
@@ -244,6 +245,7 @@ export class TableCommands {
       this.clients.has(command.client) ||
       [
         "open_command_list",
+        "activate_ability",
         "view_related_cards",
         "select_all",
         "select_row",
@@ -346,6 +348,17 @@ export class TableCommands {
     const { target } = context;
     const source = "name" in target ? target : undefined;
     const object = source?.object;
+    if (entry.ability) {
+      activateAbility(
+        client,
+        entry.ability,
+        context,
+        this.close,
+        this.report,
+        (prompt) => this.#set({ kind: "ask", prompt, context }),
+      );
+      return;
+    }
     const send = (values?: ActionValues, faceDown = shift) => {
       if (context.view !== client.view) return;
       const actions = commandActions(entry, context, values, faceDown);

@@ -48,7 +48,7 @@ pub(super) fn project(
         let slot = slots.get(id).expect("slot assigned to each displayed card");
         let card = cards::CardProjection::new(object);
         view.objects.push(card.object(slot, slots, viewer));
-        if let Some(commands) = card.commands(assists.library_flows) {
+        if let Some(commands) = card.commands(assists.library_flows, assists.ability_menus) {
             card_commands.insert(slot, commands);
         }
         refs.expose(table, Subject::Object { slot }, id);

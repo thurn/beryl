@@ -354,6 +354,11 @@ restore the old behavior.
   manual shuffle, roll, phase, turn, rewind or game start. It reads Shuffled,
   Rolled 4 (d6), Heads, the phase name, the active player's name followed by 's
   turn, Rewound to 41, or Game 2. The banner fades on the stage's clock.
+- **Ability menus on a manual table.** With Ability menus on, a permanent's
+  context menu lists its ability costs and the start of each ability under
+  Assists. −X opens the number prompt. Choosing an ability places a marker on
+  the stack. The marker shows the source card and the ability text on hover and
+  resolves with a click.
 - **Creating tokens on a manual table.** The token chooser uses the command list
   layout and offers the selected card's tokens first. Typing searches the card
   store by name. Custom token opens a form for the token's name, type line,

@@ -1867,11 +1867,10 @@
     "applies_to": "permanent",
     "scope": "table",
     "asks": "none",
-    "action": {
-      "marker": { "objects": "$objects", "in": "$in", "text": "$text" }
-    },
+    "client": "activate_ability",
     "menu": { "group": "Assists", "order": 230 },
-    "group": "Library",
+    "group": "Cards",
+    "also_applies_to": { "their_permanent": true },
     "assist": "ability_menus",
     "when": "activated_abilities"
   },

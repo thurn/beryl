@@ -71,6 +71,12 @@
   cursor: pointer;
 }
 
+.table-menu-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .table-menu-row[data-active] {
   background: color-mix(in srgb, var(--gold) 15%, var(--surface));
   border-color: var(--gold-soft);

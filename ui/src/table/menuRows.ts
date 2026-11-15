@@ -1,4 +1,8 @@
-import type { TableFlowOption } from "../generated/protocol";
+import type {
+  TableAbilityOption,
+  TableFlowOption,
+} from "../generated/protocol";
+import { cardAbilities } from "./abilities.ts";
 import type {
   CardEntry,
   CardTokenLink,
@@ -44,6 +48,7 @@ export interface MenuCommand {
   label: string;
   token?: CardTokenLink;
   flow?: TableFlowOption;
+  ability?: TableAbilityOption & { row: number };
 }
 
 export const seatOf = (view: PlayerView, side: Side) => {
@@ -182,6 +187,8 @@ function conditions({
   const result = new Set<string>(
     cardFlows({ target, view, cards }).map(({ kind }) => flowCondition(kind)),
   );
+  if (cardAbilities({ target, view, cards }).length)
+    result.add("activated_abilities");
   if (logEntry) result.add("log_entry");
   if (viewer) result.add("open_viewer");
   if (viewer?.revealed) result.add("revealed_cards");
@@ -284,6 +291,13 @@ export function availableCommands(
     )
       return [];
     const { id, label } = command;
+    if (id === "card.ability")
+      return cardAbilities(context).map((ability, row) => ({
+        id: `${id}:${row}`,
+        label: ability.label,
+        command,
+        ability: { ...ability, row },
+      }));
     if (command.assist === "library_flows" && command.when) {
       const flows = cardFlows(context).filter(
         ({ kind }) => flowCondition(kind) === command.when,
@@ -399,7 +413,7 @@ export function menuRows(kind: AppliesTo, context: MenuContext) {
     )
     .sort((a, b) => a.command.menu!.order - b.command.menu!.order);
   const groups: { heading?: string; rows: Row[] }[] = [];
-  for (const { id, command, label } of entries) {
+  for (const { id, command, label, ability } of entries) {
     const { group, submenu } = command.menu!;
     const heading = [
       "Primary",
@@ -437,6 +451,7 @@ export function menuRows(kind: AppliesTo, context: MenuContext) {
     const row = {
       id,
       label,
+      truncate: !!ability,
       key: key?.(command.id),
       click,
       checked: checked(command, context),

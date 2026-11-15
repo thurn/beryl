@@ -35,6 +35,7 @@ await import("./kept-table-assists.mjs");
 await import("./kept-table-assists-play.mjs");
 await import("./kept-table-prompts.mjs");
 await import("./kept-table-flows.mjs");
+await import("./kept-table-abilities.mjs");
 await import("./kept-table-players.mjs");
 await import("./kept-table-lobby.mjs");
 await import("./kept-table-lobby-pair.mjs");

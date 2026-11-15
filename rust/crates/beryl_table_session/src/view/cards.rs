@@ -8,6 +8,7 @@ use beryl_session::protocol::{
     ObjectId as Slot, ObjectView, PowerToughness, RowName, Side, StackItem, TableCardCommands,
     TableFlowOption, ZoneName,
 };
+use beryl_table::assist::text::{self, AbilityRow};
 use beryl_table::helpers::{counter, printed_face};
 use beryl_table::state::{AbilityMarker, Card, Face, Object, ObjectId, Row, Zone};
 
@@ -51,7 +52,19 @@ impl<'a> CardProjection<'a> {
         self.active_face().and_then(facts::printed_stats)
     }
 
-    pub(super) fn commands(&self, library_flows: bool) -> Option<TableCardCommands> {
+    pub(crate) fn abilities(&self) -> Vec<AbilityRow> {
+        if self.card.zone == Zone::Battlefield {
+            self.active_face().map(text::abilities).unwrap_or_default()
+        } else {
+            Vec::new()
+        }
+    }
+
+    pub(super) fn commands(
+        &self,
+        library_flows: bool,
+        ability_menus: bool,
+    ) -> Option<TableCardCommands> {
         let flows = if library_flows {
             self.active_face()
                 .map(beryl_table::assist::text::flows)
@@ -83,6 +96,14 @@ impl<'a> CardProjection<'a> {
             counter_names: facts::quick_counter_names(type_line, oracle_text),
             auto_attach,
             flows,
+            abilities: if ability_menus {
+                self.abilities()
+                    .iter()
+                    .map(crate::publication::abilities::menu_option)
+                    .collect()
+            } else {
+                Vec::new()
+            },
         })
     }
 

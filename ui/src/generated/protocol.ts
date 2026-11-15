@@ -1020,7 +1020,9 @@ baseStats: PowerToughness | null, counterNames: [string, string, string], autoAt
 /**
  * Library instructions printed on the visible face, when the assist is on.
  */
-flows?: Array<TableFlowOption>, };
+flows?: Array<TableFlowOption>, abilities?: Array<TableAbilityOption>, };
+
+export type TableAbilityOption = { label: string, requiresX: boolean, };
 
 export type TableFlowOption = { kind: TableFlow, count: number, };
 
@@ -1046,7 +1048,7 @@ export type TablePrompt = { "kind": "sort", title: string, cards: Array<ObjectId
 
 export type PileName = "top" | "bottom" | "graveyard";
 
-export type Answer = { "kind": "place", card: ObjectId, pile: PileName, index: number, } | { "kind": "unplace", card: ObjectId, } | { "kind": "pick", option: number, } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "bottom", card: ObjectId, } | { "kind": "done" } | { "kind": "cancel" } | { "kind": "proposalLine", id: number, line: number, on: boolean, } | { "kind": "applyProposal", id: number, revision: number, } | { "kind": "applyLabel", id: number, };
+export type Answer = { "kind": "place", card: ObjectId, pile: PileName, index: number, } | { "kind": "unplace", card: ObjectId, } | { "kind": "pick", option: number, } | { "kind": "keep" } | { "kind": "mulligan" } | { "kind": "bottom", card: ObjectId, } | { "kind": "done" } | { "kind": "cancel" } | { "kind": "proposalLine", id: number, line: number, on: boolean, } | { "kind": "applyProposal", id: number, revision: number, } | { "kind": "applyLabel", id: number, } | { "kind": "activateAbility", source: TableObjectRef, row: number, x: number | null, };
 
 export type TableActionOf<Id> = { "move": { to: TableDestination, position?: TablePosition, face?: TableFace, tapped?: boolean, objects: Array<Id>, in: TableZone, } } | { "reorder": { position: TablePosition, objects: Array<Id>, in: TableZone, } } | { "pin": { row: TableRow, objects: Array<Id>, in: TableZone, } } | { "give": { to: TableSeat, objects: Array<Id>, in: TableZone, } } | { "tap": { tapped: boolean, objects: Array<Id>, in: TableZone, } } | { "face": { face: TableFace, objects: Array<Id>, in: TableZone, } } | { "flag": { doesnt_untap: boolean, objects: Array<Id>, in: TableZone, } } | { "peek": { objects: Array<Id>, in: TableZone, } } | { "counter": { name: string, objects: Array<Id>, in: TableZone, } & ({ "add": number } | { "set": number }) } | { "stats": { stats: [number, number] | null, objects: Array<Id>, in: TableZone, } } | { "damage": { damage: number, objects: Array<Id>, in: TableZone, } } | { "note": { note: string | null, objects: Array<Id>, in: TableZone, } } | { "attach": { host: TableSeenObject<Id>, objects: Array<Id>, in: TableZone, } } | { "unattach": { objects: Array<Id>, in: TableZone, } } | { "clone": { objects: Array<Id>, in: TableZone, } } | { "token": { card: TableCard, count: number, attached_to: TableSeenObject<Id> | null, note: string | null, face_down?: boolean, } } | { "marker": { text: string, objects: Array<Id>, in: TableZone, } } | { "remove": { objects: Array<Id>, in: TableZone, } } | { "stack_until": { seat: TableSeat, query: string, hits: number, } } | { "draw": { seat: TableSeat, count: number, } } | { "mulligan": { seat: TableSeat, count: number, } } | { "shuffle": { seat: TableSeat, portion: TablePortion, } } | { "look": { seat: TableSeat, portion: TablePortion, } } | { "close_look": Record<symbol, never> } | { "reveal": { in: TableZone, 
 /**

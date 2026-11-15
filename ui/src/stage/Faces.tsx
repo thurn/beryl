@@ -9,6 +9,7 @@ import type { ObjectView } from "../generated/protocol";
 import { CARD_ASPECT, CardBack } from "../components/Card";
 import { StackItem, StackMarks } from "../components/Stack";
 import { Look, type CardState } from "../game/Look";
+import { INSPECT_PAD, INSPECT_WIDTH, type InspectPlace } from "../game/Piles";
 import {
   abilityText,
   BLANK,
@@ -97,19 +98,44 @@ export const MarkerFace = memo(function MarkerFace({
   ability: StackAbility;
   dress: Dress;
 }) {
-  const face = useMarkerFace(ability.name, ability.manual?.face ?? null);
   return (
     <>
-      <StackItem
-        source={face}
-        text={ability.text ?? ""}
-        width={dress.frame}
-        showArt
-      />
+      <MarkerCard ability={ability} width={dress.frame} />
       <StackMarks controller={ability.controller} x={0} />
     </>
   );
 });
+
+function MarkerCard({
+  ability,
+  width,
+}: {
+  ability: StackAbility;
+  width: number;
+}) {
+  const face = useMarkerFace(ability.name, ability.manual?.face ?? null);
+  return (
+    <StackItem source={face} text={ability.text ?? ""} width={width} showArt />
+  );
+}
+
+export function InspectMarker({
+  ability,
+  place: { left, top, width = INSPECT_WIDTH },
+}: {
+  ability: StackAbility;
+  place: InspectPlace;
+}) {
+  return (
+    <div
+      className="inspect"
+      style={{ left, top, width }}
+      aria-label={`${ability.name}, ability preview`}
+    >
+      <MarkerCard ability={ability} width={width - 2 * INSPECT_PAD} />
+    </div>
+  );
+}
 
 /** How a layout's nodes are drawn: a card's face from its record and its dress, and an
  * ability's from its stack item and its source's record. Each is memoised, so that motion

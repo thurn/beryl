@@ -66,14 +66,25 @@ impl TableActionRefs {
         &self,
         source: &beryl_table::action::SeenObject<TableObjectRef>,
     ) -> Option<super::ObjectId> {
-        let entry = self.actions.get(source.id.handle as usize)?;
-        if entry.reference != source.id || entry.zone != source.zone {
+        self.resolve_card(&source.id, source.zone)
+            .map(|(_, slot)| slot)
+    }
+
+    /// Identify the host card and its slot from the exact reference issued in this view.
+    pub fn resolve_card(
+        &self,
+        reference: &TableObjectRef,
+        zone: Zone,
+    ) -> Option<(ObjectId, super::ObjectId)> {
+        let handle = reference.handle as usize;
+        let entry = self.actions.get(handle)?;
+        if &entry.reference != reference || entry.zone != zone {
             return None;
         }
-        match entry.subject {
-            Subject::Object { slot } => Some(slot),
-            _ => None,
-        }
+        let Subject::Object { slot } = entry.subject else {
+            return None;
+        };
+        Some((*self.ids.get(handle)?, slot))
     }
 
     /// Resolve against the authenticated seat's current mapping, then use the

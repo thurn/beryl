@@ -171,7 +171,7 @@ pub struct TableActRequest {
     pub action: TableAction,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct TableAnswerRequest {
     pub answer: Answer,
 }

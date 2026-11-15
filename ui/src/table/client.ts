@@ -27,7 +27,7 @@ import type { TableViewers } from "./viewers";
 
 export type AssistAnswer = Extract<
   Answer,
-  { kind: "proposalLine" | "applyProposal" | "applyLabel" }
+  { kind: "proposalLine" | "applyProposal" | "applyLabel" | "activateAbility" }
 >;
 
 type ObjectKind =
@@ -401,7 +401,7 @@ export class TableClient {
 
   answerAssist(
     answer: AssistAnswer,
-    source: HTMLElement,
+    source?: Name | HTMLElement,
   ): Promise<TableActReply> {
     return this.#send(() => tableAnswer(answer), source);
   }

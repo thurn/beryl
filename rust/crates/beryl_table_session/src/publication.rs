@@ -7,6 +7,8 @@ use beryl_table::{Action, Chance, Entry, Log, Refusal, Seat, Table};
 use crate::assists::{Assists, Suggestions};
 use crate::prompt::{Completion, OpenPrompt, Progress, PromptState};
 
+#[path = "abilities.rs"]
+pub(crate) mod abilities;
 #[path = "flow.rs"]
 mod flow;
 #[path = "flows.rs"]
@@ -319,6 +321,9 @@ impl PublishedTable {
             }
             Answer::ApplyProposal { id, revision } => {
                 Some(publication.assists.apply(id, revision)?)
+            }
+            Answer::ActivateAbility { ref source, row, x } => {
+                Some(self.ability_action(seat, source, row, x)?)
             }
             Answer::ApplyLabel { id } => Some(publication.assists.label_action(
                 id,

@@ -49,6 +49,7 @@ import {
   zonePiles,
 } from "../game/zoneViews";
 import { desktop } from "./desktop.ts";
+import { InspectMarker } from "./Faces";
 import type { Name, Resting } from "./layout.ts";
 import { CARD_ASPECT } from "../components/Card";
 import {
@@ -413,6 +414,8 @@ export function Controls({
   // The inspector reads a pointed-at card shown on its own. A hand card rises to be
   // read in the fan. Its inspector opens when it faces down or its click was refused.
   const pointed = hovered === undefined ? undefined : resting.get(hovered);
+  const marker = pointed?.ability;
+  const canInspect = !dimmed && !viewed && !manualPile;
   const inspected =
     pointed?.object &&
     (!client || pointed.object.name != null) &&
@@ -485,7 +488,7 @@ export function Controls({
         {children}
       </div>
       {notice && <TimingRefusal key={notice.id} source={notice.source} />}
-      {inspected && !dimmed && !viewed && !manualPile && (
+      {inspected && canInspect && (
         <InspectAt
           view={table}
           object={inspected.object}
@@ -498,6 +501,12 @@ export function Controls({
           refusal={
             refused?.slot === inspected.object.slot ? refused.reason : undefined
           }
+        />
+      )}
+      {canInspect && pointed && marker?.manual?.face && (
+        <InspectMarker
+          ability={marker}
+          place={inspectorPlace(pointed.pose.x, true, keeps)}
         />
       )}
       {manualPile &&

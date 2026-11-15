@@ -16,6 +16,7 @@ export interface SubmenuRow {
   key?: string;
   checked?: boolean;
   click?: boolean;
+  truncate?: boolean;
   submenu?: never;
 }
 
@@ -224,7 +225,9 @@ export function Menu({
         <span aria-hidden="true" className="table-menu-check">
           {row.checked ? "✓" : null}
         </span>
-        <span>{row.label}</span>
+        <span className={row.truncate ? "table-menu-truncate" : undefined}>
+          {row.label}
+        </span>
         <span aria-hidden="true" className="table-menu-hint">
           {row.click ? "click" : row.key}
           {hasSubmenu && (

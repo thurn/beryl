@@ -48,6 +48,17 @@ pub struct TableCardCommands {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(optional, as = "Option<_>")]
     pub flows: Vec<TableFlowOption>,
+    // Activated abilities on the visible battlefield face, when the assist is on.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<_>")]
+    pub abilities: Vec<TableAbilityOption>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TableAbilityOption {
+    pub label: String,
+    pub requires_x: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -220,7 +231,7 @@ pub enum TablePrompt {
 
 /// A click in the authenticated seat's current prompt or assist. A placement index
 /// counts cards in the destination after removing the card being placed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Answer {
     Place {
@@ -252,6 +263,11 @@ pub enum Answer {
     },
     ApplyLabel {
         id: u32,
+    },
+    ActivateAbility {
+        source: TableObjectRef,
+        row: usize,
+        x: Option<u16>,
     },
 }
 
