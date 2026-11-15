@@ -280,6 +280,8 @@ restore the old behavior.
   and show their shortcuts. Up and Down move between results, Return runs the
   selected command, Option+Return opens key binding for it, and Escape closes
   the list.
+- **Quitting from a manual table.** On the desktop, the Quit shortcut asks
+  whether to leave the table and quit Beryl. Cancel keeps the table open.
 - **Manual table announcements.** The stage uses its existing step banner for a
   manual shuffle, roll, phase, turn, rewind or game start. It reads Shuffled,
   Rolled 4 (d6), Heads, the phase name, the active player's name followed by 's

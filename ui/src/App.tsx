@@ -5,8 +5,11 @@ import {
   canExportBugs,
   canReportBugs,
   isMobile,
+  isNativeApp,
   isRelayedGame,
   onAndroidBack,
+  onTableQuitAsked,
+  tableQuit,
   uiReady,
   type OutcomeView,
 } from "./ipc";
@@ -96,6 +99,33 @@ function Main() {
       }
       uiReady();
     });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+  // macOS sends this only from the manual table's Quit menu item.
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    let asking = false;
+    const warn = (error: unknown) =>
+      console.warn("Table Quit request failed:", error);
+    void onTableQuitAsked(() => {
+      if (disposed || asking) return;
+      asking = true;
+      void tableQuit()
+        .catch(warn)
+        .finally(() => {
+          asking = false;
+        });
+    })
+      .then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+      })
+      .catch(warn);
     return () => {
       disposed = true;
       unlisten?.();

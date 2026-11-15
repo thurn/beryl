@@ -909,6 +909,11 @@
     },
     {
       "kind": "no-equivalent",
+      "name": "Quitting from a manual table",
+      "rule": "On the desktop, the Quit shortcut asks whether to leave the table and quit Beryl. Cancel keeps the table open."
+    },
+    {
+      "kind": "no-equivalent",
       "name": "Manual table announcements",
       "rule": "The stage uses its existing step banner for a manual shuffle, roll, phase, turn, rewind or game start. It reads Shuffled, Rolled 4 (d6), Heads, the phase name, the active player's name followed by 's turn, Rewound to 41, or Game 2. The banner fades on the stage's clock."
     },

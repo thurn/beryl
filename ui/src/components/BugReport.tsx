@@ -23,6 +23,7 @@ import type { PageInfo, Region } from "../ipc";
 import { diagnostics, note } from "../diagnostics";
 import { freeze, thaw } from "../freeze";
 import { Button } from "./Controls";
+import { isBugReportShortcut } from "./bugReportKeys";
 import { usePhone } from "../mobile/phone";
 
 type Stage =
@@ -170,9 +171,9 @@ export function BugReporter({ route }: { route: string }) {
     thaw();
   }, []);
 
-  // ⌘B or Ctrl+B anywhere opens it; Escape closes it; while it captures or selects, Space or
-  // Enter takes the whole window. It hears keys first (the capture phase), and while it
-  // captures or selects, nothing else on the page does: the board's Space would pass.
+  // ⌘B or Ctrl+B opens it (with Shift at a manual table). Escape closes it. While it captures
+  // or selects, Space or Enter takes the whole window. It hears keys in the capture phase,
+  // and suppresses other shortcuts during capture or selection so Space cannot pass priority.
   useEffect(() => {
     const onAndroidBack = (e: Event) => {
       if (stageRef.current.kind !== "idle") {
@@ -187,12 +188,7 @@ export function BugReporter({ route }: { route: string }) {
         e.preventDefault();
         e.stopPropagation();
       };
-      if (
-        (e.metaKey || e.ctrlKey) &&
-        !e.altKey &&
-        !e.shiftKey &&
-        e.key.toLowerCase() === "b"
-      ) {
+      if (isBugReportShortcut(e)) {
         swallow();
         if (now.kind === "idle") void start();
       } else if (e.key === "Escape" && now.kind !== "idle") {

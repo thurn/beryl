@@ -21,7 +21,8 @@ use beryl_session::bugs::{self, BugReport, Images, UiLogRequest};
 use beryl_session::card_records::CardRecordsRequest;
 use beryl_session::ipc::{
     self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, Platform,
-    SetStopsRequest, TableActReply, TableActRequest, TableRefused, TableSoloRequest, UndoRequest,
+    SetStopsRequest, TableActReply, TableActRequest, TableKeysRequest, TableRefused,
+    TableSoloRequest, UndoRequest,
 };
 use beryl_session::prompt::ClickRequest;
 use beryl_session::{GameUpdate, SessionError, Sessions, StartRequest, agents};
@@ -105,6 +106,8 @@ fn handle(
                     tables.leave();
                     answer::<_, ()>(Ok(()))
                 }
+                ipc::TABLE_KEYS => answer(request::<TableKeysRequest>(args).map(|_| ())),
+                ipc::TABLE_QUIT => answer::<_, ()>(Ok(())),
                 _ => invoke(sessions, command, args),
             };
             respond(&mut stream, "200 OK", &answer.to_string())

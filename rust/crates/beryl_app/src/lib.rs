@@ -8,6 +8,7 @@ mod games;
 mod links;
 mod profile;
 mod snapshot;
+mod table_keys;
 mod tables;
 
 use std::path::PathBuf;
@@ -270,6 +271,8 @@ pub fn run() {
     let builder = builder.plugin(beryl_mobile::init());
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_dialog::init());
+    #[cfg(target_os = "macos")]
+    let builder = builder.on_menu_event(table_keys::mac::on_menu_event);
     builder
         .invoke_handler(handlers![
             app_info = ipc::APP_INFO,
@@ -289,6 +292,8 @@ pub fn run() {
             tables::table_act = ipc::TABLE_ACT,
             tables::table_current = ipc::TABLE_CURRENT,
             tables::table_leave = ipc::TABLE_LEAVE,
+            table_keys::table_keys = ipc::TABLE_KEYS,
+            table_keys::table_quit = ipc::TABLE_QUIT,
             capture_window = ipc::CAPTURE_WINDOW,
             report_bug = ipc::REPORT_BUG,
             bug_reports::export_bugs = ipc::EXPORT_BUGS,
@@ -321,6 +326,8 @@ pub fn run() {
             });
         })
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            table_keys::mac::setup(app.handle())?;
             let bug_dir = profile::setup(app.handle())?;
             journal::info(
                 "app",

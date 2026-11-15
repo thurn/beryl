@@ -248,6 +248,8 @@ export function fixtureTransport(
     },
     invoke<C extends Command>(command: C, args: Args<C>): Promise<Result<C>> {
       calls.push({ command, args });
+      if (command === "table_keys" || command === "table_quit")
+        return Promise.resolve(null as Result<C>);
       if (command === "cancel") return cancel() as Promise<Result<C>>;
       if (command === "undo") return undo() as Promise<Result<C>>;
       if (command === "card_records") {
@@ -310,6 +312,7 @@ const alike = (a: unknown, b: unknown): boolean => {
 /** Whether a recorded event is a view of the game playing on without the player, which the
  * next view follows unasked. */
 const playsOn = (e: { event: keyof Events; payload: unknown }) => {
+  if (e.event !== "game-update") return false;
   const kind = (e.payload as Events["game-update"]).view.status.kind;
   return kind === "thinking" || kind === "playing";
 };
@@ -677,6 +680,19 @@ export const tableCurrent = async () => {
 };
 
 export const tableLeave = () => call("table_leave", {});
+
+/** Gives the manual table its macOS shortcuts while its screen is mounted. */
+export const tableKeys = (on: boolean) =>
+  call("table_keys", { request: { on } });
+
+/** Asks before quitting from the manual table. */
+export const tableQuit = () => call("table_quit", {});
+
+/** The native Quit menu sends this while the table has the keys. */
+export const onTableQuitAsked = async (handler: () => void) =>
+  (await transport()).listen("table-quit-asked", (_payload, past) => {
+    if (!past) handler();
+  });
 
 /** Snapshots the window as drawn now; resolves to its number (only in the app:
  * `canCaptureWindow`). */

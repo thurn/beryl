@@ -9,7 +9,8 @@ use crate::card_records::{CardEntry, CardFace, CardImages, CardRecords, CardReco
 use crate::ipc::{
     AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, PassOnRequest,
     Platform, SetStopsRequest, ShareBugRequest, StageAnimatingRequest, TableActReply,
-    TableActRequest, TableRefusalReason, TableRefused, TableSoloRequest, UndoRequest,
+    TableActRequest, TableKeysRequest, TableRefusalReason, TableRefused, TableSoloRequest,
+    UndoRequest,
 };
 use crate::journal::Level;
 use crate::prompt::{
@@ -130,6 +131,7 @@ fn session_decls(cfg: &Config) -> impl IntoIterator<Item = String> {
         StageAnimatingRequest::decl(cfg),
         beryl_table::deck::Deck::decl(cfg),
         TableSoloRequest::decl(cfg),
+        TableKeysRequest::decl(cfg),
         TableActRequest::decl(cfg),
         TableActReply::decl(cfg),
         TableRefusalReason::decl(cfg),

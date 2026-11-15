@@ -72,6 +72,8 @@ export type TableDeck = { name: string, main: Array<[string, number]>, side: Arr
 
 export type TableSoloRequest = { deck: TableDeck, };
 
+export type TableKeysRequest = { on: boolean, };
+
 export type TableActRequest = { action: TableActionOf<TableObjectRef>, };
 
 export type TableActReply = { ok: true, } | TableRefused;
@@ -1048,6 +1050,8 @@ export type Commands = {
   table_act: { args: { request: TableActRequest }; result: TableActReply; error: never };
   table_current: { args: Record<string, never>; result: GameUpdate | null; error: never };
   table_leave: { args: Record<string, never>; result: null; error: never };
+  table_keys: { args: { request: TableKeysRequest }; result: null; error: SessionError };
+  table_quit: { args: Record<string, never>; result: null; error: SessionError };
   capture_window: { args: Record<string, never>; result: number; error: SessionError };
   report_bug: { args: { request: BugReport }; result: BugSaved; error: SessionError };
   export_bugs: { args: Record<string, never>; result: number | null; error: SessionError };
@@ -1060,4 +1064,5 @@ export type Commands = {
 /** Each event's payload. */
 export type Events = {
   "game-update": GameUpdate;
+  "table-quit-asked": null;
 };

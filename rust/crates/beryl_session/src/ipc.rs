@@ -56,6 +56,10 @@ pub const TABLE_ACT: &str = "table_act";
 pub const TABLE_CURRENT: &str = "table_current";
 /// Closes the current manual table.
 pub const TABLE_LEAVE: &str = "table_leave";
+/// Gives the manual table its macOS shortcuts while the table screen is open.
+pub const TABLE_KEYS: &str = "table_keys";
+/// Asks the player before quitting the desktop app at a manual table.
+pub const TABLE_QUIT: &str = "table_quit";
 
 /// Snapshots the window as it is drawn now, the bug report's frozen frame, and returns its
 /// number: the app serves it at `beryl-art://localhost/snapshot/<n>` and turns it into the
@@ -78,6 +82,8 @@ pub const STAGE_ANIMATING: &str = "stage_animating";
 
 /// The event every view arrives on, carrying a [`GameUpdate`].
 pub const GAME_UPDATE: &str = "game-update";
+/// The table's native Quit menu item was invoked.
+pub const TABLE_QUIT_ASKED: &str = "table-quit-asked";
 
 /// The [`CHOOSE`] command's request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -152,6 +158,11 @@ pub struct TableSoloRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct TableActRequest {
     pub action: TableAction,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct TableKeysRequest {
+    pub on: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -423,6 +434,18 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             never.clone(),
         ),
         (
+            TABLE_KEYS,
+            request(name::<TableKeysRequest>(cfg)),
+            name::<()>(cfg),
+            error.clone(),
+        ),
+        (
+            TABLE_QUIT,
+            "Record<string, never>".to_owned(),
+            name::<()>(cfg),
+            error.clone(),
+        ),
+        (
             CAPTURE_WINDOW,
             "Record<string, never>".to_owned(),
             name::<u32>(cfg),
@@ -479,8 +502,9 @@ pub(crate) fn typescript(cfg: &Config) -> String {
     out.push_str("};\n\n/** Each event's payload. */\nexport type Events = {\n");
     writeln!(
         out,
-        "  \"{GAME_UPDATE}\": {};\n}};",
-        name::<GameUpdate>(cfg)
+        "  \"{GAME_UPDATE}\": {};\n  \"{TABLE_QUIT_ASKED}\": {};\n}};",
+        name::<GameUpdate>(cfg),
+        name::<()>(cfg)
     )
     .expect("a String takes writes");
     out
