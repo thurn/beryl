@@ -2,6 +2,7 @@
 //! thread.
 
 pub mod agent;
+pub mod beat;
 mod client;
 pub mod command;
 pub mod data;
@@ -11,6 +12,7 @@ pub mod element;
 pub mod frame;
 pub mod input;
 pub mod layout;
+pub mod motion;
 pub mod pose;
 pub mod table;
 #[cfg(feature = "driver")]

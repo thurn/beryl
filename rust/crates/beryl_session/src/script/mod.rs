@@ -159,7 +159,7 @@ pub use replay::{failure, replay};
 pub use table::{Entry, Piles, Table, Turn};
 pub(crate) use text::wire;
 pub use timing::{
-    Curve, Edge, StepEffect, StepTiming, case_of, effects_of, time_script, timing_of,
+    Curve, Edge, StepEffect, StepTiming, case_of, effects_of, mover_of, time_script, timing_of,
 };
 pub use verb::{Arrow, Mark, Span, Verb};
 

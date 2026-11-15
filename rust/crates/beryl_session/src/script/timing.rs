@@ -653,7 +653,8 @@ fn carried(act: &Act) -> Option<&ObjectView> {
 /// What the step `act` moves: the creature that strikes, the ability that comes onto the
 /// stack or leaves it, or the card its record is of. A port of `moverOf` and `subjectOf` in
 /// `tracks.ts`.
-fn mover_of(act: &Act) -> Option<Subject> {
+#[must_use]
+pub fn mover_of(act: &Act) -> Option<Subject> {
     match act {
         Act::Strike { source, .. } => Some(Subject::Object { slot: *source }),
         Act::Emerge { id, .. } => Some(Subject::Ability { id: *id }),
