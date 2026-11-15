@@ -266,6 +266,9 @@ pub enum Tally {
 }
 
 /// A part of the table that changes with no motion.
+// Other `Act` variants already carry an `ObjectView`. Boxing this record
+// would add an allocation without shrinking the script's steps.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Fact {

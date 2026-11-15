@@ -83,34 +83,7 @@ pub fn player_view<L: Layout>(
         you: player_state(viewer),
         opponent: player_state(viewer.opponent()),
     };
-    objects.extend(obs.battlefield().iter().map(|&s| object_view(t, obs, s)));
-    // The other cards of each merged permanent, which the UI draws under it ([CR 731.2b]: "As
-    // an object merges with a permanent, that object leaves its previous zone and becomes part
-    // of an object on the battlefield").
-    //
-    // [CR 731.2b]: https://yawgatog.com/resources/magic-rules/#R7312b
-    // A merged permanent with a mutating card over it keeps its own card in its slot, under a
-    // copy effect: the card in the merged zone that it shows is the one over it, so the view
-    // names the card under it by the permanent's own.
-    for &host in obs.battlefield() {
-        let mut own = really(t, obs, host);
-        let top = name(t, obs, host);
-        for s in obs.shown().pile(host) {
-            let mut view = object_view(t, obs, s);
-            if own.is_some() && view.name.as_deref() == top {
-                view.name = own.take().map(str::to_owned);
-            }
-            objects.push(view);
-        }
-    }
-    // Phased-out permanents are on the battlefield by their zone, but in no battlefield list:
-    // the view still sends them, marked, after the rest ([CR 702.26b]): "a phased-out
-    // permanent is treated as though it does not exist".
-    //
-    // [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
-    let phased_out = obs.in_candidate_order(obs.phased_out());
-    let phased_out: Vec<L::Slot> = phased_out.collect();
-    objects.extend(phased_out.iter().map(|&s| object_view(t, obs, s)));
+    let phased_out = add_battlefield_objects(t, obs, &mut objects);
     let mut stack: Vec<_> = obs.stack().iter().map(|e| stack_item(t, obs, e)).collect();
     objects.extend(
         obs.stack()
@@ -192,6 +165,42 @@ pub fn player_view<L: Layout>(
         script: None,
         table: None,
     }
+}
+
+fn add_battlefield_objects<L: Layout>(
+    t: &GameTable,
+    obs: Observation<'_, L>,
+    objects: &mut Vec<ObjectView>,
+) -> Vec<L::Slot> {
+    objects.extend(obs.battlefield().iter().map(|&s| object_view(t, obs, s)));
+    // The other cards of each merged permanent, which the UI draws under it ([CR 731.2b]: "As
+    // an object merges with a permanent, that object leaves its previous zone and becomes part
+    // of an object on the battlefield").
+    //
+    // [CR 731.2b]: https://yawgatog.com/resources/magic-rules/#R7312b
+    // A merged permanent with a mutating card over it keeps its own card in its slot, under a
+    // copy effect: the card in the merged zone that it shows is the one over it, so the view
+    // names the card under it by the permanent's own.
+    for &host in obs.battlefield() {
+        let mut own = really(t, obs, host);
+        let top = name(t, obs, host);
+        for s in obs.shown().pile(host) {
+            let mut view = object_view(t, obs, s);
+            if own.is_some() && view.name.as_deref() == top {
+                view.name = own.take().map(str::to_owned);
+            }
+            objects.push(view);
+        }
+    }
+    // Phased-out permanents are on the battlefield by their zone, but in no battlefield list:
+    // the view still sends them, marked, after the rest ([CR 702.26b]): "a phased-out
+    // permanent is treated as though it does not exist".
+    //
+    // [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
+    let phased_out = obs.in_candidate_order(obs.phased_out());
+    let phased_out: Vec<L::Slot> = phased_out.collect();
+    objects.extend(phased_out.iter().map(|&s| object_view(t, obs, s)));
+    phased_out
 }
 
 pub(super) fn pending_attackers<L: Layout>(
