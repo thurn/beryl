@@ -216,6 +216,7 @@ pub(crate) fn names_nothing<L: Layout>(
         x: 0,
         targets: &[],
         registers: &Registers::default(),
+        words: crate::state::READ_NOW,
     };
     scene.objects(objects).is_empty()
 }
@@ -292,6 +293,7 @@ pub(crate) fn holds<L: Layout>(
         x: 0,
         targets: &[],
         registers: &Registers::default(),
+        words: crate::state::READ_NOW,
     };
     scene.holds(condition)
 }

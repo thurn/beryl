@@ -13,7 +13,7 @@
 //! or a name no card of the game has would have the same consequences as every other such
 //! one, since nothing in the game reads it, so one candidate, [`ANOTHER`], stands for them all.
 
-use beryl_card::{ChosenKind, Colors};
+use beryl_card::{ChosenKind, Colors, TextWord};
 
 use crate::ids::CardId;
 use crate::layout::{Layout, Small};
@@ -36,6 +36,10 @@ pub enum ChosenValue<L: Layout = Small> {
     /// A card name, by the game index of the first card with it, or `None` for a name no card
     /// of the game has.
     Name(Option<L::Card>),
+    /// A color word or a basic land type a text-changing effect names
+    /// ([`beryl_card::TextWord`]), by its number, which a byte holds where the word would
+    /// take more room in a memo.
+    Word(u8),
 }
 
 /// Filler for a fixed-capacity list's unused places, never a value of its own.
@@ -53,33 +57,33 @@ impl<L: Layout> ChosenValue<L> {
             ChosenValue::Color(_) => ChosenKind::Color,
             ChosenValue::CreatureType(_) => ChosenKind::CreatureType,
             ChosenValue::Name(_) => ChosenKind::CardName,
+            ChosenValue::Word(_) => ChosenKind::Word,
         }
     }
 
     /// The numbers of the values of `kind` a player may choose in the game of `t`, in the
     /// order a prompt lists them: the five colors; the creature types the game numbers, then
-    /// [`ANOTHER`]; the names of the game's cards in game order, then [`ANOTHER`].
+    /// [`ANOTHER`]; the names of the game's cards in game order, then [`ANOTHER`]; the ten
+    /// words of [`TextWord`].
     pub fn candidates(t: &GameTable, kind: ChosenKind) -> impl Iterator<Item = u8> + '_ {
-        // One iterator of each kind, all but one empty, so that no prompt allocates: a decision
-        // is built on the hot path (architecture §18).
-        let colors = (kind == ChosenKind::Color)
-            .then_some(0..5)
-            .into_iter()
-            .flatten();
-        let types = (kind == ChosenKind::CreatureType)
-            .then(|| t.subtypes().creature_types().map(|(n, _)| n))
-            .into_iter()
-            .flatten();
+        // One chain of the four catalogs, all but one empty: a boxed iterator would allocate
+        // at every question, on the hot path.
+        let colors = (kind == ChosenKind::Color).then_some(0..5);
+        let words = (kind == ChosenKind::Word).then_some(0..TextWord::COUNT);
+        let creature_types = (kind == ChosenKind::CreatureType)
+            .then(|| t.subtypes().creature_types().map(|(n, _)| n));
         // A layout whose card index is wider than a byte numbers a name past ANOTHER; no
         // pair of decklists gives a game that many cards.
-        let names = (kind == ChosenKind::CardName)
-            .then(|| {
-                (t.names().iter()).filter_map(|&i| u8::try_from(i).ok().filter(|&n| n < ANOTHER))
-            })
-            .into_iter()
-            .flatten();
-        let another = (kind != ChosenKind::Color).then_some(ANOTHER);
-        colors.chain(types).chain(names).chain(another)
+        let names = (kind == ChosenKind::CardName).then(|| {
+            (t.names().iter()).filter_map(|&i| u8::try_from(i).ok().filter(|&n| n < ANOTHER))
+        });
+        let another =
+            matches!(kind, ChosenKind::CreatureType | ChosenKind::CardName).then_some(ANOTHER);
+        (colors.into_iter().flatten())
+            .chain(words.into_iter().flatten())
+            .chain(creature_types.into_iter().flatten())
+            .chain(names.into_iter().flatten())
+            .chain(another)
     }
 
     /// The value of `kind` that candidate number `n` stands for, if any
@@ -88,6 +92,10 @@ impl<L: Layout> ChosenValue<L> {
         let named = (n != ANOTHER).then_some(n);
         Some(match kind {
             ChosenKind::Color => ChosenValue::Color(*Colors::EACH.get(usize::from(n))?),
+            ChosenKind::Word => {
+                TextWord::of_number(n)?;
+                ChosenValue::Word(n)
+            }
             ChosenKind::CreatureType => ChosenValue::CreatureType(named),
             ChosenKind::CardName => match named {
                 Some(n) => ChosenValue::Name(Some(L::Card::try_from_index(usize::from(n))?)),
@@ -107,6 +115,7 @@ impl<L: Layout> ChosenValue<L> {
             ),
             ChosenValue::CreatureType(n) => n.unwrap_or(ANOTHER),
             ChosenValue::Name(card) => card.map_or(ANOTHER, |c| byte(c.index())),
+            ChosenValue::Word(n) => n,
         }
     }
 
@@ -125,6 +134,18 @@ impl<L: Layout> ChosenValue<L> {
             ChosenValue::CreatureType(None) => "Another creature type".to_owned(),
             ChosenValue::Name(Some(c)) => t.def(c).name.to_owned(),
             ChosenValue::Name(None) => "Another card".to_owned(),
+            ChosenValue::Word(n) => TextWord::of_number(n)
+                .map_or("No word", TextWord::name)
+                .to_owned(),
+        }
+    }
+
+    /// The word it is, if it is one.
+    #[inline]
+    pub fn word(self) -> Option<TextWord> {
+        match self {
+            ChosenValue::Word(n) => TextWord::of_number(n),
+            _ => None,
         }
     }
 
@@ -133,7 +154,7 @@ impl<L: Layout> ChosenValue<L> {
     pub(crate) fn holds(self) -> bool {
         match self {
             ChosenValue::Color(color) => color.0.is_power_of_two(),
-            ChosenValue::CreatureType(_) | ChosenValue::Name(_) => true,
+            ChosenValue::CreatureType(_) | ChosenValue::Name(_) | ChosenValue::Word(_) => true,
         }
     }
 
@@ -144,6 +165,7 @@ impl<L: Layout> ChosenValue<L> {
             ChosenValue::Color(color) => ChosenValue::Color(color),
             ChosenValue::CreatureType(n) => ChosenValue::CreatureType(n),
             ChosenValue::Name(c) => ChosenValue::Name(c.map(card)),
+            ChosenValue::Word(word) => ChosenValue::Word(word),
         }
     }
 }

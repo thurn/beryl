@@ -245,6 +245,7 @@ impl<L: Layout> Relayout for StackEntry<L> {
             item: self.item.relayout(),
             targets: queue(self.targets.as_slice(), Target::relayout),
             x: self.x,
+            words: self.words,
         }
     }
 }
@@ -519,6 +520,7 @@ impl<L: Layout> Relayout for State<L> {
             players,
             turn,
             stack,
+            captured_words,
             triggers,
             delayed,
             last_known,
@@ -555,6 +557,7 @@ impl<L: Layout> Relayout for State<L> {
             players: per_player(players, Player::relayout),
             turn: *turn,
             stack: queue(stack.as_slice(), StackEntry::relayout),
+            captured_words: queue(captured_words.as_slice(), |&w| w),
             triggers: queue(triggers.as_slice(), PendingTrigger::relayout),
             delayed: queue(delayed.as_slice(), PendingTrigger::relayout),
             last_known: queue(last_known.as_slice(), LastKnown::relayout),

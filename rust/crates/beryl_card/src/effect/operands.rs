@@ -146,7 +146,8 @@ impl Effect {
             | Effect::GainFlashback(objects)
             | Effect::PutIntoLibrary { objects, .. }
             | Effect::Explore(objects)
-            | Effect::Modify { objects, .. } => Operands::of_objects(objects),
+            | Effect::Modify { objects, .. }
+            | Effect::ChangeText { objects, .. } => Operands::of_objects(objects),
             Effect::Attach { objects, to } | Effect::ExchangeControl(objects, to) => Operands {
                 to: Some(to),
                 ..Operands::of_objects(objects)

@@ -2,7 +2,7 @@
 //! `THEM.has(Zone::Hand, card, 1)`. Each builds an [`Action`] the long way would spell out as
 //! an `Action::answer(..)` or an `Action::assert(Assertion::..)` struct literal.
 
-use beryl_card::{Colors, CounterKind, DecisionKind, ManaColor, Seat, TurnStep, Zone};
+use beryl_card::{Colors, CounterKind, DecisionKind, ManaColor, Seat, TextWord, TurnStep, Zone};
 
 use crate::{Action, Assertion, Ending, Pick};
 
@@ -121,6 +121,16 @@ impl Player {
     pub const fn chooses_color(self, color: Colors) -> Action {
         let n = color.0.trailing_zeros() as u8;
         self.answers(DecisionKind::ChooseObject, Pick::Number { n })
+    }
+
+    /// Chooses a color word or a basic land type, as a text-changing effect asks first for the
+    /// word it replaces and then for the word to replace it with. The engine offers the words
+    /// as numbers in [`TextWord`]'s order.
+    pub const fn chooses_word(self, word: TextWord) -> Action {
+        self.answers(
+            DecisionKind::ChooseObject,
+            Pick::Number { n: word.number() },
+        )
     }
 
     /// Chooses the card name `card`, as "choose a card name" asks.

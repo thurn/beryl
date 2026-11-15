@@ -403,6 +403,20 @@ public final class BerylForgeHarness {
             return null;
         }
 
+        /**
+         * The pick of the first answer still to come whose prompt is for `purpose`, left in
+         * place: for a choice Forge makes earlier than Beryl, as Forge picks a text change's kind
+         * of word as a mode when the spell is cast and Beryl picks the word as it resolves.
+         */
+        JsonObject peekFor(Player player, String purpose) {
+            for (int i = next; i < steps.size(); i++) {
+                if (isAnswerFor(steps.get(i), player, purpose)) {
+                    return steps.get(i).getAsJsonObject("pick");
+                }
+            }
+            return null;
+        }
+
         /** Takes the next answer only if its prompt is for `purpose`, without checking asserts first. */
         JsonObject takeFollowingFor(Player player, String purpose) {
             if (next < steps.size() && isAnswerFor(steps.get(next), player, purpose)) {
@@ -1011,6 +1025,13 @@ public final class BerylForgeHarness {
         private static final String[] COLORS = {"white", "blue", "black", "red", "green"};
         /** The name chosen for Beryl's "another card": a real card that no scenario uses. */
         private static final String ANOTHER_CARD = "Black Lotus";
+        /**
+         * The words a text change chooses among (purposes "replace-word" and "new-word"), in the
+         * order Beryl numbers them: the five colors, then the five basic land types.
+         */
+        private static final String[] WORDS = {
+            "white", "blue", "black", "red", "green", "Plains", "Island", "Swamp", "Mountain", "Forest"
+        };
         private static final Set<String> OBJECTS = Set.of("ChooseObject", "ChooseUpTo", "Target", "AttackTarget", "CastOffer");
         private static final Set<String> OPTIONAL_OBJECTS = Set.of("ChooseObject", "ChooseUpTo", "Target", "AttackTarget", "CastOffer", "YesNo");
 
@@ -1229,12 +1250,62 @@ public final class BerylForgeHarness {
         }
 
         /**
-         * Beryl's answer to a choice of a creature type (its purpose "creature-type"), the type
-         * by name. Beryl's "Another creature type", one no card of the game has, is a Kithkin
+         * The kind of word of a text change, a color word or a basic land type, that Beryl's
+         * coming "replace-word" answer names: Forge chooses it among the effect's two abilities
+         * first, Beryl picks the word itself.
+         */
+        @Override
+        public List<SpellAbility> chooseSpellAbilitiesForEffect(List<SpellAbility> spells, SpellAbility sa, String title, int num, Map<String, Object> params) {
+            JsonObject word = run.peekFor(player, "replace-word");
+            if (word != null && num == 1) {
+                String kind = word.get("n").getAsInt() < 5 ? "ChangeColorWord" : "ChangeTypeWord";
+                for (SpellAbility spell : spells) {
+                    if (spell.hasParam(kind)) {
+                        return List.of(spell);
+                    }
+                }
+            }
+            return super.chooseSpellAbilitiesForEffect(spells, sa, title, num, params);
+        }
+
+        /** Beryl's word for a text change, the one it replaces and then the new one. */
+        private String scriptedWord() {
+            JsonObject pick = run.takeFollowingFor(player, "replace-word");
+            if (pick == null) {
+                pick = run.takeFollowingFor(player, "new-word");
+            }
+            return pick == null ? null : WORDS[pick.get("n").getAsInt()];
+        }
+
+        /** Beryl's color word for a text change (purposes "replace-word", "new-word"). */
+        @Override
+        public byte chooseColor(String message, SpellAbility sa, forge.card.ColorSet colors) {
+            String word = scriptedWord();
+            if (word == null) {
+                return super.chooseColor(message, sa, colors);
+            }
+            byte color = forge.card.MagicColor.fromName(word);
+            if (!colors.hasAnyColor(color)) {
+                throw new StepFailed("color word " + word + " among " + colors);
+            }
+            return color;
+        }
+
+        /**
+         * Beryl's basic land type for a text change (purposes "replace-word", "new-word"), or
+         * its answer to a choice of a creature type (its purpose "creature-type"), the type by
+         * name. Beryl's "Another creature type", one no card of the game has, is a Kithkin
          * here: no card a scenario uses is one.
          */
         @Override
         public String chooseSomeType(String kindOfType, SpellAbility sa, Collection<String> validTypes, boolean isOptional) {
+            String word = scriptedWord();
+            if (word != null) {
+                if (!validTypes.contains(word)) {
+                    throw new StepFailed("land type " + word + " among " + validTypes);
+                }
+                return word;
+            }
             JsonObject pick = run.takeFollowingFor(player, "creature-type");
             if (pick == null || !pick.has("name")) {
                 return super.chooseSomeType(kindOfType, sa, validTypes, isOptional);

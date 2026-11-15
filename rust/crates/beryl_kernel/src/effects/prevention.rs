@@ -14,7 +14,7 @@ use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
 use crate::relayout::{Relayout, slot};
 use crate::state::State;
-use beryl_card::{FaceAbility, FaceIx};
+use beryl_card::{ColorChanges, FaceAbility, FaceIx};
 
 use super::{ContinuousEffect, Kinds, Payload, Subject};
 
@@ -54,6 +54,11 @@ pub struct ChosenSource<L: Layout = Small> {
     /// [CR 615.9]: https://yawgatog.com/resources/magic-rules/#R6159
     pub face: FaceIx,
     pub ability: Option<FaceAbility>,
+    /// The color words of the text the filter is read through: those of the ability's source
+    /// as the ability went on the stack, which the shield keeps once that object has changed
+    /// or gone ([`beryl_card::Words`]). Its subtype words read as printed: the payload has no
+    /// room for them, and no card's filter for a chosen source names a subtype.
+    pub colors: ColorChanges,
 }
 
 impl<L: Layout> Relayout for Payload<L> {
@@ -68,6 +73,7 @@ impl<L: Layout> Relayout for Payload<L> {
             Payload::Cost(change) => Payload::Cost(change),
             Payload::Regeneration => Payload::Regeneration,
             Payload::Copy(values) => Payload::Copy(values.relayout()),
+            Payload::Text(change) => Payload::Text(change),
             Payload::Prevent(Shield { left, from }) => Payload::Prevent(Shield {
                 left,
                 from: from.map(|c| ChosenSource {
@@ -77,6 +83,7 @@ impl<L: Layout> Relayout for Payload<L> {
                     },
                     face: c.face,
                     ability: c.ability,
+                    colors: c.colors,
                 }),
             }),
         }

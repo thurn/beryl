@@ -32,7 +32,7 @@
 //! [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
 //! [CR 612.2]: https://yawgatog.com/resources/magic-rules/#R6122
 
-use crate::characteristics::{BasicLandTypes, Colors, Subtype, Subtypes};
+use crate::characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes};
 
 /// The most subtype words one object's text changes can replace, each with another.
 pub const SUBTYPE_CHANGES: usize = 4;
@@ -47,6 +47,13 @@ pub struct Words {
     /// The first `changed` entries are subtype words with what each reads as.
     subtypes: [(Subtype, Subtype); SUBTYPE_CHANGES],
     changed: u8,
+}
+
+/// No changes: the filler of a fixed-capacity list's unused places.
+impl Default for Words {
+    fn default() -> Self {
+        Words::NONE
+    }
 }
 
 impl Words {
@@ -106,6 +113,174 @@ impl Words {
             .iter()
             .find(|&&(word, _)| word == subtype)
             .map_or(subtype, |&(_, reads)| reads)
+    }
+}
+
+impl Words {
+    /// These changes, then `change`, or `None` when that would need more than
+    /// [`SUBTYPE_CHANGES`] subtype entries.
+    #[must_use]
+    pub fn changing(self, change: TextChange) -> Option<Words> {
+        match change {
+            TextChange::Color { from, to } => Some(self.changing_color(from, to)),
+            TextChange::Subtype { from, to } => self.changing_subtype(from, to),
+        }
+    }
+
+    /// Whether every word reads as printed.
+    #[inline]
+    pub fn is_none(&self) -> bool {
+        self.changed == 0 && self.colors == Colors::EACH
+    }
+
+    /// Whether some subtype word reads as another: the type line, a land type or a landwalk
+    /// may read otherwise than printed.
+    #[inline]
+    pub fn changes_subtypes(&self) -> bool {
+        self.changed != 0
+    }
+
+    /// The landwalk keywords among `keywords` as these words read them: "forestwalk" whose
+    /// "Forest" reads as "Island" is islandwalk ([CR 702.14a]): "Landwalk is a generic term
+    /// that appears within an object's rules text as “[type]walk,” where [type] is usually a
+    /// land type". The other keywords are kept.
+    ///
+    /// [CR 702.14a]: https://yawgatog.com/resources/magic-rules/#R70214a
+    #[must_use]
+    pub fn landwalk(&self, keywords: Keywords) -> Keywords {
+        if self.changed == 0 || !keywords.intersects(Keywords::ANY_LANDWALK) {
+            return keywords;
+        }
+        let mut read = keywords.minus(Keywords::ANY_LANDWALK);
+        for (walk, land) in Keywords::LANDWALK {
+            if keywords.contains(walk) {
+                let reads = self.subtype(land);
+                if let Some(&(other, _)) = Keywords::LANDWALK.iter().find(|&&(_, s)| s == reads) {
+                    read = read.union(other);
+                }
+            }
+        }
+        read
+    }
+}
+
+/// The color words of a [`Words`] alone, in two bytes: for each color in [`Colors::EACH`]'s
+/// order, three bits naming the color it reads as. What an effect that outlives the object
+/// whose text it was made from keeps of that text, where a whole [`Words`] has no room.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ColorChanges(u16);
+
+impl ColorChanges {
+    /// Each color word reads as itself.
+    pub const NONE: ColorChanges = ColorChanges(0b100_011_010_001_000);
+}
+
+impl Words {
+    /// Its color words alone.
+    pub fn color_changes(&self) -> ColorChanges {
+        let mut packed = 0u16;
+        for (i, reads) in self.colors.iter().enumerate() {
+            let n = Colors::EACH.iter().position(|c| c == reads).unwrap_or(i);
+            packed |= u16::try_from(n).unwrap_or(0) << (3 * i);
+        }
+        ColorChanges(packed)
+    }
+
+    /// Words whose color words read as `changes` say, and whose subtypes read as printed.
+    pub fn of_color_changes(changes: ColorChanges) -> Words {
+        let mut words = Words::NONE;
+        for (i, color) in words.colors.iter_mut().enumerate() {
+            let n = usize::from((changes.0 >> (3 * i)) & 0b111);
+            *color = Colors::EACH.get(n).copied().unwrap_or(*color);
+        }
+        words
+    }
+}
+
+/// One change of an object's text ([CR 612.1]): every instance of one color word replaced
+/// with another, or of one subtype word with another.
+///
+/// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TextChange {
+    /// Each a single color.
+    Color {
+        from: Colors,
+        to: Colors,
+    },
+    Subtype {
+        from: Subtype,
+        to: Subtype,
+    },
+}
+
+/// A word a player may choose to replace, or to replace it with, as a text-changing effect
+/// that names color words and basic land types begins: "replacing all instances of one color
+/// word with another or one basic land type with another". Numbered for a catalog prompt:
+/// the five colors in [`Colors::EACH`]'s order, then the five basic land types in
+/// [`BasicLandTypes::SUBTYPES`]' order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TextWord {
+    Color(Colors),
+    LandType(Subtype),
+}
+
+impl TextWord {
+    /// How many there are.
+    pub const COUNT: u8 = 10;
+
+    /// The word numbered `n`.
+    pub const fn of_number(n: u8) -> Option<TextWord> {
+        let i = n as usize;
+        if i < 5 {
+            Some(TextWord::Color(Colors::EACH[i]))
+        } else if i < 10 {
+            Some(TextWord::LandType(BasicLandTypes::SUBTYPES[i - 5].1))
+        } else {
+            None
+        }
+    }
+
+    /// Its number. A land type no basic land type is numbers past the ten.
+    pub const fn number(self) -> u8 {
+        match self {
+            TextWord::Color(color) => color.0.trailing_zeros() as u8,
+            TextWord::LandType(subtype) => {
+                let mut i = 0;
+                while i < 5 {
+                    if BasicLandTypes::SUBTYPES[i].1 as u16 == subtype as u16 {
+                        return 5 + i as u8;
+                    }
+                    i += 1;
+                }
+                TextWord::COUNT
+            }
+        }
+    }
+
+    /// What it is called: "Red", "Forest".
+    pub fn name(self) -> &'static str {
+        match self {
+            TextWord::Color(color) => (Colors::EACH.iter().zip(Colors::NAMES))
+                .find_map(|(&c, name)| (c == color).then_some(name))
+                .unwrap_or("No color"),
+            TextWord::LandType(subtype) => subtype.name(),
+        }
+    }
+
+    /// The change that replaces this word with `to`, if both are words of one kind and they
+    /// differ: one color word can only be replaced with another color word, and a word with
+    /// a different word (Mind Bend's ruling: "It can't change a word to the same word.").
+    pub fn to(self, to: TextWord) -> Option<TextChange> {
+        match (self, to) {
+            (TextWord::Color(from), TextWord::Color(to)) if from != to => {
+                Some(TextChange::Color { from, to })
+            }
+            (TextWord::LandType(from), TextWord::LandType(to)) if from != to => {
+                Some(TextChange::Subtype { from, to })
+            }
+            _ => None,
+        }
     }
 }
 
@@ -212,8 +387,10 @@ impl LandTypeWords {
 
 #[cfg(test)]
 mod tests {
-    use super::{ColorWords, LandTypeWords, SubtypeWord, SubtypeWords, Words};
-    use crate::characteristics::{BasicLandTypes, Colors, Subtype, Subtypes};
+    use super::{
+        ColorChanges, ColorWords, LandTypeWords, SubtypeWord, SubtypeWords, TextWord, Words,
+    };
+    use crate::characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes};
 
     /// Without changes every word reads as printed.
     #[test]
@@ -274,5 +451,46 @@ mod tests {
             SubtypeWord::new(Subtype::Island).read(&words),
             Subtype::Swamp
         );
+    }
+
+    /// A landwalk names a land type (CR 702.14a), so forestwalk whose Forest reads as Island
+    /// is islandwalk, and the other keywords stay.
+    #[test]
+    fn a_landwalk_reads_through_its_land_type() {
+        let words = Words::NONE
+            .changing_subtype(Subtype::Forest, Subtype::Island)
+            .unwrap();
+        let printed = Keywords::FORESTWALK.union(Keywords::FLYING);
+        assert_eq!(
+            words.landwalk(printed),
+            Keywords::ISLANDWALK.union(Keywords::FLYING)
+        );
+    }
+
+    /// The ten words a text change chooses among are numbered, and only two words of one kind
+    /// that differ make a change (Mind Bend's ruling: "It can't change a word to the same
+    /// word.").
+    #[test]
+    fn words_are_replaced_by_words_of_their_kind() {
+        for n in 0..TextWord::COUNT {
+            let word = TextWord::of_number(n).unwrap();
+            assert_eq!(word.number(), n);
+            assert!(word.to(word).is_none());
+        }
+        let red = TextWord::Color(Colors::RED);
+        let forest = TextWord::LandType(Subtype::Forest);
+        assert!(red.to(forest).is_none());
+        assert!(red.to(TextWord::Color(Colors::BLUE)).is_some());
+        assert_eq!(forest.name(), "Forest");
+    }
+
+    /// A shield keeps the color words of a text in two bytes and reads them back the same.
+    #[test]
+    fn color_changes_round_trip() {
+        assert_eq!(Words::NONE.color_changes(), ColorChanges::NONE);
+        let words = Words::NONE.changing_color(Colors::RED, Colors::BLUE);
+        let back = Words::of_color_changes(words.color_changes());
+        assert_eq!(ColorWords::new(Colors::RED).read(&back), Colors::BLUE);
+        assert_eq!(back, words);
     }
 }

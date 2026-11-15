@@ -64,10 +64,15 @@
   text-align: center;
   text-shadow: 0 1px 3px rgb(0 0 0 / 80%);
 }
+/* A catalog longer than its space holds, as the ten words of a text change, goes on in a
+   second column beside the first rather than over the controls under it. */
 .stage-entries ul {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  flex-wrap: wrap;
+  align-content: center;
+  gap: 12px 16px;
+  max-height: 100%;
   margin: 0;
   padding: 0;
   list-style: none;

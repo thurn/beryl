@@ -7,7 +7,7 @@
 //! made required and the reverse, a "may" or an "unless" removed, an `If` condition negated,
 //! one element dropped from a `Sequence` and a filter widened to `Filter::Any`.
 
-use beryl_card::{Filter, Prevention, Regeneration};
+use beryl_card::{Duration, Filter, Prevention, Regeneration};
 use beryl_engine::Zone;
 use beryl_engine::card::{
     Ability, AbilityKind, Amount, Behavior, CardDef, Condition, Effect, Face, Objects, Players,
@@ -808,6 +808,31 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
                         duration,
                     },
                 );
+            }
+        }
+        Effect::ChangeText {
+            objects: which,
+            duration,
+        } => {
+            for (name, which) in objects(which) {
+                add(
+                    name,
+                    Effect::ChangeText {
+                        objects: which,
+                        duration,
+                    },
+                );
+            }
+            for other in [Duration::EndOfTurn, Duration::Indefinite] {
+                if other != duration {
+                    add(
+                        format!("lasting {other:?}"),
+                        Effect::ChangeText {
+                            objects: which,
+                            duration: other,
+                        },
+                    );
+                }
             }
         }
         Effect::ExchangeControl(first, second) => {

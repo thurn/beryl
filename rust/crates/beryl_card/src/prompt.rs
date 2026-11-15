@@ -287,6 +287,12 @@ purposes! {
     /// effect instructs a player to choose a card name, the player must choose the name of a
     /// card in the Oracle card reference." No card asks it yet.
     CardName = "card-name" => Catalog,
+    /// The word a text-changing effect replaces, a color word or a basic land type
+    /// ([CR 612.1](https://yawgatog.com/resources/magic-rules/#R6121)): "Some continuous
+    /// effects change an object’s text." Chosen as the effect begins (CR 608.2d).
+    ReplaceWord = "replace-word" => Catalog,
+    /// The word a text-changing effect replaces the chosen word with: another of its kind.
+    NewWord = "new-word" => Catalog,
     /// Damage divided among targets (CR 601.2d). No card asks it yet.
     DivideDamage = "divide-damage" => Divide,
     /// Counters distributed among targets (CR 601.2d). No card asks it yet.

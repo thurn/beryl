@@ -231,7 +231,9 @@
 //! length, 16 with padding. It is 19,888 since a [`query::Copiable`] holds two copy
 //! exceptions: each of the 16 last-known rows is 60 bytes, 2 more. It is 19,920 since each
 //! player's pool holds up to four entries of mana that remembers ([`mana_memory`]), four bytes
-//! each with the queue's length.
+//! each with the queue's length. It is 20,008 since the table of four sets of text changes
+//! that abilities on the stack keep (88 bytes); the byte naming one in each stack entry fits
+//! the entry's padding.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -251,7 +253,7 @@
 //! | by-bajq.1.2 | 0 or lower (landed: -56) | last-known information leaves every trigger record for a table of 16 rows |
 //! | by-bajq.4.3 | -300 or lower (landed: -504) | each object is 22 bytes, where alignment made it 24 |
 //! | by-bajq.5.1 | +48 (landed: +16) | up to four effects that reach other zones, beside the layer results |
-//! | by-bajq.5.3 | +136 | a byte in each of the 64 stack entries naming its captured text changes, and the table of four captured sets |
+//! | by-bajq.5.3 | +136 (landed: +88) | a byte in each of the 64 stack entries naming its captured text changes, and the table of four captured sets |
 //! | by-bajq.6.1 | +72 (landed: +32) | two copy exceptions in each `Copiable`, which each of the 16 last-known rows holds |
 //! | by-bajq.7.4 | +48 (landed: +32) | up to four entries of mana that remembers in each player's pool |
 //! | by-bajq.8.3 | +16 | the count of mandatory resolutions in a row and the hash it compares, padded |

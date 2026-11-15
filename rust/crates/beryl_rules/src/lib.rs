@@ -228,6 +228,7 @@ mod scratch;
 pub mod stack;
 mod start;
 mod stops;
+mod text;
 pub mod tokens;
 mod trigger;
 mod turn;

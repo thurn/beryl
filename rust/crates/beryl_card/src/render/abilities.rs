@@ -600,6 +600,7 @@ impl Ctx {
                     ChosenKind::Color => "a color",
                     ChosenKind::CreatureType => "a creature type",
                     ChosenKind::CardName => "a card name",
+                    ChosenKind::Word => "a color word or a basic land type",
                 }
             )],
             (Replaced::PutInto(&objects, zone), Rewrite::ToZone(instead)) => {

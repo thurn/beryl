@@ -72,6 +72,13 @@ impl<L: Layout> State<L> {
         } else {
             None
         };
+        // CR 400.7a: a permanent spell's text changes go on with the permanent it becomes
+        // (`crate::effects::text`).
+        let text = if from == Zone::Stack && to == Zone::Battlefield && self.keyed.contains(slot) {
+            Some(self.carried_text(slot)?)
+        } else {
+            None
+        };
         leave(self, slot);
         self.forget_stored(slot);
         let o = self.object_mut(slot);
@@ -119,6 +126,9 @@ impl<L: Layout> State<L> {
         }
         if let Some(carried) = carried {
             self.carry_copy(slot, carried)?;
+        }
+        if let Some(text) = text.filter(|text| !text.is_empty()) {
+            self.carry_text(slot, &text)?;
         }
         if matches!(to, Zone::Battlefield | Zone::Nowhere) {
             self.forget_exiled_with(slot);

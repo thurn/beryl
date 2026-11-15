@@ -11,9 +11,9 @@
 //! as the sacrifice trigger of evoke is where Oracle text prints no reminder text.
 //! For those the session sends the definition's own text, as `beryl_card::render` writes it.
 
-use beryl_card::render::{render_ability, render_ability_of};
+use beryl_card::render::{render_ability, render_ability_of, render_face_read};
 use beryl_card_store::STORE;
-use beryl_engine::card::{FaceAbility, FaceIx};
+use beryl_engine::card::{FaceAbility, FaceIx, Words};
 use beryl_engine::{CardId, GameTable};
 
 use super::outcome::{AbilityClass, AbilityRef, ability_ref};
@@ -45,6 +45,45 @@ pub(super) fn unprinted(
         Some(text) if usize::from(at.nth) < paragraphs(&text, at) => None,
         _ => Some(render_ability_of(def, face, ability)),
     }
+}
+
+/// The rules text and type line of face `face` of `card` as `words` read them, when a text
+/// change makes them read otherwise than printed
+/// ([CR 612.1](https://yawgatog.com/resources/magic-rules/#R6121)): "This can apply to any
+/// words or symbols printed on that object, but generally affects only that object’s rules
+/// text (which appears in its text box) and/or the text that appears in its type line." The
+/// type line is the card store's with its subtypes read through the words.
+pub(super) fn changed(
+    t: &GameTable,
+    card: impl CardId,
+    face: FaceIx,
+    words: &Words,
+) -> Option<(String, String)> {
+    if words.is_none() {
+        return None;
+    }
+    let def = t.def(card);
+    let text = render_face_read(def, face, words);
+    let printed = STORE
+        .card(def.face_name(face))
+        .into_iter()
+        .flat_map(|record| record.faces)
+        .find(|f| f.name == def.face_name(face))
+        .map_or_else(String::new, |f| f.type_line);
+    let types = printed.split(" — ").next().unwrap_or_default().to_owned();
+    let subtypes: Vec<&str> = def
+        .face(face)
+        .subtypes
+        .read(words)
+        .iter()
+        .map(beryl_engine::card::Subtype::name)
+        .collect();
+    let line = if subtypes.is_empty() {
+        types
+    } else {
+        format!("{types} — {}", subtypes.join(" "))
+    };
+    Some((text, line))
 }
 
 /// The printed rules text of the card face, token or emblem named `name` in the card store.

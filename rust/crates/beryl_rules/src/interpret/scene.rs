@@ -133,6 +133,12 @@ pub(crate) struct Scene<'s, L: Layout> {
     pub(crate) x: u8,
     pub(crate) targets: &'s [Target<L>],
     pub(crate) registers: &'s Registers<L>,
+    /// Which text changes of the object the spell or ability is printed on its color words
+    /// and subtypes are read through, as a [`crate::state::StackEntry::words`] names them:
+    /// `READ_NOW` for a spell or for an ability not on the stack, its source's as they are now;
+    /// for an ability on the stack, its source's as it went there ([`State::words_by`]).
+    /// Read only where a word is.
+    pub(crate) words: u8,
 }
 
 impl<L: Layout> Scene<'_, L> {
@@ -140,13 +146,8 @@ impl<L: Layout> Scene<'_, L> {
         self.subject.of.controller
     }
 
-    /// The text changes of the object the spell or ability is printed on, which its color
-    /// words and subtypes are read through ([`State::words_of`]).
     fn words(&self) -> Words {
-        self.subject
-            .of
-            .source
-            .map_or(Words::NONE, |source| self.s.words_of(source.slot))
+        (self.s).words_by(self.subject.of.source.map(|source| source.slot), self.words)
     }
 
     /// The targets chosen for the `spec`th instance of the word "target" that were legal as
@@ -427,6 +428,7 @@ impl<L: Layout> Scene<'_, L> {
             x: self.x,
             targets: self.targets,
             registers: self.registers,
+            words: self.words,
         };
         theirs.value(amount)
     }

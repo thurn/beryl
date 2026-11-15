@@ -378,6 +378,10 @@ pub enum ChosenKind {
     /// effect instructs a player to choose a card name, the player must choose the name of a
     /// card in the Oracle card reference."
     CardName,
+    /// A color word or a basic land type, as a text-changing effect names them
+    /// ([`crate::TextWord`]): "replacing all instances of one color word with another or one
+    /// basic land type with another". No permanent chooses one as it enters.
+    Word,
 }
 
 impl ChosenKind {
@@ -387,6 +391,7 @@ impl ChosenKind {
             ChosenKind::Color => Purpose::Color,
             ChosenKind::CreatureType => Purpose::CreatureType,
             ChosenKind::CardName => Purpose::CardName,
+            ChosenKind::Word => Purpose::ReplaceWord,
         }
     }
 
@@ -396,6 +401,7 @@ impl ChosenKind {
             Purpose::Color => Some(ChosenKind::Color),
             Purpose::CreatureType => Some(ChosenKind::CreatureType),
             Purpose::CardName => Some(ChosenKind::CardName),
+            Purpose::ReplaceWord | Purpose::NewWord => Some(ChosenKind::Word),
             _ => None,
         }
     }

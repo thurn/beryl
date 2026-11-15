@@ -147,6 +147,11 @@ impl<L: Layout> State<L> {
             self.stack.len(),
             capacity(|s: &State<M>| &s.stack),
         )?;
+        room(
+            "the stack's captured text changes",
+            self.captured_words.len(),
+            capacity(|s: &State<M>| &s.captured_words),
+        )?;
         for entry in self.stack.iter() {
             room(
                 "a stack entry's targets",

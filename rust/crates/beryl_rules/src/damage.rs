@@ -191,6 +191,7 @@ pub(crate) fn prevent_instruction<L: Layout>(
                 object: game.state().object_ref(slot),
                 face: resolution.entry.face(),
                 ability: resolution.entry.ability(),
+                colors: words.color_changes(),
             })
         }
     };

@@ -23,6 +23,8 @@ impl Effect {
             | Effect::ManifestDread(_)
             | Effect::CreateAttackingTokens { .. }
             | Effect::Choose { .. }
+            // The two words are chosen as it resolves.
+            | Effect::ChangeText { .. }
             | Effect::PutBack { .. }
             | Effect::Dig { .. }
             | Effect::Fateseal { .. }

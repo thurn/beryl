@@ -88,11 +88,12 @@ pub(crate) fn pick<L: Layout>(
 
 /// The name of the creature type a decision of `d` numbers `n`, as [`Pick::Named`] picks it:
 /// the oracles name the type, not Beryl's number for it. A color stays a number, which they
-/// read in the rules' order, and a card name a card ([`Pick::Card`]).
+/// read in the rules' order, a word of a text change a number, which the harness reads in
+/// Beryl's order, and a card name a card ([`Pick::Card`]).
 fn value_name<L: Layout>(t: &GameTable, d: &Decision<L>, n: u8) -> Option<&'static str> {
     let kind = ChosenKind::of_purpose(d.prompt.purpose)?;
     Some(match ChosenValue::<L>::of_number(kind, n)? {
-        ChosenValue::Color(_) | ChosenValue::Name(_) => return None,
+        ChosenValue::Color(_) | ChosenValue::Name(_) | ChosenValue::Word(_) => return None,
         ChosenValue::CreatureType(Some(n)) => t
             .subtypes()
             .subtype(n)

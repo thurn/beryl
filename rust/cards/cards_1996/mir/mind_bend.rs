@@ -1,0 +1,121 @@
+// Generated from the card store by `just card header`: notes go below the end marker.
+//! Mind Bend {U}
+//! Instant
+//!
+//! Change the text of target permanent by replacing all instances of one color word with another or
+//! one basic land type with another. (For example, you may change "nonblack creature" to "nongreen
+//! creature" or "forestwalk" to "islandwalk." This effect lasts indefinitely.)
+// End of the generated card header.
+
+use crate::prelude::*;
+
+/// "Change the text of target permanent by replacing all instances of one color word with
+/// another or one basic land type with another." A text-changing effect ([CR 612.1]): "Some
+/// continuous effects change an object’s text. This can apply to any words or symbols printed
+/// on that object, but generally affects only that object’s rules text (which appears in its
+/// text box) and/or the text that appears in its type line." Its controller chooses the two
+/// words as it resolves, and it lasts for the rest of the game ([CR 611.2a]): "If no duration
+/// is stated, it lasts until the end of the game." The reminder text says so.
+///
+/// It changes only the permanent's own text, never an ability another object granted it
+/// ([CR 612.3]): "any abilities that are granted to an object can't be modified by
+/// text-changing effects that affect that object".
+///
+/// [CR 611.2a]: https://yawgatog.com/resources/magic-rules/#R6112a
+/// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
+/// [CR 612.3]: https://yawgatog.com/resources/magic-rules/#R6123
+pub static CARD: CardDef = Printed::MindBend
+    .abilities(&[Ability::spell()
+        .target(&TargetSpec::permanent(Filter::Any))
+        .effect(&change_text(target(), Duration::Indefinite))])
+    .card();
+
+#[cfg(feature = "scenarios")]
+pub mod scenarios {
+    use crate::prelude::*;
+
+    const MIND_BEND: &str = Card::MindBend;
+    const COP: &str = Card::CircleOfProtectionRed;
+    const RED: TextWord = TextWord::Color(Colors::RED);
+    const WHITE: TextWord = TextWord::Color(Colors::WHITE);
+    const FOREST: TextWord = TextWord::LandType(Subtype::Forest);
+    const ISLAND: TextWord = TextWord::LandType(Subtype::Island);
+    const MOUNTAIN: TextWord = TextWord::LandType(Subtype::Mountain);
+
+    // `Prop::Creature` is Elite Spellbinder, a white 3/1 flier.
+    pub const SCENARIOS: &[Scenario] = &[
+        // "Red" on Circle of Protection: Red reads "white", so on P1's next turn its ability
+        // chooses the white Spellbinder and prevents its 3 combat damage. The change lasts
+        // past the end of the turn it was made in.
+        Scenario::new("Mind Bend makes Circle of Protection: Red a circle against white")
+            .interaction(&[COP])
+            .battlefield(P0, &[COP, Card::Island, Card::Plains])
+            .battlefield(P1, &[Prop::Creature])
+            .hand(P0, &[MIND_BEND])
+            .actions(&[
+                ME.casts(MIND_BEND),
+                ME.targets(COP),
+                Resolve,
+                ME.chooses_word(RED),
+                ME.chooses_word(WHITE),
+                advance_to(2, TurnStep::BeginningOfCombat),
+                THEM.passes(),
+                ME.passes(),
+                THEM.attacks_with(Prop::Creature),
+                ME.activates(COP, 0),
+                ME.picks(Prop::Creature),
+                advance_to(2, TurnStep::EndOfCombat),
+                ME.life(20),
+            ]),
+        // Circle of Protection: Red's ability went on the stack before Mind Bend changed
+        // "red": it keeps the text its source had then (CR 113.7a), so it chooses among red
+        // sources: P1's Hill Giant is the only one, so P0 is asked nothing and gets priority.
+        // Read as "white", it would ask between the Spellbinder and the Circle itself.
+        Scenario::new("an ability on the stack keeps the words its source had")
+            .interaction(&[COP])
+            .battlefield(P0, &[COP, Card::Island, Card::Plains])
+            .battlefield(P1, &[Card::HillGiant, Prop::Creature])
+            .hand(P0, &[MIND_BEND])
+            .actions(&[
+                ME.activates(COP, 0),
+                ME.casts(MIND_BEND),
+                ME.targets(COP),
+                Resolve,
+                ME.chooses_word(RED),
+                ME.chooses_word(WHITE),
+                Resolve,
+                ME.deciding(DecisionKind::Priority, 1),
+            ]),
+        // "Mountains" on Blood Moon reads "Islands": Tundra is an Island, so it pays the {U}
+        // of a second Mind Bend, which as a Mountain it could not.
+        Scenario::new("Mind Bend makes Blood Moon's nonbasic lands Islands")
+            .interaction(&[Card::BloodMoon])
+            .battlefield(P0, &[Card::BloodMoon, Card::Island, Card::Tundra])
+            .hand(P0, &[MIND_BEND, MIND_BEND])
+            .actions(&[
+                ME.casts(MIND_BEND),
+                ME.targets(Card::BloodMoon),
+                Resolve,
+                ME.chooses_word(MOUNTAIN),
+                ME.chooses_word(ISLAND),
+                ME.casts(MIND_BEND),
+                ME.targets(Card::BloodMoon),
+                ME.tapped(Card::Tundra, 1),
+            ]),
+        // A Forest whose "Forest" reads "Island" is an Island, which taps for {U}
+        // (CR 305.6): it pays for a second Mind Bend.
+        Scenario::new("Mind Bend makes a Forest an Island")
+            .battlefield(P0, &[Card::Forest, Card::Island])
+            .hand(P0, &[MIND_BEND, MIND_BEND])
+            .actions(&[
+                ME.casts(MIND_BEND),
+                ME.targets(Card::Forest),
+                Resolve,
+                ME.chooses_word(FOREST),
+                ME.chooses_word(ISLAND),
+                ME.casts(MIND_BEND),
+                ME.targets(Card::Forest),
+                ME.tapped(Card::Forest, 1),
+            ]),
+    ];
+}

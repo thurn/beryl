@@ -66,13 +66,37 @@ pub(super) fn candidates<L: Layout>(
     x: u8,
     source: Option<L::Slot>,
 ) -> TargetSet<L> {
+    candidates_through(
+        s,
+        t,
+        spec,
+        you,
+        itself,
+        x,
+        source,
+        printed_on(s, itself, source),
+    )
+}
+
+/// [`candidates`] with the spec's words read through `words`: for a spell or ability on the
+/// stack, those it reads its text through ([`State::entry_words`]).
+#[allow(clippy::too_many_arguments)]
+fn candidates_through<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    spec: &TargetSpec,
+    you: Seat,
+    itself: Option<L::Slot>,
+    x: u8,
+    source: Option<L::Slot>,
+    words: Words,
+) -> TargetSet<L> {
     let TargetSet { objects, players } = domain(s, t, spec, you, itself, source);
     TargetSet {
         objects: if objects.is_empty() {
             objects
         } else {
-            spec.filter
-                .select_x(s, t, objects, you, &printed_on(s, itself, source), x)
+            spec.filter.select_x(s, t, objects, you, &words, x)
         },
         players,
     }
@@ -196,7 +220,9 @@ pub(crate) fn still_legal<L: Layout>(
         return false;
     }
     let itself = entry.spell().map(|r| r.slot);
-    (candidates(s, t, spec, you, itself, entry.x, source_of(entry)).objects).contains(r.slot)
+    let words = s.entry_words(entry);
+    (candidates_through(s, t, spec, you, itself, entry.x, source_of(entry), words).objects)
+        .contains(r.slot)
 }
 
 /// Chooses the targets of the triggered ability just put on the stack, if it has any.
@@ -232,6 +258,7 @@ pub(crate) fn target_trigger<L: Layout>(
         source_of(entry),
     ) {
         s.take_top_of_stack();
+        s.settle_captured_words();
         sink.departed(|| s.stack().len());
         return Ok(());
     }

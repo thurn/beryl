@@ -429,6 +429,21 @@ pub enum Effect {
         modifications: &'static [Modification],
         duration: Duration,
     },
+    /// "Change the text of [objects] by replacing all instances of one color word with
+    /// another or one basic land type with another [duration]": a text-changing effect
+    /// ([CR 612.1]): "Some continuous effects change an object’s text. This can apply to any
+    /// words or symbols printed on that object". Its controller chooses the two words as it
+    /// resolves (CR 608.2d), and the effect is on each object, a spell or a permanent, as it
+    /// is then. Only the object's own text changes ([CR 612.3]): "any abilities that are
+    /// granted to an object can't be modified by text-changing effects that affect that
+    /// object".
+    ///
+    /// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
+    /// [CR 612.3]: https://yawgatog.com/resources/magic-rules/#R6123
+    ChangeText {
+        objects: Objects,
+        duration: Duration,
+    },
     /// "Exchange control of [first] and [second]": each permanent gets the other's controller,
     /// together, for the rest of the game, unless one side names no permanent
     /// ([CR 701.12a](https://yawgatog.com/resources/magic-rules/#R70112a)): "if the entire
@@ -625,6 +640,7 @@ impl Effect {
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
             | Effect::Modify { .. }
+            | Effect::ChangeText { .. }
             | Effect::Explore(_)
             | Effect::Choose { .. }
             | Effect::LookAt { .. }

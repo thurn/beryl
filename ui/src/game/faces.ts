@@ -68,17 +68,19 @@ const toughnessLeft = (o: ObjectView, toughness: number) =>
   String(Math.max(0, toughness - o.damage));
 
 /** The face for object `o`, from its card's scan (useCardArt). On the battlefield a creature's
- * toughness is drawn less its marked damage (toughnessLeft), and red then. */
+ * toughness is drawn less its marked damage (toughnessLeft), and red then. An object whose text
+ * a text-changing effect changed shows its text and type line as changed (CR 612.1), which the
+ * session sends in place of the printed ones. */
 export function frameFace(o: ObjectView, art: CardArt): FrameFace {
   const face = art.face;
   const onField = o.zone === "battlefield";
   const loyalty = o.counters.find((c) => c.kind === "loyalty")?.count;
-  const text = face.oracle_text ?? "";
+  const text = o.text ?? face.oracle_text ?? "";
   const pt = onField ? (o.pt ?? undefined) : undefined;
   const printed = printedFace(o, face);
   return {
     name: face.name,
-    typeLine: face.type_line,
+    typeLine: o.typeLine ?? face.type_line,
     colors: face.colors.filter((c): c is Color => "WUBRG".includes(c)),
     manaCost: face.mana_cost || undefined,
     text: text || undefined,

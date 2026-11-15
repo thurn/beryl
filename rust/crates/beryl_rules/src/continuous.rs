@@ -233,7 +233,7 @@ pub(crate) fn exchange_instruction<L: Layout>(
 
 /// A duration as a card says it, for an effect `you` control
 /// ([CR 611.2a](https://yawgatog.com/resources/magic-rules/#R6112a)).
-fn lasting(duration: beryl_card::Duration, you: Seat) -> Duration {
+pub(crate) fn lasting(duration: beryl_card::Duration, you: Seat) -> Duration {
     match duration {
         beryl_card::Duration::EndOfTurn => Duration::EndOfTurn,
         beryl_card::Duration::UntilYourNextTurn => Duration::UntilYourNextTurn(you),

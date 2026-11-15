@@ -40,6 +40,10 @@ def card_source(card: str, root: Path) -> Path | None:
         r"mage\.cards\.(\w)\.(\w+)\.class"
     )
     for sets in sorted((root / "Mage.Sets" / "src" / "mage" / "sets").glob("*.java")):
-        if match := listed.search(sets.read_text(errors="replace")):
-            return cards / match.group(1) / f"{match.group(2)}.java"
+        match = listed.search(sets.read_text(errors="replace"))
+        if (
+            match
+            and (path := cards / match.group(1) / f"{match.group(2)}.java").is_file()
+        ):
+            return path
     return None

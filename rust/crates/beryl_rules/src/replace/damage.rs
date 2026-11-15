@@ -286,12 +286,13 @@ fn applies<L: Layout>(s: &State<L>, t: &GameTable, p: &Damage<L>, shield: Shield
     let Some(chosen) = shield.shield.from else {
         return true;
     };
-    // A shield outlives the object that made it, so its filter is read as printed.
+    // A shield outlives the object that made it, so its filter is read through the color
+    // words it kept.
+    let words = Words::of_color_changes(chosen.colors);
     chosen.object == p.source
         && s.is_current(p.source)
-        && chosen_with(t, shield.source, chosen).is_none_or(|filter| {
-            filter.matches(s, t, p.source.slot, affected(s, p.to), &Words::NONE)
-        })
+        && chosen_with(t, shield.source, chosen)
+            .is_none_or(|filter| filter.matches(s, t, p.source.slot, affected(s, p.to), &words))
 }
 
 /// The filter a source was chosen with for a shield of the card `card`: the `from` of the

@@ -333,6 +333,10 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         })
         .collect();
     let some = |s: Option<L::Slot>| s.map(|s| ObjectId(s.num()));
+    let changed = obs
+        .card(slot)
+        .and_then(|card| super::rules_text::changed(t, card, o.face(), &obs.words_of(slot)));
+    let (text, type_line) = changed.map_or((None, None), |(text, line)| (Some(text), Some(line)));
     ObjectView {
         slot: ObjectId(slot.num()),
         zone: o.zone().into(),
@@ -370,6 +374,8 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         exiled_by: some(obs.memos(slot).exiled_until()),
         exiled_with: some(obs.memos(slot).exiled_with()),
         chosen: obs.memos(slot).chosen().map(|value| value.name(t)),
+        text,
+        type_line,
         combat: match *o.combat() {
             CombatRole::Attacking {
                 target, blocked, ..

@@ -399,6 +399,7 @@ fn body<L: Layout>(
     // sorcery spell, or ability that can legally resolve leaves the stack once it starts to
     // resolve, it will continue to resolve fully.").
     sink.resolved();
+    s.settle_captured_words();
     // CR 117.3b: "The active player receives priority after a spell or ability (other than a
     // mana ability) resolves."
     s.give_priority(s.turn().active());

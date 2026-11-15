@@ -20,8 +20,8 @@ pub use crate::object::{
 pub use crate::pending::{CastKind, CastStep, Casting, PayingObjects, Pending, Resolving};
 pub use crate::player::{ManaPool, MulliganStatus, Player};
 pub use crate::stack::{
-    AbilityRef, PendingTrigger, StackEntry, StackItem, TARGETS, Target, TargetPlace, TargetPlaces,
-    TriggerInfo, placed,
+    AS_PRINTED, AbilityRef, PendingTrigger, READ_NOW, StackEntry, StackItem, TARGETS, Target,
+    TargetPlace, TargetPlaces, TriggerInfo, placed,
 };
 pub use crate::store::{Duration, Stored};
 pub use crate::trackers::{Count, Tracked, Tracker, Trackers};
@@ -184,6 +184,9 @@ pub struct State<L: Layout = Small> {
     pub(crate) derived: L::Table<Derived<L>, BATTLEFIELD>,
     /// The stack's entries, bottom first: [`State::put_on_stack`] and its kin write it.
     pub(crate) stack: L::Queue<StackEntry<L>, 64>,
+    /// The text changes of the sources of abilities on the stack, as each went on it, which
+    /// a [`StackEntry::words`] names ([`crate::effects::text`]). Emptied with the stack.
+    pub(crate) captured_words: L::Queue<beryl_card::Words, CAPTURED_WORDS>,
     /// The abilities that have triggered and wait to be put on the stack.
     pub(crate) triggers: L::Queue<PendingTrigger<L>, 64>,
     /// Delayed triggered abilities waiting for their moment (CR 603.7), which their
@@ -210,6 +213,10 @@ pub struct State<L: Layout = Small> {
 }
 
 const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);
+
+/// The most sets of text changes the abilities on the stack keep in a [`Small`] game. One past
+/// it stalls the game into [`crate::Large`].
+pub const CAPTURED_WORDS: usize = 4;
 
 /// Every field in the order the game is described in, whatever order they are laid out in,
 /// but the stores' index of keyed slots, which says nothing the stores do not: so a hash of
@@ -238,6 +245,7 @@ impl<L: Layout> std::hash::Hash for State<L> {
             objects,
             derived,
             stack,
+            captured_words,
             triggers,
             delayed,
             last_known,
@@ -258,6 +266,10 @@ impl<L: Layout> std::hash::Hash for State<L> {
         players.hash(h);
         turn.hash(h);
         stack.hash(h);
+        // Empty in a game without a text change, which hashes as it did before the table.
+        if !captured_words.is_empty() {
+            captured_words.hash(h);
+        }
         triggers.hash(h);
         delayed.hash(h);
         last_known.hash(h);

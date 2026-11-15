@@ -578,21 +578,48 @@ Built by by-bajq.3.10:
   printed, each to be given an object when text changes arrive: a rule change in
   force (it is known by its card, not its permanent), a prevention shield's
   filter after its source is gone, the table's per-definition caches of a face's
-  subtypes and land mana, the AI's target guesses and the UI's labels. The
-  capability that skips the read when no card changes text waits for the first
-  card that changes text, since nothing would set it before.
-- **A text change** is a layer 3 entry of the Effects store on one object,
-  permanent or spell: a kind of word, from and to. Several compose in timestamp
-  order. It does not reach an ability another object granted (CR 612.3), because
-  only the object's own face is read through its changes.
+  subtypes and land mana, the AI's target guesses and the UI's labels. Text
+  changes since gave most of these an object ("Text changes as built" below).
+- **A text change** is an entry of the Effects store on one object, permanent or
+  spell: a kind of word, from and to (`beryl_card::TextChange`, the payload
+  `Payload::Text`). Several compose in timestamp order into the object's `Words`
+  (`State::words_of`, `beryl_kernel/src/effects/text.rs`). It does not reach an
+  ability another object granted (CR 612.3), because only the object's own face
+  is read through its changes.
+- **Text changes as built** (2026-11-15). The cards say one with
+  `Effect::ChangeText { objects, duration }`, not a `Modification`: a
+  modification changes permanents in the layers, and Crystal Spray targets a
+  spell too. Its controller picks the replaced word among ten
+  (`beryl_card::TextWord`: five colors, five basic land types,
+  `Purpose::ReplaceWord`) and then a different word of the same kind
+  (`Purpose::NewWord`), both in the catalog prompt shape. Layer 3 is no pass of
+  the layers: a word is read through `words_of` wherever it is read, and the
+  layer 1 values of a permanent whose type line reads otherwise are rewritten
+  before layer 4 (`beryl_rules/src/layers/text.rs`): its subtypes, its
+  landwalks, and for a land whose basic land types changed, the intrinsic mana
+  of the new types and the loss of a written mana ability of the old ones (a
+  Forest that reads "Island" taps for {U}). A permanent spell's changes are
+  carried onto the battlefield by the zone move (CR 400.7a). A prevention shield
+  keeps the color words of the text it was made from
+  (`beryl_card::ColorChanges`, two bytes), since its payload has no room for a
+  whole `Words`; its subtype words read as printed. Still read as printed: a
+  rule change in force, the AI's target guesses and the UI's cost labels.
 - **On the stack.** An ability that goes on the stack keeps the words its source
   had then. The state holds up to four captured sets of changes for abilities on
-  the stack, named by a byte in the stack entry, and empties them with the
-  stack.
-- **Absent.** A capability says whether any card of the game changes text. If
-  none does, reading a word is the identity.
-- **Shown.** The session's rendered rules text takes the same word changes, so a
-  changed card reads as changed.
+  the stack (`State::captured_words`), named by a byte in the stack entry
+  (`StackEntry::words`: as printed, a set's number, or "read now" for a mana
+  ability that never goes on the stack), and empties them with the stack. A
+  resolution and the legality of its targets read `State::entry_words`. Growth:
+  the table of four sets, 88 bytes; the byte fits the entry's padding.
+- **Absent.** No capability flag: the Effects store's index of payload kinds is
+  the test. With no text change in force, `words_of` is one AND, an ability goes
+  on the stack as printed without a look at its source, and the byte and the
+  empty table are left out of the state's hash, so a game without a text change
+  hashes as before.
+- **Shown.** The session sends an object's rules text and type line read through
+  its words when they differ from the printed ones (`ObjectView::text` and
+  `typeLine`, rendered by `beryl_card::render::render_face_read`), and the card
+  frame shows them in place of the card store's.
 
 ### 5. Copies
 

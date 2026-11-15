@@ -9,6 +9,7 @@ use crate::cost::{CastingOption, Cost};
 use crate::definition::{CardDef, FaceIx};
 use crate::mana::ManaSet;
 use crate::trigger::Subject;
+use crate::words::Words;
 
 /// A card's rules text in Oracle's style: each face's text ([`render_face`]), a blank line
 /// between faces.
@@ -24,9 +25,19 @@ pub fn render(def: &CardDef) -> String {
 /// order the definition writes them, and the casting options printed last (overload,
 /// evoke). A Rust body renders as "[custom ability]".
 pub fn render_face(def: &CardDef, face: FaceIx) -> String {
+    render_face_read(def, face, &Words::NONE)
+}
+
+/// [`render_face`] with the face's color words and subtypes read through `words`: the text of
+/// an object whose text a text-changing effect changed ([CR 612.1]), as "protection from
+/// red" reads "protection from blue" once "red" reads "blue".
+///
+/// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
+pub fn render_face_read(def: &CardDef, face: FaceIx, words: &Words) -> String {
     let name = def.face_name(face);
     let face = def.face(face);
     let mut ctx = Ctx::of_face(face, name);
+    ctx.words = *words;
     let mut lines = Vec::new();
     if !face.additional_cost.is_empty() {
         let actions = ctx.cost_actions(Cost::of_parts(face.additional_cost));
@@ -40,7 +51,7 @@ pub fn render_face(def: &CardDef, face: FaceIx) -> String {
             lines.push(line);
         }
     }
-    let mut keywords = keywords(face.keywords);
+    let mut keywords = keywords(words.landwalk(face.keywords));
     if keywords.first().is_some_and(|k| k == "flash") {
         keywords.remove(0);
         lines.push("Flash".to_owned());

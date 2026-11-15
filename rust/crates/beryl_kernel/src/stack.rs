@@ -223,7 +223,7 @@ impl<L: Layout> Default for StackItem<L> {
 /// top of the stack without any card associated with it".
 ///
 /// [CR 405.1]: https://yawgatog.com/resources/magic-rules/#R4051
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct StackEntry<L: Layout = Small> {
     pub item: StackItem<L>,
     pub targets: L::Queue<Target<L>, TARGETS>,
@@ -233,9 +233,36 @@ pub struct StackEntry<L: Layout = Small> {
     /// [CR 107.3a]: https://yawgatog.com/resources/magic-rules/#R1073a
     /// [CR 107.3m]: https://yawgatog.com/resources/magic-rules/#R1073m
     pub x: u8,
+    /// The text changes of an ability's source as the ability went on the stack, which its
+    /// words read through from then on ([`State::entry_words`]): [`AS_PRINTED`], [`READ_NOW`],
+    /// or the number of one of the state's captured sets, from 1. A spell reads its own words
+    /// as they are now, whatever this holds.
+    pub words: u8,
 }
 
 impl Copy for StackEntry<Small> {}
+
+/// Its fields in order, and its words only when they are not [`AS_PRINTED`], as they always are
+/// in a game without a text change: such a game hashes as it did before entries had words
+/// (`beryl_bench` pins the hashes of its corpus).
+impl<L: Layout> std::hash::Hash for StackEntry<L> {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.item.hash(h);
+        self.targets.hash(h);
+        self.x.hash(h);
+        if self.words != AS_PRINTED {
+            self.words.hash(h);
+        }
+    }
+}
+
+/// An ability whose source's text was unchanged as it went on the stack, or whose source's
+/// text no effect could change then: every entry's, in a game without a text change.
+pub const AS_PRINTED: u8 = 0;
+
+/// An ability that never went on the stack, as a mana ability resolves at once: its words are
+/// its source's as they are now.
+pub const READ_NOW: u8 = u8::MAX;
 
 impl<L: Layout> StackEntry<L> {
     /// An entry for `item`, with no targets chosen yet and X of 0.
@@ -244,6 +271,7 @@ impl<L: Layout> StackEntry<L> {
             item,
             targets: Default::default(),
             x: 0,
+            words: AS_PRINTED,
         }
     }
 
@@ -413,13 +441,19 @@ impl<L: Layout> State<L> {
     /// is put on the stack, it's put on top of all objects already there." A spell's card is
     /// in the stack zone already ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)).
     #[inline]
-    pub fn put_on_stack(&mut self, sink: &mut Sink<L>, entry: StackEntry<L>) -> Result<(), Full> {
+    pub fn put_on_stack(
+        &mut self,
+        sink: &mut Sink<L>,
+        mut entry: StackEntry<L>,
+    ) -> Result<(), Full> {
         debug_assert!(
             entry
                 .spell()
                 .is_none_or(|spell| self.is_current(spell) && self.zones.stack.contains(spell.slot)),
             "a spell's entry without its card on the stack"
         );
+        self.settle_captured_words();
+        self.capture_words(&mut entry)?;
         self.stack.push(entry)?;
         sink.arrived(|| {
             self.stack
@@ -457,7 +491,9 @@ impl<L: Layout> State<L> {
     ) -> Option<StackEntry<L>> {
         let i = self.stack.iter().position(|e| e.spell() == Some(spell))?;
         sink.departed(|| i);
-        Some(self.stack.remove(i))
+        let entry = self.stack.remove(i);
+        self.settle_captured_words();
+        Some(entry)
     }
 
     /// Announces the value of X for the spell or ability being cast, the top of the stack

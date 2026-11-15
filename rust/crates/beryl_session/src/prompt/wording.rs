@@ -405,6 +405,9 @@ pub(crate) const fn wording(prompt: &Prompt, zone: Option<Zone>) -> Wording {
         Purpose::Color => picks("Choose Color"),
         Purpose::CreatureType => picks("Choose Creature Type"),
         Purpose::CardName => picks("Choose Card Name"),
+        // Not seen in Arena: composed on "Choose Color".
+        Purpose::ReplaceWord => picks("Choose Word to Replace"),
+        Purpose::NewWord => picks("Choose New Word"),
         // Composed from "Distribute damage among any number of target creatures."
         // (`3sEoP_s4DQE 28:32.5`, `bJQDi6NIrZA 21:42.5`), whose button is "Submit" alone.
         Purpose::DivideDamage => Wording {

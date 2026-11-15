@@ -20,7 +20,8 @@
 //! | [`Shape::Split`] | [`pick`], [`pick_or_end`] | A card for the destination the prompt's part names; the second way where the first destination's picks offer an end. |
 //! | [`Shape::Pay`] | [`pay`] | One step of a payment, or the whole of one the engine worked out. |
 //! | [`Shape::Declare`] | [`aim`] | What objects already chosen are aimed at. |
-//! | [`Shape::Catalog`] | [`catalog`] | A color, a creature type or a card name. |
+//! | [`Shape::Catalog`] | [`catalog`] | A color, a creature type, a card name or a word. |
+//! | | [`catalog_among`] | One of some of a catalog's values. |
 //!
 //! No resolution asks in the other shapes yet (an order, a number, a mode, a division): the
 //! first that does adds its function here. The cast a resolution offers is a
@@ -115,6 +116,24 @@ pub fn catalog<L: Layout>(
     about: Bitboard<L::Slot>,
 ) -> Result<ChosenValue<L>, Stop> {
     let d = crate::chosen::decision(game.table, player, kind, about)?;
+    let c = resolution.answer(game, &d)?;
+    Ok(crate::chosen::value(kind, d.candidates.option(c)))
+}
+
+/// Asks `player` for one of the values of `kind` that `keep` takes, by number, as `prompt`
+/// says: a [`Shape::Catalog`] narrowed by an answer before it, as a text change's new word
+/// is one of the kind of the word it replaces.
+pub fn catalog_among<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    player: Seat,
+    kind: ChosenKind,
+    prompt: Prompt,
+    about: Bitboard<L::Slot>,
+    keep: impl Fn(u8) -> bool,
+) -> Result<ChosenValue<L>, Stop> {
+    debug_assert!(prompt.shape() == Shape::Catalog, "{prompt:?} is no catalog");
+    let d = crate::chosen::decision_among(game.table, player, kind, prompt, about, keep)?;
     let c = resolution.answer(game, &d)?;
     Ok(crate::chosen::value(kind, d.candidates.option(c)))
 }

@@ -106,6 +106,10 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             x: entry.x,
             targets: entry.targets.as_slice(),
             registers: &self.registers,
+            words: match entry.item {
+                StackItem::Spell { .. } => crate::state::READ_NOW,
+                _ => entry.words,
+            },
         }
     }
 
@@ -280,6 +284,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 modifications,
                 duration,
             } => continuous::instruction(self, objects, modifications, duration)?,
+            Effect::ChangeText { objects, duration } => {
+                crate::text::instruction(self, objects, duration)?
+            }
             Effect::ExchangeControl(first, second) => {
                 continuous::exchange_instruction(self, first, second)?
             }

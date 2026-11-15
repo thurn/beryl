@@ -11,12 +11,14 @@
 //!
 //! Built so far: an object, a player and a locked-in set of objects ([`sets`]) as the
 //! affected side, and the layer change, the zone-change replacement, the rule change, the
-//! permission to cast, the cost change, the regeneration shield ([`regeneration`]) and the
-//! prevention shield ([`prevention`]) as payloads. The game as a side is designed in the contract and built with
-//! its first user.
+//! permission to cast, the cost change, the regeneration shield ([`regeneration`]), the
+//! prevention shield ([`prevention`]) and the text change ([`text`]) as payloads. The game
+//! as a side is designed in the contract and built with its first user.
 //!
 //! [`State::rule_applies`] is the one question about a rule change, whether a static
 //! ability or one of these effects makes it.
+
+use beryl_card::TextChange;
 
 use crate::fixed::Full;
 use crate::ids::{CardId, Seat};
@@ -35,6 +37,7 @@ pub mod prevention;
 pub mod regeneration;
 mod sets;
 mod store;
+pub mod text;
 
 pub use change::{Characteristics, LayerChange, read_layer};
 pub use prevention::{ChosenSource, Shield, ShieldAt};
@@ -90,6 +93,8 @@ pub enum Continuous<L: Layout = Small> {
     /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
     /// [CR 613.1a]: https://yawgatog.com/resources/magic-rules/#R6131a
     Copy(ObjectRef<L>, Copiable<L>),
+    /// A text change on a spell or a permanent ([`text`]).
+    Text(ObjectRef<L>, TextChange),
 }
 
 impl<L: Layout> Continuous<L> {
@@ -102,7 +107,8 @@ impl<L: Layout> Continuous<L> {
             | Continuous::Cast(object, _)
             | Continuous::Cost(object, _)
             | Continuous::Regeneration(object)
-            | Continuous::Copy(object, _) => Subject::Object(object),
+            | Continuous::Copy(object, _)
+            | Continuous::Text(object, _) => Subject::Object(object),
             Continuous::Rule(subject, _) | Continuous::Prevent(subject, _) => subject,
         }
     }
@@ -119,6 +125,7 @@ impl<L: Layout> Continuous<L> {
             Continuous::Regeneration(_) => Payload::Regeneration,
             Continuous::Prevent(_, shield) => Payload::Prevent(shield),
             Continuous::Copy(_, values) => Payload::Copy(values),
+            Continuous::Text(_, change) => Payload::Text(change),
         }
     }
 }
@@ -295,6 +302,8 @@ pub enum Payload<L: Layout = Small> {
     Prevent(Shield<L>),
     /// Gives the affected object these copiable values ([`copy`]).
     Copy(Copiable<L>),
+    /// Changes the affected object's text ([`text`]).
+    Text(TextChange),
 }
 
 impl<L: Layout> Payload<L> {
@@ -310,6 +319,7 @@ impl<L: Layout> Payload<L> {
             Payload::Regeneration => Kinds::REGENERATION,
             Payload::Prevent(_) => Kinds::PREVENTION,
             Payload::Copy(_) => Kinds::COPY,
+            Payload::Text(_) => Kinds::TEXT,
         }
     }
 }
@@ -328,6 +338,7 @@ impl Kinds {
     const REGENERATION: u16 = 1 << 5;
     const PREVENTION: u16 = 1 << 6;
     const COPY: u16 = 1 << 7;
+    const TEXT: u16 = 1 << 8;
 }
 
 /// A continuous effect from a resolved spell or ability
@@ -435,7 +446,10 @@ impl<L: Layout> Effects<L> {
                 }
             } else {
                 done.any = true;
-                done.layer_input |= matches!(e.payload, Payload::Layer(_) | Payload::Copy(_));
+                done.layer_input |= matches!(
+                    e.payload,
+                    Payload::Layer(_) | Payload::Copy(_) | Payload::Text(_)
+                );
             }
             kept
         });
@@ -628,7 +642,8 @@ impl<L: Layout> State<L> {
                 | Continuous::Prevent(Subject::Object(object), _)
                 | Continuous::Cast(object, _)
                 | Continuous::Cost(object, _)
-                | Continuous::Regeneration(object) => {
+                | Continuous::Regeneration(object)
+                | Continuous::Text(object, _) => {
                     debug_assert!(self.is_current(object));
                     self.keyed.insert(object.slot);
                 }
@@ -639,7 +654,7 @@ impl<L: Layout> State<L> {
                 }
             }
         }
-        if matches!(effect, Continuous::Layer(..)) {
+        if matches!(effect, Continuous::Layer(..) | Continuous::Text(..)) {
             self.flags.derived_dirty = true;
         }
         pushed

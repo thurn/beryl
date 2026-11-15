@@ -6,7 +6,10 @@ mod dependency;
 mod elsewhere;
 pub(crate) mod entering;
 mod granted;
+mod text;
 mod together;
+
+use text::reader;
 
 pub(crate) use entering::{entered, lost_entering};
 pub(crate) use together::order_may_matter;
@@ -332,6 +335,8 @@ fn apply_layers<L: Layout>(
     // Made at the first effect that applies: most recomputes have none, and the list is big.
     let mut list: Option<Applying<L>> = None;
     let mut listed = Ok(());
+    let mut text = text::Changed::default();
+    let changes_text = s.changes_text();
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         // Layer 1: the copiable values (CR 613.2a). A token copy's are those of what it
@@ -352,6 +357,12 @@ fn apply_layers<L: Layout>(
             granted: [None; 4],
             lost: Default::default(),
         };
+        if changes_text {
+            match text::type_line(s, t, i, f) {
+                Ok(changed) => text = text.and(changed),
+                Err(full) => listed = Err(full),
+            }
+        }
         for (n, ability) in f.abilities.iter().enumerate() {
             let Some(spec) = ability.layer() else {
                 continue;
@@ -380,7 +391,11 @@ fn apply_layers<L: Layout>(
         listed = listed.and(list_static(s, &mut list, on, ability, spec));
     }
     listed = listed.and(resolved_effects(s, &mut list));
-    let mut applied = Applied::default();
+    let mut applied = Applied {
+        removed: text.removed,
+        land_types: text.land_types,
+        protection: false,
+    };
     match &mut list {
         Some(list) => {
             list.as_mut_slice().sort_unstable_by_key(Apply::key);
@@ -603,25 +618,6 @@ fn apply_one<L: Layout>(
     applied.and(apply::apply_to_members(
         s, t, members, a.source, a.change, by,
     ))
-}
-
-/// Who reads the part `a` of a static ability as its layer applies: the controller of its
-/// permanent as the layers so far left it, and the words of the permanent's text it is read
-/// through. None for an effect of a resolved spell or ability, settled as it began. CR 612.3:
-/// "any abilities that are granted to an object can't be modified by text-changing effects
-/// that affect that object", so a granted ability reads as its granter prints it.
-fn reader<L: Layout>(s: &Rederive<'_, L>, a: &Apply<L>) -> Option<apply::Reader> {
-    a.from.map(|(from, _)| {
-        let i = position::<L>(from);
-        apply::Reader {
-            you: s.rows()[i].controller,
-            words: if a.order & GRANTED == 0 {
-                s.words_of(s.battlefield()[i])
-            } else {
-                Words::NONE
-            },
-        }
-    })
 }
 
 /// The permanents `a` applies to now, or none if it does not apply. A static ability's

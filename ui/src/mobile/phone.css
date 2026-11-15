@@ -472,6 +472,8 @@ body.phone::before {
   overflow-y: auto;
 }
 .phone-board .stage-entries ul {
+  flex-wrap: nowrap;
+  max-height: none;
   gap: 0;
 }
 .phone-board .stage-entry {

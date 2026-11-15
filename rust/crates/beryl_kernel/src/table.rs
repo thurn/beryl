@@ -667,7 +667,7 @@ impl FaceFacts {
         assert!(face.abilities.len() <= 64, "a face of at most 64 abilities");
         let mut facts = FaceFacts {
             mana: ManaFace::of(face),
-            land_mana: land_mana(face),
+            land_mana: land_mana(face, &Words::NONE),
             inputs: Inputs::of(face),
             activated: 0,
         };
@@ -697,7 +697,7 @@ pub enum ManaFace {
 impl ManaFace {
     /// What `face` makes as a source, with its basic land types' mana ([`land_mana`]).
     pub fn of(face: &Face) -> ManaFace {
-        let intrinsic = land_mana(face);
+        let intrinsic = land_mana(face, &Words::NONE);
         let simple = || face.abilities.iter().filter(|a| is_simple(a));
         if intrinsic == 0
             && !face
@@ -729,10 +729,11 @@ impl ManaFace {
 
 /// The kinds of mana the intrinsic abilities of the basic land types of `face` make
 /// ([CR 305.6]), a bit per [`beryl_card::ManaColor`], less those its abilities write out: a
-/// card file may write out that ability, as Plains does, or not, as Dryad Arbor.
+/// card file may write out that ability, as Plains does, or not, as Dryad Arbor. Read through
+/// `words`, a Forest that reads "Island" makes {U}, and its written {G} ability is gone.
 ///
 /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
-pub fn land_mana(face: &Face) -> u8 {
+pub fn land_mana(face: &Face, words: &Words) -> u8 {
     if !face.types.intersects(beryl_card::Types::LAND) {
         return 0;
     }
@@ -741,10 +742,10 @@ pub fn land_mana(face: &Face) -> u8 {
         .iter()
         .filter(|a| is_simple(a) && a.produces().amount == 1)
         .fold(0, |k, a| k | a.produces().colors);
-    beryl_card::BasicLandTypes::of(face.subtypes.read(&Words::NONE))
-        .mana()
-        .intrinsic_mana()
-        & !written
+    let printed = beryl_card::BasicLandTypes::of(face.subtypes.read(&Words::NONE));
+    let types = beryl_card::BasicLandTypes::of(face.subtypes.read(words));
+    // A written ability of a land type the face no longer has went with the type.
+    types.mana().intrinsic_mana() & !(written & !printed.minus(types).mana().intrinsic_mana())
 }
 
 /// Whether a face has an ability other than those the solver taps for, which tapping it for

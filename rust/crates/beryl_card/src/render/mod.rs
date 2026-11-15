@@ -35,7 +35,7 @@ mod words;
 #[cfg(test)]
 mod tests;
 
-pub use card::{render, render_ability, render_ability_of, render_face};
+pub use card::{render, render_ability, render_ability_of, render_face, render_face_read};
 pub use words::mana_text;
 
 use crate::ability::AbilityKind;

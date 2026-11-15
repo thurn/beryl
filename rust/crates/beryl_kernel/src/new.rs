@@ -131,6 +131,7 @@ impl<L: Layout> State<L> {
                 attacked: false,
             },
             stack: Default::default(),
+            captured_words: Default::default(),
             triggers: Default::default(),
             delayed: Default::default(),
             last_known: Default::default(),

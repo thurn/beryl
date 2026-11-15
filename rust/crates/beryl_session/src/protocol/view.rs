@@ -294,6 +294,14 @@ pub struct ObjectView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub chosen: Option<String>,
+    /// The rules text and type line as a text-changing effect changed them (CR 612.1), in
+    /// place of its card's printed ones; none while they read as printed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub text: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub type_line: Option<String>,
     pub combat: Option<Combat>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

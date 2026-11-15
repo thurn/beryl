@@ -6,6 +6,18 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- An ability activated before any text change was in force read its source's
+  text as it was when the ability resolved, not as it was when the ability went
+  on the stack. Circle of Protection: Red's ability, with Mind Bend changing
+  "red" to "white" on the Circle in response, offered white sources. A stack
+  entry noted its source's words only while some text change was in force, and
+  the value an entry starts with meant "read the source's words now", which was
+  right only for a mana ability that never goes on the stack. Found and fixed in
+  the change that added text changes: an entry starts as printed, and the
+  resolution of a mana ability says "read now" itself. Prevention: the default
+  of a field that records what was true at a moment is what a game without the
+  mechanism records (here "as printed"), never "look it up later".
+
 - An instruction that deals damage counted the damage it proposed as dealt, so a
   follow-up that reads "the damage dealt this way" (`Amount::ThatMany`,
   `Condition::Did`) would have seen 3 damage when a prevention shield let only 1

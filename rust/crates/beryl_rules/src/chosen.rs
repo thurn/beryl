@@ -33,6 +33,23 @@ pub(crate) fn decision<L: Layout>(
     Ok(Decision::options(player, DecisionKind::ChooseObject, options, prompt).about(about))
 }
 
+/// The question that asks `player` for one of the values of `kind` that `keep` takes, by
+/// number, with `prompt`, about the objects `about`.
+pub(crate) fn decision_among<L: Layout>(
+    t: &GameTable,
+    player: Seat,
+    kind: ChosenKind,
+    prompt: Prompt,
+    about: Bitboard<L::Slot>,
+    keep: impl Fn(u8) -> bool,
+) -> Result<Decision<L>, Full> {
+    let mut options: L::Queue<Opt<L>, 64> = Default::default();
+    for n in ChosenValue::<L>::candidates(t, kind).filter(|&n| keep(n)) {
+        options.push(Opt::Number(n))?;
+    }
+    Ok(Decision::options(player, DecisionKind::ChooseObject, options, prompt).about(about))
+}
+
 /// The value of `kind` that the answer `opt` to a [`decision`] of that kind names.
 pub(crate) fn value<L: Layout>(kind: ChosenKind, opt: Option<Opt<L>>) -> ChosenValue<L> {
     match opt {

@@ -92,6 +92,8 @@ impl ObjectView {
             exiled_by: None,
             exiled_with: None,
             chosen: None,
+            text: None,
+            type_line: None,
             combat: None,
             note: None,
             pinned: None,

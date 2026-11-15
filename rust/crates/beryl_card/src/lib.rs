@@ -66,7 +66,9 @@ pub use prompt::{Part, Place, Prompt, Purpose, Shape};
 pub use target::{Takes, TargetKind, TargetSpec};
 pub use trigger::{Subject, Trigger, TriggerEvent};
 pub use walk::Node;
-pub use words::{ColorWords, LandTypeWords, SubtypeWord, SubtypeWords, Words};
+pub use words::{
+    ColorChanges, ColorWords, LandTypeWords, SubtypeWord, SubtypeWords, TextChange, TextWord, Words,
+};
 
 /// Everything a card file uses: the vocabulary's types and its builders,
 /// `use beryl_card::prelude::*;`.
@@ -79,6 +81,6 @@ pub mod prelude {
         LayerSpec, LibraryOrder, LibraryPosition, ManaColor, ManaCost, ManaRestriction, ManaSet,
         Modification, Named, Objects, Place, Players, Prevention, Prompt, Protection, Purpose,
         Recipients, Replacement, RuleChange, Subtype, Subtypes, Supertypes, Taken, TargetKind,
-        TargetSpec, Trigger, TriggerEvent, TurnStep, Types, When, Zone, card, mana,
+        TargetSpec, TextWord, Trigger, TriggerEvent, TurnStep, Types, When, Zone, card, mana,
     };
 }

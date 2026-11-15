@@ -339,7 +339,12 @@ exiledWith: ObjectId | null,
  * "Counterspell", "Another card")
  * ([CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)).
  */
-chosen?: string, combat: Combat | null, note?: string, pinned?: RowName, 
+chosen?: string, 
+/**
+ * The rules text and type line as a text-changing effect changed them (CR 612.1), in
+ * place of its card's printed ones; none while they read as printed.
+ */
+text?: string, typeLine?: string, combat: Combat | null, note?: string, pinned?: RowName, 
 /**
  * Which face the manual table is showing. The engine uses `name` and `facing`.
  */
@@ -905,7 +910,7 @@ buttons: Array<PromptButton>,
  */
 body: ShapeBody, };
 
-export type Purpose = "priority" | "target" | "choose" | "discard" | "cleanup" | "put-on-bottom" | "legend-rule" | "look" | "search" | "untap" | "manifest-dread" | "exile-cost" | "combat-damage" | "trigger-order" | "scry" | "arrange" | "put-back" | "may" | "may-search" | "move" | "fateseal" | "top-or-bottom" | "explore" | "unless-pays" | "pay-life" | "x" | "play-or-draw" | "mulligan" | "cast-offer" | "act" | "color" | "creature-type" | "card-name" | "divide-damage" | "distribute-counters" | "mana" | "crew" | "waterbend" | "attack" | "block" | "enter-order" | "replace";
+export type Purpose = "priority" | "target" | "choose" | "discard" | "cleanup" | "put-on-bottom" | "legend-rule" | "look" | "search" | "untap" | "manifest-dread" | "exile-cost" | "combat-damage" | "trigger-order" | "scry" | "arrange" | "put-back" | "may" | "may-search" | "move" | "fateseal" | "top-or-bottom" | "explore" | "unless-pays" | "pay-life" | "x" | "play-or-draw" | "mulligan" | "cast-offer" | "act" | "color" | "creature-type" | "card-name" | "replace-word" | "new-word" | "divide-damage" | "distribute-counters" | "mana" | "crew" | "waterbend" | "attack" | "block" | "enter-order" | "replace";
 
 export type ObjectId = number;
 

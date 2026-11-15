@@ -9,7 +9,7 @@
 //! [`crate::Observation::card`] is the other door, for a player's view: nothing when the
 //! viewer does not know the card.
 
-use beryl_card::{AbilityIx, CardDef, Colors, Keywords, Subtype, Supertypes, Types, Words, Zone};
+use beryl_card::{AbilityIx, CardDef, Colors, Keywords, Subtype, Supertypes, Types, Zone};
 
 use crate::bitboard::Bitboard;
 use crate::ids::Seat;
@@ -202,14 +202,26 @@ impl<L: Layout> State<L> {
         if !self.flags.mana_changed {
             return printed;
         }
-        self.changed_intrinsic_mana(slot, printed)
+        self.changed_intrinsic_mana(t, slot, printed)
     }
 
     /// [`State::intrinsic_mana`] when some effect removed abilities or changed land types,
     /// `printed` being those of the object's face. Out of line: most games never come here.
     #[cold]
     #[inline(never)]
-    fn changed_intrinsic_mana(&self, slot: L::Slot, printed: u8) -> u8 {
+    fn changed_intrinsic_mana(
+        &self,
+        t: &crate::table::GameTable,
+        slot: L::Slot,
+        printed: u8,
+    ) -> u8 {
+        // CR 612.1: a text change may make its type line name other basic land types.
+        let words = self.words_of(slot);
+        let printed = if words.changes_subtypes() {
+            crate::table::land_mana(self.definition(slot).face(t), &words)
+        } else {
+            printed
+        };
         match self.battlefield_position(slot) {
             None => printed,
             Some(i) => {
@@ -369,17 +381,6 @@ impl<L: Layout> State<L> {
         } else {
             self.definition(slot).face(t).keywords
         }
-    }
-
-    /// The text changes on the object in `slot` ([CR 612.1]): what the color words and
-    /// subtypes its printed text and type line name read as. Every reader of a word an
-    /// object's text names takes these ([`beryl_card::words`]). No text-changing effect
-    /// exists yet, so each object's words read as printed.
-    ///
-    /// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
-    #[inline]
-    pub fn words_of(&self, _slot: L::Slot) -> Words {
-        Words::NONE
     }
 
     /// Whether an effect that gives protection applied in the last run of the layers

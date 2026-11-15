@@ -66,10 +66,14 @@ impl<'a, L: Layout> Resolution<'a, L> {
     /// answer source: a question pauses it. A mana ability resolves so, never having been
     /// on the stack ([CR 605.3b](https://yawgatog.com/resources/magic-rules/#R6053b)).
     pub(crate) fn of_trigger(trigger: &PendingTrigger<L>, ability: &'static Ability) -> Self {
-        let entry = StackEntry::new(StackItem::Triggered {
-            of: trigger.of,
-            info: trigger.info,
-        });
+        let entry = StackEntry {
+            // Never on the stack: its words are its source's as they are now.
+            words: crate::state::READ_NOW,
+            ..StackEntry::new(StackItem::Triggered {
+                of: trigger.of,
+                info: trigger.info,
+            })
+        };
         Resolution::new(entry, ability, TargetPlaces::NONE, None)
     }
 
@@ -88,13 +92,12 @@ impl<'a, L: Layout> Resolution<'a, L> {
         self.entry.object().expect("an ability with a source")
     }
 
-    /// The text changes of the spell or ability's source, which the color words and subtypes
-    /// of its text are read through ([`crate::state::State::words_of`]). An emblem's ability
-    /// has no source, and its words read as printed.
+    /// The text changes the color words and subtypes of its text are read through
+    /// ([`crate::state::State::entry_words`]): a spell's own, and an ability's source's as
+    /// the ability went on the stack. An emblem's ability has no source, and its words read
+    /// as printed.
     pub fn words(&self, game: &Game<'_, L>) -> Words {
-        self.entry
-            .object()
-            .map_or(Words::NONE, |source| game.state.words_of(source.slot))
+        game.state.entry_words(&self.entry)
     }
 
     /// The player who controls the spell or ability

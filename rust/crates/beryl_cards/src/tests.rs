@@ -22,6 +22,7 @@ mod mutation;
 mod props;
 mod render;
 mod store;
+mod text;
 mod vocabulary;
 
 /// This crate's directory, read at run time: a test binary from the shared target directory

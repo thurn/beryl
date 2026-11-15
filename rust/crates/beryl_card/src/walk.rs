@@ -3,7 +3,7 @@
 //! names.
 
 use crate::ability::{Ability, Behavior};
-use crate::characteristics::Subtypes;
+use crate::characteristics::{BasicLandTypes, Subtypes};
 use crate::continuous::{Governed, LayerSpec, Modification, Replaced};
 use crate::cost::{Cost, CostPart};
 use crate::definition::CardDef;
@@ -61,7 +61,8 @@ impl CardDef {
     /// another subtype is read by nothing, so it names none a game does not.
     ///
     /// These are the words as printed ([`Words::NONE`]). A subtype that a text change makes
-    /// a word read as is named by the card that changes the text.
+    /// a word read as is named by the card that changes the text: an effect that replaces
+    /// one basic land type with another ([`Effect::ChangeText`]) names all five.
     pub fn subtypes(&self, visit: &mut dyn FnMut(Subtypes)) {
         let printed = &Words::NONE;
         // "Islandwalk" asks whether a land the defending player controls is an Island
@@ -90,11 +91,18 @@ impl CardDef {
                 if let Behavior::Data(effect) = ability.body() {
                     let found = std::cell::RefCell::new(Subtypes::NONE);
                     effect.any(&|instruction| {
-                        if let Effect::Modify { modifications, .. } = instruction {
-                            let mut found = found.borrow_mut();
-                            for given in modifications.iter().filter_map(given) {
-                                *found = found.union(given);
+                        let mut found = found.borrow_mut();
+                        match instruction {
+                            Effect::Modify { modifications, .. } => {
+                                for given in modifications.iter().filter_map(given) {
+                                    *found = found.union(given);
+                                }
                             }
+                            Effect::ChangeText { .. } => {
+                                *found =
+                                    (BasicLandTypes::ALL.subtypes()).fold(*found, Subtypes::with);
+                            }
+                            _ => {}
                         }
                         false
                     });

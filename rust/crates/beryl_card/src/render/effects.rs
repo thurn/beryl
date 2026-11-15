@@ -363,6 +363,12 @@ impl Ctx {
                 let text = self.modify(objects, modifications);
                 vec![format!("{text}{}", duration_suffix(duration))]
             }
+            Effect::ChangeText { objects, duration } => vec![format!(
+                "change the text of {} by replacing all instances of one color word with \
+                 another or one basic land type with another{}",
+                self.objects(objects),
+                duration_suffix(duration)
+            )],
             Effect::ChangeRule { rule, duration } => {
                 let prefix = match duration {
                     Duration::EndOfTurn => "until end of turn, ",
