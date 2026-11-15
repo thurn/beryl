@@ -260,12 +260,13 @@ fn a_copy_has_the_copiable_values_and_never_a_hidden_card() {
     assert_eq!(s.copiable(small).power(&t), 1);
     derive(&t, &mut s, 0);
     s.check_invariants(&t).unwrap();
-    // A Small game holds two exceptions in copiable values; a third stalls it into Large.
-    let twice = s
+    // A Small game holds three exceptions in copiable values; a fourth stalls it into Large.
+    let thrice = s
         .copiable(smaller)
         .with_addition(one_one_addition(&t))
+        .and_then(|values| values.with_addition(one_one_addition(&t)))
         .unwrap();
-    assert!(twice.with_addition(one_one_addition(&t)).is_err());
+    assert!(thrice.with_addition(one_one_addition(&t)).is_err());
 
     // CR 707.8a: a copy of a double-faced permanent has the same face up.
     let telepath = copy_of(&t, &mut s, Seat::P1, prodigy, false);

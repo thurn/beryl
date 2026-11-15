@@ -241,7 +241,8 @@
 //! stack are kept for abilities of their own that copy them ([`last_known::DepartedSpell`]): two
 //! rows of 56 bytes, 112. It is 20,144 since the state counts resolutions in a row with no choice
 //! and keeps the hash a loop of mandatory actions is compared with ([`repeats`]): a `u16` and a
-//! `u64`, 16 with padding. The limit is 20,480. Each bead may change the size at its own push by at
+//! `u64`, 16 with padding. It is 20,184 since a [`query::Copiable`] holds three copy exceptions,
+//! 40 bytes more in all. The limit is 20,480. Each bead may change the size at its own push by at
 //! most its allotment, whatever landed before it, and reports the size as it reports the count:
 //!
 //! | Bead | Allotment | Why |
@@ -260,7 +261,7 @@
 //! | by-bajq.4.3 | -300 or lower (landed: -504) | each object is 22 bytes, where alignment made it 24 |
 //! | by-bajq.5.1 | +48 (landed: +16) | up to four effects that reach other zones, beside the layer results |
 //! | by-bajq.5.3 | +136 (landed: +88) | a byte in each of the 64 stack entries naming its captured text changes, and the table of four captured sets |
-//! | by-bajq.6.1 | +72 (landed: +32) | two copy exceptions in each `Copiable`, which each of the 16 last-known rows holds |
+//! | by-bajq.6.1 | +72 (landed: +32, and +40 by by-bajq.6.10) | copy exceptions in each `Copiable`, which each of the 16 last-known rows holds: two, then three |
 //! | by-bajq.7.4 | +48 (landed: +32) | up to four entries of mana that remembers in each player's pool |
 //! | by-bajq.8.3 | +16 (landed: +16) | the count of mandatory resolutions in a row and the hash it compares, padded |
 //! | by-bajq.8.4 | +32 | a set of the phased-out permanents' slots |

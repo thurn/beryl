@@ -88,7 +88,7 @@ fn family_corpora_never_change() {
             (
                 "copies",
                 vec![14, 11, 14, 17, 4, 7, 10, 13, 16, 19, 13, 16],
-                10_378_346_019_107_090_887
+                11_195_901_546_338_064_319
             ),
         ]
     );
@@ -168,11 +168,11 @@ fn families_pair_their_steps() {
             (
                 "copies",
                 Pairing {
-                    paired: 3_474,
-                    skipped: 116,
-                    capacity_stalls: 1,
-                    layer_recomputes: 1_187,
-                    transactions: 3_604
+                    paired: 3_774,
+                    skipped: 153,
+                    capacity_stalls: 0,
+                    layer_recomputes: 1_252,
+                    transactions: 3_771
                 }
             ),
         ]

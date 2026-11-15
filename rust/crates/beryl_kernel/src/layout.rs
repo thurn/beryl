@@ -205,7 +205,7 @@ impl Layout for Small {
     type Deck<T: Item + Default> = Fixed<T, { Slot::DECK_SLOTS }>;
     type PerPlayer<T: Item> = PerSeat<T>;
     type AbilityMask = u16;
-    type Additions = [Option<Addition<CardIx>>; 2];
+    type Additions = [Option<Addition<CardIx>>; 3];
 
     const TOKEN_POOL: Bitboard =
         Bitboard([0, !0 << (Slot::POOL - 64), !0, !0 >> (256 - Slot::COUNT)]);

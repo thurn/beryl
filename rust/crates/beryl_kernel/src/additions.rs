@@ -96,8 +96,9 @@ impl<C: CardId> Addition<C> {
 
 /// The additions copiable values hold in a layout ([`crate::Layout::Additions`]): a fixed
 /// array, filled from the start, so that [`crate::query::Copiable`] stays `Copy` in every
-/// layout. [`Small`](crate::Small) holds two, which is room for a copy of a copy that each
-/// made with an exception; a third is [`Full`] and stalls the game into
+/// layout. [`Small`](crate::Small) holds three, which is room for a copy of a copy of a copy
+/// that each made with an exception, as when a creature enters as a copy of one that entered
+/// as a copy of another such copy; a fourth is [`Full`] and stalls the game into
 /// [`Large`](crate::Large).
 pub trait AdditionList<C: CardId>:
     Copy
