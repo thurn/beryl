@@ -2,6 +2,7 @@
 //! (docs/beryl-3d.md, "Rendering"). It is the only crate that names `wgpu`.
 
 mod count;
+mod faces;
 mod mesh;
 mod pipeline;
 mod renderer;

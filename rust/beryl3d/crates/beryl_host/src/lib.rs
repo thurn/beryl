@@ -30,7 +30,7 @@ pub use drive::Drive;
 pub use events::{LINE_POINTS, Translator, modifiers_from};
 pub use frames::{Draw, Feed, FrameLoop, NoFeed, Opened, Shown, Sleep, Ticked, Ticks};
 #[cfg(feature = "headless")]
-pub use headless::Headless;
+pub use headless::{Headless, Scans};
 pub use inbox::Inbox;
 pub use phone::Phone;
 pub use threads::{Class, current_class, interactive_thread, set_class, utility_thread};

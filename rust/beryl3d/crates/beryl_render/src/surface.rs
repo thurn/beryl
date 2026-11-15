@@ -124,6 +124,8 @@ impl Renderer {
         .map_err(|error| format!("no GPU adapter for the window: {error}"))?;
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("beryl_render"),
+            // Card faces are compressed in the first format of these the GPU has.
+            required_features: adapter.features() & crate::faces::COMPRESSION,
             required_limits: limits.using_resolution(adapter.limits()),
             ..Default::default()
         }))

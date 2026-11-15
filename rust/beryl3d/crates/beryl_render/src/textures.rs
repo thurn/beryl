@@ -1,15 +1,11 @@
 //! The texture arrays a record samples (docs/beryl-3d.md, "The frame": three texture arrays),
-//! and the generated pictures that fill them until real card faces and atlas pages are made:
-//! a placeholder face per card name, a placeholder back, and the soft disc a glow draws.
+//! and the generated pictures that fill them until real card faces and atlas pages arrive: a
+//! placeholder face per card name, a placeholder back, and the soft disc a glow draws.
 
 use beryl_scene::frame::Sprite;
 
-/// The size of a placeholder face. The shader samples a face by its texture coordinates, so a
-/// face of any size fills the card.
-pub const PLACEHOLDER_WIDTH: u32 = 128;
-pub const PLACEHOLDER_HEIGHT: u32 = 180;
-/// The layer of the face arrays that holds the placeholder card back; each placeholder face
-/// for a name follows it.
+/// The layer of the face arrays that holds the card back: the card back is always the first
+/// face of a match (`beryl_scene::faces::CARD_BACK`).
 pub const BACK_LAYER: u16 = 0;
 /// The size of the placeholder atlas's one page.
 const ATLAS_SIZE: u32 = 128;
@@ -25,20 +21,6 @@ pub struct Layers {
     pub width: u32,
     pub height: u32,
     pub pictures: Vec<Vec<u8>>,
-}
-
-/// The placeholder card back in layer 0, and for each of `names` in order a placeholder face:
-/// a flat color with a darker frame and a stripe, the color and the stripe's place both chosen
-/// by a hash of the name, so that two cards are told apart in a picture.
-#[must_use]
-pub fn placeholder_faces(names: &[&str]) -> Layers {
-    let mut layers = vec![back()];
-    layers.extend(names.iter().map(|name| face(name)));
-    Layers {
-        width: PLACEHOLDER_WIDTH,
-        height: PLACEHOLDER_HEIGHT,
-        pictures: layers,
-    }
 }
 
 /// The placeholder atlas: one page holding the soft disc of `GLOW_SPRITE`, white with its
@@ -70,11 +52,11 @@ fn hash(name: &str) -> u32 {
     })
 }
 
-/// A picture of the placeholder size whose pixel at (x, y) is `color(x, y)`.
-fn picture(color: impl Fn(u32, u32) -> [u8; 3]) -> Vec<u8> {
-    let mut pixels = Vec::with_capacity((PLACEHOLDER_WIDTH * PLACEHOLDER_HEIGHT * 4) as usize);
-    for y in 0..PLACEHOLDER_HEIGHT {
-        for x in 0..PLACEHOLDER_WIDTH {
+/// A picture `width` by `height` whose pixel at (x, y) is `color(x, y)`.
+fn picture((width, height): (u32, u32), color: impl Fn(u32, u32) -> [u8; 3]) -> Vec<u8> {
+    let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+    for y in 0..height {
+        for x in 0..width {
             let [r, g, b] = color(x, y);
             pixels.extend_from_slice(&[r, g, b, 255]);
         }
@@ -82,25 +64,31 @@ fn picture(color: impl Fn(u32, u32) -> [u8; 3]) -> Vec<u8> {
     pixels
 }
 
-/// How many pixels wide a placeholder's frame is.
-const FRAME: u32 = 6;
+/// How many pixels wide a placeholder's frame is, and how tall a face's stripe is: multiples of
+/// 4, so that each 4 by 4 block of a compressed face holds one color (`faces::solid_level`).
+const FRAME: u32 = 8;
+const STRIPE: u32 = 48;
 
-fn in_frame(x: u32, y: u32) -> bool {
-    x < FRAME || y < FRAME || x >= PLACEHOLDER_WIDTH - FRAME || y >= PLACEHOLDER_HEIGHT - FRAME
+fn in_frame(x: u32, y: u32, (width, height): (u32, u32)) -> bool {
+    x < FRAME || y < FRAME || x >= width - FRAME || y >= height - FRAME
 }
 
-fn face(name: &str) -> Vec<u8> {
+/// The placeholder face for a card named `name`, `size` pixels large: a flat color with a darker
+/// frame and a lighter stripe, the color and the stripe's place both chosen by a hash of the
+/// name, so that two cards are told apart in a picture.
+pub(crate) fn face(name: &str, size: (u32, u32)) -> Vec<u8> {
     let hash = hash(name);
     let [r, g, b, s] = hash.to_le_bytes();
     // Kept between 64 and 223, so the frame is darker and the stripe lighter.
     let color = [r, g, b].map(|c| 64 + c % 160);
     let frame = color.map(|c| c / 3);
     let stripe = color.map(|c| c.saturating_add(96));
-    let stripe_top = FRAME + u32::from(s) % (PLACEHOLDER_HEIGHT - 2 * FRAME - 24);
-    picture(|x, y| {
-        if in_frame(x, y) {
+    let room = (size.1 - 2 * FRAME - STRIPE) / 4;
+    let stripe_top = FRAME + u32::from(s) % room * 4;
+    picture(size, |x, y| {
+        if in_frame(x, y, size) {
             frame
-        } else if (stripe_top..stripe_top + 24).contains(&y) {
+        } else if (stripe_top..stripe_top + STRIPE).contains(&y) {
             stripe
         } else {
             color
@@ -108,11 +96,12 @@ fn face(name: &str) -> Vec<u8> {
     })
 }
 
-fn back() -> Vec<u8> {
-    picture(|x, y| {
-        if in_frame(x, y) {
+/// The placeholder card back, `size` pixels large: a frame around diagonal bands.
+pub(crate) fn back(size: (u32, u32)) -> Vec<u8> {
+    picture(size, |x, y| {
+        if in_frame(x, y, size) {
             [20, 14, 10]
-        } else if (x + y) / 12 % 2 == 0 {
+        } else if (x / 4 + y / 4) / 6 % 2 == 0 {
             [92, 58, 34]
         } else {
             [70, 42, 24]
@@ -126,12 +115,9 @@ mod tests {
 
     #[test]
     fn faces_of_different_names_differ() {
-        let faces = placeholder_faces(&["Counterspell", "Island"]);
-        assert_eq!(faces.pictures.len(), 3);
-        assert_ne!(faces.pictures[1], faces.pictures[2]);
-        assert_eq!(
-            faces.pictures[1].len(),
-            (PLACEHOLDER_WIDTH * PLACEHOLDER_HEIGHT * 4) as usize
-        );
+        let size = (256, 360);
+        let island = face("Island", size);
+        assert_ne!(island, face("Counterspell", size));
+        assert_eq!(island.len(), 256 * 360 * 4);
     }
 }

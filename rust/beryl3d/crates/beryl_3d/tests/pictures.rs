@@ -1,12 +1,14 @@
 //! `b3d png` and `b3d film`, run as an agent runs them: the picture shows the card that the
 //! tree says is in flight, a film is one picture of bounded width with a line for each frame,
-//! and two runs started together write two files. They need a GPU adapter (Metal on a Mac).
+//! and two runs started together write two files, and the headless host draws the scans in its
+//! scan cache, prepared off its own thread. They need a GPU adapter (Metal on a Mac).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
-use beryl_host::Headless;
+use beryl_assets::{MatchFaces, faces_built_on_this_thread};
+use beryl_host::{Headless, Scans};
 use beryl_inspect::pages;
 use beryl_scene::agent::{Layout, uncovered};
 use beryl_scene::driver::Moment;
@@ -48,7 +50,8 @@ fn written(output: &Output) -> (PathBuf, (u32, u32)) {
 #[test]
 fn the_picture_shows_the_card_the_tree_says_is_in_flight() {
     let page = pages::page("verbs-zones", Side::You, Layout::Desktop, WINDOW).expect("a page");
-    let mut head = Headless::new(page, WINDOW.width, WINDOW.height, 1.0).expect("a GPU");
+    let mut head =
+        Headless::new(page, WINDOW.width, WINDOW.height, 1.0, &Scans::app()).expect("a GPU");
     head.seek(&"1500ms".parse::<Moment>().expect("a moment"))
         .expect("a moment of the recording");
     let frame = head.frame();
@@ -84,6 +87,76 @@ fn the_picture_shows_the_card_the_tree_says_is_in_flight() {
         pixel(x, y),
         table,
         "the card at ({x}, {y}) is the table's colour"
+    );
+}
+
+/// A directory of its own for one test, emptied first and removed when dropped.
+struct Scratch(PathBuf);
+
+impl Scratch {
+    fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("beryl_3d-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        Self(dir)
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn cards_show_the_scans_in_the_cache_prepared_on_other_threads() {
+    let scratch = Scratch::new("scans");
+    let scans = Scans {
+        art: scratch.0.join("art"),
+        faces: scratch.0.join("faces"),
+    };
+    let page = pages::page("verbs-zones", Side::You, Layout::Desktop, WINDOW).expect("a page");
+    // Every face's scan, the card back's included, is one flat magenta picture.
+    let magenta = [230, 20, 200];
+    let (width, height) = (672, 936);
+    let pixels: Vec<u8> = (0..width * height)
+        .flat_map(|_| [magenta[0], magenta[1], magenta[2], 255])
+        .collect();
+    // Written as a PNG, which the decoder reads whatever the file is called.
+    let scan = scratch.0.join("scan.png");
+    beryl_render::write_rgba_png(&scan, &pixels, width, height).expect("a scan");
+    let faces = MatchFaces::new(page.faces());
+    assert!(faces.faces.len() > 1, "the recording lists its faces");
+    for face in &faces.faces {
+        let file = scans.art.join(&face.scan[1..]);
+        std::fs::create_dir_all(file.parent().expect("a directory")).expect("a directory");
+        std::fs::copy(&scan, &file).expect("a scan in the cache");
+    }
+    let mut head = Headless::new(page, WINDOW.width, WINDOW.height, 1.0, &scans).expect("a GPU");
+    assert_eq!(
+        faces_built_on_this_thread(),
+        0,
+        "a face was built on the drawing thread"
+    );
+    head.seek(&"start".parse::<Moment>().expect("a moment"))
+        .expect("a moment of the recording");
+    let frame = head.frame();
+    let card = (0..frame.resolved.len() as u32)
+        .find_map(|index| {
+            let rect = uncovered(frame, index)?;
+            (rect.width >= 8.0 && rect.height >= 8.0).then_some(rect)
+        })
+        .expect("a card shows at the start");
+    let (x, y) = (
+        (card.x + card.width / 2.0) as u32,
+        (card.y + card.height / 2.0) as u32,
+    );
+    let pixels = head.pixels();
+    let at = ((y * WINDOW.width as u32 + x) * 4) as usize;
+    let found = [pixels[at], pixels[at + 1], pixels[at + 2]];
+    assert!(
+        found.iter().zip(magenta).all(|(&a, b)| a.abs_diff(b) <= 12),
+        "the card at ({x}, {y}) is {found:?}, not its scan's {magenta:?}"
     );
 }
 

@@ -2,12 +2,61 @@
 //! the test driver's clock and draws the frame at any moment with the real renderer into an
 //! offscreen target. It has no window and no timer, so a picture of a moment is the same on
 //! every run. `b3d png` and `b3d film` are built on it.
+//!
+//! Before its first picture it has `beryl_assets`' workers prepare every face of the recording's
+//! match and uploads them all, as the app does behind its loading screen (docs/beryl-3d.md,
+//! "Preparation"), so a card shows its scan when the scan cache has it and a placeholder with its
+//! name when not. It never downloads a scan, so a picture depends only on what the cache holds.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
+use beryl_art::{ArtCache, Origins};
+use beryl_assets::{Config, Format, Preparer, default_workers};
 use beryl_render::{Limits, Renderer, Target};
 use beryl_scene::driver::{DriverError, Moment, Page};
+use beryl_scene::faces::FaceList;
 use beryl_scene::frame::Frame;
+
+/// The app's identifier, which names its cache directory.
+const APP: &str = "ca.thurn.beryl";
+
+/// Where card pictures are read from: the scan cache that `beryl_art` keeps, and the cache of
+/// compressed faces beside it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Scans {
+    pub art: PathBuf,
+    pub faces: PathBuf,
+}
+
+impl Scans {
+    /// The app's own caches, in the directory Tauri gives the app: `~/Library/Caches/<app>` on
+    /// macOS, `%LOCALAPPDATA%\<app>` on Windows and `$XDG_CACHE_HOME/<app>` (or `~/.cache`)
+    /// elsewhere.
+    #[must_use]
+    pub fn app() -> Self {
+        let var = |name: &str| std::env::var_os(name).map(PathBuf::from);
+        let home = || var("HOME").unwrap_or_default();
+        let base = if cfg!(windows) {
+            var("LOCALAPPDATA").unwrap_or_default()
+        } else if cfg!(target_os = "macos") {
+            home().join("Library/Caches")
+        } else {
+            var("XDG_CACHE_HOME").unwrap_or_else(|| home().join(".cache"))
+        };
+        let dir = base.join(APP);
+        Self {
+            art: dir.join("art"),
+            faces: dir.join("faces"),
+        }
+    }
+}
+
+/// An address where nothing listens, so that a scan the cache lacks fails to download at once.
+const NOWHERE: Origins<'static> = Origins {
+    cards: "http://127.0.0.1:9",
+    backs: "http://127.0.0.1:9",
+};
 
 /// A recording played for one seat in one window, and the renderer that draws it.
 pub struct Headless {
@@ -18,13 +67,20 @@ pub struct Headless {
 
 impl Headless {
     /// Draws `page`, whose window is `width` by `height` logical points, at `scale` physical
-    /// pixels to a point.
+    /// pixels to a point, with its card faces read from `scans`.
     ///
     /// # Errors
     ///
     /// When there is no GPU adapter or device.
-    pub fn new(page: Page, width: f32, height: f32, scale: f32) -> Result<Self, String> {
-        let renderer = Renderer::headless(Limits::Default)?;
+    pub fn new(
+        page: Page,
+        width: f32,
+        height: f32,
+        scale: f32,
+        scans: &Scans,
+    ) -> Result<Self, String> {
+        let mut renderer = Renderer::headless(Limits::Default)?;
+        load_faces(&mut renderer, page.faces(), scans);
         let pixels = |points: f32| (points * scale).round().max(1.0) as u32;
         let target = Target::offscreen(&renderer, pixels(width), pixels(height));
         Ok(Self {
@@ -75,5 +131,31 @@ impl Headless {
         let frame = self.page.frame();
         self.renderer.render(frame, &mut self.target);
         self.renderer.write_png(&self.target, path)
+    }
+}
+
+/// Makes `renderer`'s face arrays for the faces of `list` and uploads every face, as the asset
+/// workers read it from the compressed cache, compress it from its scan or draw its placeholder.
+/// This thread only waits and uploads: the workers do every file read, decode and compression.
+fn load_faces(renderer: &mut Renderer, list: &FaceList, scans: &Scans) {
+    let format = Format::choose(&renderer.formats());
+    let names: Vec<&str> = list
+        .faces()
+        .iter()
+        .map(|face| face.names.first().map_or("", String::as_str))
+        .collect();
+    renderer.set_faces(&names, format);
+    let mut preparer = Preparer::new(Config {
+        art: Arc::new(ArtCache::new(scans.art.clone(), NOWHERE)),
+        faces_dir: scans.faces.clone(),
+        workers: default_workers(),
+        wake: Arc::new(|| {}),
+    });
+    let results = preparer.prepare_match(list, &[format]);
+    // Dropping the preparer waits for its workers to finish every face queued, after which the
+    // channel holds them all and then ends.
+    drop(preparer);
+    for prepared in results {
+        renderer.upload_layer(&prepared);
     }
 }

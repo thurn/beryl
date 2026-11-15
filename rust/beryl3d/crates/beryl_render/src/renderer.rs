@@ -4,15 +4,20 @@
 //! the opaque records with a depth buffer, then the blended ones, tested against it on the
 //! table and untested in the flat layer.
 
-use beryl_scene::frame::{Frame, TextureArray};
+use beryl_assets::{Format, Prepared};
+use beryl_scene::frame::{Frame, TextureArray, Wake};
+use beryl_scene::input::{AssetReady, FaceSize};
 use wgpu::util::DeviceExt;
 
 use crate::count::FragmentCounter;
+use crate::faces::{
+    COMPRESSION, FaceArray, Waiting, empty_arrays, face_arrays, face_upload, supported,
+};
 use crate::mesh::meshes;
 use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
 use crate::runs::runs;
 use crate::target::Target;
-use crate::textures::{Layers, placeholder_atlas, placeholder_faces};
+use crate::textures::{Layers, placeholder_atlas};
 
 /// How many records the instance buffer holds at startup: the tier's upload limit.
 const RECORDS: u64 = 4096;
@@ -49,8 +54,12 @@ pub struct Renderer {
     indices: wgpu::Buffer,
     /// The index range of each mesh, by `Mesh` value.
     ranges: [std::ops::Range<u32>; 3],
-    /// The texture arrays, by `TextureArray` value.
-    arrays: [wgpu::TextureView; 3],
+    /// The board-size and full-size card face arrays, by `FaceSize` value.
+    faces: [FaceArray; 2],
+    /// The atlas of glyphs and sprites.
+    atlas: wgpu::TextureView,
+    /// Faces that arrived during play, waiting to be uploaded (`hold`).
+    waiting: Waiting,
     /// One bind group per texture array, by `TextureArray` value.
     bind_groups: [wgpu::BindGroup; 3],
     depth: Option<(wgpu::TextureView, u32, u32)>,
@@ -64,8 +73,8 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    /// A renderer drawing into targets of `target_format`. Both card face arrays start with
-    /// the placeholder back alone, until `set_placeholder_faces` names the cards.
+    /// A renderer drawing into targets of `target_format`. The board-size face array starts with
+    /// the placeholder back alone, until `set_faces` lists the match's faces.
     #[must_use]
     pub fn new(
         device: wgpu::Device,
@@ -98,10 +107,9 @@ impl Renderer {
             contents: bytemuck::cast_slice(&meshes.indices),
             usage: wgpu::BufferUsages::INDEX,
         });
-        let faces = array(&device, &queue, "faces", &placeholder_faces(&[]));
+        let faces = empty_arrays(&device, &queue);
         let atlas = array(&device, &queue, "atlas", &placeholder_atlas());
-        let arrays = [faces.clone(), faces, atlas];
-        let bind_groups = bind_groups(&device, &layout, &uniforms, &sampler, &arrays);
+        let bind_groups = bind_groups(&device, &layout, &uniforms, &sampler, &faces, &atlas);
         Self {
             device,
             queue,
@@ -114,7 +122,9 @@ impl Renderer {
             vertices,
             indices,
             ranges: meshes.ranges,
-            arrays,
+            faces,
+            atlas,
+            waiting: Waiting::default(),
             bind_groups,
             depth: None,
             counter: None,
@@ -158,7 +168,7 @@ impl Renderer {
         };
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("beryl_render"),
-            required_features: features,
+            required_features: features | (adapter.features() & COMPRESSION),
             required_limits,
             ..Default::default()
         }))
@@ -193,25 +203,67 @@ impl Renderer {
             .map(|counter| counter.read(&self.device))
     }
 
-    /// Fills both card face arrays with placeholder faces: the back in layer 0 and one face per
-    /// name after it, so the card named `names[i]` shows layer `i + 1`.
-    /// The floor's limits allow 256 layers, so at most 255 names.
-    pub fn set_placeholder_faces(&mut self, names: &[&str]) {
-        let faces = array(
-            &self.device,
-            &self.queue,
-            "faces",
-            &placeholder_faces(names),
-        );
-        self.arrays[TextureArray::SmallFaces as usize] = faces.clone();
-        self.arrays[TextureArray::FullFaces as usize] = faces;
+    /// The compressed formats the device samples, in the order they are preferred. The face
+    /// arrays are made in the first of them (`Format::choose`), and `beryl_assets`' workers are
+    /// asked for the same one.
+    #[must_use]
+    pub fn formats(&self) -> Vec<Format> {
+        supported(self.device.features())
+    }
+
+    /// Makes both card face arrays for a match, in `format`, which must be one of `formats` or
+    /// `Format::Rgba8`. `names` holds one name per face in `FaceId` order, the name drawn on that
+    /// face's placeholder; layer 0, the card back's, shows the placeholder back. A face keeps its
+    /// placeholder until its layer is uploaded. The full-size array has `FULL_LAYERS` empty
+    /// layers. The floor's limits allow 256 layers, so at most 256 faces.
+    pub fn set_faces(&mut self, names: &[&str], format: Format) {
+        self.faces = face_arrays(&self.device, &self.queue, names, format);
+        self.waiting = Waiting::default();
         self.bind_groups = bind_groups(
             &self.device,
             &self.layout,
             &self.uniforms,
             &self.sampler,
-            &self.arrays,
+            &self.faces,
+            &self.atlas,
         );
+    }
+
+    /// Uploads a face's layer now, into the layer of the array its `AssetReady` names: for the
+    /// faces that arrive before the match is shown. Returns whether it was uploaded; anything
+    /// but a face, or a face of another format or size than the arrays, is not.
+    pub fn upload_layer(&mut self, prepared: &Prepared) -> bool {
+        let Some((size, index, layer)) = face_upload(prepared) else {
+            return false;
+        };
+        self.faces[face_array(size)].write(&self.queue, index, layer)
+    }
+
+    /// Keeps a face that arrived during play until `upload_waiting` lets it through.
+    pub fn hold(&mut self, prepared: Prepared) {
+        self.waiting.push(prepared);
+    }
+
+    /// How many faces `hold` keeps that have not been uploaded yet.
+    #[must_use]
+    pub fn waiting(&self) -> usize {
+        self.waiting.len()
+    }
+
+    /// Uploads what this frame may of the faces `hold` keeps, given the client's `wake` as of
+    /// its last frame: at most one full-size face, and one board-size face only when the client
+    /// is not animating, so that no card changes its picture in the middle of a flight. Returns
+    /// what the client must be told of each face uploaded, to give it as `Input::Assets`.
+    pub fn upload_waiting(&mut self, wake: Wake) -> impl Iterator<Item = AssetReady> + use<> {
+        let mut uploaded = [None, None];
+        for (slot, prepared) in uploaded.iter_mut().zip(self.waiting.next(wake)) {
+            if let Some(prepared) = prepared
+                && self.upload_layer(&prepared)
+            {
+                *slot = Some(prepared.ready);
+            }
+        }
+        uploaded.into_iter().flatten()
     }
 
     /// Draws `frame` into `target`, cleared to black first.
@@ -403,13 +455,23 @@ fn array(
     })
 }
 
+/// The index in `Renderer::faces` of the array for `size`.
+fn face_array(size: FaceSize) -> usize {
+    match size {
+        FaceSize::Board => 0,
+        FaceSize::Full => 1,
+    }
+}
+
 fn bind_groups(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     uniforms: &wgpu::Buffer,
     sampler: &wgpu::Sampler,
-    arrays: &[wgpu::TextureView; 3],
+    faces: &[FaceArray; 2],
+    atlas: &wgpu::TextureView,
 ) -> [wgpu::BindGroup; 3] {
+    let arrays = [&faces[0].view, &faces[1].view, atlas];
     [
         TextureArray::SmallFaces,
         TextureArray::FullFaces,
@@ -426,7 +488,7 @@ fn bind_groups(
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&arrays[array as usize]),
+                    resource: wgpu::BindingResource::TextureView(arrays[array as usize]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,

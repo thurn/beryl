@@ -284,6 +284,8 @@ dependencies = [
 name = "beryl_host"
 version = "0.1.0"
 dependencies = [
+ "beryl_art",
+ "beryl_assets",
  "beryl_render",
  "beryl_scene",
  "glam",
@@ -351,6 +353,7 @@ dependencies = [
 name = "beryl_render"
 version = "0.1.0"
 dependencies = [
+ "beryl_assets",
  "beryl_inspect",
  "beryl_protocol",
  "beryl_scene",

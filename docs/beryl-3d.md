@@ -1286,7 +1286,13 @@ as many pixels opaque as it can.
   may branch, at the price of choosing the mipmap level by hand.
 - **Card faces in a texture array.** All the small faces of a match are layers
   of one array texture, so every card on the table can be in one call. Cards
-  shown at full size use a second array and add a call.
+  shown at full size use a second array and add a call. Both arrays are made in
+  the first compressed format the device samples (`Renderer::formats`). Until a
+  face's layer is uploaded, the renderer fills it with a placeholder of its own:
+  a flat color, frame and stripe chosen by the card's name, laid out on the 4 by
+  4 pixel grid of a compressed block so that each block is one solid color.
+  Every compressed format can write a solid block in a few fixed bits, so the
+  renderer needs no texture encoder.
 - **Shadows are single quads.** A card above the table (in flight, held up, in a
   hand) gets one pre-blurred shadow quad beneath it, drawn just above the cards
   lying on the table, which spreads and fades with the card's height. Cards
@@ -1528,7 +1534,10 @@ Before a match's opening hand is shown:
    hit is a file read.
 3. On a miss, the worker decodes the scan, or draws Beryl's frame, scales it to
    both sizes, compresses it and writes the result to the disk cache.
-4. The board-size layers are uploaded during the loading screen.
+4. The board-size layers are uploaded during the loading screen
+   (`Renderer::upload_layer`). The headless host behind `just b3d png` does the
+   same before its first picture, but never downloads a scan, so a picture shows
+   only what the scan cache holds.
 
 Three crates do that work: `tiny-skia` 0.12.0 (a CPU rasterizer for 2D shapes)
 and `swash` 0.2.10 (a glyph rasterizer) draw Beryl's frame, and `ctt` 0.6.1 (a
@@ -1546,7 +1555,9 @@ wrapper over several texture encoders) compresses.
 - **Windows needs the MSVC build tools** (`cl.exe`, `lib.exe`) for the same C++
   and for `zstd-sys`, so it cannot be cross-checked from the Mac.
 
-During play, two kinds of upload remain.
+During play, two kinds of upload remain. The host hands each to the renderer
+(`Renderer::hold`), which uploads what a frame allows (`upload_waiting`) and
+returns the `AssetReady` of each upload for the host to give the client.
 
 - **A full-size face**, when a card is first read. A worker reads or builds it
   and the frame thread uploads it, at most one face (0.84 MB) per frame. Until

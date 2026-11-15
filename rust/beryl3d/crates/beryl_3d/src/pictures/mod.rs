@@ -12,7 +12,7 @@ mod font;
 use std::fmt::Write;
 use std::path::PathBuf;
 
-use beryl_host::Headless;
+use beryl_host::{Headless, Scans};
 use beryl_inspect::cli::{self, Options, Ran, Spec, Usage, options};
 use beryl_inspect::recordings;
 use beryl_scene::agent::{TreeOptions, tree};
@@ -192,8 +192,14 @@ fn help(command: &Command) -> String {
 /// The recording `options` names, played in the window and seat they give, with a renderer.
 pub(crate) fn open(options: &Options) -> Result<Headless, Error> {
     let page = cli::open(options)?;
-    Headless::new(page, options.size.width, options.size.height, options.scale)
-        .map_err(|why| Error::Failed(format!("no GPU to draw with: {why}")))
+    Headless::new(
+        page,
+        options.size.width,
+        options.size.height,
+        options.scale,
+        &Scans::app(),
+    )
+    .map_err(|why| Error::Failed(format!("no GPU to draw with: {why}")))
 }
 
 /// The directory pictures are written to, `$BERYL_CACHE/b3d/out`, which is made if needed.

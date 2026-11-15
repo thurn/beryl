@@ -3,6 +3,7 @@
 //! the floor's feature set. wgpu's default handler for an uncaptured error panics, so a
 //! validation error fails the test.
 
+use beryl_assets::Format;
 use beryl_render::{BACK_LAYER, GLOW_SPRITE, Limits, Renderer, Target};
 use beryl_scene::frame::{Band, Draw, Frame, FrameBuilder};
 use beryl_scene::input::FaceSize;
@@ -16,7 +17,8 @@ const TOLERANCE: u8 = 2;
 
 fn renderer(limits: Limits) -> Renderer {
     let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
-    renderer.set_placeholder_faces(&["Island", "Plains", "Counterspell"]);
+    let format = Format::choose(&renderer.formats());
+    renderer.set_faces(&["", "Island", "Plains", "Counterspell"], format);
     renderer
 }
 

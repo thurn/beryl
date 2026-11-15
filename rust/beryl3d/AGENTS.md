@@ -54,7 +54,9 @@ through the client with no window or GPU (the `b3d` skill has the details):
   moment offscreen with the real renderer, and
   `just b3d film <name> --from <moment> --to <moment> --frames 12` draws up to
   24 frames as a grid in one picture, with a line of text for each. Both print
-  the file's path, under `$BERYL_CACHE/b3d/out/`.
+  the file's path, under `$BERYL_CACHE/b3d/out/`. Cards show the scans in the
+  app's scan cache (`~/Library/Caches/ca.thurn.beryl/art`) and a placeholder
+  with the card's name where a scan is missing; neither command downloads one.
 
 The text commands are the `b3d` program in `beryl_inspect` (`src/cli`), and the
 pictures are `b3d-render` in `beryl_3d` (`src/pictures`, with `Headless` in

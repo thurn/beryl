@@ -28,6 +28,7 @@ pub use moment::{Duration, Moment, Name, Offset, ParseError};
 pub use recording::{Answer, Recording, Responses, plays_on};
 
 use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
+use crate::faces::FaceList;
 use crate::frame::{Frame, Place, Role, StateBits, Wake};
 use crate::input::{
     AssetReady, Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind,
@@ -197,6 +198,13 @@ impl Page {
     /// verb returned once.
     pub fn next_unbuilt(&mut self) -> Option<Verb> {
         self.client.next_unbuilt()
+    }
+
+    /// The match's faces, as the client listed them from the recording's card records: what a
+    /// host hands its asset workers (`Client::faces`).
+    #[must_use]
+    pub fn faces(&self) -> &FaceList {
+        self.client.faces()
     }
 
     /// Every input handed to the client so far, in order.
