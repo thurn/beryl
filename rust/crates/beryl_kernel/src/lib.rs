@@ -11,10 +11,9 @@
 //!
 //! # The contract
 //!
-//! Only the kernel writes a field. This is the design every bead of milestone 3 (epic
-//! by-w8gv.5) builds on, written as it will stand when they land; a bead that builds a part
-//! amends its text. Each part names its bead. Every field of [`State`] is private now; the
-//! sets, queries and player API below exist only where a link names them.
+//! Only the kernel writes a field. This text describes the kernel as it is built; a change
+//! that makes part of it untrue amends it in the same commit. Every field of [`State`] is
+//! private; the sets, queries and player API below exist only where a link names them.
 //!
 //! ## Mutators
 //!
@@ -54,7 +53,7 @@
 //! | put a spell on the stack, make a token, have a permanent enter | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::remember`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it |
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
 //! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::keep_seen`] | each player's knowledge; the identity is settled first |
-//! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening and replacing masks, what each face-down permanent's controller sees, `derived_dirty` cleared |
+//! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening and replacing masks, the rules the static abilities change for each player, the layer inputs the static abilities read ([`static_ability::Inputs`]), whether an effect removed abilities (for [`State::has_ability`]) or changed land types (for [`State::makes_card_mana`] and [`State::intrinsic_mana`]), what each face-down permanent's controller sees, `derived_dirty` cleared |
 //! | change a player | [`State::gain_life`], [`State::lose_life`], [`State::damage_player`], [`State::add_mana`], [`State::spend_mana`], [`State::empty_mana_pools`], [`State::count_land_played`], [`State::declare_mulligan`], [`State::keep_hand`], [`State::count_bottomed`], [`State::count_mulligan`], [`State::add_emblem`] | a pool spends only mana it holds; a hand is kept with what it owes the bottom of the library; a mulligan taken is one to declare again |
 //! | move the turn, count toward a budget, end the game | [`State::set_starting_player`], [`State::begin_turn`], [`State::begin_step`], [`State::give_priority`], [`State::pass_priority`], [`State::reset_passes`], [`State::declare_attack`], [`State::set_cleanup_check`], [`State::count_decision`], [`State::count_state_based_check`], [`State::reset_state_based_checks`], [`State::end_game`] | passes reset with priority; the lands played and the decisions offered begin again with the turn; that attackers were declared ends with the combat ([`State::end_combat`]) |
 //! | use the stack | [`State::put_on_stack`], [`State::take_top_of_stack`], [`State::take_off_stack`], which returns the entry, [`State::announce_x`], [`State::announce_target`] | a spell's entry goes on once its card is in the stack zone and comes off before the card leaves, so the zone move keeps the stack's set of objects and these keep its order |
@@ -222,7 +221,14 @@
 //! store's counts for each player, 8. It is 20,056 since last-known information is a
 //! table of the state ([`last_known`]): each of the 96 waiting and delayed triggers is 6
 //! bytes smaller and each of the 64 stack entries 6, 960 in all, and the table of 16 rows
-//! of 56 bytes, with its length, takes 904 of them.
+//! of 56 bytes, with its length, takes 904 of them. It was 20,184 when ability removal
+//! began (128 bytes that no change reported came between), and is 20,336 since each of the
+//! 128 [`state::Derived`] rows holds a mask of the abilities its permanent lost, packed to
+//! two-byte alignment, and 20,344 since a value chosen as a permanent enters. That leaves
+//! 136 bytes, less than the planned growth of the work that follows (the effects that reach
+//! other zones, captured word changes for abilities on the stack, copy exceptions in
+//! last-known information, mana that remembers, a bitboard of phased-out permanents, the
+//! loop count and hash), so that work first needs room found elsewhere in the state.
 //! The limit is 20,480. Each bead may change the size at its
 //! own push by at most its allotment, whatever landed before it, and reports the size as it
 //! reports the count:
@@ -243,10 +249,8 @@
 //!
 //! With every bead but by-w8gv.7.4 landed the size is at most 20,448, so any order holds
 //! the limit; the target with all landed was at most 20,256, and the milestone ends at
-//! 20,176. [`state::Object`] did not shrink: it stays 24 bytes while its flags are a `u32`,
-//! since `linked` and the long-tail pair freed three bytes and alignment gave none back.
-//! The flags left fit a `u16` and the object 20 bytes, 1,020 fewer in all: not taken, and
-//! there for whoever needs the room, if the count holds with every object's fields moved.
+//! 20,176. [`state::Object`] is 24 bytes: its flags are a byte now, but it is aligned to
+//! four bytes, so the bytes they freed went to padding.
 //!
 //! ### Affected sides and payloads
 //!
@@ -358,7 +362,10 @@
 //! | Hot read | With the kind absent | With it live |
 //! | --- | --- | --- |
 //! | the layers' loop over effects ([`State::layer_effects`]) | one AND of the store's kinds | one pass over the store's entries, at most 64 of 24 bytes, skipping other kinds; for an entry on a set, a pass over the battlefield testing each permanent's bit |
-//! | `event::destination` ([`State::move_replacements`]) | one AND | one pass comparing each entry's affected object |
+//! | the Effects store's replacements of a move, read by the rules' `replace::moving` ([`State::move_replacements`]) | one AND | one pass comparing each entry's affected object |
+//! | a proposal's match against the permanents' static replacement abilities (the rules' `replace`: a move, an entering, a draw, damage) | one AND of the state's replacement mask ([`State::replacing`]) with the proposal's [`event::ReplacementKind`] | for each permanent whose face replaces that kind ([`query::Copiable::may_replace`]), its abilities, each asked [`State::has_ability`] |
+//! | "does this object have this ability" ([`State::has_ability`]), "does this land make its card's mana" ([`State::makes_card_mana`], [`State::intrinsic_mana`]) | one test of a flag the layers store: no effect removes abilities or changes land types | the permanent's layer result, out of line |
+//! | an object's last-known information ([`State::last_known`]) | not read: only an ability that looked back reads it | a pass over the table's rows, at most 16 |
 //! | what a player may cast ([`State::cast_permissions`]) and what a spell costs more ([`State::cost_increase`]) | one AND each | one pass; a hand's cards need no entry |
 //! | the zone move's reset | one bit test of the keyed slots | each store ends its entries about the slot, out of line; an arrival also tests the Memos kinds for a link to the slot |
 //! | the turn's reset | Effects: the store's length read twice a turn. Trackers: nine words cleared, since the kernel begins the turn with no table to ask | Effects: one pass. Trackers: the same nine words, in place of two flags on every permanent |
@@ -558,6 +565,17 @@
 //! | its mana value: a spell's with its X (CR 202.3e), a transformed permanent's front face's and a copied back face's 0 (CR 712.6d) | [`State::mana_value`] |
 //! | who controls it: a permanent's layer result, a spell's caster, elsewhere the owner (CR 108.4a) | [`State::controller`] |
 //! | its power and toughness: the layer results on the battlefield, the copiable values elsewhere | [`State::power`], [`State::toughness`] |
+//! | its colors, the same way | [`State::colors`] |
+//! | whether it has an ability of its face: a permanent may have lost it (CR 613.1f); elsewhere it has them all | [`State::has_ability`], [`State::has_every_ability`] |
+//! | the mana its basic land types make (CR 305.6, 305.7) | [`State::intrinsic_mana`] |
+//! | the colors a permanent has protection from | [`State::protection`] |
+//! | what an object that left was as it last existed (CR 603.10a) | [`State::last_known`] |
+//!
+//! Its card types, subtypes and keywords have no query yet: a reader takes the layer result
+//! of a permanent ([`State::derived`]) and the copiable values of anything else, and so does
+//! the kernel's filter evaluation. An ability granted by another permanent's effect is a
+//! [`state::Derived`] `granted` entry that [`State::has_ability`] does not answer for, and
+//! trigger matching reads no granted ability.
 //! | the objects another record of the state names, which no twin stands in for (architecture §7.2) | [`State::named`] |
 //!
 //! A [`Copiable`] is a definition, the face of it that is up and a copy effect's exception

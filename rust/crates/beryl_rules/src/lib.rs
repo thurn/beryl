@@ -20,9 +20,9 @@
 //! # The contract
 //!
 //! The rules library is what an effect does to a game: free functions over a [`Game`] and a
-//! [`Resolution`], in modules that mirror the Comprehensive Rules. This is the design every bead of milestone 5
-//! (epic by-w8gv.9) builds on, written as it will stand when they land; a bead that builds a
-//! part amends its text. What moves an object between zones, the keyword actions, drawing,
+//! [`Resolution`], in modules that mirror the Comprehensive Rules. This text describes the
+//! library as it is built; a change that makes part of it untrue amends it in the same
+//! commit. What moves an object between zones, the keyword actions, drawing,
 //! counters, damage, life, tokens, the choices, paying a cost, coins, continuous effects,
 //! permissions to cast, delayed triggers, emblems, winning and adding mana are built.
 //!
@@ -126,6 +126,31 @@
 //!    writes them; none exists yet.
 //!
 //! A file stays under 800 lines.
+//!
+//! ## The engine's own rules
+//!
+//! The engine's modules are private and follow the same naming: `layers` (CR 613), the
+//! recompute of every permanent's characteristics one layer at a time, with `layers/dependency`
+//! (CR 613.8), `layers/granted` (static abilities granted in layer 6) and `layers/entering`
+//! (a permanent as it would exist, CR 614.12); `replace` (CR 614 to 616), where each
+//! replaceable happening is built as a typed proposal (`replace::Move`, `replace::Damage`, one
+//! card drawn, a destruction) before it changes the state, and the replacement and prevention
+//! effects that apply rewrite it, in the order of CR 616.1; `protection` (CR 702.16), read for
+//! targets, Auras, Equipment and blockers; `trigger` (CR 603), which matches events, look-back
+//! (CR 603.10a) and state triggers (CR 603.8) against the listeners the card table found; and
+//! `sba` (CR 704). A library function that changes the game sends its event through
+//! `event::settle`, which refreshes the layers, matches triggers and records it.
+//!
+//! Each of these is reached through a mask: the kinds of event the game's cards listen to or
+//! replace ([`GameTable::listens_any`](table::GameTable::listens_any),
+//! [`GameTable::replaces_any`](table::GameTable::replaces_any)), then those of the
+//! permanents now (the state's `listening` and `replacing`), then those of one face. A game
+//! with no card of a kind pays one AND for it.
+//!
+//! An object's ability is read through [`State::has_ability`](state::State::has_ability):
+//! a reader walks the face's abilities and asks it of each. An ability granted to a permanent
+//! by another's effect is read from the permanent's layer result instead, and only by
+//! activation (`cast/legal.rs`, `cast/timing.rs`) and the layers.
 //!
 //! ## Scenarios
 //!
