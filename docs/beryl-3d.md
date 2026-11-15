@@ -385,6 +385,8 @@ pub struct Frame {
     pub clips_full: bool,         // a sixteenth clip was asked for: a fault
     pub shake: Vec2,              // physical pixels, see Effects
     pub sounds: Vec<SoundId>,     // the sounds that begin in this frame
+    pub lines: Vec<TextLine>,     // each laid-out line of text: its element's
+                                  // index and its box, for the "text fits" check
     pub load: Load,               // draw calls, instances, upload bytes, and
                                   // the opaque and blended screen areas
     pub work: Work,               // elements visited, segments evaluated,
@@ -758,15 +760,20 @@ to the renderer, and the client core learns only where they are:
 pub enum AssetReady {
     /// A face is in a layer of the small or of the full-size array.
     Face { face: FaceId, size: FaceSize, layer: u16 },
-    /// Glyphs are in a page of the atlas, each at a rectangle in texels.
-    Glyphs { page: u16, glyphs: Vec<(GlyphKey, [u16; 4])> },
+    /// Glyphs are in a page of the atlas.
+    Glyphs { page: u16, glyphs: Vec<GlyphCell> },
 }
+
+/// A glyph's rectangle in texels, and its top left corner against the
+/// glyph's pen position on the baseline, in physical pixels, y down.
+pub struct GlyphCell { pub key: GlyphKey, pub rect: [u16; 4], pub bearing: [i16; 2] }
 
 /// An index into the list of faces the client made when the match loaded.
 pub struct FaceId(pub u16);
 pub enum FaceSize { Board, Full }
-/// One glyph of one bundled font at one size in physical pixels.
-pub struct GlyphKey { pub font: u8, pub glyph: u16, pub size: u16 }
+/// One glyph of one bundled font at one weight and one size in physical
+/// pixels. The text fonts are variable, so the weight is the axis value.
+pub struct GlyphKey { pub font: u8, pub weight: u16, pub glyph: u16, pub size: u16 }
 
 impl Client {
     /// The glyphs that laid-out text needs and no page holds yet. Each is

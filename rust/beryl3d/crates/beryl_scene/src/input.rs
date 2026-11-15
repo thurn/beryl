@@ -197,12 +197,20 @@ pub enum AssetReady {
         size: FaceSize,
         layer: u16,
     },
-    /// Glyphs are in a page of the atlas, each at a rectangle in texels, `[x, y, width,
-    /// height]`.
-    Glyphs {
-        page: u16,
-        glyphs: Vec<(GlyphKey, [u16; 4])>,
-    },
+    /// Glyphs are in a page of the atlas.
+    Glyphs { page: u16, glyphs: Vec<GlyphCell> },
+}
+
+/// Where one rasterized glyph lies in its atlas page, and where its picture sits against the
+/// glyph's pen position.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GlyphCell {
+    pub key: GlyphKey,
+    /// The glyph's rectangle in texels, `[x, y, width, height]`.
+    pub rect: [u16; 4],
+    /// The rectangle's top left corner relative to the pen position on the baseline, in
+    /// physical pixels, with y down: a glyph that rises above the baseline has a negative y.
+    pub bearing: [i16; 2],
 }
 
 /// An index into the list of faces the client made when the match loaded.
@@ -216,10 +224,13 @@ pub enum FaceSize {
     Full,
 }
 
-/// One glyph of one bundled font at one size in physical pixels.
+/// One glyph of one bundled font at one weight and one size in physical pixels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GlyphKey {
+    /// The font's index in `text::fonts::ALL`.
     pub font: u8,
+    /// The CSS weight the variable font is drawn at.
+    pub weight: u16,
     pub glyph: u16,
     pub size: u16,
 }

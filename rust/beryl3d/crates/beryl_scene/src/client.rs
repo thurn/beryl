@@ -5,11 +5,15 @@
 
 use std::collections::VecDeque;
 
-use crate::command::{Request, SessionCommand};
-use crate::frame::{self, Frame, FrameBuilder, Wake};
 use beryl_session::GameUpdate;
+use beryl_session::prompt::{Click, ClickReply, ClickRequest, PromptView};
+use beryl_session::protocol::{DecisionId, Status};
 
-use crate::input::{GlyphKey, Input};
+use crate::command::{Reply, Request, SessionCommand};
+use crate::element::{Press, prompt_bar};
+use crate::frame::{self, ElementId, Frame, FrameBuilder, Wake};
+use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerPhase};
+use crate::layout::Layer;
 use crate::table::{Table, Window};
 
 /// The sizes the client sets at startup.
@@ -42,10 +46,15 @@ pub struct Client {
     update: Option<Box<GameUpdate>>,
     window: Window,
     table: Table,
+    /// The flat layer: the prompt bar.
+    layer: Layer,
+    /// The open decision and its prompt's latest state, from the view or a click's reply.
+    prompt: Option<(DecisionId, PromptView)>,
+    /// The element the primary pointer went down on, which a release on it presses.
+    pressed: Option<ElementId>,
     wake: Wake,
     requests: VecDeque<Request>,
     commands: VecDeque<SessionCommand>,
-    glyphs: VecDeque<GlyphKey>,
 }
 
 impl Client {
@@ -57,20 +66,46 @@ impl Client {
             update: None,
             window: Window::default(),
             table: Table::default(),
+            layer: Layer::new(),
+            prompt: None,
+            pressed: None,
             wake: Wake::Never,
             requests: VecDeque::new(),
             commands: VecDeque::new(),
-            glyphs: VecDeque::new(),
         }
     }
 
     /// Takes a session update, a pointer or key event, a new surface or another input. An
     /// input has no time of its own: what it starts begins at the `now` of the next `frame`.
+    /// This is where screens are rebuilt and laid out, and where text is shaped.
     pub fn handle(&mut self, input: Input) {
         match input {
             Input::Update(update) => {
                 self.table.apply(&update.view);
+                self.prompt = match &update.view.status {
+                    Status::Deciding { decision } => {
+                        Some((decision.id, (*decision.prompt).clone()))
+                    }
+                    _ => None,
+                };
                 self.update = Some(update);
+                self.show_prompt();
+            }
+            Input::Reply(Reply::Click(Ok(reply))) => {
+                match reply {
+                    ClickReply::Open { prompt } => {
+                        if let Some((_, open)) = &mut self.prompt {
+                            *open = *prompt;
+                        }
+                    }
+                    // The views that follow the answer bring the next prompt.
+                    ClickReply::Answered => self.prompt = None,
+                }
+                self.show_prompt();
+            }
+            Input::Pointer(pointer) => self.point(pointer),
+            Input::Assets(AssetReady::Glyphs { page, glyphs }) => {
+                self.layer.glyphs_mut().add(page, &glyphs);
             }
             Input::Surface {
                 size,
@@ -84,6 +119,7 @@ impl Client {
                 };
                 let view = self.update.as_ref().map(|update| &update.view);
                 self.table.resize(self.window, view);
+                self.layer.resize(self.window);
             }
             input => self.inputs.push(input),
         }
@@ -98,7 +134,52 @@ impl Client {
         if let Some(update) = &self.update {
             self.table.write(&update.view, &mut builder);
         }
+        let (layout_nodes, text_runs) = self.layer.take_work();
+        builder.layout_work(layout_nodes, text_runs);
+        self.layer.write(&mut builder, self.table.camera());
         builder.finish()
+    }
+
+    /// Rebuilds the prompt bar from the open prompt, or takes it away.
+    fn show_prompt(&mut self) {
+        let screen = self.prompt.as_ref().map(|(_, prompt)| prompt_bar(prompt));
+        self.layer.show(screen);
+    }
+
+    /// A press is the primary button or a touch going down and coming up on the same enabled
+    /// element. It queues the command the element's `Press` means.
+    fn point(&mut self, pointer: Pointer) {
+        let primary = pointer.button == Button::Primary;
+        match pointer.phase {
+            PointerPhase::Down if primary => {
+                self.pressed = self.layer.press_at(pointer.position).map(|(id, ..)| id);
+            }
+            PointerPhase::Up if primary => {
+                let pressed = self.pressed.take();
+                if let Some((id, press, true)) = self.layer.press_at(pointer.position)
+                    && pressed == Some(id)
+                {
+                    self.press(press);
+                }
+            }
+            PointerPhase::Cancel | PointerPhase::Leave => self.pressed = None,
+            _ => {}
+        }
+    }
+
+    fn press(&mut self, press: Press) {
+        let Some((decision, prompt)) = &self.prompt else {
+            return;
+        };
+        match press {
+            Press::Button(button) => {
+                self.commands.push_back(SessionCommand::Click(ClickRequest {
+                    decision: *decision,
+                    revision: prompt.revision,
+                    click: Click::Button { button },
+                }));
+            }
+        }
     }
 
     /// The table, for tests and tools that read the camera.
@@ -128,6 +209,6 @@ impl Client {
     /// The glyphs that laid-out text needs and no atlas page holds yet. Each is returned once.
     /// The host hands them to the rasterizer.
     pub fn wanted_glyphs(&mut self) -> impl Iterator<Item = GlyphKey> + '_ {
-        self.glyphs.drain(..)
+        self.layer.glyphs_mut().drain_wanted()
     }
 }

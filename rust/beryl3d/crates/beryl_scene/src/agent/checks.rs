@@ -20,6 +20,7 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults.extend(overlap(frame, context));
     faults.extend(reachable(frame, context));
     faults.extend(duplicates(frame, context));
+    faults.extend(text_fits(frame, context));
     faults.extend(named(frame, context));
     faults.extend(blank_cards(frame, context));
     faults.extend(clips(frame, context));
@@ -197,6 +198,30 @@ pub fn duplicates(frame: &Frame, context: &Context) -> Vec<Fault> {
         }
     }
     faults
+}
+
+/// Text fits: no laid-out line of text reaches outside its element's box, as a line wider than
+/// the box, or lines that together are taller than it, would.
+#[must_use]
+pub fn text_fits(frame: &Frame, context: &Context) -> Vec<Fault> {
+    frame
+        .lines
+        .iter()
+        .filter(|line| !contains(bounds(&frame.resolved[line.element as usize]), line.rect))
+        .map(|line| {
+            let subject = subject(frame, line.element);
+            fault(
+                Rule::TextFits,
+                context,
+                format!(
+                    "a line of {}'s text ({}) reaches outside its box",
+                    subject.describe(),
+                    super::fault::rect_text(line.rect)
+                ),
+                vec![subject],
+            )
+        })
+        .collect()
 }
 
 /// Named: every interactive element has a non-empty name. (Every element has a role, because

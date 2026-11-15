@@ -261,11 +261,23 @@ pub struct Frame {
     pub shake: Vec2,
     /// The sounds that begin in this frame.
     pub sounds: Vec<SoundId>,
+    /// Each laid-out line of text, for the "text fits" check.
+    pub lines: Vec<TextLine>,
     pub load: Load,
     pub work: Work,
     /// The sort keys and reordered records of `FrameBuilder::finish`, kept so that ordering
     /// allocates nothing.
     scratch: order::Scratch,
+}
+
+/// One laid-out line of an element's text.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextLine {
+    /// The index in `Frame::resolved` of the element whose text it is.
+    pub element: u32,
+    /// The line's box on screen, in logical points: as wide as its glyphs and as tall as the
+    /// line.
+    pub rect: Rect,
 }
 
 impl Frame {
@@ -285,6 +297,7 @@ impl Frame {
             clips_full: false,
             shake: Vec2::ZERO,
             sounds: Vec::new(),
+            lines: Vec::with_capacity(elements),
             load: Load::default(),
             work: Work::default(),
             scratch: order::Scratch::with_capacity(draws),
@@ -318,6 +331,7 @@ impl<'a> FrameBuilder<'a> {
         frame.clips_full = false;
         frame.shake = Vec2::ZERO;
         frame.sounds.clear();
+        frame.lines.clear();
         frame.load = Load::default();
         frame.work = Work::default();
         frame.scratch.clear();
@@ -348,6 +362,18 @@ impl<'a> FrameBuilder<'a> {
         self.frame.scratch.push(band, self.frame.draws.len());
         self.frame.draws.push(draw);
         self.frame.work.records += 1;
+    }
+
+    /// Adds a line of the text of the resolved element at `element`.
+    pub fn line(&mut self, element: u32, rect: Rect) {
+        self.frame.lines.push(TextLine { element, rect });
+    }
+
+    /// Records the layout work `Client::handle` did since the last frame: layout nodes
+    /// computed and runs of text shaped.
+    pub fn layout_work(&mut self, layout_nodes: u32, text_runs: u32) {
+        self.frame.work.layout_nodes += layout_nodes;
+        self.frame.work.text_runs += text_runs;
     }
 
     /// Adds a clip rectangle in physical pixels and returns its entry, for `Draw::with_clip`.

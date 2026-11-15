@@ -4,9 +4,10 @@
 //! window's safe area.
 
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
-use glam::{Mat4, Quat, Vec2, Vec3};
+use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
 
 use super::{CARD_HEIGHT, Window};
+use crate::input::Rect;
 use crate::pose::Pose;
 
 /// A layout's camera, as data.
@@ -26,6 +27,9 @@ pub struct CameraData {
 /// The nearest and farthest distances drawn, in millimetres.
 const NEAR: f32 = 20.0;
 const FAR: f32 = 20_000.0;
+/// How far in front of the eye the flat layer's plane lies, in millimetres: just past the near
+/// plane, so that it is in front of everything on the table.
+const LAYER_DEPTH: f32 = NEAR * 1.5;
 /// The range the fit searches for the camera's distance from its target, in millimetres.
 const NEAREST: f32 = 100.0;
 const FARTHEST: f32 = 15_000.0;
@@ -159,5 +163,29 @@ impl Camera {
             scale: height * 2.0 * depth * self.tan_half / CARD_HEIGHT,
             ..Pose::default()
         }
+    }
+
+    /// The transform that lays the unit quad over `rect`, in logical points from the window's
+    /// top left corner, on the flat layer's plane (docs/beryl-3d.md, "The frame": one projection
+    /// serves the table and the flat layer).
+    #[must_use]
+    pub fn layer_transform(&self, rect: Rect) -> Affine3A {
+        let size = self.window.size;
+        let half_height = self.tan_half * LAYER_DEPTH;
+        let half_width = half_height * size.width / size.height;
+        let centre = Vec2::new(
+            (rect.x + rect.width / 2.0) / size.width * 2.0 - 1.0,
+            1.0 - (rect.y + rect.height / 2.0) / size.height * 2.0,
+        );
+        let local = Affine3A::from_scale_rotation_translation(
+            Vec3::new(
+                rect.width / size.width * 2.0 * half_width,
+                rect.height / size.height * 2.0 * half_height,
+                1.0,
+            ),
+            Quat::IDENTITY,
+            Vec3::new(centre.x * half_width, centre.y * half_height, -LAYER_DEPTH),
+        );
+        Affine3A::from_mat4(self.inverse_view) * local
     }
 }

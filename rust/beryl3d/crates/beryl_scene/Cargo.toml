@@ -23,8 +23,9 @@ bytemuck = { version = "1.25.2", features = ["derive"] }
 glam = "0.34.3"
 # Lays out text and 2D regions as flexbox and grid, in place of hand-written layout.
 taffy = "0.15.1"
-# Shapes and breaks lines of text, in place of hand-written text layout.
-parley = "0.13.0"
+# Shapes and breaks lines of text, in place of hand-written text layout. Without its default
+# `system` feature, so no system font can be found or used.
+parley = { version = "0.13.0", default-features = false, features = ["std"] }
 # The driver reads a recording's views and responses, and writes requests to match them, as JSON,
 # in place of a hand-written reader. Only the `driver` feature needs them.
 serde = { version = "1.0.229", optional = true }
@@ -33,6 +34,8 @@ serde_json = { version = "1.0.154", optional = true }
 [dev-dependencies]
 # The crate itself with the `driver` feature, for the `testing` builders its tests use.
 beryl_scene = { path = ".", features = ["driver"] }
+# The prompt purposes, for the prompts that tests build by hand.
+beryl_engine = { path = "../../../crates/beryl_engine" }
 
 [build-dependencies]
 # Reads data/beryl3d/space.json and gates.json at build time, in place of a hand-written parser.

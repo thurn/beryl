@@ -7,11 +7,15 @@ pub mod command;
 pub mod data;
 #[cfg(feature = "driver")]
 pub mod driver;
+pub mod element;
 pub mod frame;
 pub mod input;
+pub mod layout;
 pub mod pose;
 pub mod table;
 #[cfg(feature = "driver")]
 pub mod testing;
+pub mod text;
+pub mod tokens;
 
 pub use client::{Client, Config};
