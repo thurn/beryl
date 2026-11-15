@@ -66,6 +66,7 @@ export function StageBoard({
   stops,
   setStops,
   onLeave,
+  onShortcuts,
   onConcede,
   dimmed,
   board = pageStage(),
@@ -86,6 +87,7 @@ export function StageBoard({
   stops: StopsSetting;
   setStops?(stops: StopsSetting): void;
   onLeave(): void;
+  onShortcuts?: () => void;
   /** Concedes the game; none once it is over. */
   onConcede?: () => void;
   /** A screen is over the table: the opening or the game's end. */
@@ -327,6 +329,7 @@ export function StageBoard({
           stops={stops}
           setStops={setStops}
           onLeave={onLeave}
+          onShortcuts={onShortcuts}
           onConcede={onConcede}
         />
       </div>

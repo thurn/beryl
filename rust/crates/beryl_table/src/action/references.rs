@@ -110,6 +110,7 @@ impl<Id> Action<Id> {
             Self::Remove { selection } => Action::Remove {
                 selection: selection.try_map(resolve)?,
             },
+            Self::StackUntil { seat, query, hits } => Action::StackUntil { seat, query, hits },
             Self::Draw { seat, count } => Action::Draw { seat, count },
             Self::Mulligan { seat, count } => Action::Mulligan { seat, count },
             Self::Shuffle { seat, portion } => Action::Shuffle { seat, portion },

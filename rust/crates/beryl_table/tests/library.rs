@@ -668,3 +668,48 @@ fn shuffling_removes_arrows_that_refer_to_replaced_ids() {
     undo(&mut table, &entry);
     assert_eq!(table.arrows, before);
 }
+
+#[test]
+fn stack_until_matches_hidden_cards_on_the_host_and_stops_at_the_requested_hit() {
+    let mut table = library();
+    seed_zone(&mut table, LIBRARY, &[(5, "Island"), (6, "Mountain")], &[]);
+    let action = Action::StackUntil {
+        seat: OWNER,
+        query: "  LAND ".into(),
+        hits: 2,
+    };
+    assert_eq!(
+        apply(&mut table, GUEST, &action, &mut Chance::fresh(91)),
+        Err(Refusal::Permission)
+    );
+    let entry = act(&mut table, OWNER, &action);
+    assert_eq!(names(&table, Zone::Stack), ["Island", "Mountain"]);
+    assert_eq!(
+        names(&table, LIBRARY),
+        ["Island", "Lightning Bolt", "Divination", "Serra Angel"]
+    );
+    let guest = beryl_table::redact::seen_by(&table, GUEST);
+    assert!(
+        guest
+            .zone(LIBRARY)
+            .unwrap()
+            .iter()
+            .all(|id| guest.objects[id].card == Card::Hidden)
+    );
+    undo(&mut table, &entry);
+
+    act(
+        &mut table,
+        OWNER,
+        &Action::StackUntil {
+            seat: OWNER,
+            query: "Lightning Bolt".into(),
+            hits: 1,
+        },
+    );
+    assert_eq!(
+        names(&table, Zone::Stack),
+        ["Island", "Mountain", "Island", "Lightning Bolt"]
+    );
+    assert_eq!(names(&table, LIBRARY), ["Divination", "Serra Angel"]);
+}

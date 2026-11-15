@@ -182,9 +182,7 @@ fn action_references(action: &Action, references: &mut Vec<Reference>) {
             selection_references(references, selection, Reference::Card);
             references.push(Reference::Card(*host));
         }
-        Action::Token { attached_to, .. } => {
-            references.extend(attached_to.map(Reference::Card));
-        }
+        Action::Token { attached_to, .. } => references.extend(attached_to.map(Reference::Card)),
         Action::Arrow { selection, to } => {
             selection_references(references, selection, Reference::Card);
             references.push(target_reference(*to));
@@ -197,9 +195,10 @@ fn action_references(action: &Action, references: &mut Vec<Reference>) {
             Reference::UseZone(Zone::Library(*seat)),
             Reference::UseZone(Zone::Hand(*seat)),
         ]),
-        Action::Shuffle { seat, .. } | Action::Look { seat, .. } | Action::Flow { seat, .. } => {
-            references.push(Reference::UseZone(Zone::Library(*seat)));
-        }
+        Action::Shuffle { seat, .. }
+        | Action::Look { seat, .. }
+        | Action::StackUntil { seat, .. }
+        | Action::Flow { seat, .. } => references.push(Reference::UseZone(Zone::Library(*seat))),
         Action::SortHand { seat, .. } => references.push(Reference::UseZone(Zone::Hand(*seat))),
         Action::Reveal {
             zone, objects, to, ..

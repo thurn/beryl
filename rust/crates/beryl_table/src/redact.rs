@@ -398,6 +398,7 @@ fn redact_action(
                 redact_action(action, before, table, seat, names, private_marker_sources);
             }
         }
+        Action::StackUntil { query, .. } => names.redact_text(query),
         Action::Move { .. }
         | Action::Reorder { .. }
         | Action::Pin { .. }

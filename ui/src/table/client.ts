@@ -41,7 +41,8 @@ interface PileTarget {
 export type TableTarget =
   | CardTarget
   | PileTarget
-  | { kind: "life"; side: Side }
+  | { kind: "life" | "player" | "sideboard"; side: Side }
+  | { kind: "table" }
   | { kind: "counter"; side: Side; counter: string }
   | { kind: "step"; side: Side; step: Step };
 
@@ -289,6 +290,10 @@ export class TableClient {
     )
       return { kind: "hand", side: "opponent" };
     return card;
+  }
+
+  hovered() {
+    return this.#under(this.pointer.hovered);
   }
 
   hasClick(kind: TableTarget["kind"]): boolean {

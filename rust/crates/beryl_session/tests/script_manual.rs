@@ -168,6 +168,7 @@ fn manual_view_with_ordered_zones() -> PlayerView {
         lent_hand: false,
         object_actions: vec![],
         top_revealed: false,
+        top_known: false,
         manual_stats: vec![],
         last_draw: None,
         prompt: None,

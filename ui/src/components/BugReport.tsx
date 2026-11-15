@@ -261,7 +261,7 @@ export function BugReporter({ route }: { route: string }) {
   return (
     <>
       {/* The game board has its own, in the gear's column. */}
-      {!phone && route !== "/game" && (
+      {!phone && route !== "/game" && route !== "/table" && (
         <button
           type="button"
           className="icon-button bug-button"

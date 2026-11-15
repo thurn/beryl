@@ -1,5 +1,12 @@
 import { counterName } from "../game/log";
-import type { ObjectView, TableAction, TableZone } from "../generated/protocol";
+import type {
+  ObjectView,
+  PlayerView,
+  TableAction,
+  TableActionPhase,
+  TablePhase,
+  TableZone,
+} from "../generated/protocol";
 import { sameZone, type CardTarget } from "./client";
 import { fill, uses, type ActionValues } from "./fill";
 import {
@@ -49,6 +56,44 @@ export function pileSlots({ target, view }: MenuContext) {
   return [];
 }
 
+const phases = {
+  untap: "untap",
+  upkeep: "upkeep",
+  draw: "draw",
+  firstMain: "first_main",
+  beginningOfCombat: "beginning_of_combat",
+  declareAttackers: "declare_attackers",
+  declareBlockers: "declare_blockers",
+  combatDamage: "combat_damage",
+  endOfCombat: "end_of_combat",
+  secondMain: "second_main",
+  end: "end",
+} as const satisfies Record<TablePhase, TableActionPhase>;
+
+export function nextPhase(phase: TablePhase): TableActionPhase | undefined {
+  const order = Object.values(phases);
+  return order[order.indexOf(phases[phase]) + 1];
+}
+
+function untapAll(view: PlayerView): TableAction {
+  const tapped = new Set(
+    view.objects
+      .filter(
+        (object) =>
+          object.zone === "battlefield" &&
+          object.controller === "you" &&
+          object.tapped &&
+          !object.doesntUntap,
+      )
+      .map(({ slot }) => slot),
+  );
+  const objects = (view.table?.objectActions ?? []).flatMap(
+    ({ subject, reference }) =>
+      subject.kind === "object" && tapped.has(subject.slot) ? [reference] : [],
+  );
+  return { tap: { objects, in: "battlefield", tapped: false } };
+}
+
 export function commandActions(
   entry: MenuCommand,
   context: MenuContext,
@@ -56,6 +101,20 @@ export function commandActions(
 ): TableAction[] {
   const { target, view } = context;
   const { command, token } = entry;
+  if (command.id === "table.untap_all" || command.id === "phase.untap_active")
+    return [untapAll(view)];
+  if (command.id === "phase.next" || command.id === "phase.next_with_action") {
+    const phase = view.table && nextPhase(view.table.phase);
+    const advance: TableAction = phase
+      ? { phase: { phase } }
+      : { next_turn: {} };
+    if (command.id === "phase.next" || view.turn.active !== "you")
+      return [advance];
+    if (phase === "draw")
+      return [advance, { draw: { seat: seatOf(view, "you"), count: 1 } }];
+    if (!phase && view.table?.seats === 1) return [advance, untapAll(view)];
+    return [advance];
+  }
   const template = command.action;
   if (!template) return [];
   const side = "side" in target ? target.side : "you";
@@ -71,6 +130,7 @@ export function commandActions(
     other_seat: 1 - seatOf(view, "you"),
     owner: seat,
     entry: view.table?.lastDraw,
+    count: 1,
     text: target.kind === "counter" ? target.counter : null,
     on: !checked(command, context),
     tapped: context.cards.some(({ object }) => !object?.tapped),

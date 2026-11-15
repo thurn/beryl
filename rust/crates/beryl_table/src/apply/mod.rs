@@ -462,6 +462,9 @@ fn plan_action(
         } => cards::token(table, by, card, *count, *attached_to, note.as_deref()),
         Action::Marker { selection, text } => cards::marker(table, selection, text),
         Action::Remove { selection } => cards::remove(table, selection),
+        Action::StackUntil { seat, query, hits } => {
+            library::stack_until(table, *seat, query, *hits)
+        }
         Action::Draw { seat, count } => {
             return Ok(AppliedChanges::presented(
                 library::draw(table, *seat, *count)?,

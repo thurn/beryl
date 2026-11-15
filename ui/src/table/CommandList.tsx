@@ -21,7 +21,10 @@ export interface CommandListProps {
   presentation: "panel" | "fullscreen";
   initialQuery?: string;
   onRun: (id: string) => void;
-  onBind: (id: string) => void;
+  onBind?: (id: string) => void;
+  captureBinding?: (id: string, event: globalThis.KeyboardEvent) => boolean;
+  bindable?: (id: string) => boolean;
+  notice?: string;
   onClose: () => void;
 }
 
@@ -42,10 +45,16 @@ export function CommandList({
   initialQuery = "",
   onRun,
   onBind,
+  captureBinding,
+  bindable,
+  notice,
   onClose,
 }: CommandListProps) {
   const id = useId();
   const dialog = useRef<HTMLDialogElement>(null);
+  const search = useRef<HTMLInputElement>(null);
+  const keyCapture = useRef<HTMLButtonElement>(null);
+  const [capturing, setCapturing] = useState<string>();
   const activeOption = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState(initialQuery);
   const [selected, setSelected] = useState<string>();
@@ -73,9 +82,23 @@ export function CommandList({
     });
   }, [active?.id, query]);
 
+  useLayoutEffect(() => {
+    if (capturing) keyCapture.current?.focus();
+    else search.current?.focus();
+  }, [capturing]);
+
   const onKeyDown = (event: KeyboardEvent<HTMLDialogElement>) => {
     event.stopPropagation();
     if (event.nativeEvent.isComposing) return;
+    if (capturing) {
+      event.preventDefault();
+      if (
+        event.key === "Escape" ||
+        captureBinding?.(capturing, event.nativeEvent)
+      )
+        setCapturing(undefined);
+      return;
+    }
     switch (event.key) {
       case "Escape":
         event.preventDefault();
@@ -93,8 +116,11 @@ export function CommandList({
       case "Enter":
         event.preventDefault();
         if (!active) return;
-        if (event.altKey) onBind(active.id);
-        else onRun(active.id);
+        if (!event.altKey) onRun(active.id);
+        else if (bindable?.(active.id) !== false) {
+          if (captureBinding) setCapturing(active.id);
+          else onBind?.(active.id);
+        }
         break;
     }
   };
@@ -113,6 +139,7 @@ export function CommandList({
     >
       <div className="command-list-field">
         <input
+          ref={search}
           type="text"
           role="combobox"
           aria-label="Search commands"
@@ -170,6 +197,17 @@ export function CommandList({
           No matching commands
         </div>
       )}
+      {capturing && (
+        <button
+          ref={keyCapture}
+          type="button"
+          className="command-list-capture"
+          onClick={() => setCapturing(undefined)}
+        >
+          Press a key · Esc cancels
+        </button>
+      )}
+      {notice && <div role="status">{notice}</div>}
       <footer className="command-list-hints">
         <span>↵ run</span>
         <span>⌥↵ bind a key</span>

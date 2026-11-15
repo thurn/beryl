@@ -83,6 +83,7 @@ pub fn view(
             .contains(&(Zone::Hand(Seat(1 - seat.0)), seat)),
         object_actions: refs.actions().to_vec(),
         top_revealed: projected.always_reveal_top.contains(&seat),
+        top_known: projected.always_look_at_top.contains(&seat),
         manual_stats: projected
             .objects
             .values()

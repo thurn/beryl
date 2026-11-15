@@ -101,6 +101,58 @@ fn move_to(table: &Table, from: Zone, ids: Vec<ObjectId>, to: Zone, position: Po
     )
 }
 
+/// Match on the host so cards below the stopping point stay hidden.
+pub(super) fn stack_until(table: &Table, seat: Seat, query: &str, hits: u16) -> Changes {
+    let query = query.trim().to_lowercase();
+    if query.is_empty() || hits == 0 {
+        return Err(Refusal::INVALID);
+    }
+
+    let library = Zone::Library(seat);
+    let ids = zone_cards(table, library)?;
+    let mut remaining = hits;
+    let mut count = 0;
+    for id in ids {
+        count += 1;
+        let card = &table.objects[id].card;
+        let matches = match card {
+            Card::Named(name) => {
+                name.to_lowercase() == query
+                    || card_record(card).is_some_and(|record| {
+                        record
+                            .faces
+                            .first()
+                            .is_some_and(|face| type_matches(&face.type_line, &query))
+                    })
+            }
+            Card::Custom { name, types, .. } => {
+                name.to_lowercase() == query || type_matches(types, &query)
+            }
+            Card::Hidden => false,
+        };
+        if matches {
+            remaining -= 1;
+            if remaining == 0 {
+                break;
+            }
+        }
+    }
+    move_to(
+        table,
+        library,
+        ids[..count].to_vec(),
+        Zone::Stack,
+        Position::Top,
+    )
+}
+
+fn type_matches(types: &str, query: &str) -> bool {
+    types.to_lowercase() == query
+        || types
+            .split(|character: char| !character.is_alphanumeric())
+            .any(|part| part.to_lowercase() == query)
+}
+
 pub(super) fn draw(table: &Table, seat: Seat, count: u16) -> Changes {
     let library = Zone::Library(seat);
     let ids = zone_cards(table, library)?;

@@ -3,9 +3,7 @@ import type { Box } from "../game/placement";
 import { named } from "../stage/dom";
 import type { Name } from "../stage/layout";
 import { sweepBox } from "../stage/overlay";
-import type { Bindings } from "./bindings";
 import { sameZone, type TableClient } from "./client";
-import { resolve } from "./shortcuts";
 
 const touches = (a: Box, b: Box) =>
   a.left <= b.right &&
@@ -13,7 +11,7 @@ const touches = (a: Box, b: Box) =>
   a.top <= b.bottom &&
   a.bottom >= b.top;
 
-export function registerSelection(client: TableClient, bindings: Bindings) {
+export function registerSelection(client: TableClient) {
   client.onCardClick(({ name, action }, { meta }) => {
     if (!meta) return false;
     if (action) {
@@ -55,20 +53,6 @@ export function registerSelection(client: TableClient, bindings: Bindings) {
         client.cancelGesture();
         client.setSelection([]);
       }
-      return;
-    }
-    if (
-      event.target instanceof Element &&
-      event.target.closest("input, textarea, select, [contenteditable]")
-    )
-      return;
-    const command = resolve(event, "table", bindings);
-    if (
-      command === "selection.all" ||
-      command === "selection.row" ||
-      command === "selection.column"
-    ) {
-      if (selectAt(client, command)) event.preventDefault();
     }
   });
 }
@@ -76,8 +60,8 @@ export function registerSelection(client: TableClient, bindings: Bindings) {
 export function selectAt(
   client: TableClient,
   command: "selection.all" | "selection.row" | "selection.column",
+  pointed = client.surface?.pointed(),
 ) {
-  const pointed = client.surface?.pointed();
   const viewer = pointed?.closest<HTMLElement>("[data-selection-viewer]");
   if (viewer) {
     if (command === "selection.row") return false;
@@ -99,7 +83,7 @@ export function selectAt(
     client.setSelection(slots);
     return true;
   }
-  if (client.overlayOpen || command === "selection.column") return false;
+  if (command === "selection.column") return false;
   const said = pointed?.closest<HTMLElement>("[data-stage]")?.dataset.stage;
   const target = said !== undefined ? client.card(named(said)) : undefined;
   if (!target?.action || !client.view) return false;

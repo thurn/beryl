@@ -4,7 +4,14 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { onGameUpdate, tableCurrent, tableLeave } from "../ipc";
+import {
+  appInfo,
+  isNativeApp,
+  onGameUpdate,
+  tableCurrent,
+  tableLeave,
+  tableQuit,
+} from "../ipc";
 import {
   createBoardStage,
   exposeBoardStage,
@@ -21,6 +28,8 @@ import {
 import { TableArrows } from "../table/arrows";
 import { registerClicks } from "../table/click";
 import { TableClient } from "../table/client";
+import { listenTableKeys } from "../table/keyboard";
+import type { AppInfo } from "../generated/protocol";
 import { TableDrag } from "../table/drag";
 import { registerSelection } from "../table/select";
 import { GameBoard } from "./Board";
@@ -29,22 +38,48 @@ import { usePhone } from "../mobile/phone";
 import { Stage } from "../game/Stage";
 
 export function TableScreen() {
+  const [platform, setPlatform] = useState<AppInfo["platform"]>();
+  useEffect(() => {
+    void appInfo()
+      .then(({ platform }) => setPlatform(platform))
+      .catch(() => {
+        setPlatform(/Mac/.test(navigator.platform) ? "macos" : "linux");
+      });
+  }, []);
+  return platform && <ManualTable platform={platform} />;
+}
+
+function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
   const [error, setError] = useState<string>();
   const [ready, setReady] = useState(false);
   const [overlay, setOverlay] = useState<TableOverlay>();
-  const [{ board, client, commands }] = useState(() => {
+  const [{ board, client, commands, leave }] = useState(() => {
     const board = createBoardStage(false);
     const client = new TableClient(board.stage.pointer);
-    const bindings = new Bindings(
-      /Mac/.test(navigator.platform) ? "macos" : "linux",
-    );
+    const bindings = new Bindings(platform);
     const report = (failure: unknown) => setError(String(failure));
     client.drag = new TableDrag(client, board.stage, report);
-    client.arrows = new TableArrows(client, board.stage, report, bindings);
-    registerSelection(client, bindings);
+    client.arrows = new TableArrows(client, board.stage, report);
+    registerSelection(client);
     registerClicks(client, report);
-    const commands = new TableCommands(client, bindings, setOverlay, report);
-    return { board, client, commands };
+    const leave = () => {
+      void tableLeave().then(() => {
+        window.location.hash = "#/";
+      }, report);
+    };
+    const quit = () => {
+      if (isNativeApp()) void tableQuit().catch(report);
+      else if (window.confirm("Leave table?")) leave();
+    };
+    const commands = new TableCommands(
+      client,
+      bindings,
+      setOverlay,
+      report,
+      leave,
+      quit,
+    );
+    return { board, client, commands, leave };
   });
   const { stage, feed } = board;
   const { shown, log } = useSyncExternalStore(feed.subscribe, feed.fed);
@@ -100,20 +135,9 @@ export function TableScreen() {
     return stage.subscribe(update);
   }, [stage, client]);
 
-  useEffect(() => {
-    window.addEventListener("keydown", client.key);
-    return () => window.removeEventListener("keydown", client.key);
-  }, [client]);
+  useEffect(() => listenTableKeys(commands), [commands]);
 
   const phone = usePhone();
-  const leave = () => {
-    void tableLeave().then(
-      () => {
-        window.location.hash = "#/";
-      },
-      (failure: unknown) => setError(String(failure)),
-    );
-  };
 
   if (!shown) {
     const status = (
@@ -145,6 +169,7 @@ export function TableScreen() {
       waiting={false}
       stops={shown.view.stops}
       onLeave={leave}
+      onShortcuts={commands.openShortcuts}
     >
       <TableMenu
         commands={commands}

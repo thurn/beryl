@@ -214,6 +214,11 @@ pub enum Action<Id = ObjectId> {
         #[serde(flatten)]
         selection: Selection<Id>,
     },
+    StackUntil {
+        seat: Seat,
+        query: String,
+        hits: u16,
+    },
     Draw {
         seat: Seat,
         count: u16,

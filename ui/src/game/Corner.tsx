@@ -15,6 +15,7 @@ export function Corner({
   stops,
   setStops,
   onLeave,
+  onShortcuts,
   onConcede,
 }: {
   /** The settings are open: the table's, since a press anywhere on it closes them. */
@@ -23,6 +24,7 @@ export function Corner({
   stops: StopsSetting;
   setStops?(stops: StopsSetting): void;
   onLeave(): void;
+  onShortcuts?: () => void;
   /** Concedes the game; none once it is over. */
   onConcede?: () => void;
 }) {
@@ -32,7 +34,7 @@ export function Corner({
         type="button"
         className="icon-button bug-button bug-button-game"
         aria-label="Report bug"
-        title={`Report bug (${MOD_KEY}B)`}
+        title={onShortcuts ? "Report bug" : `Report bug (${MOD_KEY}B)`}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={requestBugReport}
       >
@@ -53,6 +55,13 @@ export function Corner({
             stops={stops}
             setStops={setStops}
             onLeave={onLeave}
+            onShortcuts={
+              onShortcuts &&
+              (() => {
+                onShortcuts();
+                setOpen(false);
+              })
+            }
             onConcede={
               onConcede &&
               (() => {
@@ -73,11 +82,13 @@ export function Settings({
   stops,
   setStops,
   onLeave,
+  onShortcuts,
   onConcede,
 }: {
   stops: StopsSetting;
   setStops?(stops: StopsSetting): void;
   onLeave(): void;
+  onShortcuts?: () => void;
   onConcede?: () => void;
 }) {
   return (
@@ -99,6 +110,11 @@ export function Settings({
         </label>
       )}
       {onConcede && <ConcedeButton onConcede={onConcede} />}
+      {onShortcuts && (
+        <Button variant="secondary" size="small" onClick={onShortcuts}>
+          Shortcuts
+        </Button>
+      )}
       <Button variant="secondary" size="small" onClick={onLeave}>
         Leave Game
       </Button>

@@ -236,6 +236,10 @@ pub struct TableView {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[ts(optional, as = "Option<_>")]
     pub top_revealed: bool,
+    /// The viewer keeps looking at the top of their library.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(optional, as = "Option<_>")]
+    pub top_known: bool,
     /// Visible slots whose power and toughness were set by a player.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(optional, as = "Option<_>")]

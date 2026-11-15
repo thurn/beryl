@@ -13,9 +13,7 @@ import { shapeOf, type Reach } from "../stage/lines";
 import type { Under } from "../stage/pointer";
 import { keyOf } from "../stage/spans";
 import type { ScriptStage } from "../stage/stage";
-import type { Bindings } from "./bindings";
 import type { CardTarget, TableClient, TableTarget } from "./client";
-import { resolve } from "./shortcuts";
 
 type Reference = TableSeenObject<TableObjectRef>;
 type Destination = ActionTarget<TableObjectRef>;
@@ -93,7 +91,6 @@ export class TableArrows {
     private readonly client: TableClient,
     private readonly stage: ScriptStage,
     report: (error: unknown) => void,
-    bindings: Bindings,
   ) {
     client.onAim({
       drag: (from, at, over, done) => {
@@ -161,20 +158,6 @@ export class TableArrows {
       if (event.key === "Escape" && this.#dragging) {
         event.preventDefault();
         client.cancelGesture();
-      }
-      if (
-        !client.overlayOpen &&
-        !(
-          event.target instanceof Element &&
-          event.target.closest("input, textarea, select, [contenteditable]")
-        ) &&
-        resolve(event, "table", bindings) === "table.clear_arrows"
-      ) {
-        event.preventDefault();
-        if (!event.repeat)
-          void client
-            .send({ clear_arrows: { from: null, to: null } })
-            .catch(report);
       }
     });
   }

@@ -78,6 +78,7 @@ export function PhoneStageBoard({
   waiting,
   cancel,
   onLeave,
+  onShortcuts,
   log,
   undo,
   stops,
@@ -95,6 +96,7 @@ export function PhoneStageBoard({
   /** Takes back the cast in progress. */
   cancel?(): void;
   onLeave(): void;
+  onShortcuts?: () => void;
   log: LogEntry[];
   /** Takes back the player's latest answer. */
   undo?(): void;
@@ -390,6 +392,7 @@ export function PhoneStageBoard({
           stops={stops}
           setStops={setStops}
           onLeave={onLeave}
+          onShortcuts={onShortcuts}
           onConcede={onConcede}
           onLog={() => setSheet("log")}
           onClose={() => setSheet(undefined)}

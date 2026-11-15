@@ -5,6 +5,7 @@ import { fill } from "../src/table/fill.ts";
 import { allowed, menuRows } from "../src/table/menuRows.ts";
 
 const view = {
+    turn: { active: "you" },
     table: {
         seats: 2,
         acting: [],

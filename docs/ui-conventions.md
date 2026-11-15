@@ -296,8 +296,9 @@ restore the old behavior.
 - **Command list.** The manual table's command list shows what it acts on and
   filters commands by label as you type. Results are grouped by what they act on
   and show their shortcuts. Up and Down move between results, Return runs the
-  selected command, Option+Return opens key binding for it, and Escape closes
-  the list.
+  selected command, Option+Return captures a new shortcut. The list reports when
+  another command loses the key. Escape closes the list, and Shortcuts in the
+  settings menu offers Reset shortcuts.
 - **Quitting from a manual table.** On the desktop, the Quit shortcut asks
   whether to leave the table and quit Beryl. Cancel keeps the table open.
 - **Manual table announcements.** The stage uses its existing step banner for a

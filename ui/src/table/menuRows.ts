@@ -26,6 +26,7 @@ export interface MenuContext {
   tokens?: readonly CardTokenLink[];
   printed?: ReadonlyMap<number, PrintedCard>;
   element?: HTMLElement;
+  pointed?: Element | null;
   key?: (id: string) => string | undefined;
 }
 
@@ -142,6 +143,11 @@ function conditions({
     })
   )
     result.add("two_faced");
+  if (target.kind === "counter") result.add("counter_selected");
+  if (view.turn.active === "you" && view.table?.phase === "untap")
+    result.add("active_untap");
+  if (view.turn.active === "you" && view.table?.phase === "draw")
+    result.add("active_draw");
   if (object?.facing === "down") result.add("face_down");
   if (object?.attachedTo != null) result.add("attached");
   if (
@@ -186,6 +192,10 @@ export function checked(
     );
   if (command.id === "library.keep_top_revealed" && target.kind === "library")
     return !!view.table?.topRevealed;
+  const assist = command.id.replace(/^assist\./, "");
+  if (command.id.startsWith("assist."))
+    return assists(view).has(assist as Assist);
+  if (command.id === "library.keep_top_known") return !!view.table?.topKnown;
   return undefined;
 }
 
@@ -271,6 +281,8 @@ export function menuRows(kind: AppliesTo, context: MenuContext) {
           hand: "Hand",
           counter: "Counters",
           step: "Step",
+          player: "Player",
+          sideboard: "Sideboard",
         }[target.kind]
       : undefined;
   const count =
@@ -285,7 +297,7 @@ export function menuRows(kind: AppliesTo, context: MenuContext) {
         ? `${cards.length} cards`
         : card?.name ||
           (ability?.kind === "ability" ? ability.name : pile) ||
-          "Card",
+          (target.kind === "table" ? "Table" : "Card"),
     whose:
       count !== undefined
         ? `${count} ${count === 1 ? "card" : "cards"}${

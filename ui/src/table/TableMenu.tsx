@@ -1,4 +1,5 @@
 import { useLayoutEffect } from "react";
+import { requestBugReport } from "../components/BugReport";
 import { cardRecords } from "../cardRecords";
 import { useCardRecords } from "../cards";
 import type { PlayerView, TableCard } from "../generated/protocol";
@@ -11,7 +12,11 @@ import { desktopDropAreas } from "./dropZones";
 import { AskPrompt, type AskPromptProps } from "./AskPrompt";
 import type { Bindings } from "./bindings";
 import type { TableClient, TableTarget } from "./client";
-import { CommandList } from "./CommandList";
+import { commands as registry, type Command } from "./commands";
+import { currentTarget } from "./keyboard";
+import { selectAt } from "./select";
+import { describe } from "./shortcuts";
+import { TablePalette } from "./TablePalette";
 import {
   baseStats,
   commandActions,
@@ -32,9 +37,32 @@ import {
 
 export type TableOverlay =
   | { kind: "menu"; context: MenuContext; at: Point }
-  | { kind: "ask"; prompt: AskPromptProps; context: MenuContext }
-  | { kind: "list"; context: MenuContext }
+  | { kind: "ask"; prompt: AskPromptProps; context: MenuContext; step?: string }
+  | {
+      kind: "list";
+      context: MenuContext;
+      settings?: boolean;
+      contextual?: boolean;
+    }
   | { kind: "related"; name: string; context: MenuContext };
+
+const table: TableTarget = { kind: "table" };
+const defaults: readonly TableTarget[] = [
+  { kind: "library", side: "you" },
+  { kind: "hand", side: "you" },
+  { kind: "life", side: "you" },
+  { kind: "player", side: "you" },
+  { kind: "graveyard", side: "you" },
+  { kind: "exile", side: "you" },
+  { kind: "sideboard", side: "you" },
+];
+
+const applies = (command: Command, target: TableTarget) => {
+  const kind = kindOf(target);
+  return (
+    command.applies_to === kind || command.also_applies_to?.[kind] !== undefined
+  );
+};
 
 const MIN_INT = -2147483648;
 const MAX_INT = 2147483647;
@@ -43,14 +71,16 @@ export class TableCommands {
   #overlay?: TableOverlay;
   /** Token search installs this when its overlay is available. */
   openTokenSearch?: (choose: (card: TableCard) => void) => void;
-  /** The shortcut editor can install this handler for Option+Return. */
-  bindCommand?: (id: string) => void;
+  /** Pile viewers install their client-only commands here. */
+  readonly clients = new Map<string, (context: MenuContext) => void>();
 
   constructor(
     readonly client: TableClient,
     readonly bindings: Bindings,
     readonly show: (overlay: TableOverlay | undefined) => void,
     private readonly report: (error: unknown) => void,
+    private readonly leave: () => void,
+    private readonly quit: () => void,
   ) {
     client.onSecondary((target, at, element) => {
       if (!target) {
@@ -74,6 +104,10 @@ export class TableCommands {
       if (point) this.open(target, point, element);
       return true;
     });
+  }
+
+  get overlayOpen() {
+    return this.#overlay !== undefined;
   }
 
   #set(overlay?: TableOverlay) {
@@ -103,7 +137,14 @@ export class TableCommands {
         return object && found ? [[object.slot, found] as const] : [];
       }),
     );
-    return { target, view, cards, printed, key: (id) => this.bindings.get(id) };
+    return {
+      target,
+      view,
+      cards,
+      printed,
+      pointed: this.client.surface?.pointed(),
+      key: (id) => describe(this.bindings.get(id), this.bindings.platform),
+    };
   }
 
   open(target: TableTarget, at: Point, element?: HTMLElement) {
@@ -121,11 +162,29 @@ export class TableCommands {
     if (element && element.tabIndex >= 0)
       element.focus({ preventScroll: true });
     context.element = element;
-    const overlay: TableOverlay = { kind: "menu", context, at };
+    this.#showWithTokens({ kind: "menu", context, at });
+  }
+
+  #showWithTokens(overlay: TableOverlay) {
     this.#set(overlay);
-    const card = "name" in target ? target.object : undefined;
+    void this.#withTokens(overlay.context)
+      .then((context) => {
+        if (
+          context !== overlay.context &&
+          this.#overlay === overlay &&
+          this.client.view === context.view
+        )
+          this.#set({ ...overlay, context });
+      })
+      .catch(this.report);
+  }
+
+  async #withTokens(context: MenuContext): Promise<MenuContext> {
+    const { target } = context;
+    if (!("name" in target) || context.tokens) return context;
+    const card = target.object;
     const marker =
-      !card && "name" in target && typeof target.name === "string"
+      !card && typeof target.name === "string"
         ? context.view.stack.find(
             (item) =>
               item.kind === "ability" && `a${item.manual?.id}` === target.name,
@@ -135,22 +194,85 @@ export class TableCommands {
       (card && context.printed?.get(card.slot)?.card.name) ??
       card?.name ??
       (marker?.kind === "ability" ? marker.name : undefined);
-    if (name && card?.facing !== "down")
-      void cardTokens(name)
-        .then((tokens) => {
-          if (
-            this.#overlay !== overlay ||
-            this.client.view !== context.view ||
-            !tokens.length
-          )
-            return;
-          this.#set({ ...overlay, context: { ...context, tokens } });
-        })
-        .catch(this.report);
+    if (!name || card?.facing === "down") return context;
+    const tokens = await cardTokens(name);
+    return tokens.length ? { ...context, tokens } : context;
   }
 
-  openList(context: MenuContext) {
-    this.#set({ kind: "list", context });
+  #supports({ command }: MenuCommand) {
+    if (command.asks === "token" && !this.openTokenSearch) return false;
+    return (
+      !command.client ||
+      this.clients.has(command.client) ||
+      [
+        "open_command_list",
+        "view_related_cards",
+        "view_graveyard",
+        "view_exile",
+        "select_all",
+        "select_row",
+        "select_column",
+        "report_bug",
+        "leave_table",
+        "open_shortcuts",
+      ].includes(command.client)
+    );
+  }
+
+  list(context: MenuContext, contextual = false) {
+    const targets = contextual
+      ? []
+      : context.target.kind === "table"
+        ? defaults
+        : [table];
+    const entries = [
+      context,
+      ...targets.flatMap((target) => this.context(target) ?? []),
+    ].flatMap((context) =>
+      availableCommands(kindOf(context.target), context)
+        .filter(
+          (entry) =>
+            this.#supports(entry) &&
+            entry.command.client !== "open_command_list",
+        )
+        .map((entry) => ({ entry, context })),
+    );
+    const seen = new Set<string>();
+    return entries.filter(({ entry }) => {
+      if (seen.has(entry.id)) return false;
+      seen.add(entry.id);
+      return true;
+    });
+  }
+
+  openShortcuts = () => this.openList(currentTarget(this.client), true);
+
+  openList(target = currentTarget(this.client), settings = false) {
+    const context = this.context(target ?? table);
+    if (context) this.#showWithTokens({ kind: "list", context, settings });
+  }
+
+  async shortcut(id: string, pointed?: TableTarget) {
+    if (id === "table.command_list") {
+      this.openList(pointed);
+      return;
+    }
+    const command = registry.find((command) => command.id === id);
+    if (!command) return;
+    const target =
+      pointed && applies(command, pointed)
+        ? pointed
+        : [table, ...defaults].find((target) => applies(command, target));
+    if (!target) return;
+    let context = this.context(target);
+    if (!context) return;
+    if (id === "token.all") context = await this.#withTokens(context);
+    const entry = availableCommands(kindOf(target), context).find(
+      (entry) => entry.id === id && this.#supports(entry),
+    );
+    if (!entry) return;
+    if (id === "table.leave") this.quit();
+    else await this.run(entry, context);
   }
 
   async run(entry: MenuCommand, context: MenuContext) {
@@ -174,7 +296,7 @@ export class TableCommands {
     };
 
     if (command.client === "open_command_list") {
-      this.openList(context);
+      this.#showWithTokens({ kind: "list", context, contextual: true });
       return;
     }
     if (command.client === "view_related_cards" && token) {
@@ -186,10 +308,40 @@ export class TableCommands {
       command.client === "view_exile"
     ) {
       if (target.kind === "graveyard" || target.kind === "exile")
-        target.open?.();
+        if (target.open) target.open();
+        else
+          document
+            .querySelector<HTMLButtonElement>(
+              `button[data-pile="${target.kind}"][data-side="${target.side}"]`,
+            )
+            ?.click();
       return;
     }
-    if (command.client) return;
+    switch (command.client) {
+      case "select_all":
+        selectAt(client, "selection.all", context.pointed);
+        return;
+      case "select_row":
+        selectAt(client, "selection.row", context.pointed);
+        return;
+      case "select_column":
+        selectAt(client, "selection.column", context.pointed);
+        return;
+      case "report_bug":
+        requestBugReport();
+        return;
+      case "open_shortcuts":
+        this.openShortcuts();
+        return;
+      case "leave_table":
+        this.leave();
+        return;
+      case undefined:
+        break;
+      default:
+        this.clients.get(command.client)?.(context);
+        return;
+    }
 
     if (command.asks === "target") {
       if (!source || !client.arrows) return;
@@ -221,28 +373,61 @@ export class TableCommands {
       return;
     }
 
-    const show = (prompt: AskPromptProps) =>
-      this.#set({ kind: "ask", prompt, context });
+    const show = (prompt: AskPromptProps, step?: string) =>
+      this.#set({ kind: "ask", prompt, context, step });
     const confirm = (values: ActionValues) => {
       this.close();
       send(values);
     };
     const label = entry.label.replace(/…$/, "");
-    if (command.asks === "text" || command.asks === "text_and_number") {
+    if (command.id === "table.roll") {
+      show({
+        kind: "number",
+        start: 6,
+        min: 2,
+        max: 1_000_000,
+        fieldLabel: "Sides",
+        label: () => "Next",
+        onCancel: this.close,
+        onConfirm: (number) =>
+          show(
+            {
+              kind: "number",
+              start: 1,
+              min: 1,
+              max: 100,
+              fieldLabel: "Dice",
+              label: (count) => `Roll ${count}d${number}`,
+              onCancel: this.close,
+              onConfirm: (count) => confirm({ number, count }),
+            },
+            "dice",
+          ),
+      });
+    } else if (command.asks === "text" || command.asks === "text_and_number") {
+      const stackUntil = command.id === "library.stack_until";
       show({
         kind: "text",
         start: command.id === "permanent.note" ? (object?.note ?? "") : "",
-        fieldLabel: label,
-        label: () => (command.id === "permanent.note" ? "Set note" : label),
+        fieldLabel: stackUntil ? "Card name or type" : label,
+        label: () =>
+          stackUntil
+            ? "Next"
+            : command.id === "permanent.note"
+              ? "Set note"
+              : label,
         onCancel: this.close,
         onConfirm: (text) => {
+          if (stackUntil && !text.trim()) return;
           if (command.asks === "text_and_number") {
             show({
               kind: "number",
               start: 1,
               min: 1,
               max: 65535,
-              label: (number) => `Add ${number} ${text}`,
+              fieldLabel: stackUntil ? "Hits" : undefined,
+              label: (number) =>
+                stackUntil ? "Put cards on stack" : `Add ${number} ${text}`,
               onCancel: this.close,
               onConfirm: (number) => confirm({ text, number }),
             });
@@ -257,6 +442,17 @@ export class TableCommands {
         target.kind === "life"
           ? context.view.players[target.side].life
           : undefined;
+      const playerCounter = "player_counter" in (command.action ?? {});
+      const playerCounterName =
+        target.kind === "counter" && !command.id.startsWith("player.storm_")
+          ? target.counter
+          : "storm";
+      const playerValue =
+        playerCounter && "side" in target
+          ? (context.view.players[target.side].namedCounters?.find(
+              ({ name }) => name === playerCounterName,
+            )?.count ?? 0)
+          : undefined;
       const counter = command.id.startsWith("counter.");
       const counterSlot = command.id.includes(".second_")
         ? 1
@@ -267,7 +463,9 @@ export class TableCommands {
         counterNames(object, object && context.printed?.get(object.slot))[
           counterSlot
         ] ?? "generic";
-      const current = counter ? counterValue(object, name) : life;
+      const current = counter
+        ? counterValue(object, name)
+        : (life ?? playerValue);
       const count =
         target.kind === "library" ? pileSlots(context).length : undefined;
       const verb =
@@ -278,11 +476,20 @@ export class TableCommands {
             : label;
       show({
         kind: "number",
-        start: current ?? 1,
+        start:
+          current ??
+          (command.id === "hand.mulligan"
+            ? (context.view.table?.orders.you.hand.length ?? 7)
+            : 1),
         current,
-        min: life === undefined ? (counter ? 0 : 1) : MIN_INT,
+        min:
+          life !== undefined || playerCounter
+            ? MIN_INT
+            : counter || command.id === "hand.mulligan"
+              ? 0
+              : 1,
         max:
-          life !== undefined
+          life !== undefined || playerCounter
             ? MAX_INT
             : counter
               ? 999
@@ -340,7 +547,12 @@ export function TableMenu({
   if (!overlay || view !== overlay.context.view) return null;
   const { context } = overlay;
   if (overlay.kind === "ask")
-    return <AskPrompt {...overlay.prompt} key={overlay.prompt.kind} />;
+    return (
+      <AskPrompt
+        {...overlay.prompt}
+        key={overlay.step ?? overlay.prompt.kind}
+      />
+    );
   if (overlay.kind === "related")
     return <RelatedCard name={overlay.name} onClose={commands.close} />;
   const { header, groups, entries } = menuRows(kindOf(context.target), context);
@@ -348,38 +560,16 @@ export function TableMenu({
     const entry = entries.find((entry) => entry.id === id);
     if (entry) void commands.run(entry, context).catch(commands.reportError);
   };
-  if (overlay.kind === "list") {
-    const list = availableCommands(kindOf(context.target), context).filter(
-      ({ command }) =>
-        ![
-          "table.every_action",
-          "library.stack_until",
-          "library.keep_top_known",
-        ].includes(command.id) &&
-        (!command.client ||
-          ["view_graveyard", "view_exile", "view_related_cards"].includes(
-            command.client,
-          )),
-    );
+  if (overlay.kind === "list")
     return (
-      <CommandList
-        acting={header.title}
-        commands={list.map(({ id, label, command }) => ({
-          id,
-          label,
-          group: command.group,
-          key: context.key?.(command.id),
-        }))}
-        presentation={phone ? "fullscreen" : "panel"}
-        onClose={commands.close}
-        onRun={(id) => {
-          commands.close();
-          choose(list, id);
-        }}
-        onBind={(id) => commands.bindCommand?.(id)}
+      <TablePalette
+        commands={commands}
+        context={context}
+        phone={phone}
+        settings={overlay.settings}
+        contextual={overlay.contextual}
       />
     );
-  }
   return (
     <Menu
       header={header}

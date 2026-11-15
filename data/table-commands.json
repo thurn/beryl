@@ -1732,8 +1732,10 @@
     "label": "Put top cards on stack until…",
     "applies_to": "library",
     "scope": "table",
-    "asks": "text",
-    "action": { "move": { "objects": "$objects", "in": "$in", "to": "stack" } },
+    "asks": "text_and_number",
+    "action": {
+      "stack_until": { "seat": "$seat", "query": "$text", "hits": "$number" }
+    },
     "key": { "mac": "Cmd+Shift+Y", "other": "Ctrl+Shift+Y" },
     "group": "Library"
   },
@@ -2602,7 +2604,7 @@
     "applies_to": "table",
     "scope": "table",
     "asks": "none",
-    "action": { "next_game": { "winner": "$winner" } },
+    "client": "open_next_game",
     "menu": { "group": "Game", "order": 20 },
     "group": "Setup"
   },

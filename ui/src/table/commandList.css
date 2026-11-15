@@ -120,3 +120,12 @@
 .command-list-hints span:last-child {
   margin-inline-start: auto;
 }
+
+.command-list-capture {
+  padding: 8px 12px;
+  border: 1px solid var(--gold-soft);
+  border-radius: 8px;
+  background: var(--surface-sunk);
+  color: var(--text);
+  font: inherit;
+}

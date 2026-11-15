@@ -60,6 +60,11 @@ impl Summary {
                     .map(|(_, copies)| u32::from(*copies))
                     .sum();
             }
+            Action::StackUntil { .. } => {
+                summary.count = changes.iter().filter(|change|
+                    matches!(change, Change::Move { to, .. } if to.zone == Zone::Stack)
+                ).count();
+            }
             Action::NextTurn {} => summary.turn_seat = Some(table.active),
             Action::Move {
                 to: Destination::Computed(ComputedDestination::Play),
@@ -267,6 +272,7 @@ fn describe(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
         Action::Marker { .. } => "Put an ability on the stack".into(),
         Action::Remove { selection } => format!("Removed {}", cards(selection)),
         Action::Draw { .. }
+        | Action::StackUntil { .. }
         | Action::Mulligan { .. }
         | Action::Shuffle { .. }
         | Action::Look { .. }
@@ -285,6 +291,7 @@ fn library(action: &Action, summary: &Summary, viewer: Seat) -> String {
     match action {
         Action::Draw { .. } if summary.count == 0 => "Drew from an empty library".into(),
         Action::Draw { .. } => format!("Drew {}", card_count(summary.count)),
+        Action::StackUntil { .. } => format!("Put {} on the stack", card_count(summary.count)),
         Action::Mulligan { .. } => {
             format!("Mulliganed and drew {}", card_count(summary.count))
         }

@@ -174,6 +174,7 @@ export function Menu({
   stops,
   setStops,
   onLeave,
+  onShortcuts,
   onConcede,
   onLog,
   onClose,
@@ -181,6 +182,7 @@ export function Menu({
   stops: StopsSetting;
   setStops?(stops: StopsSetting): void;
   onLeave(): void;
+  onShortcuts?: () => void;
   onConcede?: () => void;
   onLog(): void;
   onClose(): void;
@@ -209,6 +211,13 @@ export function Menu({
         stops={stops}
         setStops={setStops}
         onLeave={onLeave}
+        onShortcuts={
+          onShortcuts &&
+          (() => {
+            onClose();
+            onShortcuts();
+          })
+        }
         onConcede={
           onConcede &&
           (() => {
