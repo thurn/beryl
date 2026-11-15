@@ -92,14 +92,13 @@ impl Ctx {
             )
         });
         if without.contains(crate::Supertypes::LEGENDARY) {
-            except.push_str(&format!(
-                ", except {} isn't legendary if the spell is legendary",
-                if count == Amount::Fixed(1) {
-                    "it"
-                } else {
-                    "they"
-                }
-            ));
+            except.push_str(", except ");
+            except.push_str(if count == Amount::Fixed(1) {
+                "it"
+            } else {
+                "they"
+            });
+            except.push_str(" isn't legendary if the spell is legendary");
         }
         let copy = self.acts(("copy", "copies"), spells, &format!("{times}{except}"));
         let mut clauses = vec![copy];
