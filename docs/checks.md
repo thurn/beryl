@@ -254,6 +254,9 @@ file Beryl 3D reads can land without Beryl 3D's checks and leave it broken.
   lane in full, then the sweep's own steps, each as a lane of its own
   (`b3d-<step>`), at utility priority. Its checks are logged under the script
   `b3d-sweep`, which slow CI's CPU budget does not count.
+- Its own steps: `frame-counts` (`just b3d gate --counts`, on the Mac only)
+  counts the gated boards' instructions per frame under Callgrind in the
+  `beryl3d-bench` machine and holds them to `data/beryl3d/gates.json`.
 - A failed step is bisected over the commits since the last sweep that passed,
   for at most 15 minutes, and filed as a P1 `b3d-sweep` bead under Beryl 3D's
   epic. A check an open sweep bead already names gets a comment. Nothing holds

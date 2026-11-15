@@ -104,6 +104,9 @@ OWN: tuple[SweepStep, ...] = (
     SweepStep("gpu", (*BY, "b3d", "gate", "--gpu"), (MAC,)),
     # The app starts with no window and shows its first frame.
     SweepStep("smoke", (*BY, "b3d", "smoke")),
+    # Instructions per frame under Callgrind in `beryl3d-bench`, an arm64 Linux machine that
+    # only Apple silicon runs (counts.py).
+    SweepStep("frame-counts", (*BY, "b3d", "gate", "--counts"), (MAC,)),
 )
 
 

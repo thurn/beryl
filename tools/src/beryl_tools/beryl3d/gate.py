@@ -76,6 +76,10 @@ class Board:
     handle_allocations: int
     # The frame and backtrace of the first allocation inside `Client::frame`, if any.
     first_allocation: tuple[int, str] | None
+    # The frames `rank` picks, most work first, and the first and past-the-end frames of the
+    # stretch that checks the ranking: what the instruction-count gate counts (counts.py).
+    ranked: tuple[int, ...] = ()
+    stretch: tuple[int, int] = (0, 0)
 
 
 @dataclass(frozen=True)
@@ -113,6 +117,12 @@ def parse(text: str) -> list[Board]:
                 handle_allocations=int(board["handle_allocations"]),
                 first_allocation=(
                     (int(first["frame"]), str(first["backtrace"])) if first else None
+                ),
+                ranked=tuple(int(f) for f in board.get("ranked", ())),
+                stretch=(
+                    (int(board["stretch"][0]), int(board["stretch"][1]))
+                    if "stretch" in board
+                    else (0, 0)
                 ),
             )
         )
@@ -232,6 +242,10 @@ def run_gate(args: argparse.Namespace) -> int:
     if args.gpu:
         return gpu.run_gpu(list(args.board), args.update, data)
     boards = play(list(args.board))
+    if args.counts:
+        from . import counts  # It imports this module.
+
+        return counts.run(boards, update=args.update)
     if args.update:
         data["frames"] = lowered(boards, data.get("frames", {}))
         GATES.write_text(json.dumps(data, indent=2) + "\n")
@@ -261,4 +275,9 @@ def gate_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="count the GPU's work instead: each material's shader cost, and the fragments"
         " each board shades, drawn in the beryl3d-bench machine (gpu.py)",
+    )
+    parser.add_argument(
+        "--counts",
+        action="store_true",
+        help="hold instructions per frame instead, counted under Callgrind in beryl3d-bench",
     )

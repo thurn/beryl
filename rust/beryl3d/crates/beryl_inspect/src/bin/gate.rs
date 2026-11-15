@@ -4,8 +4,9 @@
 //!
 //! For each frame it prints the client core's work counters, the draw list's load, and the heap
 //! allocations made inside `Client::frame`, which a counting global allocator sees. For each
-//! board it prints the allocations made in `Client::handle`, and the backtrace of the first
-//! allocation inside a frame, if any.
+//! board it prints the allocations made in `Client::handle`, the backtrace of the first
+//! allocation inside a frame, if any, and the frames the instruction-count gate counts one by one:
+//! those `rank` picks and the `STRETCH` that checks the ranking.
 //!
 //! Usage: `gate [--board <name>]...`, every board of `beryl_inspect::gate::BOARDS` when none is
 //! named.
@@ -16,7 +17,7 @@ use std::process::ExitCode;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 
-use beryl_inspect::gate::{BOARDS, Playback};
+use beryl_inspect::gate::{BOARDS, Playback, STRETCH, rank};
 use serde_json::{Value, json};
 
 /// What the program is doing, so that the allocator knows which count an allocation joins.
@@ -127,6 +128,8 @@ fn measure(name: &str) -> Option<Value> {
         "name": name,
         "handle_allocations": HANDLE_ALLOCATIONS.load(Ordering::Relaxed),
         "frames": frames,
+        "ranked": rank(name)?,
+        "stretch": [STRETCH.start, STRETCH.end],
         "first_frame_allocation": first_allocation.map(|frame| json!({
             "frame": frame,
             "backtrace": backtrace,

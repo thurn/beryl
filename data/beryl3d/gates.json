@@ -26,7 +26,10 @@
       "worst_frame_upload_bytes": 20480,
       "worst_frame_blended_area": 0.0,
       "handle_allocations": 46846,
-      "frame_allocations": 0
+      "frame_allocations": 0,
+      "worst_frame_instructions": 118248648,
+      "total_instructions": 169784440,
+      "tolerance_percent": 1.0
     },
     "stress-1024": {
       "worst_frame_elements": 1025,
@@ -43,7 +46,10 @@
       "worst_frame_upload_bytes": 82000,
       "worst_frame_blended_area": 0.0,
       "handle_allocations": 178729,
-      "frame_allocations": 0
+      "frame_allocations": 0,
+      "worst_frame_instructions": 1975914996,
+      "total_instructions": 2205003868,
+      "tolerance_percent": 1.0
     }
   },
   "tiers": {

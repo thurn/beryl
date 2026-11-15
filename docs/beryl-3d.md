@@ -2251,18 +2251,23 @@ thousands of measurements, so the gate finds its candidates first.
    segments evaluated, layout nodes computed, records written. They are
    deterministic.
 2. A native pass plays the fixture and ranks its frames by those counters.
-3. The Callgrind benchmark plays the fixture again. The 8 highest-ranked frames
-   go through a wrapper function, `frame_counted`, which makes that frame's
-   `handle` calls and its `frame` call, and every other frame makes them
-   directly. Callgrind's `--toggle-collect` option counts instructions only
-   inside the wrapper.
+3. The Callgrind benchmark plays the fixture again, once for each of the 8
+   highest-ranked frames. That frame goes through a wrapper function,
+   `frame_counted`, which makes its `handle` calls and its `frame` call, and
+   every other frame makes them directly. Callgrind's `--toggle-collect` option
+   counts instructions only inside the wrapper. Each frame needs a run of its
+   own, because collection toggled around several frames in one run gives their
+   sum.
 4. The gate's worst frame is the largest of the 8 counts.
 
 - **The same frames are chosen on every run**, because the work counters are
   deterministic.
 - **A test checks that the counters rank frames correctly.** On the stress
-  boards it counts every frame of a short stretch under Callgrind and requires
-  the true worst frame to be among the 8 the counters ranked highest.
+  boards it counts every frame of a short stretch under Callgrind
+  (`gate::STRETCH`, the last frames at rest, the first frames of the flight and
+  a few after) and requires the true worst frame to be among the 8 the counters
+  ranked highest. `just b3d gate --counts` runs it with the gate, as a step of
+  the Beryl 3D sweep.
 - **The work counters are also limited natively**, on every tick, in the check
   that runs before each push. That catches most regressions without the virtual
   machine.

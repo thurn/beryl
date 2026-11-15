@@ -33,6 +33,12 @@ const MOST_FRAMES: usize = 1200;
 /// How many frames `rank` returns.
 pub const RANKED: usize = 8;
 
+/// The frames whose instructions the instruction-count gate counts one by one to check that
+/// `rank` picks the most expensive (docs/beryl-3d.md, "Finding the worst frame"): the last frames
+/// at rest, the first frames of the flight, which the work counters rank highest, and the flight
+/// frames after them.
+pub const STRETCH: std::ops::Range<usize> = REST_FRAMES - 4..REST_FRAMES + RANKED + 4;
+
 /// The window the boards are drawn in: a 1440 by 900 point desktop window on a display of two
 /// pixels per point.
 const WINDOW: Size = Size {
@@ -185,6 +191,78 @@ impl Playback {
         let now = self.next as u64 * FRAME_NANOS;
         self.next += 1;
         self.client.frame(now)
+    }
+}
+
+/// Makes one frame of `playback`'s host work: hands over the inputs due and draws the frame.
+/// Under Callgrind, the instruction-count gate collects only inside this function
+/// (`--toggle-collect`), so the frames sent through it are the frames counted.
+#[inline(never)]
+pub fn frame_counted(playback: &mut Playback) {
+    playback.handle();
+    std::hint::black_box(playback.frame());
+}
+
+/// Plays `playback` to its end, making every frame's calls directly, and returns it so that the
+/// caller decides when it is dropped.
+#[must_use]
+pub fn play_all(mut playback: Playback) -> Playback {
+    while playback.moment().is_some() {
+        playback.handle();
+        std::hint::black_box(playback.frame());
+    }
+    playback
+}
+
+/// A gated board's playback with one frame to count: the instruction-count gate's workload.
+pub struct Counted {
+    playback: Playback,
+    /// The index of the frame sent through `frame_counted`.
+    frame: usize,
+}
+
+impl Counted {
+    /// The board called `name`, counting the frame at index `frame`.
+    ///
+    /// # Panics
+    ///
+    /// When `name` is not one of `BOARDS`.
+    #[must_use]
+    pub fn frame(name: &str, frame: usize) -> Self {
+        let playback = Playback::new(name).expect("a gated board");
+        Self { playback, frame }
+    }
+
+    /// The board called `name`, counting the frame in place `place` (from 0) of those `rank`
+    /// picks.
+    ///
+    /// # Panics
+    ///
+    /// When `name` is not one of `BOARDS` or `place` is not below `RANKED`.
+    #[must_use]
+    pub fn ranked(name: &str, place: usize) -> Self {
+        let ranked = rank(name).expect("a gated board");
+        Self::frame(name, ranked[place])
+    }
+
+    /// Plays the board up to and including the counted frame, which goes through
+    /// `frame_counted` while every frame before it makes its calls directly, and returns the
+    /// playback.
+    ///
+    /// # Panics
+    ///
+    /// When the board ends before the counted frame.
+    #[must_use]
+    pub fn play(mut self) -> Playback {
+        loop {
+            let moment = self.playback.moment().expect("the counted frame is played");
+            if moment.frame == self.frame {
+                frame_counted(&mut self.playback);
+                return self.playback;
+            }
+            self.playback.handle();
+            std::hint::black_box(self.playback.frame());
+        }
     }
 }
 

@@ -88,11 +88,17 @@ project, and selects the main lanes.
 
   Under `frames.<board>` are the limits `just b3d gate` holds each gated board's
   work counters, load and allocations to (docs/beryl-3d.md, "Finding the worst
-  frame"). `just b3d gate --update` lowers them to what was measured. A limit
-  rises only when the work itself changed (a new verb, a new element on every
-  screen) or a compiler or dependency upgrade moved the count with no change to
-  Beryl's code, and the commit that raises it gives the old and new numbers. It
-  needs nobody's approval.
+  frame"). `just b3d gate --update` lowers them to what was measured.
+  `worst_frame_instructions`, `total_instructions` and `tolerance_percent` are
+  the instruction-count gate's, counted under Callgrind in `beryl3d-bench` by
+  `just b3d gate --counts` (a step of the sweep, `benches/frame_counts.rs` in
+  `beryl_inspect`), and `--counts --update` lowers them. A count may pass its
+  limit by the tolerance, 1%, which absorbs inlining and layout shifts from
+  unrelated changes; the work counters' limits have none. A limit rises only
+  when the work itself changed (a new verb, a new element on every screen) or a
+  compiler or dependency upgrade moved the count with no change to Beryl's code,
+  and the commit that raises it gives the old and new numbers. It needs nobody's
+  approval.
 
   Under `materials.<name>` are the most texture samples and naga expressions
   each material's `shade_` function in `beryl_render`'s shader may take per

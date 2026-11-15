@@ -174,16 +174,18 @@ def shader_cost() -> tuple[int, str]:
 
 
 def fragments_script(names: list[str]) -> str:
-    """The script that builds the `fragments` example in the machine and runs it twice."""
+    """The script that builds the `fragments` example in the machine and runs it twice, holding
+    the machine's lock so that it takes turns with the frame counts (counts.py): two builds at
+    once exceed the machine's 4 GiB."""
     boards = " ".join(f"--board {shlex.quote(n)}" for n in names)
-    return f""". "$HOME/.cargo/env"
+    return bench.locked(f""". "$HOME/.cargo/env"
 set -e
 cd beryl3d
 export CARGO_TARGET_DIR="{VM_TARGET}"
 cargo build --locked -q -p beryl_render --example fragments
 "$CARGO_TARGET_DIR/debug/examples/fragments" {boards}
 "$CARGO_TARGET_DIR/debug/examples/fragments" {boards}
-"""
+""")
 
 
 def count_fragments(names: list[str]) -> list[BoardCount]:
