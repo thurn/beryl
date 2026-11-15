@@ -19,8 +19,10 @@ use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
 use crate::runs::runs;
 use crate::target::Target;
 
-/// How many records the instance buffer holds at startup: the tier's upload limit.
-const RECORDS: u64 = 4096;
+/// How many records the instance buffer holds: the most a frame of the engine's largest board
+/// holds (`beryl_scene::frame::DRAWS`), so that the buffer is made once, at startup, and never
+/// again during play.
+const RECORDS: u64 = beryl_scene::frame::DRAWS as u64;
 /// The uniforms' size: the view and projection, the target's size and the shake.
 const UNIFORMS: u64 = 80;
 
@@ -296,11 +298,15 @@ impl Renderer {
         ]);
         self.queue
             .write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&uniforms));
-        let bytes: &[u8] = bytemuck::cast_slice(&frame.draws);
-        if bytes.len() as u64 > self.instances.size() {
-            let records = (frame.draws.len() as u64).next_power_of_two();
-            self.instances = instance_buffer(&self.device, records);
-        }
+        // A client made with `Config::LARGEST` never writes more records than the buffer holds.
+        // Records past it are not drawn, rather than making a buffer during play.
+        let kept = frame.draws.len().min(RECORDS as usize);
+        debug_assert_eq!(
+            kept,
+            frame.draws.len(),
+            "a frame holds more than {RECORDS} records"
+        );
+        let bytes: &[u8] = bytemuck::cast_slice(&frame.draws[..kept]);
         if !bytes.is_empty() {
             self.queue.write_buffer(&self.instances, 0, bytes);
         }
@@ -340,6 +346,10 @@ impl Renderer {
             pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint16);
             let mut state = None;
             for run in runs(frame) {
+                let records = run.records.start..run.records.end.min(kept as u32);
+                if records.is_empty() {
+                    continue;
+                }
                 let Some(indices) = self.ranges.get(usize::from(run.mesh)) else {
                     debug_assert!(false, "a record names mesh {}", run.mesh);
                     continue;
@@ -357,10 +367,10 @@ impl Renderer {
                 }
                 // The run's records are bound from their offset, so every draw starts at
                 // instance 0: OpenGL ES 3.0 has no first instance.
-                let records =
-                    u64::from(run.records.start) * RECORD..u64::from(run.records.end) * RECORD;
-                pass.set_vertex_buffer(1, self.instances.slice(records));
-                pass.draw_indexed(indices.clone(), 0, 0..run.records.len() as u32);
+                let count = records.len() as u32;
+                let bytes = u64::from(records.start) * RECORD..u64::from(records.end) * RECORD;
+                pass.set_vertex_buffer(1, self.instances.slice(bytes));
+                pass.draw_indexed(indices.clone(), 0, 0..count);
                 drawn.draw_calls += 1;
             }
             if self.counter.is_some() {

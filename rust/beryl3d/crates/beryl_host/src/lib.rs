@@ -34,5 +34,7 @@ pub use frames::{Draw, Feed, FrameLoop, NoFeed, Opened, Shown, Sleep, Ticked, Ti
 pub use headless::{Headless, Scans};
 pub use inbox::Inbox;
 pub use phone::Phone;
-pub use threads::{Class, current_class, interactive_thread, set_class, utility_thread};
+pub use threads::{
+    Class, asset_thread, current_class, interactive_thread, set_class, utility_thread,
+};
 pub use windowless::{Windowless, WindowlessOptions};

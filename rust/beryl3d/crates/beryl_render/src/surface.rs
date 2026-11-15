@@ -40,7 +40,10 @@ pub enum Native {
 
 impl Renderer {
     /// A renderer on the GPU adapter that can present to `window`, and the window's surface,
-    /// `width` by `height` physical pixels.
+    /// `width` by `height` physical pixels. The device asks for wgpu's limits for OpenGL ES 3.0,
+    /// as a phone's does, with the adapter's own texture size: the floor's 2013 integrated GPUs
+    /// may lack wgpu's default limits, and a desktop run that outgrew the floor would fail here
+    /// rather than on the floor.
     pub fn for_window<W>(window: W, width: u32, height: u32) -> Result<(Self, Surface), String>
     where
         W: wgpu::WindowHandle + wgpu::rwh::HasDisplayHandle + 'static,
@@ -49,7 +52,13 @@ impl Renderer {
         let surface = instance
             .create_surface(window)
             .map_err(|error| format!("no surface for the window: {error}"))?;
-        Self::on_surface(instance, surface, width, height, wgpu::Limits::default())
+        Self::on_surface(
+            instance,
+            surface,
+            width,
+            height,
+            wgpu::Limits::downlevel_webgl2_defaults(),
+        )
     }
 
     /// A renderer on the GPU adapter that can present to a phone's `native` surface, and that

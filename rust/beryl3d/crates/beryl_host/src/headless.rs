@@ -94,7 +94,7 @@ impl Headless {
         let pixels = |points: f32| (points * scale).round().max(1.0) as u32;
         let target = Target::offscreen(&renderer, pixels(width), pixels(height));
         let (out, pages) = mpsc::channel();
-        let glyphs = GlyphWorker::spawn(out, || {});
+        let glyphs = GlyphWorker::spawn(out, || {}, crate::threads::asset_thread);
         // The test driver lays the page out at one physical pixel to a point.
         glyphs.request(prepare_latin(1.0));
         let mut head = Self {
@@ -186,6 +186,7 @@ fn load_faces(renderer: &mut Renderer, list: &FaceList, scans: &Scans) {
         faces_dir: scans.faces.clone(),
         workers: default_workers(),
         wake: Arc::new(|| {}),
+        start: crate::threads::asset_thread,
     });
     let results = preparer.prepare_match(list, &[format]);
     // Dropping the preparer waits for its workers to finish every face queued, after which the

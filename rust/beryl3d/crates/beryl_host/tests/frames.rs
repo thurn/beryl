@@ -143,3 +143,32 @@ fn the_gap_since_the_last_frame_is_measured_only_while_the_ticks_run() {
     let later = frames.tick(10 * INTERVAL, &mut counter).expect("a frame");
     assert_eq!(later.since_last, None);
 }
+
+/// A feed that wants a frame at a fixed time, as a replayed recording wants one when its next
+/// view is due.
+struct DueAt(u64);
+
+impl beryl_host::Feed for DueAt {
+    fn wake(&self) -> beryl_scene::frame::Wake {
+        beryl_scene::frame::Wake::At(self.0)
+    }
+}
+
+/// A phone's host returns the loop's wake to the platform, which may stop its display link
+/// until then. With the client still, that wake must still come from the feed and the pause,
+/// or a replay would stop at its first still moment.
+#[test]
+fn the_loops_wake_counts_the_feed_and_the_pause() {
+    use beryl_scene::frame::Wake;
+    let mut frames = FrameLoop::new(client(), TestTicks::default())
+        .with_feed(Box::new(DueAt(5 * INTERVAL)))
+        .paused_at(Some(3 * INTERVAL));
+    frames.tick(INTERVAL, &mut Counter::default());
+    assert_eq!(frames.client().wake(), Wake::Never);
+    assert_eq!(frames.next_wake(INTERVAL), Wake::At(3 * INTERVAL));
+
+    let mut frames =
+        FrameLoop::new(client(), TestTicks::default()).with_feed(Box::new(DueAt(5 * INTERVAL)));
+    frames.tick(INTERVAL, &mut Counter::default());
+    assert_eq!(frames.next_wake(INTERVAL), Wake::At(5 * INTERVAL));
+}

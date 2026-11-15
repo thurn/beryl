@@ -36,11 +36,16 @@ winit = "0.30.13"
 # and wgpu offer none, and without one the prototype's window ran at 60 Hz on a 120 Hz display.
 # These replace hand-written Objective-C message sends.
 [target.'cfg(target_os = "macos")'.dependencies]
-# The frame thread's scheduling class (pthread_set_qos_class_self_np), in place of a
-# hand-written declaration of the C function.
-libc = "0.2.191"
 objc2 = "0.6.5"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSResponder", "NSView", "objc2-quartz-core"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSObject", "NSRunLoop"] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["std", "CADisplayLink", "CAFrameRateRange"] }
 
+# Each thread's scheduling class (pthread_set_qos_class_self_np on Apple platforms,
+# SetThreadPriority on Windows; src/threads.rs), in place of hand-written declarations of the C
+# functions.
+[target.'cfg(target_vendor = "apple")'.dependencies]
+libc = "0.2.191"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Threading"] }

@@ -1,6 +1,6 @@
-//! The two macOS calls the desktop host makes that winit does not: a display link that paces
-//! frames at the display's highest rate, and a thread's scheduling class. These are the
-//! only items in the crate that use `unsafe`, each on the one platform call that needs it.
+//! The macOS call the desktop host makes that winit does not: a display link that paces frames
+//! at the display's highest rate. Each `unsafe` block here is the one platform call that needs
+//! it.
 
 use std::ptr::NonNull;
 
@@ -121,31 +121,4 @@ impl Drop for DisplayLink {
     fn drop(&mut self) {
         self.link.invalidate();
     }
-}
-
-/// Puts the calling thread in the scheduling class `class` (`crate::threads`).
-#[expect(unsafe_code, reason = "pthread_set_qos_class_self_np")]
-pub fn set_thread_class(class: libc::qos_class_t) {
-    // SAFETY: `pthread_set_qos_class_self_np` changes only the calling thread's class and takes
-    // no pointers. It fails only for an invalid class or priority, which these are not.
-    let _ = unsafe { libc::pthread_set_qos_class_self_np(class, 0) };
-}
-
-/// The calling thread's scheduling class, as the number `qos_class_t` gives each class. It is
-/// read as a number, not as `qos_class_t`, so that a class newer than libc's list is not an
-/// invalid value of the enum.
-#[expect(unsafe_code, reason = "pthread_get_qos_class_np")]
-pub fn thread_class() -> u32 {
-    let mut class = 0u32;
-    let mut priority = 0;
-    // SAFETY: `pthread_self` names the calling thread, which is alive. Both pointers are to
-    // locals that outlive the call, and `qos_class_t` is `repr(u32)`, so the class fits.
-    let _ = unsafe {
-        libc::pthread_get_qos_class_np(
-            libc::pthread_self(),
-            (&raw mut class).cast::<libc::qos_class_t>(),
-            &raw mut priority,
-        )
-    };
-    class
 }

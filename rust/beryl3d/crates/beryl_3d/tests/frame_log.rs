@@ -175,3 +175,29 @@ fn the_summary_gives_the_median_and_95th_percentile_wait_for_a_drawable() {
     assert!(near(summary.worst_wait_ms, 20.0), "{summary:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The log's thread creates the file, so a folder that cannot be made does not stop the run;
+/// `finish` reports it.
+#[test]
+fn a_log_that_cannot_be_written_is_reported_when_it_finishes() {
+    let dir = dir("frame-log-blocked");
+    std::fs::write(&dir, b"a file where the folder should be").expect("the file is written");
+    let run = Run {
+        checkout: "/checkout".to_owned(),
+        pid: 43,
+        started_ms: 2_000,
+        window: "none".to_owned(),
+        display_hz: 60.0,
+        adapter: "a GPU".to_owned(),
+        load: None,
+        fixture: None,
+        pause_at_ms: None,
+        drive: None,
+        load_threads: None,
+        slow_gpu_ms: None,
+    };
+    let mut log = FrameLog::create(&dir, &run).expect("the log's thread starts");
+    log.frame(&ticked(10, None, true), &[], false);
+    assert!(log.finish().is_err(), "a log in no folder finished");
+    let _ = std::fs::remove_file(&dir);
+}

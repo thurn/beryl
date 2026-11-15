@@ -165,7 +165,7 @@ impl Phone {
         let since = now.saturating_sub(started);
         frames.tick(since, screen);
         frames.schedule(since);
-        match frames.client().wake() {
+        match frames.next_wake(since) {
             Wake::At(at) => Wake::At(started + at),
             wake => wake,
         }

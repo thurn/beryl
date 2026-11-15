@@ -87,17 +87,29 @@ impl AppFeed {
     }
 
     /// Finishes the frame log and prints its summary: done once, when a phone's replay ends.
+    /// Finishing waits for the log's writer, so it happens on a thread of its own rather than
+    /// on the frame thread.
     fn finish_log(&mut self) {
         let Some(Ok(log)) = self.log.borrow_mut().take() else {
             return;
         };
-        let path = log.path().to_owned();
-        match log.finish() {
-            Ok(summary) => {
-                println!("{}", summary.print(&self.run));
-                println!("frame log: {}", path.display());
-            }
-            Err(error) => eprintln!("beryl3d: the frame log could not be written: {error}"),
+        let run = self.run.clone();
+        let finishing = std::thread::Builder::new()
+            .name("frame log summary".to_owned())
+            .spawn(move || {
+                let path = log.path().to_owned();
+                match log.finish() {
+                    Ok(summary) => {
+                        println!("{}", summary.print(&run));
+                        println!("frame log: {}", path.display());
+                    }
+                    Err(error) => {
+                        eprintln!("beryl3d: the frame log could not be written: {error}");
+                    }
+                }
+            });
+        if let Err(error) = finishing {
+            eprintln!("beryl3d: the frame log could not be finished: {error}");
         }
     }
 }

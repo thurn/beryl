@@ -177,23 +177,25 @@ pub struct FrameLog {
 }
 
 impl FrameLog {
-    /// Starts a log for `run` in `dir`, named for its start time and process.
+    /// Starts a log for `run` in `dir`, named for its start time and process. The log's own
+    /// thread creates the file and writes the first line, since the host calls this on the
+    /// frame thread.
     ///
     /// # Errors
     ///
-    /// When the file cannot be created or written.
+    /// When the log's thread cannot start. A file that cannot be created or written is reported
+    /// by `finish`.
     pub fn create(dir: &Path, run: &Run) -> io::Result<Self> {
-        fs::create_dir_all(dir)?;
         let path = dir.join(format!("{}-{}.jsonl", run.started_ms, run.pid));
-        let mut file = BufWriter::new(File::create(&path)?);
-        write(&mut file, &Line::Run(run.clone()))?;
-        file.flush()?;
         let (lines, received) = channel::<Line>();
+        let (dir, file_path, first) = (dir.to_owned(), path.clone(), Line::Run(run.clone()));
         let writer = std::thread::Builder::new()
             .name("frame log".to_owned())
             .spawn(move || {
                 beryl_host::utility_thread();
-                for line in received {
+                fs::create_dir_all(&dir)?;
+                let mut file = BufWriter::new(File::create(&file_path)?);
+                for line in std::iter::once(first).chain(received) {
                     write(&mut file, &line)?;
                     file.flush()?;
                 }

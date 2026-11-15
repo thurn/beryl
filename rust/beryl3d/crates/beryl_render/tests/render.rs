@@ -5,7 +5,7 @@
 
 use beryl_assets::Format;
 use beryl_render::{BACK_LAYER, GLOW_SPRITE, Limits, Renderer, Target};
-use beryl_scene::frame::{Band, Draw, Frame, FrameBuilder};
+use beryl_scene::frame::{Band, DRAWS, Draw, Frame, FrameBuilder};
 use beryl_scene::input::FaceSize;
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Window};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
@@ -250,6 +250,33 @@ fn six_hundred_cards_draw_in_at_most_six_calls() {
         let mut renderer = renderer(limits);
         let (_, draw_calls) = draw(&mut renderer, overhead(), (200, 200), &records);
         assert!(draw_calls <= 6, "{limits:?}: {draw_calls} draw calls");
+    }
+}
+
+/// A frame as full as the engine's largest board allows (`frame::DRAWS` records) draws every
+/// record, the last included, from the instance buffer made at startup.
+#[test]
+fn the_largest_frame_draws_its_last_record() {
+    let green = [40, 180, 60];
+    let mut records: Vec<(Band, Draw)> = (0..DRAWS - 1)
+        .map(|i| {
+            let away = Vec2::new(1000.0 + i as f32, 1000.0);
+            (Band::Opaque, rectangle(away, Vec2::splat(1.0), 0.0, [0; 3]))
+        })
+        .collect();
+    // The only record of a blended band, so it is ordered last of all.
+    records.push((
+        Band::TableMarks,
+        rectangle(Vec2::ZERO, Vec2::splat(40.0), 1.0, green),
+    ));
+    for limits in BOTH {
+        let mut renderer = renderer(limits);
+        let (picture, _) = draw(&mut renderer, overhead(), (200, 200), &records);
+        let found = picture.overhead(0.0, 0.0);
+        assert!(
+            close(found, green),
+            "{limits:?}: the last record drew {found:?}, not {green:?}"
+        );
     }
 }
 

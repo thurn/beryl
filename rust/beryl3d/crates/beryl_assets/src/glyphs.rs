@@ -61,14 +61,19 @@ pub struct GlyphWorker {
 }
 
 impl GlyphWorker {
-    /// Starts the thread. It sends each finished page to `out` and then calls `wake`, so that
-    /// a host whose event loop is idle draws the new glyphs at once.
+    /// Starts the thread, which first calls `start` to set its scheduling class (`beryl_host`'s
+    /// `asset_thread`), since it would otherwise inherit its maker's. It sends each finished
+    /// page to `out` and then calls `wake`, so that a host whose event loop is idle draws the
+    /// new glyphs at once.
     #[must_use]
-    pub fn spawn(out: Sender<Prepared>, wake: impl Fn() + Send + 'static) -> Self {
+    pub fn spawn(out: Sender<Prepared>, wake: impl Fn() + Send + 'static, start: fn()) -> Self {
         let (requests, inbox) = mpsc::channel();
         let thread = thread::Builder::new()
             .name("beryl-glyphs".into())
-            .spawn(move || run(&inbox, &out, &wake))
+            .spawn(move || {
+                start();
+                run(&inbox, &out, &wake);
+            })
             .expect("the glyph worker's thread starts");
         Self {
             requests: Some(requests),

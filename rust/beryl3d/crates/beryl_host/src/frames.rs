@@ -272,6 +272,15 @@ impl<T: Ticks> FrameLoop<T> {
         }
     }
 
+    /// When the loop next wants a frame, as of `now`: the client's wake, the feed's and the
+    /// drive script's together, with the clock stopped at the pause. A host whose platform can
+    /// stop its ticks (a phone's display link) asks this, not the client alone, or it would
+    /// stop them while a replayed recording still has views to give.
+    #[must_use]
+    pub fn next_wake(&self, now: u64) -> Wake {
+        self.wake(now)
+    }
+
     /// The client, for draining what it asks of the platform after a frame.
     pub fn client(&mut self) -> &mut Client {
         &mut self.client

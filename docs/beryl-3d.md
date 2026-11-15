@@ -1636,11 +1636,14 @@ reason to wait on another thread.
 - **Search threads** run the AI, as today, on every core. They run at a lower
   scheduling priority than the frame thread, so the operating system preempts
   one when the frame thread wakes. No core is reserved. The app sets their
-  scheduling class itself (utility, on Apple platforms), and the frame thread's
-  (user-interactive). A thread otherwise inherits the class of the thread that
-  made it, and in the prototype a game started from the frame thread searched at
+  scheduling class itself (utility on Apple platforms, below-normal priority on
+  Windows), and the frame thread's (user-interactive, or the highest priority on
+  Windows). A thread otherwise inherits the class of the thread that made it,
+  and in the prototype a game started from the frame thread searched at
   drawing's priority.
-- **Asset workers**, two to four, decode, compose, compress and rasterize.
+- **Asset workers**, two to four, decode, compose, compress and rasterize. Each
+  puts itself in the default class as it starts, below drawing and above the AI,
+  since a worker started from the frame thread would otherwise share its class.
 - **The audio thread** is the audio device's callback.
 
 Communication is by channels only:

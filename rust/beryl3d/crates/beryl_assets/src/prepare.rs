@@ -41,6 +41,10 @@ pub struct Config {
     /// Called by a worker after it sends a face, so that a host whose event loop is idle draws
     /// the face at once.
     pub wake: Arc<dyn Fn() + Send + Sync>,
+    /// Called first on each worker thread, to set its scheduling class (`beryl_host`'s
+    /// `asset_thread`). A thread otherwise inherits the class of the one that made it, and a
+    /// preparer made on the frame thread would compress faces at drawing's class.
+    pub start: fn(),
 }
 
 /// Two to four workers, as the machine has cores.
@@ -148,12 +152,16 @@ impl Preparer {
             slots: std::array::from_fn(|_| AtomicU64::new(0)),
             send: Mutex::new(()),
         });
+        let start = config.start;
         let workers = (0..config.workers.max(1))
             .map(|i| {
                 let shared = Arc::clone(&shared);
                 thread::Builder::new()
                     .name(format!("beryl-assets-{i}"))
-                    .spawn(move || work(&shared))
+                    .spawn(move || {
+                        start();
+                        work(&shared);
+                    })
                     .expect("failed to start an asset worker")
             })
             .collect();

@@ -93,7 +93,7 @@ fn rasterize(text: &str) -> (Prepared, Vec<GlyphCell>) {
         })
         .collect();
     let (out, pages) = mpsc::channel();
-    let worker = GlyphWorker::spawn(out, || {});
+    let worker = GlyphWorker::spawn(out, || {}, || {});
     worker.request(keys.clone());
     worker.flush();
     let page = pages.try_recv().expect("the worker sent a page");

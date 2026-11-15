@@ -49,6 +49,7 @@ fn preparer(dir: &Path) -> Preparer {
         faces_dir: dir.join("faces"),
         workers: 2,
         wake: Arc::new(|| {}),
+        start: || {},
     })
 }
 
