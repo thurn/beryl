@@ -3,7 +3,12 @@
     "target_points": 24,
     "phone_target_points": 44,
     "line_end_points": 0.1,
-    "line_reshape_points": 4
+    "line_reshape_points": 4,
+    "step_ms": 150,
+    "step_points": 4,
+    "seen": 0.5,
+    "transparent": 0.3,
+    "crowded": 3
   },
   "frames": {
     "stress-255": {

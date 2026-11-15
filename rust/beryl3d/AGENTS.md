@@ -55,6 +55,12 @@ project, and selects the main lanes.
   - `line_end_points` and `line_reshape_points`: how far an arrow's end may move
     and still be at rest, and how far a control point must move to count as a
     change of shape (the "lines hold" check).
+  - `step_ms`, `step_points`, `seen`, `transparent` and `crowded`: the web stage
+    audit's thresholds, which "every step shown" and "not crowded" use. A step
+    whose verb travels moves its subject at least `step_points` over at least
+    `step_ms`, and the subject is seen in at least `seen` of the frames while it
+    plays, where more opaque than `transparent`. No more than `crowded`
+    different moves begin within `step_ms` in one beat.
 
   Under `frames.<board>` are the limits `just b3d gate` holds each gated board's
   work counters, load and allocations to (docs/beryl-3d.md, "Finding the worst

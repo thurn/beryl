@@ -1948,8 +1948,10 @@ The **check times** of a test are:
 - the start and end of each transition of a flat-layer element;
 - the first frame in which everything is still after each script.
 
-Two checks need no frame at all. "No jumps" and "verb values" read the segments
-directly.
+Four checks need no frame at all. "No jumps", "rest equals placement", "verb
+values" (so far, each step's duration) and "not crowded" read the segments and
+steps directly. "Every step shown" samples the step's subject in each frame
+evaluated while the step plays, and judges the samples together.
 
 Checking every tick remains, as the second line:
 

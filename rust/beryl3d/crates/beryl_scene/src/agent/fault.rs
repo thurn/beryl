@@ -42,6 +42,11 @@ pub enum Rule {
     BlankCard,
     LinesHold,
     Clips,
+    Jump,
+    RestPlacement,
+    StepTime,
+    StepShown,
+    Crowded,
 }
 
 impl Rule {
@@ -58,6 +63,11 @@ impl Rule {
             Self::BlankCard => "blank-card",
             Self::LinesHold => "lines-hold",
             Self::Clips => "clips",
+            Self::Jump => "no-jumps",
+            Self::RestPlacement => "rest-placement",
+            Self::StepTime => "step-time",
+            Self::StepShown => "step-shown",
+            Self::Crowded => "crowded",
         }
     }
 }

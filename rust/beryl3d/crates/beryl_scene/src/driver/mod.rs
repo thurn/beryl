@@ -10,6 +10,7 @@
 //! Only a driver of the client needs this (the `driver` feature); the app does not enable it.
 
 mod action;
+mod check;
 mod moment;
 mod recording;
 
@@ -21,6 +22,7 @@ use beryl_session::script::Verb;
 use glam::Vec2;
 
 pub use action::{Action, key_code};
+pub use check::{Checked, Mode};
 pub use moment::{Duration, Moment, Name, Offset, ParseError};
 pub use recording::{Answer, Recording, Responses, plays_on};
 
@@ -30,6 +32,7 @@ use crate::input::{
     Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
     Rect, Size, TextChange,
 };
+use crate::play::record::Plant;
 use crate::{Client, Config};
 
 /// How long after the table comes to rest a recorded reply is given.
@@ -108,8 +111,13 @@ pub struct Page {
     batch: usize,
     /// Since when the client has been at rest with nothing left to do, if it is.
     rest_since: Option<u64>,
-    /// Every input handed to the client, in order.
+    /// Every input handed to the client, in order, and the time of each.
     inputs: Vec<Input>,
+    given_at: Vec<u64>,
+    /// Whether the client keeps a record of every script, for the interface checks.
+    records: bool,
+    /// The faults planted in the recording's scripts (`plant`).
+    plants: Vec<Plant>,
     /// Each named moment of the recording, with its time, once asked for.
     moments: Option<Vec<(Name, u64)>>,
 }
@@ -142,6 +150,9 @@ impl Page {
             batch: 0,
             rest_since: None,
             inputs: Vec::new(),
+            given_at: Vec::new(),
+            records: false,
+            plants: Vec::new(),
             moments: None,
         };
         page.begin();
@@ -502,11 +513,18 @@ impl Page {
 
     fn give(&mut self, input: Input) {
         self.inputs.push(input.clone());
+        self.given_at.push(self.now);
         self.client.handle(input);
     }
 
     /// Sets the client up and gives it the recording's first views.
     fn begin(&mut self) {
+        if self.records {
+            self.client.record();
+        }
+        for plant in &self.plants {
+            self.client.plant(*plant);
+        }
         self.give(Input::Surface {
             size: self.size,
             scale: 1.0,
@@ -524,6 +542,7 @@ impl Page {
         self.batch = 0;
         self.rest_since = None;
         self.inputs.clear();
+        self.given_at.clear();
         self.begin();
     }
 
@@ -564,7 +583,10 @@ impl Page {
             }
         }
         if self.client.wake() == Wake::Never {
-            self.rest_since.get_or_insert(self.now);
+            // When the last script ended, not when this frame found it ended, so that a reply is
+            // given at the same time however often the clock was stopped.
+            let rested = self.client.rested();
+            self.rest_since.get_or_insert(rested);
         } else {
             self.rest_since = None;
         }
@@ -604,27 +626,37 @@ impl Page {
 
     fn named_moments(&mut self) -> &[(Name, u64)] {
         if self.moments.is_none() {
-            let mut playing = Self {
-                recording: self.recording.clone(),
-                views: self.views.clone(),
-                responses: Responses::new(&self.recording),
-                name: self.name.clone(),
-                seat: self.seat,
-                layout: self.layout,
-                size: self.size,
-                tick: self.tick,
-                client: client(),
-                now: 0,
-                released: 0,
-                batch: 0,
-                rest_since: None,
-                inputs: Vec::new(),
-                moments: Some(Vec::new()),
-            };
-            playing.begin();
+            let mut playing = self.fresh(false);
             self.moments = Some(playing.play_through());
         }
         self.moments.as_deref().expect("just set")
+    }
+
+    /// The same recording at its start, with the same faults planted and no action taken, the
+    /// client keeping a record of its scripts if `records`.
+    fn fresh(&self, records: bool) -> Self {
+        let mut page = Self {
+            recording: self.recording.clone(),
+            views: self.views.clone(),
+            responses: Responses::new(&self.recording),
+            name: self.name.clone(),
+            seat: self.seat,
+            layout: self.layout,
+            size: self.size,
+            tick: self.tick,
+            client: client(),
+            now: 0,
+            released: 0,
+            batch: 0,
+            rest_since: None,
+            inputs: Vec::new(),
+            given_at: Vec::new(),
+            records,
+            plants: self.plants.clone(),
+            moments: Some(Vec::new()),
+        };
+        page.begin();
+        page
     }
 
     /// Plays the recording to its end on its own clock, and returns each moment's time.

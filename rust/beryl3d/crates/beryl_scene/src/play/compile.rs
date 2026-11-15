@@ -11,6 +11,7 @@
 use beryl_session::protocol::PlayerView;
 use beryl_session::script::{Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of};
 
+use super::record::{Cause, MoveKey, Plant, SegmentRecord, StepRecord};
 use crate::beat::{Laid, beat};
 use crate::motion::Track;
 use crate::pose::{Curve, Pose, Segment};
@@ -31,10 +32,39 @@ pub(crate) struct Compiled {
     /// The verbs among its steps that are drawn as instant changes, one bit per verb in the order
     /// of `Verb::ALL`.
     pub unbuilt: u32,
+    /// Every step, as it was laid out, for the interface checks.
+    pub steps: Vec<StepRecord>,
+    /// Every segment of `tracks`, in the order it was added, with the step that made it.
+    pub segments: Vec<SegmentRecord>,
+}
+
+impl Compiled {
+    /// Changes the script to hold a fault a test plants, and lays its tracks out again from its
+    /// segments. Returns whether the script had a step to plant it on.
+    pub(crate) fn plant(&mut self, plant: &Plant) -> bool {
+        if !plant.apply(&mut self.steps, &mut self.segments) {
+            return false;
+        }
+        self.tracks.clear();
+        for record in &self.segments {
+            add(&mut self.tracks, record.slot, record.segment);
+        }
+        true
+    }
+
+    /// Where each object rests in the view the script leads to, by slot.
+    pub(crate) fn final_poses(&self) -> Vec<Option<Pose>> {
+        self.finals
+            .iter()
+            .map(|object| object.map(|object| object.pose()))
+            .collect()
+    }
 }
 
 /// Lays out `after`'s script, played from `before`, the view the table shows when it starts,
-/// with one timing per step in `timings`. With no `before` (the first view), with a reset, or
+/// with one timing per step in `timings`. With `records`, it also keeps a record of each step and
+/// of the step that made each segment, for the interface checks; a running game does without,
+/// so that compiling allocates no more than playing needs. With no `before` (the first view), with a reset, or
 /// with timings that do not match the steps, nothing moves: the table takes `after` as it stands
 /// when the script ends. A reset's beats still hold the time their timings give.
 pub(crate) fn compile(
@@ -42,12 +72,15 @@ pub(crate) fn compile(
     after: &PlayerView,
     timings: &[StepTiming],
     table: &Table,
+    records: bool,
 ) -> Compiled {
     let mut compiled = Compiled {
         tracks: Vec::new(),
         finals: Table::objects_for(after, &table.placement(after)),
         end: 0,
         unbuilt: 0,
+        steps: Vec::new(),
+        segments: Vec::new(),
     };
     let Some(script) = after.script.as_ref() else {
         return compiled;
@@ -57,50 +90,74 @@ pub(crate) fn compile(
     }
     let mut motion = before
         .filter(|_| script.reset.is_none())
-        .map(|before| Motion::new(before, table));
+        .map(|before| Motion::new(before, table, records));
+    let mut steps = Vec::new();
     compiled.end = lay_out(
         script,
         timings,
         &mut compiled.unbuilt,
-        |step, timing, laid| {
+        |(beat, index), step, timing, laid| {
             if let Some(motion) = &mut motion {
-                motion.step(step, timing, laid);
+                motion.step(steps.len(), step, timing, laid);
             }
+            if !records {
+                return;
+            }
+            steps.push(StepRecord {
+                beat,
+                index,
+                verb: step.act.verb(),
+                subject: subject_of(step),
+                from: nanoseconds(laid.from),
+                to: nanoseconds(laid.to),
+                timed: nanoseconds(timing.duration),
+                key: MoveKey::of(&step.act),
+            });
         },
     );
+    compiled.steps = steps;
     if let Some(motion) = motion {
         compiled.tracks = motion.tracks;
+        compiled.segments = motion.segments;
     }
     compiled
 }
 
-/// Lays out each beat of `script` after the one before, calling `each` with every step, its
-/// timing and when it plays, and returns when the last beat is over, in nanoseconds. Each verb
-/// drawn as an instant change sets its bit in `unbuilt`.
+/// Lays out each beat of `script` after the one before, calling `each` with every step's beat
+/// and index in its beat, the step, its timing and when it plays, and returns when the last beat
+/// is over, in nanoseconds. Each verb drawn as an instant change sets its bit in `unbuilt`.
 fn lay_out(
     script: &Script,
     timings: &[StepTiming],
     unbuilt: &mut u32,
-    mut each: impl FnMut(&Step, &StepTiming, &Laid),
+    mut each: impl FnMut((usize, usize), &Step, &StepTiming, &Laid),
 ) -> u64 {
     let mut laid = Vec::new();
     let mut at = 0.0;
     let mut first = 0;
-    for steps in &script.beats {
+    for (number, steps) in script.beats.iter().enumerate() {
         let timings = &timings[first..first + steps.len()];
         // No span is open and nothing passes over the table yet: the flat layer draws neither.
         let end = beat(steps, timings, at, |_| None, at, &mut laid);
-        for ((step, timing), laid) in steps.iter().zip(timings).zip(&laid) {
+        for (index, ((step, timing), laid)) in steps.iter().zip(timings).zip(&laid).enumerate() {
             let verb = step.act.verb();
             if !verbs::built(verb) {
                 *unbuilt |= bit(verb);
             }
-            each(step, timing, laid);
+            each((number, index), step, timing, laid);
         }
         at = end;
         first += steps.len();
     }
     nanoseconds(at)
+}
+
+/// The slot of the scene object `step` moves, if it moves one.
+fn subject_of(step: &Step) -> Option<usize> {
+    match mover_of(&step.act) {
+        Some(Subject::Object { slot }) => Some(usize::from(slot.0)),
+        _ => None,
+    }
 }
 
 /// `verb`'s bit in `Compiled::unbuilt`.
@@ -132,22 +189,27 @@ struct Motion<'a> {
     /// Every object's resting place as the table now stands.
     rests: Placement,
     tracks: Vec<Track>,
+    /// Every segment added to `tracks`, in order, with why, if it keeps `records`.
+    segments: Vec<SegmentRecord>,
+    records: bool,
 }
 
 impl<'a> Motion<'a> {
-    fn new(before: &PlayerView, table: &'a Table) -> Self {
+    fn new(before: &PlayerView, table: &'a Table, records: bool) -> Self {
         Self {
             table,
             played: Played::of(before),
             view: before.clone(),
             rests: table.placement(before),
             tracks: Vec::new(),
+            segments: Vec::new(),
+            records,
         }
     }
 
-    /// Plays one step: applies its act, and gives its object and every object whose resting
-    /// place changed a segment to the new place.
-    fn step(&mut self, step: &Step, timing: &StepTiming, laid: &Laid) {
+    /// Plays one step, the `number`th of the script: applies its act, and gives its object and
+    /// every object whose resting place changed a segment to the new place.
+    fn step(&mut self, number: usize, step: &Step, timing: &StepTiming, laid: &Laid) {
         // A step the table cannot take changes nothing; the table takes the view as it stands
         // when the script ends, whatever the steps did.
         if self.played.apply(&step.act).is_err() {
@@ -173,10 +235,7 @@ impl<'a> Motion<'a> {
             },
             (None, None) => own,
         };
-        let subject = match mover_of(&step.act) {
-            Some(Subject::Object { slot }) => Some(usize::from(slot.0)),
-            _ => None,
-        };
+        let subject = subject_of(step);
         let slots = self.rests.rests.len().max(next.rests.len());
         for slot in 0..slots {
             let was = self.rests.rests.get(slot).copied().flatten();
@@ -194,40 +253,54 @@ impl<'a> Motion<'a> {
                 };
                 // An instant change that changes nothing needs no segment.
                 let moves = matches!(verb, Verb::Fly | Verb::Appear) || from != to;
-                moves.then(|| verbs::segment(verb, from, to, own, Curve::named(timing.curve)))
+                moves.then(|| {
+                    (
+                        verbs::segment(verb, from, to, own, Curve::named(timing.curve)),
+                        Cause::Verb(number),
+                    )
+                })
             } else {
                 match (was, now) {
                     (Some(was), Some(now)) if was.pose != now.pose => {
                         if self.retarget(slot, room.from, was.pose, now.pose) {
                             None
                         } else {
-                            Some(verbs::slide(self.pose(slot, room.from), now.pose, room))
+                            Some((
+                                verbs::slide(self.pose(slot, room.from), now.pose, room),
+                                Cause::Slide(number),
+                            ))
                         }
                     }
                     (Some(_), None) => {
                         let from = self.pose(slot, own.from);
-                        Some(verbs::instant(
-                            from,
-                            Pose {
-                                opacity: 0.0,
-                                ..from
-                            },
-                            own.from,
+                        Some((
+                            verbs::instant(
+                                from,
+                                Pose {
+                                    opacity: 0.0,
+                                    ..from
+                                },
+                                own.from,
+                            ),
+                            Cause::Change(number),
                         ))
                     }
-                    (None, Some(now)) => Some(verbs::instant(
-                        Pose {
-                            opacity: 0.0,
-                            ..now.pose
-                        },
-                        now.pose,
-                        own.from,
+                    (None, Some(now)) => Some((
+                        verbs::instant(
+                            Pose {
+                                opacity: 0.0,
+                                ..now.pose
+                            },
+                            now.pose,
+                            own.from,
+                        ),
+                        Cause::Change(number),
                     )),
                     _ => None,
                 }
             };
-            if let Some(segment) = segment {
-                self.push(slot, segment);
+            if let Some((segment, cause)) = segment {
+                self.push(slot, segment, cause);
             }
         }
         self.rests = next;
@@ -251,6 +324,13 @@ impl<'a> Motion<'a> {
                 found = true;
             }
         }
+        // The same segments in the records, which the interface checks read.
+        for record in &mut self.segments {
+            let segment = &mut record.segment;
+            if record.slot == slot && segment.end() > from && segment.to == was {
+                segment.to = to;
+            }
+        }
         found
     }
 
@@ -269,28 +349,49 @@ impl<'a> Motion<'a> {
         }
     }
 
-    /// Adds `segment` to the track of the object in `slot`. An object's first segment comes after
-    /// one that holds it where it rested before the script, so that it stands there until it
-    /// moves.
-    fn push(&mut self, slot: usize, segment: Segment) {
-        if self.tracks.len() <= slot {
-            self.tracks.resize(slot + 1, Track::default());
-        }
-        if self.tracks[slot].segments().is_empty() {
+    /// Adds `segment` to the track of the object in `slot`, made for `cause`. An object's first
+    /// segment comes after one that holds it where it rested before the script, so that it
+    /// stands there until it moves.
+    fn push(&mut self, slot: usize, segment: Segment, cause: Cause) {
+        if self
+            .tracks
+            .get(slot)
+            .is_none_or(|track| track.segments().is_empty())
+        {
             let start = self.pose(slot, 0);
             let hold = verbs::instant(start, start, 0);
-            // An empty track has room.
-            let _ = self.tracks[slot].push(hold, 0);
+            add(&mut self.tracks, slot, hold);
+            self.record(slot, Cause::Hold, hold);
         }
-        // The segments of one object are added in order of their starts, so any that ended
-        // before this one starts no longer decides a pose and can go to make room.
-        if self.tracks[slot].push(segment, segment.start).is_err() {
-            // Every segment it holds is still under way as this one starts, which only a script
-            // that moves one object eight times at once can do. The track starts over from this
-            // segment, which decides the object's pose from its start on.
-            self.tracks[slot] = Track::default();
-            let _ = self.tracks[slot].push(segment, segment.start);
+        add(&mut self.tracks, slot, segment);
+        self.record(slot, cause, segment);
+    }
+
+    /// Notes that `cause` gave the object in `slot` `segment`, if it keeps records.
+    fn record(&mut self, slot: usize, cause: Cause, segment: Segment) {
+        if self.records {
+            self.segments.push(SegmentRecord {
+                slot,
+                cause,
+                segment,
+            });
         }
+    }
+}
+
+/// Adds `segment` to the track of the object in `slot`, growing `tracks` to hold it.
+fn add(tracks: &mut Vec<Track>, slot: usize, segment: Segment) {
+    if tracks.len() <= slot {
+        tracks.resize(slot + 1, Track::default());
+    }
+    // The segments of one object are added in order of their starts, so any that ended before
+    // this one starts no longer decides a pose and can go to make room.
+    if tracks[slot].push(segment, segment.start).is_err() {
+        // Every segment it holds is still under way as this one starts, which only a script that
+        // moves one object eight times at once can do. The track starts over from this segment,
+        // which decides the object's pose from its start on.
+        tracks[slot] = Track::default();
+        let _ = tracks[slot].push(segment, segment.start);
     }
 }
 

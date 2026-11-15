@@ -29,6 +29,13 @@ pub(crate) struct SceneObject {
     view_index: u32,
 }
 
+impl SceneObject {
+    /// Where it rests.
+    pub(crate) fn pose(&self) -> Pose {
+        self.pose
+    }
+}
+
 /// What moves while a script plays: a track for each object that moves, by slot, the time on
 /// the script's clock, and the scene objects at rest in the view the script leads to.
 #[derive(Clone, Copy, Debug)]

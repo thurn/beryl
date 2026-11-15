@@ -13,8 +13,11 @@
 //!   script is compiled again for it. A segment under way keeps its start and duration and takes
 //!   the new end pose, and its start pose is changed so that the object's pose at that instant is
 //!   the same: the card does not jump, and arrives at its new place.
+//! - When asked to (`record`), the show keeps a record of every script it is given, for the
+//!   interface checks, and a test can plant a fault in a script before it plays (`plant`).
 
 mod compile;
+pub mod record;
 
 use std::collections::VecDeque;
 
@@ -23,6 +26,7 @@ use beryl_session::protocol::PlayerView;
 use beryl_session::script::{StepTiming, Verb};
 
 use self::compile::{Compiled, bit, compile};
+use self::record::{Plant, ScriptRecord};
 use crate::data::space::catch_up;
 use crate::frame::{FrameBuilder, Wake};
 use crate::motion::Track;
@@ -32,6 +36,8 @@ use crate::table::{Motion, Table, Window};
 /// An update and the timings of its script's steps, compiled to play after the scripts before
 /// it.
 struct Waiting {
+    /// How many scripts the show was given before this one.
+    number: usize,
     update: Box<GameUpdate>,
     timings: Vec<StepTiming>,
     compiled: Compiled,
@@ -39,6 +45,8 @@ struct Waiting {
 
 /// The script under way.
 struct Playing {
+    /// How many scripts the show was given before this one.
+    number: usize,
     /// Its update, until the table shows it. A script that moves nothing (a reset, the first
     /// view) shows its view as it starts and then only holds the time its beats take.
     update: Option<Box<GameUpdate>>,
@@ -76,6 +84,16 @@ pub struct Show {
     unbuilt: u32,
     /// Those that `next_unbuilt` has returned.
     reported: u32,
+    /// How many scripts the show has been given.
+    given: usize,
+    /// When the last script to end ended, in nanoseconds since the client started.
+    rested: u64,
+    /// A record of every script given since `record` was called, in order.
+    history: Option<Vec<ScriptRecord>>,
+    /// How many scripts the show had been given when `record` was called.
+    recorded_from: usize,
+    /// The faults to plant in scripts not yet given.
+    plants: Vec<Plant>,
 }
 
 impl Show {
@@ -89,6 +107,95 @@ impl Show {
             recompiled: None,
             unbuilt: 0,
             reported: 0,
+            given: 0,
+            rested: 0,
+            history: None,
+            recorded_from: 0,
+            plants: Vec::new(),
+        }
+    }
+
+    /// From now on, keeps a record of every script the show is given (`history`).
+    pub fn record(&mut self) {
+        if self.history.is_none() {
+            self.history = Some(Vec::new());
+            self.recorded_from = self.given;
+        }
+    }
+
+    /// The record of every script given since `record` was called, in order.
+    #[must_use]
+    pub fn history(&self) -> &[ScriptRecord] {
+        self.history.as_deref().unwrap_or_default()
+    }
+
+    /// Plants a fault in a script the show has not been given yet, to test the interface checks.
+    pub fn plant(&mut self, plant: Plant) {
+        self.plants.push(plant);
+    }
+
+    /// When the last script to end ended, in nanoseconds since the client started: when the
+    /// table came to rest, if nothing has played since. However the frames fell, it is the same.
+    #[must_use]
+    pub fn rested(&self) -> u64 {
+        self.rested
+    }
+
+    /// Compiles `update`'s script, the `number`th the show is given, played from `before`, with
+    /// any fault planted in it.
+    fn compile(
+        &self,
+        number: usize,
+        before: Option<&PlayerView>,
+        update: &GameUpdate,
+        timings: &[StepTiming],
+    ) -> Compiled {
+        let plants = self.plants.iter().filter(|plant| plant.script == number);
+        let records = self.history.is_some() || plants.clone().next().is_some();
+        let mut compiled = compile(before, &update.view, timings, &self.table, records);
+        for plant in plants {
+            compiled.plant(plant);
+        }
+        compiled
+    }
+
+    /// Writes `compiled`, the `number`th script, into the history, if the show keeps one.
+    fn write_record(&mut self, number: usize, compiled: &Compiled) {
+        let Some(history) = &mut self.history else {
+            return;
+        };
+        let Some(index) = number.checked_sub(self.recorded_from) else {
+            return;
+        };
+        let mut record = ScriptRecord {
+            start: None,
+            rate: 1,
+            end: compiled.end,
+            steps: compiled.steps.clone(),
+            segments: compiled.segments.clone(),
+            finals: compiled.final_poses(),
+        };
+        match history.get_mut(index) {
+            // Compiled again for a window of a new shape: it keeps when it started.
+            Some(kept) => {
+                record.start = kept.start;
+                record.rate = kept.rate;
+                *kept = record;
+            }
+            None => history.push(record),
+        }
+    }
+
+    /// Notes in the history that the `number`th script started at `start`, its clock running
+    /// `rate` times faster than real time.
+    fn record_start(&mut self, number: usize, start: u64, rate: u64) {
+        if let Some(history) = &mut self.history
+            && let Some(record) = number
+                .checked_sub(self.recorded_from)
+                .and_then(|index| history.get_mut(index))
+        {
+            record.start = Some(start);
+            record.rate = rate;
         }
     }
 
@@ -141,8 +248,12 @@ impl Show {
     /// played. It is compiled now, against the view the table will show when its turn comes, and
     /// plays after every script that arrived before it.
     pub fn push(&mut self, update: Box<GameUpdate>, timings: Vec<StepTiming>) {
-        let compiled = compile(self.before_next(), &update.view, &timings, &self.table);
+        let number = self.given;
+        self.given += 1;
+        let compiled = self.compile(number, self.before_next(), &update, &timings);
+        self.write_record(number, &compiled);
         self.waiting.push_back(Waiting {
+            number,
             update,
             timings,
             compiled,
@@ -161,15 +272,26 @@ impl Show {
         let shown = self.shown.as_ref().map(|update| &update.view);
         self.table.resize(window, shown);
         let mut before = shown;
+        let mut compiled = Vec::new();
         if let Some(playing) = &self.playing
             && let Some(update) = &playing.update
         {
-            self.recompiled = Some(compile(before, &update.view, &playing.timings, &self.table));
+            let again = self.compile(playing.number, before, update, &playing.timings);
+            compiled.push((playing.number, again));
             before = Some(&update.view);
         }
-        for waiting in &mut self.waiting {
-            waiting.compiled = compile(before, &waiting.update.view, &waiting.timings, &self.table);
+        for waiting in &self.waiting {
+            let again = self.compile(waiting.number, before, &waiting.update, &waiting.timings);
+            compiled.push((waiting.number, again));
             before = Some(&waiting.update.view);
+        }
+        for (number, again) in compiled {
+            self.write_record(number, &again);
+            if let Some(waiting) = self.waiting.iter_mut().find(|w| w.number == number) {
+                waiting.compiled = again;
+            } else {
+                self.recompiled = Some(again);
+            }
         }
     }
 
@@ -185,7 +307,9 @@ impl Show {
                 if playing.clock(now) < end {
                     break;
                 }
-                ended = Some(playing.real(end));
+                let real = playing.real(end);
+                ended = Some(real);
+                self.rested = real;
                 self.finish();
             }
             let Some(waiting) = self.waiting.pop_front() else {
@@ -198,11 +322,14 @@ impl Show {
                 _ => 1,
             };
             let moves = !waiting.compiled.tracks.is_empty();
+            let start = ended.unwrap_or(now);
+            self.record_start(waiting.number, start, rate);
             self.playing = Some(Playing {
+                number: waiting.number,
                 update: Some(waiting.update),
                 timings: waiting.timings,
                 compiled: waiting.compiled,
-                start: ended.unwrap_or(now),
+                start,
                 rate,
             });
             if !moves {
@@ -262,8 +389,29 @@ impl Show {
             if let Some(latest) = begun.checked_sub(1) {
                 track.segments_mut()[latest].through(t, pose);
             }
+            // The same segment in the record of the script's segments: the last added of those
+            // that begin latest by `t`.
+            let latest = compiled
+                .segments
+                .iter_mut()
+                .filter(|record| record.slot == slot && record.segment.start <= t)
+                .reduce(|kept, next| {
+                    if next.segment.start >= kept.segment.start {
+                        next
+                    } else {
+                        kept
+                    }
+                });
+            if let Some(record) = latest {
+                record.segment.through(t, pose);
+            }
         }
+        let number = playing.number;
         playing.compiled = compiled;
+        if let Some(playing) = self.playing.take() {
+            self.write_record(number, &playing.compiled);
+            self.playing = Some(playing);
+        }
     }
 
     /// When the next frame is needed: now while a segment is under way or a script is waiting

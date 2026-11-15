@@ -15,6 +15,7 @@ use crate::frame::{self, ElementId, Frame, FrameBuilder, Wake};
 use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerPhase};
 use crate::layout::Layer;
 use crate::play::Show;
+use crate::play::record::{Plant, ScriptRecord};
 use crate::table::{Table, Window};
 
 /// The sizes the client sets at startup.
@@ -189,6 +190,30 @@ impl Client {
                 }));
             }
         }
+    }
+
+    /// From now on, keeps a record of every script the client is given, for the interface
+    /// checks (`Show::record`).
+    pub fn record(&mut self) {
+        self.show.record();
+    }
+
+    /// The record of every script given since `record` was called, in order.
+    #[must_use]
+    pub fn history(&self) -> &[ScriptRecord] {
+        self.show.history()
+    }
+
+    /// Plants a fault in a script not given yet, to test the interface checks.
+    pub fn plant(&mut self, plant: Plant) {
+        self.show.plant(plant);
+    }
+
+    /// When the table came to rest after the last script to end, in nanoseconds since the client
+    /// started, however the frames fell.
+    #[must_use]
+    pub fn rested(&self) -> u64 {
+        self.show.rested()
     }
 
     /// The table, for tests and tools that read the camera.

@@ -7,6 +7,7 @@ pub mod checks;
 pub mod fault;
 pub mod hit;
 pub mod locate;
+pub mod steps;
 pub mod tree;
 
 pub use checks::check;
