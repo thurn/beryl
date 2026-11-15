@@ -42,6 +42,10 @@ await check(
         await lobby.getByRole("button", { name: "Change" }).click();
         await lobby.getByRole("button", { name: "Solo check" }).click();
         await lobby.getByText("11 main · 2 sideboard").waitFor();
+        // The view can arrive before the load command returns and enables shortcuts.
+        await lobby
+            .getByRole("button", { name: "Sideboard", exact: true })
+            .click({ trial: true });
         await page.keyboard.press(mac ? "Meta+Shift+b" : "Control+Shift+b");
         await lobby
             .getByRole("button", { name: "Move Plains to main deck" })
