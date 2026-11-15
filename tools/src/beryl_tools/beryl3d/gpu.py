@@ -146,7 +146,8 @@ def lowered_materials(
 
 
 def shader_cost() -> tuple[int, str]:
-    """Runs beryl_render's `shader_cost` test: its exit code and output."""
+    """Runs beryl_render's `shader_cost` tests, in the crate's one test binary, `all`: their exit
+    code and output."""
     from .cli import warm_target  # cli imports gate, which imports this module.
 
     warm_target()
@@ -158,8 +159,9 @@ def shader_cost() -> tuple[int, str]:
             "-p",
             "beryl_render",
             "--test",
-            "shader_cost",
+            "all",
             "--",
+            "shader_cost",
             "--nocapture",
             "--test-threads",
             "1",
