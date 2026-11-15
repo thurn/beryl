@@ -9,7 +9,7 @@ use beryl_card::{Draws, Prompt};
 
 use super::{MOST, answer};
 use crate::card::{Ability, AbilityIx, FaceAbility, FaceIx, ObjectAbility, Replaced, Replacement};
-use crate::decision::{Decision, DecisionKind, Opt};
+use crate::decision::{Decision, DecisionKind, OPTIONS, Opt};
 #[cfg(doc)]
 use crate::event::Sink;
 use crate::event::{LossCause, ReplacementKind};
@@ -152,7 +152,7 @@ fn choose_draw_replacement<L: Layout>(
     player: Seat,
     found: &Fixed<Option<DrawReplacement<L>>, MOST>,
 ) -> Result<DrawReplacement<L>, Full> {
-    let mut candidates = <L::Queue<Opt<L>, 64>>::default();
+    let mut candidates = <L::Queue<Opt<L>, OPTIONS>>::default();
     let mut firsts: Fixed<Option<DrawReplacement<L>>, MOST> = Fixed::new();
     for r in found.iter().flatten() {
         if !firsts.iter().flatten().any(|f| f.same_as(r)) {

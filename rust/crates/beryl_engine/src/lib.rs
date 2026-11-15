@@ -31,7 +31,7 @@ pub use beryl_rules::{
 };
 pub use bitboard::Bitboard;
 pub use decision::{
-    Answers, Candidates, Choice, Decision, DecisionKind, Opt, Outcome, Refusal, Replay,
+    Answers, Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt, Outcome, Refusal, Replay,
     StallReason, Step,
 };
 pub use ids::{CardId, CardIx, LargeCardIx, LargeSlot, Place, Seat, Slot, SlotId};

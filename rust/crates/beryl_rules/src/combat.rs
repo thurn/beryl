@@ -7,7 +7,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Part, Prompt, Purpose, Types};
-use crate::decision::{Candidates, Decision, DecisionKind, Opt};
+use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Event, Sink};
 use crate::fixed::Full;
@@ -116,7 +116,7 @@ pub(crate) fn attack_decision<L: Layout>(
     t: &GameTable,
     attacker: Option<L::Slot>,
 ) -> Result<Decision<L>, Full> {
-    let mut list: L::Queue<Opt<L>, 64> = Default::default();
+    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     let (player, kind, part) = if attacker.is_none() {
         list.push(Opt::Done)?;
         let restricted = rule_change::attacks_restricted(t);
@@ -148,9 +148,9 @@ pub(crate) fn attack_decision<L: Layout>(
 
 /// What a creature can attack: the defending player, then each planeswalker they control.
 /// [`Full`] if the planeswalkers are more than a fixed layout's list of options holds.
-pub(crate) fn attack_targets<L: Layout>(s: &State<L>) -> Result<L::Queue<Opt<L>, 64>, Full> {
+pub(crate) fn attack_targets<L: Layout>(s: &State<L>) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     let defending = defender(s);
-    let mut list: L::Queue<Opt<L>, 64> = Default::default();
+    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     list.push(Opt::Defender(None))?;
     for &slot in s.battlefield() {
         if s.controller(slot) == defending && s.derived(slot).types.contains(Types::PLANESWALKER) {
@@ -389,7 +389,7 @@ pub(crate) fn block_decision<L: Layout>(
             about: Bitboard::single(blocker),
         });
     }
-    let mut list: L::Queue<Opt<L>, 64> = Default::default();
+    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     list.push(Opt::Done)?;
     let able = s
         .battlefield()

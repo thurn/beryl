@@ -11,7 +11,7 @@ use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
 use crate::card::Prompt;
-use crate::decision::{Decision, DecisionKind, Opt};
+use crate::decision::{Decision, DecisionKind, OPTIONS, Opt};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
@@ -25,7 +25,7 @@ pub(crate) fn decision<L: Layout>(
     kind: ChosenKind,
     about: Bitboard<L::Slot>,
 ) -> Result<Decision<L>, Full> {
-    let mut options: L::Queue<Opt<L>, 64> = Default::default();
+    let mut options: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for n in ChosenValue::<L>::candidates(t, kind) {
         options.push(Opt::Number(n))?;
     }
@@ -43,7 +43,7 @@ pub(crate) fn decision_among<L: Layout>(
     about: Bitboard<L::Slot>,
     keep: impl Fn(u8) -> bool,
 ) -> Result<Decision<L>, Full> {
-    let mut options: L::Queue<Opt<L>, 64> = Default::default();
+    let mut options: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for n in ChosenValue::<L>::candidates(t, kind).filter(|&n| keep(n)) {
         options.push(Opt::Number(n))?;
     }

@@ -24,7 +24,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, AbilityKind, ObjectAbility, Replaced, Replacement, Rewrite, Types,
 };
-use crate::decision::{Choice, Decision, DecisionKind, Opt};
+use crate::decision::{Choice, Decision, DecisionKind, OPTIONS, Opt};
 use crate::event::{Entry, Reason, ReplacementKind, Sink};
 use crate::filter::Evaluate;
 use crate::fixed::{Fixed, Full};
@@ -505,7 +505,7 @@ fn copy_to_enter<L: Layout>(
         return Ok(None);
     }
     let words = crate::card::Words::NONE;
-    let mut options = <L::Queue<Opt<L>, 64>>::default();
+    let mut options = <L::Queue<Opt<L>, OPTIONS>>::default();
     options.push(Opt::Done)?;
     for p in s.in_candidate_order(s.battlefield().iter().copied().collect()) {
         if p != slot && of.matches(s, t, p, player, &words) {
@@ -687,7 +687,7 @@ pub(crate) fn dredge<L: Layout>(game: &mut Game<'_, L>, player: Seat) -> Result<
     if cards.is_empty() {
         return Ok(false);
     }
-    let mut options = <L::Queue<Opt<L>, 64>>::default();
+    let mut options = <L::Queue<Opt<L>, OPTIONS>>::default();
     options.push(Opt::Done)?;
     for slot in game.state.in_candidate_order(cards) {
         options.push(Opt::Object(slot))?;

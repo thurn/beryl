@@ -291,13 +291,10 @@ fn advance<L: Layout>(
             settled = handed_over(s, passes);
             continue;
         }
-        let Ok(mut d) = decision(s, t, &mut x.events) else {
+        let Ok(d) = decision(s, t, &mut x.events) else {
             stall(s, StallReason::Capacity);
             continue;
         };
-        if s.turn().controller().is_some() {
-            controlled(s, &mut d);
-        }
         debug_assert!(!d.is_empty());
         let priority = d.kind == DecisionKind::Priority;
         let forced = (d.len() == 1 || only_idle(s, t, &d))
@@ -319,6 +316,11 @@ fn advance<L: Layout>(
         }
         s.count_decision();
         x.counts.decisions += 1;
+        // Only a decision `next` returns needs its decider: one answered silently is answered
+        // with its first candidate whoever answers it.
+        if s.turn().controller().is_some() {
+            return Some(Step::Decide(controlled(s, d)));
+        }
         return Some(Step::Decide(d));
     }
 }
@@ -387,10 +389,7 @@ pub fn apply_decided<L: Layout>(
     {
         assert_sound(s, t, x);
         let work = x.events.work;
-        let built = decision(s, t, &mut x.events).map(|mut built| {
-            controlled(s, &mut built);
-            built
-        });
+        let built = decision(s, t, &mut x.events).map(|built| controlled(s, built));
         x.events.work = work;
         debug_assert_eq!(built.as_ref(), Ok(d), "a decision other than the open one");
     }

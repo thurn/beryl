@@ -9,7 +9,7 @@ use crate::card::{
     ObjectAbility, Timing, Types,
 };
 use crate::casting;
-use crate::decision::{Opt, Refusal};
+use crate::decision::{OPTIONS, Opt, Refusal};
 use crate::engine::collapse;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
@@ -364,7 +364,7 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
     now: &Situation<L, TARGETS>,
     cards: Bitboard<L::Slot>,
     from: From,
-    out: &mut L::Queue<Opt<L>, 64>,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
     let player = now.player;
     // Cards no face of which may be cast now are left out before collapsing, which saves
@@ -421,7 +421,7 @@ fn escape_options<L: Layout, const TARGETS: bool>(
     slot: L::Slot,
     face: FaceIx,
     from: From,
-    out: &mut L::Queue<Opt<L>, 64>,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
     let def_face = s.copiable(slot).turned(face).face(t);
     for costs in option_sets(def_face, true).map(Castings::with_escape) {
@@ -560,7 +560,7 @@ fn activation_options<L: Layout, const TARGETS: bool>(
     s: &State<L>,
     t: &GameTable,
     now: &Situation<L, TARGETS>,
-    out: &mut L::Queue<Opt<L>, 64>,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
     let player = now.player;
     // Activations that would do nothing, left out for the player the profile hides them from,
@@ -649,7 +649,7 @@ pub(crate) fn priority_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    out: &mut L::Queue<Opt<L>, 64>,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
     let now = Situation::of(player);
     cast_options(s, t, &now, cast_sources(s, t, player), From::Priority, out)?;
@@ -671,7 +671,7 @@ pub fn payable_responses<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-) -> Result<L::Queue<Opt<L>, 64>, Full> {
+) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     debug_assert_ne!(s.turn().active(), player);
     let now = Situation::<L, false>::ignoring_targets(player);
     let mut out = Default::default();

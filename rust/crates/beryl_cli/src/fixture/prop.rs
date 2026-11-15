@@ -14,8 +14,8 @@
 use beryl_cards::CARDS;
 use beryl_engine::card::{Prompt, Purpose};
 use beryl_engine::{
-    Bitboard, Decision, DecisionKind, GameTable, Layout, Observation, Opt, Replay, Scratch, Seat,
-    Small, State, Step, next,
+    Bitboard, Decision, DecisionKind, GameTable, Layout, OPTIONS, Observation, Opt, Replay,
+    Scratch, Seat, Small, State, Step, next,
 };
 use beryl_scenario::Scenario;
 use beryl_session::prompt::{ClickReply, ClickRequest, Clicked, Held};
@@ -50,7 +50,7 @@ impl Prop {
     /// The decision, in the position `state`.
     fn decision(self, state: &State) -> Result<Decision, String> {
         let numbers = |from: u8, to: u8, prompt: Prompt| {
-            let mut offered = <Small as Layout>::Queue::<Opt, 64>::default();
+            let mut offered = <Small as Layout>::Queue::<Opt, OPTIONS>::default();
             for n in from..=to {
                 offered
                     .push(Opt::Number(n))

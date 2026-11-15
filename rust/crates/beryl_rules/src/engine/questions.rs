@@ -2,7 +2,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{ChosenKind, FaceIx, Prompt, Purpose, Types};
-use crate::decision::{Candidates, Decision, DecisionKind, Opt, Refusal};
+use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt, Refusal};
 use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::Seat;
@@ -27,7 +27,7 @@ pub(crate) fn decision<L: Layout>(
     match *s.pending() {
         Pending::None => match trigger::next_to_stack(s) {
             Some((player, triggers)) => {
-                let mut list: L::Queue<Opt<L>, 64> = Default::default();
+                let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
                 for &i in triggers.iter() {
                     list.push(Opt::Trigger(i))?;
                 }
@@ -125,7 +125,7 @@ fn options<L: Layout>(
     opts: &[Opt<L>],
     prompt: Prompt,
 ) -> Result<Decision<L>, Full> {
-    let mut list: L::Queue<Opt<L>, 64> = Default::default();
+    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for &o in opts {
         list.push(o)?;
     }
@@ -233,12 +233,15 @@ pub fn refusal<L: Layout>(
 /// Gives `d`, built for the player it belongs to, to the player controlling them this turn, if
 /// one does ([`State::decider`]; [CR 724.5]): "While controlling another player, a player
 /// makes all choices and decisions the controlled player is allowed to make or is told to
-/// make by the rules or by any objects." Set on the decision `next` holds rather than where
-/// each is built, so that no decision is moved once more in a game no one controls.
+/// make by the rules or by any objects." Set only on a decision `next` returns, rather than
+/// where each is built, so that a game no one controls never moves a decision once more, and
+/// a decision answered silently skips it. Out of line and taking the decision by value, so
+/// the common path neither calls it nor borrows its decision.
 ///
 /// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
 #[cold]
 #[inline(never)]
-pub(crate) fn controlled<L: Layout>(s: &State<L>, d: &mut Decision<L>) {
+pub(crate) fn controlled<L: Layout>(s: &State<L>, mut d: Decision<L>) -> Decision<L> {
     d.decider = s.decider(d.player);
+    d
 }

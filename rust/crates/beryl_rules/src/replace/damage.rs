@@ -5,7 +5,7 @@
 //! [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
 
 use crate::card::{Ability, AbilityKind, Effect, ObjectAbility, Replaced, Replacement, Rewrite};
-use crate::decision::{Decision, DecisionKind, Opt};
+use crate::decision::{Decision, DecisionKind, OPTIONS, Opt};
 use crate::event::{Recipient, ReplacementKind};
 use crate::filter::Evaluate;
 use crate::fixed::{Fixed, Full};
@@ -270,7 +270,7 @@ fn choose<L: Layout>(
     let (Some(shown), Some(permanent)) = (shield.shown, multiplier.shown) else {
         return Ok(Some(shield));
     };
-    let mut options = <L::Queue<Opt<L>, 64>>::default();
+    let mut options = <L::Queue<Opt<L>, OPTIONS>>::default();
     options.push_bounded(Opt::Object(shown));
     options.push_bounded(Opt::Object(permanent));
     let d = Decision::options(

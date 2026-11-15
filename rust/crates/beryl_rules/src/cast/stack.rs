@@ -2,7 +2,7 @@
 //! without resolving.
 
 use crate::bitboard::Bitboard;
-use crate::decision::Opt;
+use crate::decision::{OPTIONS, Opt};
 use crate::event::{self, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
@@ -21,8 +21,8 @@ pub(crate) fn offer_options<L: Layout>(
     object: ObjectRef<L>,
     player: Seat,
     free: bool,
-) -> Result<L::Queue<Opt<L>, 64>, Full> {
-    let mut out: L::Queue<Opt<L>, 64> = Default::default();
+) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
+    let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
     out.push(Opt::Pass)?;
     if s.is_current(object) {
         let mut cards = Bitboard::EMPTY;

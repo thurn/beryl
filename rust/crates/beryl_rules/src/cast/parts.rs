@@ -12,7 +12,7 @@ use crate::card::{
     Purpose,
 };
 use crate::counters;
-use crate::decision::{Candidates, Decision, DecisionKind, Opt};
+use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::{collapse, collapse_in_order};
 use crate::event::{self, Entry, Reason, Sink};
 use crate::filter::{Evaluate, Filter};
@@ -437,11 +437,11 @@ fn substitute_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     c: &Casting<L>,
-) -> Result<L::Queue<Opt<L>, 64>, Full> {
-    let mut out: L::Queue<Opt<L>, 64> = Default::default();
+) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
+    let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
     let entry = top(s);
     let cost = total_cost(s, t, entry, c);
-    let mut objects: L::Queue<Opt<L>, 64> = Default::default();
+    let mut objects: L::Queue<Opt<L>, OPTIONS> = Default::default();
     let paying_objects = step(c);
     let left = paying_objects.left;
     let (action, chosen) = part_being_paid(t, entry, c);

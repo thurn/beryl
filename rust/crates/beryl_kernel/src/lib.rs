@@ -266,7 +266,7 @@
 //! | by-bajq.8.3 | +16 (landed: +16) | the count of mandatory resolutions in a row and the hash it compares, padded |
 //! | by-bajq.8.4 | +32 (landed: +32) | a set of the phased-out permanents' slots |
 //!
-//! With every allotment of groups 4 to 8 landed the size is 20,248, 232 bytes under the limit.
+//! With groups 4 to 8 landed and 63 options a decision ([`decision::OPTIONS`]) it is 20,240.
 //! The next room is in [`state::CombatRole`], five bytes in each of the 255 objects, and in
 //! moving a structure only a rare game fills to [`Large`] alone.
 //!

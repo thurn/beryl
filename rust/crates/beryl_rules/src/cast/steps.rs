@@ -4,7 +4,7 @@
 use crate::bitboard::Bitboard;
 use crate::card::{CastingIx, ObjectAbility, Part, Prompt, Purpose, TargetSpec};
 use crate::casting;
-use crate::decision::{Candidates, Decision, DecisionKind, Opt};
+use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Event, EventKind, Reason, Sink};
 use crate::fixed::Full;
@@ -377,7 +377,7 @@ fn x_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     c: &Casting<L>,
-) -> Result<L::Queue<Opt<L>, 64>, Full> {
+) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     let entry = top(s);
     let least = match entry.item {
         StackItem::Spell {
@@ -386,7 +386,7 @@ fn x_options<L: Layout>(
         _ => 0,
     };
     let exclude = spent_by_entry(t, entry);
-    let mut out: L::Queue<Opt<L>, 64> = Default::default();
+    let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for x in least..(least.saturating_add(64)) {
         let mut probe = entry.clone();
         probe.x = x;
@@ -412,7 +412,7 @@ pub(crate) fn decision<L: Layout>(
     sink: &mut Sink<L>,
     c: &Casting<L>,
 ) -> Result<Decision<L>, Full> {
-    let options = |kind: DecisionKind, list: L::Queue<Opt<L>, 64>, prompt: Prompt| Decision {
+    let options = |kind: DecisionKind, list: L::Queue<Opt<L>, OPTIONS>, prompt: Prompt| Decision {
         player: c.player,
         decider: c.player,
         kind,
@@ -430,7 +430,7 @@ pub(crate) fn decision<L: Layout>(
             let entry = top(s);
             let spec = &specs(t, entry)[c.spec.index()];
             let most = target_options(s, t, c).count().min(u32::from(spec.count));
-            let mut list: L::Queue<Opt<L>, 64> = Default::default();
+            let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
             for n in 0..=most {
                 list.push(Opt::Number(n as u8))?;
             }
@@ -461,7 +461,7 @@ pub(crate) fn decision<L: Layout>(
                 players,
                 abilities,
             } => {
-                let mut list: L::Queue<Opt<L>, 64> = Default::default();
+                let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
                 for player in s.players_in_seat_order(players) {
                     list.push(Opt::Player(player))?;
                 }
@@ -495,7 +495,7 @@ pub(crate) fn decision<L: Layout>(
                 false,
                 mana::Paying::entry(t, entry),
             )?;
-            let mut list: L::Queue<Opt<L>, 64> = Default::default();
+            let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
             for i in 0..plans.len() {
                 list.push(Opt::Plan(index::<L>(i)))?;
             }

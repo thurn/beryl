@@ -80,10 +80,21 @@ impl<L: Layout> std::hash::Hash for Decision<L> {
     }
 }
 
+/// The most options a [`Small`] decision holds ([`Candidates::Options`]); a decision with more
+/// is built in the [`Large`](crate::layout::Large) layout.
+///
+/// Why 63 and not 64: a decision is copied with the state and moved on every engine step, so
+/// its size is paid on every step. Its fields outside the candidates (the object set, the
+/// prompt, the player, the decider and the kind) take 49 bytes. With 64 options of 4 bytes the
+/// candidates are 264 bytes: the 256 of the options, the list's length and the enum's tag,
+/// padded to the 8-byte alignment of their object set. That makes 313 bytes, padded to 320.
+/// With 63 the candidates are 256 and the decision 312, as it was before decisions named the
+/// player who answers them.
+pub const OPTIONS: usize = 63;
+
 // A decision is copied with the state: the prompt and its object set take the bytes the
-// question each card once had its own variant for took, and no more. The second player, the
-// decider, found no spare byte in the 312 there were before it, so it costs a word.
-const _: () = assert!(size_of::<Decision<Small>>() == 320);
+// question each card once had its own variant for took, and no more.
+const _: () = assert!(size_of::<Decision<Small>>() == 312);
 
 impl<L: Layout> Decision<L> {
     /// A pick of `prompt` among the objects `candidates`.
@@ -107,7 +118,7 @@ impl<L: Layout> Decision<L> {
     pub fn options(
         player: Seat,
         kind: DecisionKind,
-        list: L::Queue<Opt<L>, 64>,
+        list: L::Queue<Opt<L>, OPTIONS>,
         prompt: Prompt,
     ) -> Decision<L> {
         Decision {
@@ -142,7 +153,7 @@ impl<L: Layout> Decision<L> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Candidates<L: Layout = Small> {
     Objects(Bitboard<L::Slot>),
-    Options(L::Queue<Opt<L>, 64>),
+    Options(L::Queue<Opt<L>, OPTIONS>),
 }
 
 impl Copy for Candidates<Small> {}

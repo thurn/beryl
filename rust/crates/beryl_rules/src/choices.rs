@@ -74,7 +74,7 @@ use beryl_kernel::chosen::ChosenValue;
 
 use crate::bitboard::Bitboard;
 use crate::card::{Flow, Part, Players, Prompt, Purpose, Shape, Stop};
-use crate::decision::{Candidates, Decision, DecisionKind, Opt};
+use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
@@ -91,7 +91,7 @@ fn option<L: Layout>(
     prompt: Prompt,
     about: Bitboard<L::Slot>,
 ) -> Result<Opt<L>, Stop> {
-    let mut list: L::Queue<Opt<L>, 64> = Default::default();
+    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for o in opts {
         list.push(o)?;
     }
@@ -297,7 +297,7 @@ pub(crate) fn retarget<L: Layout>(
     others: crate::cast::TargetSet<L>,
 ) -> Result<Opt<L>, Stop> {
     let s = &*game.state;
-    let mut opts: L::Queue<Opt<L>, 64> = Default::default();
+    let mut opts: L::Queue<Opt<L>, OPTIONS> = Default::default();
     opts.push(kept)?;
     for p in s.players_in_seat_order(others.players) {
         opts.push(Opt::Player(p))?;
@@ -432,7 +432,7 @@ pub fn hidden_pick<L: Layout>(
     candidates: Bitboard<L::Slot>,
     prompt: Prompt,
 ) -> Result<Option<L::Slot>, Stop> {
-    let mut list: L::Queue<Opt<L>, 64> = Default::default();
+    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     list.push(Opt::Done)?;
     let candidates = crate::engine::collapse(game.state, candidates);
     for slot in game.state.in_candidate_order(candidates) {

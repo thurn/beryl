@@ -11,7 +11,7 @@ use beryl_cards::names::{
     THUNDERTRAP_TRAINER, TRINKET_MAGE,
 };
 use beryl_engine::card::{Prompt, Purpose};
-use beryl_engine::{Choice, Decision, DecisionKind, Layout, Opt, Seat, Small, TurnStep};
+use beryl_engine::{Choice, Decision, DecisionKind, Layout, OPTIONS, Opt, Seat, Small, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::StopsSetting;
 use beryl_session::prompt::{ButtonId, Click, Clicked, Held};
@@ -442,7 +442,7 @@ fn whether_to_search_is_asked_under_full_control() {
 #[test]
 fn a_plain_may_is_two_buttons() {
     let (table, state) = position(&SPRINGS);
-    let mut answers = <Small as Layout>::Queue::<Opt, 64>::default();
+    let mut answers = <Small as Layout>::Queue::<Opt, OPTIONS>::default();
     answers.push(Opt::Yes).unwrap();
     answers.push(Opt::No).unwrap();
     let d = Decision::options(

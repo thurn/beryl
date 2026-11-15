@@ -13,7 +13,7 @@ use crate::actions::discard;
 use crate::bitboard::Bitboard;
 use crate::card::{Flow, ManaCost, Part, Players, Prompt, Purpose, Stop};
 use crate::choices;
-use crate::decision::Opt;
+use crate::decision::{OPTIONS, Opt};
 use crate::event::Event;
 use crate::filter::Evaluate;
 use crate::game::Game;
@@ -113,7 +113,7 @@ pub fn pay<L: Layout>(
         greedy,
         mana::Paying::NOTHING,
     )?;
-    let mut opts: L::Queue<Opt<L>, 64> = Default::default();
+    let mut opts: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for i in 0..plans.len() {
         opts.push(Opt::Plan(index::<L>(i)))?;
     }

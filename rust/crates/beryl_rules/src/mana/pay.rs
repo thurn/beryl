@@ -5,7 +5,7 @@ use crate::card::{
     Ability, AbilityIx, ChosenKind, CostAction, FaceIx, INTRINSIC_MANA, ManaColor, ManaCost,
     ObjectAbility, Types,
 };
-use crate::decision::Opt;
+use crate::decision::{OPTIONS, Opt};
 use crate::event::{self, Sink};
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
@@ -476,10 +476,10 @@ pub(crate) fn manual_options<L: Layout>(
     remaining: ManaCost,
     exclude: Bitboard<L::Slot>,
     paying: Paying<L>,
-) -> Result<L::Queue<Opt<L>, 64>, Full> {
+) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
     let sources = Sources::of(s, t, player, exclude, paying)?;
     let pool = s.player(player).mana().amounts();
-    let mut out: L::Queue<Opt<L>, 64> = Default::default();
+    let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
     for kind in 0..KINDS {
         if !helps(remaining, kind) {
             continue;
@@ -596,7 +596,7 @@ pub(crate) fn standalone_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    out: &mut L::Queue<Opt<L>, 64>,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) {
     let sources: Bitboard<L::Slot> = controlled(s, player)
         .filter(|&(slot, d)| source(s, t, player, slot, d).is_some())
@@ -618,7 +618,7 @@ pub(crate) fn instant_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    out: &mut L::Queue<Opt<L>, 64>,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
     if !t.can(Capability::InstantMana) {
         return Ok(());
@@ -632,7 +632,7 @@ fn list_instant_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    out: &mut L::Queue<Opt<L>, 64>,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
     let instant = |slot: L::Slot| {
         let words = s.words_of(slot);
@@ -724,7 +724,7 @@ pub(crate) fn waterbend_mana_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    out: &mut L::Queue<Opt<L>, 64>,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) {
     let sources = controlled(s, player).map(|(slot, _)| slot).collect();
     add_activations(s, t, player, out, sources);
@@ -734,7 +734,7 @@ fn add_activations<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    out: &mut L::Queue<Opt<L>, 64>,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
     sources: Bitboard<L::Slot>,
 ) {
     // Candidates are listed in the candidate order, which a `Choice` counts in.

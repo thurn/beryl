@@ -7,7 +7,7 @@ use super::{blockers_of, has, in_combat_now};
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Prompt, Purpose};
 use crate::damage;
-use crate::decision::{Candidates, Choice, Decision, DecisionKind, Opt};
+use crate::decision::{Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::collapse;
 use crate::event::{Recipient, Sink};
 use crate::fixed::Full;
@@ -138,7 +138,7 @@ pub(crate) fn division_decision<L: Layout>(
     let spent: u32 = killed.sum(|b| u32::from(lethal(s, b)));
     let left = u32::from(power(s, attacker)) - spent;
     let absorbable: u32 = (blockers & !chosen).sum(|b| u32::from(lethal(s, b)) - 1);
-    let mut list: L::Queue<Opt<L>, 64> = Default::default();
+    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     if !killed.is_empty() || left <= absorbable {
         list.push(Opt::Done)?;
     }

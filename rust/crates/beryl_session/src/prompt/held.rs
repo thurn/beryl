@@ -604,7 +604,7 @@ pub(crate) fn button(id: ButtonId, label: &str, enabled: bool, primary: bool) ->
 mod tests {
     use beryl_engine::card::{Prompt, Purpose};
     use beryl_engine::layout::Queue as _;
-    use beryl_engine::{Decision, DecisionKind, Opt, Seat, Small};
+    use beryl_engine::{Decision, DecisionKind, OPTIONS, Opt, Seat, Small};
 
     use super::named;
     use crate::protocol::Side;
@@ -615,7 +615,7 @@ mod tests {
     /// the decision belongs to: P0, aiming P1's spell, clicks themself to aim it at P0.
     #[test]
     fn a_click_on_a_player_names_them_as_the_controller_sees_them() {
-        let mut list = <Small as beryl_engine::Layout>::Queue::<Opt<Small>, 64>::default();
+        let mut list = <Small as beryl_engine::Layout>::Queue::<Opt<Small>, OPTIONS>::default();
         list.push_bounded(Opt::Player(Seat::P0));
         list.push_bounded(Opt::Player(Seat::P1));
         let mut d = Decision::<Small>::options(

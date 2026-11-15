@@ -13,8 +13,8 @@ use beryl_cards::names::{
 use beryl_engine::card::{Prompt, Purpose};
 use beryl_engine::layout::Queue as _;
 use beryl_engine::{
-    Bitboard, Candidates, Choice, Decision, DecisionKind, Layout, Observation, Opt, Seat, Slot,
-    SlotId as _, Small, TurnStep,
+    Bitboard, Candidates, Choice, Decision, DecisionKind, Layout, OPTIONS, Observation, Opt, Seat,
+    Slot, SlotId as _, Small, TurnStep,
 };
 use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_search::{Agent, AgentDecision};
@@ -204,7 +204,7 @@ const RECIPIENTS: Scenario = Scenario::new("recipients")
 
 /// A decision that offers the first player the numbers `from..=to`, of `prompt`.
 fn numbers(from: u8, to: u8, prompt: Prompt) -> Decision {
-    let mut offered = <Small as Layout>::Queue::<Opt, 64>::default();
+    let mut offered = <Small as Layout>::Queue::<Opt, OPTIONS>::default();
     for n in from..=to {
         offered.push(Opt::Number(n)).unwrap();
     }

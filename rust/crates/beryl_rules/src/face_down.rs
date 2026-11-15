@@ -9,7 +9,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, ManaCost, Part, Prompt, Purpose, Types};
-use crate::decision::{Candidates, Decision, DecisionKind, Opt};
+use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::collapse;
 use crate::event::Sink;
 use crate::fixed::Full;
@@ -46,7 +46,7 @@ pub(crate) fn face_up_options<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     player: Seat,
-    out: &mut L::Queue<Opt<L>, 64>,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
     let face_down: Bitboard<L::Slot> = s
         .battlefield()
@@ -148,7 +148,7 @@ pub(crate) fn decision<L: Layout>(
             false,
             mana::Paying::NOTHING,
         )?;
-        let mut list: L::Queue<Opt<L>, 64> = Default::default();
+        let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
         for i in 0..plans.len() {
             list.push(Opt::Plan(index::<L>(i)))?;
         }

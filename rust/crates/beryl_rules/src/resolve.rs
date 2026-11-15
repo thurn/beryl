@@ -200,8 +200,7 @@ pub(crate) fn answer_controlled<L: Layout>(
     a: &mut dyn Answers<L>,
     question: &Decision<L>,
 ) -> Option<Choice> {
-    let mut asked = question.clone();
-    crate::engine::controlled(s, &mut asked);
+    let asked = crate::engine::controlled(s, question.clone());
     a.answer(Observation::new(paused, asked.decider), &asked)
 }
 
