@@ -1,11 +1,14 @@
 //! Card faces: every card of the decklist's Scryfall scan, read from the app's own image cache
 //! (beryl_app's art.rs, under the Tauri app's cache directory), decoded at startup and scaled to
-//! 256 by 360, uncompressed. A face with no cached scan is a flat colour with a stripe. Nothing
-//! is ever downloaded.
+//! 256 by 360, uncompressed. A scan missing from the cache is downloaded into it first, as the
+//! app's own queue does: one image at a time, at least 100 ms apart, as Scryfall's API
+//! guidelines ask. A face whose scan cannot be had is a flat colour with a stripe.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::thread;
+use std::time::{Duration, Instant};
 
 use beryl_session::card_records::card_records_among;
 use image::imageops::FilterType;
@@ -31,7 +34,8 @@ pub fn cache_dir() -> PathBuf {
     Path::new(&home).join("Library/Caches/ca.thurn.beryl/art")
 }
 
-fn cached(cache: &Path, url: &str) -> Option<PathBuf> {
+/// Where the app's cache keeps the image at `url`.
+fn cache_path(cache: &Path, url: &str) -> Option<PathBuf> {
     let rest = url.strip_prefix(SCRYFALL_CARDS).or_else(|| {
         url.strip_prefix(SCRYFALL_BACKS)
             .map(|r| r.trim_start_matches('/'))
@@ -41,7 +45,53 @@ fn cached(cache: &Path, url: &str) -> Option<PathBuf> {
     } else {
         cache.join(rest)
     };
-    path.is_file().then_some(path)
+    Some(path)
+}
+
+fn cached(cache: &Path, url: &str) -> Option<PathBuf> {
+    cache_path(cache, url).filter(|path| path.is_file())
+}
+
+/// Downloads each of `urls` the cache lacks, with curl, writing each file atomically.
+fn fetch_missing<'a>(cache: &Path, urls: impl IntoIterator<Item = &'a str>) {
+    let mut last: Option<Instant> = None;
+    for url in urls {
+        let Some(path) = cache_path(cache, url) else {
+            continue;
+        };
+        if path.is_file() {
+            continue;
+        }
+        if let Some(previous) = last
+            && let Some(wait) = Duration::from_millis(100).checked_sub(previous.elapsed())
+        {
+            thread::sleep(wait);
+        }
+        last = Some(Instant::now());
+        let Some(folder) = path.parent() else {
+            continue;
+        };
+        let partial = path.with_extension("part");
+        let fetched = std::fs::create_dir_all(folder).is_ok()
+            && Command::new("curl")
+                .args(["--silent", "--fail", "--location", "--max-time", "20"])
+                .args([
+                    "--user-agent",
+                    "ProjectBeryl/0.1",
+                    "--header",
+                    "Accept: image/jpeg,image/*",
+                ])
+                .arg("--output")
+                .arg(&partial)
+                .arg(url)
+                .status()
+                .is_ok_and(|status| status.success())
+            && std::fs::rename(&partial, &path).is_ok();
+        if !fetched {
+            let _ = std::fs::remove_file(&partial);
+            eprintln!("faces: could not download {url}");
+        }
+    }
 }
 
 fn placeholder(seed: u32, back: bool) -> Vec<u8> {
@@ -88,7 +138,14 @@ fn decode(path: &Path) -> Option<Vec<u8>> {
 pub fn load() -> FaceImages {
     let cache = cache_dir();
     let deck = beryl_cards::decks::default_deck();
-    let records = card_records_among(deck.iter().map(|(_, name)| name.as_str()));
+    // The deck's cards and every token they make.
+    let mut names: Vec<String> = deck.iter().map(|(_, name)| name.clone()).collect();
+    for (_, name) in &deck {
+        if let Some(record) = beryl_card_store::STORE.card(name) {
+            names.extend(record.tokens.into_iter().map(|token| token.name));
+        }
+    }
+    let records = card_records_among(names.iter().map(String::as_str));
     // Each distinct image, with the names that show it.
     let mut images: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for entry in records.cards.values().chain(records.tokens.values()) {
@@ -101,6 +158,12 @@ pub fn load() -> FaceImages {
         }
     }
     let urls: Vec<String> = images.keys().cloned().collect();
+    fetch_missing(
+        &cache,
+        urls.iter()
+            .map(String::as_str)
+            .chain([records.card_back.as_str()]),
+    );
     let decoded: Vec<Option<Vec<u8>>> = thread::scope(|scope| {
         let chunk = urls.len().div_ceil(8).max(1);
         let handles: Vec<_> = urls

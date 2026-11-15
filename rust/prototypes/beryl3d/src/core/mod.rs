@@ -301,7 +301,10 @@ impl Core {
         self.placement.place(&self.objs, &self.camera);
         for id in [previous, picked].into_iter().flatten() {
             let id = usize::from(id);
-            if self.objs[id].track.last_end() > now {
+            // A card that a script will move later keeps that motion. Any other card goes to
+            // its new pose at once, even if its last lift has not finished: waiting for it to
+            // finish left cards enlarged when the pointer crossed the hand quickly.
+            if self.objs[id].track.last_start() > now {
                 continue;
             }
             let from = self.objs[id].track.pose_at(now);

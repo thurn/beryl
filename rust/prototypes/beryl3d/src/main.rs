@@ -4,7 +4,8 @@
 //! - no arguments: opens the window (keys 1, 2, 3, Space, S);
 //! - `--stats live|stress-255|stress-1024 [--frames N]`: five runs with no window, printing what
 //!   a frame costs;
-//! - `--png <ms> <path> [--board B] [--size WxH]`: a picture of the board at a time.
+//! - `--png <ms> <path> [--board B] [--size WxH] [--sweep]`: a picture of the board at a time;
+//!   with `--sweep`, after the pointer has crossed the viewer's hand quickly.
 
 mod core;
 mod faces;
@@ -76,7 +77,8 @@ fn flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
         .map(String::as_str)
 }
 
-fn png(setup: &Setup, board: Board, at_ms: u64, path: &Path, width: u32, height: u32) {
+fn png(setup: &Setup, board: Board, at_ms: u64, path: &Path, size: (u32, u32), sweep: bool) {
+    let (width, height) = size;
     let mut offscreen = headless::Offscreen::new(width, height, &setup.faces, None);
     let (mut core, live) = stats::make(board, setup, width, height);
     let started = Instant::now();
@@ -93,6 +95,17 @@ fn png(setup: &Setup, board: Board, at_ms: u64, path: &Path, width: u32, height:
         if live.is_some() {
             std::thread::sleep(Duration::from_millis(16));
         }
+    }
+    if sweep {
+        // The pointer crosses the viewer's hand from left to right in 15 ms steps and stops
+        // two thirds of the way along, as a quick hand would.
+        for step in 0..=20 {
+            let x = -0.5 + 0.04 * step as f32;
+            core.handle(core::Input::Pointer(Some(glam::Vec2::new(x, -0.85))));
+            now += 15_000_000;
+            core.frame(now);
+        }
+        now += 300_000_000;
     }
     let stats = core.frame(now).stats;
     offscreen.renderer.draw(
@@ -143,7 +156,14 @@ fn main() {
             .map_or((1920, 1080), |(w, h)| {
                 (w.parse().expect("width"), h.parse().expect("height"))
             });
-        png(&setup(started), board, at, Path::new(path), width, height);
+        png(
+            &setup(started),
+            board,
+            at,
+            Path::new(path),
+            (width, height),
+            args.iter().any(|a| a == "--sweep"),
+        );
     } else {
         window::run(setup(started));
     }

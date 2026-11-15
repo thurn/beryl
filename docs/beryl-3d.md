@@ -1924,14 +1924,14 @@ What these show:
 | ----------------------------------------- | ------------------------------- |
 | Release executable, stripped              | 33.7 MB                         |
 | Peak memory                               | 109 MB in live, 90 MB in stress |
-| Start to first frame, faces decoded       | 44 to 65 ms                     |
-| Card faces at 256 by 360, uncompressed    | 33 layers, 12 MB                |
+| Start to first frame, 39 scans decoded    | about 130 ms                    |
+| Card faces at 256 by 360, uncompressed    | 41 layers, 15 MB                |
 | Release build of the prototype from clean | about 65 seconds                |
 
 - **Most of the executable is the game, not the client.** The earlier `wgpu`
   prototype with no game was 4.6 MB. Linking `beryl_session` brings the engine,
   the cards, the card store and the search.
-- **Peak memory includes the session and the AI.** The faces are 12 MB of it.
+- **Peak memory includes the session and the AI.** The faces are 15 MB of it.
 - **GPU timestamps do not work on this Mac.** `wgpu` 30 offers
   `Features::TIMESTAMP_QUERY` on Metal, but a render pass's end timestamp comes
   back 0.2 to 0.3 ms earlier than its start. The table above therefore gives the

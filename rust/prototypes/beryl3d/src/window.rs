@@ -85,7 +85,7 @@ impl State {
         if let Some(Shown { core, .. }) = &mut self.boards[0] {
             drain(core, Some(&self.live));
         }
-        let now = self.now(self.current);
+        let acquiring = Instant::now();
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
@@ -95,6 +95,10 @@ impl State {
             }
             _ => return,
         };
+        let acquire_ns = acquiring.elapsed().as_nanos() as f64;
+        // The time is read after the drawable is acquired, which can wait for the display, so
+        // the frame shows the moment it is drawn for.
+        let now = self.now(self.current);
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -124,6 +128,21 @@ impl State {
             && at.duration_since(previous).as_secs_f64() > 1.5 / self.refresh_hz
         {
             self.counters.late += 1;
+            // One line per late frame, saying where its time went, so a person running the
+            // window can tell drawing cost from presentation and scheduling.
+            eprintln!(
+                "late frame {}: {:.1} ms since the last (display {:.1} ms); waited {:.2} ms for \
+                 the drawable, core {:.3} ms, encode and submit {:.3} ms; {} updates waiting; \
+                 load {:.1}",
+                self.counters.late,
+                at.duration_since(previous).as_secs_f64() * 1e3,
+                1e3 / self.refresh_hz,
+                acquire_ns / 1e6,
+                core_ns / 1e6,
+                encode_ns / 1e6,
+                shown.queued(),
+                measure::load_average(),
+            );
         }
         self.last_frame = Some((at, animating));
         let c = &mut self.counters;
@@ -247,7 +266,9 @@ impl ApplicationHandler<()> for App {
             config.format = *format;
         }
         config.present_mode = wgpu::PresentMode::Fifo;
-        config.desired_maximum_frame_latency = 1;
+        // Two frames in flight, wgpu's default. With one, every frame waited for the compositor
+        // to give back the previous drawable before it could start.
+        config.desired_maximum_frame_latency = 2;
         surface.configure(&device, &config);
         let renderer = Renderer::new(device, queue, config.format, &self.setup.faces, false);
         let proxy = self.proxy.clone();

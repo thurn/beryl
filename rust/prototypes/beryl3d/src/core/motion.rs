@@ -221,14 +221,6 @@ impl Track {
             .any(|s| s.start <= t && t < s.end() && !s.from.same(&s.to))
     }
 
-    pub fn last_end(&self) -> u64 {
-        self.segments[..self.len]
-            .iter()
-            .map(Segment::end)
-            .max()
-            .unwrap_or(0)
-    }
-
     pub fn last_start(&self) -> u64 {
         self.segments[..self.len].last().map_or(0, |s| s.start)
     }

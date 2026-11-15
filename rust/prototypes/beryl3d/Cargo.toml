@@ -11,6 +11,8 @@ publish = false
 [workspace]
 
 [dependencies]
+# The card store links each card to the tokens it makes, whose faces are loaded too.
+beryl_card_store = { path = "../../crates/beryl_card_store" }
 beryl_cards = { path = "../../crates/beryl_cards" }
 beryl_search = { path = "../../crates/beryl_search" }
 beryl_session = { path = "../../crates/beryl_session" }

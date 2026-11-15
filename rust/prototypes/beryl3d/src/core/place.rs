@@ -29,6 +29,8 @@ const STACK: Vec3 = Vec3::new(380.0, -20.0, 40.0);
 const HAND_DEPTH: f32 = 300.0;
 const HAND_HEIGHT: f32 = 0.24;
 const OPPONENT_HAND_HEIGHT: f32 = 0.16;
+/// How much larger the hand card under the pointer is drawn.
+const HOVER_SCALE: f32 = 1.35;
 
 #[derive(Clone, Copy)]
 enum Group {
@@ -181,14 +183,22 @@ fn hand(rest: &mut [Pose], ids: &[u16], camera: &super::camera::Camera, hover: O
         let offset = i as f32 - (n as f32 - 1.0) / 2.0;
         let x = offset * spacing;
         if hover == Some(id) {
-            let ndc = Vec2::new(x, -1.0 + HAND_HEIGHT * 1.45 * 1.05);
-            rest[usize::from(id)] =
-                camera.screen_pose(ndc, HAND_DEPTH - 40.0, Quat::IDENTITY, HAND_HEIGHT * 1.45);
+            let ndc = Vec2::new(x, -1.0 + HAND_HEIGHT * HOVER_SCALE * 1.02);
+            rest[usize::from(id)] = camera.screen_pose(
+                ndc,
+                HAND_DEPTH - 40.0,
+                Quat::IDENTITY,
+                HAND_HEIGHT * HOVER_SCALE,
+            );
             continue;
         }
         let y = -1.0 + HAND_HEIGHT * 0.5 - offset * offset * 0.003;
-        let rotation = Quat::from_rotation_z(-offset * 0.05) * Quat::from_rotation_x(-0.25);
-        let depth = HAND_DEPTH - i as f32 * 0.8;
+        // Turned only about the line of sight, so every card lies in a plane parallel to the
+        // screen and a card nearer the camera covers its neighbour cleanly. A tilt toward or
+        // away from the camera made neighbouring cards, a millimetre or two apart, pass
+        // through each other, showing torn slivers of both.
+        let rotation = Quat::from_rotation_z(-offset * 0.05);
+        let depth = HAND_DEPTH - i as f32 * 1.5;
         rest[usize::from(id)] = camera.screen_pose(Vec2::new(x, y), depth, rotation, HAND_HEIGHT);
     }
 }
@@ -201,7 +211,7 @@ fn opponent_hand(rest: &mut [Pose], ids: &[u16], camera: &super::camera::Camera)
         let offset = i as f32 - (n as f32 - 1.0) / 2.0;
         let rotation = Quat::from_rotation_z(offset * 0.04) * Quat::from_rotation_y(PI);
         let ndc = Vec2::new(offset * spacing, 1.02 + offset * offset * 0.002);
-        let depth = HAND_DEPTH + 20.0 + i as f32 * 0.8;
+        let depth = HAND_DEPTH + 20.0 + i as f32 * 1.5;
         rest[usize::from(id)] = camera.screen_pose(ndc, depth, rotation, OPPONENT_HAND_HEIGHT);
     }
 }
