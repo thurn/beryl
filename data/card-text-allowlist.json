@@ -13,6 +13,14 @@
       "Blood Artist: whenever [-~ or another-] {+a+} creature dies , target player loses 1 life [-and-] {+.+} you gain 1 life ."
     ]
   },
+  "Bloodghast": {
+    "reason": "wording",
+    "note": "\"Landfall\" is an ability word with no rules meaning (CR 207.2c), so the renderer leaves it out. \"As long as an opponent has 10 or less life\" is said as \"as long as each opponent's life total is at most 10\", with the condition ahead of the clause: the same in a two-player game, where there is one opponent.",
+    "diff": [
+      "Bloodghast: {+as long as each opponent's life total is at most 10 ,+} ~ has haste [-as long as an opponent has 10 or less life-] .",
+      "Bloodghast: [-landfall —-] whenever a land you control enters , you may return ~ from your graveyard to the battlefield ."
+    ]
+  },
   "Cerebral Vortex": {
     "reason": "wording",
     "note": "Oracle says \"deals damage to that player equal to the number of cards they've drawn this turn\"; the renderer moves \"to that player\" to the end and says \"that player drew\" for \"they've drawn\". Same recipient and same count, and the draw and the damage are one spell's two instructions.",

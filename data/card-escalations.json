@@ -1,7 +1,1 @@
-{
-  "Bloodghast": {
-    "mechanic": "an effect returning a card from a graveyard to the battlefield under its owner's control (Effect has only ReturnToHand and ReturnTransformed); also a rule that a creature can't block (RuleChange governs only casting spells and loyalty abilities)",
-    "rule": "CR 113.6b",
-    "text": "This creature can't block.\nLandfall \u2014 Whenever a land you control enters, you may return this card from your graveyard to the battlefield."
-  }
-}
+{}
