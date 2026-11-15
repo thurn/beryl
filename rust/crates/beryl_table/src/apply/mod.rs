@@ -292,6 +292,7 @@ fn counts_as_turn_play(action: &Action, turn: u32) -> bool {
     use crate::action::{Destination, Position};
     match action {
         Action::Start { .. }
+        | Action::Keep {}
         | Action::NextTurn {}
         | Action::NextGame { .. }
         | Action::Concede {}
@@ -558,9 +559,9 @@ fn plan_action(
         } => game::sideboard(table, *seat, into_main, into_side),
         Action::Ready { seat, ready } => game::ready(table, *seat, *ready),
         Action::GameSettings { settings } => game::settings(table, *settings),
-        Action::Start { first } => {
+        Action::Start { first, opening } => {
             return Ok(AppliedChanges::presented(
-                game::start(table, *first, chance, action)?,
+                game::start(table, *first, *opening, chance, action)?,
                 Presentation::GameReset,
             ));
         }
@@ -576,7 +577,7 @@ fn plan_action(
                 Presentation::LobbyReset,
             ));
         }
-        Action::CloseLook {} => Ok(Vec::new()),
+        Action::CloseLook {} | Action::Keep {} => Ok(Vec::new()),
         Action::SetAssist { assist, on } => Ok(game::set_assist(table, by, *assist, *on)),
         Action::Flow { seat, count, .. } => library::flow(table, by, *seat, *count),
         Action::Undo { .. } | Action::Rewind { .. } | Action::Batch { .. } => Err(Refusal::INVALID),

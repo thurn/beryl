@@ -106,7 +106,11 @@ fn linked_table(
         host_views.recv().unwrap();
         guest_views.recv().unwrap();
     }
-    host.act(Action::Start { first: HOST }).unwrap();
+    host.act(Action::Start {
+        first: HOST,
+        opening: false,
+    })
+    .unwrap();
     host_views.recv().unwrap();
     guest_views.recv().unwrap();
 

@@ -90,7 +90,7 @@ struct Solo {
 
 impl Solo {
     fn lobby(&self) -> LobbyUpdate {
-        lobby::project(self.table.table(), SOLO, &[Some("You".into())], None)
+        lobby::project(self.table.table(), SOLO, &[Some("You".into())], None, false)
     }
 
     fn update(&self) -> GameUpdate {
@@ -167,7 +167,13 @@ impl TableSessions {
                     side: deck.side,
                 },
             )?;
-            table.apply_host(SOLO, &Action::Start { first: SOLO })?;
+            table.apply_host(
+                SOLO,
+                &Action::Start {
+                    first: SOLO,
+                    opening: false,
+                },
+            )?;
         }
         let session = self.ids.allocate();
         let solo = Solo { table, session };
@@ -406,8 +412,8 @@ impl TableSessions {
                         solo.table.apply_client(SOLO, action)?;
                     }
                     Request::Lobby(request) => {
-                        let action = lobby::action(solo.table.table(), SOLO, request.change)?;
-                        solo.table.apply_client(SOLO, action)?;
+                        solo.table
+                            .apply_lobby_checked(SOLO, request.change, |_| Ok(()))?;
                     }
                     Request::Answer(request) => {
                         solo.table.answer(SOLO, request.answer, |_| Ok(()))?;

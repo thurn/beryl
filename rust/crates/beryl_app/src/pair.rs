@@ -82,7 +82,13 @@ impl Role {
                 fs::write(&pending, host.invite).map_err(message)?;
                 fs::rename(pending, invite).map_err(message)?;
                 wait_for("the guest to load its deck", || read_signal(&ready))?;
-                act(tables, TableAction::Start { first: self.seat() })
+                act(
+                    tables,
+                    TableAction::Start {
+                        first: self.seat(),
+                        opening: false,
+                    },
+                )
             }
             Self::Guest => {
                 let invite = wait_for("the host's invite", || read_signal(&invite))?;

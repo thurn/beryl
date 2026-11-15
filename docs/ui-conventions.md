@@ -299,6 +299,12 @@ restore the old behavior.
   read-only information and lets either player record a result or confirm a
   concession. Both players return to the lobby with their decks ready for
   sideboarding.
+- **Guided manual table start.** The step banner shows each player's die in the
+  roll for first and shows another round on a tie. The winner, the named player
+  or the previous game's loser gets Play or Draw on the opening screen. Both
+  seats see their own opening hands and can Keep or Mulligan at the same time.
+  They can confirm bottom cards or choose Done with none selected. The table
+  moves to the first untap after both seats finish.
 - **Manual table connection.** A dropped connection freezes input on both seats
   under the existing step banner, which names the other player. The guest
   redials automatically and the returning view appears at once. A table that the

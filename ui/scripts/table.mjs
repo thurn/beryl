@@ -195,11 +195,17 @@ export async function clickTableResult(page) {
     const response = await page.waitForResponse(
         (result) => new URL(result.url()).pathname === "/invoke/table_act",
     );
+    return applyTableReply(page, response, pageSession(page));
+}
+
+async function applyTableReply(page, response, authority) {
     const { ok } = await response.json();
     if (ok.ok) {
-        const view = await tableView(pageSession(page));
+        const view = await tableView(authority);
         await showTableView(page, view);
-        return view;
+        return authority === pageSession(page)
+            ? view
+            : tableView(pageSession(page));
     }
     return ok;
 }
@@ -209,5 +215,23 @@ export async function clickTable(page, target, { tap, ...options } = {}) {
         clickTableResult(page),
         tap ? target.tap(options) : target.click(options),
     ]);
+    return result;
+}
+
+export async function clickAnswer(page, target, kind) {
+    const [response] = await Promise.all([
+        page.waitForResponse(
+            (result) =>
+                new URL(result.url()).pathname === "/invoke/table_answer" &&
+                result.request().postDataJSON()?.request.answer.kind === kind,
+        ),
+        target.click(),
+    ]);
+    // The host has committed the answer before the guest's streamed view
+    // reaches the browser. Wait for that host log position on either page.
+    const authority =
+        pageSession(page) === "guest" ? "host" : pageSession(page);
+    const result = await applyTableReply(page, response, authority);
+    assert.ok(result.table, JSON.stringify(result));
     return result;
 }

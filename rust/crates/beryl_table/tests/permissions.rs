@@ -337,7 +337,14 @@ fn decks_readiness_and_concession_belong_to_their_seat() {
             ready: true,
         },
     );
-    act(&mut table, OWNER, &Action::Start { first: OWNER });
+    act(
+        &mut table,
+        OWNER,
+        &Action::Start {
+            first: OWNER,
+            opening: false,
+        },
+    );
     act(&mut table, GUEST, &concede);
     assert_eq!(table.game_match.last_winner, Some(OWNER));
 }

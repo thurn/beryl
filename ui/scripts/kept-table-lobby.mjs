@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { crowdedControls, phoneFaults } from "./capture.mjs";
 import { check } from "./kept-harness.mjs";
 import {
+    clickAnswer,
     clickTableResult,
     showTableView,
     tableRoute,
@@ -72,6 +73,14 @@ await check(
             view.objects.filter((card) => card.zone === "hand").length,
             3,
         );
+        await clickAnswer(
+            page,
+            page.getByRole("button", { name: "Keep", exact: true }),
+            "keep",
+        );
+        await page
+            .getByRole("dialog", { name: "Opening hand" })
+            .waitFor({ state: "hidden" });
         const [drawn] = await Promise.all([
             clickTableResult(page),
             page.keyboard.press(mac ? "Meta+d" : "Control+d"),

@@ -98,6 +98,7 @@ pub(super) fn project(
         last_draw: None,
         deck_tokens: deck_tokens(&projected, seat),
         prompt: None,
+        choosing_first: false,
     });
     Ok((view, refs))
 }

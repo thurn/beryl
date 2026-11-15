@@ -92,6 +92,16 @@ function bannerWords(
       const results = outcomes.map((outcome) =>
         sides === 2 ? (outcome === 0 ? "Heads" : "Tails") : outcome + 1,
       );
+      if (table.table?.choosingFirst && results.length === 2) {
+        const you = table.table.seat ?? 0;
+        const peer = table.table.peerName ?? "Opponent";
+        return {
+          title: "Rolled dice (d6)",
+          detail: results
+            .map((result, seat) => `${seat === you ? "You" : peer}: ${result}`)
+            .join(" · "),
+        };
+      }
       if (results.length === 1) {
         return {
           title:

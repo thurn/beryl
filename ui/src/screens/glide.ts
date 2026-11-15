@@ -40,12 +40,16 @@ function placeOf(el: HTMLElement): Place {
 /** Tracks the opening's cards by slot. `track(slot)` is the ref for a card's element, wherever
  * it lies; call `before()` just before a change of state that moves cards, and each tracked
  * card that ends up somewhere else glides there from where it was. */
-export function useGlide() {
+export function useGlide(positions?: string) {
   const nodes = useRef(new Map<number, HTMLElement>());
   const refs = useRef(new Map<number, (el: HTMLElement | null) => void>());
   const pending = useRef<Map<number, Place>>(undefined);
 
+  const drawn = useRef(positions);
   useLayoutEffect(() => {
+    // Host-held picks redraw the buttons before the moved cards arrive.
+    if (positions !== undefined && positions === drawn.current) return;
+    drawn.current = positions;
     const was = pending.current;
     if (!was) return;
     pending.current = undefined;

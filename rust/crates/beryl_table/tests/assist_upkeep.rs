@@ -30,7 +30,16 @@ fn start(first: Seat) -> (Table, Chance) {
         )
         .unwrap();
     }
-    apply(&mut table, HOST, &Action::Start { first }, &mut chance).unwrap();
+    apply(
+        &mut table,
+        HOST,
+        &Action::Start {
+            first,
+            opening: false,
+        },
+        &mut chance,
+    )
+    .unwrap();
     (table, chance)
 }
 

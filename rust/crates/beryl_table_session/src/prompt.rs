@@ -52,13 +52,30 @@ pub enum OpeningDecision {
     Mulligan,
 }
 
-pub(crate) type Completion = Box<dyn Fn(&PromptState) -> Result<Action, Refusal> + Send + Sync>;
+type ActionCompletion = Box<dyn Fn(&PromptState) -> Result<Action, Refusal> + Send + Sync>;
+
+pub(crate) enum Completion {
+    Action(ActionCompletion),
+    FirstPlayer,
+    OpeningHand,
+}
+
+impl Completion {
+    pub(crate) fn valid(&self, table: &Table) -> bool {
+        match self {
+            Self::Action(_) => true,
+            Self::FirstPlayer => !table.game_match.in_game,
+            Self::OpeningHand => table.game_match.in_game && table.turn == 0,
+        }
+    }
+}
 
 pub(crate) struct OpenPrompt {
     pub state: PromptState,
     pub complete: Completion,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Progress {
     Editing,
     Complete,
@@ -168,7 +185,8 @@ impl PromptState {
             } => TablePrompt::Opening {
                 hand: slots(hand)?,
                 mulligans: *mulligans,
-                to_bottom: (*decision == Some(OpeningDecision::Keep)).then_some(*mulligans),
+                to_bottom: (*decision == Some(OpeningDecision::Keep))
+                    .then(|| bottom_limit(hand, *mulligans) as u16),
                 bottom: slots(bottom)?,
             },
         })
@@ -251,7 +269,7 @@ impl PromptState {
                 let id = object(hand, card)?;
                 if let Some(index) = bottom.iter().position(|&selected| selected == id) {
                     bottom.remove(index);
-                } else if bottom.len() < usize::from(*mulligans) {
+                } else if bottom.len() < bottom_limit(hand, *mulligans) {
                     bottom.push(id);
                 } else {
                     return Err(Refusal::INVALID);
@@ -259,13 +277,13 @@ impl PromptState {
             }
             (
                 Self::Opening {
+                    hand,
                     mulligans,
                     decision: Some(OpeningDecision::Keep),
                     bottom,
-                    ..
                 },
                 Answer::Done,
-            ) if bottom.is_empty() || bottom.len() == usize::from(*mulligans) => {
+            ) if bottom.is_empty() || bottom.len() == bottom_limit(hand, *mulligans) => {
                 return Ok(Progress::Complete);
             }
             _ => return Err(Refusal::INVALID),
@@ -304,4 +322,8 @@ impl Sort {
         }
         choice
     }
+}
+
+fn bottom_limit(hand: &[ObjectId], mulligans: u16) -> usize {
+    hand.len().min(usize::from(mulligans))
 }

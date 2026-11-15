@@ -39,6 +39,7 @@ import type { AppInfo } from "../generated/protocol";
 import { LinkBanner } from "../table/LinkBanner";
 import { linkBlocks, useLobbyLinkDetails, useTableLink } from "../table/link";
 import { TableDrag } from "../table/drag";
+import { TableOpening } from "../table/TableOpening";
 import { TableViewers } from "../table/viewers";
 import { registerSelection } from "../table/select";
 import { GameBoard } from "./Board";
@@ -133,6 +134,7 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
   });
   const { stage, feed } = board;
   const { shown, log } = useSyncExternalStore(feed.subscribe, feed.fed);
+  const playing = useSyncExternalStore(stage.subscribe, () => stage.shown.busy);
 
   useLayoutEffect(() => {
     exposeBoardStage(board);
@@ -157,7 +159,11 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
       client.drag?.arriving();
       const link = update.view.table.link?.kind;
       if (linkBlocks(link)) read(update.view);
-      feed.arrive(update, past || linkBlocks(link) || client.frozen);
+      const skip =
+        (past && !update.view.table.choosingFirst) ||
+        linkBlocks(link) ||
+        client.frozen;
+      feed.arrive(update, skip);
       if (!linkBlocks(link)) read(update.view);
     });
     void unlisten
@@ -166,7 +172,10 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
         if (!mounted) return;
         if (snapshot?.update && !heard) {
           read(snapshot.update.view, snapshot.freshLink);
-          feed.arrive(snapshot.update, true);
+          feed.arrive(
+            snapshot.update,
+            !snapshot.update.view.table?.choosingFirst || client.frozen,
+          );
         }
         setReady(true);
       })
@@ -248,11 +257,16 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
     );
     return phone ? status : <Stage>{status}</Stage>;
   }
+  const prompt = shown.view.table?.prompt;
+  const opening =
+    prompt?.kind === "opening" ||
+    (prompt?.kind === "choose" && shown.view.table?.choosingFirst && !playing);
   return (
     <GameBoard
       board={board}
       client={client}
       view={shown.view}
+      opening={opening}
       log={log}
       tableLog={{
         blocked,
@@ -283,6 +297,7 @@ function ManualTable({ platform }: { platform: AppInfo["platform"] }) {
           void commands.shortcut("phase.next").catch(commands.reportError);
       }}
     >
+      {opening && <TableOpening client={client} view={shown.view} />}
       {panel && (
         <MatchDialog
           key={panel}

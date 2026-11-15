@@ -28,6 +28,13 @@ fn load(table: &mut Table, seat: Seat) {
     );
 }
 
+fn start(first: Seat) -> Action {
+    Action::Start {
+        first,
+        opening: false,
+    }
+}
+
 fn outcomes(entry: &Entry) -> Vec<u32> {
     entry
         .changes
@@ -50,7 +57,7 @@ fn undo(table: &mut Table, entry: &Entry) {
 fn starting_builds_private_piles_shuffles_and_deals_for_both_seats() {
     let mut table = Table::new(2);
     let mut chance = Chance::fresh(42);
-    let action = Action::Start { first: GUEST };
+    let action = start(GUEST);
     load(&mut table, HOST);
     let before = table.clone();
     assert_eq!(
@@ -190,7 +197,7 @@ fn ending_a_game_updates_the_score_resets_play_and_keeps_decks() {
             ready: true,
         },
     );
-    act(&mut table, HOST, &Action::Start { first: GUEST });
+    act(&mut table, HOST, &start(GUEST));
     act(
         &mut table,
         HOST,
@@ -206,7 +213,7 @@ fn ending_a_game_updates_the_score_resets_play_and_keeps_decks() {
             into_main: deck(&[("Plains", 1)]),
             into_side: vec![],
         },
-        Action::Start { first: HOST },
+        start(HOST),
         Action::NextGame {
             winner: Some(Seat(2)),
         },
@@ -255,7 +262,7 @@ fn ending_a_game_updates_the_score_resets_play_and_keeps_decks() {
             ready: true,
         },
     );
-    act(&mut table, HOST, &Action::Start { first: HOST });
+    act(&mut table, HOST, &start(HOST));
     assert!(
         table
             .objects
@@ -273,7 +280,7 @@ fn ending_a_game_updates_the_score_resets_play_and_keeps_decks() {
             .collect::<Vec<_>>(),
         [1, 1]
     );
-    act(&mut table, HOST, &Action::Start { first: HOST });
+    act(&mut table, HOST, &start(HOST));
     act(&mut table, HOST, &Action::NextGame { winner: None });
     assert_eq!(table.game_match.last_winner, None);
     assert!(table.game_match.seats.iter().all(|seat| seat.wins == 1));
@@ -283,7 +290,7 @@ fn ending_a_game_updates_the_score_resets_play_and_keeps_decks() {
 fn a_solo_table_can_start_and_concede_without_awarding_a_win() {
     let mut table = Table::new(1);
     load(&mut table, HOST);
-    act(&mut table, HOST, &Action::Start { first: HOST });
+    act(&mut table, HOST, &start(HOST));
     assert_eq!(table.zone(Zone::Hand(HOST)).unwrap().len(), 7);
     act(&mut table, HOST, &Action::Concede {});
     assert!(!table.game_match.in_game);

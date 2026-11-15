@@ -179,6 +179,7 @@ fn manual_view_with_ordered_zones() -> PlayerView {
         last_draw: None,
         deck_tokens: Vec::new(),
         prompt: None,
+        choosing_first: false,
     });
 
     before

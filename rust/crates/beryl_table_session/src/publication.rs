@@ -4,7 +4,10 @@ use beryl_session::protocol::{Answer, ObjectId as Slot, PlayerView, TableAction,
 use beryl_table::state::{ObjectId, Proposal};
 use beryl_table::{Action, Chance, Entry, Log, Refusal, Seat, Table};
 
-use crate::prompt::{OpenPrompt, Progress, PromptState};
+use crate::prompt::{Completion, OpenPrompt, Progress, PromptState};
+
+#[path = "flow.rs"]
+mod flow;
 pub use crate::script::ProposalMarks;
 use crate::script::{proposal_marks, script_with_proposal_marks, snapshot};
 use crate::view::{Slots, attach_history, project};
@@ -83,20 +86,24 @@ impl SeatPublication {
     ) {
         view.handling = crate::view::handling(table, crate::view::Viewer(seat));
         let mut own = None;
+        let mut choosing_first = false;
         for (actor, prompt) in table.seats().zip(prompts) {
             let Some(prompt) = prompt
                 .as_ref()
-                .filter(|prompt| prompt.state.valid(table, actor))
+                .filter(|prompt| prompt.complete.valid(table) && prompt.state.valid(table, actor))
             else {
                 continue;
             };
+            choosing_first |= matches!(prompt.complete, Completion::FirstPlayer);
             if actor == seat {
                 own = prompt.state.view(|id| slots.get(id));
             } else if let Some(lift) = prompt.state.observer_lift() {
                 view.handling = Some(lift);
             }
         }
-        view.table.as_mut().expect("manual publication").prompt = own;
+        let manual = view.table.as_mut().expect("manual publication");
+        manual.prompt = own;
+        manual.choosing_first = choosing_first;
     }
 
     fn advance(
@@ -220,7 +227,7 @@ impl PublishedTable {
         let peek = state.peek();
         self.prompts[index] = Some(OpenPrompt {
             state,
-            complete: Box::new(on_done),
+            complete: Completion::Action(Box::new(on_done)),
         });
         let result = if let Some(action) = peek {
             self.apply(
@@ -254,7 +261,11 @@ impl PublishedTable {
             .ok_or(Refusal::Stale)?;
         let publication = &self.seats[index];
         let mut state = current.state.clone();
-        match state.answer(answer, publication)? {
+        let progress = state.answer(answer, publication)?;
+        if progress != Progress::Editing && !matches!(&current.complete, Completion::Action(_)) {
+            return self.finish_setup_prompt(seat, state, progress, save);
+        }
+        match progress {
             Progress::Editing => {
                 let previous = std::mem::replace(
                     &mut self.prompts[index].as_mut().expect("open prompt").state,
@@ -267,17 +278,11 @@ impl PublishedTable {
                 Ok(false)
             }
             Progress::Complete => {
-                let action = (current.complete)(&state)?;
-                let previous = self.prompts[index].take();
-                if let Err(error) = self.apply(
-                    seat,
-                    Request::Host(&action),
-                    |_| ProposalMarks::default(),
-                    save,
-                ) {
-                    self.prompts[index] = previous;
-                    return Err(error);
-                }
+                let Completion::Action(complete) = &current.complete else {
+                    unreachable!("setup prompts have a separate completion path");
+                };
+                let action = complete(&state)?;
+                self.apply_closing_prompt(seat, &action, save)?;
                 Ok(true)
             }
             Progress::Cancel => {
@@ -290,6 +295,26 @@ impl PublishedTable {
                 Ok(all)
             }
         }
+    }
+
+    fn apply_closing_prompt(
+        &mut self,
+        seat: Seat,
+        action: &Action,
+        save: impl FnOnce(&Entry) -> Result<(), Refusal>,
+    ) -> Result<(), Refusal> {
+        let index = usize::from(seat.0);
+        let previous = self.prompts[index].take();
+        if let Err(error) = self.apply(
+            seat,
+            Request::Host(action),
+            |_| ProposalMarks::default(),
+            save,
+        ) {
+            self.prompts[index] = previous;
+            return Err(error);
+        }
+        Ok(())
     }
 
     fn republish_prompts(&mut self, only: Option<Seat>) -> Result<(), Refusal> {
@@ -392,10 +417,9 @@ impl PublishedTable {
             publication.attach_history(&self.log, &self.table, &self.names);
         }
         for (seat, prompt) in self.table.seats().zip(&mut self.prompts) {
-            if prompt
-                .as_ref()
-                .is_some_and(|prompt| !prompt.state.valid(&self.table, seat))
-            {
+            if prompt.as_ref().is_some_and(|prompt| {
+                !prompt.complete.valid(&self.table) || !prompt.state.valid(&self.table, seat)
+            }) {
                 *prompt = None;
             }
         }

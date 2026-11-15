@@ -316,7 +316,12 @@ pub enum Action<Id = ObjectId> {
     },
     Start {
         first: Seat,
+        // Deal the opening hands and leave the first turn for a phase action.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
+        opening: bool,
     },
+    Keep {},
     NextGame {
         winner: Option<Seat>,
     },

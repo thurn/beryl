@@ -186,10 +186,10 @@ impl HostedTable {
                 true
             }
             Request::Lobby(request) => {
-                let action = lobby::action(self.table.table(), seat, request.change)?;
-                self.table.apply_client_checked(seat, action, |entry| {
-                    save_entry(&mut self.save, entry)
-                })?;
+                self.table
+                    .apply_lobby_checked(seat, request.change, |entry| {
+                        save_entry(&mut self.save, entry)
+                    })?;
                 true
             }
             Request::Answer(request) => self.table.answer(seat, request.answer, |entry| {
@@ -261,6 +261,7 @@ impl HostedTable {
             seat,
             &seat_names(&self.save),
             Some(&self.save.metadata.settings.invite),
+            self.table.choosing_first(),
         )
     }
 

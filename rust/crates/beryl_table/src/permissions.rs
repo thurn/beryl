@@ -255,20 +255,19 @@ fn action_references(action: &Action, references: &mut Vec<Reference>) {
         | Action::Ready { seat, .. } => references.push(Reference::OwnSeat(*seat)),
         Action::Life { seat, .. }
         | Action::PlayerCounter { seat, .. }
-        | Action::Start { first: seat } => references.push(Reference::Seat(*seat)),
+        | Action::Start { first: seat, .. } => references.push(Reference::Seat(*seat)),
         Action::NextGame { winner } => references.extend(winner.map(Reference::Seat)),
         Action::GameSettings { .. } => references.push(Reference::OwnSeat(Seat(0))),
-        Action::Batch { actions } => {
-            for action in actions {
-                action_references(action, references);
-            }
-        }
+        Action::Batch { actions } => actions
+            .iter()
+            .for_each(|action| action_references(action, references)),
         // Concession, assists and the undo key refer to the acting seat.
         // Which log entries may be undone depends on the log, not the table.
         Action::CloseLook {}
         | Action::Phase { .. }
         | Action::NextTurn {}
         | Action::Roll { .. }
+        | Action::Keep {}
         | Action::Concede {}
         | Action::SetAssist { .. }
         | Action::Undo { .. }

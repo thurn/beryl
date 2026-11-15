@@ -49,9 +49,6 @@ export function Opening({
   onPick(index: CandidateIndex): void;
   onPlan(picks: Intent[]): void;
 }) {
-  const phone = usePhone();
-  const { ref, viewport, frameStyle } = useViewport();
-  const [inspecting, setInspecting] = useState<ObjectView["slot"]>();
   const { you } = view.players;
   const { flipWinner } = view.turn;
   // When the opponent won the flip, the coin spins a while before it shows their choice, made
@@ -71,36 +68,18 @@ export function Opening({
   const decision = spinning ? undefined : asked;
   const choosingFirst =
     !spinning && starting === null && flipWinner === "opponent";
-  const considering = view.handling?.zone === "hand";
   const picking = decision?.prompt.purpose === "put-on-bottom";
   // The cards picked for the bottom, kept as they were: those sent are gone from the hand.
   const [bottom, setBottom] = useState<ObjectView[]>([]);
   const inHand = view.objects.filter(
     (o) => o.zone === "hand" && o.owner === "you",
   );
-  const hand = inHand.filter((o) => !bottom.some((b) => b.slot === o.slot));
   const unsent = bottom.filter((b) => inHand.some((o) => o.slot === b.slot));
   // One card per mulligan goes on the bottom; any already there count.
   const toBottom = picking
     ? Math.max(1, inHand.length - (STARTING_HAND - you.mulligans))
     : 0;
-  const slots = Math.max(toBottom, bottom.length);
-  // The cards are small to fit seven: hovering one shows it whole.
-  const [inspector, inspect] = useHoverInspect();
-  // A card picked goes down into its slot, and back up when picked again.
-  const glide = useGlide();
-  // As the opening closes, the hand kept drops from here into the hand on the table.
-  const cards = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const root = cards.current;
-    return () => {
-      if (root) noteOpeningHand(root);
-    };
-  }, []);
-  // A card clicked moves out from under the pointer, which never leaves it: its inspector goes.
   const toggle = (o: ObjectView) => {
-    inspect(o).onPointerLeave();
-    glide.before();
     setBottom((picked) =>
       picked.some((b) => b.slot === o.slot)
         ? picked.filter((b) => b.slot !== o.slot)
@@ -151,9 +130,91 @@ export function Opening({
     decision && !picking
       ? decision.candidates.map((c, i) => ({ label: c.label, index: i }))
       : [];
+  const phone = usePhone();
   const facedown = you.mulligan === "willMulligan" || (phone && !decision);
-  const canInspect = phone && decision?.kind === "keepOrMulligan" && !facedown;
-  const inspected = canInspect
+  return (
+    <OpeningPresentation
+      {...{ view, starting, choosingFirst, title, facedown, inHand, bottom }}
+      canInspect={decision?.kind === "keepOrMulligan"}
+      considering={view.handling?.zone === "hand"}
+      picking={picking}
+      toBottom={toBottom}
+      done={unsent.length === toBottom}
+      buttons={buttons.map(({ label, index }) => ({
+        label,
+        run: () => onPick(index),
+      }))}
+      toggle={toggle}
+      confirm={confirm}
+    />
+  );
+}
+
+type OpeningPresentationProps = {
+  view: PlayerView;
+  starting: PlayerView["turn"]["starting"];
+  choosingFirst?: boolean;
+  title: string;
+  inHand: ObjectView[];
+  bottom: ObjectView[];
+  picking?: boolean;
+  toBottom?: number;
+  done?: boolean;
+  buttons: { label: string; run(): void }[];
+  toggle?(card: ObjectView): void;
+  confirm?(): void;
+  canInspect?: boolean;
+  facedown?: boolean;
+  considering?: boolean;
+  sending?: boolean;
+  error?: string;
+  showCoin?: boolean;
+};
+
+/** The shared hand, bottom slots, and opening buttons over the board. */
+export function OpeningPresentation({
+  view,
+  starting,
+  choosingFirst = false,
+  title,
+  inHand,
+  bottom,
+  picking = false,
+  toBottom = 0,
+  done = false,
+  buttons,
+  toggle,
+  confirm,
+  canInspect = false,
+  facedown = false,
+  considering = false,
+  sending = false,
+  error,
+  showCoin = true,
+}: OpeningPresentationProps) {
+  const phone = usePhone();
+  const { ref, viewport, frameStyle } = useViewport();
+  const [inspecting, setInspecting] = useState<ObjectView["slot"]>();
+  const hand = inHand.filter((o) => !bottom.some((b) => b.slot === o.slot));
+  const slots = Math.max(toBottom, bottom.length);
+  const canInspectHand = phone && canInspect && !facedown;
+  const [inspector, inspect] = useHoverInspect();
+  const glide = useGlide(
+    picking ? bottom.map(({ slot }) => slot).join(",") : undefined,
+  );
+  const cards = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const root = cards.current;
+    return () => {
+      if (root) noteOpeningHand(root);
+    };
+  }, []);
+  const pickCard = (object: ObjectView) => {
+    inspect(object).onPointerLeave();
+    glide.before();
+    toggle?.(object);
+  };
+  const inspected = canInspectHand
     ? hand.find((o) => o.slot === inspecting)
     : undefined;
   const coinSize = viewport && viewport.width < 393 ? 56 : 64;
@@ -167,9 +228,7 @@ export function Opening({
         viewport.height - viewport.insetBottom,
         coinSize,
         // Keep room for both rows while cards are moved between the hand and the slots.
-        Math.ceil(
-          (inHand.length + bottom.length - unsent.length) / CARDS_PER_ROW,
-        ),
+        Math.ceil((hand.length + bottom.length) / CARDS_PER_ROW),
         slots,
         actions,
       )
@@ -210,13 +269,15 @@ export function Opening({
     >
       <div className="overlay-backdrop" />
       <div className="opening-coin" data-starting={starting ?? undefined}>
-        <Coin
-          key={starting ?? "spinning"}
-          size={phone ? coinSize : undefined}
-          spinning={starting === null && !choosingFirst}
-          choosing={choosingFirst}
-          first={starting === "you" || choosingFirst}
-        />
+        {showCoin && (
+          <Coin
+            key={starting ?? "spinning"}
+            size={phone ? coinSize : undefined}
+            spinning={starting === null && !choosingFirst}
+            choosing={choosingFirst}
+            first={starting === "you" || choosingFirst}
+          />
+        )}
         {starting && (
           <span className="opening-coin-label">
             {starting === "you" ? "On the play" : "On the draw"}
@@ -248,10 +309,10 @@ export function Opening({
                     hover={phone ? undefined : inspect(o)}
                     highlight={picking && bottom.length < toBottom}
                     onPick={
-                      canInspect
+                      canInspectHand
                         ? () => setInspecting(o.slot)
-                        : picking && bottom.length < toBottom
-                          ? () => toggle(o)
+                        : picking && bottom.length < toBottom && !sending
+                          ? () => pickCard(o)
                           : undefined
                     }
                   />
@@ -271,7 +332,7 @@ export function Opening({
                   width={slotWidth}
                   glide={glide.track(o.slot)}
                   highlight={picking}
-                  onPick={picking ? () => toggle(o) : undefined}
+                  onPick={picking && !sending ? () => pickCard(o) : undefined}
                 />
               ) : (
                 <i key={`empty-${i}`} className="opening-slot" />
@@ -284,9 +345,10 @@ export function Opening({
         <div className="opening-choice">
           {buttons.map((b, i) => (
             <Button
-              key={b.index}
+              key={i}
               variant={i === 0 ? "primary" : "secondary"}
-              onClick={() => onPick(b.index)}
+              onClick={b.run}
+              disabled={sending}
             >
               {b.label}
             </Button>
@@ -297,15 +359,16 @@ export function Opening({
         <Dock>
           <DockButtons className="opening-actions">
             {picking && (
-              <Button disabled={unsent.length !== toBottom} onClick={confirm}>
+              <Button disabled={!done || sending} onClick={confirm}>
                 Done
               </Button>
             )}
             {buttons.map((b, i) => (
               <Button
-                key={b.index}
+                key={i}
                 variant={i === 0 ? "primary" : "secondary"}
-                onClick={() => onPick(b.index)}
+                onClick={b.run}
+                disabled={sending}
               >
                 {b.label}
               </Button>
@@ -327,7 +390,7 @@ export function Opening({
               aria-label="Opponent is considering their hand"
             />
           ) : (
-            !decision &&
+            actions === 0 &&
             !choosingFirst && (
               <i className="working-dots opening-waiting" role="status">
                 <i />
@@ -337,6 +400,11 @@ export function Opening({
             )
           )}
         </div>
+      )}
+      {error && (
+        <p className="game-error game-toast" role="alert">
+          {error}
+        </p>
       )}
       {phone
         ? inspected &&

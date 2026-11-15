@@ -435,6 +435,7 @@ fn redact_action(
         | Action::GameSettings { .. }
         | Action::Ready { .. }
         | Action::Start { .. }
+        | Action::Keep {}
         | Action::NextGame { .. }
         | Action::Concede { .. }
         | Action::SetAssist { .. }

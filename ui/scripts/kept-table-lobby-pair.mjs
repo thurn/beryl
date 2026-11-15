@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { crowdedControls } from "./capture.mjs";
 import { check } from "./kept-harness.mjs";
-import { pair, tableCommand, tableRoute, tableView } from "./table.mjs";
+import {
+    clickAnswer,
+    pair,
+    tableCommand,
+    tableRoute,
+    tableView,
+} from "./table.mjs";
 
 const lobby = (page) => page.getByRole("main", { name: "Table lobby" });
 const button = (page, name) => page.getByRole("button", { name, exact: true });
@@ -98,8 +104,13 @@ await check(
             await lobby(host).getByLabel("First").selectOption("0");
             await button(lobby(host), "Save settings").click();
             await start.click();
-            for (const seat of [host, guest])
-                await seat.locator("[data-manual-table]").waitFor();
+            await button(host, "Play").click();
+            for (const seat of [host, guest]) {
+                await clickAnswer(seat, button(seat, "Keep"), "keep");
+                await seat
+                    .getByRole("dialog", { name: "Opening hand" })
+                    .waitFor({ state: "hidden" });
+            }
 
             await gear(guest).click();
             await button(guest, "Lobby").click();
@@ -144,7 +155,13 @@ await check(
 
             await ready.click();
             await start.click();
-            await guest.locator("[data-manual-table]").waitFor();
+            await button(guest, "Play").click();
+            for (const seat of [host, guest]) {
+                await clickAnswer(seat, button(seat, "Keep"), "keep");
+                await seat
+                    .getByRole("dialog", { name: "Opening hand" })
+                    .waitFor({ state: "hidden" });
+            }
             assert.equal((await tableView("host")).turn.active, "opponent");
             await guest.keyboard.press("F2");
             const concede = guest.getByRole("dialog", { name: "Concede" });

@@ -351,6 +351,10 @@ pub struct TableView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub prompt: Option<TablePrompt>,
+    // A guided start is waiting for one seat to choose play or draw.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[ts(optional, as = "Option<_>")]
+    pub choosing_first: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(optional, as = "Option<_>")]
     pub arrows: Vec<TableArrow>,

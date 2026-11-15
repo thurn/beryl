@@ -161,7 +161,13 @@ impl Game {
     fn opening(&mut self) {
         self.accept(HOST, load(HOST, ["Forest", "Grizzly Bears", PRIVATE_CARD]));
         self.accept(GUEST, load(GUEST, ["Plains", "Runeclaw Bear", "Opt"]));
-        self.accept(HOST, Action::Start { first: HOST });
+        self.accept(
+            HOST,
+            Action::Start {
+                first: HOST,
+                opening: false,
+            },
+        );
         for (seat, land, creature) in [
             (HOST, "Forest", "Grizzly Bears"),
             (GUEST, "Plains", "Runeclaw Bear"),

@@ -1004,7 +1004,7 @@ lastDraw?: number,
 /**
  * The viewer's deck tokens, in deck list order, for the ten numbered shortcuts.
  */
-deckTokens?: Array<CardTokenLink>, prompt?: TablePrompt, arrows?: Array<TableArrow>, link?: LinkState, peerName?: string, };
+deckTokens?: Array<CardTokenLink>, prompt?: TablePrompt, choosingFirst?: boolean, arrows?: Array<TableArrow>, link?: LinkState, peerName?: string, };
 
 export type TableArrow = { arrow: Arrow, from: Subject, to: Subject, own: boolean, };
 
@@ -1046,7 +1046,7 @@ export type TableActionOf<Id> = { "move": { to: TableDestination, position?: Tab
 /**
  * With neither objects nor a count, reveal the whole zone.
  */
-objects?: Array<Id>, random?: number, to: Array<TableSeat>, } } | { "lend": { in: TableZone, to: TableSeat, } } | { "always_reveal_top": { seat: TableSeat, on: boolean, } } | { "always_look_at_top": { seat: TableSeat, on: boolean, } } | { "sort_hand": { seat: TableSeat, by: TableSortBy, } } | { "life": { seat: TableSeat, } & ({ "add": number } | { "set": number }) } | { "player_counter": { seat: TableSeat, name: string, } & ({ "add": number } | { "set": number }) } | { "phase": { phase: TableActionPhase, } } | { "next_turn": Record<symbol, never> } | { "roll": { count: number, sides: number, } } | { "arrow": { to: TableTarget<Id>, objects: Array<Id>, in: TableZone, } } | { "clear_arrows": { from: TableSeenObject<Id> | null, to: TableTarget<Id> | null, } } | { "load_deck": { seat: TableSeat, main: Array<[string, number]>, side: Array<[string, number]>, } } | { "sideboard": { seat: TableSeat, into_main: Array<[string, number]>, into_side: Array<[string, number]>, } } | { "ready": { seat: TableSeat, ready: boolean, } } | { "game_settings": { settings: LobbySettings, } } | { "start": { first: TableSeat, } } | { "next_game": { winner: TableSeat | null, } } | { "concede": Record<symbol, never> } | { "set_assist": { assist: TableAssist, on: boolean, } } | { "flow": { seat: TableSeat, flow: TableFlow, count: number, } } | { "undo": { 
+objects?: Array<Id>, random?: number, to: Array<TableSeat>, } } | { "lend": { in: TableZone, to: TableSeat, } } | { "always_reveal_top": { seat: TableSeat, on: boolean, } } | { "always_look_at_top": { seat: TableSeat, on: boolean, } } | { "sort_hand": { seat: TableSeat, by: TableSortBy, } } | { "life": { seat: TableSeat, } & ({ "add": number } | { "set": number }) } | { "player_counter": { seat: TableSeat, name: string, } & ({ "add": number } | { "set": number }) } | { "phase": { phase: TableActionPhase, } } | { "next_turn": Record<symbol, never> } | { "roll": { count: number, sides: number, } } | { "arrow": { to: TableTarget<Id>, objects: Array<Id>, in: TableZone, } } | { "clear_arrows": { from: TableSeenObject<Id> | null, to: TableTarget<Id> | null, } } | { "load_deck": { seat: TableSeat, main: Array<[string, number]>, side: Array<[string, number]>, } } | { "sideboard": { seat: TableSeat, into_main: Array<[string, number]>, into_side: Array<[string, number]>, } } | { "ready": { seat: TableSeat, ready: boolean, } } | { "game_settings": { settings: LobbySettings, } } | { "start": { first: TableSeat, opening?: boolean, } } | { "keep": Record<symbol, never> } | { "next_game": { winner: TableSeat | null, } } | { "concede": Record<symbol, never> } | { "set_assist": { assist: TableAssist, on: boolean, } } | { "flow": { seat: TableSeat, flow: TableFlow, count: number, } } | { "undo": { 
 /**
  * A seat can name its own draw or a batch from either seat.
  */

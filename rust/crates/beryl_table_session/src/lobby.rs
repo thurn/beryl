@@ -1,7 +1,5 @@
 //! Projects the lobby for one authenticated seat and translates its commands.
 
-use std::hash::{BuildHasher, RandomState};
-
 use beryl_card_store::STORE;
 pub use beryl_session::ipc::LobbyView;
 use beryl_session::ipc::{LobbyChange, LobbySeat, LobbyUpdate};
@@ -15,7 +13,7 @@ fn loaded(seat: &MatchSeat) -> bool {
     !seat.deck.is_empty() || !seat.sideboard.is_empty()
 }
 
-fn can_start(table: &Table, viewer: Seat) -> bool {
+pub(super) fn can_start(table: &Table, viewer: Seat) -> bool {
     viewer == HOST
         && !table.game_match.in_game
         && table
@@ -31,9 +29,10 @@ pub(super) fn project(
     you: Seat,
     names: &[Option<String>],
     invite: Option<&str>,
+    choosing_first: bool,
 ) -> LobbyUpdate {
     let lobby = view(table, you, names, invite);
-    if table.game_match.in_game {
+    if choosing_first || table.game_match.in_game {
         LobbyUpdate {
             view: None,
             game: Some(Box::new(lobby)),
@@ -112,26 +111,6 @@ pub(super) fn action(
         LobbyChange::Ready { ready } => Action::Ready { seat, ready },
         LobbyChange::SetAssist { assist, on } => Action::SetAssist { assist, on },
         LobbyChange::Settings { settings } if seat == HOST => Action::GameSettings { settings },
-        LobbyChange::Start if can_start(table, seat) => {
-            let first = table
-                .game_match
-                .first
-                .or_else(|| {
-                    let winner = table.game_match.last_winner?;
-                    table.seats().find(|&seat| seat != winner)
-                })
-                .unwrap_or_else(|| {
-                    // A solo table always has the first turn. A hosted table has two seats.
-                    if table.players.len() == 1 {
-                        HOST
-                    } else {
-                        Seat(u8::from(
-                            !RandomState::new().hash_one(0_u8).is_multiple_of(2),
-                        ))
-                    }
-                });
-            Action::Start { first }
-        }
         LobbyChange::Start if seat == HOST => return Err(Refusal::INVALID),
         LobbyChange::Start | LobbyChange::Settings { .. } => return Err(Refusal::Permission),
         LobbyChange::View | LobbyChange::Solo => return Err(Refusal::INVALID),

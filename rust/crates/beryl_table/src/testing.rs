@@ -424,7 +424,10 @@ impl Generator {
                         .iter()
                         .all(|seat| !seat.deck.is_empty()) =>
             {
-                Action::Start { first: by }
+                Action::Start {
+                    first: by,
+                    opening: false,
+                }
             }
             Kind::NextGame if !lobby => Action::NextGame {
                 winner: toggle.then_some(by),

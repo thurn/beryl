@@ -126,12 +126,24 @@ fn game_and_rewind_resets_have_one_banner() {
     table.game_match.seats[1].deck = vec![("Plains".into(), 8)];
     let mut game = Game::new(table);
     for (action, expected) in [
-        (Action::Start { first: HOST }, Notice::Game { number: 1 }),
+        (
+            Action::Start {
+                first: HOST,
+                opening: false,
+            },
+            Notice::Game { number: 1 },
+        ),
         (
             Action::NextGame { winner: None },
             Notice::Game { number: 2 },
         ),
-        (Action::Start { first: GUEST }, Notice::Game { number: 2 }),
+        (
+            Action::Start {
+                first: GUEST,
+                opening: false,
+            },
+            Notice::Game { number: 2 },
+        ),
         (Action::Rewind { to: 1 }, Notice::Rewind { to: 1 }),
         (Action::Undo { entry: None }, Notice::Rewind { to: 3 }),
     ] {

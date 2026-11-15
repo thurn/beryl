@@ -38,7 +38,11 @@ export function TablePromptView({
   space: TraySpace;
   view: PlayerView;
 }) {
-  if (prompt.kind === "opening") return null;
+  if (
+    prompt.kind === "opening" ||
+    (prompt.kind === "choose" && view.table?.choosingFirst)
+  )
+    return null;
   return <Dialog key={prompt.kind} {...{ client, prompt, space, view }} />;
 }
 

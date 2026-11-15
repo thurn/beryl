@@ -465,12 +465,18 @@ impl Builder {
                 },
             );
         }
-        if events.iter().any(|event| {
-            matches!(
-                event,
-                AnimationEvent::Change(Change::SetTable(TableEdit::SetTurn { .. }))
-            )
-        }) {
+        // Starting a prepared game sets the turn in the same beat as the
+        // selected phase. Let that phase have the banner.
+        if !events
+            .iter()
+            .any(|event| matches!(event, AnimationEvent::Phase(_)))
+            && events.iter().any(|event| {
+                matches!(
+                    event,
+                    AnimationEvent::Change(Change::SetTable(TableEdit::SetTurn { .. }))
+                )
+            })
+        {
             let name = format!("Seat {}", u16::from(member.table.active.0) + 1);
             self.emit(
                 beat,

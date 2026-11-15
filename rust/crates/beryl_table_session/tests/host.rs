@@ -112,6 +112,13 @@ fn accepted_guest_action(guest: &mut MemoryLink, n: u64, action: &TableAction) -
     update
 }
 
+fn start(first: Seat) -> TableAction {
+    Action::Start {
+        first,
+        opening: false,
+    }
+}
+
 fn manual(update: &GameUpdate) -> &TableView {
     update.view.table.as_ref().unwrap()
 }
@@ -179,7 +186,7 @@ fn both_seats_share_the_order_and_keep_their_private_views() {
 
     accepted_guest_action(&mut guest, 2, &load(GUEST, "Plains"));
     emitted.recv().unwrap();
-    tables.act(Action::Start { first: HOST }).unwrap();
+    tables.act(start(HOST)).unwrap();
     let (mut host_view, mut guest_view) = (emitted.recv().unwrap(), guest_update(&mut guest));
     assert_eq!(manual(&host_view).orders.you.hand.len(), 7);
     assert_eq!(manual(&guest_view).orders.you.hand.len(), 7);
@@ -267,7 +274,7 @@ fn a_drop_freezes_actions_and_resume_replays_the_save_for_the_same_guest() {
     emitted.recv().unwrap();
     accepted_guest_action(&mut guest, 1, &load(GUEST, "Plains"));
     emitted.recv().unwrap();
-    host.act(Action::Start { first: GUEST }).unwrap();
+    host.act(start(GUEST)).unwrap();
     let before = emitted.recv().unwrap();
     let guest_before = guest_update(&mut guest);
     assert_eq!(manual(&before).orders.you.hand.len(), 5);

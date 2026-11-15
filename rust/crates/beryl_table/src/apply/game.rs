@@ -28,10 +28,17 @@ pub(super) fn set_assist(table: &Table, by: Seat, assist: Assist, on: bool) -> V
 type Deck = Vec<(String, u16)>;
 
 pub(super) fn plan_phase(table: &Table, phase: Phase) -> AppliedChanges {
-    let changes = edit(table.phase, phase, |edit| {
+    let mut changes = Vec::new();
+    let before = if table.game_match.in_game && table.turn == 0 {
+        set_turn(table, table.active, 1, &mut changes);
+        Phase::Untap
+    } else {
+        table.phase
+    };
+    changes.extend(edit(before, phase, |edit| {
         Change::SetTable(TableEdit::SetPhase { edit })
-    });
-    AppliedChanges::presented(changes.into_iter().collect(), Presentation::Phase(phase))
+    }));
+    AppliedChanges::presented(changes, Presentation::Phase(phase))
 }
 
 fn set_turn(table: &Table, active: Seat, turn: u32, changes: &mut Vec<Change>) {
@@ -54,7 +61,12 @@ fn set_turn(table: &Table, active: Seat, turn: u32, changes: &mut Vec<Change>) {
 
 pub(super) fn next_turn(table: &Table) -> Changes {
     players::player(table, table.active)?;
-    let next = (usize::from(table.active.0) + 1) % table.players.len();
+    let active = usize::from(table.active.0);
+    let next = if table.game_match.in_game && table.turn == 0 {
+        active
+    } else {
+        (active + 1) % table.players.len()
+    };
     let turn = table.turn.checked_add(1).ok_or(Refusal::INVALID)?;
     let mut changes = Vec::new();
     set_turn(table, Seat(next as u8), turn, &mut changes);
@@ -290,7 +302,13 @@ fn create_pile(
     Ok(())
 }
 
-pub(super) fn start(table: &Table, first: Seat, chance: &mut Chance, action: &Action) -> Changes {
+pub(super) fn start(
+    table: &Table,
+    first: Seat,
+    opening: bool,
+    chance: &mut Chance,
+    action: &Action,
+) -> Changes {
     lobby_seat(table, first)?;
     if table
         .game_match
@@ -302,7 +320,7 @@ pub(super) fn start(table: &Table, first: Seat, chance: &mut Chance, action: &Ac
     }
 
     let mut changes = reset_play(table);
-    set_turn(table, first, 1, &mut changes);
+    set_turn(table, first, u32::from(!opening), &mut changes);
     changes.push(Change::SetTable(TableEdit::SetInGame {
         edit: Edit {
             before: false,

@@ -79,6 +79,14 @@ impl Summary {
             Action::Roll { .. } => {
                 summary.dice = super::outcomes(changes).collect();
             }
+            Action::Batch { actions } if paired_rolls(actions) => {
+                summary.dice = super::outcomes(changes).collect();
+            }
+            Action::Batch { actions } => {
+                if let [action @ Action::Mulligan { .. }] = actions.as_slice() {
+                    return Self::new(table, by, action, changes);
+                }
+            }
             Action::Life { seat, .. } => {
                 summary.life = Some(table.players[usize::from(seat.0)].life);
             }
@@ -388,7 +396,18 @@ fn game(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
         Action::Ready { ready: true, .. } => "Ready".into(),
         Action::Ready { ready: false, .. } => "Cleared readiness".into(),
         Action::GameSettings { .. } => "Changed game settings".into(),
+        Action::Start {
+            first,
+            opening: true,
+        } => {
+            if *first == viewer {
+                "Dealt opening hands. You play first".into()
+            } else {
+                format!("Dealt opening hands. {} plays first", player(*first))
+            }
+        }
         Action::Start { .. } => "Started the game".into(),
+        Action::Keep {} => "Kept the opening hand".into(),
         Action::NextGame {
             winner: Some(winner),
         } => format!("Ended the game. {} won", player(*winner)),
@@ -400,12 +419,60 @@ fn game(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
         Action::Flow { .. } => "Opened a library flow".into(),
         Action::Undo { .. } => "Undid an action".into(),
         Action::Rewind { to } => format!("Rewound to entry {to}"),
-        Action::Batch { actions } => format!(
-            "Applied a batch of {}",
-            amount(actions.len(), "action", "actions")
-        ),
+        Action::Batch { actions } if paired_rolls(actions) => summary
+            .dice
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|dice| roll(6, dice))
+            .collect::<Vec<_>>()
+            .join(". "),
+        Action::Batch { actions } => match actions.as_slice() {
+            [action @ (Action::Start { opening: true, .. } | Action::Mulligan { .. })] => {
+                describe(action, summary, names)
+            }
+            [Action::Keep {}, rest @ ..] => {
+                opening_keep(rest).unwrap_or_else(|| batch_line(actions.len()))
+            }
+            _ => batch_line(actions.len()),
+        },
         _ => unreachable!("expected a game action"),
     }
+}
+
+fn batch_line(count: usize) -> String {
+    format!("Applied a batch of {}", amount(count, "action", "actions"))
+}
+
+fn opening_keep(actions: &[Action]) -> Option<String> {
+    let mut text = "Kept the opening hand".to_owned();
+    for action in actions {
+        match action {
+            Action::Move {
+                selection,
+                to: Destination::Zone(Zone::Library(seat)),
+                position: Position::Bottom,
+                ..
+            } if selection.zone == Zone::Hand(*seat) => {
+                // The count is public. The cards stay private.
+                text.push_str(". Put ");
+                text.push_str(&amount(selection.objects.len(), "card", "cards"));
+                text.push_str(" on the bottom");
+            }
+            Action::Phase {
+                phase: Phase::Untap,
+            } => text.push_str(". Moved to untap"),
+            _ => return None,
+        }
+    }
+    Some(text)
+}
+
+fn paired_rolls(actions: &[Action]) -> bool {
+    !actions.is_empty()
+        && actions
+            .iter()
+            .all(|action| matches!(action, Action::Roll { count: 2, sides: 6 }))
 }
 
 fn movement(
