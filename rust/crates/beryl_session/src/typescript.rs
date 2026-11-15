@@ -223,6 +223,7 @@ pub fn typescript() -> String {
     let extra = table_decls(&cfg)
         .into_iter()
         .chain(table_action_decls(&cfg))
+        .chain(crate::ipc::decks::typescript_decls(&cfg))
         .chain(prompt_decls(&cfg));
     for decl in session_decls(&cfg).into_iter().chain(extra) {
         out.push('\n');

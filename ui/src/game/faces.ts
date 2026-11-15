@@ -136,7 +136,7 @@ export function marksOf(o: ObjectView): CardMarks {
   };
 }
 
-/** A card the data does not name (it should not happen): its name on a blank frame. */
+/** A name missing from the card store draws on a plain frame. */
 export const unknownFace = (name: string): FrameFace => ({
   name,
   typeLine: "",

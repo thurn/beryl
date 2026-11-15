@@ -152,3 +152,14 @@ fn a_fixture_s_strings_find_the_names_among_them() {
     assert_eq!(found.cards.keys().collect::<Vec<_>>(), ["Island"]);
     assert_eq!(found.tokens.keys().collect::<Vec<_>>(), ["Samurai Token"]);
 }
+
+#[test]
+fn requests_keep_the_asked_name_for_case_insensitive_card_matches() {
+    let records = card_records(&CardRecordsRequest {
+        names: vec!["insectile aberration".to_owned(), "constructor".to_owned()],
+    });
+    let card = &records.cards["insectile aberration"];
+    assert_eq!(card.faces[1].name, "Insectile Aberration");
+    assert!(!records.cards.contains_key("constructor"));
+    assert!(!records.tokens.contains_key("constructor"));
+}

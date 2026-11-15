@@ -76,14 +76,20 @@ export class CardRecordCache {
       this.answered.add(name);
       // The card last, so it wins over a token of the same name.
       for (const [card, token] of [
-        [records.tokens[name], true],
-        [records.cards[name], false],
+        [Object.hasOwn(records.tokens, name) && records.tokens[name], true],
+        [Object.hasOwn(records.cards, name) && records.cards[name], false],
       ] as const) {
         if (!card) continue;
-        const face = Math.max(
-          0,
-          card.faces.findIndex((f) => f.name === name),
-        );
+        const exact = card.faces.findIndex((f) => f.name === name);
+        const face =
+          exact >= 0
+            ? exact
+            : Math.max(
+                0,
+                card.faces.findIndex(
+                  (f) => f.name.toLowerCase() === name.toLowerCase(),
+                ),
+              );
         this.named.set(name, { card, face });
         if (token) this.tokens.set(name, card);
       }

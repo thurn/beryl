@@ -9,9 +9,11 @@ import type {
   BugReport,
   CandidateIndex,
   CardRecords,
+  CardSearchRequest,
   Click,
   Commands,
   DecisionId,
+  DeckImportRequest,
   Events,
   Fixture,
   GameUpdate,
@@ -211,7 +213,8 @@ export function fixtureTransport(
     const among = (records?: CardRecords["cards"]) =>
       Object.fromEntries(
         names.flatMap((name) => {
-          const record = records?.[name];
+          const record =
+            records && Object.hasOwn(records, name) && records[name];
           return record ? [[name, record]] : [];
         }),
       );
@@ -687,6 +690,22 @@ export const tableKeys = (on: boolean) =>
 
 /** Asks before quitting from the manual table. */
 export const tableQuit = () => call("table_quit", {});
+
+export const deckImport = (request: DeckImportRequest) =>
+  call("deck_import", { request });
+
+export const deckList = () => call("deck_list", {});
+
+export const deckDelete = (name: string) =>
+  call("deck_delete", { request: { name } });
+
+export const deckOpenFile = () => call("deck_open_file", {});
+
+export const cardSearch = (request: CardSearchRequest) =>
+  call("card_search", { request });
+
+export const cardTokens = (name: string) =>
+  call("card_tokens", { request: { name } });
 
 /** The native Quit menu sends this while the table has the keys. */
 export const onTableQuitAsked = async (handler: () => void) =>

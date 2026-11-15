@@ -17,6 +17,13 @@ use crate::prompt::{ClickReply, ClickRequest};
 use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting, TableAction};
 use crate::{AgentView, GameUpdate, SessionError, StartRequest};
 
+pub mod decks;
+
+use decks::{
+    CardSearchHit, CardSearchRequest, CardTokenLink, CardTokensRequest, DeckDeleteRequest,
+    DeckImportReply, DeckImportRequest, DeckOpenReply, SavedDeck,
+};
+
 pub const APP_INFO: &str = "app_info";
 /// The UI calls this once it has rendered.
 pub const UI_READY: &str = "ui_ready";
@@ -60,6 +67,13 @@ pub const TABLE_LEAVE: &str = "table_leave";
 pub const TABLE_KEYS: &str = "table_keys";
 /// Asks the player before quitting the desktop app at a manual table.
 pub const TABLE_QUIT: &str = "table_quit";
+
+pub const DECK_IMPORT: &str = "deck_import";
+pub const DECK_LIST: &str = "deck_list";
+pub const DECK_DELETE: &str = "deck_delete";
+pub const DECK_OPEN_FILE: &str = "deck_open_file";
+pub const CARD_SEARCH: &str = "card_search";
+pub const CARD_TOKENS: &str = "card_tokens";
 
 /// Snapshots the window as it is drawn now, the bug report's frozen frame, and returns its
 /// number: the app serves it at `beryl-art://localhost/snapshot/<n>` and turns it into the
@@ -444,6 +458,42 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             "Record<string, never>".to_owned(),
             name::<()>(cfg),
             error.clone(),
+        ),
+        (
+            DECK_IMPORT,
+            request(name::<DeckImportRequest>(cfg)),
+            name::<DeckImportReply>(cfg),
+            error.clone(),
+        ),
+        (
+            DECK_LIST,
+            "Record<string, never>".to_owned(),
+            name::<Vec<SavedDeck>>(cfg),
+            error.clone(),
+        ),
+        (
+            DECK_DELETE,
+            request(name::<DeckDeleteRequest>(cfg)),
+            name::<()>(cfg),
+            error.clone(),
+        ),
+        (
+            DECK_OPEN_FILE,
+            "Record<string, never>".to_owned(),
+            name::<DeckOpenReply>(cfg),
+            error.clone(),
+        ),
+        (
+            CARD_SEARCH,
+            request(name::<CardSearchRequest>(cfg)),
+            name::<Vec<CardSearchHit>>(cfg),
+            never.clone(),
+        ),
+        (
+            CARD_TOKENS,
+            request(name::<CardTokensRequest>(cfg)),
+            name::<Vec<CardTokenLink>>(cfg),
+            never.clone(),
         ),
         (
             CAPTURE_WINDOW,

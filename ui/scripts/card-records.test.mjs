@@ -70,6 +70,20 @@ test("a name finds its card, its face or its token", () => {
     assert.equal(new CardRecordCache().namelessArt(token), undefined);
 });
 
+test("a case-insensitive face match keeps the intended face", () => {
+    const cache = new CardRecordCache();
+    const split = card("Front // Back", "Front", "Back");
+    cache.keep(["bAcK"], records({ bAcK: split }));
+    assert.deepEqual(cache.find("bAcK"), { card: split, face: 1 });
+});
+
+test("an unknown name inherited by JavaScript objects has no card record", () => {
+    const cache = new CardRecordCache();
+    cache.keep(["constructor", "__proto__"], records());
+    assert.equal(cache.find("constructor"), undefined);
+    assert.equal(cache.find("__proto__"), undefined);
+});
+
 test("every string a view carries is asked about, wherever it is", () => {
     const view = {
         objects: [{ name: "Island", slot: 1 }, { name: null }],

@@ -4,6 +4,7 @@
 
 mod art;
 mod bug_reports;
+mod decks;
 mod games;
 mod links;
 mod profile;
@@ -294,6 +295,12 @@ pub fn run() {
             tables::table_leave = ipc::TABLE_LEAVE,
             table_keys::table_keys = ipc::TABLE_KEYS,
             table_keys::table_quit = ipc::TABLE_QUIT,
+            decks::deck_import = ipc::DECK_IMPORT,
+            decks::deck_list = ipc::DECK_LIST,
+            decks::deck_delete = ipc::DECK_DELETE,
+            decks::deck_open_file = ipc::DECK_OPEN_FILE,
+            decks::card_search = ipc::CARD_SEARCH,
+            decks::card_tokens = ipc::CARD_TOKENS,
             capture_window = ipc::CAPTURE_WINDOW,
             report_bug = ipc::REPORT_BUG,
             bug_reports::export_bugs = ipc::EXPORT_BUGS,
@@ -325,44 +332,46 @@ pub fn run() {
                 responder.respond(response);
             });
         })
-        .setup(|app| {
-            #[cfg(target_os = "macos")]
-            table_keys::mac::setup(app.handle())?;
-            let bug_dir = profile::setup(app.handle())?;
-            journal::info(
-                "app",
-                "started",
-                json!({ "smoke": smoke_seconds().is_some(), "bugs": bug_dir }),
-            );
-            let games = games::sessions(app.handle());
-            app.manage(tables::sessions(app.handle(), games.session_ids()));
-            app.manage(games);
-            app.manage(Snapshots::default());
-            app.manage(BugDirectory(bug_dir));
-            let dir = app.path().app_cache_dir()?.join("art");
-            app.manage(ArtCache::new(dir, art::SCRYFALL));
-            // The iOS Simulator needs the webview shown even in smoke mode to load the UI.
-            // Showing it there does not open a window on the Mac desktop.
-            let smoke = smoke_seconds();
-            if (cfg!(target_os = "ios") || smoke.is_none())
-                && let Some(window) = app.get_webview_window("main")
-            {
-                window.show()?;
-            }
-            let Some(seconds) = smoke else { return Ok(()) };
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Prohibited);
-            std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_secs(seconds));
-                journal::error(
-                    "app",
-                    format!("the ui did not report ready within {seconds} s"),
-                    json!(null),
-                );
-                std::process::exit(1);
-            });
-            Ok(())
-        })
+        .setup(setup)
         .run(tauri::generate_context!())
         .expect("error while running the Tauri application");
+}
+
+fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    table_keys::mac::setup(app.handle())?;
+    let bug_dir = profile::setup(app.handle())?;
+    journal::info(
+        "app",
+        "started",
+        json!({ "smoke": smoke_seconds().is_some(), "bugs": bug_dir }),
+    );
+    let games = games::sessions(app.handle());
+    app.manage(tables::sessions(app.handle(), games.session_ids()));
+    app.manage(games);
+    app.manage(Snapshots::default());
+    app.manage(BugDirectory(bug_dir));
+    let dir = app.path().app_cache_dir()?.join("art");
+    app.manage(ArtCache::new(dir, art::SCRYFALL));
+    // The iOS Simulator needs the webview shown even in smoke mode to load the UI.
+    // Showing it there does not open a window on the Mac desktop.
+    let smoke = smoke_seconds();
+    if (cfg!(target_os = "ios") || smoke.is_none())
+        && let Some(window) = app.get_webview_window("main")
+    {
+        window.show()?;
+    }
+    let Some(seconds) = smoke else { return Ok(()) };
+    #[cfg(target_os = "macos")]
+    app.set_activation_policy(tauri::ActivationPolicy::Prohibited);
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(seconds));
+        journal::error(
+            "app",
+            format!("the ui did not report ready within {seconds} s"),
+            json!(null),
+        );
+        std::process::exit(1);
+    });
+    Ok(())
 }

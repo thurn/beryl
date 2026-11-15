@@ -18,6 +18,7 @@ import {
     tokenField,
     tokenRun,
     views,
+    writeFixture,
 } from "./kept-harness.mjs";
 
 // Why no audit: which card the pointer's inspector shows, and its artist's line. A permanent's:
@@ -664,4 +665,47 @@ await check(
         await page.getByLabel(`${buried.name}, inspected`).waitFor();
     },
     { fixture: "table-drawn", at: manualViews.length, ready: ".stack-ability" },
+);
+
+// The stage audits can see that the card has a slot. Check the contents of its
+// frame when the deck's name has no record, including names JavaScript inherits.
+const [openedTable] = manualViews;
+const handCard = openedTable.objects.find(
+    (object) => object.zone === "hand" && object.controller === "you",
+);
+assert.ok(handCard, "the manual table has a card in hand");
+const unknownName = "constructor";
+const unknownCard = `.card-el[data-slot="${handCard.slot}"]`;
+await writeFixture("unknown-card-frame", {
+    messages: [
+        {
+            kind: "event",
+            event: "game-update",
+            payload: {
+                session: 1,
+                view: {
+                    ...openedTable,
+                    events: [],
+                    script: { reset: { abilities: [] }, beats: [] },
+                    objects: openedTable.objects.map((object) =>
+                        object.slot === handCard.slot
+                            ? { ...object, name: unknownName }
+                            : object,
+                    ),
+                },
+            },
+        },
+    ],
+});
+await check(
+    "an unknown card name draws in a plain frame",
+    async (page) => {
+        const card = page.locator(unknownCard);
+        assert.equal(
+            await card.locator(".card-name").textContent(),
+            unknownName,
+        );
+        assert.equal(await card.locator(".card-scan").count(), 0);
+    },
+    { fixture: "unknown-card-frame", at: 1, ready: unknownCard },
 );

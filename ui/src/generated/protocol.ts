@@ -808,6 +808,24 @@ export type TableSeat = number;
 
 export type TableZone = { "library": TableSeat } | { "hand": TableSeat } | { "graveyard": TableSeat } | { "exile": TableSeat } | { "sideboard": TableSeat } | "battlefield" | "stack";
 
+export type DeckImportRequest = { name: string, text?: string, cod?: string, };
+
+export type DeckImportReply = { name: string, main: Array<[string, number]>, side: Array<[string, number]>, unknown: Array<string>, skipped: Array<string>, };
+
+export type SavedDeck = { deck: DeckImportReply, mainCount: number, sideCount: number, };
+
+export type DeckDeleteRequest = { name: string, };
+
+export type DeckOpenReply = { "kind": "text", text: string, } | { "kind": "cod", text: string, } | { "kind": "canceled" } | { "kind": "unavailable" };
+
+export type CardSearchRequest = { text: string, tokens: boolean, limit: number, };
+
+export type CardSearchHit = { name: string, scryfallId: string, typeLine: string, manaCost?: string, power?: string, toughness?: string, image: string, };
+
+export type CardTokensRequest = { name: string, };
+
+export type CardTokenLink = { name: string, scryfallId: string, };
+
 export type PromptView = { 
 /**
  * Counts this prompt's states from 0. A click names the state it was made on.
@@ -1052,6 +1070,12 @@ export type Commands = {
   table_leave: { args: Record<string, never>; result: null; error: never };
   table_keys: { args: { request: TableKeysRequest }; result: null; error: SessionError };
   table_quit: { args: Record<string, never>; result: null; error: SessionError };
+  deck_import: { args: { request: DeckImportRequest }; result: DeckImportReply; error: SessionError };
+  deck_list: { args: Record<string, never>; result: Array<SavedDeck>; error: SessionError };
+  deck_delete: { args: { request: DeckDeleteRequest }; result: null; error: SessionError };
+  deck_open_file: { args: Record<string, never>; result: DeckOpenReply; error: SessionError };
+  card_search: { args: { request: CardSearchRequest }; result: Array<CardSearchHit>; error: never };
+  card_tokens: { args: { request: CardTokensRequest }; result: Array<CardTokenLink>; error: never };
   capture_window: { args: Record<string, never>; result: number; error: SessionError };
   report_bug: { args: { request: BugReport }; result: BugSaved; error: SessionError };
   export_bugs: { args: Record<string, never>; result: number | null; error: SessionError };

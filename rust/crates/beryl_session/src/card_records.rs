@@ -130,7 +130,7 @@ fn records_in(store: &Store, names: &[String]) -> CardRecords {
         tokens: BTreeMap::new(),
     };
     for name in names {
-        if let Some(card) = store.card(name) {
+        if let Some(card) = store.card_ignoring_case(name) {
             out.cards.insert(name.clone(), entry(card));
         }
         if let Some(token) = token(store, name) {
@@ -213,7 +213,7 @@ fn entry(record: Record) -> CardEntry {
 }
 
 /// Scryfall's image of the `side` of printing `id`, in `version`.
-fn image(version: &str, side: &str, id: &str) -> String {
+pub fn image(version: &str, side: &str, id: &str) -> String {
     format!(
         "{IMAGES}/{version}/{side}/{}/{}/{id}.jpg",
         &id[0..1],

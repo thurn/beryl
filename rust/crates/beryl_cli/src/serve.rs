@@ -19,6 +19,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_session::bugs::{self, BugReport, Images, UiLogRequest};
 use beryl_session::card_records::CardRecordsRequest;
+use beryl_session::ipc::decks::{
+    CardSearchRequest, CardTokensRequest, DeckDeleteRequest, DeckImportRequest, DeckOpenReply,
+};
 use beryl_session::ipc::{
     self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, Platform,
     SetStopsRequest, TableActReply, TableActRequest, TableKeysRequest, TableRefused,
@@ -27,6 +30,7 @@ use beryl_session::ipc::{
 use beryl_session::prompt::ClickRequest;
 use beryl_session::{GameUpdate, SessionError, Sessions, StartRequest, agents};
 use beryl_table_session::TableSessions;
+use beryl_table_session::decks::{self, Decks};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -51,14 +55,18 @@ pub fn serve(port: u16) -> Result<(), String> {
     };
     let sessions = Arc::new(Sessions::new(None, emit.clone()));
     let tables = Arc::new(TableSessions::new(sessions.session_ids(), emit));
+    // A headless run has its own deck library, independent of the app's profiles.
+    let deck_dir = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let decks = Decks::new(deck_dir.path());
     println!("beryl_cli: serving on http://127.0.0.1:{port}");
     for connection in listener.incoming() {
         let Ok(connection) = connection else { continue };
         let sessions = Arc::clone(&sessions);
         let tables = Arc::clone(&tables);
         let streams = Arc::clone(&streams);
+        let decks = decks.clone();
         std::thread::spawn(move || {
-            if let Err(e) = handle(connection, &sessions, &tables, &streams) {
+            if let Err(e) = handle(connection, &sessions, &tables, &decks, &streams) {
                 eprintln!("beryl_cli: {e}");
             }
         });
@@ -79,6 +87,7 @@ fn handle(
     stream: TcpStream,
     sessions: &Sessions,
     tables: &TableSessions,
+    decks: &Decks,
     streams: &Streams,
 ) -> Result<(), String> {
     let HttpRequest {
@@ -108,6 +117,23 @@ fn handle(
                 }
                 ipc::TABLE_KEYS => answer(request::<TableKeysRequest>(args).map(|_| ())),
                 ipc::TABLE_QUIT => answer::<_, ()>(Ok(())),
+                ipc::DECK_IMPORT => answer(
+                    request::<DeckImportRequest>(args)
+                        .and_then(|r| decks::import(decks, r).map_err(|e| json!(e))),
+                ),
+                ipc::DECK_LIST => answer(decks::list(decks)),
+                ipc::DECK_DELETE => answer(
+                    request::<DeckDeleteRequest>(args)
+                        .and_then(|r| decks::delete(decks, &r).map_err(|e| json!(e))),
+                ),
+                // A browser cannot open the app's native file picker.
+                ipc::DECK_OPEN_FILE => answer::<_, ()>(Ok(DeckOpenReply::Unavailable)),
+                ipc::CARD_SEARCH => {
+                    answer(request::<CardSearchRequest>(args).map(|r| decks::search(&r)))
+                }
+                ipc::CARD_TOKENS => {
+                    answer(request::<CardTokensRequest>(args).map(|r| decks::tokens(&r)))
+                }
                 _ => invoke(sessions, command, args),
             };
             respond(&mut stream, "200 OK", &answer.to_string())
