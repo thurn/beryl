@@ -194,7 +194,7 @@ fn a_loaded_version_1_save_is_in_the_format_of_today() {
     assert_eq!(loaded.format_version, FORMAT_VERSION);
     assert_eq!(loaded.chooser, game.replay().chooser);
     // Re-recorded on this build, with the objects answers name marked as named before
-    // versions 5 and 6, as every version 4 file's are.
+    // versions 5, 6 and 13, as every version 4 file's are.
     assert_eq!(
         loaded.log,
         before_v5(&only(game.replay(), |e| !matches!(e, Entry::Checkpoint(_))))
@@ -202,8 +202,9 @@ fn a_loaded_version_1_save_is_in_the_format_of_today() {
     assert_eq!(replayed(&loaded).unwrap(), view);
 }
 
-/// `log` with each object its answers name marked as named before versions 5 and 6
-/// ([`Obj::before_v5`], [`Obj::before_v6`]), as a version 4 file's are once loaded.
+/// `log` with each object its answers name marked as named before versions 5, 6 and 13
+/// ([`Obj::before_v5`], [`Obj::before_v6`], [`Obj::before_v13`]), as a version 4 file's are
+/// once loaded.
 fn before_v5(log: &[Entry]) -> Vec<Entry> {
     fn mark(value: &mut serde_json::Value) {
         match value {
@@ -211,6 +212,7 @@ fn before_v5(log: &[Entry]) -> Vec<Entry> {
                 if fields.contains_key("zone") && fields.contains_key("controller") {
                     fields.insert("beforeV5".to_owned(), true.into());
                     fields.insert("beforeV6".to_owned(), true.into());
+                    fields.insert("beforeV13".to_owned(), true.into());
                 }
                 fields.values_mut().for_each(mark);
             }

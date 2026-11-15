@@ -7,11 +7,11 @@
 
 use beryl_engine::card::{AbilityKind, CastingOption, ChosenKind, FaceAbility, ManaColor, Types};
 use beryl_engine::chosen::ChosenValue;
-use beryl_engine::state::StackItem;
+use beryl_engine::state::{Flag, StackItem};
 use beryl_engine::{Choice, Decision, GameTable, Layout, Opt, State, TurnStep, Zone};
 use serde::{Deserialize, Serialize};
 
-use crate::checkpoint::Counter;
+use crate::checkpoint::{Counter, Exception};
 use crate::perturb;
 
 mod ability;
@@ -240,11 +240,14 @@ impl Chosen {
     }
 }
 
-/// `alike`, candidates of `d` that do alike, in the order of the battlefield or of their
-/// graveyards, which the rules keep ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)
-/// orders permanents by timestamp; [CR 404.2](https://yawgatog.com/resources/magic-rules/#R4042)
-/// keeps a graveyard's order): if there are two or more, each naming an object in one of
-/// those zones.
+/// `alike`, candidates of `d` that do alike, in the order of the battlefield, of their
+/// graveyards or of the stack, which the rules keep
+/// ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137) orders permanents by
+/// timestamp; [CR 404.2](https://yawgatog.com/resources/magic-rules/#R4042) keeps a graveyard's
+/// order; [CR 405.2](https://yawgatog.com/resources/magic-rules/#R4052): "Each time an object is
+/// put on the stack, it's put on top of all objects already there"): if there are two or more,
+/// each naming an object in one of those zones. Storm copies alike but for their targets are
+/// told apart by their places on the stack.
 fn in_order<L: Layout>(
     s: &State<L>,
     d: &Decision<L>,
@@ -264,6 +267,12 @@ fn in_order<L: Layout>(
             Zone::Graveyard => Some((
                 1 + o.owner().index(),
                 s.graveyard(o.owner()).iter().position(|&g| g == slot)?,
+            )),
+            Zone::Stack => Some((
+                3,
+                s.stack()
+                    .iter()
+                    .position(|e| e.spell().is_some_and(|spell| spell.slot == slot))?,
             )),
             _ => None,
         }
@@ -470,9 +479,9 @@ impl Act {
     /// that `named` describes it alike: without what that version did not record.
     fn named_like(mut self, named: &Act) -> Act {
         if let Some(o) = named.object() {
-            let (before_v5, before_v6) = (o.before_v5, o.before_v6);
+            let (before_v5, before_v6, before_v13) = (o.before_v5, o.before_v6, o.before_v13);
             if let Some(o) = self.object_mut() {
-                o.name_like(before_v5, before_v6);
+                o.name_like(before_v5, before_v6, before_v13);
             }
         }
         if let (Act::Trigger { ability, .. }, Act::Trigger { ability: None, .. }) =
@@ -616,9 +625,29 @@ pub struct Obj {
     #[serde(default, rename = "beforeV5", skip_serializing_if = "is_false")]
     pub before_v5: bool,
     /// A token, since version 6: a token copy of a card is a permanent apart from the card
-    /// ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)).
+    /// ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)). Since version 13 also
+    /// a copy of a spell on the stack, which is a token ([CR 707.10]): the copy and its spell
+    /// differ to what counters one.
+    ///
+    /// [CR 707.10]: https://yawgatog.com/resources/magic-rules/#R70710
     #[serde(default, skip_serializing_if = "is_false")]
     pub token: bool,
+    /// The card it really is, for a card that has another object's values under a copy
+    /// effect, since version 13: a Phantasmal Image that entered as a copy of Grizzly Bears is
+    /// named "Grizzly Bears" ([CR 707.2]) but is not a Grizzly Bears to the rules that send a
+    /// card somewhere, so the two part ways where it leaves the battlefield.
+    ///
+    /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card: Option<String>,
+    /// The copy exceptions its copiable values carry, in the order they were made, since
+    /// version 13 ([CR 707.9b]): "The final set of values for that characteristic becomes part
+    /// of the copiable values of the copy." A Phantasmal Image copying Grizzly Bears is an
+    /// Illusion with a sacrifice trigger; one copying that Image has the trigger twice.
+    ///
+    /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub excepts: Vec<Exception>,
     /// A creature that cannot yet attack or {T} ([CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026)):
     /// "A creature's activated ability with the tap symbol or the untap symbol in its
     /// activation cost can't be activated unless the creature has been under its controller's
@@ -653,6 +682,11 @@ pub struct Obj {
     /// are.
     #[serde(default, rename = "beforeV6", skip_serializing_if = "is_false")]
     pub before_v6: bool,
+    /// Named by a version 12 save or older, which names neither the card a copy really is nor
+    /// its copy exceptions, and no spell copy as a token: replay takes an object whatever they
+    /// are.
+    #[serde(default, rename = "beforeV13", skip_serializing_if = "is_false")]
+    pub before_v13: bool,
 }
 
 impl Obj {
@@ -669,7 +703,14 @@ impl Obj {
             shown: matches!(o.zone(), Zone::Hand | Zone::Library)
                 && s.opponents_of(o.owner()).any(|p| s.knows(p, slot)),
             before_v5: false,
-            token: permanent && o.is_token(),
+            token: (permanent || o.zone() == Zone::Stack) && o.is_token(),
+            card: (!o.is_token() && o.flags().has(Flag::Copy))
+                .then(|| s.definition_name(t, slot).to_owned()),
+            excepts: if permanent || o.zone() == Zone::Stack {
+                Exception::of(t, s, slot)
+            } else {
+                Vec::new()
+            },
             sick: permanent
                 && o.is_summoning_sick()
                 && s.derived(slot).types.contains(Types::CREATURE),
@@ -688,12 +729,21 @@ impl Obj {
                 .filter(|&other| permanent && s.object(other).zone() == Zone::Battlefield)
                 .map(|other| s.name(t, other).to_owned()),
             before_v6: false,
+            before_v13: false,
         }
     }
 
-    /// This object as a version before 5, if `before_v5`, or before 6, if `before_v6`, named
-    /// it.
-    fn name_like(&mut self, before_v5: bool, before_v6: bool) {
+    /// This object as a version before 5, if `before_v5`, before 6, if `before_v6`, or before
+    /// 13, if `before_v13`, named it.
+    fn name_like(&mut self, before_v5: bool, before_v6: bool, before_v13: bool) {
+        if before_v13 {
+            self.card = None;
+            self.excepts.clear();
+            if self.zone == ZoneName::Stack {
+                self.token = false;
+            }
+            self.before_v13 = true;
+        }
         if before_v5 {
             self.owner = None;
             self.shown = false;

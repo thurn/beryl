@@ -1,6 +1,6 @@
 //! A replacement effect's choice in a save. Dredge is offered as the draw step's draw is about
 //! to happen, which pauses the step's turn-based actions on a question
-//! (`Pending::StepActions`). A save that answered it replays to the same game with its seed
+//! (`Pending::StepActions`). A save that answered it replays exactly to the same game with its seed
 //! derived another way, its candidates listed in other orders and its cards in other slots.
 
 use beryl_cards::CARDS;
@@ -102,7 +102,7 @@ fn a_save_with_dredge_in_the_draw_step_replays_the_same_under_each_perturbation(
     };
     for (name, _, p) in Perturbation::EACH {
         let (again, replayed) =
-            perturb::with(p, || Game::from_replay(&CARDS, game.replay(), SESSION))
+            perturb::with(p, || Game::replay_exactly(&CARDS, game.replay(), SESSION))
                 .unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!(acts(again.replay()), acts(game.replay()), "{name}");
         assert_eq!(replayed.turn, view.turn, "{name}");

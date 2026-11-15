@@ -157,7 +157,7 @@ pub struct Exception {
 
 impl Exception {
     /// The exceptions of the copiable values of the object in `slot`.
-    fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> Vec<Exception> {
+    pub(crate) fn of<L: Layout>(t: &GameTable, s: &State<L>, slot: L::Slot) -> Vec<Exception> {
         s.copiable(slot)
             .additions()
             .map(|a| Exception {

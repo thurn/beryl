@@ -6,6 +6,22 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A save with a copy replayed a different attack once its cards were in other
+  slots.** A Phantasmal Image copying Grizzly Bears and a real Grizzly Bears,
+  both able to attack, were named alike in a save: an answer names an object by
+  its name by the rules, "Grizzly Bears" for both. Attackers are asked one
+  creature at a time, in slot order, so under the "other slot numbers"
+  perturbation the recorded attack went to the other creature, and replay
+  rebuilt the game from the turn's start. Two such objects were interchangeable
+  before copies existed: the same card in the same state. Fixed: since save
+  version 13 an object names the card it really is (`Obj::card`) and its copy
+  exceptions (`Obj::excepts`), a spell copy on the stack is named as a token,
+  and alike candidates on the stack are told apart by their places on it.
+  Prevention: two objects a save names alike must do alike in every rule; a new
+  characteristic a copy can carry goes into `Obj` in the change that adds it,
+  and a save test with that card replays with `Game::replay_exactly` under each
+  perturbation, since `Game::from_replay` hides a divergence by rebuilding.
+
 - **A copy lost the subtype its copy exception added once a text change changed
   a land type word on it.** A token copy that is "an Illusion in addition to its
   other types", whose "Forest" a text change made "Island", was an Island Dryad

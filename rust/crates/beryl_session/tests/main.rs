@@ -17,6 +17,7 @@ mod checkpoints;
 mod chosen_values;
 mod clicks;
 mod controlled;
+mod copy_saves;
 mod corpus;
 mod cost_replay;
 mod counters;

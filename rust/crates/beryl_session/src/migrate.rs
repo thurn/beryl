@@ -36,7 +36,7 @@ pub type Step = fn(Value, &'static CardTable) -> Result<Value, SessionError>;
 /// [`FORMAT_VERSION`] less one.
 pub const CHAIN: [Step; FORMAT_VERSION as usize - 1] = [
     v1_to_v2, v2_to_v3, v3_to_v4, v4_to_v5, v5_to_v6, v6_to_v7, v7_to_v8, v8_to_v9, v9_to_v10,
-    v10_to_v11, v11_to_v12,
+    v10_to_v11, v11_to_v12, v12_to_v13,
 ];
 
 /// `file`, a replay file of any version this build knows, in the format it writes. `cards`
@@ -298,6 +298,16 @@ fn v11_to_v12(mut file: Value, _: &'static CardTable) -> Result<Value, SessionEr
     Ok(file)
 }
 
+/// Version 12 to 13: version 13 names the card a copy really is and its copy exceptions, and a
+/// copy of a spell on the stack as a token ([`crate::save::Obj::card`]). Each object a version
+/// 12 answer names is marked as named before version 13 ([`crate::save::Obj::before_v13`]),
+/// which replay matches with an object whatever they are, as version 12 did.
+fn v12_to_v13(mut file: Value, _: &'static CardTable) -> Result<Value, SessionError> {
+    mark_objects(&mut file, "beforeV13");
+    set_version(&mut file, 13)?;
+    Ok(file)
+}
+
 /// Marks each object `file`'s answers name, what has a zone and a controller, with `field`.
 fn mark_objects(file: &mut Value, field: &str) {
     fn mark(value: &mut Value, field: &str) {
@@ -523,6 +533,20 @@ mod tests {
         expected["formatVersion"] = 6.into();
         expected["log"][0]["choice"]["act"]["creature"]["beforeV6"] = true.into();
         assert_eq!(v6, expected);
+    }
+
+    #[test]
+    fn version_12_to_13_marks_the_objects_answers_name() {
+        let bear = json!({ "name": "Grizzly Bears", "zone": "battlefield", "controller": 0 });
+        let v12 = json!({ "formatVersion": 12, "seed": 1, "log": [
+            { "choice": { "index": 0, "player": 0, "turn": 3, "step": "declareAttackers",
+                "kind": "attacker", "act": { "act": "attack", "creature": bear } } },
+        ] });
+        let v13 = v12_to_v13(v12.clone(), &CARDS).unwrap();
+        let mut expected = v12;
+        expected["formatVersion"] = 13.into();
+        expected["log"][0]["choice"]["act"]["creature"]["beforeV13"] = true.into();
+        assert_eq!(v13, expected);
     }
 
     #[test]
