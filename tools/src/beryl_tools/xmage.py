@@ -290,9 +290,10 @@ class Exporter:
         card = cast(str, permanent["card"])
         name = self.faces.back[card] if permanent["face"] else card
         tapped = "true" if permanent["tapped"] else "false"
-        self.emit(
-            f"addCard(Zone.BATTLEFIELD, {who}, {java_string(name)}, 1, {tapped});"
-        )
+        quoted = java_string(name)
+        self.emit(f"addCard(Zone.BATTLEFIELD, {who}, {quoted}, 1, {tapped});")
+        if self.cards.chooses_a_card_name_as_it_enters(card):
+            self.emit(f"setChoice({who}, {java_string(ANOTHER_CARD)});")
         counters = cast("Json | None", permanent["counters"])
         if counters is None:
             return
@@ -305,7 +306,7 @@ class Exporter:
             raise Unsupported(f"{name} starts with fewer counters than it enters with")
         if count:
             self.emit(
-                f"addCounters(1, PhaseStep.{STEPS[start]}, {who}, {java_string(name)}, "
+                f"addCounters(1, PhaseStep.{STEPS[start]}, {who}, {quoted}, "
                 f"CounterType.{COUNTERS[kind]}, {count});"
             )
 
