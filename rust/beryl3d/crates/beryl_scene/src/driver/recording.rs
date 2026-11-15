@@ -7,6 +7,7 @@
 //! on to its next views.
 
 use std::collections::{BTreeMap, VecDeque};
+use std::sync::Arc;
 
 use beryl_protocol::CandidateIndex;
 use beryl_protocol::GameUpdate;
@@ -17,7 +18,7 @@ use beryl_protocol::ipc::{
 };
 use beryl_protocol::prompt::{Click, ClickReply};
 use beryl_protocol::protocol::Status;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::command::{Reply, SessionCommand};
@@ -86,29 +87,32 @@ pub struct Answer {
 }
 
 /// The recorded responses, one queue per command.
+///
+/// A queue holds the indices of its responses in the recording rather than copies of them. A
+/// test plays its recording several times and makes a new `Responses` each time, and copying
+/// every response, the card store's records among them, took about a tenth of a test's time.
 #[derive(Clone, Debug, Default)]
 pub struct Responses {
-    queues: BTreeMap<String, VecDeque<(Option<Value>, Value)>>,
+    recording: Arc<Recording>,
+    queues: BTreeMap<String, VecDeque<usize>>,
 }
 
 impl Responses {
     #[must_use]
     pub fn new(recording: &Recording) -> Self {
-        let mut queues: BTreeMap<String, VecDeque<(Option<Value>, Value)>> = BTreeMap::new();
-        for message in &recording.0 {
-            if let FixtureMessage::Response {
-                command,
-                request,
-                value,
-            } = message
-            {
-                queues
-                    .entry(command.clone())
-                    .or_default()
-                    .push_back((request.clone(), value.clone()));
+        Self::shared(Arc::new(recording.clone()))
+    }
+
+    /// The responses of a recording that other pages share.
+    #[must_use]
+    pub fn shared(recording: Arc<Recording>) -> Self {
+        let mut queues: BTreeMap<String, VecDeque<usize>> = BTreeMap::new();
+        for (at, message) in recording.0.iter().enumerate() {
+            if let FixtureMessage::Response { command, .. } = message {
+                queues.entry(command.clone()).or_default().push_back(at);
             }
         }
-        Self { queues }
+        Self { recording, queues }
     }
 
     /// The recorded answer to `command`.
@@ -150,9 +154,17 @@ impl Responses {
             .get_mut(name)
             .filter(|queue| !queue.is_empty())
             .ok_or_else(|| format!("the recording has no response for `{name}` ({command:?})"))?;
-        let (recorded, value) = queue.front().cloned().expect("the queue is not empty");
+        let at = *queue.front().expect("the queue is not empty");
+        let FixtureMessage::Response {
+            request: recorded,
+            value,
+            ..
+        } = &self.recording.0[at]
+        else {
+            unreachable!("only responses are queued");
+        };
         if let Some(recorded) = recorded
-            && Some(&recorded) != request.as_ref()
+            && Some(recorded) != request.as_ref()
         {
             let asked = request.map_or_else(|| "nothing".to_owned(), |r| r.to_string());
             return Err(format!("`{name}` was recorded for {recorded}, not {asked}"));
@@ -161,7 +173,7 @@ impl Responses {
             queue.pop_front();
         }
         if name == ipc::CLICK {
-            let reply: ClickReply = serde_json::from_value(value)
+            let reply = ClickReply::deserialize(value)
                 .map_err(|error| format!("the recorded `click` reply is not one: {error}"))?;
             let plays_on = reply == ClickReply::Answered;
             return Ok(Answer {

@@ -47,6 +47,15 @@ opt-level = 3
 [profile.dev.package.miniz_oxide]
 opt-level = 3
 
+# The client core and the inspector at opt-level 2. Unoptimized, every interface test
+# (`just b3d test`) took about 270 CPU-seconds; at opt-level 2 it takes about 110. The rebuild
+# after a one-line edit to `beryl_scene` stays about 2 s. Optimizing the session crates as well
+# saved nothing more.
+[profile.dev.package.beryl_scene]
+opt-level = 2
+[profile.dev.package.beryl_inspect]
+opt-level = 2
+
 [profile.release]
 debug = "line-tables-only"
 codegen-units = 1

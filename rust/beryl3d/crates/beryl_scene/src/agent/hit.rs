@@ -58,6 +58,9 @@ pub fn free_rect(frame: &Frame, index: u32, min: Size) -> Option<Rect> {
 #[must_use]
 pub fn has_free_rect(frame: &Frame, overlaps: &Overlaps, index: u32, min: Size) -> bool {
     let grid = Grid::new(frame, index, overlaps.near(grid_area(frame, index)));
+    if grid.clear_square(frame, index, min) {
+        return true;
+    }
     let free = grid.free_cells(frame, index, true);
     grid.search(&free, min, true).is_some()
 }
@@ -153,8 +156,13 @@ impl Overlaps {
 #[must_use]
 pub fn covered(frame: &Frame, index: u32) -> f32 {
     let grid = Grid::new(frame, index, everything(frame));
-    let free = grid.free_cells(frame, index, false);
     let element = &frame.resolved[index as usize];
+    if grid.alone && catches_anywhere(element) {
+        // Nothing but the element and its descendants overlaps it, and the element catches a
+        // press anywhere inside it, so a press inside it always reaches it or a descendant.
+        return 0.0;
+    }
+    let free = grid.free_cells(frame, index, false);
     let columns = grid.xs.len() - 1;
     let (mut inside, mut open) = (0.0, 0.0);
     for (row, pair) in grid.ys.windows(2).enumerate() {
@@ -237,7 +245,12 @@ pub fn intersection(a: Rect, b: Rect) -> Option<Rect> {
 
 /// Whether a press at `point` lands on `element`, ignoring what covers it.
 fn catches(element: &Resolved, point: Vec2) -> bool {
-    element.role != Role::Arrow && element.opacity > 0.0 && within(element, point)
+    catches_anywhere(element) && within(element, point)
+}
+
+/// Whether a press inside `element` lands on it, ignoring what covers it.
+fn catches_anywhere(element: &Resolved) -> bool {
+    element.role != Role::Arrow && element.opacity > 0.0
 }
 
 /// Whether `point` is inside the element's quadrilateral and its clip.
@@ -317,6 +330,10 @@ struct Grid {
     /// The elements whose boxes overlap the element's and that can decide what a press inside
     /// its box reaches, itself among them.
     candidates: Vec<u32>,
+    /// Whether every candidate is the element or one of its descendants.
+    alone: bool,
+    /// The largest width and height of a cell.
+    cell: Vec2,
 }
 
 /// The largest side of a cell, in logical points, and the most cuts a grid makes along one
@@ -336,12 +353,14 @@ impl Grid {
     fn new(frame: &Frame, index: u32, near: Vec<u32>) -> Self {
         let area = grid_area(frame, index);
         let (mut xs, mut ys) = (Vec::new(), Vec::new());
-        for (edges, start, length) in [
-            (&mut xs, area.x, area.width),
-            (&mut ys, area.y, area.height),
+        let mut cell = Vec2::ZERO;
+        for (edges, start, length, side) in [
+            (&mut xs, area.x, area.width, &mut cell.x),
+            (&mut ys, area.y, area.height, &mut cell.y),
         ] {
             let cuts = (length / CELL).ceil().clamp(1.0, MOST_CUTS) as u32;
             edges.extend((0..=cuts).map(|cut| start + length * cut as f32 / cuts as f32));
+            *side = length / cuts as f32;
         }
         let mut overlapping = Vec::with_capacity(near.len());
         let mut lowest = index;
@@ -358,10 +377,12 @@ impl Grid {
             overlapping.push((other, inside));
         }
         let mut candidates = Vec::with_capacity(overlapping.len());
+        let mut alone = true;
         for (other, inside) in overlapping {
             if !inside && !covers(frame, other, lowest) {
                 continue;
             }
+            alone &= inside;
             candidates.push(other);
             if other == index {
                 continue;
@@ -380,7 +401,47 @@ impl Grid {
             edges.sort_by(f32::total_cmp);
             edges.dedup_by(|a, b| (*a - *b).abs() < 0.001);
         }
-        Self { xs, ys, candidates }
+        Self {
+            xs,
+            ys,
+            candidates,
+            alone,
+            cell,
+        }
+    }
+
+    /// Whether a square centred on element `index`, larger than `min` by two cells on each
+    /// axis, lies inside the element and its clip and overlaps no other candidate's box except
+    /// its descendants'. Then a press anywhere in it reaches the element or a descendant, and
+    /// the cells wholly inside it, which `free_cells` finds free, span at least `min`: the
+    /// grid would find a free rectangle that large, so it need not be built.
+    fn clear_square(&self, frame: &Frame, index: u32, min: Size) -> bool {
+        let element = &frame.resolved[index as usize];
+        if !catches_anywhere(element) {
+            return false;
+        }
+        let centre = element.corners.iter().copied().sum::<Vec2>() / 4.0;
+        let half = (Vec2::new(min.width, min.height) + 2.0 * self.cell) / 2.0;
+        let square = Rect {
+            x: centre.x - half.x,
+            y: centre.y - half.y,
+            width: 2.0 * half.x,
+            height: 2.0 * half.y,
+        };
+        let corners = [
+            centre - half,
+            Vec2::new(centre.x + half.x, centre.y - half.y),
+            centre + half,
+            Vec2::new(centre.x - half.x, centre.y + half.y),
+        ];
+        // The quadrilateral and the clip are convex, so they hold the square when they hold
+        // its corners.
+        corners.iter().all(|&corner| within(element, corner))
+            && self.candidates.iter().all(|&other| {
+                other == index
+                    || is_within(frame, other, index)
+                    || intersection(square, bounds(&frame.resolved[other as usize])).is_none()
+            })
     }
 
     /// The largest rectangle of free cells at least `min` large, by area, or with `first` the

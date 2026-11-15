@@ -16,6 +16,7 @@ mod moment;
 mod recording;
 
 use std::fmt::{self, Write};
+use std::sync::Arc;
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
@@ -97,10 +98,12 @@ impl Element {
 
 /// A recording played through a client, for one seat in one window.
 pub struct Page {
-    recording: Recording,
-    views: Vec<GameUpdate>,
+    /// The recording and what is read from it, shared with the pages `fresh` makes, which
+    /// play it again: copying them for each play took about a fifth of a test's time.
+    recording: Arc<Recording>,
+    views: Arc<[GameUpdate]>,
     /// The card records the recording starts with, from which the client lists its faces.
-    cards: Option<CardRecords>,
+    cards: Option<Arc<CardRecords>>,
     responses: Responses,
     name: String,
     seat: Side,
@@ -144,11 +147,12 @@ impl Page {
         layout: Layout,
         size: Size,
     ) -> Result<Self, DriverError> {
-        let views = recording.views().map_err(DriverError)?;
-        let cards = recording.card_records().map_err(DriverError)?;
+        let views = recording.views().map_err(DriverError)?.into();
+        let cards = recording.card_records().map_err(DriverError)?.map(Arc::new);
+        let recording = Arc::new(recording.clone());
         let mut page = Self {
-            recording: recording.clone(),
-            responses: Responses::new(recording),
+            responses: Responses::shared(Arc::clone(&recording)),
+            recording,
             views,
             cards,
             name: "recording".to_owned(),
@@ -576,7 +580,7 @@ impl Page {
             safe_area: Insets::default(),
         });
         if let Some(cards) = &self.cards {
-            self.give(Input::Cards(Box::new(cards.clone())));
+            self.give(Input::Cards(Box::new(CardRecords::clone(cards))));
             let ready: Vec<AssetReady> = self.client.faces().all_ready().collect();
             for ready in ready {
                 self.give(Input::Assets(ready));
@@ -591,7 +595,7 @@ impl Page {
 
     fn restart(&mut self) {
         self.client = client();
-        self.responses = Responses::new(&self.recording);
+        self.responses = Responses::shared(Arc::clone(&self.recording));
         self.now = 0;
         self.released = 0;
         self.batch = 0;
@@ -691,10 +695,10 @@ impl Page {
     /// client keeping a record of its scripts if `records`.
     fn fresh(&self, records: bool) -> Self {
         let mut page = Self {
-            recording: self.recording.clone(),
-            views: self.views.clone(),
+            recording: Arc::clone(&self.recording),
+            views: Arc::clone(&self.views),
             cards: self.cards.clone(),
-            responses: Responses::new(&self.recording),
+            responses: Responses::shared(Arc::clone(&self.recording)),
             name: self.name.clone(),
             seat: self.seat,
             layout: self.layout,
