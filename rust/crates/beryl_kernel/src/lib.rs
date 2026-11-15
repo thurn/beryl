@@ -206,47 +206,43 @@
 //! table of their own and never part of an entry. Counter kinds cannot be fields of each of
 //! 255 objects, so all but the three hot kinds are a keyed table.
 //!
-//! `size_of::<State<Small>>()` was 19,992 before the milestone and is 20,040 after
-//! by-w8gv.7.2: 40 for the store's mask and the keyed slots, 8 of padding for the field
-//! order ([`State`]'s rustdoc). It is 20,040 after by-w8gv.7.3 too: the four bytes of rule
-//! sets are those `sorceries_as_flash` and its padding gave back. After by-w8gv.7.4 it is
-//! 19,832: the `permissions` queue gave back 80 and each of the stack's 64 entries two
-//! bytes, [`state::StackEntry`] being 58 bytes without its two flags. After by-w8gv.7.6 it
-//! is 19,880: the Memos store's 100 bytes less the 50 of `entered_x`. After by-w8gv.7.5,
-//! which landed after it, it is 20,016: the table of locked-in sets, 136. After
-//! by-w8gv.7.8 it is 20,080: the Trackers store's two sets of slots, 64. After
-//! by-w8gv.7.9 it is 20,176: the table of counters, 96. After by-w8gv.9.7 it is 20,216:
-//! each of the players' four sets of rule changes is a word, where it was a byte. It is
-//! 20,088 since [`state::StackEntry`] holds a [`state::StackItem`], a spell, an activated
-//! ability or a triggered ability with only the fields of its kind: each of the 64 entries
-//! is 56 bytes, two fewer. It is 20,104 since what the permanents listen to is a 64-bit
-//! [`event::Listens`], where it was 16 bits, beside a 64-bit [`event::Replaces`] of what
-//! their static abilities replace: 16 more. After by-bajq.1.4 it is 20,112: the Trackers
-//! store's counts for each player, 8. It is 20,056 since last-known information is a
-//! table of the state ([`last_known`]): each of the 96 waiting and delayed triggers is 6
-//! bytes smaller and each of the 64 stack entries 6, 960 in all, and the table of 16 rows
-//! of 56 bytes, with its length, takes 904 of them. It was 20,184 when ability removal
-//! began (128 bytes that no change reported came between), and is 20,336 since each of the
-//! 128 [`state::Derived`] rows holds a mask of the abilities its permanent lost, packed to
-//! two-byte alignment, and 20,344 since a value chosen as a permanent enters. It is 19,840
-//! since [`state::Object`] is aligned to two bytes and 22 bytes long, where it was 24: 504
-//! fewer, the 510 of the 255 slots less 6 of padding. It is 19,856 since the list of
-//! effects that reach other zones ([`elsewhere`]): four entries of 3 bytes and the list's
-//! length, 16 with padding. It is 19,888 since a [`query::Copiable`] holds two copy
-//! exceptions: each of the 16 last-known rows is 60 bytes, 2 more. It is 19,920 since each
-//! player's pool holds up to four entries of mana that remembers ([`mana_memory`]), four bytes
-//! each with the queue's length. It is 20,008 since the table of four sets of text changes
-//! that abilities on the stack keep (88 bytes); the byte naming one in each stack entry fits
-//! the entry's padding. It is 20,016 since a decision names the player who answers it
-//! ([`decision::Decision::decider`]): the question a paused resolution keeps is 8 bytes
-//! longer, the decision having no spare byte; [`state::Turn::controller`] fits the turn's
-//! padding. It is 20,128 since spells that left the stack are kept for abilities of their own
-//! that copy them ([`last_known::DepartedSpell`]): two rows of 56 bytes, 112. It is 20,144
-//! since the state counts resolutions in a row with no choice and keeps the hash a loop of
-//! mandatory actions is compared with ([`repeats`]): a `u16` and a `u64`, 16 with padding.
-//! The limit is 20,480. Each bead may change the size at its
-//! own push by at most its allotment, whatever landed before it, and reports the size as it
-//! reports the count:
+//! `size_of::<State<Small>>()` was 19,992 before the milestone and is 20,040 after by-w8gv.7.2: 40
+//! for the store's mask and the keyed slots, 8 of padding for the field order ([`State`]'s
+//! rustdoc). It is 20,040 after by-w8gv.7.3 too: the four bytes of rule sets are those
+//! `sorceries_as_flash` and its padding gave back. After by-w8gv.7.4 it is 19,832: the
+//! `permissions` queue gave back 80 and each of the stack's 64 entries two bytes,
+//! [`state::StackEntry`] being 58 bytes without its two flags. After by-w8gv.7.6 it is 19,880: the
+//! Memos store's 100 bytes less the 50 of `entered_x`. After by-w8gv.7.5, which landed after it, it
+//! is 20,016: the table of locked-in sets, 136. After by-w8gv.7.8 it is 20,080: the Trackers
+//! store's two sets of slots, 64. After by-w8gv.7.9 it is 20,176: the table of counters, 96. After
+//! by-w8gv.9.7 it is 20,216: each of the players' four sets of rule changes is a word, where it was
+//! a byte. It is 20,088 since [`state::StackEntry`] holds a [`state::StackItem`], a spell, an
+//! activated ability or a triggered ability with only the fields of its kind: each of the 64
+//! entries is 56 bytes, two fewer. It is 20,104 since what the permanents listen to is a 64-bit
+//! [`event::Listens`], where it was 16 bits, beside a 64-bit [`event::Replaces`] of what their
+//! static abilities replace: 16 more. After by-bajq.1.4 it is 20,112: the Trackers store's counts
+//! for each player, 8. It is 20,056 since last-known information is a table of the state
+//! ([`last_known`]): each of the 96 waiting and delayed triggers is 6 bytes smaller and each of the
+//! 64 stack entries 6, 960 in all, and the table of 16 rows of 56 bytes, with its length, takes 904
+//! of them. It was 20,184 when ability removal began (128 bytes that no change reported came
+//! between), and is 20,336 since each of the 128 [`state::Derived`] rows holds a mask of the
+//! abilities its permanent lost, packed to two-byte alignment, and 20,344 since a value chosen as a
+//! permanent enters. It is 19,840 since [`state::Object`] is aligned to two bytes and 22 bytes
+//! long, where it was 24: 504 fewer, the 510 of the 255 slots less 6 of padding. It is 19,856 since
+//! the list of effects that reach other zones ([`elsewhere`]): four entries of 3 bytes and the
+//! list's length, 16 with padding. It is 19,888 since a [`query::Copiable`] holds two copy
+//! exceptions: each of the 16 last-known rows is 60 bytes, 2 more. It is 19,920 since each player's
+//! pool holds up to four entries of mana that remembers ([`mana_memory`]), four bytes each with the
+//! queue's length. It is 20,008 since the table of four sets of text changes that abilities on the
+//! stack keep (88 bytes); the byte naming one in each stack entry fits the entry's padding. It is
+//! 20,016 since a decision names the player who answers it ([`decision::Decision::decider`]): the
+//! question a paused resolution keeps is 8 bytes longer, the decision having no spare byte;
+//! [`state::Turn::controller`] fits the turn's padding. It is 20,128 since spells that left the
+//! stack are kept for abilities of their own that copy them ([`last_known::DepartedSpell`]): two
+//! rows of 56 bytes, 112. It is 20,144 since the state counts resolutions in a row with no choice
+//! and keeps the hash a loop of mandatory actions is compared with ([`repeats`]): a `u16` and a
+//! `u64`, 16 with padding. The limit is 20,480. Each bead may change the size at its own push by at
+//! most its allotment, whatever landed before it, and reports the size as it reports the count:
 //!
 //! | Bead | Allotment | Why |
 //! | --- | --- | --- |

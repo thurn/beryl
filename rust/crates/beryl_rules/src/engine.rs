@@ -1,9 +1,8 @@
 //! The engine loop: `next` advances to the next decision, `apply` consumes one answer
 //! (architecture §3, §7).
 
-use crate::bitboard::Bitboard;
 use crate::decision::{Answers, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step};
-use crate::event::{self, Cause, Entry, Reason, Sink, StackIx, Tagged};
+use crate::event::{Cause, Sink, StackIx, Tagged};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, index};
@@ -12,16 +11,18 @@ use crate::profile::{self, Stops};
 #[cfg(debug_assertions)]
 use crate::scratch::assert_sound;
 pub use crate::scratch::{Counts, Scratch};
-use crate::state::{Pending, State, TurnStep, Zone};
+use crate::state::{Pending, State, TurnStep};
 use crate::table::GameTable;
 use crate::{cast, combat, entered, face_down, layers, mana, resolve, sba, start, trigger, turn};
 
 mod collapse;
+mod land;
 mod paused_step;
 mod questions;
 
 pub use collapse::interchangeable;
 pub(crate) use collapse::{collapse, collapse_in_order};
+use land::{enter_from_hand, enter_or_choose, play_land};
 pub use questions::refusal;
 pub(crate) use questions::{controlled, decision};
 use questions::{land_face, only_idle};
@@ -720,89 +721,4 @@ fn pass<L: Layout>(
         s.reset_passes();
         resolve::resolve(s, t, x, a)
     }
-}
-
-/// Plays a land: a special action that puts it onto the battlefield. A land that enters
-/// tapped unless its controller pays life asks them first, and one that chooses a value as it
-/// enters asks them for it.
-///
-/// [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051): "Playing a land is a
-/// special action; it doesn't use the stack (see rule 116). Rather, the player simply puts the
-/// land onto the battlefield."
-///
-/// [CR 116.3](https://yawgatog.com/resources/magic-rules/#R1163): "If a player takes a special
-/// action, that player receives priority afterward."
-///
-/// [CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194): "If a cost or effect allows
-/// a player to pay an amount of life greater than 0, the player may do so only if their life
-/// total is greater than or equal to the amount of the payment."
-fn play_land<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    player: Seat,
-    slot: L::Slot,
-) -> Result<(), Full> {
-    s.count_land_played(player);
-    s.give_priority(player);
-    let face = land_face(s, t, slot).expect("a land face");
-    let entry = Entry {
-        face,
-        ..Entry::default()
-    };
-    match crate::replace::life_to_enter(s, t, slot, entry)? {
-        Some(life) if s.player(player).life() >= i16::from(life) => {
-            s.ask(Pending::EnterPayingLife { slot, life });
-            Ok(())
-        }
-        _ => enter_or_choose(s, t, sink, slot, false),
-    }
-}
-
-/// Puts the land being played onto the battlefield, or first asks for the value it chooses as
-/// it enters ([`Pending::EnterChoosing`]).
-fn enter_or_choose<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    slot: L::Slot,
-    pay_life: bool,
-) -> Result<(), Full> {
-    let entry = Entry {
-        face: land_face(s, t, slot).expect("a land face"),
-        ..Entry::default()
-    };
-    match crate::replace::chosen_to_enter(s, t, slot, entry)? {
-        Some(kind) => {
-            s.ask(Pending::EnterChoosing {
-                slot,
-                kind,
-                pay_life,
-            });
-            Ok(())
-        }
-        None => enter_from_hand(s, t, sink, slot, pay_life),
-    }
-}
-
-fn enter_from_hand<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    sink: &mut Sink<L>,
-    slot: L::Slot,
-    pay_life: bool,
-) -> Result<(), Full> {
-    event::move_batch(
-        s,
-        t,
-        sink,
-        Bitboard::single(slot),
-        Zone::Battlefield,
-        Reason::Play,
-        Entry {
-            pay_life,
-            face: land_face(s, t, slot).expect("a land face"),
-            ..Entry::default()
-        },
-    )
 }
