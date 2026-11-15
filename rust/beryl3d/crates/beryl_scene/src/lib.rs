@@ -13,11 +13,13 @@ pub mod frame;
 pub mod input;
 pub mod layout;
 pub mod motion;
+pub mod play;
 pub mod pose;
 pub mod table;
 #[cfg(feature = "driver")]
 pub mod testing;
 pub mod text;
 pub mod tokens;
+pub mod verbs;
 
 pub use client::{Client, Config};

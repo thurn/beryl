@@ -6,7 +6,7 @@ use beryl_session::protocol::{
     CardType, Declaration, FaceName, Facing, ManaPool, ObjectId, ObjectView, PlayerState,
     PlayerView, SessionId, Side, StackItem, ZoneName,
 };
-use beryl_session::script::{Act, Reset, Script, Step};
+use beryl_session::script::{Act, Curve, Reset, Script, Step, StepTiming};
 
 /// Builds a `PlayerView` one card at a time. Each card takes the next slot.
 #[derive(Clone, Debug)]
@@ -186,5 +186,29 @@ pub fn object(slot: ObjectId, zone: ZoneName, side: Side, name: Option<&str>) ->
         face: FaceName::Front,
         named_counters: Vec::new(),
         doesnt_untap: false,
+    }
+}
+
+/// The timing of a step that plays for `duration` milliseconds as its turn comes, easing out, and
+/// waits for nothing.
+#[must_use]
+pub fn timing(duration: f64) -> StepTiming {
+    StepTiming {
+        case: None,
+        duration,
+        delay: 0.0,
+        stagger: 0.0,
+        curve: Curve::EaseOut,
+        each: None,
+        with: false,
+        after: Vec::new(),
+        hold: None,
+        leads: false,
+        passes: false,
+        alone: false,
+        opens: false,
+        ahead: false,
+        closes: None,
+        effects: Vec::new(),
     }
 }

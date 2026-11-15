@@ -1,1 +1,5 @@
-{"verbs": {}, "pointer": {}}
+{
+  "verbs": { "fly": { "arc": 55 } },
+  "pointer": {},
+  "catch_up": { "double": 10, "quadruple": 40 }
+}

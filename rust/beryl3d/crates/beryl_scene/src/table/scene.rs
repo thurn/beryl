@@ -4,10 +4,11 @@
 use beryl_session::protocol::PlayerView;
 use glam::{Affine3A, Vec2, Vec3};
 
-use super::place::Scroll;
+use super::place::{Placement, Scroll};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, Window, place};
 use crate::frame::{Band, Draw, ElementId, FrameBuilder, Place, Resolved, Role, StateBits};
 use crate::input::FaceSize;
+use crate::motion::Track;
 use crate::pose::Pose;
 
 /// How large the table cloth is, in millimetres: past every edge of any window.
@@ -19,13 +20,23 @@ const CLOTH_TINT: [u8; 4] = [38, 66, 58, 255];
 
 /// One game object's presence on the table.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct SceneObject {
+pub(crate) struct SceneObject {
     pose: Pose,
     place: Place,
     visible: bool,
     tapped: bool,
     /// Its index in the view's `objects`, for its name.
     view_index: u32,
+}
+
+/// What moves while a script plays: a track for each object that moves, by slot, the time on
+/// the script's clock, and the scene objects at rest in the view the script leads to.
+#[derive(Clone, Copy, Debug)]
+pub struct Motion<'a> {
+    pub tracks: &'a [Track],
+    pub t: u64,
+    pub(crate) finals: &'a [Option<SceneObject>],
+    pub view: &'a PlayerView,
 }
 
 /// The 3D table: the camera and every scene object.
@@ -68,21 +79,39 @@ impl Table {
         }
     }
 
+    /// Where the object in `slot` rests in the view the table shows, if it shows it.
+    #[must_use]
+    pub fn rest(&self, slot: usize) -> Option<Pose> {
+        Some(self.objects.get(slot).copied().flatten()?.pose)
+    }
+
+    /// Every object's resting place in `view`, for this window.
+    #[must_use]
+    pub fn placement(&self, view: &PlayerView) -> Placement {
+        place(view, &self.layout, &self.camera, &self.scroll)
+    }
+
     /// Puts every object of `view` at its resting place, and forgets the objects it no longer
-    /// holds. Until the verbs animate a script's steps, every update does this, as an update
-    /// with a reset script must.
+    /// holds, as an update with a reset script must.
     pub fn apply(&mut self, view: &PlayerView) {
-        let placement = place(view, &self.layout, &self.camera, &self.scroll);
-        self.objects.clear();
+        self.objects = Self::objects_for(view, &self.placement(view));
+    }
+
+    /// The scene objects of `view`, each at its resting place in `placement`, by slot.
+    pub(crate) fn objects_for(
+        view: &PlayerView,
+        placement: &Placement,
+    ) -> Vec<Option<SceneObject>> {
+        let mut objects = Vec::new();
         for (index, object) in view.objects.iter().enumerate() {
             let Some(rest) = placement.get(object.slot) else {
                 continue;
             };
             let slot = usize::from(object.slot.0);
-            if self.objects.len() <= slot {
-                self.objects.resize(slot + 1, None);
+            if objects.len() <= slot {
+                objects.resize(slot + 1, None);
             }
-            self.objects[slot] = Some(SceneObject {
+            objects[slot] = Some(SceneObject {
                 pose: rest.pose,
                 place: rest.place,
                 visible: rest.visible,
@@ -90,16 +119,52 @@ impl Table {
                 view_index: u32::try_from(index).expect("a view holds fewer than 2^32 objects"),
             });
         }
+        objects
+    }
+
+    /// Exchanges the scene objects for `objects`, which `objects_for` made for the view the
+    /// table now shows. Nothing is allocated, so a script can end inside a frame.
+    pub(crate) fn swap_objects(&mut self, objects: &mut Vec<Option<SceneObject>>) {
+        std::mem::swap(&mut self.objects, objects);
     }
 
     /// Writes a resolved element and a draw record for every visible card, and one draw record
-    /// for the cloth, which comes last among the opaque records.
-    pub fn write(&self, view: &PlayerView, builder: &mut FrameBuilder) {
+    /// for the cloth, which comes last among the opaque records. `view` is the view the table
+    /// shows. While a script plays, `motion` gives the objects that move their poses, and the
+    /// records of the view the script leads to.
+    pub fn write(&self, view: &PlayerView, motion: Option<Motion<'_>>, builder: &mut FrameBuilder) {
         builder.camera(self.camera.view_projection);
-        for (slot, object) in self.objects.iter().enumerate() {
-            let Some(object) = object.filter(|object| object.visible) else {
-                continue;
+        let slots = motion
+            .map_or(0, |motion| motion.tracks.len())
+            .max(self.objects.len());
+        for slot in 0..slots {
+            let resting = self.objects.get(slot).copied().flatten();
+            let moving = motion.and_then(|motion| {
+                let track = motion
+                    .tracks
+                    .get(slot)
+                    .filter(|t| !t.segments().is_empty())?;
+                let pose = track.pose_at(motion.t);
+                match motion.finals.get(slot).copied().flatten() {
+                    Some(object) => Some((object, motion.view, pose)),
+                    None => resting.map(|object| (object, view, pose)),
+                }
+            });
+            let (object, view) = match (moving, resting) {
+                (Some((object, view, pose)), _) => (
+                    SceneObject {
+                        pose,
+                        visible: pose.opacity > 0.0,
+                        ..object
+                    },
+                    view,
+                ),
+                (None, Some(object)) => (object, view),
+                (None, None) => continue,
             };
+            if !object.visible {
+                continue;
+            }
             let transform = object.pose.transform();
             let name = view.objects[object.view_index as usize]
                 .name

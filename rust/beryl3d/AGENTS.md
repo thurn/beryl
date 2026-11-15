@@ -39,7 +39,11 @@ project, and selects the main lanes.
 ## Data files
 
 - `data/beryl3d/space.json`: the table's spatial values; its keys under `verbs`
-  name verbs or cases of `data/ui-conventions.json` (`data-names`).
+  name verbs or cases of `data/ui-conventions.json` (`data-names`). Each value
+  under `verbs.<name>` becomes an `f32` constant in `data::space::verbs::<name>`
+  (`fly`'s `arc`, in millimetres), and each count under `catch_up` a `usize` in
+  `data::space::catch_up`: more than `double` updates waiting make the script
+  clock run twice as fast, more than `quadruple` four times.
 - `data/beryl3d/gates.json`: the audit, frame, tier, material and test gates.
   Each number under `audit` becomes an `f32` constant in `beryl_scene`'s
   `data::audit`, named for its key in upper case:

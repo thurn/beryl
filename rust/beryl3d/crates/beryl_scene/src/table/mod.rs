@@ -15,7 +15,8 @@ use glam::{Vec2, Vec3};
 
 pub use camera::{Camera, CameraData};
 pub use place::{Placement, ROWS, Rest, Scroll, place};
-pub use scene::Table;
+pub(crate) use scene::SceneObject;
+pub use scene::{Motion, Table};
 
 use crate::input::{Insets, Size};
 

@@ -142,6 +142,47 @@ impl Segment {
     }
 }
 
+impl Segment {
+    /// Changes the start pose so that the pose at `t` is `pose`, keeping the start, duration,
+    /// curve, end pose and arc. When the window changes shape during a flight, the segment under
+    /// way takes the new end pose and this keeps the card where it is at that instant, so it
+    /// does not jump (docs/beryl-3d.md, "Determinism"). A segment not under way at `t` is left
+    /// as it is, and so is one too near its end for the start pose to matter.
+    pub fn through(&mut self, t: u64, pose: Pose) {
+        if t < self.start || t >= self.end() || self.duration == 0 {
+            return;
+        }
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a segment lasts seconds, far below f64's exact range"
+        )]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "the fraction is between 0 and 1"
+        )]
+        let elapsed = ((t - self.start) as f64 / self.duration as f64) as f32;
+        let u = self.curve.ease(elapsed);
+        let rest = 1.0 - u;
+        if rest < 1e-4 {
+            return;
+        }
+        let to = self.to;
+        // Each part of the pose is `from + (to - from) * u`, so `from = (now - to * u) / rest`.
+        let back = |now: f32, to: f32| (now - to * u) / rest;
+        let lift = Vec3::Z * self.arc * (PI * elapsed).sin();
+        // `slerp(from, to, u)` is `to * (to⁻¹ * from)^(1 - u)`, so `to⁻¹ * from` is
+        // `(to⁻¹ * now)^(1 / rest)`.
+        let (axis, angle) = (to.rotation.inverse() * pose.rotation).to_axis_angle();
+        self.from = Pose {
+            position: (pose.position - lift - to.position * u) / rest,
+            rotation: to.rotation * glam::Quat::from_axis_angle(axis, angle / rest),
+            scale: back(pose.scale, to.scale),
+            opacity: back(pose.opacity, to.opacity),
+            turn: back(pose.turn, to.turn),
+        };
+    }
+}
+
 /// An object's pose at `t`, from its `segments` sorted by start. The latest segment that has
 /// begun by `t` decides it, so a segment that begins replaces any still under way. Before
 /// the first begins the object stands at that segment's start pose, and with no segments at
@@ -194,6 +235,12 @@ impl Track {
     #[must_use]
     pub fn segments(&self) -> &[Segment] {
         &self.segments[..self.len]
+    }
+
+    /// The segments it holds, to change their poses. Their starts must not change, so that
+    /// they stay sorted.
+    pub fn segments_mut(&mut self) -> &mut [Segment] {
+        &mut self.segments[..self.len]
     }
 
     /// The object's pose at `t` (`pose_at`).

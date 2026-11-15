@@ -5,7 +5,6 @@
 
 use std::collections::VecDeque;
 
-use beryl_session::GameUpdate;
 use beryl_session::prompt::{Click, ClickReply, ClickRequest, PromptView};
 use beryl_session::protocol::{DecisionId, Status};
 
@@ -14,6 +13,7 @@ use crate::element::{Press, prompt_bar};
 use crate::frame::{self, ElementId, Frame, FrameBuilder, Wake};
 use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerPhase};
 use crate::layout::Layer;
+use crate::play::Show;
 use crate::table::{Table, Window};
 
 /// The sizes the client sets at startup.
@@ -42,10 +42,9 @@ pub struct Client {
     /// Inputs `handle` has stored and the next `frame` has not taken yet: those no part of the
     /// client acts on yet.
     inputs: Vec<Input>,
-    /// The latest view from the session.
-    update: Option<Box<GameUpdate>>,
     window: Window,
-    table: Table,
+    /// The table and the scripts that lead it from view to view.
+    show: Show,
     /// The flat layer: the prompt bar.
     layer: Layer,
     /// The open decision and its prompt's latest state, from the view or a click's reply.
@@ -63,9 +62,8 @@ impl Client {
         Self {
             frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
             inputs: Vec::new(),
-            update: None,
             window: Window::default(),
-            table: Table::default(),
+            show: Show::new(Table::default()),
             layer: Layer::new(),
             prompt: None,
             pressed: None,
@@ -81,14 +79,14 @@ impl Client {
     pub fn handle(&mut self, input: Input) {
         match input {
             Input::Update(update) => {
-                self.table.apply(&update.view);
                 self.prompt = match &update.view.status {
                     Status::Deciding { decision } => {
                         Some((decision.id, (*decision.prompt).clone()))
                     }
                     _ => None,
                 };
-                self.update = Some(update);
+                // The session sends no step timings yet, so every script is shown at once.
+                self.show.push(update, Vec::new());
                 self.show_prompt();
             }
             Input::Reply(Reply::Click(Ok(reply))) => {
@@ -117,8 +115,7 @@ impl Client {
                     scale,
                     safe_area,
                 };
-                let view = self.update.as_ref().map(|update| &update.view);
-                self.table.resize(self.window, view);
+                self.show.resize(self.window);
                 self.layer.resize(self.window);
             }
             input => self.inputs.push(input),
@@ -127,16 +124,14 @@ impl Client {
     }
 
     /// The frame at `now`, in nanoseconds since the client started.
-    pub fn frame(&mut self, _now: u64) -> &Frame {
+    pub fn frame(&mut self, now: u64) -> &Frame {
         self.inputs.clear();
-        self.wake = Wake::Never;
         let mut builder = FrameBuilder::new(&mut self.frame);
-        if let Some(update) = &self.update {
-            self.table.write(&update.view, &mut builder);
-        }
+        self.show.frame(now, &mut builder);
+        self.wake = self.show.wake(now);
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
-        self.layer.write(&mut builder, self.table.camera());
+        self.layer.write(&mut builder, self.show.table().camera());
         builder.finish()
     }
 
@@ -185,7 +180,7 @@ impl Client {
     /// The table, for tests and tools that read the camera.
     #[must_use]
     pub fn table(&self) -> &Table {
-        &self.table
+        self.show.table()
     }
 
     /// When the next frame is needed: as of the last call to `frame`, or `Now` once an input
