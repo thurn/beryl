@@ -23,7 +23,7 @@ use std::collections::VecDeque;
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::PlayerView;
-use beryl_protocol::script::{StepTiming, Verb};
+use beryl_protocol::script::{StepTiming, Table as Played, Verb};
 
 use self::compile::{Compiled, bit, compile};
 use self::record::{Plant, ScriptRecord, StepRecord};
@@ -41,6 +41,8 @@ struct Waiting {
     number: usize,
     update: Box<GameUpdate>,
     timings: Vec<StepTiming>,
+    /// The table the script before it ended with, which it is played from.
+    from: Option<Played>,
     compiled: Compiled,
 }
 
@@ -52,6 +54,8 @@ struct Playing {
     /// view) shows its view as it starts and then only holds the time its beats take.
     update: Option<Box<GameUpdate>>,
     timings: Vec<StepTiming>,
+    /// The table the script before it ended with, which it is played from.
+    from: Option<Played>,
     compiled: Compiled,
     /// When it started, in nanoseconds since the client started.
     start: u64,
@@ -80,6 +84,12 @@ pub struct Show {
     shown: Option<Box<GameUpdate>>,
     playing: Option<Playing>,
     waiting: VecDeque<Waiting>,
+    /// The table the last script given ends with, which the next is played from. The scripts
+    /// number the abilities on the stack and later steps name them by those numbers, which a
+    /// table made from a view alone does not know.
+    played: Option<Played>,
+    /// How many steps of the scripts given so far the table could not take.
+    unplaced: usize,
     /// The playing script compiled again for a window of a new shape, which the next frame
     /// takes over from the old one at its own `now`.
     recompiled: Option<Compiled>,
@@ -108,6 +118,8 @@ impl Show {
             shown: None,
             playing: None,
             waiting: VecDeque::new(),
+            played: None,
+            unplaced: 0,
             recompiled: None,
             unbuilt: 0,
             reported: 0,
@@ -152,25 +164,31 @@ impl Show {
         self.playing.is_none() && self.waiting.is_empty()
     }
 
-    /// Compiles `update`'s script, the `number`th the show is given, played from `before`, with
-    /// any fault planted in it.
+    /// Compiles `update`'s script, the `number`th the show is given, played from `before` and
+    /// `from`, the table the script before it ended with, with any fault planted in it. Returns
+    /// it with the table it ends with.
     fn compile(
         &self,
         number: usize,
         before: Option<&PlayerView>,
+        from: Option<&Played>,
         update: &GameUpdate,
         timings: &[StepTiming],
-    ) -> Compiled {
+    ) -> (Compiled, Played) {
         let plants = self.plants.iter().filter(|plant| plant.script == number);
         let records = self.history.is_some() || plants.clone().next().is_some();
         let shown = before
             .zip(self.shown.as_deref())
             .is_some_and(|(before, shown)| std::ptr::eq(before, &raw const shown.view));
-        let mut compiled = compile(before, &update.view, timings, &self.table, records, shown);
+        // Each script given after the first is played from the table the one before ended with;
+        // the first has no view before it either.
+        let before = before.zip(from);
+        let (mut compiled, played) =
+            compile(before, &update.view, timings, &self.table, records, shown);
         for plant in plants {
             compiled.plant(plant);
         }
-        compiled
+        (compiled, played)
     }
 
     /// Writes `compiled`, the `number`th script, into the history, if the show keeps one.
@@ -250,6 +268,14 @@ impl Show {
             .or(self.shown.as_deref())
     }
 
+    /// How many steps of the scripts given so far the table played over could not take. Each
+    /// made the step after it place the whole table, so that its objects jumped to their places
+    /// instead of moving there.
+    #[must_use]
+    pub fn unplaced(&self) -> usize {
+        self.unplaced
+    }
+
     /// The view the table shows at rest: that of the last script to end.
     #[must_use]
     pub fn shown(&self) -> Option<&GameUpdate> {
@@ -282,12 +308,17 @@ impl Show {
     pub fn push(&mut self, update: Box<GameUpdate>, timings: Vec<StepTiming>) {
         let number = self.given;
         self.given += 1;
-        let compiled = self.compile(number, self.before_next(), &update, &timings);
+        let from = self.played.take();
+        let (compiled, played) =
+            self.compile(number, self.before_next(), from.as_ref(), &update, &timings);
+        self.played = Some(played);
+        self.unplaced += compiled.unplaced;
         self.write_record(number, &compiled);
         self.waiting.push_back(Waiting {
             number,
             update,
             timings,
+            from,
             compiled,
         });
     }
@@ -308,12 +339,24 @@ impl Show {
         if let Some(playing) = &self.playing
             && let Some(update) = &playing.update
         {
-            let again = self.compile(playing.number, before, update, &playing.timings);
+            let (again, _) = self.compile(
+                playing.number,
+                before,
+                playing.from.as_ref(),
+                update,
+                &playing.timings,
+            );
             compiled.push((playing.number, again));
             before = Some(&update.view);
         }
         for waiting in &self.waiting {
-            let again = self.compile(waiting.number, before, &waiting.update, &waiting.timings);
+            let (again, _) = self.compile(
+                waiting.number,
+                before,
+                waiting.from.as_ref(),
+                &waiting.update,
+                &waiting.timings,
+            );
             compiled.push((waiting.number, again));
             before = Some(&waiting.update.view);
         }
@@ -360,6 +403,7 @@ impl Show {
                 number: waiting.number,
                 update: Some(waiting.update),
                 timings: waiting.timings,
+                from: waiting.from,
                 compiled: waiting.compiled,
                 start,
                 rate,

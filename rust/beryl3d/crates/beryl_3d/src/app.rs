@@ -182,6 +182,7 @@ impl Feed for AppFeed {
         while let Some(verb) = client.next_unbuilt() {
             log.unbuilt(verb.name());
         }
+        log.unplaced(client.unplaced());
         // Verbs are listed only for a late frame, so a frame on time collects none.
         let late = FrameLog::is_late(ticked);
         let verbs: Vec<&str> = if late {

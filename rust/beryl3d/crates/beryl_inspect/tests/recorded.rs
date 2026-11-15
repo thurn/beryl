@@ -5,7 +5,8 @@
 use std::time::Instant;
 
 use beryl_inspect::pages::{Recorded, check_recording, recording};
-use beryl_inspect::stress;
+use beryl_inspect::{recordings, stress};
+use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Verb;
 use beryl_scene::agent::tree::line;
@@ -55,6 +56,51 @@ fn verbs_zones_plays_to_its_end_from_both_seats() {
         }
         println!("{seat:?}: played as instant changes: {unbuilt:?}");
     }
+}
+
+/// Every script of every recording in the pack, from each seat it is recorded for, finds on
+/// the client's table everything its steps name. A step the table cannot take makes the step
+/// after it place the whole table, so that its cards jump instead of moving. The client keeps
+/// its table from script to script because the scripts number the abilities on the stack and
+/// later steps name them by number, which a view alone does not say.
+#[test]
+fn every_recorded_script_finds_what_its_steps_name() {
+    let names = recordings::names().unwrap_or_else(|why| panic!("{why}"));
+    let threads = std::thread::available_parallelism().map_or(1, usize::from);
+    let failed: Vec<String> = std::thread::scope(|scope| {
+        let workers: Vec<_> = names
+            .chunks(names.len().div_ceil(threads).max(1))
+            .map(|chunk| scope.spawn(move || chunk.iter().filter_map(unplaced).collect::<Vec<_>>()))
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|worker| worker.join().expect("a worker finishes"))
+            .collect()
+    });
+    assert_eq!(
+        failed,
+        Vec::<String>::new(),
+        "script steps the client's table could not take"
+    );
+}
+
+/// How many steps of the recording `name`'s scripts the client's table could not take as
+/// `seat` is sent them, as a line naming it, or none if it took them all.
+fn unplaced((name, seat): &(String, Seat)) -> Option<String> {
+    let side = if *seat == Seat::P0 {
+        Side::You
+    } else {
+        Side::Opponent
+    };
+    let views = recording(name, side)
+        .and_then(|recording| recording.views())
+        .unwrap_or_else(|why| panic!("{why}"));
+    let mut show = Show::new(Table::new(DESKTOP, Window::default()));
+    for update in views {
+        let timings = timings(&update);
+        show.push(Box::new(update), timings);
+    }
+    (show.unplaced() > 0).then(|| format!("{name} from {seat:?}: {}", show.unplaced()))
 }
 
 #[test]

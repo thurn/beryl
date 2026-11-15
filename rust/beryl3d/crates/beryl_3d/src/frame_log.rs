@@ -137,6 +137,10 @@ pub struct Summary {
     pub after_pause: u64,
     /// The verbs the client played as instant changes because they are not built yet.
     pub unbuilt: Vec<String>,
+    /// How many script steps the client's table could not take, each of which made the step
+    /// after it place the whole table, so that cards jumped to their places instead of moving.
+    #[serde(default)]
+    pub unplaced: usize,
     /// The rate the host asked for when the run ended, in frames a second.
     #[serde(default)]
     pub hz: f32,
@@ -323,6 +327,11 @@ impl FrameLog {
         self.summary.unbuilt.push(verb.to_owned());
     }
 
+    /// Notes how many script steps the client's table has failed to take so far.
+    pub fn unplaced(&mut self, steps: usize) {
+        self.summary.unplaced = steps;
+    }
+
     /// Writes the summary as the last line and returns it.
     ///
     /// # Errors
@@ -498,6 +507,12 @@ impl Summary {
             lines.push(format!(
                 "played as instant changes, not built yet: {}",
                 self.unbuilt.join(", ")
+            ));
+        }
+        if self.unplaced > 0 {
+            lines.push(format!(
+                "script steps the table could not take: {}",
+                self.unplaced
             ));
         }
         lines.join("\n")

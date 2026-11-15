@@ -279,6 +279,13 @@ impl Client {
         self.show.next_unbuilt()
     }
 
+    /// How many script steps the table played over could not take so far; each made the step
+    /// after it place the whole table instead of moving its cards.
+    #[must_use]
+    pub fn unplaced(&self) -> usize {
+        self.show.unplaced()
+    }
+
     /// The verbs of the script playing as of the last `frame`, for the host's log of late
     /// frames.
     pub fn playing_verbs(&self) -> impl Iterator<Item = Verb> + '_ {

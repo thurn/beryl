@@ -11,7 +11,7 @@
 
 use beryl_protocol::protocol::{ObjectId, PlayerView, StackItem, ZoneName};
 use beryl_protocol::script::{
-    Act, Room, Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of,
+    Act, Room, Script, Step, StepTiming, Subject, Table as Played, Verb, mover_of, replay,
 };
 
 use super::record::{Cause, MoveKey, Plant, SegmentRecord, StepRecord};
@@ -42,6 +42,9 @@ pub(crate) struct Compiled {
     pub steps: Vec<StepRecord>,
     /// Every segment of `tracks`, in the order it was added, with the step that made it.
     pub segments: Vec<SegmentRecord>,
+    /// How many of its steps the table played over could not take, each of which made the step
+    /// after it place the whole table instead of moving its objects.
+    pub unplaced: usize,
 }
 
 impl Compiled {
@@ -68,7 +71,10 @@ impl Compiled {
 }
 
 /// Lays out `after`'s script, played from `before`, the view the table shows when it starts,
-/// with one timing per step in `timings`. With `records`, it also keeps a record of each step and
+/// and `played`, the table the script before it ended with, with one timing per step in
+/// `timings`. Returns it with the table this script ends with, which the next script is played
+/// from: the scripts number the abilities on the stack, and a table made from a view alone
+/// knows none of those numbers. With `records`, it also keeps a record of each step and
 /// of the step that made each segment, for the interface checks; a running game does without,
 /// so that compiling allocates no more than playing needs. `shown` says whether `before` is the
 /// view the table shows at rest, whose resting places the table holds already. With no `before`
@@ -76,13 +82,13 @@ impl Compiled {
 /// with timings that do not match the steps, nothing moves: the table takes `after` as it stands
 /// when the script ends. A reset's beats still hold the time their timings give.
 pub(crate) fn compile<'a>(
-    before: Option<&'a PlayerView>,
+    before: Option<(&'a PlayerView, &Played)>,
     after: &PlayerView,
     timings: &[StepTiming],
     table: &'a Table,
     records: bool,
     shown: bool,
-) -> Compiled {
+) -> (Compiled, Played) {
     let at_rest = || Table::objects_for(after, &table.placement(after));
     let mut compiled = Compiled {
         tracks: Vec::new(),
@@ -92,10 +98,11 @@ pub(crate) fn compile<'a>(
         verbs: 0,
         steps: Vec::new(),
         segments: Vec::new(),
+        unplaced: 0,
     };
     let Some(script) = after.script.as_ref() else {
         compiled.finals = at_rest();
-        return compiled;
+        return (compiled, numbered(Played::of(after)));
     };
     compiled.verbs = script
         .beats
@@ -104,11 +111,14 @@ pub(crate) fn compile<'a>(
         .fold(0, |verbs, step| verbs | bit(step.act.verb()));
     if timings.len() != script.beats.iter().map(Vec::len).sum::<usize>() {
         compiled.finals = at_rest();
-        return compiled;
+        return (
+            compiled,
+            ended(before.map(|(_, played)| played), after, script),
+        );
     }
     let mut motion = before
         .filter(|_| script.reset.is_none())
-        .map(|before| Motion::new(before, table, records, shown));
+        .map(|(before, played)| Motion::new(before, played.clone(), table, records, shown));
     let mut steps = Vec::new();
     compiled.end = lay_out(
         script,
@@ -135,15 +145,39 @@ pub(crate) fn compile<'a>(
         },
     );
     compiled.steps = steps;
-    match motion {
-        Some(motion) => {
-            compiled.finals = Table::objects_for(after, &motion.placement_of(after));
-            compiled.tracks = motion.tracks;
-            compiled.segments = motion.segments;
-        }
-        None => compiled.finals = at_rest(),
-    }
-    compiled
+    let Some(motion) = motion else {
+        compiled.finals = at_rest();
+        return (
+            compiled,
+            ended(before.map(|(_, played)| played), after, script),
+        );
+    };
+    compiled.finals = Table::objects_for(after, &motion.placement_of(after));
+    compiled.tracks = motion.tracks;
+    compiled.segments = motion.segments;
+    compiled.unplaced = motion.unplaced;
+    // After a step the table could not take, it no longer matches the game, and the view's
+    // table is the best guess.
+    let played = if motion.unplaced == 0 {
+        motion.played
+    } else {
+        numbered(Played::of(after))
+    };
+    (compiled, played)
+}
+
+/// The table `script`, which came with `after`, ends with when it is not played step by step:
+/// `played`, the table the script before it ended with, once its steps have played over it,
+/// or with a reset, `after`'s table with the abilities the reset numbers
+/// (`beryl_protocol::script::replay`). With no table before it, or a step that table cannot
+/// take, it is `after`'s table, numbered as best it can be.
+fn ended(played: Option<&Played>, after: &PlayerView, script: &Script) -> Played {
+    let start = match (&script.reset, played) {
+        (Some(_), _) => Played::of(after),
+        (None, Some(played)) => played.clone(),
+        (None, None) => return numbered(Played::of(after)),
+    };
+    replay(start, script).unwrap_or_else(|_| numbered(Played::of(after)))
 }
 
 /// Lays out each beat of `script` after the one before, calling `each` with every step's beat
@@ -216,6 +250,8 @@ struct Motion<'a> {
     /// Whether the next step places every group, not only the ones its act changed: the step
     /// after one the table could not take, which may have changed part of it.
     whole: bool,
+    /// How many steps the table could not take.
+    unplaced: usize,
     /// Whether the next step is the first, which also places the groups that lay their objects
     /// out in the order the table lists them (`Group::in_object_order`): `rests` then holds the
     /// view the script starts from, which lists its hands in its own order, not by slot as the
@@ -243,9 +279,11 @@ struct Motion<'a> {
 
 /// `played` with a number for each ability on its stack that has none, from its place, as the
 /// session's script builder numbers an ability nothing named. A table made from a view alone
-/// knows no ability's number, since the numbers come from the scripts before it, so a step
-/// that names an ability by its number finds none and the step is placed whole. Unnumbered,
-/// the ability could not be compared with a step's subject at all.
+/// knows no ability's number, since the numbers come from the scripts before it. It is the
+/// table the show falls back on when it has not followed the scripts (the first view, or a
+/// script the table could not take), so that a later step naming an ability by its number
+/// fails cleanly and is placed whole; unnumbered, the ability could not be compared with a
+/// step's subject at all.
 fn numbered(mut played: Played) -> Played {
     for (at, entry) in played.stack.iter_mut().enumerate() {
         if matches!(entry.item, StackItem::Ability { .. }) && entry.id.is_none() {
@@ -256,7 +294,14 @@ fn numbered(mut played: Played) -> Played {
 }
 
 impl<'a> Motion<'a> {
-    fn new(before: &'a PlayerView, table: &'a Table, records: bool, shown: bool) -> Self {
+    /// The table `played`, which shows `before`, ready for a script's steps to play over it.
+    fn new(
+        before: &'a PlayerView,
+        played: Played,
+        table: &'a Table,
+        records: bool,
+        shown: bool,
+    ) -> Self {
         let rests = if shown {
             table.rests()
         } else {
@@ -275,7 +320,6 @@ impl<'a> Motion<'a> {
         // Room for a track for every object, so that growing `tracks` one slot at a time never
         // copies the tracks it holds.
         let tracks = Vec::with_capacity(rests.rests.len());
-        let played = numbered(Played::of(before));
         Self {
             table,
             names: NameIds::of(&before.objects),
@@ -284,6 +328,7 @@ impl<'a> Motion<'a> {
             members,
             groups,
             whole: false,
+            unplaced: 0,
             first: true,
             fresh: Placement::default(),
             next: vec![Vec::new(); Group::ALL.len()],
@@ -310,6 +355,7 @@ impl<'a> Motion<'a> {
             .is_err()
         {
             self.whole = true;
+            self.unplaced += 1;
             return None;
         }
         let zones = Zones::of_table(&self.played);

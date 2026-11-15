@@ -351,3 +351,90 @@ fn a_step_about_an_ability_the_view_did_not_number_does_not_stop_the_show() {
     }
     at_rest(&show, &after, 500 * MS);
 }
+
+#[test]
+fn a_later_script_finds_the_ability_an_earlier_script_numbered() {
+    // The first script puts an ability on the stack as number 7; the second changes it, then
+    // resolves it, both by that number, and then discards a card. A view's stack numbers no
+    // engine ability, so a show that built each script's table from the view before could not
+    // find ability 7: those steps failed and the discard was placed whole.
+    let (start, cards) = before();
+    let ability = |x| StackItem::Ability {
+        source: Some(cards.angel),
+        ability: 0,
+        granted: false,
+        name: "Serra Angel".to_owned(),
+        triggered: true,
+        taps_to_pay: None,
+        nth: 0,
+        text: None,
+        controller: Side::You,
+        manual: None,
+        targets: Vec::new(),
+        x,
+    };
+    let mut emerged = start.clone();
+    emerged.view.stack.push(ability(0));
+    emerged.view.script = Some(
+        ScriptBuilder::default()
+            .beat([Act::Emerge {
+                id: 7,
+                item: ability(0),
+                at: None,
+            }])
+            .build(),
+    );
+    let (mut resolved, mut timings) = discard(&emerged, cards);
+    resolved.view.stack.clear();
+    let script = resolved.view.script.as_mut().expect("a script");
+    script.beats.insert(
+        0,
+        vec![Step {
+            act: Act::Set {
+                fact: Fact::Item {
+                    subject: Subject::Ability { id: 7 },
+                    item: ability(2),
+                },
+            },
+            cause: None,
+        }],
+    );
+    script.beats.insert(
+        1,
+        vec![Step {
+            act: Act::Vanish {
+                subject: Subject::Ability { id: 7 },
+                from: ZoneName::Stack,
+                why: Why::Resolve,
+                object: None,
+                at: None,
+            },
+            cause: None,
+        }],
+    );
+    timings.splice(0..0, [timing(100.0), timing(100.0)]);
+    let mut show = show();
+    show.push(Box::new(start), Vec::new());
+    show.push(Box::new(emerged), vec![timing(100.0)]);
+    show.push(Box::new(resolved.clone()), timings);
+    assert_eq!(show.unplaced(), 0, "every step finds what it names");
+    let mut scratch = empty_frame();
+    // The first script ends at 100 ms and the second at 700 ms; the discard flies from 300 ms.
+    frame(&mut show, &mut scratch, 0);
+    frame(&mut show, &mut scratch, 100 * MS);
+    let slot = usize::from(cards.discard.0);
+    let rest = show
+        .table()
+        .placement(&resolved.view)
+        .get(cards.discard)
+        .map(|r| r.pose);
+    let flying = show.pose(slot, 500 * MS);
+    assert!(
+        flying.is_some() && flying != rest,
+        "the discard is in flight"
+    );
+    for ms in (150..=1_000).step_by(50) {
+        frame(&mut show, &mut scratch, ms * MS);
+    }
+    at_rest(&show, &resolved, 1_000 * MS);
+}
