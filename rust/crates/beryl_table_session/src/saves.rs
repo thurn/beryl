@@ -5,6 +5,7 @@ use std::hash::{BuildHasher, RandomState};
 use std::io::{self, BufRead, BufReader, Seek, Write};
 use std::path::{Path, PathBuf};
 
+use beryl_session::ipc::SavedTable;
 use beryl_table::save::{self, SaveError};
 use beryl_table::{Chance, Entry, Log, Table};
 use serde::{Deserialize, Serialize};
@@ -33,15 +34,6 @@ impl HostSettings {
             starting_hand_size: 7,
         }
     }
-}
-
-/// Details the start screen can list without exposing the invite or secret.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SavedTable {
-    pub id: String,
-    pub host: String,
-    pub guest: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]

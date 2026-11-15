@@ -39,6 +39,22 @@ impl TcpHost {
             .map_err(|error| io_error(&error))
     }
 
+    /// Put this listener in polling mode so its owner can stop accepting
+    /// without having to open another connection to wake it.
+    pub fn set_nonblocking(&self) -> Result<(), LinkError> {
+        self.0
+            .set_nonblocking(true)
+            .map_err(|error| io_error(&error))
+    }
+
+    pub fn try_accept(&self) -> Result<Option<TcpLink>, LinkError> {
+        match self.0.accept() {
+            Ok((stream, _)) => TcpLink::from_stream(stream).map(Some),
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(None),
+            Err(error) => Err(io_error(&error)),
+        }
+    }
+
     pub fn accept(&self) -> Result<TcpLink, LinkError> {
         let (stream, _) = self.0.accept().map_err(|error| io_error(&error))?;
         TcpLink::from_stream(stream)
@@ -65,6 +81,9 @@ impl TcpLink {
     }
 
     fn from_stream(stream: TcpStream) -> Result<Self, LinkError> {
+        stream
+            .set_nonblocking(false)
+            .map_err(|error| io_error(&error))?;
         stream.set_nodelay(true).map_err(|error| io_error(&error))?;
         Ok(Self {
             shared: Arc::new(TcpConnection {

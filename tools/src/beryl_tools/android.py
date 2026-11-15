@@ -69,6 +69,8 @@ def build() -> int:
             "build",
             "--debug",
             "--apk",
+            "--features",
+            "iroh",
             "--target",
             "aarch64",
         ],

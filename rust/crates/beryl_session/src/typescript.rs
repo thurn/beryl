@@ -8,9 +8,10 @@ use crate::bugs::{BugReport, BugSaved, PageInfo, Region, UiLogEntry, UiLogReques
 use crate::card_records::{CardEntry, CardFace, CardImages, CardRecords, CardRecordsRequest};
 use crate::ipc::{
     AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, Fixture, FixtureMessage, PassOnRequest,
-    Platform, SetStopsRequest, ShareBugRequest, StageAnimatingRequest, TableActReply,
-    TableActRequest, TableKeysRequest, TableRefusalReason, TableRefused, TableSoloRequest,
-    UndoRequest,
+    Platform, SavedTable, SetStopsRequest, ShareBugRequest, StageAnimatingRequest, TableActReply,
+    TableActRequest, TableConnectionError, TableHostReply, TableHostRequest, TableHostSettings,
+    TableJoinRequest, TableKeysRequest, TableLink, TableRefusalReason, TableRefused,
+    TableResumeRequest, TableSettings, TableSoloRequest, UndoRequest,
 };
 use crate::journal::Level;
 use crate::prompt::{
@@ -133,6 +134,15 @@ fn session_decls(cfg: &Config) -> impl IntoIterator<Item = String> {
         StageAnimatingRequest::decl(cfg),
         beryl_table::deck::Deck::decl(cfg),
         TableSoloRequest::decl(cfg),
+        TableLink::decl(cfg),
+        TableHostSettings::decl(cfg),
+        TableHostRequest::decl(cfg),
+        TableHostReply::decl(cfg),
+        TableJoinRequest::decl(cfg),
+        TableResumeRequest::decl(cfg),
+        SavedTable::decl(cfg),
+        TableSettings::decl(cfg),
+        TableConnectionError::decl(cfg),
         TableKeysRequest::decl(cfg),
         TableActRequest::decl(cfg),
         TableActReply::decl(cfg),
@@ -151,6 +161,11 @@ fn session_decls(cfg: &Config) -> impl IntoIterator<Item = String> {
         UiLogEntry::decl(cfg),
         Level::decl(cfg),
         SessionError::decl(cfg),
+    ]
+}
+
+fn view_decls(cfg: &Config) -> impl IntoIterator<Item = String> {
+    [
         GameUpdate::decl(cfg),
         AgentView::decl(cfg),
         SessionId::decl(cfg),
@@ -234,7 +249,11 @@ pub fn typescript() -> String {
         .chain(table_action_decls(&cfg))
         .chain(crate::ipc::decks::typescript_decls(&cfg))
         .chain(prompt_decls(&cfg));
-    for decl in session_decls(&cfg).into_iter().chain(extra) {
+    for decl in session_decls(&cfg)
+        .into_iter()
+        .chain(view_decls(&cfg))
+        .chain(extra)
+    {
         out.push('\n');
         out.push_str("export ");
         out.push_str(&decl);

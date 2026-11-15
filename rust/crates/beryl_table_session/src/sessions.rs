@@ -5,11 +5,13 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc::Receiver};
 
-use beryl_link::guest::Guest;
+use beryl_link::guest::{self, Event, Guest};
 use beryl_link::host::Sender;
-use beryl_link::{Link, LinkError};
+use beryl_link::wire::Hello;
+use beryl_link::{Link, LinkError, PING_INTERVAL};
+use beryl_session::ipc::{SavedTable, TABLE_LINK, TABLE_LOBBY};
 use beryl_session::protocol::{LinkState, TableAction};
-use beryl_session::{GameUpdate, SessionId, SessionIds};
+use beryl_session::{GameUpdate, SessionId, SessionIds, WIRE_HASH};
 use beryl_table::deck::Deck;
 use beryl_table::save::SaveError;
 use beryl_table::{Action, Chance, Log, Refusal, Seat, Table};
@@ -18,7 +20,7 @@ use serde_json::Value;
 use crate::guest::GuestSession;
 use crate::host::HostSession;
 use crate::publication::PublishedTable;
-use crate::saves::{self, HostSettings, Save, SavedTable};
+use crate::saves::{self, HostSettings, Save};
 
 const SOLO: Seat = Seat(0);
 
@@ -31,6 +33,20 @@ pub enum TableEvent {
     Link(LinkState),
     Error(String),
     Lobby(Value),
+}
+
+impl TableEvent {
+    /// The same event name and payload on both app transports.
+    pub fn into_message(self) -> (&'static str, Value) {
+        match self {
+            Self::Link(state) => (TABLE_LINK, serde_json::json!(state)),
+            Self::Error(reason) => (
+                TABLE_LINK,
+                serde_json::json!({ "kind": "error", "reason": reason }),
+            ),
+            Self::Lobby(lobby) => (TABLE_LOBBY, lobby),
+        }
+    }
 }
 
 pub struct TableSessions {
@@ -174,19 +190,47 @@ impl TableSessions {
         name: impl Into<String>,
         secret: impl Into<String>,
     ) -> SessionId {
+        let (guest, events) = dial_guest(connect, name.into(), secret.into());
+        self.open_guest(guest, events, None)
+    }
+
+    /// Wait for Welcome before replacing the current table. A rejected invite
+    /// leaves the old session and its action references intact.
+    pub fn join_checked<L: Link + 'static>(
+        &self,
+        connect: impl FnMut() -> Result<L, LinkError> + Send + 'static,
+        name: String,
+        secret: String,
+    ) -> Result<SessionId, LinkError> {
+        let (guest, events) = dial_guest(connect, name, secret);
+        let first = match events.recv() {
+            Ok(event @ (Event::Joined { .. } | Event::Resumed { .. })) => event,
+            Ok(Event::Mismatch(reason)) => {
+                (self.emit_event)(TableEvent::Error(reason.clone()));
+                return Err(LinkError::Refused(reason));
+            }
+            Ok(Event::Failed(error)) if error != LinkError::Closed => return Err(error),
+            _ => {
+                return Err(LinkError::Refused(
+                    "The host did not accept the invite.".into(),
+                ));
+            }
+        };
+        Ok(self.open_guest(guest, events, Some(first)))
+    }
+
+    fn open_guest(&self, guest: Guest, events: Receiver<Event>, first: Option<Event>) -> SessionId {
         let mut current = self.lock();
         let session = self.ids.allocate();
-        let (guest, events) = GuestSession::new(
+        let guest = GuestSession::new(
             session,
-            connect,
-            name.into(),
-            secret.into(),
+            guest,
             Arc::clone(&self.emit),
             Arc::clone(&self.emit_event),
         );
         let previous = replace(&mut current, Current::Joined(guest));
         if let Some(Current::Joined(guest)) = current.as_ref() {
-            guest.listen(events);
+            guest.listen(first, events);
         }
         drop(current);
         leave_link(previous);
@@ -253,8 +297,10 @@ impl TableSessions {
         )
         .map_err(invalid)?;
         let update = host.current();
+        let link = update.view.table.as_ref().expect("hosted table view").link;
         let previous = replace(&mut current, Current::Hosted(host));
         (self.emit)(update);
+        (self.emit_event)(TableEvent::Link(link));
         if let Some(Current::Hosted(host)) = current.as_ref() {
             host.listen(links);
         }
@@ -295,7 +341,14 @@ impl TableSessions {
     pub fn leave(&self) {
         let sender = {
             let mut current = self.lock();
-            current.take().and_then(|old| old.stop())
+            let old = current.take();
+            let departure = old.as_ref().and_then(Current::stop);
+            if matches!(&old, Some(Current::Hosted(host)) if host.link_state() != LinkState::Left)
+                || matches!(&departure, Some(Departure::Guest(_)))
+            {
+                (self.emit_event)(TableEvent::Link(LinkState::Left));
+            }
+            departure
         };
         leave_link(sender);
     }
@@ -303,6 +356,21 @@ impl TableSessions {
     fn lock(&self) -> MutexGuard<'_, Option<Current>> {
         self.current.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+fn dial_guest<L: Link + 'static>(
+    connect: impl FnMut() -> Result<L, LinkError> + Send + 'static,
+    name: String,
+    secret: String,
+) -> (Guest, Receiver<Event>) {
+    let hello = Hello {
+        wire: WIRE_HASH.into(),
+        name,
+        secret,
+    };
+    let mut guest = guest::join(connect, hello, guest::REDIAL_DELAY, PING_INTERVAL);
+    let events = guest.take_events().expect("new guest has events");
+    (guest, events)
 }
 
 fn replace(current: &mut Option<Current>, next: Current) -> Option<Departure> {

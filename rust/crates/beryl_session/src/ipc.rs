@@ -29,6 +29,7 @@ pub(crate) fn typescript(cfg: &Config) -> String {
     let request = |ty: String| format!("{{ request: {ty} }}");
     let error = name::<SessionError>(cfg);
     let never = "never".to_owned();
+    let table_error = name::<TableConnectionError>(cfg);
     let commands = [
         (APP_INFO, none.clone(), name::<AppInfo>(cfg), never.clone()),
         (UI_READY, none.clone(), name::<()>(cfg), never.clone()),
@@ -109,6 +110,42 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             request(name::<TableSoloRequest>(cfg)),
             name::<SessionId>(cfg),
             name::<TableRefused>(cfg),
+        ),
+        (
+            TABLE_HOST,
+            request(name::<TableHostRequest>(cfg)),
+            name::<TableHostReply>(cfg),
+            table_error.clone(),
+        ),
+        (
+            TABLE_JOIN,
+            request(name::<TableJoinRequest>(cfg)),
+            name::<SessionId>(cfg),
+            table_error.clone(),
+        ),
+        (
+            TABLE_RESUME,
+            request(name::<TableResumeRequest>(cfg)),
+            name::<TableHostReply>(cfg),
+            table_error.clone(),
+        ),
+        (
+            TABLE_SAVED,
+            "Record<string, never>".to_owned(),
+            name::<Vec<SavedTable>>(cfg),
+            table_error.clone(),
+        ),
+        (
+            TABLE_SETTINGS_GET,
+            "Record<string, never>".to_owned(),
+            name::<TableSettings>(cfg),
+            table_error.clone(),
+        ),
+        (
+            TABLE_SETTINGS_SET,
+            request(name::<TableSettings>(cfg)),
+            name::<()>(cfg),
+            table_error,
         ),
         (
             TABLE_ACT,
@@ -233,7 +270,7 @@ pub(crate) fn typescript(cfg: &Config) -> String {
     out.push_str("};\n\n/** Each event's payload. */\nexport type Events = {\n");
     writeln!(
         out,
-        "  \"{GAME_UPDATE}\": {};\n  \"{TABLE_QUIT_ASKED}\": {};\n}};",
+        "  \"{GAME_UPDATE}\": {};\n  \"{TABLE_QUIT_ASKED}\": {};\n  \"{TABLE_LINK}\": LinkState | ({{ kind: \"error\" }} & TableConnectionError);\n  \"{TABLE_LOBBY}\": unknown;\n}};",
         name::<GameUpdate>(cfg),
         name::<()>(cfg)
     )

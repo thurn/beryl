@@ -294,6 +294,12 @@ pub fn run() {
             tables::table_act = ipc::TABLE_ACT,
             tables::table_current = ipc::TABLE_CURRENT,
             tables::table_leave = ipc::TABLE_LEAVE,
+            tables::table_host = ipc::TABLE_HOST,
+            tables::table_join = ipc::TABLE_JOIN,
+            tables::table_resume = ipc::TABLE_RESUME,
+            tables::table_saved = ipc::TABLE_SAVED,
+            tables::table_settings_get = ipc::TABLE_SETTINGS_GET,
+            tables::table_settings_set = ipc::TABLE_SETTINGS_SET,
             table_keys::table_keys = ipc::TABLE_KEYS,
             table_keys::table_quit = ipc::TABLE_QUIT,
             decks::deck_import = ipc::DECK_IMPORT,
@@ -348,7 +354,11 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         json!({ "smoke": smoke_seconds().is_some(), "bugs": bug_dir }),
     );
     let games = games::sessions(app.handle());
-    app.manage(tables::sessions(app.handle(), games.session_ids()));
+    app.manage(tables::sessions(
+        app.handle(),
+        games.session_ids(),
+        profile::data_dir(app.handle())?,
+    ));
     app.manage(games);
     app.manage(Snapshots::default());
     app.manage(BugDirectory(bug_dir));

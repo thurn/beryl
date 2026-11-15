@@ -2,8 +2,6 @@
 // already builds beryl_cli while generating the run's fixtures.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { once } from "node:events";
-import net from "node:net";
 import { fileURLToPath } from "node:url";
 
 const binary = new URL(
@@ -12,33 +10,20 @@ const binary = new URL(
         : "../../rust/target/debug/beryl_cli",
     import.meta.url,
 );
-const loopback = "127.0.0.1";
 let starting;
 let server;
 let stopped;
 
 async function startServer() {
-    const socket = net.createServer().listen(0, loopback);
-    await once(socket, "listening");
-    const { port } = socket.address();
-    await new Promise((resolve, reject) =>
-        socket.close((error) => (error ? reject(error) : resolve())),
-    );
-
-    const url = `http://${loopback}:${port}`;
-    const child = spawn(
-        fileURLToPath(binary),
-        ["serve", "--port", String(port)],
-        {
-            stdio: ["ignore", "pipe", "inherit"],
-        },
-    );
+    const child = spawn(fileURLToPath(binary), ["serve", "--port", "0"], {
+        stdio: ["ignore", "pipe", "inherit"],
+    });
     server = child;
     stopped = new Promise((resolve) => {
         child.once("close", resolve);
     });
     process.once("exit", killServer);
-    await new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
         child.once("error", reject);
         child.once("exit", (code) =>
             reject(new Error(`table server exited (${code})`)),
@@ -47,10 +32,12 @@ async function startServer() {
         child.stdout.setEncoding("utf8");
         child.stdout.on("data", (chunk) => {
             seen += chunk;
-            if (seen.includes(`serving on ${url}`)) resolve();
+            const address = seen.match(
+                /^beryl_cli: serving on (http:\/\/127\.0\.0\.1:\d+)\r?\n/m,
+            );
+            if (address) resolve(address[1]);
         });
     });
-    return url;
 }
 
 function killServer() {
@@ -65,7 +52,7 @@ export async function stopTableServer() {
 
 const url = () => (starting ??= startServer());
 
-export async function tableRoute(page, phone = false) {
+export async function tableRoute(page, phone = false, session) {
     // Live mode normally fetches card scans. These checks are offline.
     await page.route(/^https:\/\//, (route) =>
         route.fulfill({
@@ -73,11 +60,15 @@ export async function tableRoute(page, phone = false) {
             body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140"/>',
         }),
     );
-    return `/?live=${encodeURIComponent(await url())}${phone ? "&phone" : ""}#/`;
+    const query = new URLSearchParams({ live: await url() });
+    if (session) query.set("session", session);
+    if (phone) query.set("phone", "");
+    return `/?${query}#/`;
 }
 
-export async function tableCommand(command, args = {}) {
-    const response = await fetch(`${await url()}/invoke/${command}`, {
+export async function tableCommand(command, args = {}, session) {
+    const query = session ? `?${new URLSearchParams({ session })}` : "";
+    const response = await fetch(`${await url()}/invoke/${command}${query}`, {
         method: "POST",
         body: JSON.stringify(args),
     });
@@ -86,29 +77,79 @@ export async function tableCommand(command, args = {}) {
     return reply.ok;
 }
 
-export async function tableView() {
-    return (await tableCommand("table_current")).view;
+export async function tableView(session) {
+    return (await tableCommand("table_current", {}, session)).view;
+}
+
+const pageSession = (page) => new URL(page.url()).searchParams.get("session");
+
+async function openTable(page) {
+    await page.evaluate(() => {
+        window.location.hash = "#/table";
+    });
+    await page.locator("[data-manual-table]").waitFor();
+}
+
+/** Give a live host page a guest in the same paused-clock browser context. */
+export async function pair(host, link = "local") {
+    const guest = await host.context().newPage();
+    try {
+        const { invite } = await tableCommand(
+            "table_host",
+            {
+                request: { link, settings: { name: "Host" } },
+            },
+            "host",
+        );
+        await tableCommand(
+            "table_join",
+            {
+                request: { invite, name: "Guest" },
+            },
+            "guest",
+        );
+        const route = await tableRoute(guest, false, "guest");
+        const guestUrl = new URL(route, host.url());
+        guestUrl.hash = "#/table";
+        await guest.goto(guestUrl.href);
+        await Promise.all([
+            openTable(host),
+            guest.locator("[data-manual-table]").waitFor(),
+        ]);
+        return { host, guest };
+    } catch (error) {
+        await guest.close();
+        await tableCommand("table_leave", {}, "host");
+        await tableCommand("table_leave", {}, "guest");
+        throw error;
+    }
 }
 
 /** Opens a fresh table with a decklist and optional setup actions. Setup callbacks receive
  * each latest published view so their object references come from the host's current view. */
 export async function startTable(page, text, actions = []) {
-    const deck = await tableCommand("deck_import", {
-        request: { name: "Table check", text },
-    });
+    const session = pageSession(page);
+    const deck = await tableCommand(
+        "deck_import",
+        {
+            request: { name: "Table check", text },
+        },
+        session,
+    );
     assert.deepEqual(deck.unknown, []);
-    await tableCommand("table_solo", { request: { deck } });
-    let view = await tableView();
+    await tableCommand("table_solo", { request: { deck } }, session);
+    let view = await tableView(session);
     for (const setup of actions) {
         const action = typeof setup === "function" ? setup(view) : setup;
-        const reply = await tableCommand("table_act", { request: { action } });
+        const reply = await tableCommand(
+            "table_act",
+            { request: { action } },
+            session,
+        );
         assert.deepEqual(reply, { ok: true });
-        view = await tableView();
+        view = await tableView(session);
     }
-    await page.evaluate(() => {
-        window.location.hash = "#/table";
-    });
-    await page.locator("[data-manual-table]").waitFor();
+    await openTable(page);
     return page;
 }
 
@@ -147,12 +188,12 @@ export async function showTableView(page, expected) {
 
 /** Wait for the action sent by the page and, on success, finish drawing its update. */
 export async function clickTableResult(page) {
-    const response = await page.waitForResponse((result) =>
-        result.url().endsWith("/invoke/table_act"),
+    const response = await page.waitForResponse(
+        (result) => new URL(result.url()).pathname === "/invoke/table_act",
     );
     const { ok } = await response.json();
     if (ok.ok) {
-        const view = await tableView();
+        const view = await tableView(pageSession(page));
         await showTableView(page, view);
         return view;
     }

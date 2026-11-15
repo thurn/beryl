@@ -136,15 +136,15 @@ export async function coverage(page) {
 }
 
 /** Runs the tasks it is handed at most `BERYL_UI_WORKERS` (default `limit`) at a time, each on
- * its own browser context and holding one of the machine's browser slots (slots.mjs) while it
+ * its own browser context and holding the requested browser slots (one by default) while it
  * runs. Awaiting a hand-off waits for a free worker and slot, not for the task, so a script
  * reads on while its pages play; `drain` waits for every task. A task must not throw. */
 export function workers(limit = 4) {
     limit = Number(process.env.BERYL_UI_WORKERS) || limit;
     const running = new Set();
-    const run = async (task) => {
+    const run = async (task, pages = 1) => {
         while (running.size >= limit) await Promise.race(running);
-        const release = await takeSlot();
+        const release = await takeSlot(process.env, pages);
         const done = task().finally(() => {
             release();
             running.delete(done);

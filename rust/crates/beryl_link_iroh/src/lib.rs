@@ -1,5 +1,8 @@
 //! The blocking multiplayer frame link over a single iroh QUIC stream.
 
+#[cfg(target_os = "ios")]
+extern crate iroh_ios as iroh;
+
 mod identity;
 mod invite;
 mod transport;
@@ -32,6 +35,7 @@ pub enum RelayChoice {
     Disabled,
 }
 
+#[derive(Clone)]
 pub struct IrohHost {
     endpoint: Endpoint,
 }

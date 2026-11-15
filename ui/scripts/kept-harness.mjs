@@ -172,11 +172,12 @@ export async function check(
         init,
         phone = false,
         clock = "paused",
+        pages = 1,
     } = {},
 ) {
     if (!wanted(title) || (chosenTitles && !chosenTitles.has(title))) return;
     ran += 1;
-    await queue(async () => {
+    const run = async () => {
         // A page whose boot lost one of its modules to the network (Windows now and then
         // runs out of socket buffers, net::ERR_NO_BUFFER_SPACE, beside the slow suite's other
         // lanes) never shows the board: boot it once more, in a fresh context. Any other
@@ -255,7 +256,8 @@ export async function check(
             );
             break;
         }
-    });
+    };
+    await queue(run, pages);
     if (serial) await queue.drain();
 }
 

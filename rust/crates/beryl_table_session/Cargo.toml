@@ -9,11 +9,16 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+iroh = ["dep:beryl_link_iroh"]
+
 [dependencies]
 # Supplies printed characteristics without asking the engine to interpret a card.
 beryl_card_store = { path = "../beryl_card_store" }
 # Transports manual table updates and actions between seats.
 beryl_link = { path = "../beryl_link" }
+# Traverses home routers and uses encrypted relays for internet play.
+beryl_link_iroh = { path = "../beryl_link_iroh", optional = true }
 # Supplies the view protocol shared with engine games.
 beryl_session = { path = "../beryl_session" }
 # Supplies host-side state, action permissions and per-seat redaction.
@@ -24,5 +29,7 @@ serde_json = "1.0.154"
 
 # Stages a replacement header beside a save for atomic guest reservation.
 tempfile = "3"
+# Validates the relay setting before writing it, including in builds without iroh.
+url = "2"
 
 [dev-dependencies]

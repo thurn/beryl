@@ -10,8 +10,6 @@ workspace = true
 [dependencies]
 # Use the same frame transport interface as the in-memory and localhost links.
 beryl_link = { path = "../beryl_link" }
-# iroh supplies router traversal and an encrypted relay protocol instead of writing both by hand.
-iroh = { version = "1.4.1", default-features = false, features = ["tls-ring", "portmapper"] }
 # Drive iroh's async endpoint behind the blocking link interface.
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
 # Encode invite payloads in unpadded base32 without a custom codec.
@@ -20,6 +18,14 @@ data-encoding = "2"
 getrandom = "0.4"
 # Publish a complete private identity file without replacing a concurrent writer's key.
 tempfile = "3"
+
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+# iroh supplies router traversal and an encrypted relay protocol instead of writing both by hand.
+iroh = { version = "1.4.1", default-features = false, features = ["tls-ring", "portmapper"] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+# This iroh revision uses netwatch 0.20 and netdev 0.47, which have the iOS fixes.
+iroh_ios = { package = "iroh", git = "https://github.com/n0-computer/iroh", rev = "3e9a854c3292d2fe5958294674b604331d8a350a", default-features = false, features = ["tls-ring", "portmapper"] }
 
 [dev-dependencies]
 # Supply the JSON value type required by the table handshake's test callbacks.

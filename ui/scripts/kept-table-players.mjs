@@ -5,8 +5,11 @@ import { check } from "./kept-harness.mjs";
 import {
     clickTable,
     clickTableResult,
+    pair,
+    showTableView,
     startTable,
     tableActionRef,
+    tableCommand,
     tableRoute,
     tableView,
 } from "./table.mjs";
@@ -264,4 +267,41 @@ await check(
         assert.equal(after.players.you.life, initial.players.you.life - 3);
     },
     live,
+);
+
+// The stage audits work on one view at a time. This check verifies that a
+// guest's command reaches the host and the two event feeds show their own seats.
+await check(
+    "manual table guest edits life on a linked table",
+    async (page) => {
+        const { host, guest } = await pair(page);
+        try {
+            const before = await tableView("guest");
+            await life(guest).click();
+            const input = field(guest, "Set life");
+            await input.fill("+3");
+            const guestView = await sendKey(guest, "Enter");
+            const hostView = await tableView("host");
+            await showTableView(host, hostView);
+            assert.equal(guestView.table.seat, 1);
+            assert.equal(hostView.table.seat ?? 0, 0);
+            assert.equal(
+                guestView.players.you.life,
+                before.players.you.life + 3,
+            );
+            assert.equal(
+                hostView.players.opponent.life,
+                guestView.players.you.life,
+            );
+            assert.deepEqual(
+                await host.evaluate(() => window.berylStage.shown.view.players),
+                hostView.players,
+            );
+        } finally {
+            await tableCommand("table_leave", {}, "host");
+            await tableCommand("table_leave", {}, "guest");
+            await guest.close();
+        }
+    },
+    { ...live, pages: 2, route: (page) => tableRoute(page, false, "host") },
 );

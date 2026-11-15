@@ -519,6 +519,10 @@ fn an_authenticated_version_mismatch_reaches_both_players() {
 
     assert_eq!(
         host_events.recv().unwrap(),
+        TableEvent::Link(LinkState::Alone)
+    );
+    assert_eq!(
+        host_events.recv().unwrap(),
         TableEvent::Error(VERSION_MISMATCH.into())
     );
     assert_eq!(

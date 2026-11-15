@@ -45,3 +45,14 @@ test("a slot whose holder exited is reclaimed", async () => {
 test("with no slot directory nothing is taken", async () => {
     (await takeSlot({}))();
 });
+
+test("a paired check can reserve both pages on a small host", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "slots-"));
+    const release = await takeSlot(
+        { BERYL_BROWSER_SLOTS_DIR: dir, BERYL_BROWSER_SLOTS: "3" },
+        2,
+    );
+    assert.deepEqual(readdirSync(dir).sort(), ["slot-0", "slot-1"]);
+    release();
+    assert.deepEqual(readdirSync(dir), []);
+});

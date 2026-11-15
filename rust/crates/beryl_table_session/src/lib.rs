@@ -1,5 +1,6 @@
 //! Projects manual Magic tables onto the game session's shared UI protocol.
 
+pub mod connections;
 pub mod decks;
 mod guest;
 mod host;
@@ -10,5 +11,6 @@ mod script;
 pub mod sessions;
 mod view;
 
-pub use saves::{HostSettings, SavedTable};
+pub use beryl_session::ipc::SavedTable;
+pub use saves::HostSettings;
 pub use sessions::{TableEvent, TableSessions};

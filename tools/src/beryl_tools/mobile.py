@@ -269,7 +269,9 @@ def setup(args: argparse.Namespace) -> int:
 def build_simulator_app() -> int:
     """Builds the debug app for the iOS Simulator through Tauri's CLI ([`SIMULATOR_APP`])."""
     started = time.monotonic()
-    code = app.tauri("ios", "build", "--debug", "--target", "aarch64-sim")
+    code = app.tauri(
+        "ios", "build", "--debug", "--target", "aarch64-sim", "--features", "iroh"
+    )
     print(f"ios: built in {time.monotonic() - started:.0f} s")
     return code
 
@@ -459,7 +461,7 @@ def device(args: argparse.Namespace) -> int:
         return 2
     started = time.monotonic()
     sign = ["--no-sign"] if args.no_sign else []
-    code = app.tauri("ios", "build", "--target", "aarch64", *sign)
+    code = app.tauri("ios", "build", "--target", "aarch64", "--features", "iroh", *sign)
     print(f"ios-device: built in {time.monotonic() - started:.0f} s")
     if code != 0:
         if not args.no_sign:

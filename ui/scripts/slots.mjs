@@ -57,40 +57,45 @@ function stale(file) {
     }
 }
 
-/** Takes a free slot, waiting while there is none, and resolves to the function that releases
- * it; with no `BERYL_BROWSER_SLOTS_DIR` (a script run by hand), takes nothing. Two runs that
- * reclaim the same stale slot at once can let one more page run than the count: harmless, and
- * gone when either releases it. */
-export async function takeSlot(env = process.env) {
+function releaseSlot(file) {
+    try {
+        unlinkSync(file);
+    } catch {
+        // Reclaimed as stale already.
+    }
+}
+
+/** Take every slot a task needs before it opens a page. Give up a partial
+ * reservation before waiting so two multi-page checks cannot block each other.
+ * With no slot directory configured, nothing is reserved. */
+export async function takeSlot(env = process.env, pages = 1) {
     const dir = env.BERYL_BROWSER_SLOTS_DIR;
     if (!dir) return () => {};
     mkdirSync(dir, { recursive: true });
-    const { usable } = slotCounts(env);
+    const { total, usable } = slotCounts(env);
+    if (pages < 1 || pages > total || !Number.isInteger(pages))
+        throw new RangeError(
+            `Cannot reserve ${pages} of ${total} browser slots`,
+        );
+    // A single paired check needs two slots even on a small development host.
+    const limit = Math.max(usable, pages);
     for (;;) {
-        for (let i = 0; i < usable; i++) {
+        const files = [];
+        for (let i = 0; i < limit; i++) {
             const file = join(dir, `slot-${i}`);
             try {
                 const fd = openSync(file, "wx");
                 writeSync(fd, String(process.pid));
                 closeSync(fd);
-                return () => {
-                    try {
-                        unlinkSync(file);
-                    } catch {
-                        // Reclaimed as stale already.
-                    }
-                };
+                files.push(file);
+                if (files.length === pages)
+                    return () => files.forEach(releaseSlot);
             } catch (e) {
                 if (e.code !== "EEXIST") throw e;
-                if (stale(file)) {
-                    try {
-                        unlinkSync(file);
-                    } catch {
-                        // Another run reclaimed it first.
-                    }
-                }
+                if (stale(file)) releaseSlot(file);
             }
         }
+        files.forEach(releaseSlot);
         await new Promise((r) => setTimeout(r, 100 + Math.random() * 150));
     }
 }

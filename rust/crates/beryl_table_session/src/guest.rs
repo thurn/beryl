@@ -7,11 +7,10 @@ use std::sync::{
 };
 use std::thread;
 
-use beryl_link::guest::{self, Event, Guest};
-use beryl_link::wire::Hello;
-use beryl_link::{Link, LinkError, PING_INTERVAL};
+use beryl_link::LinkError;
+use beryl_link::guest::{Event, Guest};
 use beryl_session::protocol::{LinkState, TableAction};
-use beryl_session::{GameUpdate, SessionId, WIRE_HASH};
+use beryl_session::{GameUpdate, SessionId};
 use beryl_table::Refusal;
 use serde_json::Value;
 
@@ -36,22 +35,8 @@ struct State {
 }
 
 impl GuestSession {
-    pub(super) fn new<L: Link + 'static>(
-        session: SessionId,
-        connect: impl FnMut() -> Result<L, LinkError> + Send + 'static,
-        name: String,
-        secret: String,
-        emit: Emit,
-        emit_event: EmitEvent,
-    ) -> (Self, Receiver<Event>) {
-        let hello = Hello {
-            wire: WIRE_HASH.into(),
-            name,
-            secret,
-        };
-        let mut guest = guest::join(connect, hello, guest::REDIAL_DELAY, PING_INTERVAL);
-        let events = guest.take_events().expect("new guest has events");
-        let shared = Shared {
+    pub(super) fn new(session: SessionId, guest: Guest, emit: Emit, emit_event: EmitEvent) -> Self {
+        Self(Arc::new(Shared {
             session,
             emit,
             emit_event,
@@ -62,15 +47,14 @@ impl GuestSession {
                 connection: 0,
                 pending: HashMap::new(),
             }),
-        };
-        (Self(Arc::new(shared)), events)
+        }))
     }
 
-    pub(super) fn listen(&self, events: Receiver<Event>) {
+    pub(super) fn listen(&self, first: Option<Event>, events: Receiver<Event>) {
         let shared = Arc::clone(&self.0);
         thread::spawn(move || {
             let mut error = None;
-            for event in events {
+            for event in first.into_iter().chain(events) {
                 let mut state = shared.lock();
                 if state.guest.is_none() {
                     return;
@@ -186,6 +170,15 @@ impl Shared {
     }
 
     fn link(&self, state: &mut State, link: LinkState) {
+        // Locally detected disconnects have no publication from the host.
+        // A page reloading in that interval still needs the current link state.
+        if let Some(update) = &mut state.current
+            && let Some(table) = &mut update.view.table
+            && table.link != link
+        {
+            table.link = link;
+            update.view.script = None;
+        }
         if state.link.replace(link) != Some(link) {
             (self.emit_event)(TableEvent::Link(link));
         }

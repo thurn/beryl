@@ -100,6 +100,10 @@ impl HostSession {
         table.update(LOCAL, table.link_state(), table.show_script)
     }
 
+    pub(super) fn link_state(&self) -> LinkState {
+        self.0.lock().link_state()
+    }
+
     pub(super) fn stop(&self) -> Option<Sender> {
         let mut table = self.0.lock();
         table.stopped = true;
@@ -154,6 +158,7 @@ impl HostedTable {
                 sender.disconnect();
                 self.sender = None;
                 self.link = LinkState::Reconnecting;
+                (self.emit_event)(TableEvent::Link(self.link));
             }
         }
         self.emit_local();
@@ -190,6 +195,7 @@ impl HostedTable {
     fn link_changed(&mut self, link: LinkState) {
         if !self.stopped && self.link != link {
             self.link = link;
+            (self.emit_event)(TableEvent::Link(link));
             self.show_script = false;
             self.emit_local();
         }

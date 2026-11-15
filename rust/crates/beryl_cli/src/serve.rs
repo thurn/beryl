@@ -14,6 +14,7 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::Path;
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -24,12 +25,12 @@ use beryl_session::ipc::decks::{
 };
 use beryl_session::ipc::{
     self, AppInfo, CancelRequest, ChooseRequest, ConcedeRequest, PassOnRequest, Platform,
-    SetStopsRequest, TableActReply, TableActRequest, TableKeysRequest, TableRefused,
-    TableSoloRequest, UndoRequest,
+    SetStopsRequest, TableActRequest, TableHostRequest, TableJoinRequest, TableKeysRequest,
+    TableResumeRequest, TableSettings, TableSoloRequest, UndoRequest,
 };
 use beryl_session::prompt::ClickRequest;
 use beryl_session::{GameUpdate, SessionError, Sessions, StartRequest, agents};
-use beryl_table_session::TableSessions;
+use beryl_table_session::connections::{MemoryInvites, TableConnections};
 use beryl_table_session::decks::{self, Decks};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -37,41 +38,65 @@ use serde_json::{Value, json};
 /// The open event streams, each a channel to its connection's thread.
 type Streams = Arc<Mutex<Vec<Sender<String>>>>;
 
-/// Serves the game commands on `127.0.0.1:port` until the process is killed.
+/// Serves the game commands on loopback until the process is killed.
 pub fn serve(port: u16) -> Result<(), String> {
     beryl_session::journal::install_panic_hook();
     let listener =
         TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("port {port}: {e}"))?;
-    let streams: Streams = Arc::default();
-    let emit = {
-        let streams = Arc::clone(&streams);
-        move |update: GameUpdate| {
-            let Ok(data) = serde_json::to_string(&update) else {
-                return;
-            };
-            let message = format!("event: {}\ndata: {data}\n\n", ipc::GAME_UPDATE);
-            lock(&streams).retain(|s| s.send(message.clone()).is_ok());
-        }
-    };
-    let sessions = Arc::new(Sessions::new(None, emit.clone()));
-    let tables = Arc::new(TableSessions::new(sessions.session_ids(), emit));
-    // A headless run has its own deck library, independent of the app's profiles.
-    let deck_dir = tempfile::tempdir().map_err(|error| error.to_string())?;
-    let decks = Decks::new(deck_dir.path());
-    println!("beryl_cli: serving on http://127.0.0.1:{port}");
+    let address = listener.local_addr().map_err(|error| error.to_string())?;
+    let data = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let memory = MemoryInvites::default();
+    let seats = Arc::new([
+        BrowserSeat::new(&data.path().join("host"), memory.clone()),
+        BrowserSeat::new(&data.path().join("guest"), memory),
+    ]);
+    println!("beryl_cli: serving on http://{address}");
     for connection in listener.incoming() {
         let Ok(connection) = connection else { continue };
-        let sessions = Arc::clone(&sessions);
-        let tables = Arc::clone(&tables);
-        let streams = Arc::clone(&streams);
-        let decks = decks.clone();
+        let seats = Arc::clone(&seats);
         std::thread::spawn(move || {
-            if let Err(e) = handle(connection, &sessions, &tables, &decks, &streams) {
+            if let Err(e) = handle(connection, &seats) {
                 eprintln!("beryl_cli: {e}");
             }
         });
     }
     Ok(())
+}
+
+struct BrowserSeat {
+    sessions: Sessions,
+    tables: TableConnections,
+    decks: Decks,
+    streams: Streams,
+}
+
+impl BrowserSeat {
+    fn new(data: &Path, memory: MemoryInvites) -> Self {
+        let streams: Streams = Arc::default();
+        let events = Arc::clone(&streams);
+        let game_streams = Arc::clone(&streams);
+        let emit = move |update: GameUpdate| broadcast(&game_streams, ipc::GAME_UPDATE, &update);
+        let sessions = Sessions::new(None, emit.clone());
+        let tables =
+            TableConnections::new(sessions.session_ids(), data.into(), emit, move |event| {
+                let (name, payload) = event.into_message();
+                broadcast(&events, name, &payload);
+            })
+            .for_server(memory);
+        Self {
+            sessions,
+            tables,
+            decks: Decks::new(data),
+            streams,
+        }
+    }
+}
+
+fn broadcast(streams: &Streams, event: &str, payload: &impl serde::Serialize) {
+    if let Ok(data) = serde_json::to_string(payload) {
+        let message = format!("event: {event}\ndata: {data}\n\n");
+        lock(streams).retain(|sender| sender.send(message.clone()).is_ok());
+    }
 }
 
 fn lock(streams: &Streams) -> std::sync::MutexGuard<'_, Vec<Sender<String>>> {
@@ -83,33 +108,49 @@ pub(crate) const CORS: &str = "Access-Control-Allow-Origin: *\r\n\
                     Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n\
                     Access-Control-Allow-Headers: Content-Type\r\n";
 
-fn handle(
-    stream: TcpStream,
-    sessions: &Sessions,
-    tables: &TableSessions,
-    decks: &Decks,
-    streams: &Streams,
-) -> Result<(), String> {
+fn handle(mut stream: TcpStream, seats: &[BrowserSeat; 2]) -> Result<(), String> {
     let HttpRequest {
         method, path, body, ..
     } = read_request(&stream)?;
-    let mut stream = stream;
-    match (method.as_str(), path.as_str()) {
+    let (path, query) = path.split_once('?').unwrap_or((&path, ""));
+    let key = query
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find_map(|(name, value)| (name == "session").then_some(value));
+    let seat = match key {
+        None | Some("host") => &seats[0],
+        Some("guest") => &seats[1],
+        Some(_) => return respond(&mut stream, "400 Bad Request", "{}"),
+    };
+    let BrowserSeat {
+        sessions,
+        tables,
+        decks,
+        streams,
+    } = seat;
+    match (method.as_str(), path) {
         ("OPTIONS", _) => respond(&mut stream, "204 No Content", ""),
         ("GET", "/events") => events(stream, streams),
         ("POST", path) if path.starts_with("/invoke/") => {
             let args: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
             let command = &path["/invoke/".len()..];
             let answer = match command {
-                ipc::TABLE_SOLO => answer(request::<TableSoloRequest>(args).and_then(|r| {
-                    tables
-                        .solo(r.deck)
-                        .map_err(|e| json!(TableRefused::from(e)))
-                })),
-                ipc::TABLE_ACT => answer(
-                    request::<TableActRequest>(args)
-                        .map(|r| TableActReply::from(tables.act(r.action))),
-                ),
+                ipc::TABLE_SOLO => table_command(args, |r: TableSoloRequest| tables.solo(r)),
+                ipc::TABLE_HOST => table_command(args, |r: TableHostRequest| {
+                    tables.host(Platform::current(), r)
+                }),
+                ipc::TABLE_JOIN => table_command(args, |r: TableJoinRequest| tables.join(r)),
+                ipc::TABLE_RESUME => table_command(args, |r: TableResumeRequest| {
+                    tables.resume(Platform::current(), &r)
+                }),
+                ipc::TABLE_SAVED => answer(tables.saved()),
+                ipc::TABLE_SETTINGS_GET => answer(tables.settings()),
+                ipc::TABLE_SETTINGS_SET => {
+                    table_command(args, |r: TableSettings| tables.set_settings(&r))
+                }
+                ipc::TABLE_ACT => {
+                    answer(request::<TableActRequest>(args).map(|r| tables.act(r.action)))
+                }
                 ipc::TABLE_CURRENT => answer::<_, ()>(Ok(tables.current())),
                 ipc::TABLE_LEAVE => {
                     tables.leave();
@@ -234,6 +275,15 @@ fn answer<T: serde::Serialize, E: serde::Serialize>(result: Result<T, E>) -> Val
         Ok(v) => json!({ "ok": v }),
         Err(e) => json!({ "err": e }),
     }
+}
+
+fn table_command<R, T, E>(args: Value, handle: impl FnOnce(R) -> Result<T, E>) -> Value
+where
+    R: for<'de> Deserialize<'de>,
+    T: serde::Serialize,
+    E: serde::Serialize,
+{
+    answer(request(args).and_then(|request| handle(request).map_err(|error| json!(error))))
 }
 
 /// Runs `command` as `beryl_app` would: `{"ok": result}` or `{"err": error}`.

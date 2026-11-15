@@ -72,6 +72,24 @@ export type TableDeck = { name: string, main: Array<[string, number]>, side: Arr
 
 export type TableSoloRequest = { deck: TableDeck, };
 
+export type TableLink = "iroh" | "local" | "memory";
+
+export type TableHostSettings = { name: string, startingLife?: number, startingHandSize?: number, };
+
+export type TableHostRequest = { link: TableLink, settings: TableHostSettings, };
+
+export type TableHostReply = { invite: string, };
+
+export type TableJoinRequest = { invite: string, name: string, };
+
+export type TableResumeRequest = { id: string, };
+
+export type SavedTable = { id: string, host: string, guest: string | null, };
+
+export type TableSettings = { relay: string | null, };
+
+export type TableConnectionError = { reason: string, };
+
 export type TableKeysRequest = { on: boolean, };
 
 export type TableActRequest = { action: TableActionOf<TableObjectRef>, };
@@ -1286,6 +1304,12 @@ export type Commands = {
   resume_game: { args: Record<string, never>; result: SessionId | null; error: never };
   stage_timings: { args: Record<string, never>; result: OwnTimings; error: never };
   table_solo: { args: { request: TableSoloRequest }; result: SessionId; error: TableRefused };
+  table_host: { args: { request: TableHostRequest }; result: TableHostReply; error: TableConnectionError };
+  table_join: { args: { request: TableJoinRequest }; result: SessionId; error: TableConnectionError };
+  table_resume: { args: { request: TableResumeRequest }; result: TableHostReply; error: TableConnectionError };
+  table_saved: { args: Record<string, never>; result: Array<SavedTable>; error: TableConnectionError };
+  table_settings_get: { args: Record<string, never>; result: TableSettings; error: TableConnectionError };
+  table_settings_set: { args: { request: TableSettings }; result: null; error: TableConnectionError };
   table_act: { args: { request: TableActRequest }; result: TableActReply; error: never };
   table_current: { args: Record<string, never>; result: GameUpdate | null; error: never };
   table_leave: { args: Record<string, never>; result: null; error: never };
@@ -1310,4 +1334,6 @@ export type Commands = {
 export type Events = {
   "game-update": GameUpdate;
   "table-quit-asked": null;
+  "table-link": LinkState | ({ kind: "error" } & TableConnectionError);
+  "table-lobby": unknown;
 };

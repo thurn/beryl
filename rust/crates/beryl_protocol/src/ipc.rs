@@ -13,6 +13,8 @@ use crate::GameUpdate;
 use crate::protocol::{CandidateIndex, DecisionId, SessionId, StopsSetting, TableAction};
 
 pub mod decks;
+mod table;
+pub use table::*;
 
 pub const APP_INFO: &str = "app_info";
 /// The UI calls this once it has rendered.

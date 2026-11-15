@@ -2,16 +2,13 @@
 // inside the app, or a fixture that replays a recorded stream of messages so screens run in a
 // plain browser (`just ui-shots`). Every command, its arguments, result and error, and every
 // event are generated from rust/crates/beryl_session (`Commands`, `Events`).
-import { invoke } from "@tauri-apps/api/core";
 import { onBackButtonPress } from "@tauri-apps/api/app";
-import { listen } from "@tauri-apps/api/event";
 import type {
   BugReport,
   CandidateIndex,
   CardRecords,
   CardSearchRequest,
   Click,
-  Commands,
   DecisionId,
   DeckImportRequest,
   Events,
@@ -22,50 +19,37 @@ import type {
   StopsSetting,
   TableAction,
   TableDeck,
+  TableHostSettings,
+  TableLink,
+  TableSettings,
 } from "./generated/protocol";
 import { cardRecords, strings } from "./cardRecords";
 import { brief, forwardTo, note, noteUpdate } from "./diagnostics";
 import { whenThawed } from "./freeze";
 import { apply, tableOf, type Table } from "./stage/table";
 
+import {
+  type Args,
+  CommandError,
+  type Command,
+  isRelayedGame,
+  liveBase,
+  liveTransport,
+  type Result,
+  tauriTransport,
+  type Transport,
+  type Unlisten,
+} from "./ipc/transport";
+
+export { CommandError, isRelayedGame, liveTransport } from "./ipc/transport";
+export type {
+  LiveEntry,
+  RelayedEvent,
+  Transport,
+  Unlisten,
+} from "./ipc/transport";
+
 export type * from "./generated/protocol";
-
-export type Unlisten = () => void;
-
-type Command = keyof Commands;
-type Args<C extends Command> = Commands[C]["args"];
-type Result<C extends Command> = Commands[C]["result"];
-
-/** A command's rejection: the typed error the Rust command returned. */
-export class CommandError<C extends Command = Command> extends Error {
-  constructor(
-    readonly command: C,
-    readonly error: Commands[C]["error"],
-  ) {
-    super(`${command}: ${JSON.stringify(error)}`);
-  }
-}
-
-export interface Transport {
-  invoke<C extends Command>(command: C, args: Args<C>): Promise<Result<C>>;
-  /** Calls `handler` with each event; `past` says it happened before the listener started
-   * listening (a fixture's recorded history), so the UI shows it at once rather than paced. */
-  listen<E extends keyof Events>(
-    event: E,
-    handler: (payload: Events[E], past: boolean) => void,
-  ): Promise<Unlisten>;
-}
-
-const tauriTransport: Transport = {
-  invoke: <C extends Command>(command: C, args: Args<C>) =>
-    invoke<Result<C>>(command, args).catch((error: Commands[C]["error"]) => {
-      throw new CommandError(command, error);
-    }),
-  listen: <E extends keyof Events>(
-    event: E,
-    handler: (payload: Events[E], past: boolean) => void,
-  ) => listen<Events[E]>(event, (e) => handler(e.payload, false)),
-};
 
 /** A command the fixture transport received, for tests (`window.berylFixture`). */
 export interface FixtureCall {
@@ -320,106 +304,6 @@ const playsOn = (e: { event: keyof Events; payload: unknown }) => {
   return kind === "thinking" || kind === "playing";
 };
 
-/** One message a live transport saw, for a reviewer's probes (`window.berylLive`): when it
- * happened on the page's clock, and what it was. */
-export type LiveEntry =
-  | { at: number; kind: "invoke"; command: Command; args: unknown }
-  | {
-      at: number;
-      kind: "result";
-      command: Command;
-      ok: boolean;
-      value: unknown;
-    }
-  | { at: number; kind: "event"; event: keyof Events; payload: unknown };
-
-/** A message a spec page (screens/Testing.tsx) hands the frame playing one of its moments: an
- * event from the page's one stream, which carries every frame's. */
-export interface RelayedEvent {
-  kind: "beryl-relay";
-  event: keyof Events;
-  payload: unknown;
-}
-
-/** The app's commands and events from `beryl_cli serve` at `base`, so a plain browser plays
- * live games with the app's real timing (`just ui-live`). Every message is logged in `log`.
- * A `relayed` page hears its events from the page framing it rather than a stream of its own
- * (`RelayedEvent`). */
-export function liveTransport(
-  base: string,
-  relayed = false,
-): Transport & { log: LiveEntry[] } {
-  const log: LiveEntry[] = [];
-  const events = relayed ? undefined : new EventSource(`${base}/events`);
-  // The server subscribes the stream before it answers: once open, no view is missed. The
-  // framing page's stream is open before it frames anything.
-  const opened = new Promise<void>((resolve) => {
-    if (!events || events.readyState === EventSource.OPEN) resolve();
-    else events.addEventListener("open", () => resolve(), { once: true });
-  });
-  return {
-    log,
-    async invoke<C extends Command>(command: C, args: Args<C>) {
-      log.push({ at: performance.now(), kind: "invoke", command, args });
-      // A text body keeps the request simple: no CORS preflight.
-      const response = await fetch(`${base}/invoke/${command}`, {
-        method: "POST",
-        body: JSON.stringify(args),
-      });
-      const answer = (await response.json()) as
-        { ok: Result<C> } | { err: Commands[C]["error"] };
-      const ok = "ok" in answer;
-      log.push({
-        at: performance.now(),
-        kind: "result",
-        command,
-        ok,
-        value: ok ? answer.ok : answer.err,
-      });
-      if (!ok) {
-        throw new CommandError(command, answer.err);
-      }
-      return answer.ok;
-    },
-    async listen<E extends keyof Events>(
-      event: E,
-      handler: (payload: Events[E], past: boolean) => void,
-    ) {
-      // Live events are never past: each happens as the page sees it.
-      const hear = (payload: Events[E]) => {
-        log.push({ at: performance.now(), kind: "event", event, payload });
-        handler(payload, false);
-      };
-      if (!events) {
-        const relay = (e: MessageEvent<RelayedEvent>) => {
-          if (e.origin !== window.location.origin) return;
-          if (e.data?.kind === "beryl-relay" && e.data.event === event) {
-            hear(e.data.payload as Events[E]);
-          }
-        };
-        window.addEventListener("message", relay);
-        return () => window.removeEventListener("message", relay);
-      }
-      const stream = events;
-      const listener = (e: MessageEvent<string>) =>
-        hear(JSON.parse(e.data) as Events[E]);
-      stream.addEventListener(event, listener);
-      // A command sent once listening (`current_game`) sees no view slip past.
-      await opened;
-      return () => stream.removeEventListener(event, listener);
-    },
-  };
-}
-
-/** The `beryl_cli serve` base URL a page was opened with (`?live=<url>`), if any. */
-const liveBase = () =>
-  new URLSearchParams(window.location.search).get("live") ?? undefined;
-
-/** Whether this game is a spec frame that receives updates from its parent. */
-export const isRelayedGame = () =>
-  window.parent !== window &&
-  new URLSearchParams(window.location.search).has("relay");
-
 /** What a plain browser gets without `?fixture=`: enough for the shell to render. */
 const browserFixture: Fixture = {
   messages: [
@@ -453,6 +337,13 @@ const logged = (command: Command, value: unknown): unknown => {
       description: (value as { request?: BugReport }).request?.description,
     };
   }
+  // Invite codes contain the table secret. Keep them out of bug reports.
+  if (
+    command === "table_host" ||
+    command === "table_join" ||
+    command === "table_resume"
+  )
+    return undefined;
   if (command === "card_records") {
     const { request, cards, tokens } = value as Partial<
       Args<"card_records"> & CardRecords
@@ -551,7 +442,12 @@ async function rawTransport(): Promise<Transport> {
   }
   const live = liveBase();
   if (live) {
-    const transport = liveTransport(live, isRelayedGame());
+    const session = new URLSearchParams(window.location.search).get("session");
+    const transport = liveTransport(
+      live,
+      isRelayedGame(),
+      session ?? undefined,
+    );
     (window as { berylLive?: unknown }).berylLive = transport;
     return transport;
   }
@@ -677,6 +573,30 @@ export const resumeGame = () => call("resume_game", {});
 
 export const tableSolo = (deck: TableDeck) =>
   call("table_solo", { request: { deck } });
+
+export const tableHost = (link: TableLink, settings: TableHostSettings) =>
+  call("table_host", { request: { link, settings } });
+
+export const tableJoin = (invite: string, name: string) =>
+  call("table_join", { request: { invite, name } });
+
+export const tableResume = (id: string) =>
+  call("table_resume", { request: { id } });
+
+export const tableSaved = () => call("table_saved", {});
+
+export const tableSettingsGet = () => call("table_settings_get", {});
+
+export const tableSettingsSet = (settings: TableSettings) =>
+  call("table_settings_set", { request: settings });
+
+export const onTableLink = async (
+  handler: (payload: Events["table-link"]) => void,
+) => (await transport()).listen("table-link", handler);
+
+export const onTableLobby = async (
+  handler: (payload: Events["table-lobby"]) => void,
+) => (await transport()).listen("table-lobby", handler);
 
 export const tableAct = (action: TableAction) =>
   call("table_act", { request: { action } });
