@@ -316,7 +316,15 @@ for (const file of files) {
     const [, name, seat] = match;
     const read = JSON.parse(await readFile(join(dir, file), "utf8"));
     const messages = Array.isArray(read) ? read : read.messages;
-    const out = timeline(name.replaceAll("__", "/"), seat, messages);
+    // A recording the stage cannot time (see `timeline`) prints no lines, and the parity check
+    // counts each of its steps as one the web interface lacks, so one recording never stops
+    // the rest.
+    let out = [];
+    try {
+        out = timeline(name.replaceAll("__", "/"), seat, messages);
+    } catch (error) {
+        console.error(`${name}/${seat}: ${error.message}`);
+    }
     process.stdout.write(
         out.map((line) => JSON.stringify(line) + "\n").join(""),
     );

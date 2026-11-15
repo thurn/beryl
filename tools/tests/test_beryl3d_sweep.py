@@ -89,7 +89,10 @@ def test_the_sweep_runs_every_step_of_the_lane_each_as_a_lane_of_its_own() -> No
 
 def test_the_quick_part_holds_the_build_and_the_lane_and_the_slow_part_the_vm() -> None:
     quick = [s.name for s in sweep.chosen(None, sweep.MAC, sweep.QUICK)]
-    assert quick == [s.name for s in lane.steps()] + ["smoke"]
+    assert quick == [s.name for s in lane.steps()] + [
+        "smoke",
+        "timeline-parity-all",
+    ]
     assert set(sweep.BUILDS) <= set(quick)
     assert [s.name for s in sweep.chosen(None, sweep.MAC, sweep.SLOW)] == [
         "gpu",

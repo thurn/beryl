@@ -38,7 +38,10 @@ path. Its `[workspace.lints]` table must equal the main one's, which the
 
 `just b3d` lists every command, and `just b3d <command> --help` explains one.
 `just b3d lane` runs the checks of the `beryl3d` lane that the fast check runs
-for a change here.
+for a change here. `just b3d timeline-parity [--fixtures] [prefix]` compares the
+web interface's and Beryl 3D's timelines of the recordings (see
+`data/beryl3d/timeline-parity.json`, below). The lane runs it with `--fixtures`
+and the sweep without.
 
 Each crate's integration tests are one binary, `tests/all/main.rs` with one
 module per file, because every test binary links the crate and its dependencies
@@ -117,6 +120,17 @@ project, and selects the main lanes.
   a 1920 by 1080 frame. `just b3d camera-fit` solves the desktop camera's pitch
   and field of view from them, and `layout.desktop.camera` in `space.json` holds
   the result, which a tools test keeps equal to the fit.
+
+- `data/beryl3d/timeline-parity.json`: `{"recordings": {"<name>/<seat>": n}}`,
+  the number of steps of each recording and seat whose start or end, verb, case,
+  effects or place differ between the web interface's timeline
+  (`ui/scripts/timeline.mjs`) and `just b3d timeline`, or that only one of them
+  has. The `timeline-parity` check fails for a recording that differs by more
+  steps than its entry, or is not listed. A count may only go down:
+  `just b3d timeline-parity --update` lowers entries and refuses to raise or add
+  one unless `--raise` is given, and a commit that does says why in its body. A
+  recording the web script cannot time (it needs `stage_timings` for a step the
+  stage makes itself) prints no lines there and counts every step.
 
 - `data/beryl3d/gates.json`: the audit, frame, tier, material and test gates.
   Each number under `audit` becomes an `f32` constant in `beryl_scene`'s

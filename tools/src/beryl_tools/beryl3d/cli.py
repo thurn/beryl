@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .. import system, warm
-from . import app, camera, gate, lane, paths, phone, sweep, vm
+from . import app, camera, gate, lane, paths, phone, sweep, timeline, vm
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
 USAGE = 2
@@ -259,6 +259,22 @@ COMMANDS: tuple[Command, ...] = (
     render_command(
         "film",
         "draws up to 24 frames of a recording as a grid in one PNG, a line of text per frame",
+    ),
+    Command(
+        "timeline-parity",
+        "holds the web interface's and Beryl 3D's timelines of every recording to each other",
+        (
+            (
+                "just b3d timeline-parity verbs-zones",
+                "the recordings named verbs-zones",
+            ),
+            (
+                "just b3d timeline-parity --fixtures",
+                "the recorded fixtures only, as the lane does",
+            ),
+        ),
+        lambda args: timeline.run_parity(args),
+        timeline.parity_arguments,
     ),
     Command(
         "lane",

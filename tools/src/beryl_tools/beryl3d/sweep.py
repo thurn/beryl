@@ -119,6 +119,9 @@ OWN: tuple[SweepStep, ...] = (
     # The GPU's work: shader cost, and the fragments shaded counted in the beryl3d-bench
     # machine. Only this Mac's machine has been shown to count fragments repeatably.
     SweepStep("gpu", (*BY, "b3d", "gate", "--gpu"), (MAC,), SLOW),
+    # Every recording's timeline against the web interface's, where the lane's step compares
+    # only the recorded fixtures.
+    SweepStep("timeline-parity-all", (*BY, "b3d", "timeline-parity")),
     # Instructions per frame under Callgrind in `beryl3d-bench`, an arm64 Linux machine that
     # only Apple silicon runs (counts.py).
     SweepStep("frame-counts", (*BY, "b3d", "gate", "--counts"), (MAC,), SLOW),

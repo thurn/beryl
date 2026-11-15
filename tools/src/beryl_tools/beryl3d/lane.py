@@ -24,6 +24,9 @@ def steps() -> list[Step]:
         Step("scene-purity", [*PURITY, "scene-purity"], paths.REPO),
         Step("lints-match", [*PURITY, "lints-match"], paths.REPO),
         Step("data-names", [*PURITY, "data-names"], paths.REPO),
+        # Beryl 3D's own timeline of every recording takes minutes, so the lane compares the
+        # recorded fixtures only and the sweep compares everything (sweep.py).
+        Step("timeline-parity", [*cargo, "timeline-parity", "--fixtures"], paths.REPO),
     ]
 
 
