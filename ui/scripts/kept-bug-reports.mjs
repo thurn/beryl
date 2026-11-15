@@ -57,6 +57,7 @@ await check(
                         profile: null,
                     },
                     list_agents: [],
+                    stage_timings: { entries: [] },
                     report_bug: { id: "test" },
                 };
                 return Response.json({ ok: responses[command] ?? null });

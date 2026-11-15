@@ -17,10 +17,13 @@ installDiagnostics();
 
 // The stage times the steps it makes itself while a prompt is open (its marks, arrows and
 // held cards) by a table the session gives once, which it has before the first view plays.
-// Without it they are over as they begin.
-const timed = stageTimings().then(ownTimings, (error: unknown) => {
-  note("warn", "stage", "no timing for the stage's own steps", String(error));
-});
+// Without it they are over as they begin. A missing or malformed table still renders the app:
+// the catch follows `ownTimings`, so a table it cannot read is caught too.
+const timed = stageTimings()
+  .then(ownTimings)
+  .catch((error: unknown) => {
+    note("warn", "stage", "no timing for the stage's own steps", String(error));
+  });
 
 function render() {
   void installAudio();
