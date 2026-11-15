@@ -48,3 +48,6 @@ ratio = 1.25
 
 [family.layers]
 ratio = 1.25
+
+[family.replacement]
+ratio = 1.25

@@ -70,6 +70,11 @@ fn family_corpora_never_change() {
                 vec![2, 5, 8, 3, 6, 9, 2, 5, 8, 10, 13, 16],
                 15_055_249_918_153_319_555
             ),
+            (
+                "replacement",
+                vec![20, 15, 20, 4, 13, 16, 19, 14, 17, 20, 15, 18],
+                3_337_079_432_780_671_536
+            ),
         ]
     );
 }
@@ -91,7 +96,8 @@ fn families_pair_their_steps() {
                     paired: 3_695,
                     skipped: 0,
                     capacity_stalls: 0,
-                    layer_recomputes: 1_439
+                    layer_recomputes: 1_439,
+                    transactions: 0
                 }
             ),
             (
@@ -100,7 +106,8 @@ fn families_pair_their_steps() {
                     paired: 3_619,
                     skipped: 16,
                     capacity_stalls: 0,
-                    layer_recomputes: 825
+                    layer_recomputes: 825,
+                    transactions: 0
                 }
             ),
             (
@@ -109,7 +116,18 @@ fn families_pair_their_steps() {
                     paired: 1_700,
                     skipped: 0,
                     capacity_stalls: 0,
-                    layer_recomputes: 880
+                    layer_recomputes: 880,
+                    transactions: 0
+                }
+            ),
+            (
+                "replacement",
+                Pairing {
+                    paired: 2_775,
+                    skipped: 0,
+                    capacity_stalls: 0,
+                    layer_recomputes: 827,
+                    transactions: 7_700
                 }
             ),
         ]

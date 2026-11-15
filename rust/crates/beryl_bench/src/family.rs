@@ -82,6 +82,18 @@ pub const FAMILIES: &[Family] = &[
             (2, names::FOREST, names::ISLAND),
         ],
     },
+    // The replacement pipeline's cards (CR 614, 616): Rest in Peace (graveyard to exile),
+    // Chains of Mephistopheles (draws, with a choice of order against other replacements),
+    // Containment Priest (creatures that were not cast) and Furnace of Rath (damage doubled).
+    Family {
+        name: "replacement",
+        swaps: &[
+            (1, names::REST_IN_PEACE, names::REPRIEVE),
+            (1, names::CHAINS_OF_MEPHISTOPHELES, names::OUST),
+            (1, names::CONTAINMENT_PRIEST, names::PORTABLE_HOLE),
+            (1, names::FURNACE_OF_RATH, names::NO_MORE_LIES),
+        ],
+    },
 ];
 
 /// The family called `name`.
@@ -352,6 +364,9 @@ pub struct Pairing {
     pub capacity_stalls: u64,
     /// `layer_recomputes` the present side's steps made, from the rollout's own counts.
     pub layer_recomputes: u64,
+    /// `state_copies` the present side's steps made: the engine's whole-state copies for
+    /// transactional replay, so the advances that ran as transactions.
+    pub transactions: u64,
 }
 
 /// One transition of the rollout, the one the present side counts: `c` applied to `s`, then
@@ -422,6 +437,7 @@ pub fn roll_paired(w: &FamilyWorkload) -> Pairing {
         let mut s = *start;
         let mut step = next(&mut s, t, &mut x, &mut a);
         let mut before = x.counts.layer_recomputes;
+        let mut copies = x.counts.state_copies;
         while let Step::Decide(d) = step {
             let c = w.policy.choose(t, Observation::new(&s, d.player), &d);
             let paired = control(&s, t, &w.in_table)
@@ -435,6 +451,8 @@ pub fn roll_paired(w: &FamilyWorkload) -> Pairing {
             }
             pairing.layer_recomputes += x.counts.layer_recomputes - before;
             before = x.counts.layer_recomputes;
+            pairing.transactions += x.counts.state_copies - copies;
+            copies = x.counts.state_copies;
         }
         if matches!(step, Step::Over(Outcome::Stalled(StallReason::Capacity))) {
             pairing.capacity_stalls += 1;
