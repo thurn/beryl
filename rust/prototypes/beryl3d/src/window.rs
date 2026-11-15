@@ -42,6 +42,10 @@ struct Shown {
 
 struct State {
     window: Arc<Window>,
+    /// The macOS display link that paces frames at the display's highest rate, if one was
+    /// made. Without it, frames are requested directly and macOS chooses their rate.
+    #[cfg(target_os = "macos")]
+    display_link: Option<crate::display_link::DisplayLink>,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     renderer: Renderer,
@@ -325,9 +329,26 @@ impl ApplicationHandler<()> for App {
             "display: up to {refresh_hz:.0} Hz; faces: {} scans, {} placeholders",
             self.setup.faces.scans, self.setup.faces.missing
         );
+        #[cfg(target_os = "macos")]
+        let display_link = if std::env::var_os("BERYL3D_NO_DISPLAY_LINK").is_some() {
+            None
+        } else {
+            crate::display_link::DisplayLink::new(&window, self.proxy.clone(), refresh_hz as f32)
+        };
+        #[cfg(target_os = "macos")]
+        println!(
+            "display link: {}",
+            if display_link.is_some() {
+                "on (set BERYL3D_NO_DISPLAY_LINK=1 to compare)"
+            } else {
+                "off"
+            }
+        );
         println!("keys: 1 live game, 2 stress-255, 3 stress-1024, Space pause, S statistics");
         self.state = Some(State {
             window,
+            #[cfg(target_os = "macos")]
+            display_link,
             surface,
             config,
             renderer,
@@ -437,12 +458,27 @@ impl ApplicationHandler<()> for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        let Some(state) = &self.state else {
+        let Some(state) = &mut self.state else {
             return;
         };
-        match state.wake() {
+        let wake = state.wake();
+        // With a display link, its ticks request the frames while the core wants them, and it
+        // is paused otherwise. Without one, each frame asks for the next.
+        #[cfg(target_os = "macos")]
+        let paced = match &mut state.display_link {
+            Some(link) => {
+                link.set_running(wake == Wake::Now);
+                true
+            }
+            None => false,
+        };
+        #[cfg(not(target_os = "macos"))]
+        let paced = false;
+        match wake {
             Wake::Now => {
-                state.window.request_redraw();
+                if !paced {
+                    state.window.request_redraw();
+                }
                 event_loop.set_control_flow(ControlFlow::Wait);
             }
             Wake::At(at) => {

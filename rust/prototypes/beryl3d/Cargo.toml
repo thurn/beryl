@@ -33,6 +33,15 @@ wgpu = "30.0.2"
 # The desktop window and its events.
 winit = "0.30.13"
 
+# The display link that asks macOS for the display's highest refresh rate (src/display_link.rs).
+# winit and wgpu offer none, and without one macOS paced the window as low as 15 Hz.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSResponder", "NSView", "objc2-quartz-core"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSObject", "NSRunLoop"] }
+objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["std", "CADisplayLink", "CAFrameRateRange"] }
+raw-window-handle = "0.6"
+
 [profile.release]
 strip = true
 codegen-units = 1

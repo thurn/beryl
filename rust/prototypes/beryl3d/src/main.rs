@@ -8,6 +8,8 @@
 //!   with `--sweep`, after the pointer has crossed the viewer's hand quickly.
 
 mod core;
+#[cfg(target_os = "macos")]
+mod display_link;
 mod faces;
 mod game;
 mod headless;
