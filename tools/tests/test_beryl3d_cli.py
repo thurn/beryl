@@ -104,8 +104,7 @@ def test_picture_commands_hand_every_argument_to_the_b3d_render_program(
     monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
     assert cli.main(["png", "verbs-zones", "--at", "1500ms", "--tree"]) == 0
     build, run = ran
-    assert build[:5] == ["build", "-q", "-p", "beryl_3d", "--features"]
-    assert build[-2:] == ["--bin", "b3d-render"]
+    assert build == ["build", "-q", "-p", "beryl_pictures", "--bin", "b3d-render"]
     assert run == [
         "/linked/b3d-render",
         "png",

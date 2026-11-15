@@ -5,6 +5,7 @@
 
 use beryl_scene::faces::FaceList;
 use beryl_scene::input::FaceId;
+#[cfg(feature = "decklists")]
 use beryl_session::card_records::{CardRecordsRequest, card_records, record};
 
 pub use beryl_scene::faces::CARD_BACK;
@@ -40,6 +41,7 @@ pub struct MatchFaces {
 /// The faces of `decklists`, each a list of `(count, card name)`, and of every token their
 /// cards make, listed as the client lists them from the same cards' records. A name the card
 /// store does not know has no face.
+#[cfg(feature = "decklists")]
 #[must_use]
 pub fn decklist_faces(decklists: &[&[(u8, &str)]]) -> FaceList {
     let mut names: Vec<String> = Vec::new();
@@ -76,6 +78,7 @@ impl MatchFaces {
     }
 
     /// The faces of `decklists` and their tokens ([`decklist_faces`]).
+    #[cfg(feature = "decklists")]
     #[must_use]
     pub fn list(decklists: &[&[(u8, &str)]]) -> Self {
         Self::new(&decklist_faces(decklists))

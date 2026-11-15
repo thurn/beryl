@@ -26,6 +26,8 @@ path. Its `[workspace.lints]` table must equal the main one's, which the
   plays the engine. It builds the recordings pack `beryl_inspect` reads when it
   is missing; `just b3d record` runs it, and `just b3d` does when `b3d` or
   `b3d-render` exits with 3.
+- `beryl_pictures`: `b3d-render`, the picture commands `png` and `film`. Like
+  `beryl_inspect` it links no engine or cards, so it relinks fast after an edit.
 - `beryl_3d`: the client that ties `beryl_scene`, `beryl_render`,
   `beryl_assets`, `beryl_host` and `beryl_inspect` together. On phones it is a
   library whose C functions (`src/ffi`, `include/beryl3d.h`) a small Swift app
@@ -62,9 +64,9 @@ through the client with no window or GPU (the `b3d` skill has the details):
   with the card's name where a scan is missing; neither command downloads one.
 
 The text commands are the `b3d` program in `beryl_inspect` (`src/cli`), and the
-pictures are `b3d-render` in `beryl_3d` (`src/pictures`, with `Headless` in
-`beryl_host`), built in debug. A wrong name, moment or locator exits with 2 and
-lists what would work.
+pictures are `b3d-render` in `beryl_pictures` (with `Headless` in `beryl_host`),
+built in debug. A wrong name, moment or locator exits with 2 and lists what
+would work.
 
 ## Phones
 

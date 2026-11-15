@@ -56,6 +56,31 @@ opt-level = 2
 [profile.dev.package.beryl_inspect]
 opt-level = 2
 
+# Every dependency at opt-level 1. None of them is rebuilt after an edit to this workspace's
+# crates, and optimized they make `b3d-render` 28 MB instead of 74, which links faster, passes
+# macOS's check of a new executable faster and draws its picture in 0.4 CPU-seconds instead of
+# 0.7. A cold build of its dependencies took 2 minutes 18 seconds at load 70, paid once per
+# change to a dependency (docs/beryl-3d.md, "Edit-to-output time").
+[profile.dev.package."*"]
+opt-level = 1
+# The face encoders and the scaler they use, at opt-level 3. `just b3d png` compresses a
+# placeholder on every run for each face whose scan is missing, since placeholders are never
+# cached: unoptimized, 11 placeholders took 1.4 s of the program's 2.6 CPU-seconds.
+[profile.dev.package.ctt]
+opt-level = 3
+[profile.dev.package.ctt-astcenc]
+opt-level = 3
+[profile.dev.package.ctt-bc7f]
+opt-level = 3
+[profile.dev.package.ctt-etcpak]
+opt-level = 3
+[profile.dev.package.fast_image_resize]
+opt-level = 3
+[profile.dev.package.fearless_simd]
+opt-level = 3
+[profile.dev.package.half]
+opt-level = 3
+
 [profile.release]
 debug = "line-tables-only"
 codegen-units = 1

@@ -11,11 +11,11 @@ use beryl_assets::glyphs::glyphs_rasterized_on_this_thread;
 use beryl_assets::{MatchFaces, faces_built_on_this_thread};
 use beryl_host::{Headless, Scans};
 use beryl_inspect::pages;
+use beryl_protocol::protocol::Side;
 use beryl_scene::agent::{Layout, uncovered};
 use beryl_scene::driver::Moment;
 use beryl_scene::frame::StateBits;
 use beryl_scene::input::Size;
-use beryl_session::protocol::Side;
 
 const WINDOW: Size = Size {
     width: 1600.0,
@@ -96,7 +96,8 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("beryl_3d-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("beryl_pictures-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a scratch directory");
         Self(dir)

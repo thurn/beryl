@@ -22,7 +22,9 @@ use beryl_scene::input::AssetReady;
 
 pub use cache::CacheKey;
 pub use encode::{ENCODER_VERSION, EncodeError, Format, Layer, decode, dimensions, encode};
-pub use faces::{CARD_BACK, MatchFace, MatchFaces, decklist_faces};
+#[cfg(feature = "decklists")]
+pub use faces::decklist_faces;
+pub use faces::{CARD_BACK, MatchFace, MatchFaces};
 pub use placeholder::placeholder;
 pub use prepare::{
     Config, FULL_LAYERS, Full, Preparer, Source, default_workers, faces_built_on_this_thread,

@@ -298,7 +298,9 @@ cache that the Tauri shell also uses.
   crate that names a `wgpu` type.
 - **`beryl_assets`**, everything prepared off the drawing thread: decoding the
   card images that `beryl_art` downloads, composing card faces, compressing
-  textures and rasterizing glyphs.
+  textures and rasterizing glyphs. Listing a match's faces from its decklists
+  needs the card records of `beryl_session`, so that function is behind the
+  `decklists` feature, which `beryl_pictures` leaves off.
 - **`beryl_record`**, the `record` program, which plays the engine through
   `beryl_cli`'s fixture and spec recorders to build the file of recordings when
   it is missing. It is the only crate of the workspace that plays the engine
@@ -308,8 +310,11 @@ cache that the Tauri shell also uses.
   the commands of `just b3d` that print text (see
   [The agent interface](#the-agent-interface)). It depends on the client core
   and `beryl_protocol`, and on no GPU, engine or card crate, so it rebuilds,
-  links and starts quickly after an edit to the client core. The commands that
-  draw pictures are a second program in `beryl_3d`, which has the renderer.
+  links and starts quickly after an edit to the client core.
+- **`beryl_pictures`**, the commands of `just b3d` that draw pictures, `png` and
+  `film`, as the program `b3d-render`. It depends on `beryl_inspect`, the
+  renderer and the windowless host, and like `beryl_inspect` on no engine or
+  card crate.
 - **`beryl_scene`**, which this document calls **the client core**. It holds the
   3D table, the element tree, animation, layout, hit testing and the interface
   checks. It depends on `taffy`, `parley` and `beryl_protocol` (plain data:
@@ -1774,7 +1779,7 @@ so `--from` and `--to` at the same moment show what an action changes.
 
 `just b3d` is two programs behind one command. The commands that print text are
 `beryl_inspect`'s program, `b3d`, which contains no GPU code. `png` and `film`
-are a second program, `b3d-render`, in `beryl_3d`, which has the renderer.
+are a second program, `b3d-render`, in `beryl_pictures`, which has the renderer.
 `just b3d` runs whichever the command needs, and both read their options with
 the same code.
 
@@ -1840,8 +1845,8 @@ rebuilding `beryl_scene`, then `beryl_inspect`, which depends on it, and linking
 and later edits in the same loops took 3 to 4 s.
 
 `just b3d png verbs-zones --at 1500ms` has a target of 6 seconds after the same
-one-line edit. It was measured on 2026-11-15 with `b3d-render` (`beryl_3d`, 134
-MB) five times at the load shown, and is not met:
+one-line edit. It was first measured on 2026-11-15 with `b3d-render` in
+`beryl_3d`, a 134 MB executable that linked the engine through `beryl_session`:
 
 | Run | Time (s) | Load (1 min) |
 | --: | -------: | -----------: |
@@ -1851,15 +1856,55 @@ MB) five times at the load shown, and is not met:
 |   4 |     34.2 |           25 |
 |   5 |     21.6 |           22 |
 
-The median is 32 s. The build after the edit takes about 13 s (`beryl_scene`,
-then `beryl_inspect`, `beryl_render`, `beryl_host` and `beryl_3d`, which all
-depend on it), and the rest is macOS checking the newly linked executable before
-its first run, which took 28 s at load 20 to 50 and 1.4 s on the next run. The
-program is larger than `b3d` because it links wgpu, and it still links the
-engine through `beryl_session`, which `beryl_3d` plays games with. `just b3d`
-now runs it as it runs `b3d`, from the linker's own file, so a command after a
-build that changed nothing no longer pays the check; the edit case was not
-measured again.
+The median was 32 s: about 13 s of build after the edit, and macOS checking the
+newly linked executable before its first run, which took 28 s at load 20 to 50.
+Three changes followed, each measured by the same method on the same day:
+
+- `b3d-render` moved into a crate of its own, `beryl_pictures`, a program with
+  no library that depends on `beryl_inspect`, the renderer and the windowless
+  host. `beryl_assets` reached `beryl_session` for one function,
+  `decklist_faces`, which lists a match's faces from decklists through the card
+  records; it is now behind the `decklists` feature, which only `beryl_assets`'
+  own tests turn on. The executable is 74 MB.
+- That left 2.6 CPU-seconds in the program itself, against 0.06 for `b3d tree`.
+  1.2 to 1.6 s of it was the faces: a face whose scan is missing from the scan
+  cache gets a placeholder, which is drawn and compressed on every run, since
+  placeholders are never cached. 11 of the recording's 23 faces had no scan, and
+  the encoder (`ctt` and the crates it uses) was unoptimized. The encoder and
+  its scaler now build at opt-level 3, and the program takes 0.67 CPU-seconds.
+- Every dependency builds at opt-level 1 in the dev profile. None is rebuilt
+  after an edit to Beryl 3D's crates, and the executable shrinks to 28 MB, which
+  links faster, passes macOS's check faster and runs in 0.37 CPU-seconds. A cold
+  build of `b3d-render`'s dependencies took 2 minutes 18 seconds (584
+  CPU-seconds) at load 70, paid once per change to a dependency or the profile.
+
+| Case, one-line edit each run | Median | Runs (s)                                |  Load |
+| ---------------------------- | -----: | --------------------------------------- | ----: |
+| Before                       |   32 s | 21.2 32.0 46.6 34.2 21.6                | 22-37 |
+| Own crate, no engine         | 17.1 s | 16.7 31.1 21.8 16.1 17.1                | 74-88 |
+| And the encoder optimized    |  5.5 s | 10.8 59.2 5.5 4.3 4.3                   | 56-68 |
+| The same, again              |  7.5 s | 11.0 7.5 10.1 7.4 5.9                   | 42-45 |
+| And dependencies at opt 1    |  6.4 s | 6.6 7.2 9.4 6.1 6.2 6.1 5.1 6.1 7.9 7.6 | 52-68 |
+| The same, later              | 12.4 s | 18.0 12.4 10.1 9.0 12.7                 | 22-25 |
+
+The target is met only some of the time. The same change measured an hour apart
+gave medians of 6.4 s and 12.4 s, at a lower load the second time: every crate
+compiled about twice as slowly, so the load average does not capture all of the
+machine's state. With no edit the command takes 1.1 to 1.3 s.
+
+What remains after an edit, from `cargo build --timings` and separate runs:
+
+- The build, 4 to 11 s. `beryl_scene` takes 1.3 to 4 s at opt-level 2 (kept for
+  the interface tests' speed). Then `beryl_assets` and `beryl_inspect`,
+  `beryl_render`, `beryl_host` and `beryl_pictures` rebuild in series, because
+  each depends on the one before, at 0.5 to 2.5 s each. The link takes 0.5 to
+  1.5 s of `beryl_pictures`' step.
+- The first run, 1.5 to 7 s: about 1 s more than a second run, which is macOS's
+  check of the new 28 MB executable, and 0.8 to 1.4 s for the program itself.
+
+A faster loop would need fewer crates in that series, or the dependencies that
+never change linked as a dynamic library, so that each edit links and macOS
+checks a small executable. Neither is done.
 
 ### Times, moments, locators and actions
 
@@ -2557,6 +2602,10 @@ with no GPU, clock or thread that writes draw records (64 bytes each in the
 prototype, 80 in the design since), and a `wgpu` renderer that draws them) and
 leaves out text, prompts and the flat layer. Its numbers are replaced by the
 real client's when it exists.
+
+The times from a one-line edit to the output of `just b3d tree` and
+`just b3d png`, measured from Beryl 3D itself, are in
+[Edit-to-output time](#edit-to-output-time).
 
 Each number is the median of five runs, with the worst of the five beside it.
 The frames are 1920 by 1080, drawn into a texture.

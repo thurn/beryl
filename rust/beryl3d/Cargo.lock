@@ -158,7 +158,7 @@ name = "beryl_assets"
 version = "0.1.0"
 dependencies = [
  "beryl_art",
- "beryl_card_store",
+ "beryl_assets",
  "beryl_cards",
  "beryl_scene",
  "beryl_session",
@@ -326,6 +326,18 @@ dependencies = [
  "parking_lot",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "beryl_pictures"
+version = "0.1.0"
+dependencies = [
+ "beryl_assets",
+ "beryl_host",
+ "beryl_inspect",
+ "beryl_protocol",
+ "beryl_render",
+ "beryl_scene",
 ]
 
 [[package]]

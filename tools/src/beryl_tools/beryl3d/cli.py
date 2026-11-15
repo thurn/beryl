@@ -163,21 +163,12 @@ def b3d_command(name: str, summary: str) -> Command:
 
 
 def run_render(command: str) -> Callable[[argparse.Namespace], int]:
-    """Builds the `b3d-render` program of `beryl_3d` and runs its `command` with the arguments."""
+    """Builds the `b3d-render` program of `beryl_pictures` and runs its `command` with the
+    arguments. Like `b3d`, it links no engine, so that it relinks and starts fast after an edit
+    (docs/beryl-3d.md, 'Edit-to-output time')."""
 
     def run(args: argparse.Namespace) -> int:
-        built = cargo(
-            [
-                "build",
-                "-q",
-                "-p",
-                "beryl_3d",
-                "--features",
-                "tools",
-                "--bin",
-                "b3d-render",
-            ]
-        )
+        built = cargo(["build", "-q", "-p", "beryl_pictures", "--bin", "b3d-render"])
         if built != 0:
             return built
         return run_program("b3d-render", [command, *args.arguments])
@@ -187,7 +178,7 @@ def run_render(command: str) -> Callable[[argparse.Namespace], int]:
 
 def render_command(name: str, summary: str) -> Command:
     """A picture command of the `b3d-render` program, which reads its own options and prints
-    its own `--help` (`pictures` in `beryl_3d`)."""
+    its own `--help` (`beryl_pictures`)."""
     return Command(name, summary, (), run_render(name), passthrough=True)
 
 

@@ -1,6 +1,8 @@
 //! The picture commands of `just b3d` (docs/beryl-3d.md, "The agent interface"): `png` draws one
 //! moment of a recording with the real renderer, offscreen, and `film` draws a span of it as a
-//! grid of frames in one picture. The `b3d-render` program runs [`main`].
+//! grid of frames in one picture. The crate is this one program, with no library, and links no
+//! engine, so that it rebuilds and relinks fast after an edit (docs/beryl-3d.md,
+//! "Edit-to-output time"). Its tests run the program.
 //!
 //! The options are read by the parser the text commands use, and a wrong command line exits with
 //! status 2 and a message that names what would work. Every file is written under
@@ -10,7 +12,9 @@ mod film;
 mod font;
 
 use std::fmt::Write;
+use std::io::Write as _;
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use beryl_host::{Headless, Scans};
 use beryl_inspect::cli::{self, Options, Ran, Spec, Usage, options};
@@ -100,9 +104,17 @@ const COMMANDS: [Command; 2] = [
     },
 ];
 
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let ran = run(&args);
+    // A closed pipe (`| head`) is not an error of the command's.
+    let _ = std::io::stdout().write_all(ran.stdout.as_bytes());
+    let _ = std::io::stderr().write_all(ran.stderr.as_bytes());
+    ExitCode::from(ran.code)
+}
+
 /// Runs the command line `args`, the arguments after the program's name.
-#[must_use]
-pub fn main(args: &[String]) -> Ran {
+fn run(args: &[String]) -> Ran {
     // A missing recordings pack exits with its own status, so that `just b3d` builds it.
     let usage = |error: &Usage| Ran {
         stdout: String::new(),
