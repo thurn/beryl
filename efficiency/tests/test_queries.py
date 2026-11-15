@@ -345,7 +345,8 @@ def test_the_bead_query_follows_the_designs_layout(
     assert lines[0] == "by-e.1  Bead by-e.1"
     assert lines[1].startswith("closed 2026-11-15 10:30   role:executor   tier:opus")
     assert lines[2].startswith("agent min ") and "core min -" in lines[2]
-    assert "rework -" in lines[2]
+    assert "rework 0.00" in lines[2]
+    assert lines[5].startswith("lead min  queued ")
     assert found["more"] == ["efficiency session t1 --bead by-e.1"]
     time = found["time"]
     assert isinstance(time, list) and {p["name"] for p in time} >= {"model"}

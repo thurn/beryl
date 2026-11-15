@@ -18,7 +18,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
-from . import cpu
+from . import commits, cpu, rework
 from .scope import Range, Scope
 from .timing import AGENT_CATEGORIES
 
@@ -171,6 +171,9 @@ class Facts:
         self._spans: dict[str, list[tuple[str, str | None]]] = defaultdict(list)
         self._cpu: dict[str, dict[str, float]] = {}
         self._measured: dict[str, str] | None = None
+        self._history: commits.History | None = None
+        self._rework: rework.Rework | None = None
+        self._direct: dict[str, float] | None = None
 
     def worktree(self, bead: Bead) -> str:
         return cpu.worktree_name(bead.enact.get("enact_worktree"))
@@ -234,6 +237,54 @@ class Facts:
             minutes = cpu.worktree_minutes(db, name, since, None, None)
             self._cpu[name] = cpu.attribute(minutes, claims)[0]
         return minutes_of(self._cpu[name].get(bead, 0.0))
+
+    def history(self) -> commits.History:
+        """The commits in the store, each with the bead that landed it."""
+        found = self._history
+        if found is None:
+            beads = {b.id: b.enact for b in self.beads.values()}
+            found = (
+                commits.load(self.db, beads)
+                if self.db is not None
+                else commits.History([], {}, [])
+            )
+            self._history = found
+        return found
+
+    def direct(self, bead: str) -> float:
+        """The bead's direct dollars: every window of it, at any time, on any host."""
+        found = self._direct
+        if found is None:
+            found = defaultdict(float)
+            for w in self.windows:
+                if w.kind == "bead" and w.bead is not None:
+                    found[w.bead] += w.total_dollars()
+            self._direct = found
+        return found.get(bead, 0.0)
+
+    def rework(self) -> rework.Rework:
+        """Every bead's rework, from the whole history ("Rework"): a bead's rework counts
+        fixes made at any time, and never changes its direct cost."""
+        found = self._rework
+        if found is None:
+            stewards = {
+                b.id: str(b.enact["enact_ci_range"])
+                for b in self.beads.values()
+                if b.enact.get("enact_ci_range")
+            }
+            history = self.history()
+            costs = {b: self.direct(b) for b in set(stewards) | set(history.by_bead)}
+            found = rework.compute(history, stewards, costs)
+            self._rework = found
+        return found
+
+    def lead(self, bead: str) -> commits.Lead:
+        found = self.beads.get(bead)
+        if found is None:
+            return commits.Lead(None, None, None, None)
+        return commits.lead(
+            self.history(), bead, found.created, found.started, found.closed
+        )
 
     def top_epic(self, bead: str | None) -> str | None:
         """The bead's topmost ancestor, or the bead itself when it is an epic with no

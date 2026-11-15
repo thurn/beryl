@@ -42,7 +42,23 @@ FIELDS: dict[str, str] = {
     "closed beads the sampler measured, with the 90th percentile and the median before",
     "dollars": "tokens times each model's published API price. Per bead: the median over "
     "closed beads, with the 90th percentile and the median over the range before",
-    "rework": "dollars of later fixes the bead's commits caused; not measured yet",
+    "rework": "dollars of later fixes the bead's commits caused: a share of a Steward "
+    "bead's cost for a slow-CI failure in a range with its commits, and a share of a later "
+    "bead's cost for `fix` commits to card files it added. Part of the fixing bead's direct "
+    "dollars, so never added to a total. Per bead: the median over closed beads",
+    "rework_percent": "rework as a percent of the bead's direct dollars",
+    "rework_from": "the beads whose direct dollars the rework is part of, and by which rule",
+    "commits": "commits the bead landed, from its enact_commits",
+    "cards": "card files under rust/cards/ that the bead's commits added first",
+    "queue_minutes": "minutes from the bead's creation to its start",
+    "work_minutes": "minutes from the bead's start to its close",
+    "to_master_minutes": "minutes from the bead's last commit on staging to that commit "
+    "reaching master, from master's reflog",
+    "lead_minutes": "minutes from the bead's creation to its last commit reaching master",
+    "fixed_later": "percent of the card files that a later fix commit by another bead "
+    "changed",
+    "per_card": "direct dollars, rework dollars and agent minutes over the card files "
+    "added",
     "cores": "the machine's cores, from the CPU sampler",
     "cores_in_use": "the cores in use on average over the sampled minutes, a minute "
     "sampled over the machine's cores counting as all of them",

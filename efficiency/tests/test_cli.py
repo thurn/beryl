@@ -21,6 +21,7 @@ TABLES = {
     "beads",
     "labels",
     "commits",
+    "ref_moves",
     "checks",
     "lane_runs",
     "verdicts",

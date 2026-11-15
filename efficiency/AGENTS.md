@@ -66,6 +66,15 @@ store" and "Isolation" before changing anything here.
   `bd export` into `verdicts`. `family` names a check's family. `ci.py` is the
   `ci` query (the tree script, check lane, family, check, with CPU by kind of
   process from the sampler) and the CI metrics.
+- `commits.py`: the commits source, `git log` of `staging` and `master` run in
+  the main checkout, with `master`'s reflog in `ref_moves` (kept after git
+  expires it), which says when each commit reached `master`. `History` gives
+  each commit's bead (from the beads' `enact_commits`, at query time), the bead
+  that first added each card file, commit ranges and lead times. `rework.py`
+  applies the two rework rules of "Rework" and is cached by `Facts.rework`;
+  rework is a share of another bead's direct dollars, so it is shown beside
+  direct cost and never summed into it. `cards.py` is the `cards` query and the
+  card, rework and lead-time metrics.
 - The query layer: `scope.py` parses `--since` and the cohort filters into a
   `Scope`; `facts.py` loads beads and windows with their `window_time` and
   `window_dollars` rows, which every query adds up, so that a roll-up's lines

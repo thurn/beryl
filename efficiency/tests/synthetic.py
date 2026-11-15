@@ -167,3 +167,20 @@ class Transcript:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text("".join(line + "\n" for line in self.lines))
         return self.path
+
+
+# A commit as the commits source's `git log` prints it: sha, parents, time, subject and
+# (status, path) changes.
+GitCommit = tuple[str, str, str, str, list[tuple[str, str]]]
+
+
+def git_snapshot(commits: list[GitCommit], moves: list[tuple[str, int]]) -> bytes:
+    """The commits source's snapshot: `git log` of `commits`, newest first, then master's
+    reflog of (sha, unix time) moves."""
+    log = "".join(
+        f"\x1e{sha}\x1f{parents}\x1f{time}\x1f{subject}\n\n"
+        + "".join(f"{status}\t{path}\n" for status, path in changes)
+        for sha, parents, time, subject, changes in reversed(commits)
+    )
+    reflog = "".join(f"{sha}\x1fmaster@{{{t}}}\n" for sha, t in reversed(moves))
+    return log.encode() + b"\x1d" + reflog.encode()

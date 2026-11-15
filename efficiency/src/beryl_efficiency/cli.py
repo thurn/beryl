@@ -14,9 +14,11 @@ from pathlib import Path
 
 from . import (
     bead,
+    cards,
     ci,
     cilog,
     claude,
+    commits,
     codex,
     cpu,
     facts,
@@ -52,6 +54,7 @@ def sources() -> list[ingest.Source]:
         cpu.Leases(cpu.leases_path(paths.cache_root()), host),
         cilog.RunLog(cilog.runlog_path(paths.cache_root())),
         cilog.Verdicts.here(checkout),
+        commits.Commits.here(checkout),
     ]
 
 
@@ -378,6 +381,10 @@ def run_dollars(args: argparse.Namespace) -> Result:
     return answer(args, lambda _, f, s: rollups.dollars_by(f, s, str(args.by)))
 
 
+def run_cards(args: argparse.Namespace) -> Result:
+    return answer(args, lambda _, f, s: cards.report(f, s, str(args.by)))
+
+
 def run_machine(args: argparse.Namespace) -> Result:
     return answer(args, machine.report)
 
@@ -408,6 +415,10 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
         "dollars by class, source, purpose, model, tier, role, lane, epic or day",
         run_dollars,
     ),
+    "cards": (
+        "cost per card file added, with rework beside it, by tier or any label",
+        run_cards,
+    ),
     "machine": (
         "cores in use, saturation, time queued for cores, shared CPU, capacity",
         run_machine,
@@ -431,6 +442,7 @@ SCOPED: dict[str, str] = {
     "time": "7d",
     "dollars": "7d",
     "metrics": "7d",
+    "cards": "7d",
     "machine": "7d",
     "ci": "7d",
     "epic": "all",
@@ -470,6 +482,12 @@ def parser() -> argparse.ArgumentParser:
             p.add_argument("--by", choices=rollups.TIME_BY, default="kind")
         if name == "dollars":
             p.add_argument("--by", choices=rollups.DOLLARS_BY, default="source")
+        if name == "cards":
+            p.add_argument(
+                "--by",
+                default="tier",
+                help="tier (the default), role, lane, epic or any label's key",
+            )
         if name == "ci":
             p.add_argument(
                 "--script",

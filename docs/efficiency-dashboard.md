@@ -946,8 +946,12 @@ The tables, each keyed so that ingesting the same bytes twice changes nothing:
   tokens it added to the context and its carrying cost.
 - **windows**: one row per bead window.
 - **beads**: the latest state of each bead and its labels.
-- **commits**: each commit on `staging`, its subject, paths and the bead that
-  landed it.
+- **commits**: each commit on `staging` and `master`, its parents, subject,
+  changed paths and added paths. The bead that landed it is read from the beads'
+  `enact_commits` at query time.
+- **ref_moves**: each move of `master` from its reflog, which is the only record
+  of when a commit reached `master`, since Enact fast-forwards it. Rows are kept
+  after git expires the reflog.
 - **checks**: one row per check per day per script, as described under
   [CI accounting](#ci-accounting).
 - **cpu**: one row per minute per owner, kind and worktree.

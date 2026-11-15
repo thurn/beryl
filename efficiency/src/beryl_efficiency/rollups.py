@@ -71,6 +71,7 @@ class Line:
     idle_minutes: float
     dollars: float
     lower_bound: bool
+    rework: float
 
 
 @dataclass
@@ -86,7 +87,9 @@ class Figure:
     lower_bound: bool
 
 
-def line(name: str, title: str | None, closed: int, found: Totals) -> Line:
+def line(
+    name: str, title: str | None, closed: int, found: Totals, rework: float = 0.0
+) -> Line:
     return Line(
         name,
         title,
@@ -96,6 +99,7 @@ def line(name: str, title: str | None, closed: int, found: Totals) -> Line:
         minutes(found.idle_seconds),
         money(found.dollars),
         bool(found.unpriced),
+        money(rework),
     )
 
 
@@ -180,7 +184,12 @@ def figure(
     return Figure(median, p90, len(values), before_median, lower)
 
 
-UNMEASURED = Figure(None, None, 0, None, False)
+def rework_figures(facts: Facts, scope: Scope, closed: list[Bead]) -> list[float]:
+    """The rework of each closed bead with windows in the store, the beads whose direct
+    dollars the summary's dollars figure measures."""
+    by_bead = facts.bead_windows(scope)
+    found = facts.rework()
+    return [found.dollars(b.id) for b in closed if by_bead.get(b.id)]
 
 
 def days_in(facts: Facts, scope: Scope) -> float | None:
@@ -224,8 +233,11 @@ def summary(facts: Facts, scope: Scope) -> Result:
     for w in windows:
         groups[line_of(facts, w)].append(w)
     closed_by: dict[str, int] = defaultdict(int)
+    rework_by: dict[str, float] = defaultdict(float)
+    found_rework = facts.rework()
     for b in closed:
         closed_by[facts.top_epic(b.id) or NO_EPIC] += 1
+        rework_by[facts.top_epic(b.id) or NO_EPIC] += found_rework.dollars(b.id)
     epics = sorted(
         (
             line(
@@ -233,6 +245,7 @@ def summary(facts: Facts, scope: Scope) -> Result:
                 facts.beads[name].title if name in facts.beads else None,
                 closed_by.get(name, 0),
                 total(groups.get(name, [])),
+                rework_by.get(name, 0.0),
             )
             for name in set(groups) | set(closed_by)
             if name not in (NO_EPIC, ORCHESTRATION, NO_BEAD)
@@ -240,7 +253,13 @@ def summary(facts: Facts, scope: Scope) -> Result:
         key=lambda l: (-l.dollars, l.name),
     )
     tail = [
-        line(name, None, closed_by.get(name, 0), total(groups.get(name, [])))
+        line(
+            name,
+            None,
+            closed_by.get(name, 0),
+            total(groups.get(name, [])),
+            rework_by.get(name, 0.0),
+        )
         for name in (NO_EPIC, ORCHESTRATION, NO_BEAD)
     ]
     whole = total(windows)
@@ -261,8 +280,13 @@ def summary(facts: Facts, scope: Scope) -> Result:
         figure(agent, agent_before, 1, False),
         figure(core_figures(facts, closed), core_figures(facts, then), 1, False),
         figure(dollars, dollars_before, 2, lower),
-        UNMEASURED,
-        line("total", None, len(closed), whole),
+        figure(
+            rework_figures(facts, scope, closed),
+            rework_figures(facts, scope, then),
+            2,
+            False,
+        ),
+        line("total", None, len(closed), whole, sum(rework_by.values())),
         bar(agent_parts(windows), whole.agent_seconds / 60, 1),
         [
             Part(n, minutes(s), 0.0)
@@ -327,7 +351,16 @@ def figure_text(name: str, f: Figure, digits: int) -> str:
 
 def lines_table(lines: list[Line], first: str) -> list[str]:
     return table(
-        [first, "closed", "agent min", "person min", "idle min", "dollars", "title"],
+        [
+            first,
+            "closed",
+            "agent min",
+            "person min",
+            "idle min",
+            "dollars",
+            "rework",
+            "title",
+        ],
         [
             [
                 l.name,
@@ -336,6 +369,7 @@ def lines_table(lines: list[Line], first: str) -> list[str]:
                 l.person_minutes,
                 l.idle_minutes,
                 f"{l.dollars:.2f}{mark(l.lower_bound)}",
+                f"{l.rework:.2f}",
                 l.title,
             ]
             for l in lines
@@ -401,6 +435,7 @@ def epic(facts: Facts, scope: Scope, epic_id: str) -> Result:
         name = ORCHESTRATION if w.kind == "orchestration" else str(w.bead)
         groups[name].append(w)
     closed_ids = {b.id for b in closed}
+    found_rework = facts.rework()
     beads = sorted(
         (
             line(
@@ -408,6 +443,7 @@ def epic(facts: Facts, scope: Scope, epic_id: str) -> Result:
                 facts.beads[name].title if name in facts.beads else None,
                 1 if name in closed_ids else 0,
                 total(groups.get(name, [])),
+                found_rework.dollars(name),
             )
             for name in (set(groups) | closed_ids) - {ORCHESTRATION}
         ),
@@ -423,7 +459,7 @@ def epic(facts: Facts, scope: Scope, epic_id: str) -> Result:
         scope.range.name,
         within.describe(),
         len(closed),
-        line("total", None, len(closed), whole),
+        line("total", None, len(closed), whole, sum(l.rework for l in beads)),
         beads + [line(ORCHESTRATION, None, 0, total(groups.get(ORCHESTRATION, [])))],
         sorted(whole.unpriced),
     )
@@ -438,7 +474,7 @@ def epic(facts: Facts, scope: Scope, epic_id: str) -> Result:
             f"efficiency time --by kind {flags}",
             f"efficiency dollars --by source {flags}",
         ],
-        describe("since", "beads_closed", "lines", "lower_bound"),
+        describe("since", "beads_closed", "lines", "rework", "lower_bound"),
     )
 
 
@@ -448,7 +484,8 @@ def epic_lines(e: Epic) -> list[str]:
         f"epic {e.epic}" + (f"  {e.title}" if e.title else ""),
         f"{e.status or 'not in the store'}   since {e.since or 'the start'} ({e.range})"
         + f"   beads closed {e.beads_closed}",
-        f"agent min {t.agent_minutes:.1f}   dollars {t.dollars:.2f}{mark(t.lower_bound)}",
+        f"agent min {t.agent_minutes:.1f}   dollars {t.dollars:.2f}{mark(t.lower_bound)}"
+        + f"   rework {t.rework:.2f}",
         "",
         *lines_table([*e.lines, t], "bead"),
         *footnote(e.unpriced),

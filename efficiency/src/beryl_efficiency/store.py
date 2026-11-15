@@ -416,6 +416,27 @@ MIGRATIONS: tuple[str, ...] = (
         steward TEXT
     );
     """,
+    """
+    -- Commits on staging and master, from `git log`. `parents`, `paths` (every file the
+    -- commit changed, both names of a rename) and `added` (files it created) are JSON
+    -- lists. A commit's bead is read from the beads at query time.
+    DROP TABLE commits;
+    CREATE TABLE commits (
+        sha TEXT PRIMARY KEY,
+        time TEXT NOT NULL,
+        subject TEXT,
+        parents TEXT NOT NULL DEFAULT '[]',
+        paths TEXT NOT NULL DEFAULT '[]',
+        added TEXT NOT NULL DEFAULT '[]'
+    );
+    -- Each time a branch moved, from its reflog, kept after git expires the entry.
+    CREATE TABLE ref_moves (
+        ref TEXT NOT NULL,
+        time TEXT NOT NULL,
+        sha TEXT NOT NULL,
+        PRIMARY KEY (ref, time, sha)
+    );
+    """,
 )
 
 
