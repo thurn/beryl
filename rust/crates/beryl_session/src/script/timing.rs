@@ -10,6 +10,7 @@ use super::Subject;
 /// How one step is played. Times are in milliseconds.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)] // Each flag is one independent rule of the wire format.
 pub struct StepTiming {
     /// The verb's case in `data/ui-conventions.json`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
