@@ -324,7 +324,9 @@ log, which is the trap DeepScry fell into when its rollouts ran with the log
 off.
 
 `Turn` holds the turn number, active player, step, the priority holder and pass
-count, the queue of extra turns, and any inserted combat phase.
+count. Extra turns are entries of the Effects store (§4.5). Nothing yet inserts
+or skips a step or a phase; [project-50k-part-2.md](project-50k-part-2.md) plans
+the turn's remaining steps as a queue.
 
 ### 4.5 Queues
 
@@ -892,12 +894,13 @@ Combat is factored into single picks with legality-aware candidates:
 
 The turn is a small program of steps: untap, upkeep, draw, main, beginning of
 combat, declare attackers, declare blockers, combat damage (twice with first
-strike), end of combat, main, end, cleanup. Extra turns queue; extra combat
-phases insert. Each step boundary is an event, so "at the beginning of" and
-"until end of turn" are triggers and durations like any other. Priority passes
-in succession with an empty stack advance the step; with a non-empty stack they
-resolve the top object. Cleanup discards to hand size, removes damage and ends
-until-end-of-turn effects, and repeats if that caused a trigger.
+strike), end of combat, main, end, cleanup. Extra turns queue. Extra combat
+phases, extra steps and ending the turn are not built. Each step boundary is an
+event, so "at the beginning of" and "until end of turn" are triggers and
+durations like any other. Priority passes in succession with an empty stack
+advance the step; with a non-empty stack they resolve the top object. Cleanup
+discards to hand size, removes damage and ends until-end-of-turn effects, and
+repeats if that caused a trigger.
 
 The game starts with the London mulligan: keep or mulligan, then the cards to
 bottom one pick at a time.
@@ -1542,6 +1545,29 @@ missing from the list were about how the rebuild was run.
 | K27 | Each verb's motion values are Beryl's own data; `just motion` holds the stage to them and shows Arena's measured values (`data/arena-motion.json`) beside them. The user's bug reports judge the look.                                                                                           | Asking only whether something moved passed fixes the user reported again.                                                                                                                    |
 | K28 | The design language is data (`data/ui-conventions.json`): each verb, each mark, the numbered exceptions and the cases Arena does not show. `docs/ui-conventions.md` is generated from it.                                                                                                        | Nothing forced the code and the prose to agree.                                                                                                                                              |
 | K29 | What the recordings do not show is composed from existing verbs and shapes and listed. The phone shares the stage and keeps its own layout.                                                                                                                                                      | 50,000 cards cannot each need a decision, and the recordings are desktop only.                                                                                                               |
+
+### Decisions planned for Part II
+
+On 2026-11-15 a second set of structure decisions was taken, **P1** to **P16**
+in [project-50k-part-2.md](project-50k-part-2.md), with the measurements behind
+them. They are plans until that work lands, when this appendix states them as
+shipped. In brief:
+
+- A card stays a hand-written Rust file; Oracle text is never parsed (P1). A
+  count over the card store found that two thirds of cards have a sentence no
+  other card has.
+- A card needs no hand-written scenario when its generated scenarios kill every
+  mutant of its definition and agree with both oracles (P2, which carries out
+  **K3**), and a card file cites the rules only for card-specific rulings (P3).
+- The compiler refuses more: no wildcard match arm over an enum, no lossy
+  integer cast, no walk in slot order that mutates, and object references typed
+  by what they point at (P7).
+- Each engine module declares the Comprehensive Rules it implements, and a check
+  holds its citations to them (P8). **K17**'s 800-line limit stays; a file over
+  it is split along rule boundaries.
+- Helpers shared by cards are a phrase library keyed by the Oracle wording each
+  renders to (P9).
+- The engine reads the shape of a game from one `Format` value (P10).
 
 ### Measurements behind the structure
 

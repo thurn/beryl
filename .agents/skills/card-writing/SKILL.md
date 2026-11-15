@@ -72,13 +72,16 @@ and builders a card definition is made of.
      not keywords. Add them with `.keywords(Keywords::FLYING)`, or
      `Keywords::FLASH.union(Keywords::FLYING)` for several.
    - Instructions in one ability go in order in `sequence(&[...])`.
-   - Each rule the card relies on gets a comment citing the Comprehensive Rules,
-     as a reference, `[CR 118.12a]`, with the link
+   - Cite the Comprehensive Rules only where the card relies on something no
+     vocabulary entry says: a ruling about an unusual interaction, or a reason
+     the definition is shaped the way it is. The vocabulary entries and the
+     rules code already cite the rule for what "draw a card" or "exile" does, so
+     a card that only composes them needs no citation and no quotation. Where
+     you do cite, write a reference, `[CR 118.12a]`, with the link
      `[CR 118.12a]: https://yawgatog.com/resources/magic-rules/#R11812a` at the
-     end of the doc comment, and a quote of the rule's text, like the comments in
-     the model card. `just citations shorten <file>` turns inline links into
-     references, and `just citations` checks the quotes against the pinned rules
-     release.
+     end of the doc comment, and quote the rule's text.
+     `just citations shorten <file>` turns inline links into references, and
+     `just citations` checks the quotes against the pinned rules release.
 5. **Write scenarios.** The file's `scenarios` module needs hand-written
    `Scenario`s that, between them, carry out every part of every ability: each
    branch of an `if_then` or `if_else`, the inside of each `may` (answered yes)

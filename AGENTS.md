@@ -20,7 +20,9 @@ Comprehensive Rules it implements. Link to
 https://yawgatog.com/resources/magic-rules/ and quote the relevant text from the
 rules release pinned in `data/rules-version.json`. In a doc comment, cite as a
 reference, `[CR 118.12a]`, and define its link at the end of the comment;
-`just citations shorten <paths>` rewrites inline links that way.
+`just citations shorten <paths>` rewrites inline links that way. A card file is
+not rules engine code: it cites a rule only where the card relies on something
+no vocabulary entry says, such as a ruling about an unusual interaction.
 
 This file holds the rules that apply to every change. `rust/`, `ui/` and `data/`
 each have their own `AGENTS.md` with the reference material for work in that
@@ -327,7 +329,9 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
 - When you fix a rules engine bug, including one in your own code from the same
   session, add an entry to `docs/bugs.md`: a short description of the bug and
   how similar bugs could be prevented in future (for example, through the type
-  system). Link the fixing commit's hash when the bug wasn't found and fixed in
+  system). Name the guard that now stops its class (a lint, a type, a check or a
+  differential test), adding it in the same change where you can, or say why
+  none can. Link the fixing commit's hash when the bug wasn't found and fixed in
   the same session.
 - Do not directly reference planning documents or beads in code (e.g. "plan
   K16"), this gets stale fast. If you touch code with such references, delete
