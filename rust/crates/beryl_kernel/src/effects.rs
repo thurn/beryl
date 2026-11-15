@@ -12,7 +12,8 @@
 //! Built so far: an object, a player and a locked-in set of objects ([`sets`]) as the
 //! affected side, and the layer change, the zone-change replacement, the rule change, the
 //! permission to cast, the cost change, the regeneration shield ([`regeneration`]), the
-//! prevention shield ([`prevention`]) and the text change ([`text`]) as payloads. The game
+//! prevention shield ([`prevention`]), the text change ([`text`]), the player-controlling
+//! effect ([`control`]) and the extra turn ([`extra_turn`]) as payloads. The game
 //! as a side is designed in the contract and built with its first user.
 //!
 //! [`State::rule_applies`] is the one question about a rule change, whether a static
@@ -34,6 +35,7 @@ use crate::table::GameTable;
 mod change;
 pub mod control;
 pub mod copy;
+pub mod extra_turn;
 mod on;
 pub mod prevention;
 pub mod regeneration;
@@ -100,6 +102,8 @@ pub enum Continuous<L: Layout = Small> {
     Text(ObjectRef<L>, TextChange),
     /// `controller` controls `controlled` during `controlled`'s next turn ([`control`]).
     Control { controlled: Seat, controller: Seat },
+    /// The player takes an extra turn after the current one ([`extra_turn`]).
+    ExtraTurn(Seat),
 }
 
 impl<L: Layout> Continuous<L> {
@@ -116,6 +120,7 @@ impl<L: Layout> Continuous<L> {
             | Continuous::Text(object, _) => Subject::Object(object),
             Continuous::Rule(subject, _) | Continuous::Prevent(subject, _) => subject,
             Continuous::Control { controlled, .. } => Subject::Player(controlled),
+            Continuous::ExtraTurn(player) => Subject::Player(player),
         }
     }
 
@@ -133,6 +138,7 @@ impl<L: Layout> Continuous<L> {
             Continuous::Copy(_, values) => Payload::Copy(values),
             Continuous::Text(_, change) => Payload::Text(change),
             Continuous::Control { controller, .. } => Payload::Control(controller),
+            Continuous::ExtraTurn(_) => Payload::ExtraTurn,
         }
     }
 }
@@ -313,6 +319,8 @@ pub enum Payload<L: Layout = Small> {
     Text(TextChange),
     /// This player controls the affected player in their next turn ([`control`]).
     Control(Seat),
+    /// The affected player takes an extra turn after the current one ([`extra_turn`]).
+    ExtraTurn,
 }
 
 impl<L: Layout> Payload<L> {
@@ -330,6 +338,7 @@ impl<L: Layout> Payload<L> {
             Payload::Copy(_) => Kinds::COPY,
             Payload::Text(_) => Kinds::TEXT,
             Payload::Control(_) => Kinds::CONTROL,
+            Payload::ExtraTurn => Kinds::EXTRA_TURN,
         }
     }
 }
@@ -350,6 +359,7 @@ impl Kinds {
     const COPY: u16 = 1 << 7;
     const TEXT: u16 = 1 << 8;
     const CONTROL: u16 = 1 << 9;
+    const EXTRA_TURN: u16 = 1 << 10;
 }
 
 /// A continuous effect from a resolved spell or ability
@@ -622,7 +632,9 @@ impl<L: Layout> State<L> {
                     let rules = &mut self.effects.rules[player.index()];
                     *rules = rules.with(rule);
                 }
-                Continuous::Prevent(Subject::Player(_), _) | Continuous::Control { .. } => {}
+                Continuous::Prevent(Subject::Player(_), _)
+                | Continuous::Control { .. }
+                | Continuous::ExtraTurn(_) => {}
                 Continuous::Layer(object, _)
                 | Continuous::Move(object, _)
                 | Continuous::Rule(Subject::Object(object), _)

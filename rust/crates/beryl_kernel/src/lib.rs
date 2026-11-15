@@ -312,9 +312,9 @@
 //!
 //! Its payload ([`effects::Payload`]) is a layer change, a zone-change replacement or a
 //! rule change, a permission to cast, a cost change, a regeneration shield, a prevention
-//! shield or a player-controlling effect (built; [`effects::control`] says how a turn is
-//! controlled). A prevention shield is a payload on a player besides a rule change and
-//! control, and names the source of damage chosen for it, if any, by an [`object::ObjectRef`] that stops
+//! shield, a player-controlling effect ([`effects::control`]) or an extra turn
+//! ([`effects::extra_turn`]). A prevention shield is a payload on a player besides a rule
+//! change, control and an extra turn, and names the source of damage chosen for it, if any, by an [`object::ObjectRef`] that stops
 //! matching once that source changes zones. A payload is a
 //! resolved kernel type: every word of the card that needed the resolving ability to
 //! settle it is settled, as [`store::Duration`] names the player "your next turn" means. A
@@ -333,7 +333,7 @@
 //!   the [`store::Duration`] it is given. The rules call it as that moment comes, since the
 //!   kernel moves the turn and holds none of its rules: with `UntilYourNextTurn` of the
 //!   active player as a turn begins and `EndOfTurn` in the cleanup step. A
-//!   player-controlling effect is `Indefinite`: the turn it waits for takes it (CR 724.1b).
+//!   player-controlling effect or extra turn is `Indefinite`: its turn takes it (CR 724.1b).
 //! - **An object ends.** "While the card stays in its zone" is no duration: whatever is
 //!   stored about an object ends with it
 //!   ([CR 400.7]), inside the three

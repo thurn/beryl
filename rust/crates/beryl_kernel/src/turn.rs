@@ -44,11 +44,18 @@ pub struct Turn {
     ///
     /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
     pub(crate) controller: Option<Seat>,
+    /// In an extra turn, the active player of the last turn that was not one, whom the turn
+    /// order goes on from when the extra turns are over ([CR 500.7]): "Some effects can give
+    /// a player extra turns. They do this by adding the turns directly after the specified
+    /// turn." [`State::begin_turn`] sets it.
+    ///
+    /// [CR 500.7]: https://yawgatog.com/resources/magic-rules/#R5007
+    pub(crate) after_extra: Option<Seat>,
 }
 
-/// Every field, but the controller only where there is one: a turn no player controls hashes
-/// as it did before turns could be controlled, so the benchmark corpora pinned by their
-/// hashes still name the same positions.
+/// Every field, but the controller and the turn an extra turn follows only where there is
+/// one: a turn that is neither controlled nor extra hashes as it did before turns could be,
+/// so the benchmark corpora pinned by their hashes still name the same positions.
 impl std::hash::Hash for Turn {
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         let Turn {
@@ -61,11 +68,16 @@ impl std::hash::Hash for Turn {
             cleanup_check,
             attacked,
             controller,
+            after_extra,
         } = *self;
         (number, active, starting_player, step, priority).hash(h);
         (passes, cleanup_check, attacked).hash(h);
         if let Some(controller) = controller {
             controller.hash(h);
+        }
+        if let Some(regular) = after_extra {
+            // Tagged, so that it hashes apart from a controller's seat.
+            (u8::MAX, regular).hash(h);
         }
     }
 }
@@ -151,9 +163,12 @@ impl<L: Layout> State<L> {
         self.turn.active = starting;
     }
 
-    /// Begins the next turn and returns its active player: the starting player's first, then
-    /// alternating ([CR 103.8](https://yawgatog.com/resources/magic-rules/#R1038)): "The
-    /// starting player takes their first turn." The per-turn counts begin again with it: the
+    /// Begins the next turn and returns its active player: the starting player's first
+    /// ([CR 103.8]: "The starting player takes their first turn."), then the extra turn
+    /// created last if one is waiting ([`crate::effects::extra_turn`]; [CR 500.7]: "The most
+    /// recently created turn will be taken first."), and otherwise the next player in turn
+    /// order after the last turn that was not extra ([CR 500.7]: "They do this by adding the
+    /// turns directly after the specified turn."). The per-turn counts begin again with it: the
     /// decisions offered, the lands each player has played
     /// ([CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052)), and what the
     /// Trackers store noted of the turn before ([`crate::trackers`]).
@@ -162,16 +177,22 @@ impl<L: Layout> State<L> {
     /// controller the turn's controller ([`Turn::controller`]), and the control of the turn
     /// before ends ([CR 724.1]): "This effect applies to the next turn that the affected
     /// player actually takes. The affected player is controlled during the entire turn; the
-    /// effect doesn't end until the beginning of the next turn."
+    /// effect doesn't end until the beginning of the next turn." An extra turn is a turn the
+    /// player actually takes, so an effect waiting for them controls it.
     ///
+    /// [CR 103.8]: https://yawgatog.com/resources/magic-rules/#R1038
+    /// [CR 500.7]: https://yawgatog.com/resources/magic-rules/#R5007
     /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
     #[inline]
     pub fn begin_turn(&mut self) -> Seat {
-        self.turn.active = if self.turn.number == 0 {
-            self.turn.starting_player
+        if self.turn.number == 0 {
+            self.turn.active = self.turn.starting_player;
         } else {
-            self.next_player(self.turn.active)
-        };
+            let regular = self.turn.after_extra.unwrap_or(self.turn.active);
+            let extra = self.effects.take_extra_turn();
+            self.turn.after_extra = extra.map(|_| regular);
+            self.turn.active = extra.unwrap_or_else(|| self.next_player(regular));
+        }
         self.turn.controller = self.effects.take_control(self.turn.active);
         // CR 724.4: the controller sees what the controlled player sees, from the turn's
         // start; what they learn during it, they learn as that player does (`sharer`).

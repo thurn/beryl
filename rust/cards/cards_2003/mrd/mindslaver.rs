@@ -57,6 +57,31 @@ pub mod scenarios {
             .library(P1, &[Card::Island, Card::Island])
     }
 
+    /// [`slaving`], with Time Warp in P0's hand and five more Islands to cast it after
+    /// activating Mindslaver, and an Oust for each of P1's next two turns.
+    const fn warping(name: &'static str) -> Scenario {
+        slaving(name)
+            .interaction(&[Card::TimeWarp])
+            .hand(P0, &[Card::TimeWarp])
+            .hand(P1, &[Prop::Sorcery, Prop::Sorcery])
+            .battlefield(
+                P0,
+                &[
+                    MINDSLAVER,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Prop::Vanilla,
+                ],
+            )
+    }
+
     pub const SCENARIOS: &[Scenario] = &[
         // CR 724.5 and 724.5a: in P1's next turn P0 casts P1's Oust, paid with P1's Plains, at
         // P1's own creature; P1 is its controller and gains the 3 life.
@@ -159,5 +184,50 @@ pub mod scenarios {
                 Resolve,
                 ME.has(Zone::Library, Prop::Vanilla, 1),
             ]),
+        // CR 724.1: "This effect applies to the next turn that the affected player actually
+        // takes." P1's extra turn from Time Warp (CR 500.7) is turn 2 and is the controlled
+        // one, so in turn 3, their regular turn, P1 decides for themself.
+        warping("an extra turn of the controlled player's is the controlled one").actions(&[
+            ME.activates(MINDSLAVER, 0),
+            ME.targets_player(THEM),
+            Resolve,
+            ME.casts(Card::TimeWarp),
+            ME.targets_player(THEM),
+            Resolve,
+            advance_to(2, TurnStep::PrecombatMain),
+            ME.casts(Prop::Sorcery),
+            ME.targets(Prop::Flier),
+            Resolve,
+            THEM.has(Zone::Library, Prop::Flier, 1),
+            advance_to(3, TurnStep::PrecombatMain),
+            // P0's creature is the only one left, so the target is chosen without asking.
+            THEM.casts(Prop::Sorcery),
+            Resolve,
+            ME.has(Zone::Library, Prop::Vanilla, 1),
+            THEM.life(23),
+            ME.life(23),
+        ]),
+        // CR 724.1 and 500.7: P0 takes an extra turn first, turn 2, which P1 takes no part
+        // in; the control waits for turn 3, P1's next turn.
+        warping("the controller's extra turn comes before the controlled turn").actions(&[
+            ME.activates(MINDSLAVER, 0),
+            ME.targets_player(THEM),
+            Resolve,
+            ME.casts(Card::TimeWarp),
+            ME.targets_player(ME),
+            Resolve,
+            advance_to(2, TurnStep::PrecombatMain),
+            ME.has(Zone::Hand, Card::Island, 1),
+            THEM.has(Zone::Hand, Card::Island, 0),
+            advance_to(2, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.done_attacking(),
+            advance_to(3, TurnStep::PrecombatMain),
+            ME.casts(Prop::Sorcery),
+            ME.targets(Prop::Flier),
+            Resolve,
+            THEM.has(Zone::Library, Prop::Flier, 1),
+            THEM.life(23),
+        ]),
     ];
 }

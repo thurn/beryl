@@ -98,7 +98,8 @@ impl Effect {
             | Effect::GetEmblem { .. }
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
-            | Effect::ControlPlayer(_) => false,
+            | Effect::ControlPlayer(_)
+            | Effect::ExtraTurn(_) => false,
         }
     }
 }

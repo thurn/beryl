@@ -102,9 +102,12 @@ impl<L: Layout> Store<L> for Effects<L> {
                     check(
                         matches!(
                             e.payload,
-                            Payload::Rule(_) | Payload::Prevent(_) | Payload::Control(_)
+                            Payload::Rule(_)
+                                | Payload::Prevent(_)
+                                | Payload::Control(_)
+                                | Payload::ExtraTurn
                         ),
-                        "an effect on a player that is no rule change, shield or control",
+                        "an effect on a player that is no rule change, shield, control or extra turn",
                         Some(At::Player(player)),
                     )?;
                     None

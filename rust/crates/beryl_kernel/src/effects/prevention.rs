@@ -75,6 +75,7 @@ impl<L: Layout> Relayout for Payload<L> {
             Payload::Copy(values) => Payload::Copy(values.relayout()),
             Payload::Text(change) => Payload::Text(change),
             Payload::Control(controller) => Payload::Control(controller),
+            Payload::ExtraTurn => Payload::ExtraTurn,
             Payload::Prevent(Shield { left, from }) => Payload::Prevent(Shield {
                 left,
                 from: from.map(|c| ChosenSource {

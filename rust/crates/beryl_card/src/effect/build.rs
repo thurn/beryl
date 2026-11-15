@@ -750,6 +750,11 @@ pub const fn control_player(player: Players) -> Effect {
     Effect::ControlPlayer(player)
 }
 
+/// [`Effect::ExtraTurn`]: "[player] takes an extra turn after this one".
+pub const fn extra_turn(player: Players) -> Effect {
+    Effect::ExtraTurn(player)
+}
+
 /// [`Effect::WinGame`]: "[player] wins the game".
 pub const fn win_game(player: Players) -> Effect {
     Effect::WinGame(player)

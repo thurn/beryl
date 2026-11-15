@@ -1040,6 +1040,11 @@ fn local(effect: &'static Effect) -> Neighbours<Effect> {
                 add(name, Effect::ControlPlayer(player));
             }
         }
+        Effect::ExtraTurn(player) => {
+            for (name, player) in players(player) {
+                add(name, Effect::ExtraTurn(player));
+            }
+        }
         Effect::ExileLinked(_)
         | Effect::ReturnTransformed(_)
         | Effect::Explore(_)

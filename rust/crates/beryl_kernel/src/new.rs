@@ -130,6 +130,7 @@ impl<L: Layout> State<L> {
                 cleanup_check: false,
                 attacked: false,
                 controller: None,
+                after_extra: None,
             },
             stack: Default::default(),
             captured_words: Default::default(),

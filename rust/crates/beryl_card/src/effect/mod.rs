@@ -613,6 +613,13 @@ pub enum Effect {
     /// to the next turn that the affected player actually takes." "You" is the controller of
     /// what is resolving.
     ControlPlayer(Players),
+    /// "[Player] takes an extra turn after this one"
+    /// ([CR 500.7](https://yawgatog.com/resources/magic-rules/#R5007)): "Some effects can give
+    /// a player extra turns. They do this by adding the turns directly after the specified
+    /// turn. ... If multiple players are given extra turns, the extra turns are added one at a
+    /// time, in APNAP order (see rule 101.4). The most recently created turn will be taken
+    /// first."
+    ExtraTurn(Players),
 }
 
 impl Effect {
@@ -725,7 +732,8 @@ impl Effect {
             | Effect::GetEmblem { .. }
             | Effect::WinGame(_)
             | Effect::LoseGame(_)
-            | Effect::ControlPlayer(_) => false,
+            | Effect::ControlPlayer(_)
+            | Effect::ExtraTurn(_) => false,
         }
     }
 

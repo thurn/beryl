@@ -237,7 +237,8 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::ManifestDread(player)
         | Effect::FlipCoin(player)
         | Effect::WinGame(player)
-        | Effect::LoseGame(player) => Some(player),
+        | Effect::LoseGame(player)
+        | Effect::ExtraTurn(player) => Some(player),
         Effect::ForEachPlayer { .. }
         | Effect::Counter(_)
         | Effect::CopySpell { .. }

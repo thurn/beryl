@@ -469,6 +469,9 @@ impl Ctx {
             Effect::LoseGame(player) => {
                 vec![self.stated(player, ("lose", "loses"), |_| "the game".to_owned())]
             }
+            Effect::ExtraTurn(player) => vec![self.stated(player, ("take", "takes"), |_| {
+                "an extra turn after this one".to_owned()
+            })],
             Effect::ControlPlayer(player) => vec![format!(
                 "you control {} during that player's next turn",
                 self.player(player)

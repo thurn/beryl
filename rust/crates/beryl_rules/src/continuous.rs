@@ -273,6 +273,33 @@ pub(crate) fn control_player_instruction<L: Layout>(
     Ok(Outcome::of(Bitboard::EMPTY, count))
 }
 
+/// [`Effect::ExtraTurn`](beryl_card::Effect::ExtraTurn): "[Player] takes an extra turn after
+/// this one" ([CR 500.7]): an effect on each player named, which the next turn's beginning
+/// takes ([`State::begin_turn`](crate::state::State::begin_turn)). They are added "one at a
+/// time, in APNAP order", and "The most recently created turn will be taken first", so the
+/// player last in turn order takes theirs first. The outcome is how many players it is on.
+///
+/// [CR 500.7]: https://yawgatog.com/resources/magic-rules/#R5007
+pub(crate) fn extra_turn_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    players: Players,
+) -> Result<Outcome<L>, Full> {
+    let named = run.scene().players(players);
+    let (game, resolution) = run.resolving();
+    let mut count = 0;
+    for player in game.state.players_in_turn_order(named) {
+        // It lasts until its turn begins, which ends it.
+        start(
+            game,
+            resolution,
+            Continuous::ExtraTurn(player),
+            Duration::Indefinite,
+        )?;
+        count += 1;
+    }
+    Ok(Outcome::of(Bitboard::EMPTY, count))
+}
+
 /// [`Effect::ChangeRule`](beryl_card::Effect::ChangeRule): "[Rule change] [duration]"
 /// (CR 613.11): [`change_rule`], for as long as the card says. The outcome is that it did.
 pub(crate) fn change_rule_instruction<L: Layout>(
