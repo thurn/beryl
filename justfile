@@ -243,6 +243,11 @@ citations *args:
 conventions *args:
     {{ by }} conventions "$@"
 
+# Write ui/src/design/tokens.css from data/design-tokens.json (--check)
+[group('data')]
+design-tokens *args:
+    {{ by }} design-tokens "$@"
+
 # Transcode the UI's music and sounds from the staged CC0 packs into ui/public/audio (--check)
 [group('data')]
 audio *args:

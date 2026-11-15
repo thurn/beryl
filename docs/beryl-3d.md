@@ -1260,9 +1260,9 @@ fn prompt_bar(prompt: &PromptView) -> Element {
   for one that does not. Roles and names are what locators find, what the tree
   printout shows, and what an accessibility tree would be built from.
 - **Styles come from design tokens.** Colors, type styles, spacing and radii are
-  named constants generated from one data file, which also generates the web
-  interface's CSS variables, so the two clients cannot drift apart in color or
-  type.
+  named constants generated from one data file, `data/design-tokens.json`, which
+  also generates the web interface's CSS variables (`just design-tokens`), so
+  the two clients cannot drift apart in color or type.
 - **An element can show a scene object.** The card browser, the mulligan screen
   and the inspector lay out boxes with `taffy` and place real 3D cards in them,
   so a card looks and animates the same wherever it appears.

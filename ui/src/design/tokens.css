@@ -1,7 +1,9 @@
-/* Design tokens from docs/ui_mockups/ui_system.png ("01 Foundations"), as its swatches render:
-   the swatches' labels (#625C56, #242321, #F2ECE1, #E9AD4A, #38DCFF) differ a little from the
-   colors they show, and the screens are painted in the shown ones. */
+/* Written by `just design-tokens` from data/design-tokens.json: edit that file and run it,
+   never this one. */
 :root {
+  /* Design tokens from docs/ui_mockups/ui_system.png ("01 Foundations"), as its swatches
+     render: the swatches' labels (#625C56, #242321, #F2ECE1, #E9AD4A, #38DCFF) differ a little
+     from the colors they show, and the screens are painted in the shown ones. */
   --table: #6b5f56;
   --surface: #211f1c;
   --text: #f2e7d8;
@@ -18,8 +20,8 @@
   --cyan-soft: rgb(56 220 255 / 45%);
   --ember: #f07a1c;
   --ember-deep: #c84a0c;
-  /* A number raised or lowered against the printed one, as Arena inks it: deep inks on a
-     card's pale plaque, bright ones on the dark surfaces. */
+  /* A number raised or lowered against the printed one, as Arena inks it: deep inks on a card's
+     pale plaque, bright ones on the dark surfaces. */
   --stat-up-ink: #0e7a2c;
   --stat-down-ink: #c0141a;
   --stat-up: #6fe08a;
@@ -67,9 +69,10 @@
   --radius-card: 7px;
   --shadow-card: 0 2px 3px rgb(0 0 0 / 45%), 0 10px 18px rgb(0 0 0 / 35%);
   --shadow-lifted: 0 6px 10px rgb(0 0 0 / 45%), 0 24px 40px rgb(0 0 0 / 40%);
-  /* Source and target glows, as ui_system.png section 04 draws them: a white-hot line straddling
-     the card's edge, a halo falling off fast with a faint tail, and light bleeding into
-     the black frame (the -in shadows, inset). Cards on the table glow broader (screens.css). */
+  /* Source and target glows, as ui_system.png section 04 draws them: a white-hot line
+     straddling the card's edge, a halo falling off fast with a faint tail, and light bleeding
+     into the black frame (the -in shadows, inset). Cards on the table glow broader
+     (screens.css). */
   --glow-gold:
     0 0 0 1.5px #fff8c0, 0 0 1px 2.5px rgb(240 140 25 / 95%),
     0 0 4px 4px rgb(205 110 30 / 80%), 0 0 16px 6px rgb(160 95 40 / 60%);

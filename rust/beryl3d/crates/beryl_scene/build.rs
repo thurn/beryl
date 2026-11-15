@@ -2,7 +2,8 @@
 //! module `space`, and each number of the `audit` object of `data/beryl3d/gates.json` as an
 //! `f32` constant named for its key in upper case, to `OUT_DIR/data.rs`, which `src/data.rs`
 //! includes. `write_space` describes the one rule that turns `space.json` into modules and
-//! constants.
+//! constants. It also writes the design tokens of `data/design-tokens.json` as the constants of
+//! `src/tokens.rs`'s modules, one file each under `OUT_DIR/tokens` (`write_tokens`).
 
 use std::fmt::Write;
 use std::fs;
@@ -43,8 +44,191 @@ fn main() {
         .unwrap();
     }
     out.push_str("}\n");
-    let dest = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("data.rs");
-    fs::write(dest, out).unwrap();
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    fs::write(out_dir.join("data.rs"), out).unwrap();
+    let tokens = manifest.join("../../../../data/design-tokens.json");
+    println!("cargo:rerun-if-changed={}", tokens.display());
+    let tokens_json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&tokens).unwrap()).unwrap();
+    let tokens_dir = out_dir.join("tokens");
+    fs::create_dir_all(&tokens_dir).unwrap();
+    for (module, text) in write_tokens(&tokens_json) {
+        fs::write(tokens_dir.join(format!("{module}.rs")), text).unwrap();
+    }
+}
+
+/// The modules of `src/tokens.rs` from `design-tokens.json`, each as its name and its
+/// constants. `color` holds a constant for every token of kind `color`, named for the token in
+/// upper case with `_` for `-`, then the colors of `flat.color`. `space`, `type_style` and
+/// `size` hold the entries of `flat` under the same names. A number in `flat` is a `value`, or
+/// the `token` of kind `length` whose pixels it takes; a `note` becomes the doc comment.
+fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
+    let tokens = Tokens {
+        list: json["tokens"].as_array().expect("`tokens` is an array"),
+        flat: &json["flat"],
+    };
+    let mut space = String::new();
+    let mut size = String::new();
+    for (module, out) in [("space", &mut space), ("size", &mut size)] {
+        for (key, entry) in tokens.entries(module) {
+            let (value, doc) = tokens.number(entry, &format!("flat.{module}.{key}"));
+            writeln!(out, "/// {doc}\npub const {key}: f32 = {value:?};").unwrap();
+        }
+    }
+    vec![
+        ("space", space),
+        ("type_style", write_type_styles(&tokens)),
+        ("size", size),
+        ("color", write_colors(&tokens)),
+    ]
+}
+
+/// The tokens of `design-tokens.json` and its `flat` object.
+struct Tokens<'a> {
+    list: &'a [serde_json::Value],
+    flat: &'a serde_json::Value,
+}
+
+impl<'a> Tokens<'a> {
+    /// The token named `name`.
+    fn find(&self, name: &str) -> &'a serde_json::Value {
+        self.list
+            .iter()
+            .find(|token| token["name"] == name)
+            .unwrap_or_else(|| panic!("design-tokens.json has no token `{name}`"))
+    }
+
+    /// The entries of `flat.<module>`.
+    fn entries(&self, module: &str) -> &'a serde_json::Map<String, serde_json::Value> {
+        self.flat[module]
+            .as_object()
+            .unwrap_or_else(|| panic!("design-tokens.json's `flat.{module}` is an object"))
+    }
+
+    /// A number of `flat` at `path` and its doc comment: a plain number, or an object with its
+    /// `value` or the `token` whose length in pixels it takes, and an optional `note`.
+    fn number(&self, entry: &serde_json::Value, path: &str) -> (f32, String) {
+        let doc = entry["note"].as_str().map(str::to_string);
+        if let Some(name) = entry["token"].as_str() {
+            let value = self.find(name)["value"].as_str().unwrap_or_default();
+            let pixels = value
+                .strip_suffix("px")
+                .and_then(|n| n.parse::<f32>().ok())
+                .unwrap_or_else(|| panic!("`{path}` names `{name}`, which is not a length"));
+            let doc = doc.map_or(format!("`--{name}`."), |d| format!("`--{name}`: {d}"));
+            return (pixels, doc);
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        let value = entry
+            .as_f64()
+            .or_else(|| entry["value"].as_f64())
+            .unwrap_or_else(|| panic!("`{path}` is a number, or has a `value` or a `token`"))
+            as f32;
+        (value, doc.unwrap_or_else(|| format!("`{path}`.")))
+    }
+}
+
+/// The module `type_style`: a `TypeStyle` for each entry of `flat.type_style`, and `ALL`.
+fn write_type_styles(tokens: &Tokens) -> String {
+    let mut out = String::new();
+    let styles = tokens.entries("type_style");
+    for (key, entry) in styles {
+        let path = format!("flat.type_style.{key}");
+        let font = entry["font"]
+            .as_str()
+            .expect("a type style names its `font`");
+        let weight = entry["weight"]
+            .as_u64()
+            .expect("a type style has a `weight`");
+        let (size, _) = tokens.number(&entry["size"], &path);
+        let (line, _) = tokens.number(&entry["line_height"], &path);
+        let doc = entry["note"]
+            .as_str()
+            .map_or(format!("`{path}`."), str::to_string);
+        writeln!(
+            out,
+            "/// {doc}\npub const {key}: TypeStyle = TypeStyle {{\n    font: Font::{font},\n    \
+             weight: {weight},\n    size: {size:?},\n    line_height: {line:?},\n}};"
+        )
+        .unwrap();
+    }
+    let names: Vec<&str> = styles.keys().map(String::as_str).collect();
+    writeln!(
+        out,
+        "/// Every type style, for the glyph rasterizer to prepare before the first frame.\n\
+         pub const ALL: [TypeStyle; {}] = [{}];",
+        names.len(),
+        names.join(", ")
+    )
+    .unwrap();
+    out
+}
+
+/// The module `color`: each token of kind `color`, then each entry of `flat.color`, the
+/// `color` token it names with its own `alpha`.
+fn write_colors(tokens: &Tokens) -> String {
+    let find = |name: &str| tokens.find(name);
+    let mut out = String::new();
+    for token in tokens.list.iter().filter(|token| token["kind"] == "color") {
+        let name = token["name"].as_str().unwrap();
+        let rgba = parse_color(token["value"].as_str().unwrap(), &find);
+        let constant = name.to_uppercase().replace('-', "_");
+        let doc = token["note"]
+            .as_str()
+            .map_or(format!("`--{name}`."), |note| format!("`--{name}`: {note}"));
+        writeln!(out, "/// {doc}\npub const {constant}: [u8; 4] = {rgba:?};").unwrap();
+    }
+    for (key, entry) in tokens.entries("color") {
+        let base = entry["color"]
+            .as_str()
+            .expect("a flat color names its `color`");
+        let mut rgba = parse_color(find(base)["value"].as_str().unwrap(), &find);
+        if let Some(alpha) = entry["alpha"].as_u64() {
+            rgba[3] = u8::try_from(alpha).expect("`alpha` is from 0 to 255");
+        }
+        let doc = entry["note"]
+            .as_str()
+            .map_or(format!("`--{base}`."), str::to_string);
+        writeln!(out, "/// {doc}\npub const {key}: [u8; 4] = {rgba:?};").unwrap();
+    }
+    out
+}
+
+/// A CSS color as RGBA: `#rrggbb`, `rgb(r g b)`, `rgb(r g b / a%)`, or `rgb(var(--name))`
+/// where the token `name` holds `r g b`. `find` looks a token up by name.
+fn parse_color<'a>(value: &str, find: &dyn Fn(&str) -> &'a serde_json::Value) -> [u8; 4] {
+    if let Some(hex) = value.strip_prefix('#') {
+        let channel = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).unwrap();
+        assert_eq!(hex.len(), 6, "`{value}` is a six-digit hex color");
+        return [channel(0), channel(2), channel(4), 0xff];
+    }
+    let inner = value
+        .strip_prefix("rgb(")
+        .and_then(|v| v.strip_suffix(')'))
+        .unwrap_or_else(|| panic!("`{value}` is not a color the build script reads"));
+    let inner = match inner
+        .strip_prefix("var(--")
+        .and_then(|v| v.strip_suffix(')'))
+    {
+        Some(name) => find(name)["value"].as_str().unwrap(),
+        None => inner,
+    };
+    let (channels, alpha) = inner.split_once('/').unwrap_or((inner, "100%"));
+    let mut rgba = [0xff; 4];
+    for (slot, channel) in rgba.iter_mut().zip(channels.split_whitespace()) {
+        *slot = channel
+            .parse()
+            .unwrap_or_else(|_| panic!("`{value}` has a bad channel"));
+    }
+    let percent: f64 = alpha
+        .trim()
+        .strip_suffix('%')
+        .and_then(|a| a.parse().ok())
+        .unwrap_or_else(|| panic!("`{value}` has a bad alpha"));
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let byte = (percent * 255.0 / 100.0).round() as u8;
+    rgba[3] = byte;
+    rgba
 }
 
 /// Writes the module `space` from `space.json` by one rule, whatever the keys are. An object

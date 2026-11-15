@@ -66,6 +66,17 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   uses the requested part. `Primary` is the unlabeled group before "Move to".
   The Rust test in `beryl_table/tests/commands.rs` checks the shape of each
   action.
+- `design-tokens.json`: the design tokens both clients draw with.
+  `just design-tokens` writes the web interface's `ui/src/design/tokens.css`
+  from it, and Beryl 3D's `beryl_scene` build script writes the constants of its
+  `tokens` module. `tokens` lists every CSS variable in order, each with a
+  `name`, a `kind` (`color`, `length`, `number`, `font`, or `css` for values
+  only CSS can use, which Beryl 3D skips), its CSS `value`, an optional `note`
+  written as a comment, and `group: true` for a blank line before it. `root` and
+  `rules` are the stylesheet's other declarations and rules. `flat` holds what
+  only Beryl 3D's flat layer uses (spacing, type styles, sizes and the panel
+  color), where a number is a `value` or names the `token` whose length it
+  takes. `tools/src/beryl_tools/design_tokens.py` describes the format.
 - `ui-conventions.json`: the UI design rules, which `just conventions` turns
   into `docs/ui-conventions.md`. Edit the JSON, never the generated page.
 

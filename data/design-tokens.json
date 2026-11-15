@@ -1,0 +1,357 @@
+{
+  "tokens": [
+    {
+      "name": "table",
+      "kind": "color",
+      "value": "#6b5f56",
+      "note": "Design tokens from docs/ui_mockups/ui_system.png (\"01 Foundations\"), as its swatches render: the swatches' labels (#625C56, #242321, #F2ECE1, #E9AD4A, #38DCFF) differ a little from the colors they show, and the screens are painted in the shown ones."
+    },
+    {
+      "name": "surface",
+      "kind": "color",
+      "value": "#211f1c"
+    },
+    {
+      "name": "text",
+      "kind": "color",
+      "value": "#f2e7d8"
+    },
+    {
+      "name": "gold",
+      "kind": "color",
+      "value": "#e4a242"
+    },
+    {
+      "name": "cyan",
+      "kind": "color",
+      "value": "#33dcfe"
+    },
+    {
+      "name": "type",
+      "kind": "color",
+      "value": "#f5f3f0",
+      "group": true,
+      "note": "Type on the dark surfaces renders near-neutral white, cooler than the Text swatch."
+    },
+    {
+      "name": "text-dim",
+      "kind": "color",
+      "value": "rgb(242 236 225 / 62%)"
+    },
+    {
+      "name": "text-faint",
+      "kind": "color",
+      "value": "rgb(242 236 225 / 38%)"
+    },
+    {
+      "name": "surface-raised",
+      "kind": "color",
+      "value": "#2e2c29"
+    },
+    {
+      "name": "surface-sunk",
+      "kind": "color",
+      "value": "#1b1a18"
+    },
+    {
+      "name": "gold-soft",
+      "kind": "color",
+      "value": "rgb(233 173 74 / 45%)"
+    },
+    {
+      "name": "cyan-soft",
+      "kind": "color",
+      "value": "rgb(56 220 255 / 45%)"
+    },
+    {
+      "name": "ember",
+      "kind": "color",
+      "value": "#f07a1c"
+    },
+    {
+      "name": "ember-deep",
+      "kind": "color",
+      "value": "#c84a0c"
+    },
+    {
+      "name": "stat-up-ink",
+      "kind": "color",
+      "value": "#0e7a2c",
+      "note": "A number raised or lowered against the printed one, as Arena inks it: deep inks on a card's pale plaque, bright ones on the dark surfaces."
+    },
+    {
+      "name": "stat-down-ink",
+      "kind": "color",
+      "value": "#c0141a"
+    },
+    {
+      "name": "stat-up",
+      "kind": "color",
+      "value": "#6fe08a"
+    },
+    {
+      "name": "stat-down",
+      "kind": "color",
+      "value": "#ff6a5e"
+    },
+    {
+      "name": "stolen",
+      "kind": "color",
+      "value": "#b48cff",
+      "note": "A permanent its owner doesn't control (Card.tsx), apart from every glow."
+    },
+    {
+      "name": "button-height",
+      "kind": "length",
+      "value": "48px",
+      "group": true,
+      "note": "Buttons: one size for every action on the game screen, each in the action dock at the bottom right (components.css .button, screens.css .dock)."
+    },
+    {
+      "name": "button-font",
+      "kind": "length",
+      "value": "24px"
+    },
+    {
+      "name": "button-width",
+      "kind": "length",
+      "value": "250px"
+    },
+    {
+      "name": "button-gap",
+      "kind": "length",
+      "value": "10px"
+    },
+    {
+      "name": "metal",
+      "kind": "color",
+      "value": "rgb(214 192 150 / 42%)",
+      "group": true,
+      "note": "Thin metallic borders: a pale gold line that catches the light."
+    },
+    {
+      "name": "metal-bright",
+      "kind": "color",
+      "value": "rgb(236 220 186 / 75%)"
+    },
+    {
+      "name": "metal-line",
+      "kind": "css",
+      "value": "linear-gradient(90deg, transparent, rgb(233 173 74 / 85%) 30%, rgb(255 226 170 / 95%) 50%, rgb(233 173 74 / 85%) 70%, transparent)"
+    },
+    {
+      "name": "silver-line",
+      "kind": "css",
+      "value": "linear-gradient(90deg, transparent, rgb(220 214 204 / 70%) 30%, rgb(250 248 244 / 85%) 50%, rgb(220 214 204 / 70%) 70%, transparent)"
+    },
+    {
+      "name": "font-serif",
+      "kind": "font",
+      "value": "\"Times New Roman\", Times, serif",
+      "group": true
+    },
+    {
+      "name": "font-card",
+      "kind": "font",
+      "value": "\"Crimson Pro Variable\", \"Iowan Old Style\", Georgia, serif",
+      "note": "Card names, type lines, rules text and P/T."
+    },
+    {
+      "name": "font-display",
+      "kind": "font",
+      "value": "\"Cinzel Variable\", \"Times New Roman\", serif"
+    },
+    {
+      "name": "font-sans",
+      "kind": "font",
+      "value": "\"Open Sans Variable\", -apple-system, \"Helvetica Neue\", sans-serif"
+    },
+    {
+      "name": "playable-rgb",
+      "kind": "css",
+      "value": "74 222 108",
+      "group": true,
+      "note": "What the player can play or activate now: a green outline (screens.css .card-playable)."
+    },
+    {
+      "name": "playable",
+      "kind": "color",
+      "value": "rgb(var(--playable-rgb))"
+    },
+    {
+      "name": "radius-card",
+      "kind": "length",
+      "value": "7px"
+    },
+    {
+      "name": "shadow-card",
+      "kind": "css",
+      "value": "0 2px 3px rgb(0 0 0 / 45%), 0 10px 18px rgb(0 0 0 / 35%)"
+    },
+    {
+      "name": "shadow-lifted",
+      "kind": "css",
+      "value": "0 6px 10px rgb(0 0 0 / 45%), 0 24px 40px rgb(0 0 0 / 40%)"
+    },
+    {
+      "name": "glow-gold",
+      "kind": "css",
+      "value": "0 0 0 1.5px #fff8c0, 0 0 1px 2.5px rgb(240 140 25 / 95%), 0 0 4px 4px rgb(205 110 30 / 80%), 0 0 16px 6px rgb(160 95 40 / 60%)",
+      "note": "Source and target glows, as ui_system.png section 04 draws them: a white-hot line straddling the card's edge, a halo falling off fast with a faint tail, and light bleeding into the black frame (the -in shadows, inset). Cards on the table glow broader (screens.css)."
+    },
+    {
+      "name": "glow-gold-in",
+      "kind": "css",
+      "value": "inset 0 0 0 1px #fffbd0, inset 0 0 3px 2px rgb(225 130 35 / 85%), inset 0 0 0 30px rgb(95 55 15 / 35%)"
+    },
+    {
+      "name": "glow-cyan",
+      "kind": "css",
+      "value": "0 0 0 1.5px #b0fcfe, 0 0 1px 2.5px rgb(5 190 240 / 95%), 0 0 4px 4px rgb(10 130 190 / 80%), 0 0 16px 6px rgb(30 100 140 / 60%)"
+    },
+    {
+      "name": "glow-cyan-in",
+      "kind": "css",
+      "value": "inset 0 0 0 1px #8cf4fa, inset 0 0 4px 3px rgb(5 150 215 / 95%), inset 0 0 0 30px rgb(0 50 75 / 55%)"
+    },
+    {
+      "name": "grain",
+      "kind": "css",
+      "value": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+      "group": true,
+      "note": "The matte tabletop: warm brown under a faint grain, lit evenly across the middle and falling off to dark edges and darker corners (battlefield.png: #837069 across the middle, #493f3b at the sides' middle, #1b1818 in the corners)."
+    },
+    {
+      "name": "tabletop",
+      "kind": "css",
+      "value": "var(--grain), radial-gradient(ellipse 50% 50% at 50% 50%, #857169, #837069 42%, #7e6c65 52%, #75645d 61%, #70605a 71%, #685953 81%, #594c46 90%, #4a3f3b 100%, #3b3331 123%, #2a2624 133%, #1b1818 141%)"
+    }
+  ],
+  "root": [
+    "color-scheme: dark",
+    "font-family: var(--font-sans)",
+    "color: var(--text)",
+    "background: var(--surface)"
+  ],
+  "rules": [
+    {
+      "selectors": [
+        "*"
+      ],
+      "declarations": [
+        "box-sizing: border-box"
+      ]
+    },
+    {
+      "selectors": [
+        "html",
+        "body",
+        "#root"
+      ],
+      "declarations": [
+        "height: 100%"
+      ]
+    },
+    {
+      "selectors": [
+        "body"
+      ],
+      "declarations": [
+        "margin: 0",
+        "-webkit-font-smoothing: antialiased"
+      ]
+    },
+    {
+      "selectors": [
+        "button"
+      ],
+      "declarations": [
+        "font: inherit",
+        "color: inherit"
+      ]
+    },
+    {
+      "selectors": [
+        ".serif"
+      ],
+      "declarations": [
+        "font-family: var(--font-serif)"
+      ]
+    },
+    {
+      "selectors": [
+        ".sans"
+      ],
+      "declarations": [
+        "font-family: var(--font-sans)"
+      ]
+    }
+  ],
+  "flat": {
+    "space": {
+      "S": {
+        "value": 4
+      },
+      "M": {
+        "token": "button-gap"
+      },
+      "L": {
+        "value": 16
+      }
+    },
+    "type_style": {
+      "TITLE": {
+        "font": "CrimsonPro",
+        "weight": 600,
+        "size": 26,
+        "line_height": 1.15,
+        "note": "A prompt's question: the dock's `.prompt-title`, 26 points at weight 600, line height 1.15."
+      },
+      "BODY": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 16,
+        "line_height": 1.4,
+        "note": "Running interface text."
+      },
+      "BUTTON": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": {
+          "token": "button-font"
+        },
+        "line_height": 1,
+        "note": "A button's label: `--button-font`, 24 points at weight 700, line height 1."
+      }
+    },
+    "size": {
+      "BUTTON_HEIGHT": {
+        "token": "button-height",
+        "note": "Every action button on the game screen."
+      },
+      "BUTTON_PADDING": {
+        "value": 21.6,
+        "note": "A button's padding on either side of its label: the `.button` rule's 0.9em at `--button-font`."
+      },
+      "PANEL_RADIUS": {
+        "value": 12,
+        "note": "The radius of a panel's corners."
+      },
+      "BORDER": {
+        "value": 1.5,
+        "note": "The width of a panel's or a button's border: the `.button` rule's 1.5px."
+      }
+    },
+    "color": {
+      "PANEL": {
+        "color": "surface",
+        "alpha": 224,
+        "note": "`--surface`, slightly translucent for a panel over the table."
+      },
+      "BUTTON": {
+        "color": "surface-raised",
+        "note": "`--surface-raised`: a button's face."
+      }
+    }
+  }
+}

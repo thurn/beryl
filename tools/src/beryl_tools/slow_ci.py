@@ -94,7 +94,7 @@ RUST_DATA: re.Pattern[str] = re.compile(
 )
 # The data files ui/src imports (and selection.py's harness, so every browser check runs).
 UI_DATA: re.Pattern[str] = re.compile(
-    r"^data/(arena-motion\.json|ui-conventions\.json|card-store\.tsv)$"
+    r"^data/(arena-motion\.json|ui-conventions\.json|card-store\.tsv|design-tokens\.json)$"
 )
 # The modules that decide whether a step's results fail its lane: its reruns, and the
 # pending and slow-only checks.

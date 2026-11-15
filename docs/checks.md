@@ -50,7 +50,9 @@ The lanes:
   one build in the checkout's target. `tools/tests/test_cli_build.py` fails if a
   dev-dependency turns on a feature that no normal dependency does, which would
   split them again.
-- `ui`: prettier, tsc and `npm test`.
+- `ui`: `design-tokens` (`ui/src/design/tokens.css` is what
+  `data/design-tokens.json` renders), prettier, tsc and `npm test`. A change to
+  `data/design-tokens.json` runs it too.
 - `names`, which holds several source checks:
   - `card-names`: no card names in generic code, apart from the entries in
     `data/card-names-allowlist.json`, whose counts may only go down.

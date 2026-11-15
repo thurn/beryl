@@ -61,6 +61,7 @@ from . import (
     card_text,
     citations,
     conventions,
+    design_tokens,
     deadline,
     discarded_push,
     efficiency,
@@ -90,6 +91,7 @@ from .lanes import (
     BY,
     CARD_FILES,
     CARD_STORE,
+    DESIGN_TOKENS,
     SMOKE_TITLES,
     Lane,
     Step,
@@ -546,7 +548,7 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
         )
     if touched(script_checks.inputs()) or touched(CARD_STORE):
         lanes.append(script_checks.lane())
-    if touched(r"^ui/"):
+    if touched(r"^ui/") or touched(DESIGN_TOKENS):
         lanes.append(ui_lane())
     # The changed files that may cite the rules, held to the cached release's text. The
     # dashboard's data files cite none.
@@ -644,6 +646,7 @@ def steps() -> dict[str, Callable[..., int]]:
         "citations": citations.step,
         "divergences": card_diverge.step,
         "conventions": conventions.step,
+        "design-tokens": design_tokens.step,
         "build-paths": build_paths.step,
         "rustfmt": card_files.rustfmt_step,
     }

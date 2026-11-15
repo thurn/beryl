@@ -135,7 +135,7 @@ impl Layer {
         let tint = fade(match look.tint {
             Some(tint) => tint,
             None if element.enabled => color::TYPE,
-            None => color::TYPE_FAINT,
+            None => color::TEXT_FAINT,
         });
         let scale = self.window.scale;
         for glyph in &block.glyphs {

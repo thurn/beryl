@@ -12,6 +12,9 @@ says how Beryl follows MTG Arena.
   `boards.rs`).
 - `src/generated/protocol.ts` is generated from `beryl_session` by ts-rs. A test
   fails when it is out of date, and its header explains how to regenerate it.
+- `src/design/tokens.css`, the CSS variables of colors, sizes and fonts, is
+  generated from `data/design-tokens.json` by `just design-tokens`. Edit the
+  JSON, never the stylesheet.
 - `src/stage/` is the "stage", the code that draws the game table and animates
   it. It plays the session's animation scripts on a clock that tests can step
   through one tick at a time (plan K25).

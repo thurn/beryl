@@ -109,6 +109,9 @@ CARD_FILES = r"^rust/(cards|crates/beryl_cards?)/"
 # rebuilds every crate that reads a record, and the tools' tests read it and hold it to their
 # sample.
 CARD_STORE = r"^data/card-store\.tsv$"
+# The web interface's stylesheet of design tokens is generated from this file: a change to it
+# runs the ui lane, whose `design-tokens` step holds the two to each other.
+DESIGN_TOKENS = r"^data/design-tokens\.json$"
 
 
 def scale_lane() -> Lane:
@@ -127,6 +130,11 @@ def scale_lane() -> Lane:
 def ui_lane() -> Lane:
     return (
         Lane("ui", warm=True)
+        # tokens.css is generated from data/design-tokens.json, which prettier leaves alone.
+        .step(
+            "design-tokens",
+            [sys.executable, "-m", "beryl_tools.checks", "design-tokens"],
+        )
         .step("prettier", [system.npm_bin("prettier"), "--check", "."], paths.UI)
         .step("tsc", [system.npm_bin("tsc"), "-b"], paths.UI)
         # The UI's logic that runs with no browser (ui/package.json `test`): Node expands the

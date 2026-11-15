@@ -196,6 +196,7 @@ def inputs(rust: Path = repo_paths.RUST) -> re.Pattern[str]:
         r"|^rust/Cargo\.toml$"
         rf"{crates}"
         r"|^data/ui-conventions\.json$|^data/card-store\.tsv$|^ui/fixtures\.json$"
+        r"|^data/design-tokens\.json$"
     )
 
 

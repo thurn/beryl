@@ -15,7 +15,8 @@ path. Its `[workspace.lints]` table must equal the main one's, which the
 - `beryl_scene`: poses, layout and animation as pure data; no GPU, window, clock
   or thread (`scene-purity`). Its build script writes `data/beryl3d/space.json`
   and the `audit` object of `data/beryl3d/gates.json` into constants
-  (`src/data.rs`).
+  (`src/data.rs`), and `data/design-tokens.json` into the design tokens of
+  `src/tokens.rs`.
 - `beryl_render`: draws a scene with wgpu. The only crate that names `wgpu`.
 - `beryl_assets`: decodes and packs card pictures for the renderer.
 - `beryl_host`: the window and event loop (winit) that drive a scene and render
