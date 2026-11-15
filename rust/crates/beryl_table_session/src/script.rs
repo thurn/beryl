@@ -118,6 +118,10 @@ fn last_reset(members: &[(Vec<AnimationEvent>, Table)]) -> Option<ResetReason> {
         })
 }
 
+pub(super) fn snapshot(view: &PlayerView) -> Script {
+    reset(&Stage::of(view), &spans::of_view(view, &[]), None, None)
+}
+
 fn reset(end: &Stage, spans: &[Open], notice: Option<Notice>, cause: Option<Subject>) -> Script {
     let mut beats = Vec::new();
     if !spans.is_empty() {

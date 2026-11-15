@@ -399,6 +399,7 @@ name = "beryl_link"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "parking_lot",
  "serde",
  "serde_json",
 ]
@@ -494,6 +495,7 @@ dependencies = [
  "beryl_table",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

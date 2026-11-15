@@ -1,14 +1,9 @@
-use std::{
-    io::Write,
-    sync::{Mutex, mpsc},
-    thread,
-    time::Duration,
-};
+use std::{io::Write, sync::mpsc, thread, time::Duration};
 
 use beryl_link::{
-    Link, LinkError, PING_INTERVAL, Route,
+    Link, LinkError, PING_INTERVAL, PeerInfo, Route,
     guest::{Event, REDIAL_DELAY, join},
-    host::{Host, Hosted, Sender, serve},
+    host::{Host, Hosted, Sender, TableQueue, serve},
     memory::{self, MemoryLink},
     wire::{Hello, Message, RefusalReason, TableStatus, VERSION_MISMATCH, decode, encode},
 };
@@ -55,9 +50,9 @@ impl Hosted for Counter {
         }
     }
 
-    fn update_for(&mut self, seat: u8) -> Value {
+    fn update_for(&mut self, seat: u8, _: &PeerInfo) -> Result<Value, LinkError> {
         assert_eq!(seat, 1);
-        json!({"count": self.count})
+        Ok(json!({"count": self.count}))
     }
 
     fn lobby_for(&mut self, seat: u8) -> Option<Value> {
@@ -189,7 +184,7 @@ fn refuses_json_that_expands_beyond_the_wire_limit() {
 #[test]
 fn wrong_secret_closes_without_sending_anything() {
     let (link, mut peer) = memory::pair();
-    let table = Mutex::new(Counter::default());
+    let table = TableQueue::new(Counter::default());
     let mut hello = hello();
     hello.secret = "wrong".into();
     hello.wire = "also wrong".into();
@@ -199,7 +194,7 @@ fn wrong_secret_closes_without_sending_anything() {
         Err(LinkError::Refused(_))
     ));
     assert_eq!(peer.receive(), Err(LinkError::Closed));
-    assert!(table.into_inner().unwrap().sender.is_none());
+    assert!(table.into_inner().sender.is_none());
 }
 
 #[test]
@@ -215,7 +210,7 @@ fn both_sides_see_the_version_mismatch() {
         PING_INTERVAL,
     );
     let events = guest.take_events().unwrap();
-    let table = Mutex::new(Counter::default());
+    let table = TableQueue::new(Counter::default());
     assert_eq!(
         serve(link, &mut host(), &table, PING_INTERVAL),
         Err(LinkError::Refused(VERSION_MISMATCH.into()))
@@ -242,14 +237,14 @@ fn acts_updates_and_refusals_share_one_order() {
         PING_INTERVAL,
     );
     let events = guest.take_events().unwrap();
-    let table = Mutex::new(Counter::default());
+    let table = TableQueue::new(Counter::default());
     thread::scope(|scope| {
         let guest = guest;
         let server = scope.spawn(|| serve(link, &mut host(), &table, PING_INTERVAL));
         verify_connected(&events, &Event::Joined { seat: 1 }, 0);
         assert_eq!(guest.peer().unwrap().name, "Derek");
         assert_eq!(guest.peer().unwrap().route, Route::Memory);
-        table.lock().unwrap().increment();
+        table.lock().increment();
 
         let first = guest.act(json!("increment")).unwrap();
         let second = guest.act(json!("increment")).unwrap();
@@ -287,7 +282,6 @@ fn acts_updates_and_refusals_share_one_order() {
         // A later message on the same stream also detects updates emitted after a refusal.
         table
             .lock()
-            .unwrap()
             .sender
             .as_ref()
             .unwrap()
@@ -301,7 +295,7 @@ fn acts_updates_and_refusals_share_one_order() {
         guest.leave();
         assert_eq!(server.join().unwrap(), Ok(()));
     });
-    let table = table.into_inner().unwrap();
+    let table = table.into_inner();
     assert_eq!(table.count, 3);
     assert_eq!(table.left, 1);
     assert_eq!(table.dropped, 0);
@@ -320,7 +314,7 @@ fn a_severed_link_redials_and_resumes_with_a_whole_view() {
         PING_INTERVAL,
     );
     let events = guest.take_events().unwrap();
-    let table = Mutex::new(Counter::default());
+    let table = TableQueue::new(Counter::default());
     let mut host = host();
     thread::scope(|scope| {
         let server = scope.spawn(|| {
@@ -338,13 +332,13 @@ fn a_severed_link_redials_and_resumes_with_a_whole_view() {
         disconnect.close().unwrap();
         assert_eq!(events.recv().unwrap(), Event::Reconnecting);
         verify_connected(&events, &Event::Resumed { seat: 1 }, 1);
-        let sender = table.lock().unwrap().sender.clone().unwrap();
+        let sender = table.lock().sender.clone().unwrap();
         sender.leave().unwrap();
         assert_eq!(events.recv().unwrap(), Event::Left);
         assert!(events.recv().is_err());
         assert_eq!(server.join().unwrap(), Ok(()));
     });
-    let table = table.into_inner().unwrap();
+    let table = table.into_inner();
     assert_eq!(table.dropped, 1);
     assert_eq!(table.left, 1);
 }
@@ -369,7 +363,7 @@ fn leave_cancels_redial_during_an_attempt() {
         PING_INTERVAL,
     );
     let events = guest.take_events().unwrap();
-    let table = Mutex::new(Counter::default());
+    let table = TableQueue::new(Counter::default());
     thread::scope(|scope| {
         let server = scope.spawn(|| serve(link, &mut host(), &table, PING_INTERVAL));
         verify_connected(&events, &Event::Joined { seat: 1 }, 0);
@@ -390,12 +384,12 @@ fn leave_cancels_redial_during_an_attempt() {
 fn host_disconnects_after_three_unanswered_pings() {
     let (link, mut peer) = memory::pair();
     peer.send(&encode(&Message::Hello(hello()))).unwrap();
-    let table = Mutex::new(Counter::default());
+    let table = TableQueue::new(Counter::default());
     assert_eq!(
         serve(link, &mut host(), &table, Duration::ZERO),
         Err(LinkError::Closed)
     );
-    assert_eq!(table.into_inner().unwrap().dropped, 1);
+    assert_eq!(table.into_inner().dropped, 1);
 }
 
 #[test]

@@ -60,16 +60,29 @@ struct Header<T> {
     format: u32,
     seed: u64,
     initial: T,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    metadata: Option<serde_json::Value>,
 }
 
 /// Writes the first line. Use the table from before the first saved entry.
 pub fn write_header(writer: impl Write, initial: &Table, seed: u64) -> Result<(), SaveError> {
+    write_header_with_metadata(writer, initial, seed, None)
+}
+
+/// Writes a header with optional host session settings in addition to the game state.
+pub fn write_header_with_metadata(
+    writer: impl Write,
+    initial: &Table,
+    seed: u64,
+    metadata: Option<serde_json::Value>,
+) -> Result<(), SaveError> {
     write_line(
         writer,
         &Header {
             format: FORMAT,
             seed,
             initial,
+            metadata,
         },
     )
 }

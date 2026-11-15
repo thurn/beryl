@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use beryl_session::protocol::{
-    AssistsView, Counter, CounterView, FaceName, ManaPool, ManualOrders, ManualPiles,
+    AssistsView, Counter, CounterView, FaceName, LinkState, ManaPool, ManualOrders, ManualPiles,
     MarkerPreview, NamedCounter, ObjectId, ObjectView, PlayerState, PlayerView, PowerToughness,
     Side, StackItem, TablePhase, TableView, Why, ZoneName,
 };
@@ -158,6 +158,7 @@ fn manual_view_with_ordered_zones() -> PlayerView {
         assists: AssistsView::default(),
         phase: TablePhase::FirstMain,
         seats: 2,
+        link: LinkState::Alone,
         seat: None,
         orders: ManualOrders {
             you: ManualPiles {

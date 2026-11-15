@@ -1,9 +1,9 @@
-use std::{sync::Mutex, thread};
+use std::thread;
 
 use beryl_link::{
     Invite, Link, LinkError, MAX_FRAME_SIZE, PING_INTERVAL, Route,
     guest::{Event, REDIAL_DELAY, join},
-    host::{Host, Hosted, serve},
+    host::{Host, Hosted, TableQueue, serve},
     wire::{Hello, RefusalReason},
 };
 use beryl_link_iroh::{Identity, IrohHost, IrohLink, RelayChoice, RemoteInvite};
@@ -143,7 +143,7 @@ fn refuses_malformed_invites_and_wrong_table_secret() {
     let result = serve(
         host.accept().unwrap(),
         &mut Host::new("test", secret, "Host"),
-        &Mutex::new(NoTableData),
+        &TableQueue::new(NoTableData),
         PING_INTERVAL,
     );
     assert_eq!(
@@ -162,7 +162,7 @@ impl Hosted for NoTableData {
     fn act(&mut self, _: u8, _: Value) -> Result<(), RefusalReason> {
         unreachable!()
     }
-    fn update_for(&mut self, _: u8) -> Value {
+    fn update_for(&mut self, _: u8, _: &beryl_link::PeerInfo) -> Result<Value, LinkError> {
         unreachable!()
     }
     fn lobby_for(&mut self, _: u8) -> Option<Value> {

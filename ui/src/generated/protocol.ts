@@ -861,6 +861,8 @@ sideboard: Array<ObjectId>, };
 
 export type ManualOrders = { you: ManualPiles, opponent: ManualPiles, };
 
+export type LinkState = { "kind": "alone" } | { "kind": "connected", direct: boolean, roundTripMs: number | null, } | { "kind": "reconnecting" } | { "kind": "left" };
+
 export type TableView = { log: Array<LogLine>, proposals: Array<ProposalView>, labels: Array<LabelView>, assists: AssistsView, phase: TablePhase, seats: number, 
 /**
  * The viewer's absolute seat, omitted for seat zero.
@@ -897,7 +899,7 @@ lastDraw?: number,
 /**
  * The viewer's deck tokens, in deck list order, for the ten numbered shortcuts.
  */
-deckTokens?: Array<CardTokenLink>, prompt?: TablePrompt, arrows?: Array<TableArrow>, };
+deckTokens?: Array<CardTokenLink>, prompt?: TablePrompt, arrows?: Array<TableArrow>, link?: LinkState, };
 
 export type TableArrow = { arrow: Arrow, from: Subject, to: Subject, own: boolean, };
 

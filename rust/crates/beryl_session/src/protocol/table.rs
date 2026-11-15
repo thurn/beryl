@@ -225,6 +225,30 @@ pub struct TableArrow {
     pub own: bool,
 }
 
+/// The other seat's connection as seen by the viewer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum LinkState {
+    #[default]
+    Alone,
+    Connected {
+        direct: bool,
+        round_trip_ms: Option<u32>,
+    },
+    Reconnecting,
+    Left,
+}
+
+impl LinkState {
+    fn is_alone(&self) -> bool {
+        *self == Self::Alone
+    }
+}
+
 /// What the viewer can see or use on a manual table in addition to the shared game view.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -274,4 +298,7 @@ pub struct TableView {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(optional, as = "Option<_>")]
     pub arrows: Vec<TableArrow>,
+    #[serde(default, skip_serializing_if = "LinkState::is_alone")]
+    #[ts(optional, as = "Option<_>")]
+    pub link: LinkState,
 }

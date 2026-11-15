@@ -26,7 +26,7 @@ use crate::protocol::{
     ZoneName,
 };
 use crate::protocol::{
-    AssistsView, FaceName, LabelView, LogLine, ManualAbility, ManualOrders, ManualPiles,
+    AssistsView, FaceName, LabelView, LinkState, LogLine, ManualAbility, ManualOrders, ManualPiles,
     NamedCounter, ProposalLine, ProposalView, RowName, TableArrow, TableCardCommands,
     TableObjectAction, TableObjectRef, TablePhase, TablePrompt, TableView, ZoneRef,
 };
@@ -61,7 +61,7 @@ fn prompt_decls(cfg: &Config) -> [String; 18] {
 }
 
 /// Types used by manual table views and their scripts.
-fn table_decls(cfg: &Config) -> [String; 19] {
+fn table_decls(cfg: &Config) -> [String; 20] {
     [
         FaceName::decl(cfg),
         ManualAbility::decl(cfg),
@@ -69,6 +69,7 @@ fn table_decls(cfg: &Config) -> [String; 19] {
         NamedCounter::decl(cfg),
         ManualPiles::decl(cfg),
         ManualOrders::decl(cfg),
+        LinkState::decl(cfg),
         TableView::decl(cfg),
         TableArrow::decl(cfg),
         TableObjectRef::decl(cfg),

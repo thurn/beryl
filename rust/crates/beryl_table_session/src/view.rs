@@ -10,9 +10,9 @@ use std::collections::{BTreeMap, HashSet};
 use beryl_card_store::{STORE, facts};
 use beryl_session::ipc::decks::CardTokenLink;
 use beryl_session::protocol::{
-    AssistsView, CardHandling, LogLine, ManualOrders, ManualPiles, NamedCounter, ObjectId as Slot,
-    PlayerState, PlayerView, Side, StackItem, Step, TableActionRefs, TableArrow, TablePhase,
-    TableView, ZoneName, ZoneRef,
+    AssistsView, CardHandling, LinkState, LogLine, ManualOrders, ManualPiles, NamedCounter,
+    ObjectId as Slot, PlayerState, PlayerView, Side, StackItem, Step, TableActionRefs, TableArrow,
+    TablePhase, TableView, ZoneName, ZoneRef,
 };
 use beryl_session::script::{Arrow, Subject, Turn};
 use beryl_table::action::Portion;
@@ -76,6 +76,7 @@ pub(super) fn project(
         assists: assists(&projected, seat),
         phase,
         seats: projected.players.len() as u8,
+        link: LinkState::Alone,
         seat: (seat.0 != 0).then_some(seat.0),
         orders: ManualOrders {
             you: yours,
@@ -260,20 +261,29 @@ fn assists(table: &Table, seat: Seat) -> AssistsView {
 }
 
 // Log controls depend on the recorded entry, including strikes and undo targets.
-pub(super) fn attach_history(view: &mut PlayerView, log: &Log, table: &Table, seat: Seat) {
+pub(super) fn attach_history(
+    view: &mut PlayerView,
+    log: &Log,
+    table: &Table,
+    seat: Seat,
+    names: &[Option<String>],
+) {
     let manual = view.table.as_mut().expect("manual table projection");
-    manual.log = history(log, table, seat);
+    manual.log = history(log, table, seat, names);
     manual.last_draw = log.last_draw(table, seat);
 }
 
-fn history(log: &Log, table: &Table, seat: Seat) -> Vec<LogLine> {
+fn history(log: &Log, table: &Table, seat: Seat, names: &[Option<String>]) -> Vec<LogLine> {
     log.visible_history(table, seat)
         .map(|row| LogLine {
             n: row.n,
             by: if row.by == seat {
                 "You".to_owned()
             } else {
-                format!("Seat {}", u16::from(row.by.0) + 1)
+                names
+                    .get(usize::from(row.by.0))
+                    .and_then(Clone::clone)
+                    .unwrap_or_else(|| format!("Seat {}", u16::from(row.by.0) + 1))
             },
             text: row.text.to_owned(),
             struck: row.struck,

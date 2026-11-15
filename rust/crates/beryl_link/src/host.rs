@@ -1,6 +1,9 @@
 //! Host-side handshake and dispatch into a table that owns the game state.
 
-use std::{sync::Mutex, time::Duration};
+use std::time::Duration;
+
+/// Shared by local callers and the link loop so requests wait in FIFO order.
+pub use parking_lot::FairMutex as TableQueue;
 
 use serde_json::Value;
 
@@ -15,10 +18,11 @@ pub trait Hosted {
 
     /// Apply the action and send both seats their updates before returning.
     /// A refused action emits no updates.
-    /// Local actions should hold the same mutex for the same sequence of work.
+    /// Local actions should hold the same table queue for the same sequence of work.
     fn act(&mut self, seat: u8, action: Value) -> Result<(), RefusalReason>;
 
-    fn update_for(&mut self, seat: u8) -> Value;
+    /// Prepare the first seat snapshot before admitting the connection.
+    fn update_for(&mut self, seat: u8, peer: &PeerInfo) -> Result<Value, LinkError>;
     fn lobby_for(&mut self, seat: u8) -> Option<Value>;
 
     /// Install the sender for subsequent actions. The initial snapshot is
@@ -73,6 +77,11 @@ impl Sender {
         self.0.finish(&Message::Leave)
     }
 
+    /// Interrupt the link so a guest can reconnect.
+    pub fn disconnect(&self) {
+        self.0.close();
+    }
+
     pub fn peer(&self) -> PeerInfo {
         self.0.peer()
     }
@@ -83,7 +92,7 @@ impl Sender {
 pub fn serve(
     link: impl Link + 'static,
     host: &mut Host,
-    hosted: &Mutex<impl Hosted>,
+    hosted: &TableQueue<impl Hosted>,
     ping_interval: Duration,
 ) -> Result<(), LinkError> {
     let connection = Connection::new(link)?;
@@ -106,7 +115,7 @@ pub fn serve(
 
     let seat;
     {
-        let mut table = hosted.lock().map_err(|_| LinkError::Closed)?;
+        let mut table = hosted.lock();
         let status;
         (seat, status) = match &host.guest {
             Some((name, seat)) if name == &hello.name => (*seat, TableStatus::Resumed),
@@ -120,12 +129,13 @@ pub fn serve(
         };
         let mut initial = || {
             let sender = Sender(connection.outbox.clone());
+            let update = table.update_for(seat, &sender.peer())?;
             connection.outbox.send(&Message::Welcome {
                 seat,
                 table: status,
                 host: host.name.clone(),
             })?;
-            sender.update(table.update_for(seat))?;
+            sender.update(update)?;
             if let Some(lobby) = table.lobby_for(seat) {
                 sender.lobby(lobby)?;
             }
@@ -140,7 +150,7 @@ pub fn serve(
     }
 
     let result = serve_actions(&connection, hosted, seat, ping_interval);
-    let mut table = hosted.lock().map_err(|_| LinkError::Closed)?;
+    let mut table = hosted.lock();
     if result.is_ok() || connection.outbox.is_finishing() {
         table.left(seat);
         host.guest = None;
@@ -153,7 +163,7 @@ pub fn serve(
 
 fn serve_actions(
     connection: &Connection,
-    hosted: &Mutex<impl Hosted>,
+    hosted: &TableQueue<impl Hosted>,
     seat: u8,
     ping_interval: Duration,
 ) -> Result<(), LinkError> {
@@ -161,7 +171,7 @@ fn serve_actions(
     loop {
         match connection.receive(&mut heartbeat)? {
             Message::Act { n, action } => {
-                let mut table = hosted.lock().map_err(|_| LinkError::Closed)?;
+                let mut table = hosted.lock();
                 if connection.outbox.is_finishing() {
                     return Ok(());
                 }
