@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
+use beryl_assets::glyphs::glyphs_rasterized_on_this_thread;
 use beryl_assets::{MatchFaces, faces_built_on_this_thread};
 use beryl_host::{Headless, Scans};
 use beryl_inspect::pages;
@@ -157,6 +158,34 @@ fn cards_show_the_scans_in_the_cache_prepared_on_other_threads() {
     assert!(
         found.iter().zip(magenta).all(|(&a, b)| a.abs_diff(b) <= 12),
         "the card at ({x}, {y}) is {found:?}, not its scan's {magenta:?}"
+    );
+}
+
+#[test]
+fn the_prompt_bar_draws_text_rasterized_on_another_thread() {
+    let page = pages::page("pay-default", Side::You, Layout::Desktop, WINDOW).expect("a page");
+    let mut head =
+        Headless::new(page, WINDOW.width, WINDOW.height, 1.0, &Scans::app()).expect("a GPU");
+    head.seek(&"prompt:1".parse::<Moment>().expect("a moment"))
+        .expect("a moment of the recording");
+    let button = head.page().find(r#"button "Next""#).rect();
+    let pixels = head.pixels();
+    assert_eq!(
+        glyphs_rasterized_on_this_thread(),
+        0,
+        "a glyph was rasterized on the drawing thread"
+    );
+    // The button is dark with a dull border; only its label's ink is near white.
+    let inked = (button.y as u32..(button.y + button.height) as u32)
+        .flat_map(|y| (button.x as u32..(button.x + button.width) as u32).map(move |x| (x, y)))
+        .filter(|&(x, y)| {
+            let at = ((y * WINDOW.width as u32 + x) * 4) as usize;
+            pixels[at..at + 3].iter().all(|&channel| channel > 200)
+        })
+        .count();
+    assert!(
+        inked > 20,
+        "the button's label drew {inked} near-white pixels"
     );
 }
 

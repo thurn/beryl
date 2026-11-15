@@ -1,49 +1,9 @@
-//! The texture arrays a record samples (docs/beryl-3d.md, "The frame": three texture arrays),
-//! and the generated pictures that fill them until real card faces and atlas pages arrive: a
-//! placeholder face per card name, a placeholder back, and the soft disc a glow draws.
-
-use beryl_scene::frame::Sprite;
+//! The generated pictures that fill the card face arrays until real faces arrive: a
+//! placeholder face per card name and a placeholder back.
 
 /// The layer of the face arrays that holds the card back: the card back is always the first
 /// face of a match (`beryl_scene::faces::CARD_BACK`).
 pub const BACK_LAYER: u16 = 0;
-/// The size of the placeholder atlas's one page.
-const ATLAS_SIZE: u32 = 128;
-/// The soft disc that a glow draws: the whole of the placeholder atlas's first page.
-pub const GLOW_SPRITE: Sprite = Sprite {
-    page: 0,
-    rect: [0, 0, ATLAS_SIZE as u16, ATLAS_SIZE as u16],
-};
-
-/// The pictures of one texture array: every layer is `width` by `height` RGBA pixels, not
-/// premultiplied, stored as sRGB values.
-pub struct Layers {
-    pub width: u32,
-    pub height: u32,
-    pub pictures: Vec<Vec<u8>>,
-}
-
-/// The placeholder atlas: one page holding the soft disc of `GLOW_SPRITE`, white with its
-/// opacity falling from the centre to nothing at the edge.
-#[must_use]
-pub fn placeholder_atlas() -> Layers {
-    let size = ATLAS_SIZE;
-    let mut page = Vec::with_capacity((size * size * 4) as usize);
-    for y in 0..size {
-        for x in 0..size {
-            let dx = (x as f32 + 0.5) / size as f32 * 2.0 - 1.0;
-            let dy = (y as f32 + 0.5) / size as f32 * 2.0 - 1.0;
-            let distance = (dx * dx + dy * dy).sqrt().min(1.0);
-            let alpha = (1.0 - distance) * (1.0 - distance);
-            page.extend_from_slice(&[255, 255, 255, (alpha * 255.0).round() as u8]);
-        }
-    }
-    Layers {
-        width: size,
-        height: size,
-        pictures: vec![page],
-    }
-}
 
 /// FNV-1a, a small stable hash: the same name gives the same face on every machine.
 fn hash(name: &str) -> u32 {

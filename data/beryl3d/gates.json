@@ -63,19 +63,27 @@
   "materials": {
     "card": {
       "samples": 1,
-      "expressions": 63
+      "expressions": 72
     },
     "contact_shadow": {
       "samples": 1,
-      "expressions": 77
+      "expressions": 86
     },
     "glow": {
       "samples": 1,
-      "expressions": 63
+      "expressions": 72
+    },
+    "glyph": {
+      "samples": 1,
+      "expressions": 66
+    },
+    "panel": {
+      "samples": 1,
+      "expressions": 110
     },
     "table": {
       "samples": 1,
-      "expressions": 55
+      "expressions": 64
     }
   },
   "tests": {}

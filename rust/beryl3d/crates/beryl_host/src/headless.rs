@@ -7,12 +7,19 @@
 //! match and uploads them all, as the app does behind its loading screen (docs/beryl-3d.md,
 //! "Preparation"), so a card shows its scan when the scan cache has it and a placeholder with its
 //! name when not. It never downloads a scan, so a picture depends only on what the cache holds.
+//!
+//! Text is drawn from glyphs that `beryl_assets`' glyph worker rasterizes on its own thread:
+//! the printable ASCII characters of every type style before the first picture, and before each
+//! picture whatever else the client's text asks for. The host waits for the worker to finish
+//! before it draws, so a picture never lacks a glyph that a later one would have.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::mpsc::{self, Receiver};
 
 use beryl_art::{ArtCache, Origins};
-use beryl_assets::{Config, Format, Preparer, default_workers};
+use beryl_assets::glyphs::{GlyphWorker, prepare_latin};
+use beryl_assets::{Config, Format, Prepared, Preparer, default_workers};
 use beryl_render::{Limits, Renderer, Target};
 use beryl_scene::driver::{DriverError, Moment, Page};
 use beryl_scene::faces::FaceList;
@@ -63,6 +70,9 @@ pub struct Headless {
     page: Page,
     renderer: Renderer,
     target: Target,
+    glyphs: GlyphWorker,
+    /// The glyph pages the worker has finished.
+    pages: Receiver<Prepared>,
 }
 
 impl Headless {
@@ -83,11 +93,34 @@ impl Headless {
         load_faces(&mut renderer, page.faces(), scans);
         let pixels = |points: f32| (points * scale).round().max(1.0) as u32;
         let target = Target::offscreen(&renderer, pixels(width), pixels(height));
-        Ok(Self {
+        let (out, pages) = mpsc::channel();
+        let glyphs = GlyphWorker::spawn(out, || {});
+        // The test driver lays the page out at one physical pixel to a point.
+        glyphs.request(prepare_latin(1.0));
+        let mut head = Self {
             page,
             renderer,
             target,
-        })
+            glyphs,
+            pages,
+        };
+        head.text();
+        Ok(head)
+    }
+
+    /// Has the glyph worker rasterize what the present moment's text needs that the client has
+    /// no page for, waits for it, uploads every page it finished and gives the client their
+    /// glyphs. Laying out text never waits for its glyphs, so this changes what is drawn but
+    /// not where.
+    fn text(&mut self) {
+        self.page.frame();
+        self.glyphs.request(self.page.wanted_glyphs());
+        self.glyphs.flush();
+        while let Ok(prepared) = self.pages.try_recv() {
+            if self.renderer.upload_page(&prepared) {
+                self.page.give_glyphs(prepared.ready);
+            }
+        }
     }
 
     /// The recording being played, to read or to act on.
@@ -112,11 +145,13 @@ impl Headless {
 
     /// The frame at the present moment, as the client builds it.
     pub fn frame(&mut self) -> &Frame {
+        self.text();
         self.page.frame()
     }
 
     /// Draws the present frame and returns its pixels, RGBA bytes row by row from the top.
     pub fn pixels(&mut self) -> Vec<u8> {
+        self.text();
         let frame = self.page.frame();
         self.renderer.render(frame, &mut self.target);
         self.renderer.read(&self.target)
@@ -128,6 +163,7 @@ impl Headless {
     ///
     /// When the file cannot be written.
     pub fn png(&mut self, path: &Path) -> Result<(), String> {
+        self.text();
         let frame = self.page.frame();
         self.renderer.render(frame, &mut self.target);
         self.renderer.write_png(&self.target, path)

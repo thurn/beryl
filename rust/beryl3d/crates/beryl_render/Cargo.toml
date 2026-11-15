@@ -34,3 +34,5 @@ naga = { version = "30.0.2", features = ["wgsl-in"] }
 serde_json = "1.0.154"
 # Builds the test scenes' transforms and camera.
 glam = "0.34.3"
+# Finds the glyphs of the test text in its font: the release beryl_assets rasterizes with.
+swash = "=0.2.10"

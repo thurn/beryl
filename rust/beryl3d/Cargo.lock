@@ -363,6 +363,7 @@ dependencies = [
  "naga",
  "pollster",
  "serde_json",
+ "swash",
  "wgpu",
 ]
 

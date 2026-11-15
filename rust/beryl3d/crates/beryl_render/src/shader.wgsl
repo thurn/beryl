@@ -21,6 +21,8 @@ const TABLE: u32 = 0u;
 const CARD: u32 = 1u;
 const CONTACT_SHADOW: u32 = 2u;
 const GLOW: u32 = 3u;
+const PANEL: u32 = 5u;
+const GLYPH: u32 = 6u;
 
 // A card's printed size and corner radius, in millimetres, as the card mesh is built.
 const CARD_SIZE: vec2<f32> = vec2<f32>(63.0, 88.0);
@@ -60,6 +62,8 @@ struct VertexOut {
     @location(5) @interpolate(flat) params: vec4<f32>,
     // 0 inside a shape, rising to 1 across the edge strip's one pixel.
     @location(6) edge: f32,
+    // The record's `uv` as it was written: a panel's border color, from 0 to 255.
+    @location(7) @interpolate(flat) rect: vec4<u32>,
 };
 
 fn world(v: VertexIn, p: vec2<f32>) -> vec3<f32> {
@@ -88,6 +92,7 @@ fn vs(v: VertexIn) -> VertexOut {
     out.tint = v.tint;
     out.params = v.params;
     out.edge = v.edge;
+    out.rect = v.rect;
     if (out.material == CARD) {
         // A card's face fills its layer; its back's layer is in the record's `uv[0]`.
         out.uv = v.uv;
@@ -128,11 +133,38 @@ fn shade_contact_shadow(mesh_uv: vec2<f32>, tint: vec4<f32>, params: vec4<f32>) 
     return vec4<f32>(tint.rgb * a, a);
 }
 
-// A glow: the sprite's opacity in the tint's color, fading as `progress` (params.x) runs to 1.
-// Light adds to what is beneath it, so its opacity is zero.
+// A glow: the sprite's coverage (the atlas's one channel) in the tint's color, fading as
+// `progress` (params.x) runs to 1. Light adds to what is beneath it, so its opacity is zero.
 fn shade_glow(sprite: vec4<f32>, tint: vec4<f32>, params: vec4<f32>) -> vec4<f32> {
-    let a = sprite.a * tint.a * (1.0 - params.x);
+    let a = sprite.r * tint.a * (1.0 - params.x);
     return vec4<f32>(tint.rgb * a, 0.0);
+}
+
+// A panel of the flat layer: a rounded rectangle `params.xy` logical points large with corners
+// of radius `params.z`, filled with the tint, and a border `params.w` wide in the color held in
+// the record's `uv` (`border`, from 0 to 255). Both edges are antialiased over one pixel;
+// `mesh_pixel` is how far `mesh_uv` moves across one pixel.
+fn shade_panel(
+    mesh_uv: vec2<f32>,
+    mesh_pixel: vec2<f32>,
+    tint: vec4<f32>,
+    border: vec4<u32>,
+    params: vec4<f32>,
+) -> vec4<f32> {
+    let size = params.xy;
+    let pixel = max(max(mesh_pixel.x * size.x, mesh_pixel.y * size.y), 1e-4);
+    let d = rounded_box((mesh_uv - vec2<f32>(0.5)) * size, size * 0.5, params.z);
+    let outer = clamp(0.5 - d / pixel, 0.0, 1.0);
+    let inner = select(1.0, clamp(0.5 - (d + params.w) / pixel, 0.0, 1.0), params.w > 0.0);
+    let color = mix(vec4<f32>(border) / 255.0, tint, inner);
+    let a = color.a * outer;
+    return vec4<f32>(color.rgb * a, a);
+}
+
+// A glyph: its coverage (the atlas's one channel) times the tint.
+fn shade_glyph(sprite: vec4<f32>, tint: vec4<f32>) -> vec4<f32> {
+    let a = sprite.r * tint.a;
+    return vec4<f32>(tint.rgb * a, a);
 }
 
 @fragment
@@ -144,12 +176,16 @@ fn fs(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f3
     // Sampled before branching on the material, which varies per instance: WGSL allows
     // `textureSample` only in uniform control flow.
     let picture = textureSample(pictures, picture_sampler, uv, i32(layer));
+    // Derivatives too are allowed only in uniform control flow.
+    let mesh_pixel = fwidth(in.mesh_uv);
     var color = vec4<f32>(0.0);
     switch in.material {
         case TABLE: { color = shade_table(in.tint); }
         case CARD: { color = shade_card(picture, in.tint, in.params); }
         case CONTACT_SHADOW: { color = shade_contact_shadow(in.mesh_uv, in.tint, in.params); }
         case GLOW: { color = shade_glow(picture, in.tint, in.params); }
+        case PANEL: { color = shade_panel(in.mesh_uv, mesh_pixel, in.tint, in.rect, in.params); }
+        case GLYPH: { color = shade_glyph(picture, in.tint); }
         default: {}
     }
     return color * (1.0 - in.edge);

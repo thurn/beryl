@@ -518,7 +518,10 @@ The rules for building a frame:
   record.
 - **Three texture arrays.** A record's `flags` name one of them: the small card
   faces, the full-size card faces, or **the atlas**, which holds everything else
-  (glyph pages, icons, and the shapes of shadows and glows).
+  (glyph pages, icons, and the shapes of shadows and glows). The atlas is an
+  array of single-channel pages, each 1,024 texels square, that hold coverage:
+  the glyph worker fills pages from the first up, and the renderer keeps its own
+  shapes, such as a glow's soft disc, on the last.
 - **One projection.** Every record's transform is in the table's space. A
   flat-layer record's transform places it on a plane just in front of the
   camera, so the same camera matrix serves the table and the flat layer.

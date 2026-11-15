@@ -145,3 +145,20 @@ fn a_space_is_sent_with_an_empty_rectangle() {
     assert_eq!(cells[0].key, space);
     assert_eq!(cells[0].rect[2..], [0, 0]);
 }
+
+#[test]
+fn a_flush_returns_once_every_page_asked_for_is_sent() {
+    let (out, results) = mpsc::channel();
+    let worker = GlyphWorker::spawn(out, || {});
+    worker.request(prepare_latin(1.0));
+    worker.flush();
+    let pages: Vec<Prepared> = results.try_iter().collect();
+    assert!(
+        !pages.is_empty(),
+        "no page had arrived when the flush returned"
+    );
+    // Asking again for glyphs already sent sends nothing, and the flush still returns.
+    worker.request(prepare_latin(1.0));
+    worker.flush();
+    assert_eq!(results.try_iter().count(), 0);
+}

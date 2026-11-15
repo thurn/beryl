@@ -9,6 +9,7 @@ use beryl_scene::frame::{Frame, TextureArray, Wake};
 use beryl_scene::input::{AssetReady, FaceSize};
 use wgpu::util::DeviceExt;
 
+use crate::atlas::Atlas;
 use crate::count::FragmentCounter;
 use crate::faces::{
     COMPRESSION, FaceArray, Waiting, empty_arrays, face_arrays, face_upload, supported,
@@ -17,7 +18,6 @@ use crate::mesh::meshes;
 use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
 use crate::runs::runs;
 use crate::target::Target;
-use crate::textures::{Layers, placeholder_atlas};
 
 /// How many records the instance buffer holds at startup: the tier's upload limit.
 const RECORDS: u64 = 4096;
@@ -56,8 +56,8 @@ pub struct Renderer {
     ranges: [std::ops::Range<u32>; 3],
     /// The board-size and full-size card face arrays, by `FaceSize` value.
     faces: [FaceArray; 2],
-    /// The atlas of glyphs and sprites.
-    atlas: wgpu::TextureView,
+    /// The atlas of glyph pages and shapes.
+    atlas: Atlas,
     /// Faces that arrived during play, waiting to be uploaded (`hold`).
     waiting: Waiting,
     /// One bind group per texture array, by `TextureArray` value.
@@ -108,7 +108,7 @@ impl Renderer {
             usage: wgpu::BufferUsages::INDEX,
         });
         let faces = empty_arrays(&device, &queue);
-        let atlas = array(&device, &queue, "atlas", &placeholder_atlas());
+        let atlas = Atlas::new(&device, &queue);
         let bind_groups = bind_groups(&device, &layout, &uniforms, &sampler, &faces, &atlas);
         Self {
             device,
@@ -237,6 +237,13 @@ impl Renderer {
             return false;
         };
         self.faces[face_array(size)].write(&self.queue, index, layer)
+    }
+
+    /// Uploads a glyph page from the glyph worker into its page of the atlas. Returns whether
+    /// it was uploaded: anything but a glyph page, or a page past `GLYPH_PAGES`, is not. The
+    /// host then gives the client the page's `AssetReady`, so that its text draws.
+    pub fn upload_page(&mut self, prepared: &Prepared) -> bool {
+        self.atlas.upload(&self.queue, prepared)
     }
 
     /// Keeps a face that arrived during play until `upload_waiting` lets it through.
@@ -416,45 +423,6 @@ fn instance_buffer(device: &wgpu::Device, records: u64) -> wgpu::Buffer {
     })
 }
 
-/// A texture array holding `layers`, as a view of every layer. An array of one layer gets a
-/// copy of it as a second, because OpenGL cannot tell a one-layer array from a plain texture.
-fn array(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    label: &str,
-    layers: &Layers,
-) -> wgpu::TextureView {
-    let mut data = layers.pictures.concat();
-    let mut count = layers.pictures.len() as u32;
-    if count == 1 {
-        data.extend_from_slice(&layers.pictures[0]);
-        count = 2;
-    }
-    let texture = device.create_texture_with_data(
-        queue,
-        &wgpu::TextureDescriptor {
-            label: Some(label),
-            size: wgpu::Extent3d {
-                width: layers.width,
-                height: layers.height,
-                depth_or_array_layers: count,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        },
-        wgpu::util::TextureDataOrder::LayerMajor,
-        &data,
-    );
-    texture.create_view(&wgpu::TextureViewDescriptor {
-        dimension: Some(wgpu::TextureViewDimension::D2Array),
-        ..Default::default()
-    })
-}
-
 /// The index in `Renderer::faces` of the array for `size`.
 fn face_array(size: FaceSize) -> usize {
     match size {
@@ -469,9 +437,9 @@ fn bind_groups(
     uniforms: &wgpu::Buffer,
     sampler: &wgpu::Sampler,
     faces: &[FaceArray; 2],
-    atlas: &wgpu::TextureView,
+    atlas: &Atlas,
 ) -> [wgpu::BindGroup; 3] {
-    let arrays = [&faces[0].view, &faces[1].view, atlas];
+    let arrays = [&faces[0].view, &faces[1].view, &atlas.view];
     [
         TextureArray::SmallFaces,
         TextureArray::FullFaces,

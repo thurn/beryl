@@ -11,6 +11,7 @@
 
 mod action;
 mod check;
+mod glyphs;
 mod moment;
 mod recording;
 
@@ -126,6 +127,9 @@ pub struct Page {
     moments: Option<Vec<(Name, u64)>>,
     /// Every step of the recording's scripts, once asked for.
     steps: Option<Vec<StepMoment>>,
+    /// The glyph pages a host has given (`give_glyphs`), given again whenever the client is
+    /// made anew, so that its text keeps drawing after a seek back.
+    glyphs: Vec<AssetReady>,
 }
 
 impl Page {
@@ -163,6 +167,7 @@ impl Page {
             plants: Vec::new(),
             moments: None,
             steps: None,
+            glyphs: Vec::new(),
         };
         page.begin();
         Ok(page)
@@ -577,6 +582,9 @@ impl Page {
                 self.give(Input::Assets(ready));
             }
         }
+        for ready in self.glyphs.clone() {
+            self.give(Input::Assets(ready));
+        }
         self.release();
         self.render();
     }
@@ -703,6 +711,7 @@ impl Page {
             plants: self.plants.clone(),
             moments: Some(Vec::new()),
             steps: Some(Vec::new()),
+            glyphs: self.glyphs.clone(),
         };
         page.begin();
         page

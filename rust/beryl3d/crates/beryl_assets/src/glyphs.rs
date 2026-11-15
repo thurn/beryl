@@ -4,8 +4,9 @@
 //! atlas page and sends each new or changed page as a [`Prepared`]. The caller's thread only
 //! sends keys, so the frame thread never rasterizes.
 
+use std::cell::Cell;
 use std::collections::BTreeSet;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::thread::{self, JoinHandle};
 
 use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey};
@@ -40,11 +41,22 @@ pub fn prepare_latin(scale: f32) -> Vec<GlyphKey> {
     keys
 }
 
+thread_local! {
+    static GLYPHS_RASTERIZED: Cell<u64> = const { Cell::new(0) };
+}
+
+/// How many glyphs this thread has rasterized. Only the glyph worker rasterizes, so on any
+/// other thread, such as the one that draws frames, this stays zero.
+#[must_use]
+pub fn glyphs_rasterized_on_this_thread() -> u64 {
+    GLYPHS_RASTERIZED.with(Cell::get)
+}
+
 /// A thread that rasterizes glyphs. Dropping it stops the thread once it has finished what it
 /// was asked.
 #[derive(Debug)]
 pub struct GlyphWorker {
-    requests: Option<Sender<Vec<GlyphKey>>>,
+    requests: Option<Sender<Message>>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -74,9 +86,32 @@ impl GlyphWorker {
         if let Some(requests) = &self.requests {
             // The worker only stops when this sender is dropped, or when the host has dropped
             // the receiver of finished pages and wants none.
-            let _ = requests.send(keys);
+            let _ = requests.send(Message::Keys(keys));
         }
     }
+
+    /// Waits until every glyph asked for so far has been rasterized and its page sent, so
+    /// that a host drawing a picture of one moment, such as the headless host, can take every
+    /// page it needs before it draws. A host drawing frames as they come never calls it.
+    pub fn flush(&self) {
+        let Some(requests) = &self.requests else {
+            return;
+        };
+        let (done, wait) = mpsc::sync_channel(1);
+        if requests.send(Message::Flush(done)).is_ok() {
+            // An error means the worker stopped, and has nothing left to send.
+            let _ = wait.recv();
+        }
+    }
+}
+
+/// What a host sends the worker.
+#[derive(Debug)]
+enum Message {
+    /// Glyphs to rasterize.
+    Keys(Vec<GlyphKey>),
+    /// Answer once every glyph asked for before this has been sent.
+    Flush(SyncSender<()>),
 }
 
 impl Drop for GlyphWorker {
@@ -89,21 +124,32 @@ impl Drop for GlyphWorker {
 }
 
 /// The worker's loop: takes every request waiting, rasterizes them together so that a burst
-/// of requests uploads each page once, and sends the pages.
-fn run(inbox: &Receiver<Vec<GlyphKey>>, out: &Sender<Prepared>, wake: &dyn Fn()) {
+/// of requests uploads each page once, sends the pages, and then answers the flushes that were
+/// waiting with them.
+fn run(inbox: &Receiver<Message>, out: &Sender<Prepared>, wake: &dyn Fn()) {
     let mut atlas = Atlas::new();
-    while let Ok(mut keys) = inbox.recv() {
-        keys.extend(inbox.try_iter().flatten());
-        let prepared = atlas.add(&keys);
-        if prepared.is_empty() {
-            continue;
+    while let Ok(first) = inbox.recv() {
+        let mut keys = Vec::new();
+        let mut flushes = Vec::new();
+        for message in std::iter::once(first).chain(inbox.try_iter()) {
+            match message {
+                Message::Keys(more) => keys.extend(more),
+                Message::Flush(done) => flushes.push(done),
+            }
         }
+        let prepared = atlas.add(&keys);
+        let sent = !prepared.is_empty();
         for page in prepared {
             if out.send(page).is_err() {
                 return;
             }
         }
-        wake();
+        if sent {
+            wake();
+        }
+        for done in flushes {
+            let _ = done.send(());
+        }
     }
 }
 
@@ -193,6 +239,7 @@ impl Atlas {
     /// Draws the glyph `key` as coverage, without hinting, with the variable font's weight
     /// axis set to the key's weight.
     fn rasterize(&mut self, key: GlyphKey) -> Option<Bitmap> {
+        GLYPHS_RASTERIZED.with(|count| count.set(count.get() + 1));
         let file = ALL.get(usize::from(key.font))?;
         let font = FontRef::from_index(file.data, 0)?;
         let mut scaler = self
