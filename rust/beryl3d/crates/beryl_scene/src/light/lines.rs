@@ -21,12 +21,15 @@ use glam::Vec2;
 use crate::data::space::light::{bow, hang, onto};
 
 /// One end of a line as it lies on the screen: its middle, how far it reaches from there across
-/// and down (zero for a player's anchor, which is a point), and which way its controller faces
-/// across the table, up the screen (-1) or down it (1); 0 for what faces neither way.
+/// and down, as a box or, `round`, as the ellipse inside that box (a player's life total, as the
+/// web's `reachOfLife` has it), and which way its controller faces across the table, up the
+/// screen (-1) or down it (1); 0 for what faces neither way. An end that reaches nowhere is a
+/// point.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct End {
     pub middle: Vec2,
     pub half: Vec2,
+    pub round: bool,
     pub toward: f32,
 }
 
@@ -88,14 +91,19 @@ pub fn along(points: &[Vec2; 4], t: f32) -> Vec2 {
         + points[3] * (t * t * t)
 }
 
-/// Where the way from `end`'s middle toward `point` crosses its edge; `None` if `point` lies
-/// within it. A point's edge is the point itself.
+/// Where the way from `end`'s middle toward `point` crosses its edge, its box's or its
+/// ellipse's; `None` if `point` lies within it. A point's edge is the point itself.
 fn edge(end: End, point: Vec2) -> Option<Vec2> {
     let way = point - end.middle;
     if end.half.x <= 0.0 || end.half.y <= 0.0 {
         return (way != Vec2::ZERO).then_some(end.middle);
     }
-    let out = (way.x / end.half.x).abs().max((way.y / end.half.y).abs());
+    let share = way / end.half;
+    let out = if end.round {
+        share.length()
+    } else {
+        share.x.abs().max(share.y.abs())
+    };
     (out > 1.0).then(|| end.middle + way / out)
 }
 

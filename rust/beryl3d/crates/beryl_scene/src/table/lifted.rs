@@ -1,7 +1,9 @@
 //! Where the cards the opponent is handling rest while they look at them (`lift`): the top cards
 //! of a library, lying face down beside it as Arena's do, or a hand, held up in front of the
 //! camera in a small fan as the web interface's `handlingPlacements` (`ui/src/game/layout.ts`)
-//! holds them. A card of a hand shows the face its record shows to the viewer.
+//! holds them: smaller and high at the left before the first turn, when the opening hand is
+//! looked at. A card of a hand shows its back when the opponent owns it or a counted look at a
+//! pile takes it, as the web's do, and otherwise the face its record shows to the viewer.
 //!
 //! The handling is the view's (`PlayerView::handling`), or, while a script plays, the one its
 //! `lift` steps so far have begun. Which cards it holds follows the web's `handledAt`
@@ -88,13 +90,20 @@ pub(crate) struct Handled {
     pub handling: CardHandling,
     /// The cards held up, in the order they left their pile.
     pub slots: Vec<ObjectId>,
+    /// Whether the look is before the game's first turn, at an opening hand, which the web's
+    /// `handlingPlacements` holds up smaller and out of the way (`view.turn.number === 0`).
+    pub opening: bool,
 }
 
 impl Handled {
     /// The look a snapshot places. The session only lifts a counted look at the top of a
     /// library for a scry (UI Conventions, "Cards a look returns"). During other choices
     /// the library stays in place until a step moves a card from it.
-    pub(crate) fn of_view(zones: &Zones, handling: Option<CardHandling>) -> Option<Self> {
+    pub(crate) fn of_view(
+        zones: &Zones,
+        handling: Option<CardHandling>,
+        opening: bool,
+    ) -> Option<Self> {
         handling
             .filter(|handling| {
                 !matches!(
@@ -106,18 +115,22 @@ impl Handled {
                     }
                 )
             })
-            .map(|handling| Self::of(zones, handling))
+            .map(|handling| Self::of(zones, handling, opening))
     }
 
-    /// The look `handling` as it begins over `zones`.
-    pub(crate) fn of(zones: &Zones, handling: CardHandling) -> Self {
+    /// The look `handling` as it begins over `zones`, `opening` if before the first turn.
+    pub(crate) fn of(zones: &Zones, handling: CardHandling, opening: bool) -> Self {
         let slots = group_of(handling).map_or_else(Vec::new, |group| {
             handled(handling, &members(zones, group))
                 .iter()
                 .map(|object| object.slot)
                 .collect()
         });
-        Self { handling, slots }
+        Self {
+            handling,
+            slots,
+            opening,
+        }
     }
 }
 
@@ -170,6 +183,10 @@ pub(crate) fn lay(
             // Beside the library toward the table's middle: to its right on the viewer's side,
             // and to its left on the opponent's.
             // The lifted cards are as large as the pile's, and lie as far apart for their size.
+            // This differs from the web's `handlingPlacements` on purpose. The web draws them
+            // 1.95 times the pile's width in a flat group at the screen's top right; Beryl 3D
+            // follows Arena, which lays them at library size on the table beside the library
+            // (UI Conventions, "Cards the opponent looks at").
             let scale = super::pile::pile_scale(layout, side);
             let beside = match side {
                 Side::You => beside,
@@ -183,7 +200,14 @@ pub(crate) fn lay(
                 ..Pose::default()
             }
         } else {
-            held_up(object, side, (offset, under, order), camera)
+            let pile = matches!(handled.handling, CardHandling::Pile { .. });
+            held_up(
+                object,
+                side,
+                (offset, under, order),
+                (handled.opening, pile),
+                camera,
+            )
         };
         if let Some(rest) = placement.get(object.slot).copied() {
             // A card lifted from under the top two of a pile is drawn, as the pile's are not.
@@ -201,22 +225,29 @@ pub(crate) fn lay(
 
 /// Where a card taken from `side`'s hand is held up in front of the camera, as the web's
 /// `handlingPlacements` holds it: the viewer's low in the middle of the screen, the opponent's
-/// high. `offset` is its column's distance from the middle column, `under` how many cards of its
-/// column lie over it, and `order` how far it lies over the first card. The opponent's cards show
-/// their backs.
+/// high, and, for a look at an `opening` hand, either player's smaller and high at the left.
+/// `offset` is its column's distance from the middle column, `under` how many cards of its
+/// column lie over it, and `order` how far it lies over the first card. The opponent's cards,
+/// and every card a counted look at a `pile` takes, show their backs, as the web's do; so does a
+/// card whose face the viewer's record does not show.
 fn held_up(
     object: &ObjectView,
     side: Side,
     (offset, under, order): (f32, usize, f32),
+    (opening, pile): (bool, bool),
     camera: &Camera,
 ) -> Pose {
     let aspect = camera.window.size.width / camera.window.size.height;
-    // A card's width, in normalized device coordinates of the window.
-    let width = lift::hand::HEIGHT * 2.0 * (CARD_WIDTH / CARD_HEIGHT) / aspect;
-    let at = match side {
-        Side::You => lift::hand::AT,
-        Side::Opponent => lift::hand::THEIRS_AT,
+    let (at, height) = match (opening, side) {
+        (true, _) => (lift::hand::opening::AT, lift::hand::opening::HEIGHT),
+        (false, Side::You) => (lift::hand::AT, lift::hand::HEIGHT),
+        (false, Side::Opponent) => (lift::hand::THEIRS_AT, lift::hand::HEIGHT),
     };
+    // A card's width, in normalized device coordinates of the window.
+    let width = height * 2.0 * (CARD_WIDTH / CARD_HEIGHT) / aspect;
+    // Where the middle card stands is given across in window heights, so that it keeps its
+    // distance from the middle of the screen at any window shape, as the web's `fromMiddle` does.
+    let at = Vec2::new(at.x / aspect, at.y);
     #[expect(clippy::cast_precision_loss, reason = "a handful of cards")]
     let ndc =
         at + Vec2::new(
@@ -225,8 +256,8 @@ fn held_up(
         ) + lift::hand::PACKET * under as f32;
     let rotation = Quat::from_rotation_z(-(offset * lift::hand::LEAN_DEGREES).to_radians());
     let depth = lift::hand::DEPTH - order;
-    let mut pose = camera.screen_pose(ndc, depth, rotation, lift::hand::HEIGHT);
-    pose.turn = if object.owner == Side::Opponent || !super::rows::face_up(object) {
+    let mut pose = camera.screen_pose(ndc, depth, rotation, height);
+    pose.turn = if pile || object.owner == Side::Opponent || !super::rows::face_up(object) {
         1.0
     } else {
         0.0
@@ -257,7 +288,9 @@ pub(crate) fn lay_picked(
         let (column, under) = (index % columns, index / columns);
         let offset = column as f32 - (columns as f32 - 1.0) / 2.0;
         let order = (column * packet + packet - under) as f32;
-        let pose = held_up(object, side, (offset, under, order), camera);
+        // A hidden pick is made while a spell or ability resolves, which is never before the
+        // first turn, so its cards are never laid out as an opening hand's.
+        let pose = held_up(object, side, (offset, under, order), (false, false), camera);
         placement.set(
             object.slot,
             super::Rest {
@@ -283,6 +316,9 @@ pub(crate) struct Look {
     /// has not yet.
     changes: bool,
     next: Option<Handled>,
+    /// Whether the script plays before the first turn, so that a look it begins is at an
+    /// opening hand.
+    opening: bool,
     /// Whether no step of the script takes time, so that the first step makes that change.
     instant: bool,
     /// The cards the step being played lifts as a look begins, or puts back as it ends.
@@ -310,11 +346,13 @@ impl Look {
             view.handling
                 .and_then(|_| Zones::of_view(view, &[]).handling)
         };
+        let opening = after.turn.number == 0;
         let handled = of(before);
         let open = if announced { None } else { of(after) };
         Self {
             changes: !announced && open != handled,
             next: open,
+            opening,
             handled,
             instant: !timed,
             lifting: Vec::new(),
@@ -358,7 +396,11 @@ impl Look {
         if let Act::Lift { span, handling } = act {
             let ended = self.handled.take();
             if *span == Span::Begin {
-                self.handled = Some(Handled::of(&Zones::of_table(played), *handling));
+                self.handled = Some(Handled::of(
+                    &Zones::of_table(played),
+                    *handling,
+                    self.opening,
+                ));
             }
             let moved = match span {
                 Span::Begin => self.handled.as_ref(),

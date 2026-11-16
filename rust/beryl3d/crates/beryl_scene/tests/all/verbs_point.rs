@@ -8,6 +8,7 @@ use beryl_protocol::script::{Act, Arrow, Span, StepTiming, Subject};
 use beryl_scene::agent::checks::{KeptArrow, keep_arrows, lines_hold};
 use beryl_scene::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use beryl_scene::agent::{Context, Layout, TreeOptions};
+use beryl_scene::data::space::light;
 use beryl_scene::frame::{Frame, Role};
 use beryl_scene::input::{Insets, Size};
 use beryl_scene::play::Show;
@@ -319,8 +320,11 @@ fn lines_hold_finds_a_planted_reshape() {
     assert_eq!(lines_hold(&kept, &after, &desktop()).len(), 1);
 }
 
+/// An arrow at a player comes onto their life total, an oval, as the web's `reachOfLife` makes
+/// it: its tip lies `light.onto.into` of the way in from the oval's rim toward its middle, on the
+/// way the arrow comes in.
 #[test]
-fn an_arrow_at_a_player_ends_at_their_anchor() {
+fn an_arrow_at_a_player_ends_inside_their_life_total() {
     let (mut played, start, cards) = Played::new();
     let opponent = Subject::Player {
         player: Side::Opponent,
@@ -338,12 +342,14 @@ fn an_arrow_at_a_player_ends_at_their_anchor() {
     let drawn = played.last_frame();
     let arrow = arrows(&drawn)[0];
     let table = played.show.table();
-    let anchor = table
-        .camera()
-        .to_screen(table.player_pose(Side::Opponent).position);
+    let camera = table.camera();
+    let anchor = camera.to_screen(table.player_pose(Side::Opponent).position);
+    // The life orb's half-size, in pixels of the web's stage, whose 900 are the window's height.
+    let half = light::PLAYER_HALF_PIXELS * (camera.window.size.height / 900.0);
+    let inside = ((arrow.corners[3] - anchor) / half).length();
     assert!(
-        arrow.corners[3].distance(anchor) < 0.5,
-        "{:?} ends at {anchor:?}",
+        (inside - (1.0 - light::onto::INTO)).abs() < 0.01,
+        "{:?} ends {inside} of the way out from {anchor:?}",
         arrow.corners
     );
 }

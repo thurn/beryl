@@ -447,7 +447,7 @@ impl<'a> Zones<'a> {
             handling: None,
             arrival: None,
         };
-        let handled = lifted::Handled::of_view(&zones, view.handling);
+        let handled = lifted::Handled::of_view(&zones, view.handling, view.turn.number == 0);
         zones.handled(handled)
     }
 

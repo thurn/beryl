@@ -13,10 +13,11 @@
 
 use std::f32::consts::PI;
 
-use beryl_protocol::script::Arrow;
+use beryl_protocol::script::{Arrow, Subject};
 use glam::{Vec2, Vec3};
 
 use super::lines::{End, along, cubic, way_of};
+use super::marks;
 use super::{Lit, Open, Span};
 use crate::data::space::light;
 use crate::frame::sprites;
@@ -56,7 +57,11 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         let (Some(from), Some(to)) = (scene.reach(arrow.from), scene.reach(arrow.to)) else {
             continue;
         };
+        // A player's end is their life total, an oval (`marks::player_half`), as the web's
+        // `reachOfLife` makes it: an arrow at a player stops at its rim, and is sized by it.
+        let (from, to) = (life(scene, arrow.from, from), life(scene, arrow.to, to));
         let ends = [(arrow.from, from), (arrow.to, to)].map(|(subject, reach)| End {
+            round: matches!(subject, Subject::Player { .. }),
             toward: scene.toward(subject),
             ..on_screen(scene, reach)
         });
@@ -80,13 +85,16 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         let Some(from) = scene.reach(aim.from) else {
             continue;
         };
+        let from = life(scene, aim.from, from);
         let start = End {
+            round: matches!(aim.from, Subject::Player { .. }),
             toward: scene.toward(aim.from),
             ..on_screen(scene, from)
         };
         let pointer = End {
             middle: aim.to,
             half: Vec2::ZERO,
+            round: false,
             toward: 0.0,
         };
         #[expect(
@@ -184,14 +192,26 @@ impl Drawn {
     }
 }
 
+/// Where `subject` reaches, `reach`, with a player's anchor given the size of their life total.
+fn life(scene: &Scene<'_>, subject: Subject, reach: Reach) -> Reach {
+    match subject {
+        Subject::Player { .. } => Reach {
+            half: marks::player_half(scene, reach.pose.scale),
+            ..reach
+        },
+        Subject::Object { .. } | Subject::Ability { .. } => reach,
+    }
+}
+
 /// `reach` as an end of a line on the screen: the box round its four corners there, or its middle
-/// alone for a player's anchor, which has no size.
+/// alone for what has no size.
 fn on_screen(scene: &Scene<'_>, reach: Reach) -> End {
     let camera = scene.table().camera();
     if reach.half == Vec2::ZERO || reach.pose.scale <= 0.0 {
         return End {
             middle: camera.to_screen(reach.pose.position),
             half: Vec2::ZERO,
+            round: false,
             toward: 0.0,
         };
     }
@@ -208,6 +228,7 @@ fn on_screen(scene: &Scene<'_>, reach: Reach) -> End {
     End {
         middle: (low + high) / 2.0,
         half: (high - low) / 2.0,
+        round: false,
         toward: 0.0,
     }
 }

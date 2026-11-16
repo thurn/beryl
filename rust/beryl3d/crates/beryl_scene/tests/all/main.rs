@@ -41,6 +41,7 @@ mod verbs_count;
 mod verbs_fly;
 mod verbs_fly_draw;
 mod verbs_leaving;
+mod verbs_lift;
 mod verbs_mark;
 mod verbs_point;
 mod verbs_shown;
