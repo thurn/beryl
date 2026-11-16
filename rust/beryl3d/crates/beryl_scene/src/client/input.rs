@@ -10,7 +10,7 @@ use glam::Vec2;
 use super::{Client, Platform};
 use crate::agent::hit;
 use crate::element::{Chord, Dismiss, Press};
-use crate::frame::{Place, Role};
+use crate::frame::{ElementId, Place, Role};
 use crate::input::{Button, Input, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
 use crate::layout::{Edit, Navigation};
 use crate::prompts;
@@ -26,6 +26,10 @@ impl Client {
     /// sets its level instead (`slide`). After each, the flat layer is told which element a
     /// press under the pointer would reach and which one is held down, which it draws so.
     pub(super) fn point(&mut self, pointer: Pointer) {
+        if self.bug_open() {
+            self.bug_point(&pointer);
+            return;
+        }
         self.show.pointer_mut().handle(&pointer);
         // The mouse is followed whatever is asked, so that an arrow to the pointer that a
         // prompt opens under it starts there. A touch has no pointer to follow.
@@ -50,11 +54,7 @@ impl Client {
         if !self.slide(&pointer) {
             self.press_layer(&pointer);
         }
-        let gone = matches!(pointer.phase, PointerPhase::Cancel | PointerPhase::Leave)
-            || (pointer.kind == PointerKind::Touch && pointer.phase == PointerPhase::Up);
-        let hovered = (!gone)
-            .then(|| self.layer.press_at(pointer.position, self.open))
-            .flatten();
+        let hovered = self.hover_flat(&pointer);
         // The pointer on a payment's Auto Pay, or a touch held on it, marks what it would tap.
         let suggesting = match (&self.prompt, &hovered) {
             (Some((_, prompt)), Some((_, Press::Button(button), true))) => {
@@ -63,10 +63,21 @@ impl Client {
             _ => false,
         };
         self.suggest(suggesting);
-        let hovered = hovered.map(|(id, ..)| id);
-        (self.layer).point_at(hovered, self.pressed.or(self.slider));
+    }
+
+    /// Tells the flat layer which element a press under `pointer` would reach, which it draws
+    /// hovered, and which one is held down, and returns the first with its press.
+    pub(super) fn hover_flat(&mut self, pointer: &Pointer) -> Option<(ElementId, Press, bool)> {
+        let gone = matches!(pointer.phase, PointerPhase::Cancel | PointerPhase::Leave)
+            || (pointer.kind == PointerKind::Touch && pointer.phase == PointerPhase::Up);
+        let hovered = (!gone)
+            .then(|| self.layer.press_at(pointer.position, self.open))
+            .flatten();
+        let id = hovered.as_ref().map(|(id, ..)| *id);
+        (self.layer).point_at(id, self.pressed.or(self.slider));
         let at = (!gone).then_some(pointer.position);
         self.layer.hover(at, self.open);
+        hovered
     }
 
     /// Sets the level of the slider the primary pointer goes down on, and of the one it drags,
@@ -114,6 +125,12 @@ impl Client {
         {
             (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
         }
+        self.press_flat(pointer, true);
+    }
+
+    /// A press on the flat layer, or with `table` on a card of the table that no element of
+    /// the flat layer covers, as `point` describes it.
+    pub(super) fn press_flat(&mut self, pointer: &Pointer, table: bool) {
         let primary = pointer.button == Button::Primary;
         let open = self.open;
         match pointer.phase {
@@ -126,7 +143,8 @@ impl Client {
                     }
                 }
                 self.viewing.down = None;
-                if self.pressed.is_none()
+                if table
+                    && self.pressed.is_none()
                     && let Some(index) = hit(&self.frame, pointer.position)
                     && let element = &self.frame.resolved[index as usize]
                     && matches!(element.role, Role::Card | Role::Pile)
@@ -227,7 +245,7 @@ impl Client {
     /// (`isBugReportShortcut` in `ui/src/components/bugReportKeys.ts`). A key that means none
     /// of these waits for the next frame, as before.
     pub(super) fn key(&mut self, key: Key) {
-        if key.phase == KeyPhase::Up {
+        if key.phase == KeyPhase::Up || self.bug_key(key) {
             return;
         }
         if self.layer.edited_id().is_some() && self.field_key(key) {

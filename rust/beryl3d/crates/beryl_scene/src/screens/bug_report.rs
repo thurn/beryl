@@ -1,27 +1,418 @@
-//! The bug report sheet: for now its description field alone, until the screens track builds
-//! the rest of it.
+//! The bug report sheet, in the stages of the web interface's `BugReporter`
+//! (`ui/src/components/BugReport.tsx`, styled by `ui/src/screens/styles/bug-report.css`). Cmd+B
+//! freezes the table and takes a picture of the window with nothing of the report in it; the
+//! player then drags out the region that shows the bug over the frozen table (a click, Space,
+//! Return or the whole-window button takes the whole window), says what went wrong, and
+//! submits. "Saved" shows until the report closes, and the table plays on.
+//!
+//! Unlike the web, the sheet shows the frozen table itself rather than the picture of it: the
+//! client keeps drawing the frame the picture was taken of, which is the same image, so the
+//! renderer needs no texture for a window-sized picture. For the same reason the describe stage
+//! shows no thumbnail of the region.
+//!
+//! The sheet is drawn over the screen as the last child of the screen's top element, anchored
+//! over the whole window, so that the screen's own elements are kept as they were and none
+//! of them fades in again in the picture.
+
+use glam::Vec2;
 
 use super::ScreenIn;
-use crate::element::{Element, column};
-use crate::widgets::field;
+use crate::element::{
+    Align, Anchor, BugPress, Element, Justify, Position, Press, TextAlign, column, row, text,
+};
+use crate::frame::Role;
+use crate::input::Rect;
+use crate::text::TypeStyle;
+use crate::text::fonts::Font;
+use crate::tokens::{color, size, type_style};
+use crate::widgets::{self, field, icon_button, primary};
 
 /// The name of the field the player describes the bug in.
 pub const DESCRIPTION: &str = "description";
 
-/// How wide the description field is, in logical points.
-const DESCRIPTION_WIDTH: f32 = 480.0;
+/// A drag shorter than this across or down, in logical points, is a click: the whole window
+/// (`CLICK`).
+pub const CLICK: f32 = 6.0;
 
-/// The least height of the description field: the web interface's `.bug-text` rule's
-/// `min-height` (`ui/src/screens/styles/bug-report.css`).
+/// The least height of the description field: the `.bug-text` rule's `min-height`.
 const DESCRIPTION_HEIGHT: f32 = 110.0;
 
-/// What the flat layer shows for it.
+/// The panel's width, padding, gap and corner radius (`.bug-panel`).
+const PANEL_WIDTH: f32 = 520.0;
+const PANEL_PADDING: [f32; 4] = [18.0, 20.0, 18.0, 20.0];
+const PANEL_GAP: f32 = 12.0;
+const PANEL_RADIUS: f32 = 10.0;
+
+/// `.bug-panel`'s and `.bug-tools`'s background: the surface at 97% and 92%.
+const PANEL: [u8; 4] = [33, 31, 28, 247];
+const TOOLS: [u8; 4] = [33, 31, 28, 235];
+
+/// The shade over the frame while nothing is dragged (`.bug-shade`, 25%), around the region
+/// being dragged (`.bug-region`, 45%) and around the region being described
+/// (`.bug-region-dim`, 65%).
+const SHADE: [u8; 4] = [0, 0, 0, 64];
+const SHADE_DRAG: [u8; 4] = [0, 0, 0, 115];
+const SHADE_DESCRIBE: [u8; 4] = [0, 0, 0, 166];
+
+/// Where the tools stand from the window's top right corner, and the side of each tool
+/// (`.bug-tools`, `.bug-tool`).
+const TOOLS_INSET: [f32; 2] = [14.0, 16.0];
+const TOOL: f32 = 40.0;
+
+/// How far the hint stands below the window's top (`.bug-hint`).
+const HINT_TOP: f32 = 22.0;
+
+/// The checkbox's side, as the start screen's fair-deal box.
+const CHECKBOX: f32 = 18.0;
+
+/// `.bug-title`: semibold 22-point display type.
+const TITLE: TypeStyle = TypeStyle {
+    font: Font::Cinzel,
+    weight: 600,
+    size: 22.0,
+    line_height: 1.2,
+};
+
+/// `.bug-hint`, `.bug-ai` and `.bug-error`: interface type of 15 and 14 points.
+const HINT: TypeStyle = TypeStyle {
+    size: 15.0,
+    ..type_style::BODY
+};
+const ERROR: TypeStyle = TypeStyle {
+    size: 14.0,
+    ..type_style::BODY
+};
+
+/// `.bug-saved`: semibold 20-point display type.
+const SAVED: TypeStyle = TypeStyle {
+    font: Font::Cinzel,
+    weight: 600,
+    size: 20.0,
+    line_height: 1.0,
+};
+
+/// Where the bug report is, from Cmd+B until it closes.
+#[derive(Clone, Debug, PartialEq)]
+pub enum BugStage {
+    /// The table has frozen and the host is taking its picture: nothing of the report shows,
+    /// or it would be in the picture. `drawn` counts the frames drawn since it froze.
+    Capturing { drawn: u8 },
+    /// The player drags out a region, `drag` so far, over the frozen table.
+    Select { drag: Option<Rect> },
+    /// The player says what went wrong in `region`; `saving` once Submit has been pressed and
+    /// the host has not answered, and `error` if the host could not save it.
+    Describe {
+        region: Rect,
+        saving: bool,
+        error: Option<String>,
+    },
+    /// The report is saved, and closes at `close_at` (nanoseconds since the client started),
+    /// once a frame has set it.
+    Saved { region: Rect, close_at: Option<u64> },
+}
+
+/// What the bug report holds while it is open.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BugForm {
+    pub stage: BugStage,
+    /// Whether the "AI play" box is checked.
+    pub ai: bool,
+}
+
+impl BugForm {
+    /// A report just opened, freezing the table.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            stage: BugStage::Capturing { drawn: 0 },
+            ai: false,
+        }
+    }
+}
+
+impl Default for BugForm {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The rectangle from `a` to `b`, either way round (`span`).
 #[must_use]
-pub fn bug_report(input: &ScreenIn) -> Element {
+pub fn span(a: glam::Vec2, b: glam::Vec2) -> Rect {
+    let (low, high) = (a.min(b), a.max(b));
+    Rect {
+        x: low.x,
+        y: low.y,
+        width: high.x - low.x,
+        height: high.y - low.y,
+    }
+}
+
+/// What the flat layer shows for the report over `under`, the screen's own element, or alone
+/// where the screen shows nothing.
+#[must_use]
+pub fn bug_report(under: Option<Element>, input: &ScreenIn) -> Element {
+    let window = whole(input);
+    let overlay = match &input.bug.stage {
+        // Nothing of the report is in the picture.
+        BugStage::Capturing { .. } => None,
+        BugStage::Select { drag } => Some(select(*drag, window)),
+        BugStage::Describe {
+            region,
+            saving,
+            error,
+        } => Some(describe(input, *region, *saving, error.as_deref(), window)),
+        BugStage::Saved { region, .. } => Some(saved(*region, window)),
+    };
+    // Anchored at the window's top left corner, since the screen's top element may be no
+    // larger than the prompt bar.
+    let overlay = overlay.map(|children| {
+        let mut overlay = column()
+            .name("bug report")
+            .background([0; 4])
+            .border(([0; 4], 0.0))
+            .width(window.width)
+            .height(window.height)
+            .children(children);
+        overlay.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
+        overlay
+    });
+    match under {
+        Some(screen) => screen.children(overlay),
+        // The game screen shows nothing between prompts; a clear element fills the window then.
+        None => column()
+            .name("frozen screen")
+            .background([0; 4])
+            .border(([0; 4], 0.0))
+            .grow(1.0)
+            .align_self(Align::Stretch)
+            .children(overlay),
+    }
+}
+
+/// The whole window, in logical points.
+fn whole(input: &ScreenIn) -> Rect {
+    Rect {
+        x: 0.0,
+        y: 0.0,
+        width: input.window.size.width,
+        height: input.window.size.height,
+    }
+}
+
+/// The stage where a region is dragged out: the shade, or the region so far with the window
+/// shaded around it, the hint until a drag starts, and the tools.
+fn select(drag: Option<Rect>, window: Rect) -> Vec<Element> {
+    let mut children = match drag {
+        Some(region) => framed(region, window, SHADE_DRAG),
+        None => vec![placed("shade", window).background(SHADE)],
+    };
+    if drag.is_none() {
+        let hint = text("Drag to select")
+            .style(HINT)
+            .color(color::TEXT)
+            .background(TOOLS)
+            .border((color::METAL, 1.0))
+            .radius(999.0)
+            .margin([HINT_TOP, 0.0, 0.0, 0.0]);
+        let mut hint = hint;
+        hint.style.padding = [6.0, 14.0, 6.0, 14.0];
+        children.push(
+            row()
+                .name("hint")
+                .position(Position::Absolute)
+                .inset([Some(0.0), None, None, Some(0.0)])
+                .width(window.width)
+                .justify_content(Justify::Center)
+                .child(hint),
+        );
+    }
+    children.push(tools(true));
+    children
+}
+
+/// The stage where the bug is described: the region with the window shaded around it, the
+/// panel in the middle of the window and the close tool.
+fn describe(
+    input: &ScreenIn,
+    region: Rect,
+    saving: bool,
+    error: Option<&str>,
+    window: Rect,
+) -> Vec<Element> {
     let mut state = input.fields.get(DESCRIPTION);
     "What went wrong?".clone_into(&mut state.placeholder);
+    let ready = !state.text.trim().is_empty() && !saving;
     let mut description = field(DESCRIPTION, &state);
-    description.style.width = Some(DESCRIPTION_WIDTH);
     description.style.min_height = Some(DESCRIPTION_HEIGHT);
-    column().name("bug report").child(description)
+    description.style.align_self = Some(Align::Stretch);
+    let submit = primary(if saving { "Saving…" } else { "Submit" });
+    let mut submit = submit.enabled(ready).on_press(Press::Bug(BugPress::Save));
+    // `size="small"`: shorter, with smaller type, and only as wide as its label.
+    submit.style.height = Some(size::BUTTON_HEIGHT * 0.75);
+    submit.style.text.size = type_style::BUTTON.size * 0.75;
+    submit.style.min_width = None;
+    let actions = row()
+        .name("actions")
+        .align_self(Align::Stretch)
+        .align_items(Align::Center)
+        .justify_content(Justify::SpaceBetween)
+        .child(ai_box(input.bug.ai))
+        .child(submit);
+    let mut panel_children = vec![text("Report bug").style(TITLE).color(color::TYPE)];
+    panel_children.push(description);
+    if let Some(error) = error {
+        panel_children.push(text(error).style(ERROR).color(color::STAT_DOWN));
+    }
+    panel_children.push(actions);
+    let mut children = framed(region, window, SHADE_DESCRIBE);
+    children.push(centred("panel", panel(panel_children), window));
+    children.push(tools(false));
+    children
+}
+
+/// The stage once the report is saved: the region still framed, and "Saved".
+fn saved(region: Rect, window: Rect) -> Vec<Element> {
+    let words = text("Saved").style(SAVED).color(color::TYPE);
+    let mut children = framed(region, window, SHADE_DESCRIBE);
+    children.push(centred("panel", panel(vec![words]).name("Saved"), window));
+    children
+}
+
+/// The panel that holds the description or "Saved" (`.bug-panel`).
+fn panel(children: Vec<Element>) -> Element {
+    let mut panel = column()
+        .name("Report bug")
+        .width(PANEL_WIDTH)
+        .gap(PANEL_GAP)
+        .background(PANEL)
+        .border((color::METAL, 1.0))
+        .radius(PANEL_RADIUS)
+        .children(children);
+    panel.style.padding = PANEL_PADDING;
+    panel
+}
+
+/// The "AI play" box (`.bug-ai`): a questionable play of the AI's, whose report carries the
+/// agent's latest searches.
+fn ai_box(on: bool) -> Element {
+    let check = row()
+        .name("checkbox")
+        .width(CHECKBOX)
+        .height(CHECKBOX)
+        .radius(3.0)
+        .border((color::GOLD, size::BORDER))
+        .align_items(Align::Center)
+        .justify_content(Justify::Center)
+        .children(on.then(|| text("✓").style(ERROR).color(color::GOLD)));
+    Element::new(Role::Toggle)
+        .name("AI play")
+        .selected(on)
+        .gap(8.0)
+        .align_items(Align::Center)
+        .on_press(Press::Bug(BugPress::Ai))
+        .child(check)
+        .child(text("AI play").style(HINT).color(color::TEXT_DIM))
+}
+
+/// The tools at the top right on their dark pill (`.bug-tools`): the whole window, while a
+/// region is being chosen, and the close button.
+fn tools(choosing: bool) -> Element {
+    let tool = |icon, name: &str, press| {
+        icon_button(icon, name)
+            .width(TOOL)
+            .height(TOOL)
+            .background([0; 4])
+            .border(([0; 4], 0.0))
+            .radius(TOOL / 2.0)
+            .on_press(press)
+    };
+    let mut pill = row()
+        .name("bug tools")
+        .gap(2.0)
+        .background(TOOLS)
+        .border((color::METAL, 1.0))
+        .radius(999.0)
+        .position(Position::Absolute)
+        .inset([Some(TOOLS_INSET[0]), Some(TOOLS_INSET[1]), None, None])
+        .children(choosing.then(|| {
+            tool(
+                widgets::icons::WHOLE,
+                "Whole window",
+                Press::Bug(BugPress::Whole),
+            )
+        }))
+        .child(tool(widgets::icons::CLOSE, "Close", Press::Sheet(None)));
+    pill.style.padding = [3.0; 4];
+    pill
+}
+
+/// `region` outlined in gold (`.bug-region`), with the rest of `window` shaded by `shade` in
+/// four bands around it, as the web's wide box shadow shades it.
+fn framed(region: Rect, window: Rect, shade: [u8; 4]) -> Vec<Element> {
+    let right = region.x + region.width;
+    let bottom = region.y + region.height;
+    let bands = [
+        ("shade above", 0.0, 0.0, window.width, region.y),
+        (
+            "shade below",
+            0.0,
+            bottom,
+            window.width,
+            window.height - bottom,
+        ),
+        ("shade left", 0.0, region.y, region.x, region.height),
+        (
+            "shade right",
+            right,
+            region.y,
+            window.width - right,
+            region.height,
+        ),
+    ];
+    let mut children: Vec<Element> = bands
+        .into_iter()
+        .map(|(name, x, y, width, height)| {
+            let band = Rect {
+                x,
+                y,
+                width: width.max(0.0),
+                height: height.max(0.0),
+            };
+            placed(name, band).background(shade)
+        })
+        .collect();
+    children.push(
+        placed("region", region)
+            .background([0; 4])
+            .border((color::GOLD, 1.5)),
+    );
+    children
+}
+
+/// A clear region named `name` placed at `rect` over the window.
+fn placed(name: &str, rect: Rect) -> Element {
+    row()
+        .name(name)
+        .position(Position::Absolute)
+        .inset([Some(rect.y), None, None, Some(rect.x)])
+        .width(rect.width)
+        .height(rect.height)
+        .border(([0; 4], 0.0))
+}
+
+/// `child` in the middle of `window`, in a clear region named `name` that fills it.
+fn centred(name: &str, child: Element, window: Rect) -> Element {
+    column()
+        .name(name)
+        .background([0; 4])
+        .border(([0; 4], 0.0))
+        .position(Position::Absolute)
+        .inset([Some(0.0), None, None, Some(0.0)])
+        .width(window.width)
+        .height(window.height)
+        .align_items(Align::Center)
+        .justify_content(Justify::Center)
+        .text_align(TextAlign::Start)
+        .child(child)
 }

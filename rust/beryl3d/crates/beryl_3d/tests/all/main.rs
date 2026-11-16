@@ -4,6 +4,7 @@
 
 mod app;
 mod audio;
+mod bugs;
 mod drive;
 mod ffi;
 mod fixture;

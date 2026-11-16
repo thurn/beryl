@@ -3673,6 +3673,32 @@ could not give.
 
 The frame log and the session's replay file are attached as they are today.
 
+How it works (`beryl_scene`'s `screens::bug_report` and `client/bug.rs`, and
+`beryl_3d`'s `bugs.rs`):
+
+- Cmd+B (Cmd+Shift+B on the manual table) freezes the table's clock and sends
+  `Request::FreezeFrame`. For two frames nothing of the report is drawn; the
+  host reads back the second, and keeps the `just b3d tree` printout of that
+  frame beside it.
+- The sheet then goes through the web's stages: drag a region (a click, Space,
+  Return or the whole-window button takes the whole window), describe the bug
+  with the "AI play" box, submit, "Saved", closed. Escape closes it at any
+  point.
+- Under the sheet the client keeps drawing the frozen table itself, not the
+  read-back picture, so the renderer needs no window-sized texture. The describe
+  stage has no thumbnail of the region for the same reason.
+- Once the report closes, the table's clock runs behind the frame's by the time
+  it was frozen, so a script that was playing goes on from where it stopped.
+- `Request::SaveBug` writes the report with
+  `beryl_session::bugs::write_attached`: on the session thread in a live game,
+  and on a thread of its own for a replayed recording, which has no replay or
+  view of a game. Beside the web report's files it holds `tree.txt` and
+  `frames.jsonl`, and its `ui.json` names Beryl 3D as the client.
+- `Request::ExportBugs` writes `beryl-bug-reports.zip` to the Downloads folder
+  and prints its path, since winit has no save dialog.
+- A drive script's or `just b3d live do`'s `key` action takes modifiers, as in
+  `key Cmd+B`.
+
 ## Migration and compatibility
 
 Both clients are alive from the first commit of Beryl 3D until the project's

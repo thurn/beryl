@@ -179,13 +179,14 @@ mod milestone_three {
     use beryl_scene::command::{Request, SessionCommand};
     use beryl_scene::element::Press;
     use beryl_scene::prompts;
-    use beryl_scene::screens::{self, Music, Screen, ScreenIn, Sheet, StartForm};
+    use beryl_scene::screens::{self, BugForm, Music, Screen, ScreenIn, Sheet, StartForm};
     use beryl_scene::settings::{Setting, Settings};
     use beryl_scene::table::Window;
     use beryl_scene::testing::ViewBuilder;
     use beryl_scene::widgets::Fields;
 
     static FIELDS: Fields = Fields::new();
+    static BUG: BugForm = BugForm::new();
 
     use super::super::flat_layer::{client, deciding, decision, prompt};
 
@@ -206,6 +207,7 @@ mod milestone_three {
             },
             recordings: &[],
             seat: Side::You,
+            bug: &BUG,
             fields: &FIELDS,
             inspected: None,
             faces: None,
@@ -225,7 +227,10 @@ mod milestone_three {
             );
         }
         for sheet in Sheet::ALL {
-            assert!(!screens::sheet(sheet, &input).name.is_empty(), "{sheet:?}");
+            assert!(
+                !screens::sheet(sheet, None, &input).name.is_empty(),
+                "{sheet:?}"
+            );
         }
     }
 

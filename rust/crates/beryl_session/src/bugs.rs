@@ -250,13 +250,36 @@ pub struct Device {
     pub simulator: bool,
 }
 
+/// A file a client adds to its report beyond those [`write`] makes: Beryl 3D's element tree
+/// and frame log.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Attached {
+    /// The file's name in the report's folder.
+    pub name: String,
+    pub bytes: Vec<u8>,
+    /// What it holds, for the report's list of files.
+    pub note: String,
+}
+
 /// Writes `report` into a new folder under `dir`, with its `images` and what `sessions` knows
 /// of the game.
-#[allow(clippy::too_many_lines)] // A block per file the report holds.
 pub fn write(
     dir: &Path,
     report: &BugReport,
     images: &Images,
+    sessions: &Sessions,
+    environment: &Environment,
+) -> Result<BugSaved, SessionError> {
+    write_attached(dir, report, images, &[], sessions, environment)
+}
+
+/// [`write`], with the `attached` files beside the rest, in the folder before it is published.
+#[allow(clippy::too_many_lines)] // A block per file the report holds.
+pub fn write_attached(
+    dir: &Path,
+    report: &BugReport,
+    images: &Images,
+    attached: &[Attached],
     sessions: &Sessions,
     environment: &Environment,
 ) -> Result<BugSaved, SessionError> {
@@ -330,6 +353,10 @@ pub fn write(
                 report.updates.len()
             ),
         ));
+    }
+    for file in attached {
+        put(&file.name, &file.bytes)?;
+        files.push((&file.name, file.note.clone()));
     }
     put(
         "ui.json",
@@ -565,9 +592,16 @@ mod tests {
                 simulator: true,
             }),
         };
-        let saved = write(&dir, &report, &images, &sessions, &environment).unwrap();
+        let tree = Attached {
+            name: "tree.txt".to_owned(),
+            bytes: b"layer".to_vec(),
+            note: "the element tree".to_owned(),
+        };
+        let saved =
+            write_attached(&dir, &report, &images, &[tree], &sessions, &environment).unwrap();
         let folder = PathBuf::from(&saved.path);
         assert!(saved.id.ends_with("-the-button-it-vanished"));
+        assert_eq!(std::fs::read(folder.join("tree.txt")).unwrap(), b"layer");
         let md = std::fs::read_to_string(folder.join("report.md")).unwrap();
         assert!(md.starts_with("---\nid: "));
         assert!(md.contains("title: \"The button: it vanished\""));
@@ -577,6 +611,7 @@ mod tests {
             md.contains("platform: ios\nos: \"26.5\"\nmodel: \"iPhone18,3\"\nsimulator: true\n")
         );
         assert!(md.contains("## The AI's latest decisions"));
+        assert!(md.contains("tree.txt"), "the attached file is listed");
         assert!(md.contains("![What the player saw](screenshot.png)"));
         assert_eq!(std::fs::read(folder.join("screenshot.png")).unwrap(), b"hi");
         let fixture: Fixture =

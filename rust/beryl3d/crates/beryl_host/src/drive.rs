@@ -231,12 +231,13 @@ impl Drive {
                 self.pending
                     .push_back((at, Input::Text(TextChange::Insert(text.clone()))));
             }
-            Action::Key(code) => {
+            Action::Key(chord) => {
+                let modifiers = chord.modifiers(client.mac());
                 for phase in [KeyPhase::Down, KeyPhase::Up] {
                     let key = Key {
-                        code: *code,
+                        code: chord.code,
                         phase,
-                        modifiers: Modifiers::default(),
+                        modifiers,
                     };
                     self.pending.push_back((at, Input::Key(key)));
                 }

@@ -9,7 +9,7 @@ use beryl_protocol::protocol::Side;
 use beryl_protocol::{DecisionId, SessionError, SessionId, StartRequest, StopsSetting};
 
 use crate::frame::ElementId;
-use crate::input::Rect;
+use crate::input::{Rect, Size};
 use crate::screens::Music;
 use crate::settings::Settings;
 
@@ -53,6 +53,21 @@ pub enum Request {
     Paste,
     /// Save every bug report the app keeps to one file, as the web's `exportBugs` does.
     ExportBugs,
+    /// The bug report has frozen the table: read back the next frame the host draws, which
+    /// shows nothing of the report, as the report's picture of the window, and keep the element
+    /// tree of that frame beside it. The client keeps drawing that frame unchanged until the
+    /// picture has been taken (`screens::BugStage::Capturing`).
+    FreezeFrame,
+    /// Save a bug report saying `description` about `region` of the frozen window, in logical
+    /// points of a window of `window`'s size, flagged as a questionable play of the AI's if
+    /// `ai`, with the picture and tree `FreezeFrame` took. The host answers with
+    /// `Input::BugSaved`.
+    SaveBug {
+        description: String,
+        ai: bool,
+        region: Rect,
+        window: Size,
+    },
     /// Offer the file at `path` to the platform's share sheet.
     Share {
         path: PathBuf,

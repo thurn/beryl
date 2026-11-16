@@ -181,6 +181,45 @@ impl Picture {
     pub fn write_png(&self, path: &Path) -> Result<(), String> {
         write_rgba_png(path, &self.pixels, self.width, self.height)
     }
+
+    /// The picture as the bytes of a PNG file.
+    ///
+    /// # Errors
+    ///
+    /// When the picture cannot be encoded.
+    pub fn png(&self) -> Result<Vec<u8>, String> {
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        image::write_buffer_with_format(
+            &mut bytes,
+            &self.pixels,
+            self.width,
+            self.height,
+            image::ColorType::Rgba8,
+            image::ImageFormat::Png,
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(bytes.into_inner())
+    }
+
+    /// The part of the picture `width` by `height` pixels from (`x`, `y`), cut to the picture's
+    /// edges.
+    #[must_use]
+    pub fn crop(&self, x: u32, y: u32, width: u32, height: u32) -> Picture {
+        let x = x.min(self.width);
+        let y = y.min(self.height);
+        let width = width.min(self.width - x);
+        let height = height.min(self.height - y);
+        let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+        for row in y..y + height {
+            let start = ((row * self.width + x) * 4) as usize;
+            pixels.extend_from_slice(&self.pixels[start..start + (width * 4) as usize]);
+        }
+        Picture {
+            pixels,
+            width,
+            height,
+        }
+    }
 }
 
 /// A copy of a target's pixels on its way to the CPU (`Renderer::read_back`).

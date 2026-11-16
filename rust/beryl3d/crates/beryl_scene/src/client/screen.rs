@@ -9,7 +9,7 @@ use beryl_protocol::protocol::Status;
 use crate::command::Request;
 use crate::element::floats;
 use crate::layout::FloatLook;
-use crate::screens::{self, Screen, ScreenIn};
+use crate::screens::{self, Screen, ScreenIn, Sheet};
 
 impl Client {
     /// Rebuilds the flat layer's screen, or the sheet open over it, from what the client holds
@@ -29,28 +29,34 @@ impl Client {
             start: &self.start,
             recordings: &self.recordings,
             seat: self.seat,
+            bug: &self.bug.form,
             fields: &self.fields,
             inspected: None,
             faces: Some(self.show.faces().list()),
             viewing: self.viewing.open,
             revealed: &self.viewing.revealed,
         };
-        // Until the sheets are built, an open sheet takes the screen's place in the flat layer.
-        // The game screen shows nothing while no prompt or viewer is open and the game goes on,
-        // so that no empty panel is drawn over the table (and none is built); once the game has
-        // ended it shows the result.
+        // Until the sheets are built, the settings sheet takes the screen's place in the flat
+        // layer; the bug report is drawn over the screen. The game screen shows nothing while no
+        // prompt or viewer is open and the game goes on, so that no empty panel is drawn over
+        // the table (and none is built); once the game has ended it shows the result.
         let ended =
             view.is_some_and(|view| matches!(view.status, Status::Over { .. } | Status::Stopped));
-        let shown = match self.sheet {
-            Some(sheet) => Some(screens::sheet(sheet, &input)),
-            None if self.screen == Screen::Game
+        let under = match self.sheet {
+            Some(sheet) if sheet != Sheet::BugReport => None,
+            _ if self.bug_hides_screen() => None,
+            _ if self.screen == Screen::Game
                 && input.prompt.is_none()
                 && input.viewing.is_none()
                 && !ended =>
             {
                 None
             }
-            None => Some(screens::screen(self.screen, &input)),
+            _ => Some(screens::screen(self.screen, &input)),
+        };
+        let shown = match self.sheet {
+            Some(sheet) => Some(screens::sheet(sheet, under, &input)),
+            None => under,
         };
         let music = screens::music(self.screen, view);
         self.layer.show(shown);
@@ -63,9 +69,10 @@ impl Client {
     }
 
     /// Shows the gear that opens the settings at the window's top right while the game screen
-    /// is shown with no sheet over it, and takes it away otherwise.
+    /// is shown with no sheet over it, or while the bug report takes its picture, and takes it
+    /// away otherwise.
     pub(super) fn show_gear(&mut self) {
-        let gear = (self.screen == Screen::Game && self.sheet.is_none()).then(screens::gear);
+        let gear = (self.screen == Screen::Game && self.table_shown()).then(screens::gear);
         let shown = gear.is_some();
         self.layer.float(floats::GEAR, gear);
         if shown {

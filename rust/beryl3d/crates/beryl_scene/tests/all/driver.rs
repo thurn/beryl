@@ -7,7 +7,7 @@ use beryl_protocol::script::{Act, Subject};
 use beryl_protocol::{CandidateIndex, DecisionId, SessionId};
 use beryl_scene::agent::Layout;
 use beryl_scene::command::{Reply, SessionCommand};
-use beryl_scene::driver::{Action, Duration, Moment, Name, Page, Recording, Responses};
+use beryl_scene::driver::{Action, Duration, KeyChord, Moment, Name, Page, Recording, Responses};
 use beryl_scene::frame::StateBits;
 use beryl_scene::input::{Input, KeyCode, PointerPhase, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
@@ -289,8 +289,16 @@ fn every_action_name_is_a_line_run_accepts() {
                 "WU \"Control\"".to_owned(),
             ),
         ),
-        ("key escape", Action::Key(KeyCode::Escape)),
-        ("key Q", Action::Key(KeyCode::Q)),
+        ("key escape", Action::Key(KeyChord::plain(KeyCode::Escape))),
+        ("key Q", Action::Key(KeyChord::plain(KeyCode::Q))),
+        (
+            "key Cmd+Shift+B",
+            Action::Key(KeyChord {
+                cmd: true,
+                shift: true,
+                ..KeyChord::plain(KeyCode::B)
+            }),
+        ),
         ("move 400,300", Action::Move(Vec2::new(400.0, 300.0))),
         ("step 1.25s", Action::Step(ms(1250))),
         ("still", Action::Still),

@@ -1,9 +1,9 @@
 //! The page's keyboard and host actions: typing into a field, pressing keys and chords, and
 //! answering what the client asks of the platform.
 
-use super::Page;
+use super::{KeyChord, Page};
 use crate::element::Chord;
-use crate::input::{Input, Key, KeyCode, KeyPhase, Modifiers, TextChange};
+use crate::input::{Input, Key, KeyCode, KeyPhase, TextChange};
 
 impl Page {
     /// Presses the field `locator` names and types `text` at its caret, as a desktop host
@@ -54,11 +54,17 @@ impl Page {
 
     /// Presses and releases a key.
     pub fn key(&mut self, code: KeyCode) {
+        self.key_chord(KeyChord::plain(code));
+    }
+
+    /// Presses and releases the key of `chord` with its modifiers held, as a `key` action does.
+    pub fn key_chord(&mut self, chord: KeyChord) {
+        let modifiers = chord.modifiers(self.client.mac());
         for phase in [KeyPhase::Down, KeyPhase::Up] {
             self.give(Input::Key(Key {
-                code,
+                code: chord.code,
                 phase,
-                modifiers: Modifiers::default(),
+                modifiers,
             }));
         }
         self.render();

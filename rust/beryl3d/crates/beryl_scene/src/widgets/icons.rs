@@ -21,6 +21,8 @@ pub const FULL_CONTROL: IconId = IconId(7);
 pub const PASS_ON: IconId = IconId(8);
 pub const PLUS: IconId = IconId(9);
 pub const MINUS: IconId = IconId(10);
+/// The bug report's button that reports the whole window: four corners of a frame.
+pub const WHOLE: IconId = IconId(40);
 
 /// The icon of each step stop, filled, in the order of the web interface's `STEP_STOPS`
 /// (`ui/src/components/Steps.tsx`): untap, upkeep, draw, first main, beginning of combat,
@@ -37,7 +39,7 @@ pub const STEPS_OUTLINED: [IconId; 12] = steps(1);
 pub const PHASES: [IconId; 5] = [IconId(35), IconId(36), IconId(37), IconId(38), IconId(39)];
 
 /// How many icons there are: every id is below this.
-pub const COUNT: u16 = 40;
+pub const COUNT: u16 = 41;
 
 /// The step icons from id 11, filled and outlined in turn, offset by `outlined`.
 const fn steps(outlined: u16) -> [IconId; 12] {

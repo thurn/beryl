@@ -20,6 +20,7 @@ use beryl_session::protocol::Status;
 use beryl_session::script::Verb;
 
 use crate::audio::{Audio, Output};
+use crate::bugs::Bugs;
 use crate::fixture::Fixture;
 use crate::frame_log::{FrameLog, Run, Summary};
 use crate::options::{Options, Window};
@@ -79,6 +80,8 @@ struct AppFeed {
     audio: Option<Audio>,
     /// Writes the settings the client asks to save, in a live game.
     saver: Option<Saver>,
+    /// The bug report's picture, tree and views, and where reports go.
+    bugs: Bugs,
     /// The socket `just b3d live` speaks to, in a build that has one.
     #[cfg(all(feature = "tools", unix))]
     live: Option<crate::live::Live>,
@@ -107,6 +110,7 @@ impl AppFeed {
     /// Connects the feed to the host's inbox: starts the session thread or the replay, and the
     /// live socket in a build that has one.
     fn attach(&mut self, options: &Options, inbox: Inbox) -> Result<(), String> {
+        self.bugs.attach(inbox.clone());
         #[cfg(all(feature = "tools", unix))]
         {
             self.live = start_live(inbox.clone());
@@ -164,6 +168,7 @@ impl Feed for AppFeed {
         if let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
             log.input(input);
         }
+        self.bugs.seen(input);
         let mut summarize = false;
         if let Input::Update(update) = input {
             self.searching = matches!(update.view.status, Status::Thinking);
@@ -192,6 +197,7 @@ impl Feed for AppFeed {
     }
 
     fn after(&mut self, client: &mut Client, ticked: &Ticked) {
+        self.bugs.after(client);
         if let Some(audio) = &self.audio {
             for sound in client.sounds() {
                 audio.play(*sound);
@@ -274,6 +280,18 @@ impl Feed for AppFeed {
             }
             #[cfg(feature = "tools")]
             Request::Replay { name, seat } => self.replay(name, *seat),
+            Request::FreezeFrame => self.bugs.freeze(),
+            Request::SaveBug { .. } => {
+                let log = self.log.borrow();
+                let frame_log = log.as_ref().and_then(|log| log.as_ref().ok());
+                let live = match &self.source {
+                    Some(Source::Live(commands)) => Some(commands),
+                    _ => None,
+                };
+                self.bugs.save(request, frame_log.map(FrameLog::path), live);
+            }
+            #[cfg(not(any(target_os = "ios", target_os = "android")))]
+            Request::ExportBugs => self.bugs.export(),
             _ => {}
         }
     }
@@ -289,18 +307,22 @@ impl Feed for AppFeed {
         }
     }
 
-    #[cfg(all(feature = "tools", unix))]
     fn capture_wanted(&mut self) -> bool {
-        self.live
-            .as_mut()
-            .is_some_and(crate::live::Live::picture_wanted)
+        #[cfg(all(feature = "tools", unix))]
+        let live = (self.live.as_mut()).is_some_and(crate::live::Live::picture_wanted);
+        #[cfg(not(all(feature = "tools", unix)))]
+        let live = false;
+        self.bugs.capture_wanted(live)
     }
 
-    #[cfg(all(feature = "tools", unix))]
     fn captured(&mut self, picture: beryl_render::Picture) {
-        if let Some(live) = &mut self.live {
+        let picture = self.bugs.captured(picture);
+        #[cfg(all(feature = "tools", unix))]
+        if let (Some(live), Some(picture)) = (&mut self.live, picture) {
             live.picture(&picture);
         }
+        #[cfg(not(all(feature = "tools", unix)))]
+        drop(picture);
     }
 
     #[cfg(all(feature = "tools", unix))]
@@ -338,7 +360,7 @@ pub(crate) fn phone_feed(
         Some(name.to_owned()),
         log_dir,
         display_hz,
-        Finish::AtFixtureEnd,
+        (Finish::AtFixtureEnd, Bugs::new(beryl_session::bugs::dir())),
     )
 }
 
@@ -358,6 +380,8 @@ pub(crate) fn phone_live_feed(
         data_dir.join("logs"),
         beryl_shell::Profile::current(),
     );
+    let mut bugs = Bugs::new(dirs.bugs.clone());
+    bugs.attach(inbox.clone());
     let commands = session::spawn(
         beryl_host::Class::Default,
         {
@@ -377,17 +401,18 @@ pub(crate) fn phone_live_feed(
         None,
         data_dir,
         display_hz,
-        Finish::AtSuspend,
+        (Finish::AtSuspend, bugs),
     )
 }
 
-/// A phone's app feed of `source`, writing its frame log in `log_dir` against `display_hz`.
+/// A phone's app feed of `source`, writing its frame log in `log_dir` against `display_hz`,
+/// finishing it as `finish` says and writing bug reports with `bugs`.
 fn phone_app(
     source: Source,
     fixture: Option<String>,
     log_dir: PathBuf,
     display_hz: f32,
-    finish: Finish,
+    (finish, bugs): (Finish, Bugs),
 ) -> Box<dyn Feed> {
     Box::new(AppFeed {
         source: Some(source),
@@ -414,6 +439,7 @@ fn phone_app(
         shown_first: false,
         audio: None,
         saver: None,
+        bugs,
         #[cfg(all(feature = "tools", unix))]
         live: None,
     })
@@ -453,6 +479,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         shown_first: false,
         audio: Some(audio),
         saver,
+        bugs: Bugs::desktop(),
         #[cfg(all(feature = "tools", unix))]
         live: None,
     };

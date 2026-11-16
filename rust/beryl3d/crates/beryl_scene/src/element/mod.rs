@@ -71,6 +71,19 @@ pub enum Press {
     Dismiss(Dismiss),
     /// Open the viewer of a pile's cards, as a press on a pile does.
     View(Viewed),
+    /// One of the bug report's controls.
+    Bug(BugPress),
+}
+
+/// What a `Press::Bug` does (`screens::bug_report`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BugPress {
+    /// Report the whole window instead of a region dragged out over it.
+    Whole,
+    /// Turn the "AI play" box on or off.
+    Ai,
+    /// Save the report with the description typed.
+    Save,
 }
 
 /// What the viewer shows the cards of (`inspect::viewer`).

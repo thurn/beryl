@@ -23,6 +23,20 @@ impl Layer {
         self.follow_focus();
     }
 
+    /// Gives the focus to the text field named `name`, if the screen has one, as an
+    /// `autoFocus` field takes it when it appears.
+    pub fn focus_field(&mut self, name: &str) {
+        fn search(node: &Node, name: &str) -> Option<ElementId> {
+            if node.element.field.is_some() && node.element.name == name {
+                return Some(node.id);
+            }
+            node.children.iter().find_map(|child| search(child, name))
+        }
+        if let Some(id) = self.screen.as_ref().and_then(|screen| search(screen, name)) {
+            self.focus(Some(id));
+        }
+    }
+
     /// The innermost element at `point` that takes the focus when pressed, if the screen is
     /// `open`.
     #[must_use]

@@ -16,7 +16,7 @@ use beryl_scene::input::IconCell;
 use beryl_scene::widgets::IconId;
 use beryl_scene::widgets::icons::{
     BUG, CLOSE, FULL_CONTROL, GEAR, LOG, MINUS, PASS_ON, PHASES, PLUS, SPEAKER, SPEAKER_OFF, STEPS,
-    STEPS_OUTLINED, UNDO,
+    STEPS_OUTLINED, UNDO, WHOLE,
 };
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, Pixmap, Stroke, Transform};
 
@@ -183,7 +183,7 @@ const PEAK: [Shape; 3] = [
 ];
 
 /// Every icon, in the order of their ids.
-pub const ALL: [Artwork; 40] = [
+pub const ALL: [Artwork; 41] = [
     // `Gear`, game/Corner.tsx: filled even-odd, its hole left empty (`.gear`, table.css).
     button(
         GEAR,
@@ -514,6 +514,12 @@ pub const ALL: [Artwork; 40] = [
                 PHASE_STROKE,
             ),
         ],
+    ),
+    // The bug report's whole-window button, components/BugReport.tsx: four corners stroked 2.2
+    // wide (`.bug-whole`, bug-report.css).
+    button(
+        WHOLE,
+        &[stroked("M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5", 2.2)],
     ),
 ];
 

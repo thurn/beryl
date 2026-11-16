@@ -3,12 +3,13 @@
 //! point reads a clock, starts a thread, takes a lock or touches a file, so the same calls give
 //! the same frames.
 
+mod bug;
 mod editing;
 
 use std::collections::VecDeque;
 
 use beryl_protocol::prompt::{Click, ClickReply, ClickRequest, PromptView};
-use beryl_protocol::protocol::{DecisionId, ObjectId, SessionId, Side, Status, StepSet};
+use beryl_protocol::protocol::{DecisionId, ObjectId, SessionId, Side, Status};
 use beryl_protocol::script::{OwnTimings, Subject, Verb, own_timings};
 use beryl_protocol::{AgentView, StartRequest};
 
@@ -28,7 +29,7 @@ use crate::pointer::LetGo;
 use crate::pointer::rows::RowGesture;
 use crate::prompts;
 use crate::screens::{self, Music, SEED, Screen, Sheet, StartForm};
-use crate::settings::{Setting, Settings};
+use crate::settings::Settings;
 use crate::table::{Table, Window};
 use crate::widgets::Fields;
 
@@ -36,10 +37,12 @@ mod input;
 mod inspect;
 mod own;
 mod screen;
+mod stops;
 mod testing;
 mod viewing;
 
 use inspect::Inspector;
+use stops::toggled;
 use viewing::Viewing;
 
 /// The platform a host runs on, as far as the client cares: where `Cmd` in a shortcut means
@@ -163,6 +166,8 @@ pub struct Client {
     inspector: Inspector,
     /// The viewer of a pile's cards and the Revealed Cards pill (`viewing`).
     viewing: Viewing,
+    /// The bug report and the table's clock, which it freezes (`bug`).
+    bug: bug::Bug,
 }
 
 /// Whether the pointer is on the open prompt's button that shows what it would tap
@@ -221,6 +226,7 @@ impl Client {
             low_memory: false,
             inspector: Inspector::default(),
             viewing: Viewing::default(),
+            bug: bug::Bug::default(),
         }
     }
 
@@ -235,6 +241,7 @@ impl Client {
     /// Takes a session update, a pointer or key event, a new surface or another input. An
     /// input has no time of its own: what it starts begins at the `now` of the next `frame`.
     /// This is where screens are rebuilt and laid out, and where text is shaped.
+    #[expect(clippy::too_many_lines, reason = "one arm for each kind of input")]
     pub fn handle(&mut self, input: Input) {
         match input {
             Input::Update(update) => {
@@ -308,6 +315,7 @@ impl Client {
                 self.recordings = recordings;
                 self.show_screen();
             }
+            Input::BugSaved(result) => self.bug_saved(result),
             Input::Nudge => {}
             Input::Pointer(pointer) => self.point(pointer),
             Input::Key(key) => self.key(key),
@@ -377,17 +385,21 @@ impl Client {
     /// The frame at `now`, in nanoseconds since the client started.
     pub fn frame(&mut self, now: u64) -> &Frame {
         self.now = now;
+        // The table plays on its own clock, which the bug report stops (`bug`).
+        let table_now = self.bug_frame(now);
+        let table_shown = self.screen == Screen::Game && self.table_shown();
+        let reporting = self.bug_open();
         self.inputs.clear();
-        self.own(now);
-        self.set_aims(self.open);
-        let targets = self.targets(self.open);
+        self.own(table_now);
+        self.set_aims(self.table_open());
+        let targets = self.targets(self.table_open());
         let transitioning = self.layer.tick(now);
-        self.show.pointer_mut().advance(now);
-        self.show.advance_slide(now);
+        self.show.pointer_mut().advance(table_now);
+        self.show.advance_slide(table_now);
         self.inspect();
         self.write_pill(self.screen == Screen::Game && self.sheet.is_none());
         let mut builder = FrameBuilder::new(&mut self.frame);
-        self.show.frame(now, &mut builder);
+        self.show.frame(table_now, &mut builder);
         // Elements anchored to a card, an ability or a player stand where the table drew it.
         let table = self.show.table();
         self.layer
@@ -397,17 +409,17 @@ impl Client {
             &mut self.layer,
             self.show.counts(),
             self.show.effects(),
-            now,
+            table_now,
             self.show.table().layout(),
             self.window.size,
-            (self.screen == Screen::Game && self.sheet.is_none(), targets),
+            (table_shown, targets),
         );
-        let visible = self.screen == Screen::Game && self.sheet.is_none();
+        let visible = table_shown;
         (self.piles).write(&mut self.layer, self.show.table(), visible);
         (self.notices).write(
             &mut self.layer,
             self.show.notices(),
-            now,
+            table_now,
             (self.show.table().layout(), self.window.size),
             visible,
         );
@@ -415,7 +427,8 @@ impl Client {
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
         builder.placement_work(self.show.table().take_placed(), self.show.take_compiled());
-        self.open = self.show.settled();
+        // The bug report is drawn whether or not the table has settled (`bug`).
+        self.open = reporting || self.show.settled();
         let faces = Some(self.show.faces());
         (self.layer).write_with(&mut builder, self.show.table().camera(), self.open, faces);
         builder.finish();
@@ -423,7 +436,7 @@ impl Client {
         // that ended since the last frame and means a click on it (a press that picked nothing
         // up, or a card carried off the hand and let go) clicks the open prompt on that card;
         // one held up in a tray and carried is dropped where it was let go.
-        match self.show.point(&mut self.frame, now) {
+        match self.show.point(&mut self.frame, table_now) {
             Some(LetGo::Click(slot)) => {
                 if let Ok(slot) = u16::try_from(slot) {
                     let on = Subject::Object {
@@ -442,7 +455,7 @@ impl Client {
             Wake::Now
         } else {
             // A tooltip waiting for the pointer to rest shows at its time.
-            self.show.wake(now).or_at(self.layer.tip_due())
+            self.bug_wake(table_now).or_at(self.layer.tip_due())
         };
         &self.frame
     }
@@ -483,13 +496,10 @@ impl Client {
             Press::Open(screen) => {
                 self.first_view_opens = None;
                 self.screen = screen;
-                self.sheet = None;
+                self.set_sheet(None);
                 self.show_screen();
             }
-            Press::Sheet(sheet) => {
-                self.sheet = sheet;
-                self.show_screen();
-            }
+            Press::Sheet(sheet) => self.set_sheet(sheet),
             Press::Setting(setting) => self.set(setting),
             Press::Stop { step, theirs } => {
                 let stops = &mut self.settings.stops;
@@ -523,6 +533,7 @@ impl Client {
             Press::Field(id, ref text) => self.keep_field(id, text),
             Press::View(viewed) => self.view(Some(viewed)),
             Press::Dismiss(Dismiss::Viewer) => self.view(None),
+            Press::Bug(press) => self.bug_press(press),
             Press::Dismiss(Dismiss::Revealed) => self.dismiss_revealed(),
             // No screen opens a menu yet, so there is nothing for these to act on: the screen
             // that opens one gives them their arms.
@@ -559,7 +570,7 @@ impl Client {
         self.start.confirming = false;
         self.first_view_opens = None;
         self.screen = Screen::Game;
-        self.sheet = None;
+        self.set_sheet(None);
         self.show_screen();
     }
 
@@ -574,42 +585,6 @@ impl Client {
             revision: prompt.revision,
             click,
         }));
-    }
-
-    /// Changes a setting, asks the host to save the settings, and tells it the sound levels
-    /// or the session the stops when those changed.
-    fn set(&mut self, setting: Setting) {
-        self.settings.apply(setting);
-        self.requests
-            .push_back(Request::SaveSettings(self.settings));
-        match setting {
-            Setting::Music(_) | Setting::Effects(_) | Setting::Muted(_) => {
-                self.requests.push_back(Request::Audio {
-                    music: self.settings.music,
-                    effects: self.settings.effects,
-                    muted: self.settings.muted,
-                });
-            }
-            Setting::FullControl(_) => self.send_stops(),
-        }
-        self.show_screen();
-    }
-
-    /// Asks the host to save the settings after a stop changed, and sends the stops to the
-    /// session.
-    fn save_stops(&mut self) {
-        self.requests
-            .push_back(Request::SaveSettings(self.settings));
-        self.send_stops();
-        self.show_screen();
-    }
-
-    /// Sends the player's stops to the session of the latest view, if there is one.
-    fn send_stops(&mut self) {
-        if let Some(session) = self.session {
-            self.commands
-                .push_back(SessionCommand::SetStops(session, self.settings.stops));
-        }
     }
 
     /// From now on, keeps a record of every script the client is given, for the interface
@@ -640,14 +615,21 @@ impl Client {
     /// started, however the frames fell.
     #[must_use]
     pub fn rested(&self) -> u64 {
-        self.show.rested()
+        self.bug.frame_time(self.show.rested())
     }
 
     /// When the first notice shown or to be shown ends, as of the last `frame`, if there is one
     /// (`Show::notice_end`).
     #[must_use]
     pub fn notice_end(&self) -> Option<u64> {
-        self.show.notice_end()
+        self.show.notice_end().map(|end| self.bug.frame_time(end))
+    }
+
+    /// The frame the last `frame` made, without making another: what the host read back, for
+    /// the element tree a bug report keeps beside its picture.
+    #[must_use]
+    pub fn last_frame(&self) -> &Frame {
+        &self.frame
     }
 
     /// The match's faces, which the host's asset workers prepare: each arrives as an
@@ -741,17 +723,4 @@ impl Client {
     pub fn wanted_faces(&mut self) -> impl Iterator<Item = FaceId> + '_ {
         self.show.faces_mut().drain_wanted()
     }
-}
-
-/// `set` with `step` added if it was not in it, or taken out if it was.
-fn toggled(set: StepSet, step: beryl_protocol::protocol::Step) -> StepSet {
-    let mut steps: Vec<_> = set.steps().collect();
-    let step = step.into();
-    match steps.iter().position(|&held| held == step) {
-        Some(at) => {
-            steps.remove(at);
-        }
-        None => steps.push(step),
-    }
-    StepSet::of(&steps)
 }

@@ -27,7 +27,7 @@ use beryl_protocol::protocol::{Side, Status, ZoneName};
 use beryl_protocol::script::Verb;
 use glam::Vec2;
 
-pub use action::{Action, key_code};
+pub use action::{Action, KeyChord, key_code};
 pub use check::{Checked, Mode, StepMoment, TimelineStep};
 pub use moment::{Duration, Moment, Name, Offset, ParseError};
 pub use recording::{Answer, OPEN, RECORDINGS, Recording, Responses, plays_on};
@@ -394,7 +394,7 @@ impl Page {
             Action::Hover(locator) => self.hover(locator),
             Action::Drag(from, to) => self.drag(from, to),
             Action::Type(locator, text) => self.type_text(locator, text),
-            Action::Key(code) => self.key(*code),
+            Action::Key(chord) => self.key_chord(*chord),
             Action::Move(point) => self.move_to(*point),
             Action::Step(duration) => self.step(*duration),
             Action::Still => self.still(),

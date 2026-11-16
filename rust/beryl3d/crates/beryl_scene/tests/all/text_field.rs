@@ -15,7 +15,8 @@ use glam::Vec2;
 
 const FIELD: &str = "field \"description\"";
 
-/// The sample table with the bug report open over it, whose description field is empty.
+/// The sample table with the bug report describing the whole window, whose description field
+/// is empty.
 fn bug_report() -> Page {
     let mut view = ViewBuilder::sample();
     view.script(ScriptBuilder::reset().build());
@@ -27,7 +28,10 @@ fn bug_report() -> Page {
     let mut page = Page::new(recording.into(), Side::You, Layout::Desktop, size).unwrap();
     page.still();
     page.chord("Cmd+B");
-    // The sheet fades in.
+    // The table freezes for its picture, then Space takes the whole window and the sheet
+    // fades in.
+    page.still();
+    page.key(KeyCode::Space);
     page.still();
     page
 }
@@ -104,10 +108,8 @@ fn composing_text_is_underlined_and_joins_the_text_when_committed() {
 }
 
 #[test]
-fn focusing_the_field_begins_text_entry_over_it() {
+fn the_field_focused_as_the_form_opens_begins_text_entry_over_it() {
     let mut page = bug_report();
-    requests(&mut page);
-    page.press(FIELD);
     let field = page.find(FIELD);
     let begun = requests(&mut page)
         .into_iter()

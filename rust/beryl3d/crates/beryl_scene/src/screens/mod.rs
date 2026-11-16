@@ -12,6 +12,7 @@ mod start;
 mod table;
 mod testing;
 
+pub use bug_report::{BugForm, BugStage, CLICK, DESCRIPTION, span};
 pub use start::{SEED, StartForm, in_progress, seed};
 
 pub use settings::{GEAR_INSET, gear};
@@ -110,6 +111,8 @@ pub struct ScreenIn<'a> {
     pub recordings: &'a [String],
     /// The seat the testing screen replays recordings from.
     pub seat: Side,
+    /// The bug report, while it is open.
+    pub bug: &'a BugForm,
     /// What each text field holds, by its name.
     pub fields: &'a Fields,
     /// The card the pointer is over that the inspector shows, if any (`inspect::inspector`).
@@ -134,12 +137,13 @@ pub fn screen(screen: Screen, input: &ScreenIn) -> Element {
     }
 }
 
-/// What a sheet shows over the screen.
+/// What a sheet shows over the screen, given `under`, what the screen itself shows if
+/// anything. The settings sheet takes the screen's place; the bug report is drawn over it.
 #[must_use]
-pub fn sheet(sheet: Sheet, input: &ScreenIn) -> Element {
+pub fn sheet(sheet: Sheet, under: Option<Element>, input: &ScreenIn) -> Element {
     match sheet {
         Sheet::Settings => settings::settings(input),
-        Sheet::BugReport => bug_report::bug_report(input),
+        Sheet::BugReport => bug_report::bug_report(under, input),
     }
 }
 

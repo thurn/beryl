@@ -562,11 +562,13 @@ fn carry_out(window: &Window, clipboard: &mut Clipboard, request: Request) -> Op
         Request::Paste => return clipboard.paste().map(Input::Paste),
         Request::Share { path } => reveal(&path),
         Request::OpenUrl(url) => open_url(url),
-        // A desktop has no haptics. The app's feed saves the settings, plays the sound and
-        // replays a recording, as it sees each request first (`Feed::request`). Nothing exports
-        // bug reports yet.
+        // A desktop has no haptics. The app's feed saves the settings, plays the sound,
+        // replays a recording, takes the bug report's picture, saves the report and exports the
+        // reports, as it sees each request first (`Feed::request`).
         Request::Haptic(_)
         | Request::ExportBugs
+        | Request::FreezeFrame
+        | Request::SaveBug { .. }
         | Request::SaveSettings(_)
         | Request::Music(_)
         | Request::Audio { .. }

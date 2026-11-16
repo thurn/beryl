@@ -3,7 +3,7 @@
 
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest};
 use beryl_protocol::script::Subject;
-use beryl_scene::command::SessionCommand;
+use beryl_scene::command::{Request, SessionCommand};
 use beryl_scene::element::{
     Anchor, Chord, Display, Element, Overflow, Position, Press, Track, column, row, text,
 };
@@ -413,8 +413,8 @@ fn cmd_b_opens_the_bug_report_and_ctrl_b_does_off_the_mac() {
             client.handle(Input::Platform { mac });
         }
         client.handle(key(KeyCode::B, modifiers));
-        let frame = client.frame(0);
-        (frame.resolved.iter()).any(|element| frame.name(element.name) == "bug report")
+        // The report opens by freezing the table and asking the host for its picture.
+        std::iter::from_fn(|| client.next_request()).any(|request| request == Request::FreezeFrame)
     };
     assert!(opens(None, command), "Cmd+B on the Mac");
     assert!(!opens(None, control), "Ctrl+B is not the Mac's chord");

@@ -1,7 +1,9 @@
 //! The session thread (docs/beryl-3d.md, "Threads"). The frame thread never calls a function of
 //! `Sessions`, because one can wait on a lock: it sends each `SessionCommand` down a channel,
 //! and this thread calls the function the command names and hands the result back to the host
-//! as an `Input::Reply`, which wakes the event loop.
+//! as an `Input::Reply`, which wakes the event loop. A bug report goes down the same channel,
+//! so that it is written after every command sent before it, and its result comes back as an
+//! `Input::BugSaved`.
 //!
 //! The thread puts itself in the default scheduling class before it starts or resumes a game.
 //! The game's thread and the search threads are started from it and inherit that class, so the
@@ -19,6 +21,8 @@ use beryl_session::ai::AgentMove;
 use beryl_session::{Seat, Sessions, StartGame, StopsSetting};
 use beryl_shell::Dirs;
 
+use crate::bugs::Job;
+
 /// What answers the frame thread's commands: `Sessions`, or a test's stand-in.
 pub trait Session {
     /// Called once on the session thread before the first command: starts or resumes a game.
@@ -26,6 +30,15 @@ pub trait Session {
 
     /// Calls the function of the session that `command` names, and returns its result.
     fn run(&mut self, command: SessionCommand) -> Reply;
+
+    /// Writes a bug report, with what the session knows of the game.
+    ///
+    /// # Errors
+    ///
+    /// When the report cannot be written, with the reason the client shows.
+    fn save_bug(&mut self, job: Job) -> Result<(), String> {
+        job.write(None)
+    }
 
     /// Called once on the session thread after the last command, when the frame thread has
     /// closed its end.
@@ -35,7 +48,7 @@ pub trait Session {
 /// The frame thread's end of the session thread: where commands go. Dropping it ends the
 /// session thread once it has run every command sent so far, and waits for it.
 pub struct Commands {
-    sender: Option<Sender<SessionCommand>>,
+    sender: Option<Sender<Work>>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -45,7 +58,14 @@ impl Commands {
         // The thread ends only when this handle is dropped, so a failed send means it
         // panicked, and the panic has already been printed.
         if let Some(sender) = &self.sender {
-            let _ = sender.send(command);
+            let _ = sender.send(Work::Command(command));
+        }
+    }
+
+    /// Sends a bug report to be written on the session thread and returns at once.
+    pub fn save_bug(&self, job: Job) {
+        if let Some(sender) = &self.sender {
+            let _ = sender.send(Work::Bug(Box::new(job)));
         }
     }
 
@@ -76,15 +96,19 @@ pub fn spawn<S: Session>(
     make: impl FnOnce() -> S + Send + 'static,
     inbox: Inbox,
 ) -> Commands {
-    let (sender, commands) = channel::<SessionCommand>();
+    let (sender, commands) = channel::<Work>();
     let thread = std::thread::Builder::new()
         .name("session".to_owned())
         .spawn(move || {
             beryl_host::set_class(class);
             let mut session = make();
             session.begin();
-            for command in commands {
-                if !inbox.send(Input::Reply(session.run(command))) {
+            for work in commands {
+                let answer = match work {
+                    Work::Command(command) => Input::Reply(session.run(command)),
+                    Work::Bug(job) => Input::BugSaved(session.save_bug(*job)),
+                };
+                if !inbox.send(answer) {
                     break;
                 }
             }
@@ -95,6 +119,12 @@ pub fn spawn<S: Session>(
         sender: Some(sender),
         thread: Some(thread),
     }
+}
+
+/// What the session thread is sent.
+enum Work {
+    Command(SessionCommand),
+    Bug(Box<Job>),
 }
 
 /// The real session. Its views go to the host's inbox as they are emitted.
@@ -232,6 +262,10 @@ impl Session for Live {
             }
             SessionCommand::Concede(session) => Reply::Done(sessions.concede(session)),
         }
+    }
+
+    fn save_bug(&mut self, job: Job) -> Result<(), String> {
+        job.write(Some(&self.sessions))
     }
 
     /// With `--agent`, prints what the opponent's searches did (`search_report`), over the

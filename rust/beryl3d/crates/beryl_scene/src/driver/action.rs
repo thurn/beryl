@@ -4,7 +4,7 @@
 use glam::Vec2;
 
 use super::moment::{Duration, ParseError};
-use crate::input::KeyCode;
+use crate::input::{KeyCode, Modifiers};
 
 /// One action.
 #[derive(Clone, Debug, PartialEq)]
@@ -17,14 +17,74 @@ pub enum Action {
     Drag(String, String),
     /// `type <locator> "<text>"`
     Type(String, String),
-    /// `key <name>`
-    Key(KeyCode),
+    /// `key <name>`, or `key <modifiers>+<name>` as in `key Cmd+B`
+    Key(KeyChord),
     /// `move <x>,<y>`
     Move(Vec2),
     /// `step <duration>`
     Step(Duration),
     /// `still`
     Still,
+}
+
+/// A key with the modifiers held while it is pressed, as a `key` action names them. `Cmd` is
+/// the Command key on the Mac and Control elsewhere, as in a shortcut's binding
+/// (`element::Chord`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one flag per modifier a chord may name"
+)]
+pub struct KeyChord {
+    pub code: KeyCode,
+    pub cmd: bool,
+    pub ctrl: bool,
+    pub alt: bool,
+    pub shift: bool,
+}
+
+impl KeyChord {
+    /// `code` with no modifier held.
+    #[must_use]
+    pub fn plain(code: KeyCode) -> Self {
+        Self {
+            code,
+            cmd: false,
+            ctrl: false,
+            alt: false,
+            shift: false,
+        }
+    }
+
+    /// The chord `name` names: a key's name, after any of `Cmd+`, `Ctrl+`, `Alt+` (or
+    /// `Option+`) and `Shift+`.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        let mut parts: Vec<&str> = name.split('+').collect();
+        let mut chord = Self::plain(key_code(parts.pop()?)?);
+        for modifier in parts {
+            let flag = match modifier {
+                "Cmd" => &mut chord.cmd,
+                "Ctrl" => &mut chord.ctrl,
+                "Alt" | "Option" => &mut chord.alt,
+                "Shift" => &mut chord.shift,
+                _ => return None,
+            };
+            *flag = true;
+        }
+        Some(chord)
+    }
+
+    /// The modifier keys held, on the Mac if `mac`.
+    #[must_use]
+    pub fn modifiers(self, mac: bool) -> Modifiers {
+        Modifiers {
+            shift: self.shift,
+            control: self.ctrl || (self.cmd && !mac),
+            alt: self.alt,
+            command: self.cmd && mac,
+        }
+    }
 }
 
 impl std::str::FromStr for Action {
@@ -63,9 +123,11 @@ impl std::str::FromStr for Action {
                     .ok_or_else(|| expected("type needs a locator and then the text in quotes"))?;
                 Ok(Self::Type(rest[..at].trim().to_owned(), text))
             }
-            "key" => key_code(rest)
-                .map(Self::Key)
-                .ok_or_else(|| expected(&format!("'{rest}' is not a key's name"))),
+            "key" => KeyChord::parse(rest).map(Self::Key).ok_or_else(|| {
+                expected(&format!(
+                    "'{rest}' is not a key's name, with Cmd+, Ctrl+, Alt+ or Shift+ before it"
+                ))
+            }),
             "move" => {
                 let point = rest.split_once(',').and_then(|(x, y)| {
                     Some(Vec2::new(x.trim().parse().ok()?, y.trim().parse().ok()?))

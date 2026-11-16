@@ -4,6 +4,7 @@
 
 pub mod app;
 pub mod audio;
+pub mod bugs;
 pub mod ffi;
 pub mod fixture;
 pub mod frame_log;

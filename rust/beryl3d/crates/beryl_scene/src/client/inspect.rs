@@ -60,6 +60,7 @@ impl Client {
             start: &self.start,
             recordings: &self.recordings,
             seat: self.seat,
+            bug: &self.bug.form,
             fields: &self.fields,
             inspected: self.inspector.shown.as_ref(),
             faces: Some(self.show.faces().list()),
