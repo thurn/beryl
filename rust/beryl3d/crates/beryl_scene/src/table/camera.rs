@@ -222,6 +222,31 @@ impl Camera {
         ]
     }
 
+    /// The transform that lays the unit quad on the flat layer's plane centred on `centre`, in
+    /// logical points from the window's top left corner, `size.x` points long and `size.y` wide,
+    /// its length turned `angle` radians clockwise on the screen from pointing right: a quad of
+    /// light along a line drawn on the screen (`light::arrows`).
+    #[must_use]
+    pub fn screen_transform(&self, centre: Vec2, size: Vec2, angle: f32) -> Affine3A {
+        let window = self.window.size;
+        // One logical point on the layer's plane, in millimetres, the same across and down.
+        let point = 2.0 * self.tan_half * LAYER_DEPTH / window.height;
+        let ndc = Vec2::new(
+            centre.x / window.width * 2.0 - 1.0,
+            1.0 - centre.y / window.height * 2.0,
+        );
+        let half_height = self.tan_half * LAYER_DEPTH;
+        let half_width = half_height * window.width / window.height;
+        let local = Affine3A::from_scale_rotation_translation(
+            Vec3::new(size.x * point, size.y * point, 1.0),
+            // The screen's y runs down and the camera's up, so clockwise there is a negative
+            // turn here.
+            Quat::from_rotation_z(-angle),
+            Vec3::new(ndc.x * half_width, ndc.y * half_height, -LAYER_DEPTH),
+        );
+        Affine3A::from_mat4(self.inverse_view) * local
+    }
+
     /// The transform that lays the unit quad over `rect`, in logical points from the window's
     /// top left corner, on the flat layer's plane (docs/beryl-3d.md, "The frame": one projection
     /// serves the table and the flat layer).

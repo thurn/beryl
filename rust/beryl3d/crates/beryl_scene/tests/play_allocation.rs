@@ -1,8 +1,8 @@
 //! A frame that ends one script and starts the next allocates nothing (docs/beryl-3d.md, "The
 //! frame": no allocation): scripts are compiled when their updates arrive. This binary counts
 //! every heap allocation, so it holds one test, which also checks that the effects a starting
-//! script begins, `Lit::advance`, a frame of twenty streaks and one of forty effects of light
-//! allocate nothing.
+//! script begins, `Lit::advance`, a frame of twenty streaks, one of forty effects of light and
+//! one with 50 arrows allocate nothing.
 
 mod common;
 
@@ -10,14 +10,17 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use beryl_protocol::protocol::{Mana, ObjectId, Side, ZoneName};
-use beryl_protocol::script::{Act, Curve, Edge, Mark, StepEffect, StepTiming, Stream, Subject};
+use beryl_protocol::script::{
+    Act, Arrow, Curve, Edge, Mark, StepEffect, StepTiming, Stream, Subject,
+};
 use beryl_scene::frame::{Frame, FrameBuilder, Material, Role};
 use beryl_scene::light::streaks::RECORDS;
-use beryl_scene::light::{Lit, MarkSpan, Span};
+use beryl_scene::light::{ArrowSpan, Lit, MarkSpan, Span};
+use beryl_scene::play::Show;
 use beryl_scene::play::record::{Plant, Planted};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
 use beryl_scene::verbs::Interval;
-use common::{MS, before, emerge, empty_frame, resolve, show, three_beats};
+use common::{Cards, MS, before, emerge, empty_frame, resolve, show, three_beats};
 
 /// The system allocator, counting the allocations it makes.
 struct Counting;
@@ -162,6 +165,7 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
     );
     assert_eq!(lit.open().len(), 2);
 
+    fifty_arrows_allocate_nothing(&mut show, cards);
     twenty_streaks_allocate_nothing();
     forty_effects_allocate_nothing();
 }
@@ -262,4 +266,47 @@ fn forty_effects_allocate_nothing() {
             assert!(lights > 0, "the effects are drawn");
         }
     }
+}
+
+/// A frame that draws 50 arrows between the Angel and the Island allocates nothing.
+fn fifty_arrows_allocate_nothing(show: &mut Show, cards: Cards) {
+    for number in 0..50 {
+        let arrow = if number % 2 == 0 {
+            Arrow::FriendlyTarget
+        } else {
+            Arrow::Block
+        };
+        let (from, to) = if number % 4 < 2 {
+            (cards.angel, cards.island)
+        } else {
+            (cards.island, cards.angel)
+        };
+        show.lit_mut().begin(
+            Span::Arrow(ArrowSpan {
+                arrow,
+                from: Subject::Object { slot: from },
+                to: Subject::Object { slot: to },
+            }),
+            Interval {
+                from: 1_800 * MS,
+                to: 1_800 * MS,
+            },
+        );
+    }
+    let mut frame = Frame::with_capacity(512, 2048, 16384);
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    let mut builder = FrameBuilder::new(&mut frame);
+    show.frame(1_900 * MS, &mut builder);
+    let arrows = builder
+        .finish()
+        .resolved
+        .iter()
+        .filter(|element| element.role == Role::Arrow)
+        .count();
+    assert_eq!(
+        ALLOCATIONS.load(Ordering::Relaxed) - before,
+        0,
+        "allocations in a frame with 50 arrows"
+    );
+    assert_eq!(arrows, 50);
 }

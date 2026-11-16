@@ -128,12 +128,15 @@ pub struct Checked {
     pub plays: usize,
     /// How many frames it checked, over all of them.
     pub frames: u64,
+    /// How many pairs of consecutive frames "lines hold" compared, each sharing an arrow.
+    pub line_pairs: u64,
 }
 
 /// Plays the recording `name` from each seat it is recorded for, in each of
 /// [`DESKTOP_WINDOWS`], from its start to its end on its own clock, and runs every interface
-/// check on the frame of every tick. A fault of a rule that `data/beryl3d/test-faults.json`
-/// lists for that seat and window is allowed; `just b3d test` holds those to their counts.
+/// check on the frame of every tick, and "lines hold" on each pair of consecutive frames. A
+/// fault of a rule that `data/beryl3d/test-faults.json` lists for that seat and window is
+/// allowed; `just b3d test` holds those to their counts.
 ///
 /// # Panics
 ///
@@ -153,6 +156,7 @@ pub fn check_recording(name: &str) -> Checked {
     let mut checked = Checked {
         plays: 0,
         frames: 0,
+        line_pairs: 0,
     };
     for &seat in &seats {
         for size in DESKTOP_WINDOWS {
@@ -165,15 +169,13 @@ pub fn check_recording(name: &str) -> Checked {
             let mut page = page(name, seat, Layout::Desktop, size).unwrap_or_else(|why| {
                 panic!("{why}");
             });
+            // The arrows of the frame before, for "lines hold".
+            let mut kept = Vec::new();
             loop {
-                let faults = page.faults();
-                if faults
-                    .iter()
-                    .any(|fault| !allowed.contains_key(fault.rule.word()))
-                {
-                    page.check();
-                }
+                let held =
+                    page.check_since(&mut kept, |fault| allowed.contains_key(fault.rule.word()));
                 checked.frames += 1;
+                checked.line_pairs += u64::from(held);
                 if page.ended() {
                     break;
                 }

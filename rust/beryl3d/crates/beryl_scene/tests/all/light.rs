@@ -57,6 +57,7 @@ fn every_verb_has_a_play_function_and_says_whether_it_is_built() {
             Verb::Showcase,
             Verb::Dwell,
             Verb::Announce,
+            Verb::Point,
             Verb::Mark,
             Verb::Lift
         ]

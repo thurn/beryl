@@ -57,8 +57,9 @@ pub(super) fn check(options: &Options) -> Result<Printed, Usage> {
     };
     let seconds = started.elapsed().as_secs_f64();
     let closing = format!(
-        "1 test, {} frames, {} faults in {seconds:.1}s",
+        "1 test, {} frames, lines-hold on {} pairs, {} faults in {seconds:.1}s",
         checked.frames,
+        checked.line_pairs,
         found.len()
     );
     let fault = !found.is_empty();
@@ -81,6 +82,7 @@ pub(super) fn check(options: &Options) -> Result<Printed, Usage> {
             "command": options.command_line(),
             "tests": 1,
             "frames": checked.frames,
+            "line_pairs": checked.line_pairs,
             "faults": rows,
             "seconds": seconds,
         });

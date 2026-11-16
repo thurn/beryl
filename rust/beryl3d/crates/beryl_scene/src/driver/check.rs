@@ -12,6 +12,7 @@ use std::collections::BTreeSet;
 use beryl_protocol::script::{Edge, Verb};
 
 use super::{DriverError, Name, Page};
+use crate::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
 use crate::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
 use crate::agent::tree::locator_of;
 use crate::agent::{self, Fault, Subject, hit::bounds};
@@ -72,6 +73,9 @@ pub struct Checked {
     /// How many frames were drawn: those the frame checks ran on, those in which a step's
     /// subject was only sampled, and those that name the objects of a fault.
     pub frames: usize,
+    /// How many pairs of consecutive checked frames "lines hold" compared, each sharing at least
+    /// one arrow.
+    pub line_pairs: usize,
 }
 
 /// One step of one script that "every step shown" judges, with what the frames showed of it.
@@ -134,6 +138,9 @@ impl Page {
 
         let mut page = self.fresh(true);
         let mut faults = Vec::new();
+        // The arrows of the last frame the frame checks ran on, for "lines hold".
+        let mut kept: Vec<KeptArrow> = Vec::new();
+        let mut line_pairs = 0;
         let mut named: Vec<Vec<Subject>> = vec![Vec::new(); found.len()];
         for &t in &all {
             page.advance_to(t);
@@ -143,6 +150,11 @@ impl Page {
             let frame = page.frame();
             if checked.contains(&t) {
                 faults.extend(agent::check(frame, &context));
+                if arrows_held(&kept, frame) > 0 {
+                    line_pairs += 1;
+                    faults.extend(lines_hold(&kept, frame, &context));
+                }
+                keep_arrows(frame, &mut kept);
             }
             if sampled.contains(&t) {
                 for step in judged
@@ -190,7 +202,36 @@ impl Page {
         Checked {
             faults,
             frames: all.len(),
+            line_pairs,
         }
+    }
+
+    /// Runs every interface check on the present frame, and "lines hold" on it and the frame
+    /// whose arrows `kept` holds, then keeps this frame's arrows there for the next. Returns
+    /// whether the two frames shared an arrow for "lines hold" to compare.
+    ///
+    /// # Panics
+    ///
+    /// When a check finds a fault that `allowed` does not allow, with every fault and the
+    /// clock's state.
+    pub fn check_since(
+        &mut self,
+        kept: &mut Vec<KeptArrow>,
+        allowed: impl Fn(&Fault) -> bool,
+    ) -> bool {
+        let context = self.context();
+        let frame = self.frame();
+        let mut faults = agent::check(frame, &context);
+        let held = arrows_held(kept, frame) > 0;
+        if held {
+            faults.extend(lines_hold(kept, frame, &context));
+        }
+        keep_arrows(frame, kept);
+        if faults.iter().any(|fault| !allowed(fault)) {
+            let printed: Vec<String> = faults.iter().map(|fault| fault.print(&context)).collect();
+            panic!("{}", self.error(&printed.join("\n")));
+        }
+        held
     }
 
     /// Plants a fault of kind `kind` in the script that plays at `at`, in nanoseconds since the

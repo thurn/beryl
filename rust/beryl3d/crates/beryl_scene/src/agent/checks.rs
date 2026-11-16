@@ -199,6 +199,8 @@ enum Kind {
 /// A card id at or above `REVEALED_FACE` is the face of the card in slot `id - REVEALED_FACE`
 /// in the Revealed Cards pile, which a card held up to be read has beside itself: it is no
 /// second card of that object, and is counted apart from the cards.
+/// Arrows are not held to the sibling rule: a spell with two targets of one kind has two arrows
+/// named alike, told apart by their ids.
 #[must_use]
 pub fn duplicates(frame: &Frame, context: &Context) -> Vec<Fault> {
     let mut faults = Vec::new();
@@ -223,7 +225,7 @@ pub fn duplicates(frame: &Frame, context: &Context) -> Vec<Fault> {
             ids.insert(key, index);
         }
         let name = frame.name(element.name);
-        if element.place != Place::Layer || name.is_empty() {
+        if element.place != Place::Layer || element.role == Role::Arrow || name.is_empty() {
             continue;
         }
         let key = (element.parent, element.role.word(), name);
@@ -334,32 +336,61 @@ pub fn clips(frame: &Frame, context: &Context) -> Vec<Fault> {
     )]
 }
 
-/// Lines hold: an arrow whose two ends are at rest does not change shape. An arrow is matched
-/// across the frames by its id. Its ends are at rest when neither of its end points moved more
-/// than `LINE_END_POINTS` and it is moving in neither frame, and it changed shape when either
-/// control point moved `LINE_RESHAPE_POINTS` or more. `context` is the later frame's.
-#[must_use]
-pub fn lines_hold(before: &Frame, after: &Frame, context: &Context) -> Vec<Fault> {
-    let arrows = |frame: &Frame| {
+/// An arrow as one frame drew it, kept for "lines hold" to compare with the next frame's, since
+/// a `Frame` is reused for the next and cannot be cloned.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct KeptArrow {
+    pub id: u32,
+    /// The control points of its curve on the screen (`Role::Arrow`).
+    pub corners: [Vec2; 4],
+    pub moving: bool,
+}
+
+/// Replaces `kept` with the arrows of `frame`. Allocates only when `frame` has more arrows than
+/// `kept` has ever held.
+pub fn keep_arrows(frame: &Frame, kept: &mut Vec<KeptArrow>) {
+    kept.clear();
+    kept.extend(
         frame
             .resolved
             .iter()
-            .enumerate()
-            .filter(|(_, element)| element.role == Role::Arrow)
-            .map(|(index, element)| (element.id.0, index as u32))
-            .collect::<BTreeMap<u32, u32>>()
-    };
-    let earlier = arrows(before);
+            .filter(|element| element.role == Role::Arrow)
+            .map(|element| KeptArrow {
+                id: element.id.0,
+                corners: element.corners,
+                moving: element.state.has(StateBits::MOVING),
+            }),
+    );
+}
+
+/// How many arrows of `after` the frame before drew too, which "lines hold" compares.
+#[must_use]
+pub fn arrows_held(before: &[KeptArrow], after: &Frame) -> usize {
+    after
+        .resolved
+        .iter()
+        .filter(|element| {
+            element.role == Role::Arrow && before.iter().any(|was| was.id == element.id.0)
+        })
+        .count()
+}
+
+/// Lines hold: an arrow whose two ends are at rest does not change shape. An arrow is matched
+/// across two consecutive frames by its id, `before` holding the earlier frame's arrows
+/// (`keep_arrows`). Its ends are at rest when neither of its end points moved more than
+/// `LINE_END_POINTS` and it is moving in neither frame, and it changed shape when either control
+/// point moved `LINE_RESHAPE_POINTS` or more. `context` is the later frame's.
+#[must_use]
+pub fn lines_hold(before: &[KeptArrow], after: &Frame, context: &Context) -> Vec<Fault> {
     let mut faults = Vec::new();
     for (index, now) in after.resolved.iter().enumerate() {
         if now.role != Role::Arrow {
             continue;
         }
-        let Some(&was_index) = earlier.get(&now.id.0) else {
+        let Some(was) = before.iter().find(|was| was.id == now.id.0) else {
             continue;
         };
-        let was = &before.resolved[was_index as usize];
-        if was.state.has(StateBits::MOVING) || now.state.has(StateBits::MOVING) {
+        if was.moving || now.state.has(StateBits::MOVING) {
             continue;
         }
         let moved = |corner: usize| was.corners[corner].distance(now.corners[corner]);

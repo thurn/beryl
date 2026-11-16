@@ -31,6 +31,7 @@ mod verbs_fly;
 mod verbs_fly_draw;
 mod verbs_leaving;
 mod verbs_mark;
+mod verbs_point;
 mod verbs_shown;
 mod verbs_streak;
 mod verbs_strike;

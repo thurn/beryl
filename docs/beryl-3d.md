@@ -1160,6 +1160,12 @@ streaks and notices (`StepOut`).
   fails for a name that is no verb or case. Tuning a 3D value does not touch the
   web interface's data file, so none of the web interface's checks run for it
   (decision C17).
+- **Arrows are drawn from their ends on every frame.** `point` only begins and
+  ends a span. `light::arrows` draws each open arrow from where its two ends are
+  in that frame, on the screen, with the web stage's shapes
+  (`ui/src/stage/lines.ts`): a target arrow arcs over what lies between, the
+  line to a source sags toward the bottom of the window by `light.sag`, and a
+  line of combat runs straight. Its values are under `light` in `space.json`.
 - **A step ends when its animation ends.** A script's beats play in order, the
   steps of one beat together, on the time passed to `frame`.
 - **A notice outlives its beat.** `announce` moves nothing: it writes a
@@ -2302,7 +2308,8 @@ screen, so they cover every card spec that is ever generated.
   where a hit test returns it.
 - **No duplicates.** No two elements share an id, a game object has exactly one
   scene object, and no two sibling elements of the flat layer share a role and a
-  name.
+  name. Arrows are left out of that last rule, since two arrows of one kind from
+  one spell are named alike and told apart by their ids.
 - **Text fits.** No laid-out line is wider or taller than its element's box.
 - **Named.** Every interactive element has a role and a non-empty name.
 - **Clips fit.** The frame asks for no more than 15 clip rectangles. A clip
@@ -2328,7 +2335,10 @@ screen, so they cover every card spec that is ever generated.
   a face layer of its own.
 - **Lines hold.** An arrow or line whose two ends are at rest does not change
   shape: between two frames in which it is not moving, neither control point of
-  its curve moves 4 points or more while its two ends stay within 0.1.
+  its curve moves 4 points or more while its two ends stay within 0.1. It runs
+  on each pair of consecutive frames the checks evaluate, which keep the arrows
+  of the frame before (`agent::checks::keep_arrows`), and `just b3d check` says
+  in its closing line on how many pairs it ran.
 
 The last four are the web interface's stage audits (`ui/scripts/stage-audit.mjs`
 and `audit.mjs`), with the same thresholds. The thresholds are in

@@ -2,7 +2,8 @@
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use beryl_scene::agent::checks::{
-    blank_cards, check, duplicates, lines_hold, named, on_screen, overlap, reachable,
+    KeptArrow, blank_cards, check, duplicates, keep_arrows, lines_hold, named, on_screen, overlap,
+    reachable,
 };
 use beryl_scene::agent::locate::LocateError;
 use beryl_scene::agent::tree::line;
@@ -496,6 +497,22 @@ fn duplicate_ids_and_siblings_are_faults() {
             &["button \"Cancel\" #2", "button \"Cancel\" #3"]
         )
     );
+    // Two arrows of one kind from one spell are named alike and told apart by their ids.
+    let arrows = frame(vec![
+        layer(
+            Role::Arrow,
+            "hostile-target",
+            5,
+            rect(0.0, 0.0, 300.0, 60.0),
+        ),
+        layer(
+            Role::Arrow,
+            "hostile-target",
+            6,
+            rect(0.0, 100.0, 300.0, 60.0),
+        ),
+    ]);
+    assert_eq!(summary(&duplicates(&arrows, &desktop())), vec![]);
 }
 
 #[test]
@@ -536,7 +553,8 @@ fn arrow(start: Vec2, bend: f32, end: Vec2) -> Frame {
 #[test]
 fn an_arrow_that_changes_shape_with_its_ends_at_rest_is_a_fault() {
     let (start, end) = (Vec2::ZERO, Vec2::new(300.0, 0.0));
-    let before = arrow(start, -50.0, end);
+    let mut before: Vec<KeptArrow> = Vec::new();
+    keep_arrows(&arrow(start, -50.0, end), &mut before);
     assert_eq!(
         summary(&lines_hold(&before, &arrow(start, -80.0, end), &desktop())),
         one(Rule::LinesHold, &["arrow \"target\" #5"])

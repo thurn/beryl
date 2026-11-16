@@ -7,6 +7,7 @@
 //! (`beryl_protocol::script`, "Spans"). A script with a reset drops every span.
 
 pub mod arrows;
+pub mod lines;
 pub mod marks;
 pub mod streaks;
 

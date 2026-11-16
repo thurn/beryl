@@ -36,6 +36,16 @@ pub mod size {
 pub mod color {
     include!(concat!(env!("OUT_DIR"), "/tokens/color.rs"));
 
+    /// The light of an arrow or line, by what it says (UI Conventions, exception 4), from the
+    /// web stage's `TONES` (`ui/src/stage/light.ts`): green at a target its chooser controls
+    /// and red at one they do not, cyan an attack's line, gold a block's, and pale the line from
+    /// an ability to its source.
+    pub const FRIENDLY_TARGET: [u8; 4] = [20, 235, 128, 255];
+    pub const HOSTILE_TARGET: [u8; 4] = [255, 43, 26, 255];
+    pub const ATTACK_LINE: [u8; 4] = [26, 214, 242, 255];
+    pub const BLOCK_LINE: [u8; 4] = [255, 168, 26, 255];
+    pub const SOURCE_LINE: [u8; 4] = [219, 184, 117, 255];
+
     /// A life total that falls: the `--flare` of the `[data-life] > .stage-effect` rule.
     pub const LOSS: [u8; 4] = [255, 106, 85, 255];
     /// A life total that rises: the `--flare` of the `[data-life] > .stage-effect-gain` rule.
