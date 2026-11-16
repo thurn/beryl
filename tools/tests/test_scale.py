@@ -38,6 +38,20 @@ def test_a_card_of_two_faces_renames_each_face() -> None:
     assert scale_workspace.clone_name(several, 3).endswith(" 3")
 
 
+def test_the_scratch_store_keeps_the_cards_read_through_the_card_type() -> None:
+    # A clone's scenario reads `Card::Plains`: without Plains in the scratch store, every
+    # set crate's build script failed with "no card in the store is spelled so".
+    pool, _ = scale_workspace.sources()
+    readers = [
+        s for s in pool if "Card::Plains" in s.text and "names::PLAINS" not in s.text
+    ]
+    assert readers
+    keys = {
+        line.partition(b"\t")[0] for line in scale_workspace.store_lines(readers[:1])
+    }
+    assert b"card:Plains" in keys
+
+
 def test_the_plan_follows_the_trees_groups() -> None:
     groups = [(5, 1000), (2, 500)]
     crates = scale_workspace.plan(3000, None, groups)

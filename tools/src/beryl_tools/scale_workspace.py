@@ -319,10 +319,20 @@ def workspace_manifest(tree: str) -> str:
 
 def store_lines(pool: list[Source], store: Path = card_store.STORE) -> list[bytes]:
     """The real lines the scratch store keeps: every token, and the cards the clones' files
-    name that are not the clones themselves, with the record each such alias names."""
+    name (as `names::PLAINS` or `Card::Plains`) that are not the clones themselves, with the
+    record each such alias names."""
     named = {c for s in pool for m, c in CONSTANT.findall(s.text) if m == "names"}
+    # Card files mostly read other cards through the `Card` type (`Card::Plains`), whose
+    # constants lose the module's word breaks, so those match on the name's own CamelCase.
+    camels = {c for s in pool for m, c in CAMEL.findall(s.text) if m == "Card"}
     spelled = card_files.spelled(store)
     wanted = {name for c in named for name in spelled.get(c.lower(), ())}
+    wanted |= {
+        name
+        for names in spelled.values()
+        for name in names
+        if set_groups.camel(name) in camels
+    }
     kept: list[bytes] = []
     aliased: set[str] = set()
     with store.open("rb") as lines:
