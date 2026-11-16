@@ -2862,8 +2862,11 @@ than the test that reads it.
   recording's name, seat and number of views, and its messages as deflated JSON
   (the views of a recording repeat, so deflating makes the file about 30 times
   smaller), or why it could not be recorded. The builder holds
-  `recordings-<hash>.lock`, writes under a temporary name and renames; the
-  newest three files are kept.
+  `recordings-<hash>.lock`, writes under a temporary name and renames. Building
+  or reading a pack sets its modification time, and a pack used in the last six
+  hours is kept, as are the newest three, up to 48 packs (`pack::prune`). When
+  only the newest three were kept, the worktrees building packs for their own
+  sources deleted a fast check's pack while its tests still read it.
 - **Card spec moments and fixtures are recorded from both seats.** A fixture's
   definition names the seat its stop is seen from. From the other seat it is the
   same game, with the same stand-in answers and clicks and the same stop, with

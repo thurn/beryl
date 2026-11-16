@@ -260,6 +260,9 @@ fn open() -> Result<Opened, String> {
         ));
     }
     let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    // So that other worktrees' builds keep this pack while this process and its siblings use
+    // it.
+    pack::mark_used(&path);
     // Kept for the life of the process, so that entries can borrow their names and messages.
     let bytes: &'static [u8] = Vec::leak(bytes);
     let entries = pack::read(bytes).map_err(|why| format!("{}: {why}", path.display()))?;

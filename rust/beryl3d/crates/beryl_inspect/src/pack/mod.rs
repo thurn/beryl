@@ -5,8 +5,9 @@
 //! The file is `recordings-<hash>.bin` in the cache directory, where the hash is
 //! [`sources::hash`] of [`sources::sources`]. Of several processes that find it missing, one
 //! builds it while holding `recordings-<hash>.lock`, writes it under a name of its own and
-//! renames it into place; the others wait on the lock and read the finished file. The newest
-//! [`KEPT`] packs are kept and older ones deleted.
+//! renames it into place; the others wait on the lock and read the finished file. A pack that
+//! was built or read in the last [`KEPT_FOR`] is kept, as are the newest [`KEPT`], up to
+//! [`MOST`]; older ones are deleted.
 //!
 //! The file is postcard: the format version, then each recording's name, seat, number of views
 //! and either its messages as deflated JSON text or why it could not be recorded. A message
@@ -19,14 +20,28 @@ pub mod sources;
 use std::fs::{self, File};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime};
 
 use beryl_protocol::Seat;
 use beryl_protocol::ipc::{FixtureMessage, GAME_UPDATE};
 use serde::{Deserialize, Serialize};
 
-/// How many packs the cache keeps: the newest, by when they were written.
+/// How many packs the cache keeps however old they are: the newest, by when they were last
+/// built or read.
 pub const KEPT: usize = 3;
+
+/// How long after its last build or read a pack is kept. When the cache kept only the newest
+/// [`KEPT`], the worktrees of the machine, each at its own state of the sources, built three
+/// packs within three minutes on 2026-11-16, so a fast check's pack was deleted while its
+/// tests still ran and they failed with "the recordings pack for the present sources is
+/// missing".
+pub const KEPT_FOR: Duration = Duration::from_hours(6);
+
+/// The most packs kept, whatever their age: a pack is about 15 MB.
+pub const MOST: usize = 48;
+
+/// A pack read again sooner than this after its last mark is not marked again (`mark_used`).
+const MARK_EVERY: Duration = Duration::from_secs(60);
 
 /// The pack format's version, which a reader requires. The hash covers it too, so a pack of an
 /// older format is built again, not misread.
@@ -111,6 +126,7 @@ pub fn cache_dir() -> PathBuf {
 pub fn ensure(dir: &Path, hash: &str, recorder: &dyn Recorder) -> Result<PathBuf, String> {
     let pack = path(dir, hash);
     if pack.is_file() {
+        mark_used(&pack);
         return Ok(pack);
     }
     fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -212,8 +228,22 @@ pub fn messages(entry: &Entry) -> Result<Vec<FixtureMessage>, String> {
     serde_json::from_slice(&json).map_err(|e| format!("{}: not messages: {e}", entry.name))
 }
 
-/// Deletes all but the newest [`KEPT`] packs in `dir`, never `keep`, with their lock files and
-/// any temporary file left by a build that died. Nothing that fails here matters to the caller.
+/// Sets the modification time of the pack at `path` to now, which [`prune`] reads as its last
+/// use, unless it was set within [`MARK_EVERY`]. Nothing that fails here matters to the caller.
+pub fn mark_used(path: &Path) {
+    let stale = fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_none_or(|age| age > MARK_EVERY);
+    if stale && let Ok(file) = File::options().write(true).open(path) {
+        let _ = file.set_modified(SystemTime::now());
+    }
+}
+
+/// Deletes the packs in `dir` that are neither among the newest [`KEPT`] nor used within
+/// [`KEPT_FOR`], and all but the newest [`MOST`], never `keep`, with their lock files and any
+/// temporary file left by a build that died. Nothing that fails here matters to the caller.
 fn prune(dir: &Path, keep: &Path) {
     let Ok(listing) = fs::read_dir(dir) else {
         return;
@@ -248,7 +278,13 @@ fn prune(dir: &Path, keep: &Path) {
     }
     // The pack just built first, then the newest.
     packs.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)));
-    for (_, _, path) in packs.into_iter().skip(KEPT) {
+    for (at, (_, written, path)) in packs.into_iter().enumerate() {
+        let recent = written
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age <= KEPT_FOR);
+        if at < KEPT || (at < MOST && recent) {
+            continue;
+        }
         let _ = fs::remove_file(&path);
         let _ = fs::remove_file(path.with_extension("lock"));
     }

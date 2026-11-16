@@ -115,22 +115,53 @@ fn a_pack_reads_back_each_recording_sorted_with_its_views_and_failures() {
     );
 }
 
+/// Sets the modification time of `dir`'s pack for `hash` to `hours` ago.
+fn age(dir: &Path, hash: &str, hours: u64) {
+    let file = std::fs::File::options()
+        .write(true)
+        .open(pack::path(dir, hash))
+        .unwrap();
+    let then = std::time::SystemTime::now() - std::time::Duration::from_secs(hours * 3600);
+    file.set_modified(then).unwrap();
+}
+
 #[test]
-fn the_newest_three_packs_are_kept() {
+fn packs_used_lately_are_kept_and_old_ones_are_deleted() {
     let dir = scratch("kept");
     let recorder = Counting::default();
-    for hash in ["01", "02", "03", "04"] {
+    for hash in ["01", "02", "03", "04", "05"] {
         pack::ensure(&dir, hash, &recorder).unwrap();
     }
+    // Five packs built within the last hours stay, more than the three newest.
+    assert_eq!(files(&dir, ".bin").len(), 5);
+    for hash in ["01", "02", "03"] {
+        age(&dir, hash, 7);
+    }
+    // A worktree still reading pack 02 keeps it.
+    pack::mark_used(&pack::path(&dir, "02"));
+    pack::ensure(&dir, "06", &recorder).unwrap();
     assert_eq!(
         files(&dir, ".bin"),
         [
             "recordings-02.bin",
-            "recordings-03.bin",
-            "recordings-04.bin"
+            "recordings-04.bin",
+            "recordings-05.bin",
+            "recordings-06.bin"
         ]
     );
-    assert_eq!(files(&dir, ".lock").len(), 3);
+    assert_eq!(files(&dir, ".lock").len(), 4);
+}
+
+#[test]
+fn the_newest_three_packs_are_kept_however_old() {
+    let dir = scratch("kept-old");
+    let recorder = Counting::default();
+    for hash in ["01", "02", "03"] {
+        pack::ensure(&dir, hash, &recorder).unwrap();
+        age(&dir, hash, 24);
+    }
+    pack::ensure(&dir, "04", &recorder).unwrap();
+    assert_eq!(files(&dir, ".bin").len(), 3);
 }
 
 /// The environment variable that makes [`build_in_a_child_process`] build: the directory.
