@@ -14,6 +14,7 @@ mod check;
 mod cues;
 mod gesture;
 mod glyphs;
+mod keys;
 mod moment;
 mod recording;
 
@@ -36,8 +37,7 @@ use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered}
 use crate::faces::FaceList;
 use crate::frame::{Frame, Place, Role, Sound, StateBits, Wake};
 use crate::input::{
-    AssetReady, Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind,
-    PointerPhase, Rect, Size, TextChange,
+    AssetReady, Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Rect, Size,
 };
 use crate::play::record::Plant;
 use crate::{Client, Config};
@@ -316,25 +316,6 @@ impl Page {
     pub fn drag(&mut self, from: &str, to: &str) {
         let (start, end) = (self.point(from), self.point(to));
         self.drag_between(start, end);
-    }
-
-    /// Presses the field `locator` names and gives it `text` as its whole new contents.
-    pub fn type_text(&mut self, locator: &str, text: &str) {
-        self.press(locator);
-        self.give(Input::Text(TextChange(text.to_owned())));
-        self.render();
-    }
-
-    /// Presses and releases a key.
-    pub fn key(&mut self, code: KeyCode) {
-        for phase in [KeyPhase::Down, KeyPhase::Up] {
-            self.give(Input::Key(Key {
-                code,
-                phase,
-                modifiers: Modifiers::default(),
-            }));
-        }
-        self.render();
     }
 
     /// Moves the pointer to `point`, in logical points.

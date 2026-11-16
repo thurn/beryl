@@ -248,7 +248,7 @@ impl Phone {
 
     /// The edited text field's whole new contents. Dropped before the first surface.
     pub fn text(&mut self, text: String) {
-        self.give(Input::Text(TextChange(text)));
+        self.give(Input::Text(TextChange::Replace(text)));
     }
 
     /// The next thing the client asks of the platform, or `None`, as always before the first

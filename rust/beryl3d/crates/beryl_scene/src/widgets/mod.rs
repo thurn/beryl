@@ -13,7 +13,7 @@ mod toggle;
 mod tooltip;
 
 pub use button::{button, primary};
-pub use field::{FieldState, field};
+pub use field::{FieldState, Fields, field};
 pub use icon_button::icon_button;
 pub use icons::IconId;
 pub use list::list;

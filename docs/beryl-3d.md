@@ -793,7 +793,8 @@ pub enum Input {
     Surface { size: Size, scale: f32, safe_area: Insets },
     Pointer(Pointer),                        // mouse, touch or pen
     Key(Key),
-    Text(TextChange),                        // the edited field's new contents
+    Text(TextChange),                        // typed, composed or a phone field's whole text
+    Paste(String),                           // the clipboard's text, for Request::Paste
     Assets(AssetReady),                      // a face or a glyph page is ready
     Lifecycle(Lifecycle),                    // suspended, resumed, low memory
     Tier(Tier),                              // Baseline or Enhanced
@@ -831,6 +832,8 @@ impl Client {
 pub enum Request {
     BeginTextEntry { field: ElementId, rect: Rect, text: String },
     EndTextEntry,
+    Copy(String),                            // put a field's selection on the clipboard
+    Paste,                                   // answered with Input::Paste
     Share { path: PathBuf },
     Haptic(Haptic),
     OpenUrl(String),
@@ -1078,9 +1081,14 @@ The phone hosts handle the following platform behaviors.
 - **Text entry.** On phones the host shows a native text field over the element
   being edited, so the system keyboard, autocorrect, dictation and input methods
   all work as the platform intends. The client sends `BeginTextEntry` with the
-  field's rectangle and contents, and the host sends a `Text` input for every
-  change. On the desktop the field is edited in place, using `parley`'s editing
-  support and `winit`'s input-method events.
+  field's rectangle and contents, and the host sends a `Text` input
+  (`TextChange::Replace`) for every change. On the desktop the field is edited
+  in place, with `parley`'s `PlainEditor`: the host sends typed text and an
+  input method's committed text as `TextChange::Insert`, its composing text as
+  `TextChange::Preedit`, which the field shows underlined at the caret, and
+  answers `Copy` and `Paste` with the system clipboard (arboard).
+  `BeginTextEntry` turns the input method on with the field's rectangle as its
+  candidate area, and `EndTextEntry` turns it off.
 - **Losing the surface.** The Android host stops its frame callbacks on pause
   and drops the GPU surface before returning from `surfaceDestroyed`. On resume
   it waits for a valid surface before scheduling a frame. iOS forbids GPU work

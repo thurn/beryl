@@ -20,7 +20,7 @@ use crate::input::{FaceId, FaceSize};
 use crate::screens::{Screen, Sheet};
 use crate::settings::Setting;
 use crate::text::TypeStyle;
-use crate::widgets::{IconId, MenuId};
+use crate::widgets::{FieldState, IconId, MenuId};
 
 /// What a press on an element means. A value, not a closure, so that an unchanged element
 /// compares equal and a test can print it. `Client::press` turns it into a `SessionCommand`, a
@@ -51,6 +51,9 @@ pub enum Press {
     Menu(MenuId, u16),
     /// Give the keys to an element, such as a text field.
     Focus(ElementId),
+    /// The text field `ElementId` now holds this text: an edit made in it, which
+    /// `Client::press` keeps in the field's `FieldState`.
+    Field(ElementId, String),
     /// Close something shown over the screen.
     Dismiss(Dismiss),
 }
@@ -127,6 +130,9 @@ pub struct Element {
     pub shows: Option<Shown>,
     /// The keyboard shortcuts the screen answers, given on its top element.
     pub shortcuts: Shortcuts,
+    /// For a text field, what it holds and where its caret is (`widgets::field`), from which
+    /// the layer starts editing it when it takes the focus.
+    pub field: Option<Box<FieldState>>,
     pub children: Vec<Element>,
 }
 
@@ -147,6 +153,7 @@ impl Element {
             anchor: None,
             shows: None,
             shortcuts: Shortcuts::default(),
+            field: None,
             children: Vec::new(),
         }
     }
@@ -166,6 +173,7 @@ impl Element {
             && self.anchor == other.anchor
             && self.shows == other.shows
             && self.shortcuts == other.shortcuts
+            && self.field == other.field
     }
 
     #[must_use]

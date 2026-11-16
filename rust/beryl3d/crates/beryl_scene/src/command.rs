@@ -46,6 +46,10 @@ pub enum Request {
         text: String,
     },
     EndTextEntry,
+    /// Put this text on the platform's clipboard: the selection of a field, copied or cut.
+    Copy(String),
+    /// Read the platform's clipboard and hand its text back as `Input::Paste`.
+    Paste,
     /// Offer the file at `path` to the platform's share sheet.
     Share {
         path: PathBuf,

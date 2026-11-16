@@ -8,6 +8,7 @@
 //! screen it keeps floats, small elements placed at a point of the window (`float`).
 
 mod anchor;
+mod edit;
 mod fit;
 mod float;
 mod focus;
@@ -24,6 +25,7 @@ use taffy::{
 };
 
 pub use anchor::centre_of;
+pub use edit::{Edit, Edited};
 pub use float::FloatLook;
 
 use float::{Float, Prepared};
@@ -112,6 +114,8 @@ pub struct Layer {
     /// (`Layer::point_at`).
     hovered: Option<ElementId>,
     pressed: Option<ElementId>,
+    /// The focused text field's editor, while a text field has the focus (`edit`).
+    editing: Option<edit::Editing>,
     /// Whether the tree being matched and laid out is the screen's, whose changes transition
     /// (`motion`); floats' do not.
     animating: bool,
@@ -150,6 +154,7 @@ impl Layer {
             focused: None,
             hovered: None,
             pressed: None,
+            editing: None,
             animating: false,
         }
     }
@@ -199,6 +204,7 @@ impl Layer {
         }
         self.relayout();
         self.animating = false;
+        self.follow_focus();
     }
 
     /// The layout nodes computed and texts shaped since the last call.
@@ -352,6 +358,9 @@ impl Layer {
         // Only a pass over the screen drops the texts it did not use. A pass over floats alone
         // uses only their texts, and would drop the screen's, which taffy measures again when
         // any part of the screen changes, so they would all be shaped again.
+        // Layout may have broken the edited field's own text at a new width in place of its
+        // editor's.
+        self.refresh_edit();
         self.text_runs += if root_dirty {
             self.text.end_pass()
         } else {
@@ -557,6 +566,16 @@ fn contains(rect: Rect, point: glam::Vec2) -> bool {
         && point.x <= rect.x + rect.width
         && point.y >= rect.y
         && point.y <= rect.y + rect.height
+}
+
+/// How far down `node`'s content box its laid-out text of `height` starts: a text field's at
+/// the top, as a browser's text area's does, and every other text centred.
+fn text_top(node: &Node, height: f32) -> f32 {
+    if node.element.role == Role::Field {
+        0.0
+    } else {
+        (node.content.height - height) / 2.0
+    }
 }
 
 /// Whether an element of `role` is drawn on a panel: every button, and the top element of a

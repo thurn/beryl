@@ -261,7 +261,13 @@ pub fn request_to_c(request: &Request, text: &mut CString) -> Option<BerylReques
             out.kind = BERYL_REQUEST_OPEN_URL;
             out.text = set_text(url);
         }
-        Request::SaveSettings(_) | Request::Music(_) | Request::Audio { .. } => return None,
+        // A phone's text is edited in its native field, which copies and pastes for itself, so
+        // the clipboard requests of a field edited in place never come from a phone's client.
+        Request::SaveSettings(_)
+        | Request::Music(_)
+        | Request::Audio { .. }
+        | Request::Copy(_)
+        | Request::Paste => return None,
     }
     Some(out)
 }

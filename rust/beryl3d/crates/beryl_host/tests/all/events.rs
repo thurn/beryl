@@ -4,12 +4,12 @@
 use beryl_host::{LINE_POINTS, Translator, is_fullscreen_key};
 use beryl_scene::input::{
     Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size,
+    Size, TextChange,
 };
 use glam::Vec2;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{
-    DeviceId, ElementState, MouseButton, MouseScrollDelta, Touch, TouchPhase, WindowEvent,
+    DeviceId, ElementState, Ime, MouseButton, MouseScrollDelta, Touch, TouchPhase, WindowEvent,
 };
 use winit::keyboard::{KeyCode as WinitKey, ModifiersState, NativeKeyCode, PhysicalKey};
 
@@ -186,6 +186,8 @@ fn keys_carry_their_phase_and_the_held_modifiers() {
         (WinitKey::NumpadEnter, KeyCode::Enter),
         (WinitKey::Escape, KeyCode::Escape),
         (WinitKey::ArrowLeft, KeyCode::ArrowLeft),
+        (WinitKey::Home, KeyCode::Home),
+        (WinitKey::End, KeyCode::End),
         (WinitKey::BrowserBack, KeyCode::Back),
     ] {
         let Some(Input::Key(key)) =
@@ -220,4 +222,46 @@ fn f11_toggles_fullscreen_and_so_does_control_command_f_on_macos() {
     assert_eq!(is_fullscreen_key(f, true, true), cfg!(target_os = "macos"));
     assert!(!is_fullscreen_key(f, false, true));
     assert!(!is_fullscreen_key(f, true, false));
+}
+
+#[test]
+fn an_input_method_commits_and_composes_text_in_the_edited_field() {
+    let mut translator = translator();
+    assert_eq!(
+        translator.window_event(&WindowEvent::Ime(Ime::Commit("か".to_owned()))),
+        Some(Input::Text(TextChange::Insert("か".to_owned())))
+    );
+    assert_eq!(
+        translator.window_event(&WindowEvent::Ime(Ime::Preedit("ka".to_owned(), None))),
+        Some(Input::Text(TextChange::Preedit("ka".to_owned())))
+    );
+    assert_eq!(
+        translator.window_event(&WindowEvent::Ime(Ime::Disabled)),
+        Some(Input::Text(TextChange::Preedit(String::new())))
+    );
+    assert_eq!(
+        translator.window_event(&WindowEvent::Ime(Ime::Enabled)),
+        None
+    );
+}
+
+#[test]
+fn a_key_types_its_text_unless_it_is_a_chord_or_a_control_character() {
+    let mut translator = translator();
+    let typed =
+        |translator: &Translator, text: &str| translator.typed(Some(text), ElementState::Pressed);
+    assert_eq!(
+        typed(&translator, "a"),
+        Some(Input::Text(TextChange::Insert("a".to_owned())))
+    );
+    assert_eq!(typed(&translator, "\r"), None, "Return");
+    assert_eq!(typed(&translator, "\u{8}"), None, "Backspace");
+    assert_eq!(translator.typed(Some("a"), ElementState::Released), None);
+    let command = WindowEvent::ModifiersChanged(ModifiersState::SUPER.into());
+    translator.window_event(&command);
+    assert_eq!(
+        typed(&translator, "c"),
+        None,
+        "Cmd+C copies, and types nothing"
+    );
 }

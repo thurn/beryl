@@ -22,6 +22,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
+use crate::clipboard::Clipboard;
 use crate::events::Translator;
 use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Sleep, Ticks};
 use crate::inbox::Inbox;
@@ -182,6 +183,7 @@ struct Running {
     frames: FrameLoop<Pacer>,
     screen: Screen,
     translator: Translator,
+    clipboard: Clipboard,
 }
 
 /// Where frames are drawn.
@@ -320,6 +322,7 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
                 slow_gpu: self.options.slow_gpu,
             },
             translator,
+            clipboard: Clipboard::default(),
             window,
         })
     }
@@ -362,7 +365,9 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
         };
         if running.frames.tick(now, &mut running.screen).is_some() {
             while let Some(request) = running.frames.next_request() {
-                carry_out(&running.window, request);
+                if let Some(answer) = carry_out(&running.window, &mut running.clipboard, request) {
+                    running.frames.handle(answer);
+                }
             }
         }
     }
@@ -446,6 +451,7 @@ impl<S: FnOnce(&mut Renderer)> ApplicationHandler<UserEvent> for App<S> {
                         physical_key,
                         state,
                         repeat,
+                        text,
                         ..
                     },
                 ..
@@ -461,6 +467,9 @@ impl<S: FnOnce(&mut Renderer)> ApplicationHandler<UserEvent> for App<S> {
                     return;
                 }
                 if let Some(input) = running.translator.key(*physical_key, *state, *repeat) {
+                    running.frames.handle(input);
+                }
+                if let Some(input) = running.translator.typed(text.as_deref(), *state) {
                     running.frames.handle(input);
                 }
                 return;
@@ -536,9 +545,10 @@ fn is_fullscreen(window: &Window) -> bool {
     window.fullscreen().is_some()
 }
 
-/// Carries out one of the client's requests. A desktop has no haptics, and its text fields are
-/// edited in place, so text entry only turns the input method on over the field.
-fn carry_out(window: &Window, request: Request) {
+/// Carries out one of the client's requests, and returns the input that answers it, if any. A
+/// desktop has no haptics, and its text fields are edited in place, so text entry only turns
+/// the input method on over the field.
+fn carry_out(window: &Window, clipboard: &mut Clipboard, request: Request) -> Option<Input> {
     match request {
         Request::BeginTextEntry { rect, .. } => {
             window.set_ime_allowed(true);
@@ -548,6 +558,8 @@ fn carry_out(window: &Window, request: Request) {
             );
         }
         Request::EndTextEntry => window.set_ime_allowed(false),
+        Request::Copy(text) => clipboard.copy(text),
+        Request::Paste => return clipboard.paste().map(Input::Paste),
         Request::Share { path } => reveal(&path),
         Request::OpenUrl(url) => open_url(url),
         // A desktop has no haptics. The app's feed saves the settings and plays the sound, as
@@ -557,6 +569,7 @@ fn carry_out(window: &Window, request: Request) {
         | Request::Music(_)
         | Request::Audio { .. } => {}
     }
+    None
 }
 
 /// Shows the file at `path` in the system's file browser, on a thread of its own so that the

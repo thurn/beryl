@@ -7,6 +7,8 @@
 //! that is Rust: their Swift and Kotlin apps call it through `beryl_3d`'s C functions.
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
+mod clipboard;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod desktop;
 #[cfg(feature = "drive")]
 mod drive;

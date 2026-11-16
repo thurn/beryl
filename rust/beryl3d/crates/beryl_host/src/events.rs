@@ -5,11 +5,11 @@
 
 use beryl_scene::input::{
     Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size,
+    Size, TextChange,
 };
 use glam::Vec2;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
-use winit::event::{ElementState, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent};
+use winit::event::{ElementState, Ime, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent};
 use winit::keyboard::{KeyCode as WinitKey, ModifiersState, PhysicalKey};
 
 /// How many logical points one line of a mouse wheel scrolls: one notch of the wheel, which
@@ -77,6 +77,7 @@ impl Translator {
                 Some(self.mouse(PointerPhase::Wheel, Button::None, wheel))
             }
             WindowEvent::Touch(touch) => Some(self.touch(touch.id, touch.phase, touch.location)),
+            WindowEvent::Ime(ime) => ime_input(ime),
             WindowEvent::ModifiersChanged(modifiers) => {
                 self.modifiers = modifiers_from(modifiers.state());
                 None
@@ -100,6 +101,19 @@ impl Translator {
             phase,
             modifiers: self.modifiers,
         }))
+    }
+
+    /// The `Input` for the text a key press types, if it types any: what the edited field
+    /// inserts at its caret. A chord with Control or Command types nothing, nor does a key whose
+    /// text is a control character, such as Return's or Backspace's. While an input method is
+    /// on, macOS sends typed text as `Ime::Commit` instead, and no key event types it.
+    pub fn typed(&self, text: Option<&str>, state: ElementState) -> Option<Input> {
+        let text = text?;
+        let chord = self.modifiers.control || self.modifiers.command;
+        if state != ElementState::Pressed || chord || text.chars().any(char::is_control) {
+            return None;
+        }
+        Some(Input::Text(TextChange::Insert(text.to_owned())))
     }
 
     /// The `Input` for the window moving to a display of `scale` pixels per point. winit sends
@@ -170,6 +184,19 @@ impl Translator {
     }
 }
 
+/// The `Input` for an input method's event: the text it is composing, shown underlined at the
+/// edited field's caret, and the text it commits, inserted there. Turning the method off ends
+/// any composing.
+pub fn ime_input(ime: &Ime) -> Option<Input> {
+    let change = match ime {
+        Ime::Commit(text) => TextChange::Insert(text.clone()),
+        Ime::Preedit(text, _) => TextChange::Preedit(text.clone()),
+        Ime::Disabled => TextChange::Preedit(String::new()),
+        Ime::Enabled => return None,
+    };
+    Some(Input::Text(change))
+}
+
 fn phase(state: ElementState) -> PointerPhase {
     match state {
         ElementState::Pressed => PointerPhase::Down,
@@ -237,6 +264,8 @@ fn key_code(code: WinitKey) -> Option<KeyCode> {
         WinitKey::ArrowDown => KeyCode::ArrowDown,
         WinitKey::ArrowLeft => KeyCode::ArrowLeft,
         WinitKey::ArrowRight => KeyCode::ArrowRight,
+        WinitKey::Home => KeyCode::Home,
+        WinitKey::End => KeyCode::End,
         WinitKey::BrowserBack => KeyCode::Back,
         _ => return None,
     })

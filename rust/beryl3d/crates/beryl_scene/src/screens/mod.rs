@@ -20,6 +20,7 @@ use crate::element::Element;
 use crate::frame::ElementId;
 use crate::settings::Settings;
 use crate::table::Window;
+use crate::widgets::Fields;
 
 /// A screen of the client: the web interface's routes (`Main` in `ui/src/App.tsx`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -93,6 +94,8 @@ pub struct ScreenIn<'a> {
     pub sheet: Option<Sheet>,
     /// The names of the agents a person may play, in the order the host listed them.
     pub agents: &'a [String],
+    /// What each text field holds, by its name.
+    pub fields: &'a Fields,
 }
 
 /// What the flat layer shows on `screen`.

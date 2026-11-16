@@ -183,6 +183,9 @@ mod milestone_three {
     use beryl_scene::settings::{Setting, Settings};
     use beryl_scene::table::Window;
     use beryl_scene::testing::ViewBuilder;
+    use beryl_scene::widgets::Fields;
+
+    static FIELDS: Fields = Fields::new();
 
     use super::super::flat_layer::{client, deciding, decision, prompt};
 
@@ -195,6 +198,7 @@ mod milestone_three {
             hovered: None,
             sheet: None,
             agents: &[],
+            fields: &FIELDS,
         }
     }
 

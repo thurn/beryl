@@ -229,7 +229,7 @@ impl Drive {
                 self.pointer(at, PointerPhase::Down, point, Button::Primary);
                 self.pointer(at, PointerPhase::Up, point, Button::Primary);
                 self.pending
-                    .push_back((at, Input::Text(TextChange(text.clone()))));
+                    .push_back((at, Input::Text(TextChange::Insert(text.clone()))));
             }
             Action::Key(code) => {
                 for phase in [KeyPhase::Down, KeyPhase::Up] {

@@ -32,6 +32,9 @@ glam = "0.34.3"
 # have native Swift and Kotlin hosts instead (decision C7), which call `phone::Phone`.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 winit = "0.30.13"
+# The system clipboard that a text field copies to and pastes from (src/clipboard.rs), in place of
+# hand-written pasteboard calls. Without its default `image-data` feature: only text is copied.
+arboard = { version = "3.4.1", default-features = false }
 
 # The display link that asks macOS for the display's highest refresh rate (src/macos.rs): winit
 # and wgpu offer none, and without one the prototype's window ran at 60 Hz on a 120 Hz display.

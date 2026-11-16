@@ -90,6 +90,8 @@ fn key_named(name: &str, mac: bool) -> Option<KeyCode> {
         "ArrowDown" => ArrowDown,
         "ArrowLeft" => ArrowLeft,
         "ArrowRight" => ArrowRight,
+        "Home" => KeyCode::Home,
+        "End" => KeyCode::End,
         _ => return None,
     })
 }

@@ -17,7 +17,7 @@ use std::ops::Range;
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache};
 use parley::{
     FontContext, FontFamily, FontFamilyName, FontWeight, InlineBox, InlineBoxKind, Layout,
-    LayoutContext, LineHeight, PositionedLayoutItem, StyleProperty, VerticalAlign,
+    LayoutContext, LineHeight, PlainEditor, PositionedLayoutItem, StyleProperty, VerticalAlign,
 };
 
 use crate::element::Span;
@@ -264,6 +264,29 @@ impl Text {
         std::mem::take(&mut self.runs)
     }
 
+    /// A parley editor that lays a text field's text out in `style`, as `block` lays out every
+    /// other text: at a scale of 1 and with no rounding to whole pixels.
+    pub(crate) fn editor(&self, style: TypeStyle) -> PlainEditor<u16> {
+        let mut editor = PlainEditor::new(style.size);
+        editor.set_quantize(false);
+        let family = FontFamilyName::Named(self.families[style.font as usize].clone().into());
+        let styles = editor.edit_styles();
+        styles.insert(StyleProperty::Brush(0));
+        styles.insert(StyleProperty::FontFamily(FontFamily::Single(family)));
+        styles.insert(StyleProperty::FontWeight(FontWeight::new(f32::from(
+            style.weight,
+        ))));
+        styles.insert(StyleProperty::LineHeight(LineHeight::FontSizeRelative(
+            style.line_height,
+        )));
+        editor
+    }
+
+    /// The font and layout contexts an editor from `editor` lays its text out with.
+    pub(crate) fn contexts(&mut self) -> (&mut FontContext, &mut LayoutContext<u16>) {
+        (&mut self.fonts, &mut self.layouts)
+    }
+
     /// Shapes `text` with its spans in one paragraph. Each mana symbol's `{...}` is replaced by
     /// the object character parley lays an inline box out at, as wide as the em of the style
     /// in force there, and the symbol's glyph is shaped apart in the Mana font.
@@ -464,6 +487,41 @@ fn for_each_glyph(layout: &Layout<u16>, mut each: impl FnMut(u16, u16, f32, f32)
     }
 }
 
+/// The lines and glyphs of `layout`, already broken at `max_width`, every glyph in the look
+/// `base`: a text field's text as its editor laid it out, with no spans or mana symbols.
+pub(crate) fn plain_block(layout: &Layout<u16>, base: Run, max_width: Option<f32>) -> Block {
+    let mut block = Block {
+        max_width,
+        width: 0.0,
+        height: layout.height(),
+        lines: Vec::new(),
+        base,
+        runs: Vec::new(),
+        glyphs: Vec::new(),
+        symbols: Vec::new(),
+    };
+    for line in layout.lines() {
+        add_line(&mut block, &line);
+    }
+    for_each_glyph(layout, |run, glyph, x, y| {
+        block.glyphs.push(PlacedGlyph { glyph, run, x, y });
+    });
+    block
+}
+
+/// Adds `line`'s box to `block`, widening the block to it.
+fn add_line(block: &mut Block, line: &parley::Line<'_, u16>) {
+    let metrics = line.metrics();
+    let width = metrics.advance - metrics.hanging_advance;
+    block.width = block.width.max(width);
+    block.lines.push(Rect {
+        x: metrics.offset,
+        y: metrics.block_min_coord,
+        width,
+        height: metrics.block_max_coord - metrics.block_min_coord,
+    });
+}
+
 /// The lines, glyphs and symbols of a shaped text already broken at `max_width`.
 fn block_of(shaped: &Shaped, max_width: Option<f32>) -> Block {
     let layout = &shaped.layout;
@@ -478,15 +536,7 @@ fn block_of(shaped: &Shaped, max_width: Option<f32>) -> Block {
         symbols: Vec::new(),
     };
     for line in layout.lines() {
-        let metrics = line.metrics();
-        let width = metrics.advance - metrics.hanging_advance;
-        block.width = block.width.max(width);
-        block.lines.push(Rect {
-            x: metrics.offset,
-            y: metrics.block_min_coord,
-            width,
-            height: metrics.block_max_coord - metrics.block_min_coord,
-        });
+        add_line(&mut block, &line);
         for item in line.items() {
             let PositionedLayoutItem::InlineBox(inline) = item else {
                 continue;

@@ -3,6 +3,8 @@
 //! point reads a clock, starts a thread, takes a lock or touches a file, so the same calls give
 //! the same frames.
 
+mod editing;
+
 use std::collections::VecDeque;
 
 use beryl_protocol::StartRequest;
@@ -27,6 +29,7 @@ use crate::prompts;
 use crate::screens::{self, Music, Screen, ScreenIn, Sheet};
 use crate::settings::{Setting, Settings};
 use crate::table::{Table, Window};
+use crate::widgets::Fields;
 
 mod input;
 
@@ -115,6 +118,15 @@ pub struct Client {
     slider: Option<ElementId>,
     /// The host's platform, which says what `Cmd` in a shortcut means.
     platform: Platform,
+    /// What each text field holds, which the screens show (`editing`).
+    fields: Fields,
+    /// The text field the host was last asked to begin text entry over, if any.
+    entry: Option<ElementId>,
+    /// When and where the primary button last went down in the edited field, which makes the
+    /// next press there a double click.
+    last_down: Option<(u64, glam::Vec2)>,
+    /// The `now` of the latest frame: the time of every input since, which has none of its own.
+    now: u64,
     wake: Wake,
     requests: VecDeque<Request>,
     commands: VecDeque<SessionCommand>,
@@ -153,6 +165,10 @@ impl Client {
             scroll_drag: None,
             slider: None,
             platform: Platform::Mac,
+            fields: Fields::new(),
+            entry: None,
+            last_down: None,
+            now: 0,
             wake: Wake::Never,
             requests: VecDeque::new(),
             commands: VecDeque::new(),
@@ -267,10 +283,12 @@ impl Client {
                 scale,
                 safe_area,
             }),
+            Input::Text(_) | Input::Paste(_) => self.type_into(&input),
             Input::Tier(tier) => self.set_tier(tier),
             Input::Lifecycle(Lifecycle::LowMemory) => self.low_memory(),
             input => self.inputs.push(input),
         }
+        self.follow_entry();
         self.wake = Wake::Now;
     }
 
@@ -292,6 +310,7 @@ impl Client {
 
     /// The frame at `now`, in nanoseconds since the client started.
     pub fn frame(&mut self, now: u64) -> &Frame {
+        self.now = now;
         self.inputs.clear();
         if self.own_due {
             self.own_due = false;
@@ -389,6 +408,7 @@ impl Client {
             hovered: None,
             sheet: self.sheet,
             agents: &self.agents,
+            fields: &self.fields,
         };
         // Until the sheets are built, an open sheet takes the screen's place in the flat layer.
         // Until the game screen shows anything besides the open prompt, it shows nothing while
@@ -485,6 +505,7 @@ impl Client {
                 }
             }
             Press::Focus(id) => self.layer.focus(Some(id)),
+            Press::Field(id, ref text) => self.keep_field(id, text),
             // No menu or viewer is built yet, so there is nothing for these to act on: the
             // widgets and game screen tracks give them their arms.
             Press::Menu(..) | Press::Dismiss(_) => {}

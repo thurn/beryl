@@ -131,7 +131,7 @@ fn outside_quotes(text: &str, needle: &str) -> Option<usize> {
 }
 
 /// The key a name means: a letter, a digit, or `Enter`, `Escape`, `Space`, `Tab`,
-/// `Backspace`, `Delete`, `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight` or `Back`, in any
+/// `Backspace`, `Delete`, `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`, `Home`, `End` or `Back`, in any
 /// case.
 #[must_use]
 pub fn key_code(name: &str) -> Option<KeyCode> {
@@ -195,6 +195,8 @@ pub fn key_code(name: &str) -> Option<KeyCode> {
         ("arrowdown", KeyCode::ArrowDown),
         ("arrowleft", KeyCode::ArrowLeft),
         ("arrowright", KeyCode::ArrowRight),
+        ("home", KeyCode::Home),
+        ("end", KeyCode::End),
         ("back", KeyCode::Back),
     ];
     let lower = name.to_ascii_lowercase();

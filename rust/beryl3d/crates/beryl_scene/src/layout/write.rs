@@ -5,7 +5,8 @@
 
 use glam::Vec2;
 
-use super::{Layer, Node, has_panel};
+use super::edit::Marks;
+use super::{Layer, Node, has_panel, text_top};
 use crate::element::{Display, Overflow, Shown, TextAlign};
 use crate::frame::{Band, Draw, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
 use crate::input::Rect;
@@ -101,8 +102,9 @@ impl Layer {
                 opacity: look.opacity,
                 clip: look.clip.map(|(rect, _)| rect),
                 // An element scrolled out of its clip cannot be pressed, and one wholly
-                // transparent, as at the first frame it fades in, cannot be seen to be.
-                interactive: element.press.is_some()
+                // transparent, as at the first frame it fades in, cannot be seen to be. A text
+                // field takes a press, which gives it the focus, though it has no `Press`.
+                interactive: (element.press.is_some() || element.focus)
                     && look.opacity > 0.0
                     && look.clip.is_none_or(|(clip, _)| overlaps(clip, rect)),
                 state,
@@ -128,26 +130,16 @@ impl Layer {
             point: look.point + node.offset() + sink,
             ..look
         };
+        let edited = (self.editing.as_ref()).filter(|editing| editing.id == node.id);
+        if let Some(editing) = edited {
+            write_marks(node, &editing.marks, true, shown, builder, camera);
+        }
         if node.block.is_some() {
             self.write_text(node, index, state, shown, builder, camera);
         }
-        if let Some(Shown::Icon(icon, side)) = element.shows
-            && let Some(sprite) = self.icons.get(icon, side)
-        {
-            let side = f32::from(side);
-            let content = moved(node.content, shown.point);
-            let at = Rect {
-                x: content.x + (content.width - side) / 2.0,
-                y: content.y + (content.height - side) / 2.0,
-                width: side,
-                height: side,
-            };
-            let tint = fade(ink(node, state, look.tint));
-            let mut draw = Draw::icon(camera.layer_transform(at), tint, sprite);
-            if clip > 0 {
-                draw = draw.with_clip(clip);
-            }
-            builder.draw(Band::Layer, draw);
+        self.write_icon(node, state, shown, builder, camera);
+        if let Some(editing) = edited {
+            write_marks(node, &editing.marks, false, shown, builder, camera);
         }
         let mut inside = look;
         if element.style.overflow != Overflow::Visible {
@@ -173,6 +165,38 @@ impl Layer {
             }
             self.write_node(child, index, false, look, builder, camera);
         }
+    }
+
+    /// Writes the icon `node` shows, if any, centred in its content box, moved, tinted and
+    /// clipped by `look`.
+    fn write_icon(
+        &self,
+        node: &Node,
+        state: StateBits,
+        look: Look,
+        builder: &mut FrameBuilder,
+        camera: &Camera,
+    ) {
+        let Some(Shown::Icon(icon, side)) = node.element.shows else {
+            return;
+        };
+        let Some(sprite) = self.icons.get(icon, side) else {
+            return;
+        };
+        let side = f32::from(side);
+        let content = moved(node.content, look.point);
+        let at = Rect {
+            x: content.x + (content.width - side) / 2.0,
+            y: content.y + (content.height - side) / 2.0,
+            width: side,
+            height: side,
+        };
+        let tint = faded(ink(node, state, look.tint), look.opacity);
+        let mut draw = Draw::icon(camera.layer_transform(at), tint, sprite);
+        if let Some((_, clip)) = look.clip.filter(|&(_, clip)| clip > 0) {
+            draw = draw.with_clip(clip);
+        }
+        builder.draw(Band::Layer, draw);
     }
 
     /// Writes the lines and glyphs of `node`'s text, which the resolved element at `index`
@@ -202,7 +226,7 @@ impl Layer {
                         TextAlign::Start => 0.0,
                         TextAlign::Center => free.x / 2.0,
                     },
-                node.content.y + free.y / 2.0,
+                node.content.y + text_top(node, block.height),
             );
         for line in &block.lines {
             builder.line(
@@ -225,6 +249,41 @@ impl Layer {
             clip: look.clip.map_or(0, |(_, entry)| entry),
         };
         text::write_block(builder, block, origin, &block_look);
+    }
+}
+
+/// Writes the marks of the field `node` while it is edited, moved and clipped by `look`:
+/// the selection, drawn `behind` its text, or the caret and the composing text's underline,
+/// drawn over it.
+fn write_marks(
+    node: &Node,
+    marks: &Marks,
+    behind: bool,
+    look: Look,
+    builder: &mut FrameBuilder,
+    camera: &Camera,
+) {
+    // A field's text starts at the top of its content box, as `write_text` draws it.
+    let origin = look.point + Vec2::new(node.content.x, node.content.y);
+    let clip = look.clip.map_or(0, |(_, entry)| entry);
+    let mut mark = |rect: Rect, tint: [u8; 4]| {
+        let rect = moved(rect, origin);
+        let tint = faded(tint, look.opacity);
+        let size = Vec2::new(rect.width, rect.height);
+        let mut draw = Draw::panel(camera.layer_transform(rect), tint, tint, size, 0.0, 0.0);
+        if clip > 0 {
+            draw = draw.with_clip(clip);
+        }
+        builder.draw(Band::Layer, draw);
+    };
+    if behind {
+        for &rect in &marks.selection {
+            mark(rect, color::CYAN_SOFT);
+        }
+    } else {
+        for rect in marks.caret.iter().chain(&marks.underline) {
+            mark(*rect, color::TYPE);
+        }
     }
 }
 

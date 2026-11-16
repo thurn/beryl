@@ -20,6 +20,7 @@ impl Layer {
     /// Gives the focus to the element `id`, or takes it away with `None`.
     pub fn focus(&mut self, id: Option<ElementId>) {
         self.focused = id;
+        self.follow_focus();
     }
 
     /// The innermost element at `point` that takes the focus when pressed, if the screen is
@@ -69,6 +70,7 @@ impl Layer {
             (false, false) => last,
         };
         self.focused = next;
+        self.follow_focus();
     }
 
     /// What pressing the focused element means, if it is enabled and has a press.
@@ -107,7 +109,7 @@ impl Layer {
     }
 
     /// The screen's node `id`.
-    fn find(&self, id: ElementId) -> Option<&Node> {
+    pub(super) fn find(&self, id: ElementId) -> Option<&Node> {
         fn search(node: &Node, id: ElementId) -> Option<&Node> {
             if node.id == id {
                 return Some(node);

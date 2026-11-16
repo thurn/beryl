@@ -29,8 +29,11 @@ pub enum Input {
     /// A mouse, touch or pen event.
     Pointer(Pointer),
     Key(Key),
-    /// The text field being edited has new contents.
+    /// Text typed into the focused field, or its native field's new contents on a phone.
     Text(TextChange),
+    /// The platform's clipboard held this text when the client asked for it
+    /// (`Request::Paste`): it is inserted at the focused field's caret.
+    Paste(String),
     /// A face, or an atlas page of glyphs or icons, is ready on the GPU.
     Assets(AssetReady),
     /// The app was suspended or resumed, or the system is low on memory.
@@ -194,6 +197,8 @@ pub enum KeyCode {
     ArrowDown,
     ArrowLeft,
     ArrowRight,
+    Home,
+    End,
     Back,
 }
 
@@ -204,9 +209,18 @@ pub enum KeyPhase {
     Up,
 }
 
-/// The edited text field's whole new text, sent by a phone host's native field on every change.
+/// A change to the focused text field's text from outside the client's own key handling.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TextChange(pub String);
+pub enum TextChange {
+    /// The field's whole new text, sent by a phone host's native field on every change.
+    Replace(String),
+    /// Characters typed, or committed by an input method (winit's `Ime::Commit`), inserted at
+    /// the caret in place of the selection.
+    Insert(String),
+    /// The text an input method is composing (winit's `Ime::Preedit`), shown underlined at the
+    /// caret and not yet part of the field's text. An empty string ends the composing.
+    Preedit(String),
+}
 
 /// What a worker tells the client core when it finishes. The pixels go to the renderer; the
 /// client core learns only where they are.

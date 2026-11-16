@@ -31,6 +31,7 @@ mod scroll;
 mod shadows;
 mod sound;
 mod table;
+mod text_field;
 mod tokens;
 mod verbs_count;
 mod verbs_fly;

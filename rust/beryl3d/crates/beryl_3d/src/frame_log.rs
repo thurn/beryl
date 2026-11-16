@@ -213,8 +213,8 @@ pub enum InputLine {
         phase: String,
         modifiers: Vec<String>,
     },
-    /// The edited field's new contents, as their length in characters: the text itself may be
-    /// private.
+    /// Text typed into the edited field, or its new contents, as its length in characters:
+    /// the text itself may be private.
     Text {
         length: usize,
     },
@@ -259,7 +259,9 @@ impl InputLine {
                 phase: format!("{:?}", key.phase),
                 modifiers: modifier_names(key.modifiers),
             },
-            Input::Text(TextChange(text)) => Self::Text {
+            Input::Text(
+                TextChange::Replace(text) | TextChange::Insert(text) | TextChange::Preedit(text),
+            ) => Self::Text {
                 length: text.chars().count(),
             },
             Input::Surface {

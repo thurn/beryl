@@ -7,6 +7,7 @@ use crate::agent::hit;
 use crate::element::{Chord, Press};
 use crate::frame::Role;
 use crate::input::{Button, Input, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
+use crate::layout::Edit;
 use crate::screens::{Screen, Sheet};
 use crate::widgets::{STEP, level_at};
 
@@ -86,6 +87,9 @@ impl Client {
                 self.pressed = (self.layer.press_at(pointer.position, open)).map(|(id, ..)| id);
                 if let Some(id) = self.layer.focusable_at(pointer.position, open) {
                     self.layer.focus(Some(id));
+                    if self.layer.edited_id() == Some(id) {
+                        self.press_field(pointer);
+                    }
                 }
                 if self.pressed.is_none()
                     && let Some(index) = hit(&self.frame, pointer.position)
@@ -97,7 +101,13 @@ impl Client {
                     (self.show.pointer_mut()).press(slot, pointer.position, holdable);
                 }
             }
+            PointerPhase::Move if self.layer.edited_id().is_some() => {
+                self.edit(Edit::Move(pointer.position));
+            }
             PointerPhase::Up if primary => {
+                if self.layer.edited_id().is_some() {
+                    self.edit(Edit::Up);
+                }
                 let pressed = self.pressed.take();
                 if let Some((id, press, true)) = self.layer.press_at(pointer.position, open)
                     && pressed == Some(id)
@@ -162,6 +172,9 @@ impl Client {
     /// frame, as before.
     pub(super) fn key(&mut self, key: Key) {
         if key.phase == KeyPhase::Up {
+            return;
+        }
+        if self.layer.edited_id().is_some() && self.field_key(key) {
             return;
         }
         let first = key.phase == KeyPhase::Down;
