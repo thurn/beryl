@@ -231,6 +231,66 @@ pub(super) fn spell_payable<L: Layout>(
         CostPart::Chosen(action, chosen) => payable(s, t, player, slot, *action, chosen),
         CostPart::Life(n) => life::can_pay(s, t, player, *n),
         _ => unreachable!("the card table refuses a spell's cost the engine cannot pay"),
+    }) && parts_share_enough(s, t, player, slot, face, costs)
+}
+
+/// Whether the parts of the cost of casting `face` with the options `costs` that each take a
+/// number of objects from one zone can all be paid together, each object paying for one part
+/// ([CR 601.2h]): "The player pays the total cost. ... Partial payments are not allowed."
+/// Abhorrent Oculus cast with escape takes six cards from its caster's graveyard and three
+/// others, so it needs nine.
+/// [`payable`] answers for each part alone. Here every set of the parts that share a zone
+/// must have, among the objects any of them accepts, as many as the set's parts take
+/// together. By Hall's theorem that is exactly when the objects can be shared out. A spell
+/// has at most a few parts, so the sets are few.
+///
+/// [CR 601.2h]: https://yawgatog.com/resources/magic-rules/#R6012h
+fn parts_share_enough<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    slot: L::Slot,
+    face: &Face,
+    costs: Castings,
+) -> bool {
+    const MOST: usize = 8;
+    let mut counted: [(Zone, u32, Bitboard<L::Slot>); MOST] =
+        [(Zone::Graveyard, 0, Bitboard::EMPTY); MOST];
+    let mut len = 0;
+    for part in face.cost_parts(costs) {
+        if let CostPart::Chosen(action, chosen) = part
+            && let Measure::Count(n) = chosen.measure
+            && len < MOST
+        {
+            let cards = candidates(s, t, player, slot, *action, chosen);
+            counted[len] = (chosen.zone, u32::from(n), cards);
+            len += 1;
+        }
+    }
+    let counted = &counted[..len];
+    // Most spells take objects for one part at most, which `payable` has answered.
+    if counted.len() < 2 {
+        return true;
+    }
+    (1u32..1 << counted.len()).all(|set| {
+        let mut parts = counted
+            .iter()
+            .enumerate()
+            .filter(|&(i, _)| set & (1 << i) != 0)
+            .map(|(_, part)| part);
+        let Some(&(zone, n, cards)) = parts.next() else {
+            return true;
+        };
+        let (mut needed, mut cards) = (n, cards);
+        for &(other_zone, n, others) in parts {
+            if other_zone != zone {
+                // Parts in different zones never compete for an object.
+                return true;
+            }
+            needed += n;
+            cards |= others;
+        }
+        cards.count() >= needed
     })
 }
 

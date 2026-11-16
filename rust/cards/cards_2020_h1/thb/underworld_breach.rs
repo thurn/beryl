@@ -407,6 +407,53 @@ pub mod scenarios {
                 ],
             )
             .actions(&[ME.deciding(DecisionKind::Priority, 2)]),
+        // Abhorrent Oculus's escape takes its additional cost, six cards from the graveyard,
+        // and escape's three other cards: nine of the eight Plains, so it can't be cast
+        // (CR 601.2h). P0 may only pass or play the Island in their hand.
+        Scenario::new("an additional cost and escape can't exile the same cards")
+            .interaction(&[Card::AbhorrentOculus])
+            .battlefield(P0, &[BREACH, Card::Island, Card::Island, Card::Island])
+            .hand(P0, &[Card::Island])
+            .graveyard(
+                P0,
+                &[
+                    Card::AbhorrentOculus,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .actions(&[ME.deciding(DecisionKind::Priority, 2)]),
+        // With nine, it escapes: the six and the three are all exiled.
+        Scenario::new("an additional cost and escape exile their cards together")
+            .interaction(&[Card::AbhorrentOculus])
+            .battlefield(P0, &[BREACH, Card::Island, Card::Island, Card::Island])
+            .graveyard(
+                P0,
+                &[
+                    Card::AbhorrentOculus,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .actions(&[
+                ME.escapes(Card::AbhorrentOculus),
+                Resolve,
+                ME.controls(Card::AbhorrentOculus, 1),
+                ME.has(Zone::Exile, Card::Plains, 9),
+            ]),
         // It is sacrificed at the beginning of the end step: P0's own.
         Scenario::new("it is sacrificed at the beginning of the end step")
             .battlefield(P0, &[BREACH])

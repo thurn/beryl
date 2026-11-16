@@ -45,6 +45,21 @@ fixed in the same session. Newest first.
   pool, the legality check must count the pool once for both. The fuzz caught
   this class, and no type can express a shared pool cheaply.
 
+- **An additional cost and escape could count the same graveyard cards.** After
+  the delve fix above, the nightly fuzz still panicked with "enough cards to pay
+  the cost" in `cast::parts::choices`: Abhorrent Oculus, whose additional cost
+  exiles six cards from its caster's graveyard, was offered with the escape that
+  Underworld Breach grants, which exiles three other cards, though the graveyard
+  held fewer than nine. `cast::parts::spell_payable` asked `payable` about each
+  part alone, so each saw enough cards. The delve fix had counted the pool once
+  only for delve against the other parts, not for two counted parts against each
+  other. Fixed: `parts_share_enough` checks every set of the parts that take a
+  number of objects from one zone against the objects any of them accepts
+  (Hall's condition, exact for any filters). Two Underworld Breach scenarios
+  hold it. Prevention: the same as the delve entry; the shared-pool check now
+  covers every counted part of a spell's cost, and the fuzz's shrink test
+  (`fuzz_games_keep_the_invariants`) found the case.
+
 - **A spell's life payment ignored "your life total can't change".** Under
   Teferi's Protection or Platinum Emperion, a player was offered Force of Will
   for its alternative cost, and casting it exiled the blue card and paid no
