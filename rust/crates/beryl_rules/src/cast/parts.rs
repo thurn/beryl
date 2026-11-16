@@ -8,14 +8,13 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Castings, Chosen, CostAction, CostPart, Face, FaceIx, Keywords, ManaCost, Measure, Prompt,
-    Purpose,
+    Castings, Chosen, CostAction, CostPart, Face, ManaCost, Measure, Prompt, Purpose,
 };
 use crate::counters;
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::{collapse, collapse_in_order};
 use crate::event::{self, Entry, Reason, Sink};
-use crate::filter::{Evaluate, Filter};
+use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -29,57 +28,9 @@ use crate::state::{
 use crate::table::GameTable;
 
 use super::costs::total_cost;
+use super::delve::{DELVE, DELVE_PART, delve_candidates, delve_most, delves};
 use super::steps::{finish, pay_mana, top};
 use super::timing::entry_ability_of;
-
-/// What delve has its spell's caster do rather than pay generic mana
-/// ([CR 702.66a]): "For each generic mana in this spell's total cost, you may exile a card
-/// from your graveyard rather than pay that mana." A part of no cost printed on a card, which
-/// the casting steps name by [`DELVE_PART`].
-///
-/// [CR 702.66a]: https://yawgatog.com/resources/magic-rules/#R70266a
-static DELVE: CostPart = CostPart::Chosen(
-    CostAction::Exile,
-    Chosen {
-        zone: Zone::Graveyard,
-        filter: Filter::Any,
-        other: false,
-        measure: Measure::ForGeneric(u8::MAX),
-    },
-);
-
-/// The index the casting steps give [`DELVE`] among a spell's parts, past any it prints.
-const DELVE_PART: u8 = u8::MAX;
-
-/// Whether `face`, a spell's, has delve. Delve functions only while its spell is on the
-/// stack ([CR 702.66a]), where an effect that grants or removes abilities reaches no spell
-/// this engine plays, so the face's keywords answer.
-///
-/// [CR 702.66a]: https://yawgatog.com/resources/magic-rules/#R70266a
-pub(super) fn delves(face: &Face) -> bool {
-    face.keywords.contains(Keywords::DELVE)
-}
-
-/// Whether `player` can pay `cost` for casting the card in `slot` as its face `face`, a spell
-/// with delve, exiling cards from their graveyard for its generic mana (CR 702.66a). The rest
-/// may be paid with restricted mana the spell accepts, such as mana that may be spent only on
-/// creature spells of a chosen type ([`mana::Paying`]).
-pub(super) fn delve_pays<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    funds: &Funds<L>,
-    player: Seat,
-    slot: L::Slot,
-    face: FaceIx,
-    cost: ManaCost,
-) -> bool {
-    let CostPart::Chosen(action, chosen) = DELVE else {
-        unreachable!("delve exiles chosen cards");
-    };
-    let cards = candidates(s, t, player, slot, action, &chosen);
-    let paying = mana::Paying::casting(s, t, slot, face);
-    payable_with_substitutes(s, t, funds, cost, u8::MAX, cards, Bitboard::EMPTY, paying)
-}
 
 /// The part at `index` of the cost of the spell or ability `entry`, counting its parts that
 /// are not mana from 0 in the order printed; at [`DELVE_PART`], delve's.
@@ -411,8 +362,14 @@ pub(super) fn pay_substitutes<L: Layout>(
 ) -> Result<(), Full> {
     let entry = top(s);
     let found = match entry.item {
-        StackItem::Spell { card, face, .. } => {
-            delves(t.def(card).face(face)).then_some((DELVE_PART, u8::MAX))
+        StackItem::Spell {
+            card, face, costs, ..
+        } => {
+            let face = t.def(card).face(face);
+            delves(face).then(|| {
+                let cards = delve_candidates(s, t, c.player, itself(entry));
+                (DELVE_PART, delve_most(face, costs, cards))
+            })
         }
         _ => substitute(entry_ability_of(t, entry).cost().parts())
             .map(|(part, _, _, most)| (part, most)),

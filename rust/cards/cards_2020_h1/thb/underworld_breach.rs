@@ -358,6 +358,55 @@ pub mod scenarios {
                 ME.controls(LED, 1),
                 ME.tapped(Card::Island, 3),
             ]),
+        // Escape's cost is the card's mana cost, {6}{B} for Gurmag Angler, which delve can
+        // pay part of, plus three other cards. Delve exiles its cards first, so it may take
+        // only three of the six Islands, leaving three for escape; the four Swamps pay
+        // {3}{B}. The player pays the total cost (CR 601.2h).
+        Scenario::new("a delve card escapes, delving only what escape leaves")
+            .interaction(&[Card::GurmagAngler])
+            .battlefield(
+                P0,
+                &[BREACH, Card::Swamp, Card::Swamp, Card::Swamp, Card::Swamp],
+            )
+            .graveyard(
+                P0,
+                &[
+                    Card::GurmagAngler,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .actions(&[
+                ME.escapes(Card::GurmagAngler),
+                Resolve,
+                ME.controls(Card::GurmagAngler, 1),
+                ME.has(Zone::Exile, Card::Island, 6),
+                ME.tapped(Card::Swamp, 4),
+            ]),
+        // With three Swamps, Gurmag Angler's escape needs four cards for delve and three for
+        // escape, seven of the six Islands, so it can't be cast: P0 may only pass or play the
+        // Island in their hand.
+        Scenario::new("delve and escape can't exile the same cards")
+            .interaction(&[Card::GurmagAngler])
+            .battlefield(P0, &[BREACH, Card::Swamp, Card::Swamp, Card::Swamp])
+            .hand(P0, &[Card::Island])
+            .graveyard(
+                P0,
+                &[
+                    Card::GurmagAngler,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .actions(&[ME.deciding(DecisionKind::Priority, 2)]),
         // It is sacrificed at the beginning of the end step: P0's own.
         Scenario::new("it is sacrificed at the beginning of the end step")
             .battlefield(P0, &[BREACH])

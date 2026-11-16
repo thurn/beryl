@@ -11,6 +11,7 @@
 //! answers that leave the rest completable, so the machine never has to rewind.
 
 mod costs;
+mod delve;
 mod legal;
 mod parts;
 mod stack;

@@ -20,6 +20,7 @@ use crate::state::{RuleKind, State, Tracker, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
 
 use super::costs::{From, option_sets, spell_cost, x_range_start};
+use super::delve;
 use super::parts;
 use super::targets::{Itself, targetable};
 use super::timing::{activated, instant_speed, sorcery_timing};
@@ -135,6 +136,7 @@ fn restricted_pays<L: Layout>(
 /// delve, which the caller tests first.
 #[cold]
 #[inline(never)]
+#[allow(clippy::too_many_arguments)]
 fn pays_otherwise<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -143,11 +145,12 @@ fn pays_otherwise<L: Layout>(
     player: Seat,
     slot: L::Slot,
     face: FaceIx,
+    costs: Castings,
 ) -> bool {
     (funds.may_restrict() && restricted_pays(s, t, funds, cost, slot, face))
         || (t.can(Capability::Delve)
-            && parts::delves(s.copiable(slot).turned(face).face(t))
-            && parts::delve_pays(s, t, funds, player, slot, face, cost))
+            && delve::delves(s.copiable(slot).turned(face).face(t))
+            && delve::delve_pays(s, t, funds, player, slot, face, costs, cost))
 }
 
 /// Why `player` may not cast the card in `slot` with this face and these casting options:
@@ -195,7 +198,7 @@ fn refused<L: Layout, const TARGETS: bool>(
     if !now.funds(s, t).is_some_and(|f| {
         f.pays(s, t, cost, Bitboard::EMPTY)
             || (t.can_either(Capability::RemembersMana, Capability::Delve)
-                && pays_otherwise(s, t, f, cost, player, slot, face_index))
+                && pays_otherwise(s, t, f, cost, player, slot, face_index, costs))
     }) {
         return Some(Refusal::Mana);
     }

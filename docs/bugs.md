@@ -6,6 +6,21 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Delve could exile the cards an escape cost needed.** The nightly fuzz
+  panicked with "enough cards to pay the cost" in `cast::parts::choices`: Gurmag
+  Angler, cast with the escape that Underworld Breach grants, reached the step
+  that asks for escape's "exile three other cards from your graveyard" with an
+  empty graveyard. A spell's delve exiles its cards while the mana is paid,
+  before the spell's other cost parts, and both the legality check
+  (`cast::parts::delve_pays`) and the delve step (`pay_substitutes`) let delve
+  take every card in the graveyard. `spell_payable` counted the same cards again
+  for escape, so a spell was offered whose total cost could not be paid (CR
+  601.2h). Fixed: `delve_most` caps delve at the graveyard's cards less those
+  the spell's other graveyard parts take, in both places. Two Underworld Breach
+  scenarios hold it. Prevention: when two parts of one cost draw on the same
+  pool, the legality check must count the pool once for both. The fuzz caught
+  this class, and no type can express a shared pool cheaply.
+
 - **A spell's life payment ignored "your life total can't change".** Under
   Teferi's Protection or Platinum Emperion, a player was offered Force of Will
   for its alternative cost, and casting it exiled the blue card and paid no
