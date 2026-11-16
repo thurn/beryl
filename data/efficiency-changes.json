@@ -143,5 +143,11 @@
     "label": "Sweep step replays skip the sweep's lock, and waited-for runs go first on the bench VM",
     "metric": "bead.agent-minutes",
     "expect": "down"
+
+  },
+  {
+    "label": "The fast check's Beryl 3D interface tests run the b3d of the shared build instead of building b3d alone, so the cargo-test and timeline-parity lanes no longer wait behind that build",
+    "metric": "machine.saturation",
+    "expect": "down"
   }
 ]

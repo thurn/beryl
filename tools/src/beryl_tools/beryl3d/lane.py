@@ -24,9 +24,10 @@ CARGO: list[str] = [*BY, "b3d"]
 # The first step of each lane that runs a program of the workspace: the build that the tests,
 # `record` and `gate` share (`cli.SHARED_BUILD`), then the recordings pack. The lanes start it
 # together, Cargo's lock on the build directory lets one of them build, and the others then
-# find nothing to do. Without it, `test` and `timeline-parity` would start by building `b3d`
-# alone (`cli.run_b3d`), with other features than the shared build, and the shared build would
-# compile those crates again.
+# find nothing to do. `test` and `timeline-parity` then run the `b3d` that the shared build
+# made (`cli.run_shared_b3d`, `timeline.b3d`). Building `b3d` alone (`cli.run_b3d`) would use
+# other features and another profile than the shared build, compile eight crates again and hold
+# the build lock that the other lanes' first build waits on.
 RECORD = Step("record", [*CARGO, "record"], paths.REPO)
 
 # Each lane's name and its steps by name, in the order they run. The first lane holds the steps

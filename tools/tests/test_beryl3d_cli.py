@@ -40,6 +40,28 @@ def test_text_commands_hand_every_argument_to_the_b3d_program(
     assert run == ["/linked/b3d", "tree", "verbs-zones", "--at", "1500ms", "--help"]
 
 
+def test_interface_tests_run_the_shared_builds_b3d(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The lane's `test` step builds nothing beyond the shared build, which the `cargo-test`
+    and `timeline-parity` lanes also start with, so it never holds the build lock they wait
+    on (`cli.run_shared_b3d`)."""
+    ran: list[list[str]] = []
+    monkeypatch.setattr(cli, "cargo", lambda arguments: ran.append(arguments) or 0)
+
+    def program(
+        command: list[str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        ran.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(cli.subprocess, "run", program)
+    monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
+    monkeypatch.setattr(cli, "program", lambda name: Path("/built") / name)
+    assert cli.main(["test", "verbs-"]) == 0
+    assert ran == [cli.SHARED_BUILD, ["/built/b3d", "test", "verbs-"]]
+
+
 def test_a_missing_pack_is_recorded_and_the_command_run_again(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

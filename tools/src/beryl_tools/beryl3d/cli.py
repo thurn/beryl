@@ -201,12 +201,12 @@ def linked(name: str) -> Path:
     return max(program or found, key=lambda p: p.stat().st_mtime)
 
 
-def run_program(name: str, arguments: list[str]) -> int:
-    """Runs the built program `name` with `arguments`, inside a lease of CPU tokens, since
-    its checks spread over as many threads as the lease allows (`beryl_inspect::runner::
-    threads`). When it says the recordings pack is missing, builds the pack and runs it
-    again."""
-    line = [str(linked(name)), *arguments]
+def run_program(name: str, arguments: list[str], binary: Path | None = None) -> int:
+    """Runs the built program `name` (the file `binary`, or else `linked(name)`) with
+    `arguments`, inside a lease of CPU tokens, since its checks spread over as many threads as
+    the lease allows (`beryl_inspect::runner::threads`). When it says the recordings pack is
+    missing, builds the pack and runs it again."""
+    line = [str(binary or linked(name)), *arguments]
     code = tokens.run_program(line, check=False).returncode
     if code != MISSING_PACK:
         return code
@@ -228,10 +228,33 @@ def run_b3d(command: str) -> Callable[[argparse.Namespace], int]:
     return run
 
 
-def b3d_command(name: str, summary: str) -> Command:
+def run_shared_b3d(command: str) -> Callable[[argparse.Namespace], int]:
+    """Runs the `b3d` program that `shared_build` built with its `command` and the arguments.
+    The fast check's `test` step runs this way. Building `b3d` alone (`run_b3d`) is a `dev`
+    build with other features than the shared `test` build, so it compiled eight crates again
+    (111 CPU-seconds and 22 s at load 11, with a warm target), and it held the checkout's build
+    lock (`build`) meanwhile, so the `cargo-test` and `timeline-parity` lanes, whose first
+    build finds nothing to do, waited behind it. In 12 of the 20 fast checks between 04:30
+    and 06:10 UTC on 2026-11-16 whose shared build finished, `cargo-test` was cut off at the
+    180 s limit after about 1 CPU-second of work. Both binaries ran every interface test in
+    11-13 s on all cores, about 150 CPU-seconds each."""
+
+    def run(args: argparse.Namespace) -> int:
+        built = shared_build()
+        if built != 0:
+            return built
+        return run_program("b3d", [command, *args.arguments], program("b3d"))
+
+    return run
+
+
+def b3d_command(name: str, summary: str, shared: bool = False) -> Command:
     """A text command of the `b3d` program, which reads its own options and prints its own
-    `--help` (`cli` in `beryl_inspect`)."""
-    return Command(name, summary, (), run_b3d(name), passthrough=True)
+    `--help` (`cli` in `beryl_inspect`). It runs the `b3d` that `shared_build` built when
+    `shared` is set, and otherwise builds `b3d` alone, which relinks fastest after an edit.
+    """
+    run = run_shared_b3d(name) if shared else run_b3d(name)
+    return Command(name, summary, (), run, passthrough=True)
 
 
 def run_render(command: str) -> Callable[[argparse.Namespace], int]:
@@ -296,6 +319,7 @@ COMMANDS: tuple[Command, ...] = (
     b3d_command(
         "test",
         "every interface test whose name starts with a prefix, at its check times",
+        shared=True,
     ),
     b3d_command(
         "timeline",
