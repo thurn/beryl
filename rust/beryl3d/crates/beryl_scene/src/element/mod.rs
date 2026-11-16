@@ -377,4 +377,6 @@ pub mod floats {
     /// The "Revealed Cards" pill over the Revealed Cards pile, with the cross that dismisses
     /// the pile (`inspect::revealed`).
     pub const REVEALED: FloatId = FloatId(30);
+    /// The waiting trigger the pointer carries along an order prompt's row (`Client::carry_item`).
+    pub const CARRIED_ITEM: FloatId = FloatId(31);
 }

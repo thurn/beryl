@@ -4,6 +4,7 @@
 //! the same frames.
 
 mod bug;
+mod carry;
 mod editing;
 
 use std::collections::VecDeque;
@@ -148,6 +149,8 @@ pub struct Client {
     scroll_drag: Option<(u8, ElementId, glam::Vec2)>,
     /// The slider the primary pointer went down on, which a drag sets until the press ends.
     slider: Option<ElementId>,
+    /// The item of an order prompt's row the primary pointer went down on (`carry_item`).
+    carried_item: Option<carry::Carry>,
     /// The host's platform, which says what `Cmd` in a shortcut means.
     platform: Platform,
     /// What each text field holds, which the screens show (`editing`).
@@ -222,6 +225,7 @@ impl Client {
             pressed: None,
             scroll_drag: None,
             slider: None,
+            carried_item: None,
             platform: Platform::Mac,
             fields: Fields::new(),
             entry: None,
@@ -383,6 +387,9 @@ impl Client {
         self.inputs.clear();
         self.own(table_now);
         self.set_aims(self.table_open());
+        let covers = self.table_open()
+            && (self.prompt.as_ref()).is_some_and(|(_, prompt)| prompts::covers_table(prompt));
+        self.show.cover_table(covers);
         let targets = self.targets(self.table_open());
         let transitioning = self.layer.tick(now);
         self.show.pointer_mut().advance(table_now);

@@ -129,6 +129,9 @@ pub struct Table {
     pub(super) tray: TrayMotion,
     /// The cards shown in the flat layer's boxes, and their moves (`table::shown`).
     pub(super) shown: Shown,
+    /// Whether the open prompt lists what it asks about over the table, which then takes no
+    /// press (`Table::cover_for_prompt`).
+    pub(super) prompt_covers: bool,
 }
 
 /// How many objects a table has placed since its count was last taken, for `Work::placed`.
@@ -173,6 +176,7 @@ impl Table {
             held: None,
             tray: TrayMotion::new(),
             shown: Shown::default(),
+            prompt_covers: false,
         }
     }
 

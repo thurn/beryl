@@ -8,7 +8,7 @@ mod catalog;
 mod choose;
 mod declare;
 mod divide;
-mod order;
+pub(crate) mod order;
 mod pay;
 mod pick;
 mod split;
@@ -77,6 +77,15 @@ pub fn faces(input: &ScreenIn) -> Vec<FaceId> {
     input.prompt.map_or_else(Vec::new, |prompt| {
         choose::way_faces(prompt, input).flatten().collect()
     })
+}
+
+/// Whether `prompt` lists what it asks about over the table on a shade of its own, so that the
+/// table under it takes no press, as the web interface's `coversTable` in
+/// `ui/src/stage/prompt.ts` has it for an order's waiting triggers. A prompt that holds cards
+/// up in its tray covers the table through the tray (`Table::pressable`).
+#[must_use]
+pub fn covers_table(prompt: &PromptView) -> bool {
+    matches!(prompt.body, ShapeBody::Order { .. })
 }
 
 /// Whether the pointer on `button` of `prompt`, or a touch held on it, shows what the prompt

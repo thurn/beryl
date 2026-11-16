@@ -519,6 +519,21 @@ fn stage_of(space: &TraySpace, size: Size) -> (f32, f32) {
     (per_point, size.width * per_point)
 }
 
+/// The part of a window `size` that `space` gives a prompt's tray, in logical points: the
+/// space's band of the stage, as wide as it may reach about the middle, as the web's
+/// `desktopTray` gives it.
+#[must_use]
+pub fn tray_area(space: TraySpace, size: Size) -> Rect {
+    let (per_point, stage_width) = stage_of(&space, size);
+    let (left, wide) = across(&space, stage_width);
+    Rect {
+        x: left / per_point,
+        y: space.y / per_point,
+        width: wide / per_point,
+        height: space.height / per_point,
+    }
+}
+
 /// The box of each pile of `held`, laid out in `space`, on a window `size`, in logical points,
 /// as the web's `TrayUnder` draws them: none for a tray of one pile or a fan.
 #[must_use]

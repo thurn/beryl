@@ -215,6 +215,7 @@ mod milestone_three {
             viewing: None,
             revealed: &[],
             table_menu: None,
+            carried: None,
         }
     }
 

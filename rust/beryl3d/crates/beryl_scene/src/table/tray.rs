@@ -104,6 +104,13 @@ impl Table {
         self.held = held;
     }
 
+    /// Covers the table for the open prompt, or uncovers it: while the prompt lists what it asks
+    /// about over the table on a shade of its own, such as an order's waiting triggers, no card
+    /// of the table takes a press (`pressable`).
+    pub fn cover_for_prompt(&mut self, covers: bool) {
+        self.prompt_covers = covers;
+    }
+
     /// Whether the card in `slot` is held up in the tray.
     #[must_use]
     pub fn in_tray(&self, slot: usize) -> bool {
@@ -115,8 +122,9 @@ impl Table {
     /// Whether a press may reach the card in `slot`, resting at `place`: one where the pointer
     /// reaches cards, while no tray is up; and while one is, only a card in it, as the shade the
     /// web interface lays over the table under a tray takes the pointer (`coversTable` in
-    /// `ui/src/stage/prompt.ts`). Scripts are played from where the cards rest in their zones:
-    /// only the table's own resting places put them in the tray.
+    /// `ui/src/stage/prompt.ts`). None while the table is covered, by a viewer or by the open
+    /// prompt (`cover_for_prompt`). Scripts are played from where the cards rest in their
+    /// zones: only the table's own resting places put them in the tray.
     ///
     /// The table takes no press either while a card the tray let go still waits where it was
     /// held up for its own step (`waiting`, from `handed_waiting`): it stands over the table as
@@ -125,7 +133,7 @@ impl Table {
         match self.held {
             _ if self.covered() => false,
             Some(_) => self.in_tray(slot),
-            None => !waiting && crate::pointer::takes_pointer(place),
+            None => !waiting && !self.prompt_covers && crate::pointer::takes_pointer(place),
         }
     }
 

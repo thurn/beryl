@@ -37,6 +37,11 @@ impl Show {
         self.table.show_in(boxes, moves, covered);
     }
 
+    /// Covers the table for the open prompt or uncovers it (`Table::cover_for_prompt`).
+    pub fn cover_table(&mut self, covers: bool) {
+        self.table.cover_for_prompt(covers);
+    }
+
     /// Where each card held up rests in its zone in the view the table shows (`Table::zone_rests`).
     #[must_use]
     pub fn zone_rests(&self) -> Vec<(ObjectId, Pose, bool)> {

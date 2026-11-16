@@ -21,6 +21,7 @@ pub use settings::{GEAR_INSET, gear};
 
 use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};
+use beryl_protocol::script::Subject;
 use beryl_protocol::{AgentView, PlayerView};
 
 use crate::element::{Element, Viewed};
@@ -130,6 +131,9 @@ pub struct ScreenIn<'a> {
     pub revealed: &'a [RevealedFace],
     /// The manual table's open context menu, if any (`manual::menus`).
     pub table_menu: Option<&'a OpenMenu>,
+    /// The item of an order prompt's row that the pointer carries along it, which a float draws
+    /// in its place (`Client::carry_item`).
+    pub carried: Option<Subject>,
 }
 
 /// What the flat layer shows on `screen`.

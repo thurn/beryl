@@ -425,6 +425,14 @@
         "value": 4,
         "note": "The height of a slider's track."
       },
+      "ORDER_ITEM_RADIUS": {
+        "value": 8,
+        "note": "The radius of a waiting trigger in an order's row: `.stage-order-item`'s `border-radius`."
+      },
+      "ORDER_ITEM_RING": {
+        "value": 2,
+        "note": "The gold ring round a waiting trigger carried along an order's row: `.stage-order-item.lifted`'s `box-shadow` spread."
+      },
       "SLIDER_THUMB": {
         "value": 16,
         "note": "The side of a slider's round thumb."
@@ -723,6 +731,10 @@
       "THINKING": {
         "value": "#ff9a2a",
         "note": "The gold of the ring under the opponent's orb while they think: the middle of `Thinking`'s arc."
+      },
+      "TRAY_SHADE": {
+        "value": "rgb(6 9 12 / 62%)",
+        "note": "The shade over the table under what a prompt holds up or lists, such as waiting triggers to order: `.stage-tray`'s `background` in `ui/src/stage/stage.css`."
       }
     },
     "mana": {

@@ -15,6 +15,7 @@ mod pointer_held;
 mod prompts;
 mod prompts_declare;
 mod prompts_divide;
+mod prompts_order;
 mod prompts_pick;
 mod prompts_split;
 mod recorded;

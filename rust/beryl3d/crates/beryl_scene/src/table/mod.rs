@@ -38,7 +38,7 @@ pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub(crate) use scene::{Objects, PileCount, ability_track};
 pub use shown::Moves;
 pub(crate) use stack::{OnStack, on_stack, row_area};
-pub use tray_layout::{Held, TrayKind, TrayPoses, TraySpace, landing, tray, tray_boxes};
+pub use tray_layout::{Held, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes};
 
 use crate::data::space;
 use crate::input::{Insets, Size};

@@ -48,7 +48,10 @@ impl Client {
             self.press(&Press::Dismiss(Dismiss::Menu));
             return;
         }
-        if self.scroll_layer(&pointer) || self.open_table_menu(&pointer) {
+        if self.scroll_layer(&pointer)
+            || self.open_table_menu(&pointer)
+            || self.carry_item(&pointer)
+        {
             return;
         }
         if !self.slide(&pointer) {
