@@ -66,7 +66,8 @@ impl Chord {
 
 /// The words that show `binding` beside a command, such as a menu row's key hint, on the Mac
 /// if `mac`, by `describe` in shortcuts.ts: the modifiers in the order Control, Option, Shift,
-/// Command, then the key's name, as `⌃⌥⇧⌘Z` on the Mac and `Ctrl+Shift+Z` elsewhere. Empty for
+/// Command, then the key's name, as `Ctrl+Option+Shift+Cmd+Z` on the Mac and `Ctrl+Shift+Z`
+/// elsewhere. The Mac's key symbols (⌃⌥⇧⌘⌫) are spelled out because no bundled font has them. Empty for
 /// a binding shortcuts.ts cannot read.
 #[must_use]
 pub fn describe(binding: &str, mac: bool) -> String {
@@ -87,17 +88,17 @@ pub fn describe(binding: &str, mac: bool) -> String {
         return String::new();
     }
     let labels = [
-        (control, if mac { "⌃" } else { "Ctrl" }),
-        (option, if mac { "⌥" } else { "Alt" }),
-        (shift, if mac { "⇧" } else { "Shift" }),
-        (meta, if mac { "⌘" } else { "Meta" }),
+        (control, "Ctrl"),
+        (option, if mac { "Option" } else { "Alt" }),
+        (shift, "Shift"),
+        (meta, if mac { "Cmd" } else { "Meta" }),
         (true, name),
     ];
     let shown = labels
         .iter()
         .filter(|(held, _)| *held)
         .map(|(_, label)| *label);
-    shown.collect::<Vec<_>>().join(if mac { "" } else { "+" })
+    shown.collect::<Vec<_>>().join("+")
 }
 
 /// A binding's modifiers, everything before the last `+`, and its key's name, everything

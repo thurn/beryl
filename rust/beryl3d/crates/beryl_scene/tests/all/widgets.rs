@@ -387,8 +387,8 @@ fn element_index(frame: &Frame, element: &beryl_scene::frame::Resolved) -> usize
 
 #[test]
 fn a_key_hint_is_written_as_shortcuts_ts_describes_it() {
-    assert_eq!(describe("Cmd+Shift+Z", true), "⇧⌘Z");
+    assert_eq!(describe("Cmd+Shift+Z", true), "Shift+Cmd+Z");
     assert_eq!(describe("Cmd+Shift+Z", false), "Ctrl+Shift+Z");
-    assert_eq!(describe("Ctrl+Option+K", true), "⌃⌥K");
+    assert_eq!(describe("Ctrl+Option+K", true), "Ctrl+Option+K");
     assert_eq!(describe("Hyper+K", true), "");
 }

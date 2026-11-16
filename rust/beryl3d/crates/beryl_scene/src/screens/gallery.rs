@@ -465,29 +465,29 @@ fn example_menu(kind: GalleryMenu) -> Element {
             &[
                 group(&[("Tap", "")]),
                 group(&[
-                    ("Graveyard", "⌘⌫"),
+                    ("Graveyard", "Cmd+Backspace"),
                     ("Exile", ""),
                     ("Hand", ""),
                     ("Top of library", ""),
-                    ("Bottom of library", "⌘B"),
+                    ("Bottom of library", "Cmd+B"),
                 ]),
                 group(&[
                     ("Add counter…", ""),
-                    ("Set power and toughness…", "⌘P"),
-                    ("Every action…", "⌘K"),
+                    ("Set power and toughness…", "Cmd+P"),
+                    ("Every action…", "Cmd+K"),
                 ]),
             ],
         );
     }
     let mut rows = group(&[
-        ("Keep top card revealed", "⌘N"),
+        ("Keep top card revealed", "Cmd+N"),
         ("Bottom of library", ""),
-        ("Every action…", "⌘K"),
+        ("Every action…", "Cmd+K"),
     ]);
     rows.rows[0].checked = true;
     rows.rows[1].submenu = group(&[
         ("Draw bottom card", ""),
-        ("Look at bottom cards…", "⇧⌘W"),
+        ("Look at bottom cards…", "Shift+Cmd+W"),
         ("Move bottom card to graveyard", ""),
     ])
     .rows;
@@ -497,10 +497,10 @@ fn example_menu(kind: GalleryMenu) -> Element {
         &[
             group(&[
                 ("Draw", ""),
-                ("Draw cards…", "⌘E"),
-                ("Look at top cards…", "⌘W"),
+                ("Draw cards…", "Cmd+E"),
+                ("Look at top cards…", "Cmd+W"),
                 ("Search", "F3"),
-                ("Shuffle", "⌘S"),
+                ("Shuffle", "Cmd+S"),
             ]),
             group(&[("Scry…", ""), ("Surveil…", "")]),
             rows,
