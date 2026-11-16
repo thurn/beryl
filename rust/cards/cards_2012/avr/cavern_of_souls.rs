@@ -142,6 +142,7 @@ pub mod scenarios {
             ]),
         // Force of Will counters with the same effect as Counterspell, and the rider stops it too.
         Scenario::new("Cavern of Souls' creature spell can't be countered by Force of Will")
+            .interaction(&[Card::ForceOfWill])
             .battlefield(P0, &[Card::Plains])
             .hand(P0, &[Card::CavernOfSouls, Prop::Vanilla])
             .battlefield(P1, &[Card::Island; 5])
@@ -158,6 +159,7 @@ pub mod scenarios {
         // spell is still a legal target and Mana Drain's second sentence is unconditional:
         // P1 gets {C} equal to the Elk's mana value, 2, at their next main phase.
         Scenario::new("Cavern of Souls' spell drained still gives the Mana Drain mana")
+            .interaction(&[Card::ManaDrain])
             .battlefield(P0, &[Card::Plains])
             .hand(P0, &[Card::CavernOfSouls, Prop::Vanilla])
             .battlefield(P1, &[Card::Island, Card::Island])

@@ -382,6 +382,7 @@ pub mod scenarios {
         //
         // [CR 107.3a]: https://yawgatog.com/resources/magic-rules/#R1073a
         Scenario::new("an X spell escapes with X chosen")
+            .interaction(&[Card::Braingeyser])
             .battlefield(
                 P0,
                 &[
@@ -426,7 +427,6 @@ pub mod scenarios {
             ]),
         // Ruling: a countered escaped spell goes to the graveyard (CR 701.6a), not exile.
         Scenario::new("a countered escaped spell goes to the graveyard")
-            .interaction(&[Card::Counterspell])
             .battlefield(P0, &[BREACH, Card::Island, Card::Island])
             .graveyard(
                 P0,

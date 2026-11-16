@@ -257,6 +257,7 @@ pub mod scenarios {
         // graveyard (CR 614.1a), but the dredge still happened, so Life from the Loam returns
         // (CR 702.52a).
         Scenario::new("dredge under Rest in Peace exiles the milled cards")
+            .interaction(&[Card::RestInPeace])
             .at(3, P0, TurnStep::Upkeep)
             .battlefield(P0, FLASH_MANA)
             .battlefield(P1, &[Card::RestInPeace])

@@ -291,7 +291,7 @@ pub mod scenarios {
         // [CR 702.15b]: https://yawgatog.com/resources/magic-rules/#R70215b
         // [CR 615.1]: https://yawgatog.com/resources/magic-rules/#R6151
         Scenario::new("prevented combat damage from a lifelink attacker gains no life")
-            .interaction(&[BOLT, Card::Griselbrand])
+            .interaction(&[Card::Griselbrand])
             .at(2, P1, TurnStep::PrecombatMain)
             .battlefield(P0, &[Card::Plains, Card::Plains, Card::Plains])
             .hand(P0, &[PROTECTION])
@@ -316,6 +316,7 @@ pub mod scenarios {
         //
         // [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
         Scenario::new("a token that phases out phases back in")
+            .interaction(&[Card::BezaTheBoundingSpring, Card::Hullbreacher])
             .hand(P1, &[Card::Hullbreacher])
             .battlefield(P0, &[Card::Plains; 7])
             .battlefield(P1, &[Card::Plains; 8])

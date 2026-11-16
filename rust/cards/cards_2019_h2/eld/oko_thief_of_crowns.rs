@@ -277,6 +277,7 @@ pub mod scenarios {
         // Under Humility, Oko's effect began after Humility's and sets base 3/3 later in layer 7b
         // (CR 613.7), so the target is a 3/3 while the others are 1/1.
         Scenario::new("+1's Elk under an earlier Humility is 3/3")
+            .interaction(&[Card::Humility])
             .battlefield(P0, &[OKO, Card::Humility, VANILLA])
             .battlefield(P1, &[Prop::Flier])
             .library(P0, &[Card::Island])
@@ -291,6 +292,7 @@ pub mod scenarios {
             ]),
         // Humility cast after Oko's effect began applies its 1/1 later in layer 7b.
         Scenario::new("+1's Elk under a later Humility is 1/1")
+            .interaction(&[Card::Humility])
             .battlefield(
                 P0,
                 &[
@@ -381,7 +383,7 @@ pub mod scenarios {
         // sets its types to creature alone (CR 205.1a): it is no longer an enchantment, so
         // Opalescence's mana-value size no longer applies and the Elk is 3/3, not 2/2.
         Scenario::new("+1 on an Opalescence creature makes a 3/3 Elk")
-            .interaction(&[Card::DressDown])
+            .interaction(&[Card::Opalescence, Card::DressDown])
             .battlefield(P0, &[OKO, Card::Opalescence, Card::DressDown])
             .library(P0, &[Card::Island])
             .library(P1, &[Card::Island])

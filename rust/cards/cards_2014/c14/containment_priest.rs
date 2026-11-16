@@ -132,7 +132,7 @@ pub mod scenarios {
         // (CR 614.12: a replacement effect from a permanent applies only if it is on the
         // battlefield; here it is not yet).
         Scenario::new("Containment Priest entering with another creature exiles neither")
-            .interaction(&[Card::ShowAndTell, PRIEST])
+            .interaction(&[Card::ShowAndTell])
             .hand(P0, &[Card::ShowAndTell, PRIEST])
             .battlefield(P0, &[Card::Island; 3])
             .hand(P1, &[Prop::Vanilla])

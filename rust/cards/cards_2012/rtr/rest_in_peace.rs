@@ -140,6 +140,7 @@ pub mod scenarios {
         // The legend rule puts one Thalia into the graveyard (CR 704.5j), where she's exiled
         // instead: she didn't die, so Blood Artist doesn't trigger (CR 614.6).
         Scenario::new("the legend rule's creature is exiled and doesn't die")
+            .interaction(&[Card::BloodArtist, Card::ThaliaGuardianOfThraben])
             .battlefield(
                 P0,
                 &[

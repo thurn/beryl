@@ -187,7 +187,7 @@ pub mod scenarios {
         // ability's effect). On P1's turn Portable Hole exiles Needle, and P0 can activate
         // Mother of Runes again.
         Scenario::new("Pithing Needle leaving the battlefield ends its restriction")
-            .interaction(&[MOTHER, Card::PortableHole])
+            .interaction(&[MOTHER])
             .battlefield(P0, &[Card::Island, MOTHER])
             .hand(P0, &[NEEDLE, Card::Island])
             .battlefield(P1, &[Card::Plains])

@@ -433,7 +433,6 @@ pub mod scenarios {
         // only creature P0 has is a Human (Hired Blade), so with the three Forests that pay for
         // mutate and not the four that pay the mana cost, the cast is not offered.
         Scenario::new("Gemrazer can't mutate onto a Human")
-            .interaction(&[Prop::FlashCreature])
             .battlefield(
                 P0,
                 &[
@@ -462,7 +461,6 @@ pub mod scenarios {
         // +1/+1 counters and attached Equipment stay on it: over a 2/1 with two +1/+1 counters
         // wearing a +1/+1 Equipment, a 4/4 Gemrazer is 7/7.
         Scenario::new("Gemrazer over a creature keeps its counters and Equipment")
-            .interaction(&[Card::LeoninScimitar])
             .permanents(
                 P0,
                 &[

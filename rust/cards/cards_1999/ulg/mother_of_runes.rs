@@ -228,6 +228,7 @@ pub mod scenarios {
         // [CR 702.16e]: https://yawgatog.com/resources/magic-rules/#R70216e
         // [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
         attacking("Furnace of Rath doesn't get damage past protection")
+            .interaction(&[Card::FurnaceOfRath])
             .battlefield(P0, &[MOTHER, Prop::Vanilla, Card::FurnaceOfRath])
             .actions(&[
                 advance_to(3, TurnStep::BeginningOfCombat),
@@ -249,6 +250,7 @@ pub mod scenarios {
         //
         // [CR 702.16]: https://yawgatog.com/resources/magic-rules/#R70216
         Scenario::new("protection doesn't save a creature from a spell that doesn't target")
+            .interaction(&[Card::Damn])
             .battlefield(
                 P0,
                 &[
@@ -282,6 +284,7 @@ pub mod scenarios {
         // [CR 702.16d]: https://yawgatog.com/resources/magic-rules/#R70216d
         // [CR 704.5n]: https://yawgatog.com/resources/magic-rules/#R7045n
         Scenario::new("protection from red unattaches an Equipment Painter's Servant made red")
+            .interaction(&[Card::PaintersServant])
             .battlefield(
                 P0,
                 &[

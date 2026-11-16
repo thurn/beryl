@@ -165,6 +165,7 @@ pub mod scenarios {
         // cast this spell, copy it". Only the Tendrils' own storm trigger (storm
         // count 0, so no copies) is on the stack; the copy and the original each drain 2.
         Scenario::new("Fork copies Tendrils of Agony without a second storm trigger")
+            .interaction(&[Card::TendrilsOfAgony])
             .battlefield(
                 P0,
                 &[

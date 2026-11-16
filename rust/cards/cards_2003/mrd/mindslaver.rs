@@ -234,7 +234,6 @@ pub mod scenarios {
         // Stupor on the Oust, paying with their own Islands; the Oust returns to P1's hand and
         // P1's creature stays.
         slaving("the controller also acts for themself during the controlled turn")
-            .interaction(&[Prop::Removal])
             .hand(P0, &[Prop::Removal])
             .battlefield(
                 P0,

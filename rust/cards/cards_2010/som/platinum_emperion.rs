@@ -84,7 +84,7 @@ pub mod scenarios {
         // is not offered. With Lightning Bolt on the stack, P0 may pass or cast Counterspell from
         // its two Islands, and nothing else.
         Scenario::new("Force of Will's alternative cost is not offered")
-            .interaction(&[BOLT, Card::ForceOfWill, Card::Counterspell])
+            .interaction(&[BOLT, Card::ForceOfWill])
             .battlefield(P0, &[EMPERION, Card::Island, Card::Island])
             .hand(P0, &[Card::ForceOfWill, Card::Counterspell])
             .battlefield(P1, &[Card::Mountain])

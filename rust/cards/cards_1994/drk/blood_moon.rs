@@ -140,7 +140,7 @@ pub mod scenarios {
         // (CR 305.6, CR 613.1f), whichever of the two effects began first: one Mountain alone
         // can't pay for Gold Myr, and P0 is given no priority in the main phase.
         Scenario::new("Dryad Arbor under Blood Moon and Humility makes no mana")
-            .interaction(&[Card::GoldMyr])
+            .interaction(&[Card::GoldMyr, Card::Humility])
             .battlefield(
                 P0,
                 &[BLOOD_MOON, Card::Humility, Card::DryadArbor, Card::Mountain],
@@ -150,6 +150,7 @@ pub mod scenarios {
         // Opalescence makes Blood Moon a creature, and a 3/3 one; Blood Moon is no land, so it
         // still changes nothing about itself.
         Scenario::new("Blood Moon under Opalescence is a 3/3 creature")
+            .interaction(&[Card::Opalescence])
             .battlefield(P0, &[BLOOD_MOON, Card::Opalescence])
             .actions(&[ME.creature(BLOOD_MOON, true), ME.pt(BLOOD_MOON, 3, 3)]),
     ];
