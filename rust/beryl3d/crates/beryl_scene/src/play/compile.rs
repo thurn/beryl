@@ -129,7 +129,7 @@ impl Compiled {
 /// when the script ends. A reset's beats still hold the time their timings give.
 pub(crate) fn compile<'a>(
     before: Option<(&'a PlayerView, &Played)>,
-    after: &PlayerView,
+    after: &'a PlayerView,
     timings: &[StepTiming],
     table: &'a Table,
     records: bool,
@@ -259,11 +259,11 @@ fn ended(played: Option<&Played>, after: &PlayerView, script: &Script) -> Played
 /// is over, in nanoseconds. Each verb drawn as an instant change sets its bit in `unbuilt`.
 /// `each` returns when what closed up after its step has closed, in milliseconds, if anything
 /// did: a beat is not over until then.
-fn lay_out(
-    script: &Script,
+fn lay_out<'s>(
+    script: &'s Script,
     timings: &[StepTiming],
     unbuilt: &mut u32,
-    mut each: impl FnMut((usize, usize), &Step, &StepTiming, &Laid) -> Option<f64>,
+    mut each: impl FnMut((usize, usize), &'s Step, &StepTiming, &Laid) -> Option<f64>,
 ) -> u64 {
     let mut laid = Vec::new();
     let mut at = 0.0;

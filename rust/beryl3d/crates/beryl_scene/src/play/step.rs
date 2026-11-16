@@ -6,6 +6,7 @@ use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, StackItem, Zone
 use beryl_protocol::script::{Act, Step, StepTiming, Subject, Table as Played, mover_of};
 
 use super::compile::{nanoseconds, subject_of};
+use super::index::{self, Index};
 use super::record::{Cause, SegmentRecord};
 use crate::beat::Laid;
 use crate::hud::counts::CountChange;
@@ -137,6 +138,9 @@ pub(crate) struct Motion<'a> {
     members: Vec<Vec<ObjectId>>,
     /// The group each slot was last placed in, by `Group::index`, indexed by slot.
     groups: Vec<Option<usize>>,
+    /// `played`'s objects and their groups by slot, kept up to date step by step, for a script
+    /// with steps enough to repay building it (`index::LEAST_STEPS`).
+    index: Option<Index<'a>>,
     /// Whether the next step places every group, not only the ones its act changed: the step
     /// after one the table could not take, which may have changed part of it.
     whole: bool,
@@ -208,6 +212,8 @@ impl<'a> Motion<'a> {
         // Room for a track for every object, so that growing `tracks` one slot at a time never
         // copies the tracks it holds.
         let tracks = Vec::with_capacity(rests.rests.len());
+        let steps = timings.len();
+        let index = (steps >= index::LEAST_STEPS).then(|| Index::new(before, played));
         Self {
             table,
             names: NameIds::of(&before.objects),
@@ -215,6 +221,7 @@ impl<'a> Motion<'a> {
             rests,
             members,
             groups,
+            index,
             whole: false,
             unplaced: 0,
             first: true,
@@ -242,7 +249,7 @@ impl<'a> Motion<'a> {
     /// whose abilities an act may add or take away without naming an object. Their resting
     /// places go to `fresh` and their slots to `next`; `rests` is left as it was. Returns which
     /// groups it placed, or none if the table could not take the act.
-    fn place(&mut self, act: &Act, timed: bool) -> Option<[bool; Group::ALL.len()]> {
+    fn place(&mut self, act: &'a Act, timed: bool) -> Option<[bool; Group::ALL.len()]> {
         let touched = &mut self.touched;
         touched.clear();
         if self
@@ -257,7 +264,8 @@ impl<'a> Motion<'a> {
         let mut dirty = [self.whole; Group::ALL.len()];
         dirty[Group::Stack.index()] = true;
         self.look.follow((act, timed), &self.played, &mut dirty);
-        let zones = Zones::of_table(&self.played).handled(self.look.handled());
+        let zones = index::step_zones(self.index.as_mut(), &self.played, act, &self.touched)
+            .handled(self.look.handled());
         if self.first {
             for group in Group::ALL
                 .into_iter()
@@ -412,7 +420,7 @@ impl<'a> Motion<'a> {
     pub(crate) fn step(
         &mut self,
         number: usize,
-        (beat, index): (&[Step], usize),
+        (beat, index): (&'a [Step], usize),
         timing: &StepTiming,
         laid: &Laid,
     ) {

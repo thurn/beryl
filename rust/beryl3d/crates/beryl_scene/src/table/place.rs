@@ -2,11 +2,15 @@
 //! (docs/beryl-3d.md, "Objects and placement"). Each is pure: it reads the view, the layout, the
 //! camera fitted to the window and the rows' scroll offsets, and nothing else.
 
+use std::borrow::Cow;
+
 use beryl_protocol::protocol::{
     CardType, ObjectId, ObjectView, PlayerState, PlayerView, RowName, Side, ZoneName,
 };
 use beryl_protocol::script::{Piles, Table as Played};
 use glam::{Quat, Vec2, Vec3};
+
+mod indexed;
 
 use super::rows::{Laid, NameIds, RowRules, SameName, face_up, lay_row};
 use super::stack::{OnStack, on_stack, place_stack, spells};
@@ -191,6 +195,10 @@ pub(crate) fn place_group(
 /// and, if the caller keeps them, the numbers of the objects' names.
 pub(crate) type Rules<'r> = (&'r Layout, &'r Camera, &'r Scroll, Option<&'r NameIds<'r>>);
 
+/// What `Zones::of_table_grouped` holds for a slot with no object, or one the table does not
+/// show: no `Group::number`.
+pub(crate) const NO_GROUP: u8 = u8::MAX;
+
 /// A part of the table whose objects are placed together and apart from every other part: a
 /// pile, a hand, a battlefield row or the stack. Where an object rests depends only on the
 /// objects of its own group, so an act changes the resting places of the groups that held or
@@ -256,6 +264,11 @@ impl Group {
             Group::Stack,
         ]
     };
+
+    /// `index`, as one byte.
+    pub(crate) fn number(self) -> u8 {
+        u8::try_from(self.index()).expect("fewer than 256 groups")
+    }
 
     /// Its place in `ALL`.
     pub(crate) fn index(self) -> usize {
@@ -350,7 +363,10 @@ pub(crate) struct Zones<'a> {
     /// script plays over, which lists them by slot, the order of `slots`.
     in_view_order: Option<&'a [ObjectView]>,
     /// Every object, by slot.
-    slots: Vec<Option<&'a ObjectView>>,
+    slots: Cow<'a, [Option<&'a ObjectView>]>,
+    /// The `Group::number` of the object in each slot, or `NO_GROUP`, where the caller keeps
+    /// them (`of_table_grouped`).
+    groups: Option<&'a [u8]>,
     /// Permanents, in the order they entered.
     battlefield: &'a [ObjectId],
     /// The spells and numbered abilities on the stack, bottom first.
@@ -373,7 +389,8 @@ impl<'a> Zones<'a> {
             .unwrap_or(0);
         let zones = Self {
             in_view_order: Some(&view.objects),
-            slots: by_slot(end, view.objects.iter()),
+            slots: Cow::Owned(by_slot(end, view.objects.iter())),
+            groups: None,
             battlefield: &view.battlefield,
             stack: on_stack(view.stack.iter().map(|item| (item, None)), abilities),
             piles: [player(&view.players.you), player(&view.players.opponent)],
@@ -395,7 +412,8 @@ impl<'a> Zones<'a> {
             .map_or(0, |(slot, _)| usize::from(slot.0) + 1);
         Self {
             in_view_order: None,
-            slots: by_slot(end, table.objects.values()),
+            slots: Cow::Owned(by_slot(end, table.objects.values())),
+            groups: None,
             battlefield: &table.battlefield,
             stack: on_stack(table.stack.iter().map(|entry| (&entry.item, entry.id)), &[]),
             piles: [piles(&table.you), piles(&table.opponent)],
@@ -467,17 +485,7 @@ pub(crate) fn members<'a>(zones: &Zones<'a>, group: Group) -> Vec<&'a ObjectView
         } => zones.listed(zones.piles[side_index(side)][1]),
         Group::Pile { side, zone } => zones.in_zone(side, zone),
         Group::Hand(side) => zones.in_zone(side, ZoneName::Hand),
-        Group::Row { side, row } => {
-            let mut found = Vec::with_capacity(zones.battlefield.len());
-            found.extend(
-                zones
-                    .battlefield
-                    .iter()
-                    .filter_map(|&slot| zones.get(slot))
-                    .filter(|object| side_of(object) == side && row_of(object) == row),
-            );
-            found
-        }
+        Group::Row { side, row } => zones.in_row(side, row),
         Group::Stack => zones.listed(&spells(&zones.stack)),
     }
 }
@@ -507,7 +515,13 @@ fn all_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
             side: side_of(object),
             row: row_of(object),
         };
-        all[group.index()].push(object);
+        let row = &mut all[group.index()];
+        // Room for the whole battlefield as a row takes its first card, so that no row grows one
+        // copy at a time and a row with no cards allocates nothing.
+        if row.capacity() == 0 {
+            row.reserve_exact(zones.battlefield.len());
+        }
+        row.push(object);
     }
     all[Group::Stack.index()] = zones.listed(&spells(&zones.stack));
     all

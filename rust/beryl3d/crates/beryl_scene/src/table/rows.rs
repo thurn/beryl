@@ -248,18 +248,25 @@ fn piles<'a, 'b>(cards: &'b [&'a ObjectView], names: &SameName) -> Groups<'a, 'b
 pub(crate) struct NameIds<'a> {
     /// By slot, the number of the object's name; `u32::MAX` for a slot that holds no object.
     by_slot: Vec<u32>,
-    /// The names of the objects it was made from, borrowed from them, sorted, each with its
-    /// number.
-    names: Vec<(Option<&'a str>, u32)>,
+    /// The names of the objects it was made from, borrowed from them, each with its hash
+    /// (`name_hash`) and number, sorted by hash and then by name: sorting by a hash compares
+    /// one number where sorting by the names compares strings.
+    names: Vec<(u64, Option<&'a str>, u32)>,
     /// Names first seen when an object was numbered again, each with its number.
     later: Vec<(Option<String>, u32)>,
 }
 
 impl<'a> NameIds<'a> {
     pub(crate) fn of(objects: &'a [ObjectView]) -> Self {
-        let mut sorted: Vec<&ObjectView> = objects.iter().collect();
-        sorted.sort_unstable_by(|a, b| a.name.cmp(&b.name));
-        let end = sorted
+        let mut sorted: Vec<(u64, &ObjectView)> = objects
+            .iter()
+            .map(|object| (name_hash(object.name.as_deref()), object))
+            .collect();
+        // Names are compared only where two hashes are equal, which equal names' are.
+        sorted.sort_unstable_by(|(a_hash, a), (b_hash, b)| {
+            a_hash.cmp(b_hash).then_with(|| a.name.cmp(&b.name))
+        });
+        let end = objects
             .iter()
             .map(|object| usize::from(object.slot.0) + 1)
             .max()
@@ -269,10 +276,11 @@ impl<'a> NameIds<'a> {
             names: Vec::new(),
             later: Vec::new(),
         };
-        for run in sorted.chunk_by(|a, b| a.name == b.name) {
+        for run in sorted.chunk_by(|(a_hash, a), (b_hash, b)| a_hash == b_hash && a.name == b.name)
+        {
             let id = ids.next_id();
-            ids.names.push((run[0].name.as_deref(), id));
-            for object in run {
+            ids.names.push((run[0].0, run[0].1.name.as_deref(), id));
+            for (_, object) in run {
                 ids.by_slot[usize::from(object.slot.0)] = id;
             }
         }
@@ -287,8 +295,12 @@ impl<'a> NameIds<'a> {
     /// Numbers `object`'s name again, as it now stands.
     pub(crate) fn note(&mut self, object: &ObjectView) {
         let name = object.name.as_deref();
-        let known = match self.names.binary_search_by(|(other, _)| other.cmp(&name)) {
-            Ok(at) => Some(self.names[at].1),
+        let hash = name_hash(name);
+        let found = self
+            .names
+            .binary_search_by(|(other_hash, other, _)| (other_hash, other).cmp(&(&hash, &name)));
+        let known = match found {
+            Ok(at) => Some(self.names[at].2),
             Err(_) => self
                 .later
                 .iter()

@@ -402,7 +402,8 @@ impl Table {
         if let Some(at) = at
             && let Some(order) = self.order(object.zone, side)
         {
-            let others = order.iter().filter(|&&s| s != slot).count();
+            // An order holds each slot at most once.
+            let others = order.len() - usize::from(order.contains(&slot));
             if usize::from(at) > others {
                 return Err(format!("#{slot} at {at} of {others}"));
             }
@@ -445,8 +446,13 @@ impl Table {
 
     /// Takes `slot` out of `zone`'s order, and its spell off the stack if it leaves that.
     fn leave(&mut self, slot: ObjectId, zone: ZoneName, side: Side, moved: bool) {
-        if let Some(order) = self.order_mut(zone, side) {
-            order.retain(|&s| s != slot);
+        // An order holds each slot at most once, so finding it is enough: `retain` would go on
+        // to visit every later slot.
+        if let Some(order) = self.order_mut(zone, side)
+            && let Some(at) = order.iter().position(|&s| s == slot)
+        {
+            order.remove(at);
+            debug_assert!(!order.contains(&slot), "#{slot} is twice in one order");
         }
         if moved && zone == ZoneName::Stack {
             self.stack

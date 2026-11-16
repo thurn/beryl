@@ -23,6 +23,7 @@ mod affect;
 mod compile;
 mod counts;
 pub(crate) use compile::nanoseconds;
+mod index;
 pub mod record;
 pub(crate) mod step;
 
