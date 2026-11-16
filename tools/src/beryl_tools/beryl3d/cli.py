@@ -575,7 +575,7 @@ COMMANDS: tuple[Command, ...] = (
     ),
     Command(
         "phone-search",
-        "plays a live game against expert on the iOS Simulator and the Android emulator, and"
+        "plays a live game against mcts-hidden on the iOS Simulator and the Android emulator, and"
         " compares late frames while the AI searched and while it did not",
         (
             ("just b3d phone-search", "iOS, then Android on Vulkan"),

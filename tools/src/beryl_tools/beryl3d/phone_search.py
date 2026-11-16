@@ -1,5 +1,5 @@
 """`just b3d phone-search`: whether the AI's search starves a phone's frame thread
-(docs/beryl-3d.md, "Threads"). It plays one live game against `expert` in the headless iOS
+(docs/beryl-3d.md, "Threads"). It plays one live game against `mcts-hidden` in the headless iOS
 Simulator and then in the Android emulator (on Vulkan, and on OpenGL ES 3.0 too with `--gles`),
 with the stand-in agent `greedy` answering the person's decisions so nobody has to play. After
 5 minutes, or when the game ends, it suspends the app, which makes the app write its frame

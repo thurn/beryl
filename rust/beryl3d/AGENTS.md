@@ -104,8 +104,8 @@ backgrounds and resumes a replay, checks that frames resume on the reattached
 surface, and exercises low memory, haptics, sharing and opening a URL.
 `just b3d ios-device --user-asked` installs on the paired iPhone, only when the
 user asked for it in chat. `just b3d phone-search [--gles]` plays a live game
-against `expert` on each platform for 5 minutes and compares late frames while
-the AI searched and while it did not: a measurement of whether the search
+against `mcts-hidden` on each platform for 5 minutes and compares late frames
+while the AI searched and while it did not: a measurement of whether the search
 starves the frame thread. None of these are in the lane or the sweep yet.
 
 ## Paths

@@ -138,15 +138,18 @@ impl Live {
         self
     }
 
-    /// The same sessions, which start a fresh game against the expert, as a person's game
-    /// starts, with the agent `name` answering the person's decisions in their place: for a
-    /// phone's unattended runs. The seed is the clock's, as `Sessions::start` deals one.
+    /// The same sessions, which start a fresh game against the searching agent `--agent`
+    /// plays against (`options::OPPONENT`), with the agent `name` answering the person's
+    /// decisions in their place: for a phone's unattended runs, which measure drawing while
+    /// the AI searches. (The expert, which this once played, plays by rules and never searches,
+    /// so a game between it and a stand-in ended in a tenth of a second.) The seed is the
+    /// clock's, as `Sessions::start` deals one.
     #[must_use]
     pub fn with_stand_in(self, name: &str) -> Self {
         let seed = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |since| since.as_nanos() as u64);
-        self.played_by(name, "expert", seed)
+        self.played_by(name, crate::options::OPPONENT, seed)
     }
 }
 
