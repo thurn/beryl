@@ -293,11 +293,96 @@ async function drag(page, from, to, { shift = false, button = "left" } = {}) {
     return view;
 }
 
-async function handPoint(page, slot) {
+async function handPoint(page, slot, height = 0.12) {
     const box = await card(page, slot).boundingBox();
     assert.ok(box, `hand card ${slot}`);
-    return { x: box.x + box.width * 0.6, y: box.y + box.height * 0.12 };
+    return { x: box.x + box.width * 0.6, y: box.y + box.height * height };
 }
+
+// The stage audits cannot observe a local shake or whether a drag sent an IPC request.
+await check(
+    "manual table QA shakes a private opposing hand card on drag",
+    linked(async (host, guest) => {
+        await start([["Island", 20]], [["Mountain", 20]]);
+        const opening = await tableView("guest");
+        await act(
+            {
+                move: {
+                    ...ref(opening, lastHand(opening)),
+                    to: { graveyard: 1 },
+                },
+            },
+            "guest",
+        );
+        const guestBefore = await showBoth(host, guest);
+        const before = await tableView("host");
+        const slot = lastHand(before, "opponent");
+        assert.equal(object(before, slot).name, null);
+
+        const actions = [];
+        host.on("request", (request) => {
+            if (new URL(request.url()).pathname === "/invoke/table_act")
+                actions.push(request.postDataJSON().request.action);
+        });
+        await host.evaluate(() => {
+            const animate = Element.prototype.animate;
+            window.handShakes = [];
+            Element.prototype.animate = function (frames, options) {
+                if (options?.id === "table-refusal")
+                    window.handShakes.push(
+                        Number(this.closest("[data-slot]")?.dataset.slot),
+                    );
+                return animate.call(this, frames, options);
+            };
+        });
+        const graveyard = host.locator(
+            'button[data-pile="graveyard"][data-side="opponent"]',
+        );
+        const destination = center(await graveyard.boundingBox());
+        // The opponent's hand extends above the stage, so grab its lower edge.
+        const from = await handPoint(host, slot, 0.85);
+        const pointedSlot = await host.evaluate(
+            ({ x, y }) =>
+                document.elementFromPoint(x, y)?.closest("[data-slot]")?.dataset
+                    .slot,
+            from,
+        );
+        assert.equal(pointedSlot, String(slot));
+        await host.mouse.move(from.x, from.y);
+        await host.mouse.down();
+        await host.mouse.move(destination.x, destination.y, { steps: 4 });
+        assert.equal(
+            await host.evaluate(() => window.berylStage.pointer.held?.name),
+            undefined,
+        );
+        await host.mouse.up();
+        assert.deepEqual(await host.evaluate(() => window.handShakes), [slot]);
+        assert.deepEqual(actions, []);
+        assert.deepEqual(await tableView("guest"), guestBefore);
+
+        await act({ reveal: { in: { hand: 1 }, to: [0] } }, "guest");
+        await showBoth(host, guest);
+        const revealed = await tableView("host");
+        const revealedSlot = lastHand(revealed, "opponent");
+        assert.equal(object(revealed, revealedSlot).name, "Mountain");
+        const moved = await drag(
+            host,
+            await handPoint(host, revealedSlot, 0.85),
+            destination,
+        );
+        const guestAfter = await showBoth(host, guest, moved);
+        assert.equal(actions.length, 1);
+        assert.equal(
+            guestAfter.table.orders.you.hand.length,
+            guestBefore.table.orders.you.hand.length - 1,
+        );
+        assert.equal(
+            guestAfter.players.you.graveyard.length,
+            guestBefore.players.you.graveyard.length + 1,
+        );
+    }),
+    live,
+);
 
 await check(
     "manual table QA shifts a dragged card face down",

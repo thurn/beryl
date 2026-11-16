@@ -368,17 +368,30 @@ export class TableClient {
     this.pointer.cancel();
   }
 
-  readonly gestures: PointerClient = {
-    dragSource: (element, keys, at) =>
-      this.frozen ? undefined : this.#drag?.dragSource?.(element, keys, at),
-    holdable: (name) =>
+  #canDrag() {
+    return (
       !this.frozen &&
       !this.#selecting &&
       !this.#aim?.picking() &&
       !!this.#drop &&
-      (this.#drag?.canHold?.() ?? true) &&
+      (this.#drag?.canHold?.() ?? true)
+    );
+  }
+
+  readonly gestures: PointerClient = {
+    dragSource: (element, keys, at) =>
+      this.frozen ? undefined : this.#drag?.dragSource?.(element, keys, at),
+    holdable: (name) =>
+      this.#canDrag() &&
       !!this.card(name, true)?.action &&
       typeof name === "number",
+    unheldDrag: (name) => {
+      if (!this.#canDrag()) return;
+      const target = this.#under(name);
+      if (target?.kind !== "hand" || target.side !== "opponent") return;
+      const element = this.#surface?.node(name);
+      if (element) shakeRefusal(element);
+    },
     over: (target, at) => this.#drag?.over?.(target, at),
     lift: (name) => this.#drag?.lift?.(name),
     click: (name, _at, keys, unhandled) => {

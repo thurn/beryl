@@ -73,6 +73,8 @@ export interface PointerClient {
   ): DragSource | undefined;
   /** Which nodes a press may pick up. */
   holdable?(name: Name): boolean;
+  /** A drag ended on release without picking up the pressed card. */
+  unheldDrag?(name: Name): void;
   /** A card click. Call `unhandled` if it should go to the stage's viewers. */
   click?(name: Name, at: Point, keys: PointerKeys, unhandled: () => void): void;
   /** A primary click or tap on a player's life total. */
@@ -448,7 +450,8 @@ export class Pointer {
     }
     const held = this.#held;
     if (!held) {
-      if (!moved && !press.origin) this.#click(name, at, keys);
+      if (moved && press.touchReady) this.#client?.unheldDrag?.(name);
+      else if (!moved && !press.origin) this.#click(name, at, keys);
       return press.origin !== undefined && moved;
     }
     this.#held = { ...held, at };
