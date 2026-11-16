@@ -1077,7 +1077,13 @@ flight start exactly where the card was.
 - **Marks are separate quads.** What a card's own record says (tapped, a power
   and toughness plaque, counters, summoning sickness) and what a prompt marks on
   it are drawn as a few quads placed on the card's face, so they change without
-  touching the face's texture.
+  touching the face's texture. The marks of a permanent's own record (a moon for
+  summoning sickness, a token's coin, a stolen permanent's violet outline, an
+  attacker's wedge and a blocker's crescent) need no span and no step: the table
+  draws them from the record it holds, in `beryl_scene`'s `table::own`. The
+  wedge and the crescent face the defending side, on the card's edge that faces
+  it most nearly, and fade in from the frame the record first says the creature
+  fights.
 
 ### Verbs
 

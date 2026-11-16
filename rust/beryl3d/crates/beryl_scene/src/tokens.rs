@@ -74,4 +74,19 @@ pub mod color {
     /// The outline of a target its chooser does not control: the `--tone` of
     /// `.stage-mark-hostile-target`.
     pub const MARK_HOSTILE_TARGET: [u8; 4] = [255, 92, 74, 255];
+
+    /// The wedge an attacker wears: the glow of `ember` in `TONES`, the tone `fighterLight`
+    /// (`ui/src/stage/light.ts`) gives it.
+    pub const WEDGE: [u8; 4] = [255, 38, 10, 255];
+    /// The crescent a blocker wears: the glow of `gold` in `TONES`, the tone `fighterLight`
+    /// gives it.
+    pub const CRESCENT: [u8; 4] = [255, 168, 26, 255];
+    /// A summoning-sick permanent's moon: the `--mark` of `.mark-sick`
+    /// (`ui/src/design/components/card-frame.css`).
+    pub const MOON: [u8; 4] = CYAN;
+    /// A token's coin: the `--mark` of `.mark-token` in the same file.
+    pub const COIN: [u8; 4] = [214, 210, 204, 255];
+    /// The edge of a permanent its owner does not control: the border of `.card-stolen-edge`
+    /// (`ui/src/design/components/card-marks-and-piles.css`).
+    pub const OUTLINE: [u8; 4] = STOLEN;
 }

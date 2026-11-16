@@ -94,6 +94,14 @@ pub(super) fn finish(frame: &mut Frame) {
     }
 }
 
+impl Frame {
+    /// The band of the record at `index` of `draws`, once the frame is finished.
+    #[must_use]
+    pub fn band(&self, index: usize) -> Option<Band> {
+        self.scratch.keys.get(index).map(|&key| band_of(key))
+    }
+}
+
 /// The band a sort key holds.
 fn band_of(key: u64) -> Band {
     match key >> BAND_SHIFT {

@@ -165,6 +165,41 @@
     "height": 88,
     "layer": 0.3
   },
+  "own": {
+    "lift": 0.1,
+    "fade_ms": 40,
+    "moon": {
+      "size": 0.4,
+      "at": [
+        0,
+        -0.2
+      ]
+    },
+    "coin": {
+      "size": 0.16,
+      "at": [
+        -0.34,
+        -0.42
+      ]
+    },
+    "wedge": {
+      "chevron": 0.1667,
+      "pop_ms": 60,
+      "pop": [
+        0.1,
+        0.15
+      ]
+    },
+    "crescent": {
+      "gap": 0.08,
+      "size": [
+        1.1,
+        0.36
+      ],
+      "open_ms": 120,
+      "opens_from": 0.85
+    }
+  },
   "layout": {
     "desktop": {
       "camera": {

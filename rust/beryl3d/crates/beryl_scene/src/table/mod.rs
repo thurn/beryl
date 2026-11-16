@@ -8,6 +8,7 @@
 
 mod camera;
 pub(crate) mod lifted;
+mod own;
 mod place;
 mod revealed;
 mod rows;

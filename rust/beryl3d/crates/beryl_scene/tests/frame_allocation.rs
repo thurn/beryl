@@ -1,5 +1,6 @@
 //! `Client::frame` allocates nothing once a prompt bar has been laid out, nor while a life total
-//! falls and the amount it fell by sinks away, nor while 255 marks are drawn, and neither does moving a float of the flat
+//! falls and the amount it fell by sinks away, nor while 255 marks are drawn, nor with 255
+//! attackers wearing their wedges, and neither does moving a float of the flat
 //! layer and writing it (docs/beryl-3d.md, "The frame": no allocation). This binary counts
 //! every heap allocation, so it holds one test.
 
@@ -11,16 +12,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::prompt::Purpose;
 use beryl_protocol::prompt::{ButtonId, PartName, PromptButton, PromptView, ShapeBody, Words};
-use beryl_protocol::protocol::ObjectId;
-use beryl_protocol::protocol::{DecisionId, DecisionView, Kind, SessionId, Side, Status};
+use beryl_protocol::protocol::{
+    CardType, Combat, DecisionId, DecisionView, Kind, ObjectId, SessionId, Side, Status, ZoneName,
+};
 use beryl_protocol::script::{Act, Mark, Subject, Tally};
 use beryl_scene::element::{floats, text};
-use beryl_scene::frame::{Frame, FrameBuilder};
+use beryl_scene::frame::{Frame, FrameBuilder, Material};
 use beryl_scene::input::{AssetReady, GlyphCell, Input, Insets, Size};
 use beryl_scene::layout::{FloatLook, Layer};
 use beryl_scene::light::{MarkSpan, Span};
 use beryl_scene::table::Table;
-use beryl_scene::testing::ViewBuilder;
+use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::verbs::Interval;
 use beryl_scene::{Client, Config};
 use glam::Vec2;
@@ -190,10 +192,13 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
         assert_eq!(after - before, 0, "allocations in a frame with 255 marks");
     }
 
+    a_frame_of_255_attackers_allocates_nothing();
+
     // A float moved and faded by a new look, then written into a frame.
     let mut layer = Layer::new();
     layer.float(floats::LIFE[0], Some(text("20")));
     let mut frame = Frame::with_capacity(64, 256, 1024);
+    let table = Table::default();
     let before = ALLOCATIONS.load(Ordering::Relaxed);
     layer.set_float_look(
         floats::LIFE[0],
@@ -205,7 +210,7 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
         },
     );
     let mut builder = FrameBuilder::new(&mut frame);
-    layer.write(&mut builder, Table::default().camera(), false);
+    layer.write(&mut builder, table.camera(), false);
     let elements = builder.finish().resolved.len();
     let after = ALLOCATIONS.load(Ordering::Relaxed);
     assert_eq!(elements, 1, "the frame holds the float");
@@ -214,4 +219,52 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
         0,
         "allocations setting a float's look and writing it"
     );
+}
+
+/// A battlefield of 255 attackers, each wearing its wedge as it fades in.
+fn a_frame_of_255_attackers_allocates_nothing() {
+    let mut client = Client::new(Config {
+        elements: 512,
+        draws: 1024,
+        name_bytes: 16_384,
+    });
+    client.handle(Input::Surface {
+        size: Size {
+            width: 1440.0,
+            height: 900.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    });
+    let mut view = ViewBuilder::new();
+    for _ in 0..255 {
+        let card = view.card(ZoneName::Battlefield, Side::You, "Serra Angel");
+        card.types = vec![CardType::Creature];
+        card.combat = Some(Combat::Attacking {
+            planeswalker: None,
+            target_departed: None,
+            blocked: false,
+        });
+    }
+    view.script(ScriptBuilder::reset().build());
+    client.handle(Input::Update(Box::new(view.update())));
+    client.frame(0);
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    let frame = client.frame(20_000_000);
+    let after = ALLOCATIONS.load(Ordering::Relaxed);
+    let count = |material: Material| {
+        frame
+            .draws
+            .iter()
+            .filter(|draw| draw.material == material as u8)
+            .count()
+    };
+    // A row shows as many as fit; the rest wait undrawn at its end.
+    assert!(count(Material::Card) > 10, "many attackers are drawn");
+    assert_eq!(
+        count(Material::Glow),
+        count(Material::Card),
+        "each attacker drawn wears a wedge"
+    );
+    assert_eq!(after - before, 0, "allocations in a frame of 255 attackers");
 }

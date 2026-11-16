@@ -3,10 +3,11 @@
 
 use std::cell::Cell;
 
-use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, Side, StackItem};
+use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, Side, StackItem, ZoneName};
 use beryl_protocol::script::Subject;
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
+use super::own::{self, Fights};
 use super::place::{
     Group, Placement, Rest, Scroll, Zones, place_group, place_reusing, place_zones,
 };
@@ -14,7 +15,9 @@ use super::rows::NameIds;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, place};
 use crate::effects::{self, EffectRun};
 use crate::faces::{CARD_BACK, Faces};
-use crate::frame::{Band, Draw, ElementId, FrameBuilder, Place, Resolved, Role, StateBits};
+use crate::frame::{
+    Band, Draw, ElementId, FrameBuilder, OBJECTS, Place, Resolved, Role, StateBits,
+};
 use crate::input::FaceSize;
 use crate::light::{self, Lit};
 use crate::motion::Track;
@@ -134,6 +137,9 @@ pub struct Table {
     /// The record of the face each card last showed when it was held up to be read, by slot,
     /// which the Revealed Cards pile draws (`Span::Revealed`).
     revealed: Vec<Option<ObjectView>>,
+    /// Since when each permanent has fought as its record says, by slot, for the marks of its
+    /// own record.
+    fights: Fights,
 }
 
 /// How many objects a table has placed since its count was last taken, for `Work::placed`.
@@ -171,6 +177,7 @@ impl Table {
             objects: Objects::default(),
             placed: Placed::default(),
             revealed: Vec::new(),
+            fights: Fights::with_capacity(OBJECTS),
         }
     }
 
@@ -411,9 +418,9 @@ impl Table {
     /// Writes a resolved element and a draw record for every visible card, and one draw record
     /// for the cloth, which comes last among the opaque records. `view` is the view the table
     /// shows. While a script plays, `motion` gives the objects that move their poses, and the
-    /// records of the view the script leads to. Each card is drawn from the board-size layer
-    /// of its face in `faces`, or from layer 0 while that face has no layer or the viewer does
-    /// not know the card's name. Its back is drawn from the card back's layer. How each card
+    /// records of the view the script leads to. A permanent wears the marks its record calls for
+    /// (`own`). Each card is drawn from the board-size layer of its face in `faces`, or from
+    /// layer 0 while that face has no layer or the viewer does not know the card's name. Its back is drawn from the card back's layer. How each card
     /// looks is then changed by `dress`: the effects on it, the marks on it and the pointer, in
     /// that order.
     pub fn write(
@@ -433,9 +440,11 @@ impl Table {
             builder.visit();
             let Some((object, view, under_way)) = self.object_at(slot, view, motion, builder)
             else {
+                self.fights.forget(slot);
                 continue;
             };
             if !object.visible {
+                self.fights.forget(slot);
                 continue;
             }
             self.write_card(
@@ -535,6 +544,11 @@ impl Table {
         effects::card::look(dress.effects, on, dress.now, &mut look);
         light::marks::look(dress.lit, on, dress.now, &mut look);
         pointer::look(dress.pointer, slot, &mut look);
+        if shown.zone == ZoneName::Battlefield {
+            own::write((slot, shown), &look, &self.fights, dress.now, builder);
+        } else {
+            self.fights.forget(slot);
+        }
         self.write_look(
             name,
             (
