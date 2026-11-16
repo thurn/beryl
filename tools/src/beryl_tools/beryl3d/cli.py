@@ -17,6 +17,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 
 from .. import caches, cargo_pool, deadline, system, tokens, warm
 from .. import paths as repo_paths
@@ -370,7 +371,7 @@ def run_fmt(args: argparse.Namespace) -> int:
 
 # The commands of the modules that register their own, listed after this module's, in order. A
 # module adds a command by writing `COMMANDS` and adding its name here.
-MODULES = (phone, camera, vm)
+MODULES: tuple[ModuleType, ...] = (phone, camera, vm)
 
 OWN_COMMANDS: tuple[Command, ...] = (
     b3d_command(
