@@ -27,7 +27,7 @@ pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
         }
         _ => None,
     };
-    Some(bar(prompt, input, left))
+    Some(bar(prompt, input, left, None))
 }
 
 /// Whether `button` is the one whose hover shows what the payment would tap: Auto Pay.

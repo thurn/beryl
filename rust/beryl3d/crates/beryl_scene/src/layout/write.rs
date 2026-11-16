@@ -238,7 +238,10 @@ impl Layer {
                 let Some(mut draw) = face_draw(faces, face, size, transform) else {
                     return;
                 };
-                draw.tint = faded([255; 4], look.opacity);
+                // A face's color, where it has one, darkens it, as a way that cannot be chosen
+                // is dimmed (`prompts::choose`).
+                let tint = node.element.style.color.unwrap_or([255; 4]);
+                draw.tint = faded(tint, look.opacity);
                 draw
             }
             Some(Shown::Object(_)) | None => return,

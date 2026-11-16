@@ -64,6 +64,21 @@ impl TraySpace {
         heading: data::HEADING,
         depth: data::DEPTH,
     };
+
+    /// The space on a window of `size`, in logical points of the window, and how many logical
+    /// points a stage pixel is.
+    #[must_use]
+    pub fn on_window(&self, size: Size) -> (Rect, f32) {
+        let per_point = self.stage_height / size.height;
+        let (left, wide) = across(self, size.width * per_point);
+        let rect = Rect {
+            x: left / per_point,
+            y: self.y / per_point,
+            width: wide / per_point,
+            height: self.height / per_point,
+        };
+        (rect, 1.0 / per_point)
+    }
 }
 
 /// How a tray of two piles is laid out, as the web's `Tray.picks` and `Tray.putBack` say.

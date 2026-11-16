@@ -51,6 +51,9 @@ pub(crate) struct TrayMotion {
     curve: Curve,
     /// Whether the cards are going back out of the tray.
     leaving: bool,
+    /// The cards the tray let go that a script took over, which wait where the tray held them
+    /// up until their own step carries them on (`Show::hand_over_tray`).
+    handed: Vec<usize>,
     /// The `now` of the latest frame.
     now: u64,
 }
@@ -67,6 +70,7 @@ impl TrayMotion {
             waiting: None,
             curve: Curve::EASE_OUT,
             leaving: false,
+            handed: Vec::new(),
             now: 0,
         }
     }
@@ -113,12 +117,25 @@ impl Table {
     /// web interface lays over the table under a tray takes the pointer (`coversTable` in
     /// `ui/src/stage/prompt.ts`). Scripts are played from where the cards rest in their zones:
     /// only the table's own resting places put them in the tray.
-    pub(super) fn pressable(&self, slot: usize, place: crate::frame::Place) -> bool {
+    ///
+    /// The table takes no press either while a card the tray let go still waits where it was
+    /// held up for its own step (`waiting`, from `handed_waiting`): it stands over the table as
+    /// it did in the tray, and nothing under it could be reached.
+    pub(super) fn pressable(&self, slot: usize, place: crate::frame::Place, waiting: bool) -> bool {
         match self.held {
             _ if self.covered() => false,
             Some(_) => self.in_tray(slot),
-            None => crate::pointer::takes_pointer(place),
+            None => !waiting && crate::pointer::takes_pointer(place),
         }
+    }
+
+    /// Whether a card the tray let go, which the script playing in `motion` took over, still
+    /// waits where the tray held it up: the script's track has not yet begun to move it.
+    pub(super) fn handed_waiting(&self, motion: Option<super::Motion<'_>>) -> bool {
+        motion.is_some_and(|motion| {
+            (self.tray.handed.iter())
+                .any(|&slot| (motion.tracks.get(slot)).is_some_and(|track| !track.begun(motion.t)))
+        })
     }
 
     /// The cards held up in the tray, if any.
@@ -163,6 +180,7 @@ impl Table {
         self.tray.waiting = None;
         self.tray.curve = curve;
         self.tray.leaving = false;
+        self.tray.handed.clear();
     }
 
     /// Where each card held up rests in its zone in `view`, the view the table shows, for
@@ -250,9 +268,12 @@ impl Table {
         self.tray.leaving
     }
 
-    /// A script has taken over the cards the tray let go.
-    pub(crate) fn handed_over_tray(&mut self) {
+    /// A script has taken over the cards the tray let go: those in `handed` wait where the tray
+    /// held them up until the script's tracks move them.
+    pub(crate) fn handed_over_tray(&mut self, handed: &[usize]) {
         self.tray.leaving = false;
+        self.tray.handed.clear();
+        self.tray.handed.extend_from_slice(handed);
     }
 
     /// Where the card in `slot` was drawn as the tray began to let it go, while no script has

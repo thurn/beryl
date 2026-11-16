@@ -39,6 +39,7 @@ impl Client {
             viewing: self.viewing.open,
             revealed: &self.viewing.revealed,
         };
+        let full = crate::prompts::faces(&input);
         // Until the sheets are built, the settings sheet takes the screen's place in the flat
         // layer; the bug report is drawn over the screen. The game screen shows nothing while no
         // prompt or viewer is open and the game goes on, so that no empty panel is drawn over
@@ -64,6 +65,9 @@ impl Client {
         let music = screens::music(self.screen, view);
         self.layer.show(shown);
         self.place_shown();
+        for face in full {
+            self.show.faces_mut().want_full(face);
+        }
         self.show_gear();
         if music != self.music {
             self.music = music;

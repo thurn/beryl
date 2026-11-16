@@ -345,7 +345,7 @@ impl Table {
                 slot,
                 (&object, drawn, under_way),
                 (view, faces),
-                (back, dress),
+                (back, dress, self.handed_waiting(motion)),
                 builder,
             );
         }
@@ -462,13 +462,13 @@ impl Table {
     /// Writes the resolved element and the draw record of the card in `slot`: `object` as
     /// `view` shows it, moving if `under_way`. Its face comes from `faces`, its back from layer
     /// `back`, and how it looks is changed by `dress`. `shown_view` is the view the table shows
-    /// before the playing script, whose face a `cover` shows until half way.
+    /// before the script, whose face a `cover` shows until half way; `waiting` is `pressable`'s.
     fn write_card(
         &self,
         slot: usize,
         (object, view, under_way): (&SceneObject, &PlayerView, bool),
         (shown_view, faces): (&PlayerView, &Faces),
-        (back, dress): (u16, &Dress<'_>),
+        (back, dress, waiting): (u16, &Dress<'_>, bool),
         builder: &mut FrameBuilder,
     ) {
         let shown = &view.objects[object.view_index as usize];
@@ -503,7 +503,7 @@ impl Table {
             interactive: state & StateBits::FACE_DOWN == 0
                 && object.copies > 0
                 && !name.is_empty()
-                && self.pressable(slot, object.place),
+                && self.pressable(slot, object.place, waiting),
         };
         let on = Subject::Object {
             slot: ObjectId(u16::try_from(slot).expect("slots are u16")),

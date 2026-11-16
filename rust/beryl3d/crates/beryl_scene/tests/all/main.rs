@@ -29,6 +29,7 @@ mod own;
 mod piles;
 mod play;
 mod pointer;
+mod prompts;
 mod relay;
 mod screens;
 mod scroll;

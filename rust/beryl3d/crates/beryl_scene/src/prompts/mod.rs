@@ -14,7 +14,7 @@ mod pick;
 mod split;
 mod tray;
 
-use beryl_protocol::prompt::{ButtonId, Marked, PromptView, ShapeBody};
+use beryl_protocol::prompt::{ButtonId, Marked, PromptButton, PromptView, Purpose, ShapeBody};
 use beryl_protocol::protocol::{ObjectId, PlayerView, ZoneName};
 use beryl_protocol::script::{Mark, OwnStep, OwnTimings, StepTiming, Verb};
 
@@ -22,6 +22,7 @@ pub use bar::prompt_bar;
 pub use tray::Piles;
 
 use crate::element::Element;
+use crate::input::FaceId;
 use crate::light::{ArrowSpan, Lit, MarkSpan, Span};
 use crate::pose::Curve;
 use crate::screens::ScreenIn;
@@ -69,12 +70,48 @@ pub fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
     }
 }
 
+/// The faces the open prompt shows in the flat layer at full size, which the client asks for
+/// at full size (`Faces::want_full`): those of the ways to use a card (`choose`).
+#[must_use]
+pub fn faces(input: &ScreenIn) -> Vec<FaceId> {
+    input.prompt.map_or_else(Vec::new, |prompt| {
+        choose::way_faces(prompt, input).flatten().collect()
+    })
+}
+
 /// Whether the pointer on `button` of `prompt`, or a touch held on it, shows what the prompt
-/// would tap: a payment's Auto Pay. The web interface's `shows` in
-/// `ui/src/stage/PromptBar.tsx` says the same.
+/// would tap: a payment's Auto Pay, or the yes of a question whose yes pays a cost. The web
+/// interface's `shows` in `ui/src/stage/PromptBar.tsx` says the same.
 #[must_use]
 pub fn shows(prompt: &PromptView, button: ButtonId) -> bool {
-    matches!(prompt.body, ShapeBody::Pay { .. }) && pay::shows(button)
+    match prompt.body {
+        ShapeBody::Pay { .. } => pay::shows(button),
+        ShapeBody::YesNo { .. } => choose::shows(prompt, button),
+        _ => false,
+    }
+}
+
+/// Whether the table shows anything of `prompt`: every prompt but what the opening screen
+/// asks, who plays first and whether to keep a hand, as the web's `onTable`
+/// (`ui/src/stage/prompt.ts`) has it.
+pub(super) fn on_table(prompt: &PromptView) -> bool {
+    !(prompt.is(Purpose::PlayOrDraw) || prompt.is(Purpose::Mulligan))
+}
+
+/// The buttons of `prompt` that are the ways to use a card, where it is the choice among them
+/// (a mode of purpose `act`): each way the card can be cast, played or activated, and each
+/// activated ability it cannot use now. The web's `waysOf` (`ui/src/stage/prompt.ts`). These
+/// stand over the table as the card once a way (`choose`), not in the prompt bar.
+pub fn ways(prompt: &PromptView) -> impl Iterator<Item = &PromptButton> {
+    let choosing = matches!(prompt.body, ShapeBody::Mode { .. }) && prompt.is(Purpose::Act);
+    (prompt.buttons.iter())
+        .filter(move |_| choosing)
+        .filter(|button| {
+            matches!(
+                button.id,
+                ButtonId::Option { .. } | ButtonId::Ability { .. }
+            )
+        })
 }
 
 /// Begins and ends the marks and arrows on the table that the client draws itself for the
@@ -83,6 +120,8 @@ pub fn shows(prompt: &PromptView, button: ButtonId) -> bool {
 /// the two are of different shapes, the shape of `was` ends what it drew and then the shape of
 /// `shown` draws.
 pub fn own(shown: Option<Shown>, was: Option<Shown>, steps: &mut Steps) {
+    let showing = |prompt: &Shown| on_table(prompt.prompt);
+    let (shown, was) = (shown.filter(showing), was.filter(showing));
     let shape = |prompt: Option<Shown>| prompt.and_then(|prompt| prompt.prompt.body.shape());
     if was.is_some() && shown.is_some() && shape(was) != shape(shown) {
         own_shape(None, was, steps);
@@ -114,8 +153,9 @@ fn own_shape(shown: Option<Shown>, was: Option<Shown>, steps: &mut Steps) {
 }
 
 /// Makes the marks on the table those of `shown` where they were those of `was`: the marks
-/// `was` had and `shown` has not end, then the marks new in `shown` begin, one after another
-/// in one beat, as the web interface's `#mark` in `ui/src/stage/prompt.ts` plays them. `look`
+/// `was` had and `shown` has not end, then the tray lifts the cards `shown` holds up or lets
+/// those of `was` go (`tray::lift`), then the marks new in `shown` begin, one after another in one
+/// beat, as the web interface's `#mark` in `ui/src/stage/prompt.ts` plays them. `look`
 /// gives the mark the table draws for each of a prompt's marks, or none where it draws none.
 /// Allocates nothing.
 fn marks(
@@ -130,6 +170,7 @@ fn marks(
         let over = steps.next(OwnStep::MarkEnds, Verb::Mark, Some(&span));
         steps.lit.end(&span, over);
     }
+    tray::lift(shown, was, steps);
     for span in drawn(shown).filter(|span| !drawn(was).any(|then| then == *span)) {
         let step = OwnStep::MarkBegins { mark: span.mark };
         let over = steps.next(step, Verb::Mark, None);

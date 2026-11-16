@@ -1,15 +1,17 @@
 //! The cards a prompt holds up off the table in its tray, as the web interface's `trayOf`
 //! (`ui/src/stage/prompt.ts`) lists them: a pick's tray as one pile, such as the top of a
-//! library searched, and a split's two piles, each laid out for as many cards as it must come to
+//! library searched, a split's two piles, each laid out for as many cards as it must come to
 //! hold, marked as a put-back where the cards go from the hand onto the library, or as a pick
-//! where some are taken out of the library. And the one beat in which a prompt that holds cards up changes what the table shows,
+//! where some are taken out of the library, and the cards a yes or no or a choice among answers
+//! is about, as one pile. And the one beat in which a prompt that holds cards up changes what
+//! the table shows,
 //! as the web's `Prompts.#mark` plays it.
 
 use beryl_protocol::prompt::{Pile, PlaceName, PromptView, ShapeBody};
 use beryl_protocol::protocol::ObjectId;
 use beryl_protocol::script::OwnStep;
 
-use super::{Shown, Steps, begin_spans, end_spans, mark_spans};
+use super::{Shown, Steps, begin_spans, end_spans, mark_spans, on_table, ways};
 use crate::light::Span;
 use crate::table::{Held, TrayKind};
 
@@ -58,17 +60,28 @@ impl Kind {
 }
 
 impl<'a> Piles<'a> {
-    /// The cards `prompt` holds up: a pick's non-empty tray, or a split's two piles. None for any
-    /// other prompt, which picks what it asks about where it lies.
+    /// The cards `prompt` holds up: a pick's non-empty tray, a split's two piles, or the cards
+    /// a yes or no or a choice among answers is about, unless the choice is among the ways to
+    /// use a card, which shows the card once a way instead (`super::choose`). None for any other
+    /// prompt, which picks what it asks about where it lies, or for one the table does not show
+    /// (`super::on_table`).
     #[must_use]
     pub fn of(prompt: &'a PromptView) -> Option<Self> {
+        if !on_table(prompt) {
+            return None;
+        }
+        let one = |cards: &'a [ObjectId]| Self {
+            cards: [cards, &[]],
+            rooms: [None; 2],
+            count: 1,
+            kind: Kind::Boxes,
+        };
         match &prompt.body {
-            ShapeBody::Pick { tray, .. } if !tray.is_empty() => Some(Self {
-                cards: [tray, &[]],
-                rooms: [None; 2],
-                count: 1,
-                kind: Kind::Boxes,
-            }),
+            ShapeBody::Pick { tray, .. } if !tray.is_empty() => Some(one(tray)),
+            ShapeBody::YesNo { about, .. } if !about.is_empty() => Some(one(about)),
+            ShapeBody::Mode { about } if !about.is_empty() && ways(prompt).next().is_none() => {
+                Some(one(about))
+            }
             ShapeBody::Split { piles } => match &piles[..] {
                 [first, second] => Some(Self {
                     cards: [&first.cards, &second.cards],
@@ -136,6 +149,13 @@ pub(super) fn own<'s, I>(
     I: Iterator<Item = Span>,
 {
     end_spans(&spans, shown, was, steps);
+    lift(shown, was, steps);
+    begin_spans(&spans, shown, was, steps);
+}
+
+/// Lifts the cards `shown` holds up into the tray (sorted, where a tray was up already) or
+/// lets those `was` held go, as one step of `steps`, where the two hold up different cards.
+pub(super) fn lift<'s>(shown: Option<Shown<'s>>, was: Option<Shown<'s>>, steps: &mut Steps) {
     let piles = |prompt: Option<Shown<'s>>| prompt.and_then(|shown| Piles::of(shown.prompt));
     let (now, then) = (piles(shown), piles(was));
     if now != then {
@@ -147,7 +167,6 @@ pub(super) fn own<'s, I>(
             }
         });
     }
-    begin_spans(&spans, shown, was, steps);
 }
 
 /// Each mark `prompt` sends, as the table draws it.

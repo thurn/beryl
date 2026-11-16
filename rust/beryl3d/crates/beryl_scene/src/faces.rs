@@ -71,6 +71,9 @@ pub struct FaceList {
     /// The plate face of each ability, by its source's face, whether it is triggered, and how
     /// many paragraphs of that kind come before it (`StackItem::Ability`'s `nth`).
     plates: BTreeMap<(FaceId, bool, u8), FaceId>,
+    /// Each card's faces in its record's order, by the card's name and the name it was asked
+    /// for.
+    cards: BTreeMap<String, Vec<FaceId>>,
 }
 
 impl FaceList {
@@ -173,7 +176,32 @@ impl FaceList {
         self.by_name.get(name).copied()
     }
 
+    /// The face of the card named `card` that is its `index`th, counting from 0 in its
+    /// record's order: the face a spell is cast with (`Candidate::Cast`'s `face`). Allocates
+    /// nothing.
+    #[must_use]
+    pub fn face_of(&self, card: &str, index: u8) -> Option<FaceId> {
+        self.cards.get(card)?.get(usize::from(index)).copied()
+    }
+
+    /// The face the card named `card` is played with as a land: its first face whose type
+    /// line says Land, as the web's `landFace` (`ui/src/cards.ts`) finds it ([CR 712.9]):
+    /// "A player playing a modal double-faced card or a copy of a modal double-faced card as a
+    /// land chooses one of its faces that’s a land before putting it onto the battlefield."
+    /// Allocates nothing.
+    ///
+    /// [CR 712.9]: https://yawgatog.com/resources/magic-rules/#R7129
+    #[must_use]
+    pub fn land_face(&self, card: &str) -> Option<FaceId> {
+        (self.cards.get(card)?.iter().copied()).find(|&face| {
+            (self.faces[usize::from(face.0)].text.type_line)
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|word| word == "Land")
+        })
+    }
+
     fn add_entry(&mut self, asked: &str, entry: &CardEntry, token: bool) {
+        let mut ids = Vec::with_capacity(entry.faces.len());
         for (i, face) in entry.faces.iter().enumerate() {
             let mut names = vec![face.name.clone()];
             if i == 0 {
@@ -195,7 +223,14 @@ impl FaceList {
                 loyalty: face.loyalty.clone(),
                 token,
             };
-            self.add(&face.images.large, names, &face.colors, printed, text);
+            ids.push(self.add(&face.images.large, names, &face.colors, printed, text));
+        }
+        if !token {
+            for name in [asked, entry.name.as_str()] {
+                self.cards
+                    .entry(name.to_owned())
+                    .or_insert_with(|| ids.clone());
+            }
         }
     }
 
@@ -223,7 +258,7 @@ impl FaceList {
         colors: &[String],
         printed: Option<[i32; 2]>,
         text: PrintedText,
-    ) {
+    ) -> FaceId {
         let next = FaceId(u16::try_from(self.faces.len()).expect("a match has under 2^16 faces"));
         let id = *self.by_image.entry(image.to_owned()).or_insert(next);
         if id == next {
@@ -243,6 +278,7 @@ impl FaceList {
             }
             self.by_name.entry(name).or_insert(id);
         }
+        id
     }
 }
 
