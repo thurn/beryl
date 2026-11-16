@@ -93,7 +93,8 @@ impl Scratch {
     }
 }
 
-/// Puts `frame.draws` in drawing order, sets `opaque` and `layer`, and counts the load.
+/// Puts `frame.draws` in drawing order, sets `opaque` and `layer`, and counts the load, all but
+/// the screen areas, which `areas` measures when a gate asks for them.
 pub(super) fn finish(frame: &mut Frame) {
     let view_projection = frame.view_projection;
     let Frame {
@@ -129,14 +130,23 @@ pub(super) fn finish(frame: &mut Frame) {
     load.instances = records;
     load.upload_bytes = records * super::index(size_of::<Draw>());
     load.draw_calls = draw_calls(&frame.draws, opaque, layer);
+}
+
+/// The screen areas of a finished frame's opaque and blended records. Only the gates and tests
+/// read them, so the client measures them only when asked: measuring every record took about a
+/// fifth of the instructions of a stress board's frame between scripts.
+pub(super) fn areas(frame: &Frame) -> super::Areas {
+    let opaque = frame.opaque as usize;
+    let mut areas = super::Areas::default();
     for (index, draw) in frame.draws.iter().enumerate() {
-        let area = screen_area(draw, &view_projection);
+        let area = screen_area(draw, &frame.view_projection);
         if index < opaque {
-            load.opaque_area += area;
+            areas.opaque += area;
         } else {
-            load.blended_area += area;
+            areas.blended += area;
         }
     }
+    areas
 }
 
 impl Frame {
@@ -144,6 +154,15 @@ impl Frame {
     #[must_use]
     pub fn band(&self, index: usize) -> Option<Band> {
         self.scratch.keys.get(index).map(|&key| band_of(key))
+    }
+
+    /// The screen area of the opaque and of the blended records of the finished frame, each
+    /// divided by the screen's: the rectangle that bounds each record's mesh, cut to the view
+    /// volume. The one-pixel edge strip counts as no area, and clips are not taken into
+    /// account.
+    #[must_use]
+    pub fn areas(&self) -> super::Areas {
+        areas(self)
     }
 }
 

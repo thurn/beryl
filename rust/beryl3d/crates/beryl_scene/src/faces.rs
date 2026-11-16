@@ -66,7 +66,10 @@ pub struct Plate {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FaceList {
     faces: Vec<ListedFace>,
-    by_name: BTreeMap<String, FaceId>,
+    /// Each face by every name it shows, with the name's hash (`name_hash`), sorted by hash and
+    /// then by name. Every card drawn looks its face up here on every frame, and comparing one
+    /// hash at each step of the search costs a fraction of comparing names along a tree's path.
+    by_name: Vec<(u64, String, FaceId)>,
     by_image: BTreeMap<String, FaceId>,
     /// The plate face of each ability, by its source's face, whether it is triggered, and how
     /// many paragraphs of that kind come before it (`StackItem::Ability`'s `nth`).
@@ -173,7 +176,14 @@ impl FaceList {
     /// The face that shows the card or face named `name`. Allocates nothing.
     #[must_use]
     pub fn find(&self, name: &str) -> Option<FaceId> {
-        self.by_name.get(name).copied()
+        let hash = name_hash(name);
+        let at = self
+            .by_name
+            .binary_search_by(|(other_hash, other, _)| {
+                (*other_hash, other.as_str()).cmp(&(hash, name))
+            })
+            .ok()?;
+        Some(self.by_name[at].2)
     }
 
     /// The face of the card named `card` that is its `index`th, counting from 0 in its
@@ -276,10 +286,37 @@ impl FaceList {
             if !listed.names.contains(&name) {
                 listed.names.push(name.clone());
             }
-            self.by_name.entry(name).or_insert(id);
+            let hash = name_hash(&name);
+            let search = self.by_name.binary_search_by(|(other_hash, other, _)| {
+                (*other_hash, other.as_str()).cmp(&(hash, &name))
+            });
+            if let Err(at) = search {
+                self.by_name.insert(at, (hash, name, id));
+            }
         }
         id
     }
+}
+
+/// A hash of a name in the manner of `FxHash`, which the Rust compiler uses for its own tables: it
+/// mixes in eight bytes at a time with a rotation and a multiplication. Equal names hash alike;
+/// different names rarely do.
+pub(crate) fn name_hash(name: &str) -> u64 {
+    let mut hash: u64 = 0;
+    let mut mix = |word: u64| {
+        hash = (hash.rotate_left(5) ^ word).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    };
+    mix(name.len() as u64);
+    let (words, rest) = name.as_bytes().as_chunks::<8>();
+    for &word in words {
+        mix(u64::from_le_bytes(word));
+    }
+    if !rest.is_empty() {
+        let mut word = [0; 8];
+        word[..rest.len()].copy_from_slice(rest);
+        mix(u64::from_le_bytes(word));
+    }
+    hash
 }
 
 /// Whether `paragraph` of a face's rules text says a triggered ability (it begins "When",

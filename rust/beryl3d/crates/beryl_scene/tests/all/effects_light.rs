@@ -170,7 +170,7 @@ fn one_glow_lights_little_of_the_screen() {
     // The largest it is drawn, as it ends, grown by its spread.
     let area = frames
         .iter()
-        .map(|(_, with, without)| with.load.blended_area - without.load.blended_area)
+        .map(|(_, with, without)| with.areas().blended - without.areas().blended)
         .fold(0.0, f32::max);
     assert!(area > 0.0, "the glow is drawn");
     assert!(area < 0.02, "a glow covers {area} screens");

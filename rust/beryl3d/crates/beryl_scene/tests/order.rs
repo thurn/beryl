@@ -159,9 +159,9 @@ fn screen_areas_are_counted_in_screens() {
     );
     // A quad wholly behind the camera covers nothing.
     builder.draw(Band::Glows, quad(4, -1.0));
-    let load = builder.finish().load;
-    assert!((load.opaque_area - 0.25).abs() < 1e-6, "{load:?}");
-    assert!((load.blended_area - 1.25).abs() < 1e-6, "{load:?}");
+    let areas = builder.finish().areas();
+    assert!((areas.opaque - 0.25).abs() < 1e-6, "{areas:?}");
+    assert!((areas.blended - 1.25).abs() < 1e-6, "{areas:?}");
 }
 
 /// Where a small record lies with the identity camera: `x` across the screen, which is 2 wide,
@@ -257,12 +257,12 @@ fn an_outline_counts_only_the_ring_its_mesh_covers() {
         Band::Glows,
         Draw::glow(Affine3A::IDENTITY, tag(1), sprites::OUTLINE, 0.0),
     );
-    let load = builder.finish().load;
+    let areas = builder.finish().areas();
     // A unit quad covers a quarter of the screen; the ring is the outer rectangle less the
     // hole, as shares of the quad.
     let [outer, hole] = [sprites::OUTLINE_OUTER, sprites::OUTLINE_HOLE];
     let ring = 4.0 * (outer[0] * outer[1] - hole[0] * hole[1]);
-    assert!((load.blended_area - 0.25 * ring).abs() < 1e-6, "{load:?}");
+    assert!((areas.blended - 0.25 * ring).abs() < 1e-6, "{areas:?}");
 }
 
 #[test]

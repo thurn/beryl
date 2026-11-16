@@ -190,16 +190,22 @@ pub struct Sound {
 /// The most sounds a frame holds without allocating.
 const SOUNDS: usize = 16;
 
-/// Numbers that predict the GPU's load, added up while the frame is built.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+/// Numbers that predict the GPU's load, added up while the frame is built. The screen areas,
+/// which take longer to measure, are `Frame::areas`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Load {
     pub draw_calls: u32,
     pub instances: u32,
     pub upload_bytes: u32,
-    /// The screen area of the opaque records, in screens.
-    pub opaque_area: f32,
-    /// The screen area of the blended records, in screens.
-    pub blended_area: f32,
+}
+
+/// The screen area of a frame's records, in screens (`Frame::areas`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Areas {
+    /// The screen area of the opaque records.
+    pub opaque: f32,
+    /// The screen area of the blended records.
+    pub blended: f32,
 }
 
 /// The work the client core did, counted so that the gates can hold it.

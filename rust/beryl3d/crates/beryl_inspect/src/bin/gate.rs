@@ -117,7 +117,7 @@ fn measure(name: &str) -> Option<Value> {
             "draw_calls": load.draw_calls,
             "instances": load.instances,
             "upload_bytes": load.upload_bytes,
-            "blended_area": load.blended_area,
+            "blended_area": frame.areas().blended,
             "frame_allocations": allocations,
         }));
     }

@@ -197,27 +197,11 @@ impl SameName {
     }
 }
 
-/// A hash of a card's name, or of its having none, in the manner of `FxHash`, which the Rust
-/// compiler uses for its own tables: it mixes in eight bytes at a time with a rotation and a
-/// multiplication. Equal names hash alike; different names rarely do.
+/// A hash of a card's name (`faces::name_hash`), or of its having none.
 fn name_hash(name: Option<&str>) -> u64 {
-    let mut hash: u64 = 0;
-    let mut mix = |word: u64| {
-        hash = (hash.rotate_left(5) ^ word).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
-    };
-    let Some(name) = name else {
-        mix(u64::MAX);
-        return hash;
-    };
-    mix(name.len() as u64);
-    let (words, rest) = name.as_bytes().as_chunks::<8>();
-    for &word in words {
-        mix(u64::from_le_bytes(word));
-    }
-    if !rest.is_empty() {
-        let mut word = [0; 8];
-        word[..rest.len()].copy_from_slice(rest);
-        mix(u64::from_le_bytes(word));
-    }
-    hash
+    // What `faces::name_hash` mixes in first, the length, is never `u64::MAX`.
+    name.map_or(
+        u64::MAX.wrapping_mul(0x51_7c_c1_b7_27_22_0a_95),
+        crate::faces::name_hash,
+    )
 }

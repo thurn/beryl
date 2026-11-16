@@ -150,9 +150,14 @@ impl<'a> Motion<'a> {
                 groups[slot] = Some(group.index());
             }
         }
-        // Room for a track for every object, so that growing `tracks` one slot at a time never
-        // copies the tracks it holds.
-        let tracks = Vec::with_capacity(rests.rests.len());
+        // Room for a track for every object of the views before and after, so that growing
+        // `tracks` one slot at a time never copies the tracks it holds. A token the script
+        // creates takes a slot past every object of the view before, and copying the tracks
+        // to make room for it cost more than all the other allocations of the step.
+        let end = (after.objects.iter())
+            .map(|object| usize::from(object.slot.0) + 1)
+            .fold(rests.rests.len(), usize::max);
+        let tracks = Vec::with_capacity(end);
         let steps = timings.len();
         let index = (steps >= index::LEAST_STEPS).then(|| Index::new(before, played));
         Self {

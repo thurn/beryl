@@ -419,8 +419,8 @@ pub struct Frame {
                                   // with whether it is the opponent's
     pub lines: Vec<TextLine>,     // each laid-out line of text: its element's
                                   // index and its box, for the "text fits" check
-    pub load: Load,               // draw calls, instances, upload bytes, and
-                                  // the opaque and blended screen areas
+    pub load: Load,               // draw calls, instances and upload bytes;
+                                  // `Frame::areas` measures the screen areas
     pub work: Work,               // elements visited, segments evaluated,
                                   // layout nodes computed, records written
 }
@@ -449,8 +449,11 @@ pub struct Load {
     pub draw_calls: u32,
     pub instances: u32,
     pub upload_bytes: u32,
-    pub opaque_area: f32,     // in screens
-    pub blended_area: f32,    // in screens
+}
+
+pub struct Areas {            // `Frame::areas`, measured when asked
+    pub opaque: f32,          // in screens
+    pub blended: f32,         // in screens
 }
 
 pub struct Work {
@@ -593,12 +596,15 @@ The rules for building a frame:
   call. The flat layer's quads are a third call, cards at full size a fourth,
   and each clip adds two, so a frame is normally two to six calls.
 - **Load counted as it is built.** While it builds the list, the client core
-  adds up numbers that predict GPU load: draw calls, instances, bytes to upload,
-  and the screen area of its opaque and of its blended records, each divided by
-  the screen's area. The [Performance gates](#performance-gates) section below
-  holds these to limits, and counts the pixels actually shaded. A record's area
-  is the rectangle that bounds its mesh, cut to the view volume. The one-pixel
-  edge strip counts as no area, and clip rectangles are not taken into account.
+  adds up numbers that predict GPU load: draw calls, instances and bytes to
+  upload. The screen area of its opaque and of its blended records, each divided
+  by the screen's area, is measured only when a gate or test asks for it
+  (`Frame::areas`): the client itself never reads it, and measuring every record
+  took about a fifth of a stress board's frame between scripts. The
+  [Performance gates](#performance-gates) section below holds these to limits,
+  and counts the pixels actually shaded. A record's area is the rectangle that
+  bounds its mesh, cut to the view volume. The one-pixel edge strip counts as no
+  area, and clip rectangles are not taken into account.
 - **Ordered once, without allocating.** Records may be pushed in any order;
   `FrameBuilder::finish` sorts them by band, then by depth, then by the order
   they were pushed, with keys held in a scratch array the frame keeps. The

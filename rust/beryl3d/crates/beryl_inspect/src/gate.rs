@@ -327,8 +327,9 @@ pub fn play(name: &str, mut each: impl FnMut(Moment, &Frame)) -> bool {
 /// The `RANKED` frames of the board called `name` with the most work, most first. The
 /// instruction-count gate counts every frame and checks that the one with the most
 /// instructions is among these, so that the work counters, which the native gate reads in
-/// seconds, keep seeing the work that costs instructions. A frame's work is the sum of its work counters, and of
-/// two frames with the same work the earlier ranks higher. Returns `None` for a name that is
+/// seconds, keep seeing the work that costs instructions. A frame's work is its work counters
+/// weighted by what one of each costs (`total`), and of two frames with the same work the
+/// earlier ranks higher. Returns `None` for a name that is
 /// not one of `BOARDS`.
 #[must_use]
 pub fn rank(name: &str) -> Option<[usize; RANKED]> {
@@ -346,18 +347,23 @@ pub fn rank(name: &str) -> Option<[usize; RANKED]> {
     Some(ranked)
 }
 
-/// The sum of a frame's work counters.
+/// A frame's work counters, each weighted by roughly how many instructions one of it costs.
+/// Unweighted, a frame that lays out the whole HUD and shapes its text ranked below frames that
+/// only draw a thousand stack records, though it cost more. The weights are a fit of every
+/// frame's Callgrind count to its counters over the gated boards, rounded. A layout node and a
+/// text run always come together in `handle`, so the fit cannot tell them apart and they share
+/// its weight.
 fn total(work: Work) -> u64 {
     [
-        work.elements,
-        work.segments,
-        work.records,
-        work.layout_nodes,
-        work.text_runs,
-        work.placed,
-        work.steps,
+        (work.elements, 200),
+        (work.segments, 3_000),
+        (work.records, 750),
+        (work.layout_nodes, 30_000),
+        (work.text_runs, 30_000),
+        (work.placed, 700),
+        (work.steps, 10_000),
     ]
     .into_iter()
-    .map(u64::from)
+    .map(|(count, weight)| u64::from(count) * weight)
     .sum()
 }
