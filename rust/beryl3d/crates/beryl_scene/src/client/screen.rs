@@ -16,6 +16,11 @@ impl Client {
     /// Rebuilds the flat layer's screen, or the sheet open over it, from what the client holds
     /// now, and asks the host for the music it calls for if that has changed.
     pub(super) fn show_screen(&mut self) {
+        // The element a gesture began on is gone with the screen or sheet it was on.
+        if self.shown != (self.screen, self.sheet) {
+            self.shown = (self.screen, self.sheet);
+            self.end_gesture();
+        }
         self.inspector.due = true;
         self.log.folded = self.permanent_over_log();
         let view = self.show.latest().map(|update| &update.view);
@@ -75,7 +80,7 @@ impl Client {
             viewing: self.viewing.open,
             revealed: &self.viewing.revealed,
             table: &self.manual.state,
-            carried: self.carried_item.map(|carry| carry.on),
+            carried: self.gesture.carried(),
             lobby: &self.manual.lobby,
             log: self.log.logged.entries(),
             log_folded: self.log.folded,

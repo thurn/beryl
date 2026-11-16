@@ -179,8 +179,7 @@ impl Client {
         self.manual.hold = None;
         if self.open_table_menu_at(at) {
             self.show.pointer_mut().cancel();
-            self.pressed = None;
-            self.viewing.down = None;
+            self.end_gesture();
         }
     }
 

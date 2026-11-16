@@ -10,6 +10,7 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::Client;
+use super::gesture::Gesture;
 use crate::data::space::pointer::DRAG_THRESHOLD_POINTS;
 use crate::element::{Press, floats};
 use crate::input::{Button, Pointer, PointerPhase};
@@ -22,7 +23,7 @@ use crate::prompts::order;
 pub(super) struct Carry {
     pub(super) on: Subject,
     start: Vec2,
-    lifted: bool,
+    pub(super) lifted: bool,
 }
 
 impl Client {
@@ -31,21 +32,25 @@ impl Client {
     pub(super) fn carry_item(&mut self, pointer: &Pointer) -> bool {
         match pointer.phase {
             PointerPhase::Down if pointer.button == Button::Primary => {
-                // A second finger going down ends the carry under way.
-                self.drop_carry();
-                self.carried_item = self.order_item_at(pointer.position).map(|on| Carry {
-                    on,
-                    start: pointer.position,
-                    lifted: false,
-                });
+                if let Some(on) = self.order_item_at(pointer.position) {
+                    let carry = Carry {
+                        on,
+                        start: pointer.position,
+                        lifted: false,
+                    };
+                    self.gesture = Gesture::Carry {
+                        carry,
+                        release: None,
+                    };
+                }
                 false
             }
             PointerPhase::Move => {
-                let Some(carry) = self.carried_item else {
+                let Gesture::Carry { carry, .. } = self.gesture else {
                     return false;
                 };
                 if !self.still_ordering(carry) {
-                    self.drop_carry();
+                    self.end_gesture();
                     return false;
                 }
                 if !carry.lifted && carry.start.distance(pointer.position) < DRAG_THRESHOLD_POINTS {
@@ -58,12 +63,13 @@ impl Client {
                 true
             }
             PointerPhase::Up if pointer.button == Button::Primary => {
-                let Some(carry) = self.carried_item.take() else {
+                let Gesture::Carry { carry, .. } = self.gesture else {
                     return false;
                 };
                 if !carry.lifted {
                     return false;
                 }
+                self.gesture = Gesture::None;
                 self.put_item_down();
                 if !self.still_ordering(carry) {
                     return true;
@@ -82,10 +88,6 @@ impl Client {
                 }
                 true
             }
-            PointerPhase::Cancel | PointerPhase::Leave => {
-                self.drop_carry();
-                false
-            }
             _ => false,
         }
     }
@@ -98,13 +100,6 @@ impl Client {
         (self.prompt.as_ref())
             .filter(|_| self.open)
             .is_some_and(|(_, prompt)| order::cell_of(prompt, self.window.size, carry.on).is_some())
-    }
-
-    /// Ends the carry, putting the item back in the row if it had left it.
-    fn drop_carry(&mut self) {
-        if self.carried_item.take().is_some_and(|carry| carry.lifted) {
-            self.put_item_down();
-        }
     }
 
     /// The item of the open order prompt's row that a press at `point` reaches, if any.
@@ -129,11 +124,13 @@ impl Client {
     /// Takes the item `carry` names out of the row and shows it as the carried float, which
     /// stops the press under it from clicking it.
     fn lift_item(&mut self, carry: Carry) {
-        self.carried_item = Some(Carry {
-            lifted: true,
-            ..carry
-        });
-        self.pressed = None;
+        self.gesture = Gesture::Carry {
+            carry: Carry {
+                lifted: true,
+                ..carry
+            },
+            release: None,
+        };
         let float = (self.prompt.as_ref()).and_then(|(_, prompt)| {
             let view = self.show.latest().map(|update| &update.view);
             let faces = Some(self.show.faces().list());
@@ -162,7 +159,7 @@ impl Client {
 
     /// Takes the carried float away and puts its item back in the row, until the session's
     /// reply to the drop draws the row again.
-    fn put_item_down(&mut self) {
+    pub(super) fn put_item_down(&mut self) {
         self.layer.float(floats::CARRIED_ITEM, None);
         self.show_screen();
     }

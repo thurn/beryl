@@ -36,8 +36,6 @@ pub(super) struct Viewing {
     boxes: Vec<(ObjectId, Rect, bool)>,
     /// Whether the pill is shown.
     pill: bool,
-    /// The pile the primary pointer went down on, which a release on it opens.
-    pub(super) down: Option<Viewed>,
 }
 
 impl Client {

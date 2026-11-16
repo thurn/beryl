@@ -7,6 +7,7 @@ use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
+use super::gesture::{Gesture, Release};
 use super::{Client, Platform};
 use crate::agent::hit;
 use crate::element::{Chord, Dismiss, Press};
@@ -25,7 +26,23 @@ impl Client {
     /// next `frame` asks what it meant. A press on a slider, and a drag that begins on one,
     /// sets its level instead (`slide`). After each, the flat layer is told which element a
     /// press under the pointer would reach and which one is held down, which it draws so.
+    ///
+    /// What the primary pointer is doing since it went down is one `Gesture`. A press, or a
+    /// second finger, going down ends the one under way before a branch claims the new one,
+    /// and the release, Cancel or Leave ends it once every branch has seen that phase.
     pub(super) fn point(&mut self, pointer: Pointer) {
+        if pointer.phase == PointerPhase::Down && pointer.button == Button::Primary {
+            self.end_gesture();
+        }
+        self.claim(&pointer);
+        if ends_gesture(&pointer) {
+            self.end_gesture();
+        }
+    }
+
+    /// Gives `pointer` to the first branch that claims it, as `point` describes.
+    fn claim(&mut self, pointer: &Pointer) {
+        let pointer = *pointer;
         if self.bug_open() {
             self.bug_point(&pointer);
             return;
@@ -47,7 +64,6 @@ impl Client {
             && pointer.button == Button::Primary
             && self.layer.outside_menu(pointer.position, self.open)
         {
-            self.pressed = None;
             self.press(&Press::Dismiss(Dismiss::Menu));
             return;
         }
@@ -82,7 +98,10 @@ impl Client {
             .then(|| self.layer.press_at(pointer.position, self.open))
             .flatten();
         let id = hovered.as_ref().map(|(id, ..)| *id);
-        (self.layer).point_at(id, self.pressed.or(self.slider));
+        let held = (!ends_gesture(pointer))
+            .then(|| self.gesture.held())
+            .flatten();
+        (self.layer).point_at(id, held);
         let at = (!gone).then_some(pointer.position);
         self.layer.hover(at, self.open);
         hovered
@@ -93,22 +112,21 @@ impl Client {
     /// whether the pointer is on a slider, and so means nothing else.
     fn slide(&mut self, pointer: &Pointer) -> bool {
         let primary = pointer.button == Button::Primary;
-        let at = match (pointer.phase, self.slider) {
+        let at = match (pointer.phase, self.gesture) {
             (PointerPhase::Down, _) if primary => {
                 let Some((id, press, rect)) = self.layer.slider_at(pointer.position, self.open)
                 else {
                     return false;
                 };
-                self.slider = Some(id);
+                self.gesture = Gesture::Slider(id);
                 self.layer.focus(Some(id));
                 (press, rect)
             }
-            (PointerPhase::Move, Some(id)) => match self.layer.slider(id) {
+            (PointerPhase::Move, Gesture::Slider(id)) => match self.layer.slider(id) {
                 Some(at) => at,
                 None => return true,
             },
-            (PointerPhase::Up | PointerPhase::Cancel | PointerPhase::Leave, Some(_)) => {
-                self.slider = None;
+            (PointerPhase::Up | PointerPhase::Cancel | PointerPhase::Leave, Gesture::Slider(_)) => {
                 return true;
             }
             _ => return false,
@@ -143,16 +161,16 @@ impl Client {
         let open = self.open;
         match pointer.phase {
             PointerPhase::Down if primary => {
-                self.pressed = (self.layer.press_at(pointer.position, open)).map(|(id, ..)| id);
+                let pressed = (self.layer.press_at(pointer.position, open)).map(|(id, ..)| id);
+                self.gesture.set_release(pressed.map(Release::Element));
                 if let Some(id) = self.layer.focusable_at(pointer.position, open) {
                     self.layer.focus(Some(id));
                     if self.layer.edited_id() == Some(id) {
                         self.press_field(pointer);
                     }
                 }
-                self.viewing.down = None;
                 if table
-                    && self.pressed.is_none()
+                    && pressed.is_none()
                     && let Some(index) = hit(&self.frame, pointer.position)
                     && let element = &self.frame.resolved[index as usize]
                     && matches!(element.role, Role::Card | Role::Pile)
@@ -162,7 +180,7 @@ impl Client {
                     // is pressed as a card.
                     let opens = element.role == Role::Pile || !element.interactive;
                     if let Some(pile) = self.pile_at(element.place).filter(|_| opens) {
-                        self.viewing.down = Some(pile);
+                        self.gesture.set_release(Some(Release::Pile(pile)));
                         return;
                     }
                     if element.role == Role::Card {
@@ -179,20 +197,24 @@ impl Client {
                 if self.layer.edited_id().is_some() {
                     self.edit(Edit::Up);
                 }
-                if let Some(pile) = self.viewing.down.take()
-                    && let Some(index) = hit(&self.frame, pointer.position)
-                    && self.pile_at(self.frame.resolved[index as usize].place) == Some(pile)
-                {
-                    self.press(&crate::element::Press::View(pile));
-                }
-                let pressed = self.pressed.take();
-                if let Some((id, press, true)) = self.layer.press_at(pointer.position, open)
-                    && pressed == Some(id)
-                {
-                    self.press(&press);
+                match self.gesture.take_release() {
+                    Some(Release::Pile(pile))
+                        if let Some(index) = hit(&self.frame, pointer.position)
+                            && self.pile_at(self.frame.resolved[index as usize].place)
+                                == Some(pile) =>
+                    {
+                        self.press(&Press::View(pile));
+                    }
+                    Some(Release::Element(pressed))
+                        if let Some((id, press, true)) =
+                            self.layer.press_at(pointer.position, open)
+                            && pressed == id =>
+                    {
+                        self.press(&press);
+                    }
+                    _ => {}
                 }
             }
-            PointerPhase::Cancel | PointerPhase::Leave => self.pressed = None,
             _ => {}
         }
     }
@@ -214,34 +236,38 @@ impl Client {
                 true
             }
             PointerPhase::Down if pointer.kind == PointerKind::Touch => {
-                self.scroll_drag = (self.layer.scroller_at(pointer.position, open))
-                    .map(|id| (pointer.id, id, pointer.position));
+                if let Some(id) = self.layer.scroller_at(pointer.position, open) {
+                    self.gesture = Gesture::Scroll {
+                        finger: pointer.id,
+                        id,
+                        last: pointer.position,
+                        release: None,
+                    };
+                }
                 false
             }
-            PointerPhase::Move => match &mut self.scroll_drag {
-                Some((finger, id, last)) if *finger == pointer.id => {
-                    // The content follows the finger.
+            PointerPhase::Move => match &mut self.gesture {
+                Gesture::Scroll {
+                    finger,
+                    id,
+                    last,
+                    release,
+                } if *finger == pointer.id => {
+                    // The content follows the finger, and the touch is no longer a press.
                     let delta = *last - pointer.position;
                     *last = pointer.position;
+                    *release = None;
                     let id = *id;
                     if self.layer.scroll(id, delta) {
                         self.place_shown();
                     }
-                    self.pressed = None;
                     true
                 }
                 _ => false,
             },
-            PointerPhase::Up | PointerPhase::Cancel | PointerPhase::Leave => {
-                if self
-                    .scroll_drag
-                    .is_some_and(|(finger, ..)| finger == pointer.id)
-                {
-                    self.scroll_drag = None;
-                }
+            PointerPhase::Down | PointerPhase::Up | PointerPhase::Cancel | PointerPhase::Leave => {
                 false
             }
-            PointerPhase::Down => false,
         }
     }
 
@@ -407,5 +433,15 @@ impl Client {
                 at: before,
             });
         }
+    }
+}
+
+/// Whether `pointer` ends what the primary pointer was doing: the primary button or a finger
+/// coming up, Cancel or Leave.
+fn ends_gesture(pointer: &Pointer) -> bool {
+    match pointer.phase {
+        PointerPhase::Up => pointer.button == Button::Primary,
+        PointerPhase::Cancel | PointerPhase::Leave => true,
+        PointerPhase::Down | PointerPhase::Move | PointerPhase::Wheel => false,
     }
 }

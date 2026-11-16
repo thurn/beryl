@@ -4,13 +4,13 @@
 
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, PromptButton, ShapeBody};
 use beryl_protocol::script::Subject;
+use beryl_scene::Client;
 use beryl_scene::command::{Request, SessionCommand};
 use beryl_scene::element::{Press, row, text};
-use beryl_scene::frame::Role;
+use beryl_scene::frame::{Role, StateBits};
 use beryl_scene::input::{Button, Input, Modifiers, Pointer, PointerKind, PointerPhase};
 use beryl_scene::screens::Sheet;
 use beryl_scene::widgets;
-use beryl_scene::Client;
 use glam::Vec2;
 
 use super::flat_layer::{centre, client, deciding, edges, find, pointer, prompt};
@@ -71,7 +71,11 @@ fn a_drag_from_a_slider_let_go_on_a_button_sets_the_slider_and_presses_nothing()
         .last();
     assert_eq!(saved, Some(100), "the move past the slider's end sets 100");
     let frame = client.frame(2);
-    find(frame, Role::Slider, "Music");
+    let state = frame.resolved[find(frame, Role::Slider, "Music")].state;
+    assert!(
+        !state.has(StateBits::HELD),
+        "the released slider is not held"
+    );
     assert_eq!(clicks(&mut client), Vec::new());
 }
 

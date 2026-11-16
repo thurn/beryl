@@ -112,7 +112,6 @@ impl Client {
             self.bug.form = BugForm::new();
             self.bug.from = None;
             self.bug.whole = false;
-            self.pressed = None;
             self.layer.focus(None);
             self.fields.set(DESCRIPTION, FieldState::default());
             self.requests.push_back(Request::FreezeFrame);

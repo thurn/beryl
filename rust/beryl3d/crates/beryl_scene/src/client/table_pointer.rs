@@ -70,7 +70,6 @@ impl Client {
             self.send_table(actions);
         }
         self.show.pointer_mut().cancel();
-        self.pressed = None;
         true
     }
 

@@ -6,6 +6,7 @@
 mod bug;
 mod carry;
 mod editing;
+mod gesture;
 
 use std::collections::VecDeque;
 
@@ -156,15 +157,10 @@ pub struct Client {
     /// interface's prompt opens when its view has played out. Set by each `frame`, so a press
     /// reaches only a bar the last frame drew.
     open: bool,
-    /// The element the primary pointer went down on, which a release on it presses.
-    pressed: Option<ElementId>,
-    /// The finger dragging a scrolling element of the flat layer, that element, and where the
-    /// finger was last.
-    scroll_drag: Option<(u8, ElementId, glam::Vec2)>,
-    /// The slider the primary pointer went down on, which a drag sets until the press ends.
-    slider: Option<ElementId>,
-    /// The item of an order prompt's row the primary pointer went down on (`carry_item`).
-    carried_item: Option<carry::Carry>,
+    /// What the primary pointer is doing since it went down (`gesture`), and the screen and
+    /// sheet the flat layer last showed, a change of which ends it.
+    gesture: gesture::Gesture,
+    shown: (Screen, Option<Sheet>),
     /// The host's platform, which says what `Cmd` in a shortcut means.
     platform: Platform,
     /// What each text field holds, which the screens show (`editing`).
@@ -243,10 +239,8 @@ impl Client {
             views: 0,
             own_record: None,
             open: false,
-            pressed: None,
-            scroll_drag: None,
-            slider: None,
-            carried_item: None,
+            gesture: gesture::Gesture::None,
+            shown: (Screen::Game, None),
             platform: Platform::Mac,
             fields: Fields::new(),
             entry: None,
@@ -523,6 +517,7 @@ impl Client {
 
     /// Lays the table and the flat layer out in a window of a new size, scale or safe area.
     fn resize(&mut self, window: Window) {
+        self.end_gesture();
         self.window = window;
         self.show.resize(window);
         self.layer.resize(window);
