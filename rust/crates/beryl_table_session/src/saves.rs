@@ -44,8 +44,7 @@ pub(super) struct Metadata {
 
 pub(super) struct Save {
     path: PathBuf,
-    file: File,
-    failed: bool,
+    file: Option<File>,
     pub(super) metadata: Metadata,
 }
 
@@ -72,9 +71,8 @@ impl Save {
             .map_err(|error| error.error)?;
         Ok(Self {
             path,
-            file,
+            file: Some(file),
             metadata,
-            failed: false,
         })
     }
 
@@ -89,9 +87,8 @@ impl Save {
         Ok((
             Self {
                 path,
-                file,
+                file: Some(file),
                 metadata,
-                failed: false,
             },
             table,
             log,
@@ -107,26 +104,29 @@ impl Save {
     }
 
     pub(super) fn append(&mut self, entry: &Entry) -> Result<(), SaveError> {
-        if self.failed {
+        let Some(file) = &mut self.file else {
             return Err(io::Error::other("The table save must be reopened.").into());
-        }
-        let offset = self.file.stream_position()?;
-        let result =
-            save::append(&mut self.file, entry).and_then(|()| Ok(self.file.sync_data()?));
-        if result.is_err() {
-            // Restore the last complete end before accepting any subsequent action.
-            // If the file cannot be repaired, leave it to open_for_append on resume.
-            self.failed = self
-                .file
+        };
+        let offset = file.stream_position()?;
+        let result = save::append(&mut *file, entry).and_then(|()| Ok(file.sync_data()?));
+        // Restore the last complete end before accepting any subsequent action.
+        // If the file cannot be repaired, leave it to open_for_append on resume.
+        if result.is_err()
+            && file
                 .set_len(offset)
-                .and_then(|()| self.file.sync_data())
-                .and_then(|()| self.file.seek(io::SeekFrom::Start(offset)))
-                .is_err();
+                .and_then(|()| file.sync_data())
+                .and_then(|()| file.seek(io::SeekFrom::Start(offset)))
+                .is_err()
+        {
+            self.file = None;
         }
         result
     }
 
     pub(super) fn reserve_guest(&mut self, name: &str) -> Result<(), SaveError> {
+        if self.file.is_none() {
+            return Err(io::Error::other("The table save must be reopened.").into());
+        }
         let mut current = BufReader::new(File::open(&self.path)?);
         let mut header = read_header(&mut current)?;
         header["metadata"]["guest"] = serde_json::Value::String(name.to_owned());
@@ -143,7 +143,25 @@ impl Save {
         io::copy(&mut current, &mut staged)?;
         staged.as_file().sync_all()?;
 
-        self.file = staged.persist(&self.path).map_err(|error| error.error)?;
+        // Windows requires both handles to the destination to be closed before
+        // persist can replace it. If replacement fails, continue with the old save.
+        drop(current);
+        drop(self.file.take());
+        match staged.persist(&self.path) {
+            Ok(file) => self.file = Some(file),
+            Err(error) => {
+                self.file = OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(&self.path)
+                    .and_then(|mut file| {
+                        file.seek(io::SeekFrom::End(0))?;
+                        Ok(file)
+                    })
+                    .ok();
+                return Err(error.error.into());
+            }
+        }
         self.metadata.guest = Some(name.to_owned());
         Ok(())
     }
@@ -224,4 +242,56 @@ fn read_header(mut reader: impl BufRead) -> Result<serde_json::Value, SaveError>
         return Err(SaveError::MissingHeader);
     }
     Ok(serde_json::from_slice(&line)?)
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    use beryl_table::action::Adjustment;
+    use beryl_table::{Action, Seat};
+
+    use super::*;
+
+    #[test]
+    fn failed_guest_reservation_preserves_the_log_and_allows_retry() {
+        const FILE_SHARE_READ_WRITE: u32 = 0x0003;
+        let directory = tempfile::tempdir().unwrap();
+        let mut table = Table::new(2);
+        let mut log = Log::new(&table);
+        let mut chance = Chance::fresh(42);
+        let settings = HostSettings::new("Host", "invite", "secret");
+        let mut save = Save::create(directory.path(), settings, &table, 42).unwrap();
+        let id = save.id().to_owned();
+        let action = Action::Life {
+            seat: Seat(0),
+            adjustment: Adjustment::Add(1),
+        };
+        let entry = log
+            .apply(&mut table, Seat(0), &action, &mut chance)
+            .unwrap();
+        save.append(entry).unwrap();
+        let before = fs::read(&save.path).unwrap();
+
+        // Allow reads and writes to the original, but deny replacing it.
+        let reader = OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ_WRITE)
+            .open(&save.path)
+            .unwrap();
+        assert!(save.reserve_guest("Guest").is_err());
+        assert!(save.metadata.guest.is_none());
+        assert_eq!(fs::read(&save.path).unwrap(), before);
+        let entry = log
+            .apply(&mut table, Seat(0), &action, &mut chance)
+            .unwrap();
+        save.append(entry).unwrap();
+        drop(reader);
+
+        save.reserve_guest("Guest").unwrap();
+        drop(save);
+        let (save, _, replayed, _) = Save::open(directory.path(), &id).unwrap();
+        assert_eq!(save.metadata.guest.as_deref(), Some("Guest"));
+        assert_eq!(replayed.entries(), log.entries());
+    }
 }
