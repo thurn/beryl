@@ -46,25 +46,26 @@ audit looks at the keystones as built and at what Part II is about to change:
 
 ## Where things stand
 
-Measured on 2026-11-15 at staging `bc14e0f8`.
+Measured on 2026-11-15 at staging `bc14e0f8`, with the card files, card layouts,
+census, bug log and state size checked on 2026-11-16 at staging `950e3c614`.
 
-| What                                              | Measurement                                                                  |
-| ------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Card files                                        | 121, median 124 lines                                                        |
-| Lines of a card file that are its definition      | Median 28: 13 of code, 11 of doc comment, the rest header                    |
-| Lines of a card file that are scenarios           | Median 83; 71% of all card-file lines                                        |
-| Card layouts implemented                          | Single-faced, and one mutate card. About 1,260 pool cards have other layouts |
-| Vocabulary                                        | 415 enum variants in `beryl_card`; `Effect` has 63                           |
-| Pool cards the vocabulary fully covers            | 6,107 of 32,177 (19%), by `just census`                                      |
-| Bug log                                           | 59 entries in [bugs.md](bugs.md)                                             |
-| Wildcard `_ =>` match arms in the engine crates   | 256 (`beryl_kernel` 73, `beryl_rules` 96, `beryl_card` 87)                   |
-| Integer `as` casts in the engine crates           | 158, with all four clippy cast lints switched off                            |
-| Engine source files between 745 and 800 lines     | About 30 of 282                                                              |
-| Rules functions that repeat `<L: Layout>`         | 641 of about 1,300 in `beryl_rules`                                          |
-| `size_of::<State<Small>>()`                       | 20,248 bytes of 20,480, as last recorded in the kernel contract              |
-| Cold `cargo check` of 50,000 cards (`just scale`) | 58.7 s against a 60 s budget (2026-11-12)                                    |
-| Most expensive check in CI                        | `rust:clippy`, about 76 s a run over 1,081 runs                              |
-| Per-card tests (`every_card_has_scenarios_...`)   | About 12 CPU-seconds a run at 121 cards                                      |
+| What                                              | Measurement                                                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Card files                                        | 121, median 123 lines                                                                                         |
+| Lines of a card file that are its definition      | Median 28: 13 of code, 11 of doc comment, the rest header                                                     |
+| Lines of a card file that are scenarios           | Median 85 from the scenarios module and its feature gate; 74.5% of all card-file lines                        |
+| Card layouts implemented                          | Single-faced, transforming double-faced (Jace), and modal double-faced (Glasspool Mimic and Sink into Stupor) |
+| Vocabulary                                        | 415 enum variants in `beryl_card`; `Effect` has 63                                                            |
+| Pool cards the vocabulary fully covers            | 6,552 of 32,177 (20.4%), by `just census`                                                                     |
+| Bug log                                           | 64 entries in [bugs.md](bugs.md)                                                                              |
+| Wildcard `_ =>` match arms in the engine crates   | 259 line-leading arms outside tests (`beryl_kernel` 74, `beryl_rules` 96, `beryl_card` 89)                    |
+| Integer `as` casts in the engine crates           | 158, with all four clippy cast lints switched off                                                             |
+| Engine source files between 745 and 800 lines     | 16 of 287 across `beryl_kernel`, `beryl_rules` and `beryl_card`                                               |
+| Rules functions that repeat `<L: Layout>`         | 644 of about 1,300 in `beryl_rules`                                                                           |
+| `size_of::<State<Small>>()`                       | 20,240 bytes of 20,480                                                                                        |
+| Cold `cargo check` of 50,000 cards (`just scale`) | 58.7 s against a 60 s budget (2026-11-12)                                                                     |
+| Most expensive check in CI                        | `rust:clippy`, about 76 s a run over 1,081 runs                                                               |
+| Per-card tests (`every_card_has_scenarios_...`)   | About 12 CPU-seconds a run at 121 cards                                                                       |
 
 **Oracle text is not parsed.** The interview asked again whether a simple card's
 definition could be read from its Oracle text. Normalising card names, numbers
