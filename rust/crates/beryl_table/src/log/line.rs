@@ -289,6 +289,10 @@ fn describe(action: &Action, summary: &Summary, names: &Cards<'_>) -> String {
         | Action::AlwaysRevealTop { .. }
         | Action::AlwaysLookAtTop { .. }
         | Action::SortHand { .. } => library(action, summary, viewer),
+        Action::ChooseFirst { chooser } if *chooser == viewer => "You choose play or draw".into(),
+        Action::ChooseFirst { chooser } => {
+            format!("{} chooses play or draw", player_name(*chooser, viewer))
+        }
         _ => game(action, summary, names),
     }
 }
@@ -475,6 +479,10 @@ fn opening_keep(actions: &[Action]) -> Option<String> {
 }
 
 fn paired_rolls(actions: &[Action]) -> bool {
+    let actions = match actions.split_last() {
+        Some((Action::ChooseFirst { .. }, rolls)) => rolls,
+        _ => actions,
+    };
     !actions.is_empty()
         && actions
             .iter()

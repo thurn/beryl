@@ -313,6 +313,7 @@ fn counts_as_turn_play(action: &Action, turn: u32) -> bool {
     use crate::action::{Destination, Position};
     match action {
         Action::Start { .. }
+        | Action::ChooseFirst { .. }
         | Action::Keep {}
         | Action::NextTurn {}
         | Action::NextGame { .. }
@@ -597,6 +598,11 @@ fn plan_action(
                 game::concede(table, by)?,
                 Presentation::LobbyReset,
             ));
+        }
+        Action::ChooseFirst { .. } if table.game_match.in_game => Err(Refusal::INVALID),
+        Action::ChooseFirst { chooser } => {
+            players::player(table, *chooser)?;
+            Ok(Vec::new())
         }
         Action::CloseLook {} | Action::Keep {} => Ok(Vec::new()),
         Action::SetAssist { assist, on } => Ok(game::set_assist(table, by, *assist, *on)),

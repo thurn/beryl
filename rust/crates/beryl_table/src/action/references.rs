@@ -169,6 +169,7 @@ impl<Id> Action<Id> {
             Self::Ready { seat, ready } => Action::Ready { seat, ready },
             Self::GameSettings { settings } => Action::GameSettings { settings },
             Self::Start { first, opening } => Action::Start { first, opening },
+            Self::ChooseFirst { chooser } => Action::ChooseFirst { chooser },
             Self::Keep {} => Action::Keep {},
             Self::NextGame { winner } => Action::NextGame { winner },
             Self::Concede {} => Action::Concede {},

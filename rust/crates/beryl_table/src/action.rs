@@ -321,6 +321,11 @@ pub enum Action<Id = ObjectId> {
         #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
         opening: bool,
     },
+    /// The host has selected who answers play or draw.
+    #[cfg_attr(feature = "ts", ts(skip))]
+    ChooseFirst {
+        chooser: Seat,
+    },
     Keep {},
     NextGame {
         winner: Option<Seat>,

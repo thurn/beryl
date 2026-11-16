@@ -175,6 +175,10 @@ fn target_reference(target: Target) -> Reference {
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "every action must declare which references its permissions check"
+)]
 fn action_references(action: &Action, references: &mut Vec<Reference>) {
     match action {
         Action::Move { selection, to, .. } => {
@@ -272,6 +276,7 @@ fn action_references(action: &Action, references: &mut Vec<Reference>) {
         | Action::Phase { .. }
         | Action::NextTurn {}
         | Action::Roll { .. }
+        | Action::ChooseFirst { .. }
         | Action::Keep {}
         | Action::Concede {}
         | Action::SetAssist { .. }

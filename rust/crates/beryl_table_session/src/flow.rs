@@ -1,5 +1,5 @@
-//! The optional guided start. The log owns the deal, rolls, hand changes and
-//! first turn. The prompts own only decisions that have not been applied yet.
+//! The guided start is projected from the live log. Prompts hold only
+//! uncommitted choices, such as which cards to put on the bottom.
 
 use beryl_session::ipc::LobbyChange;
 use beryl_table::action::{Destination, Position, Selection};
@@ -41,14 +41,21 @@ impl PublishedTable {
             self.deal_opening(seat, seat, save)?;
             return Ok(());
         }
-        let mut chooser = self.table.game_match.first.or_else(|| {
+        let chooser = self.table.game_match.first.or_else(|| {
             let winner = self.table.game_match.last_winner?;
             self.table.seats().find(|&seat| seat != winner)
         });
-        if chooser.is_none() {
-            // Roll both seats together so the banner shows the host die and
-            // guest die side by side. Each tied round has its own notice.
-            let (winner, actions) = roll_for_first(self.chance.clone())?;
+        if let Some(chooser) = chooser {
+            self.apply(
+                seat,
+                Request::Host(&Action::ChooseFirst { chooser }),
+                |_| None,
+                save,
+            )?;
+        } else {
+            // Commit the chooser with the dice so reopening cannot roll again.
+            let (chooser, mut actions) = roll_for_first(self.chance.clone())?;
+            actions.push(Action::ChooseFirst { chooser });
             let roll = Action::Batch { actions };
             self.apply(seat, Request::Host(&roll), |_| None, save)?;
             for publication in &mut self.seats {
@@ -63,18 +70,7 @@ impl PublishedTable {
                     }
                 }
             }
-            chooser = Some(winner);
         }
-        let chooser = chooser.expect("a two-seat start has a chooser");
-        self.set_setup_prompt(
-            chooser,
-            PromptState::Choose {
-                title: "Play or draw?".into(),
-                options: vec!["Play".into(), "Draw".into()],
-                selected: None,
-            },
-            Completion::FirstPlayer,
-        );
         Ok(())
     }
 
@@ -85,12 +81,66 @@ impl PublishedTable {
             .any(|prompt| matches!(prompt.complete, Completion::FirstPlayer))
     }
 
-    fn set_setup_prompt(&mut self, seat: Seat, state: PromptState, complete: Completion) {
-        let index = usize::from(seat.0);
-        self.prompts[index] = Some(OpenPrompt { state, complete });
-        // Setup prompts have no lift. Attach the prompt to the current view
-        // without losing the roll, deal or mulligan script that precedes it.
+    fn opening(&self) -> Opening {
+        let mut opening = Opening::Inactive;
+        if self.table.turn == 0 {
+            for entry in self.log.live_entries() {
+                opening.record(entry.by, &entry.action, self.seats.len());
+            }
+        }
+        opening
+    }
+
+    pub(super) fn refresh_setup_prompts(&mut self) {
+        let opening = self.opening();
+        for (seat, current) in self.table.seats().zip(&mut self.prompts) {
+            let next = opening.prompt(&self.table, seat);
+            let keep_draft = match (current.as_ref(), next.as_ref()) {
+                (
+                    Some(OpenPrompt {
+                        complete: Completion::FirstPlayer,
+                        ..
+                    }),
+                    Some(OpenPrompt {
+                        complete: Completion::FirstPlayer,
+                        ..
+                    }),
+                )
+                | (
+                    Some(OpenPrompt {
+                        complete: Completion::Action(_),
+                        ..
+                    }),
+                    None,
+                ) => true,
+                (
+                    Some(OpenPrompt {
+                        state:
+                            PromptState::Opening {
+                                hand, mulligans, ..
+                            },
+                        complete: Completion::OpeningHand,
+                    }),
+                    Some(OpenPrompt {
+                        state:
+                            PromptState::Opening {
+                                hand: next_hand,
+                                mulligans: next_count,
+                                ..
+                            },
+                        complete: Completion::OpeningHand,
+                    }),
+                ) => hand == next_hand && mulligans == next_count,
+                _ => false,
+            };
+            if !keep_draft {
+                *current = next;
+            }
+        }
+        // Setup prompts have no lift. Attach them without replacing the roll,
+        // deal, mulligan or rewind script in the current publication.
         for publication in &mut self.seats {
+            let handling = publication.view.handling;
             SeatPublication::project_prompts(
                 &mut publication.view,
                 publication.seat,
@@ -98,6 +148,14 @@ impl PublishedTable {
                 &self.table,
                 &self.prompts,
             );
+            // An undo or rewind can restore an opening prompt while a player
+            // is lifting a library pile. Snapshot the stage with the lift gone.
+            if publication.view.handling != handling {
+                publication.view.script = Some(crate::script::snapshot(
+                    &publication.view,
+                    publication.marks(),
+                ));
+            }
         }
     }
 
@@ -113,25 +171,7 @@ impl PublishedTable {
                 opening: true,
             }],
         };
-        self.apply_closing_prompt(chooser, &deal, save)?;
-        for index in 0..self.seats.len() {
-            self.open_hand(self.seats[index].seat, 0);
-        }
-        Ok(())
-    }
-
-    fn open_hand(&mut self, seat: Seat, mulligans: u16) {
-        let hand = self.table.zone(Zone::Hand(seat)).expect("existing seat");
-        self.set_setup_prompt(
-            seat,
-            PromptState::Opening {
-                hand: hand.to_vec(),
-                mulligans,
-                decision: None,
-                bottom: Vec::new(),
-            },
-            Completion::OpeningHand,
-        );
+        self.apply_closing_prompt(chooser, &deal, save)
     }
 
     pub(super) fn finish_setup_prompt(
@@ -155,7 +195,6 @@ impl PublishedTable {
             }
             PromptState::Opening {
                 decision: Some(OpeningDecision::Mulligan),
-                mulligans,
                 ..
             } => {
                 let count = self.table.game_match.starting_hand_size;
@@ -163,7 +202,6 @@ impl PublishedTable {
                     actions: vec![Action::Mulligan { seat, count }],
                 };
                 self.apply_closing_prompt(seat, &action, save)?;
-                self.open_hand(seat, mulligans.saturating_add(1));
             }
             PromptState::Opening { bottom, .. } => {
                 let mut actions = vec![Action::Keep {}];
@@ -179,15 +217,10 @@ impl PublishedTable {
                         tapped: None,
                     });
                 }
-                let other_open = self.table.seats().any(|other| {
-                    other != seat
-                        && self.prompts[usize::from(other.0)]
-                            .as_ref()
-                            .is_some_and(|prompt| {
-                                matches!(prompt.complete, Completion::OpeningHand)
-                            })
-                });
-                if !other_open {
+                let Opening::Hands(hands) = self.opening() else {
+                    return Err(Refusal::Stale);
+                };
+                if hands.iter().filter(|hand| hand.is_some()).count() == 1 {
                     actions.push(Action::Phase {
                         phase: Phase::Untap,
                     });
@@ -197,6 +230,67 @@ impl PublishedTable {
             PromptState::Sort(_) => unreachable!("a sort does not start a game"),
         }
         Ok(true)
+    }
+}
+
+enum Opening {
+    Inactive,
+    Choose(Seat),
+    Hands(Vec<Option<u16>>),
+}
+
+impl Opening {
+    fn record(&mut self, by: Seat, action: &Action, seats: usize) {
+        match action {
+            Action::ChooseFirst { chooser } => *self = Self::Choose(*chooser),
+            Action::Start { opening: true, .. } => *self = Self::Hands(vec![Some(0); seats]),
+            Action::Start { .. } | Action::NextGame { .. } | Action::Concede {} => {
+                *self = Self::Inactive;
+            }
+            Action::Mulligan { seat, .. } => {
+                if let Self::Hands(hands) = self
+                    && let Some(count) = &mut hands[usize::from(seat.0)]
+                {
+                    *count = count.saturating_add(1);
+                }
+            }
+            Action::Keep {} => {
+                if let Self::Hands(hands) = self {
+                    hands[usize::from(by.0)] = None;
+                }
+            }
+            Action::Batch { actions } => {
+                for action in actions {
+                    self.record(by, action, seats);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn prompt(&self, table: &beryl_table::Table, seat: Seat) -> Option<OpenPrompt> {
+        match self {
+            Self::Choose(chooser) if *chooser == seat && !table.game_match.in_game => {
+                Some(OpenPrompt {
+                    state: PromptState::Choose {
+                        title: "Play or draw?".into(),
+                        options: vec!["Play".into(), "Draw".into()],
+                        selected: None,
+                    },
+                    complete: Completion::FirstPlayer,
+                })
+            }
+            Self::Hands(hands) if table.game_match.in_game => Some(OpenPrompt {
+                state: PromptState::Opening {
+                    hand: table.zone(Zone::Hand(seat))?.to_vec(),
+                    mulligans: hands[usize::from(seat.0)]?,
+                    decision: None,
+                    bottom: Vec::new(),
+                },
+                complete: Completion::OpeningHand,
+            }),
+            _ => None,
+        }
     }
 }
 

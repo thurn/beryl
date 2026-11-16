@@ -3,25 +3,22 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::apply::{AppliedChanges, Presentation};
 use crate::change::TableEdit;
 use crate::log::UndoControl;
-use crate::state::Zone;
+use crate::state::{Phase, Zone};
 use crate::{Action, Change, Entry, Log, Refusal, Seat, Table};
 
 pub(crate) struct Targets<'a> {
     live: Vec<&'a Entry>,
+    opening_blockers: BTreeMap<u32, u32>,
 }
 
 impl<'a> Targets<'a> {
     pub(crate) fn new(log: &'a Log) -> Self {
-        let strikes = log.struck_at(log.tip());
-        let unstruck = log
-            .entries()
-            .iter()
-            .filter(|entry| !strikes.is_some_and(|strikes| strikes.contains(&entry.n)));
-        let undone: BTreeSet<_> = unstruck.clone().filter_map(|entry| entry.undoes).collect();
-        let live = unstruck
-            .filter(|entry| entry.undoes.is_none() && !undone.contains(&entry.n))
-            .collect();
-        Self { live }
+        let live: Vec<_> = log.live_entries().collect();
+        let opening_blockers = opening_blockers(&live);
+        Self {
+            live,
+            opening_blockers,
+        }
     }
 
     pub(crate) fn last_draw(&self, by: Seat) -> Option<u32> {
@@ -66,9 +63,12 @@ impl<'a> Targets<'a> {
 
     fn control(&self, entry: &Entry) -> UndoControl {
         let first_later = self.live.partition_point(|later| later.n <= entry.n);
+        let opening_blocker = self.opening_blockers.get(&entry.n).copied();
         let blocking: Vec<_> = self.live[first_later..]
             .iter()
-            .filter(|later| entry.touches.conflicts(&later.touches))
+            .filter(|later| {
+                opening_blocker == Some(later.n) || entry.touches.conflicts(&later.touches)
+            })
             .map(|later| later.n)
             .collect();
         if blocking.is_empty() {
@@ -77,6 +77,57 @@ impl<'a> Targets<'a> {
             UndoControl::Blocked(blocking)
         }
     }
+}
+
+/// The deal consumes the choice and the final keep consumes the earlier keeps.
+fn opening_blockers(entries: &[&Entry]) -> BTreeMap<u32, u32> {
+    let mut blockers = BTreeMap::new();
+    let mut chooser = None;
+    let mut deal = None;
+    let mut keeps = Vec::new();
+    for entry in entries {
+        let actions = match &entry.action {
+            Action::Batch { actions } => actions.as_slice(),
+            action => std::slice::from_ref(action),
+        };
+        match actions {
+            [.., Action::ChooseFirst { .. }] => chooser = Some(entry.n),
+            [Action::Start { opening, .. }] => {
+                // Older saves had no chooser marker and can contain undos that
+                // would be blocked by these dependencies.
+                deal = None;
+                keeps.clear();
+                if let Some(chooser) = chooser.take()
+                    && *opening
+                {
+                    blockers.insert(chooser, entry.n);
+                    deal = Some(entry.n);
+                }
+            }
+            [
+                Action::Keep {},
+                ..,
+                Action::Phase {
+                    phase: Phase::Untap,
+                },
+            ] if deal.is_some() => {
+                blockers.extend(keeps.drain(..).map(|keep| (keep, entry.n)));
+                deal = None;
+            }
+            [Action::Keep {}, ..] => {
+                if let Some(deal) = deal {
+                    blockers.insert(deal, entry.n);
+                    keeps.push(entry.n);
+                }
+            }
+            [Action::NextGame { .. } | Action::Concede {}] => {
+                deal = None;
+                keeps.clear();
+            }
+            _ => {}
+        }
+    }
+    blockers
 }
 
 fn own_draw(entry: &Entry, by: Seat) -> bool {

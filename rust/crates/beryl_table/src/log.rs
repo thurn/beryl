@@ -65,6 +65,17 @@ impl Log {
         &self.entries
     }
 
+    /// Returns the actions currently in effect, in their original order.
+    pub fn live_entries(&self) -> impl DoubleEndedIterator<Item = &Entry> {
+        let strikes = self.struck_at(self.tip());
+        let unstruck = self
+            .entries
+            .iter()
+            .filter(move |entry| !strikes.is_some_and(|strikes| strikes.contains(&entry.n)));
+        let undone: BTreeSet<_> = unstruck.clone().filter_map(|entry| entry.undoes).collect();
+        unstruck.filter(move |entry| entry.undoes.is_none() && !undone.contains(&entry.n))
+    }
+
     pub fn is_struck(&self, n: u32) -> bool {
         self.struck_at(self.tip())
             .is_some_and(|set| set.contains(&n))

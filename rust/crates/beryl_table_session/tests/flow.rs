@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, channel};
 
@@ -9,9 +11,10 @@ use beryl_session::protocol::{Answer, ObjectId, Side, TablePhase, TablePrompt};
 use beryl_session::{GameUpdate, SessionIds};
 use beryl_table::action::Adjustment;
 use beryl_table::state::LobbySettings;
-use beryl_table::{Action, Seat};
+use beryl_table::{Action, Change, Log, Seat, Table, save};
 use beryl_table_session::connections::{MemoryInvites, TableConnections};
 
+const HOST: Seat = Seat(0);
 const GUEST: Seat = Seat(1);
 
 fn lobby(table: &TableConnections, change: LobbyChange) {
@@ -47,6 +50,15 @@ fn opening(update: &GameUpdate) -> (&[ObjectId], u16, Option<u16>, &[ObjectId]) 
 
 fn receive(views: &Receiver<GameUpdate>, matches: impl Fn(&GameUpdate) -> bool) -> GameUpdate {
     views.iter().find(matches).expect("publication ended")
+}
+
+fn receive_opening(views: &Receiver<GameUpdate>, count: u16) -> GameUpdate {
+    receive(views, |update| {
+        matches!(
+            update.view.table.as_ref().unwrap().prompt,
+            Some(TablePrompt::Opening { mulligans, .. }) if mulligans == count
+        )
+    })
 }
 
 fn linked_table(
@@ -97,6 +109,55 @@ fn guest_profile(dir: &Path, memory: MemoryInvites) -> (TableConnections, Receiv
     )
     .for_server(memory);
     (guest, views)
+}
+
+fn host_save(host: &TableConnections) -> TableResumeRequest {
+    let [saved]: [_; 1] = host.saved(Platform::Macos).unwrap().try_into().unwrap();
+    TableResumeRequest { id: saved.id }
+}
+
+fn read_host_save(dir: &Path, request: &TableResumeRequest) -> (Table, Log) {
+    let path = dir
+        .join("host/tables")
+        .join(format!("{}.jsonl", request.id));
+    save::open(BufReader::new(File::open(path).unwrap())).unwrap()
+}
+
+fn reopen_table(
+    dir: &Path,
+    host: TableConnections,
+    guest: TableConnections,
+    memory: MemoryInvites,
+    request: &TableResumeRequest,
+) -> (TableConnections, TableConnections, Receiver<GameUpdate>) {
+    host.shutdown();
+    guest.shutdown();
+    drop((host, guest));
+    let host = TableConnections::new(SessionIds::default(), dir.join("host"), |_| {}, |_| {})
+        .for_server(memory.clone());
+    host.resume(Platform::Macos, request).unwrap();
+    let (guest, views) = guest_profile(dir, memory);
+    let guest_save = host_save(&guest);
+    guest.resume(Platform::Macos, &guest_save).unwrap();
+    (host, guest, views)
+}
+
+fn hand_names(update: &GameUpdate) -> Vec<&str> {
+    opening(update)
+        .0
+        .iter()
+        .map(|slot| {
+            update
+                .view
+                .objects
+                .iter()
+                .find(|card| card.slot == *slot)
+                .unwrap()
+                .name
+                .as_deref()
+                .unwrap()
+        })
+        .collect()
 }
 
 fn gain_life(guest: &TableConnections) {
@@ -182,12 +243,7 @@ fn linked_seats_keep_independently_and_bottom_two_cards() {
     assert_eq!(dealt.view.turn.number, 0);
     assert_eq!(dealt.view.turn.active, Side::You);
     assert!(!serde_json::to_string(&dealt).unwrap().contains("Mountain"));
-    let guest_dealt = receive(&views, |update| {
-        matches!(
-            update.view.table.as_ref().unwrap().prompt,
-            Some(TablePrompt::Opening { mulligans: 0, .. })
-        )
-    });
+    let guest_dealt = receive_opening(&views, 0);
     assert_eq!(opening(&guest_dealt).0.len(), 7);
     assert!(
         !serde_json::to_string(&guest_dealt)
@@ -255,6 +311,161 @@ fn linked_seats_keep_independently_and_bottom_two_cards() {
             .text
             .starts_with("Undid: Kept the opening hand")
     );
+}
+
+#[test]
+fn a_reopened_host_asks_the_same_seat_to_play_or_draw() {
+    let dir = tempfile::tempdir().unwrap();
+    let (host, guest, views, memory) = linked_table(dir.path());
+    lobby(&host, LobbyChange::Start);
+    let before_guest = receive(&views, |update| {
+        update.view.table.as_ref().unwrap().choosing_first
+    });
+    let before_host = host.current().unwrap();
+    let request = host_save(&host);
+    let (_, before_log) = read_host_save(dir.path(), &request);
+    assert!(
+        before_log
+            .entries()
+            .last()
+            .unwrap()
+            .changes
+            .iter()
+            .any(|change| { matches!(change, Change::Roll { .. }) })
+    );
+
+    let (host, guest, views) = reopen_table(dir.path(), host, guest, memory, &request);
+    let after_host = host.current().unwrap();
+    let after_guest = views.recv().unwrap();
+    for (before, after) in [(before_host, after_host), (before_guest, after_guest)] {
+        let before = before.view.table.unwrap();
+        let after = after.view.table.unwrap();
+        assert!(after.choosing_first);
+        assert_eq!(after.prompt, before.prompt);
+        assert_eq!(after.log, before.log);
+    }
+    let chooser = if host.current().unwrap().view.table.unwrap().prompt.is_some() {
+        &host
+    } else {
+        &guest
+    };
+    answer(chooser, Answer::Pick { option: 0 });
+    answer(chooser, Answer::Done);
+    let (table, log) = read_host_save(dir.path(), &request);
+    assert_eq!(log.entries().len(), before_log.entries().len() + 1);
+    let choice = before_log.entries().last().unwrap().n;
+    assert_eq!(
+        log.undo_target(&table, HOST, Some(choice)),
+        Err(beryl_table::Refusal::Invalid {
+            blocking: vec![log.entries().last().unwrap().n],
+        }),
+    );
+    assert_eq!(table.turn, 0);
+    assert_eq!(opening(&host.current().unwrap()).1, 0);
+    receive_opening(&views, 0);
+}
+
+#[test]
+fn a_reopened_host_restores_each_mulligan_and_keep_through_undo_and_rewind() {
+    let dir = tempfile::tempdir().unwrap();
+    let (host, guest, views, memory) = linked_table(dir.path());
+    lobby(
+        &guest,
+        LobbyChange::LoadDeck {
+            main: vec![("Mountain".into(), 8), ("Plains".into(), 7)],
+            side: vec![],
+        },
+    );
+    lobby(&guest, LobbyChange::Ready { ready: true });
+    lobby(
+        &host,
+        LobbyChange::Settings {
+            settings: LobbySettings {
+                first: Some(HOST),
+                starting_life: 20,
+                starting_hand_size: 7,
+            },
+        },
+    );
+    lobby(&host, LobbyChange::Start);
+    answer(&host, Answer::Pick { option: 0 });
+    answer(&host, Answer::Done);
+    receive_opening(&views, 0);
+    answer(&host, Answer::Keep);
+    answer(&guest, Answer::Mulligan);
+    let before = guest.current().unwrap();
+    assert_eq!(opening(&before).1, 1);
+    let request = host_save(&host);
+    let (table, log) = read_host_save(dir.path(), &request);
+    assert_eq!(table.turn, 0);
+    let checkpoint = log.entries().last().unwrap().n;
+
+    answer(&guest, Answer::Keep);
+    answer(
+        &guest,
+        Answer::Bottom {
+            card: opening(&before).0[0],
+        },
+    );
+    let (host, guest, views) = reopen_table(dir.path(), host, guest, memory, &request);
+    let resumed = views.recv().unwrap();
+    assert_eq!(opening(&resumed).1, 1);
+    assert_eq!(opening(&resumed).2, None);
+    assert_eq!(hand_names(&resumed), hand_names(&before));
+    assert!(host.current().unwrap().view.table.unwrap().prompt.is_none());
+    assert_eq!(
+        host.answer(Answer::Keep),
+        TableActReply::Refused(beryl_table::Refusal::Stale.into())
+    );
+
+    answer(&guest, Answer::Keep);
+    answer(
+        &guest,
+        Answer::Bottom {
+            card: opening(&resumed).0[0],
+        },
+    );
+    answer(&guest, Answer::Done);
+    let (finished, log) = read_host_save(dir.path(), &request);
+    assert_eq!(finished.turn, 1);
+    assert_eq!(guest.current().unwrap().view.turn.number, 1);
+    receive(&views, |update| update.view.turn.number == 1);
+    let final_keep = log.entries().last().unwrap().n;
+    assert_eq!(final_keep, checkpoint + 1);
+    let first_keep = checkpoint - 1;
+    assert_eq!(
+        host.act(Action::Undo {
+            entry: Some(first_keep)
+        }),
+        TableActReply::Refused(
+            beryl_table::Refusal::Invalid {
+                blocking: vec![final_keep],
+            }
+            .into()
+        ),
+    );
+
+    for action in [
+        Action::Undo {
+            entry: Some(final_keep),
+        },
+        Action::Rewind { to: checkpoint },
+    ] {
+        assert_eq!(host.act(action), TableActReply::Ok { ok: true });
+        let guest_reopened = receive_opening(&views, 1);
+        assert_eq!(hand_names(&guest_reopened), hand_names(&before));
+        let (restored, log) = read_host_save(dir.path(), &request);
+        assert_eq!(restored.turn, 0);
+        assert_eq!(
+            restored,
+            beryl_table::log::rebuild(&log, restored.revision()).unwrap()
+        );
+        assert!(host.current().unwrap().view.table.unwrap().prompt.is_none());
+        answer(&guest, Answer::Keep);
+        answer(&guest, Answer::Done);
+        assert_eq!(guest.current().unwrap().view.turn.number, 1);
+        receive(&views, |update| update.view.turn.number == 1);
+    }
 }
 
 #[test]

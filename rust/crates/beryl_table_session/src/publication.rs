@@ -230,14 +230,16 @@ impl PublishedTable {
             .map(|seat| SeatPublication::new(&table, &log, seat))
             .collect::<Result<_, _>>()?;
         let prompts = table.seats().map(|_| None).collect();
-        Ok(Self {
+        let mut published = Self {
             table,
             log,
             chance,
             seats,
             names: Vec::new(),
             prompts,
-        })
+        };
+        published.refresh_setup_prompts();
+        Ok(published)
     }
 
     pub fn table(&self) -> &Table {
@@ -517,6 +519,7 @@ impl PublishedTable {
             }
         }
         self.seats = prepared;
+        self.refresh_setup_prompts();
         Ok(self.log.entries().last().expect("action recorded an entry"))
     }
 }

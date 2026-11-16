@@ -126,7 +126,13 @@ impl TableActionRefs {
     }
 
     fn resolve_action(&self, staged: &Table, mut action: TableAction) -> Result<Action, Refusal> {
-        if matches!(action, Action::Flow { .. } | Action::FlowResult { .. }) {
+        if matches!(
+            action,
+            Action::Flow { .. }
+                | Action::FlowResult { .. }
+                | Action::ChooseFirst { .. }
+                | Action::Keep {}
+        ) {
             return Err(Refusal::Permission);
         }
         if let Action::Arrow { selection, .. } = &mut action

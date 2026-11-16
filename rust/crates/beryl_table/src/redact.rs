@@ -444,6 +444,7 @@ fn redact_action(
         | Action::Roll { .. }
         | Action::Arrow { .. }
         | Action::ClearArrows { .. }
+        | Action::ChooseFirst { .. }
         | Action::GameSettings { .. }
         | Action::Ready { .. }
         | Action::Start { .. }
