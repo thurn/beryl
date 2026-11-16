@@ -451,7 +451,9 @@ impl Table {
         // A card a row has scrolled out of view rests undrawn at the row's end, above the last
         // card shown, as does a card under the top two of a pile. One out of view before the
         // script and after it stays undrawn while it slides, or it would cover that card. A
-        // card that changes place is drawn on its way, wherever it starts or ends. Before its
+        // card that changes place is drawn on its way, wherever it starts or ends, and so is one
+        // a step's own verb moves, such as a flight to the end of its row: it leaves from the
+        // row's nearer end, where it rests undrawn. Before its
         // track first moves it, a card is drawn as where it rests is; once its track has ended,
         // as where the script leaves it is.
         let moves = resting.zip(last).is_some_and(|(a, b)| a.place != b.place);
@@ -459,7 +461,12 @@ impl Table {
         let seen = match (resting, last) {
             (Some(resting), _) if !begun => resting.visible,
             (_, Some(last)) if track.settled(motion.t) => last.visible,
-            _ => moves || resting.is_some_and(|a| a.visible) || last.is_some_and(|b| b.visible),
+            _ => {
+                moves
+                    || track.carried(motion.t)
+                    || resting.is_some_and(|a| a.visible)
+                    || last.is_some_and(|b| b.visible)
+            }
         };
         let veiled = turn.is_some_and(|(_, at)| motion.t < at);
         let (object, view) = match (last, resting) {

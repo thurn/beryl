@@ -103,7 +103,7 @@ pub fn recording(name: &str, seat: Side) -> Result<Recording, String> {
                 "the stress board {name:?} is seen from P0 only, not {seat:?}"
             ));
         }
-        let records = card_records(name, &board);
+        let records = card_records(&board);
         let session = SessionId(1);
         let mut messages: Vec<FixtureMessage> = board
             .views

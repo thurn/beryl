@@ -354,38 +354,6 @@
     "b3d:stack-tall/you/2560x1080": {
       "step-shown": 2
     },
-    "b3d:stress-1024/you/1440x900": {
-      "blank-card": 106,
-      "step-shown": 7
-    },
-    "b3d:stress-1024/you/1600x900": {
-      "blank-card": 114,
-      "step-shown": 7
-    },
-    "b3d:stress-1024/you/1920x1080": {
-      "blank-card": 129,
-      "step-shown": 7
-    },
-    "b3d:stress-1024/you/2560x1080": {
-      "blank-card": 139,
-      "step-shown": 7
-    },
-    "b3d:stress-255/you/1440x900": {
-      "blank-card": 106,
-      "step-shown": 7
-    },
-    "b3d:stress-255/you/1600x900": {
-      "blank-card": 114,
-      "step-shown": 7
-    },
-    "b3d:stress-255/you/1920x1080": {
-      "blank-card": 129,
-      "step-shown": 7
-    },
-    "b3d:stress-255/you/2560x1080": {
-      "blank-card": 139,
-      "step-shown": 7
-    },
     "b3d:stress-stack/you/1440x900": {
       "reachable": 4
     },

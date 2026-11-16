@@ -134,7 +134,7 @@ impl Playback {
         }
         let (mut views, records) = match stress(name) {
             Some(board) => {
-                let records = card_records(name, &board);
+                let records = card_records(&board);
                 let views = board
                     .views
                     .into_iter()

@@ -1198,9 +1198,10 @@ flight start exactly where the card was.
   again, as a change of window shape does: each card that stays in view slides
   to its new place over `slide.regroup_ms`, and a card that comes into view
   fades in where it rests. A script moves a card that is out of view from the
-  nearer end of the row, where placement rests it. Each end with cards off it
-  shows their number, as "+12", in a float just outside that end
-  (`floats::ROW_COUNT`).
+  nearer end of the row, where placement rests it. It is drawn while its own
+  step's verb moves it, such as a flight to the row's end, but not while it only
+  slides because other cards moved. Each end with cards off it shows their
+  number, as "+12", in a float just outside that end (`floats::ROW_COUNT`).
 - **An ability on the stack is a scene object like a spell.** It is drawn as a
   card showing its source's face, at its place among the stack's items, and
   arrows, marks and steps reach it by its number, which the session's scripts

@@ -10,7 +10,7 @@ use glam::{Quat, Vec3};
 use crate::data::space::verbs;
 use crate::data::space::verbs::fly::thrown;
 use crate::pose::{Curve, Pose, Segment, Shape};
-use crate::verbs::Interval;
+use crate::verbs::{Follows, Interval};
 
 impl Curve {
     /// CSS's `linear`: progress equals elapsed time.
@@ -502,6 +502,20 @@ impl Track {
     #[must_use]
     pub fn settled(&self, t: u64) -> bool {
         (self.segments().iter()).all(|segment| segment.end() <= t || !segment.moves())
+    }
+
+    /// Whether a step's own act moves the object at `t`: a segment its verb made, or that
+    /// brought it to the table or took it away, is under way. A segment the object slides along
+    /// because a step changed where it rests does not count.
+    #[must_use]
+    pub fn carried(&self, t: u64) -> bool {
+        self.segments().iter().any(|segment| {
+            segment.start <= t
+                && t < segment.end()
+                && segment
+                    .step
+                    .is_some_and(|step| step.follows == Follows::Start)
+        })
     }
 
     /// Adds `segment` after every segment that starts no later than it, so that of two that

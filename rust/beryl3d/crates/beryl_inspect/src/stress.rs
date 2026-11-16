@@ -581,13 +581,10 @@ pub(crate) fn pointer_moves(
         .collect()
 }
 
-/// Gives the mixed stress boards their own placeholder faces. The object-limit boards
-/// retain their existing load with just the common card back.
-pub(crate) fn card_records(name: &str, board: &Stress) -> CardRecords {
+/// Gives every stress board's cards placeholder faces of their own, one per name, so that no
+/// card is drawn face up with no face.
+pub(crate) fn card_records(board: &Stress) -> CardRecords {
     let mut records = CardRecords::none();
-    if matches!(name, "stress-255" | "stress-1024") {
-        return records;
-    }
     for object in board.views.iter().flat_map(|view| &view.objects) {
         let Some(name) = &object.name else { continue };
         let entries = if object.token {
