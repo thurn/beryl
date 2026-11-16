@@ -6,6 +6,7 @@
 //! script of actions on the display's clock. `phone` is the part of the iOS and Android hosts
 //! that is Rust: their Swift and Kotlin apps call it through `beryl_3d`'s C functions.
 
+mod assets;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod clipboard;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]

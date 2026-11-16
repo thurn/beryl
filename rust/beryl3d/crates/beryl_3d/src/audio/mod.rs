@@ -513,7 +513,10 @@ impl Thread {
         if !track.looped() || playing.player.len() > 1 {
             return;
         }
-        if track.variants == 1 {
+        // A loop with one variant plays round again. So does a loop whose next variant was not
+        // decoded before this one ended (its file was missing, or its worker was slow), rather
+        // than leaving the music silent until the music changes.
+        if track.variants == 1 || playing.player.empty() {
             playing.player.append(playing.clip.buffer.clone());
             return;
         }

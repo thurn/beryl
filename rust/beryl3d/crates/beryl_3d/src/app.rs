@@ -322,7 +322,7 @@ impl Feed for AppFeed {
         let picture = self.bugs.captured(picture);
         #[cfg(all(feature = "tools", unix))]
         if let (Some(live), Some(picture)) = (&mut self.live, picture) {
-            live.picture(&picture);
+            live.picture(picture);
         }
         #[cfg(not(all(feature = "tools", unix)))]
         drop(picture);

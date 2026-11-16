@@ -46,6 +46,13 @@ pub trait Draw {
     fn capture(&mut self, _frame: &Frame) -> Option<Readback> {
         None
     }
+
+    /// Hands what `client` wants of the platform's assets (glyphs, today) to the host's
+    /// workers, and gives `client` what they have finished. Called before each frame, so that
+    /// the frame draws what has arrived, and after it, so that what the frame found missing is
+    /// asked for even when the client then wants no more frames. It never waits; a worker
+    /// that finishes something wakes the host. A host with no workers does nothing.
+    fn assets(&mut self, _client: &mut Client) {}
 }
 
 /// One frame the loop drew.
@@ -282,6 +289,7 @@ impl<T: Ticks> FrameLoop<T> {
         #[cfg(feature = "drive")]
         self.play_live(now, clock);
         self.feed.before(&mut self.client, clock);
+        draw.assets(&mut self.client);
         let started = Instant::now();
         let frame = self.client.frame(clock);
         let client = started.elapsed().as_nanos() as u64;
@@ -291,6 +299,7 @@ impl<T: Ticks> FrameLoop<T> {
         {
             self.readbacks.push(readback);
         }
+        draw.assets(&mut self.client);
         let since_last = self.last.map(|last| now.saturating_sub(last));
         let hz = self.hz;
         let step = self.pace(since_last, client, shown);

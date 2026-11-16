@@ -12,6 +12,7 @@ use beryl_scene::Client;
 use beryl_scene::frame::Frame;
 use beryl_scene::input::{Input, Insets, Size};
 
+use crate::assets::Glyphs;
 use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Sleep, Ticks};
 use crate::inbox::Inbox;
 
@@ -114,10 +115,15 @@ impl Windowless {
             scale: options.scale,
             safe_area: Insets::default(),
         });
+        // The host waits on its own channel, so a nudge down it wakes the loop.
+        let wake = Inbox::new(self.sender.clone(), || true);
         let mut screen = Offscreen {
             renderer,
             target,
             slow_gpu: options.slow_gpu,
+            glyphs: Glyphs::start(options.scale, move || {
+                wake.send(Input::Nudge);
+            }),
         };
         let started = Instant::now();
         let end = options.end_after.map(|end| started + end);
@@ -215,6 +221,7 @@ struct Offscreen {
     renderer: Renderer,
     target: Target,
     slow_gpu: Duration,
+    glyphs: Glyphs,
 }
 
 impl Draw for Offscreen {
@@ -232,5 +239,9 @@ impl Draw for Offscreen {
 
     fn capture(&mut self, _frame: &Frame) -> Option<beryl_render::Readback> {
         Some(self.renderer.read_back(&self.target))
+    }
+
+    fn assets(&mut self, client: &mut Client) {
+        self.glyphs.deliver(client, &mut self.renderer);
     }
 }

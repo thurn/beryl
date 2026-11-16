@@ -170,21 +170,28 @@ impl Live {
         true
     }
 
-    /// The picture of an earlier frame is ready: writes it and answers those who asked.
-    pub fn picture(&mut self, picture: &Picture) {
+    /// The picture of an earlier frame is ready: writes it and answers those who asked, on a
+    /// thread of its own, since encoding a window-sized PNG takes longer than a frame.
+    pub fn picture(&mut self, picture: Picture) {
         let Some(askers) = self.pictures_waiting.pop_front() else {
             return;
         };
         self.pictures += 1;
-        let path = self
-            .out
-            .join(format!("live-{}-{}.png", std::process::id(), self.pictures));
-        let written = std::fs::create_dir_all(&self.out)
-            .map_err(|error| format!("{}: {error}", self.out.display()))
-            .and_then(|()| picture.write_png(&path))
-            .map(|()| path.display().to_string());
-        for asker in askers {
-            let _ = asker.send(written.clone());
+        let out = self.out.clone();
+        let path = out.join(format!("live-{}-{}.png", std::process::id(), self.pictures));
+        let written = std::thread::Builder::new()
+            .name("live picture".to_owned())
+            .spawn(move || {
+                let written = std::fs::create_dir_all(&out)
+                    .map_err(|error| format!("{}: {error}", out.display()))
+                    .and_then(|()| picture.write_png(&path))
+                    .map(|()| path.display().to_string());
+                for asker in askers {
+                    let _ = asker.send(written.clone());
+                }
+            });
+        if let Err(error) = written {
+            eprintln!("beryl3d: the live picture's thread did not start: {error}");
         }
     }
 

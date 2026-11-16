@@ -22,6 +22,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
+use crate::assets::Glyphs;
 use crate::clipboard::Clipboard;
 use crate::events::Translator;
 use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Sleep, Ticks};
@@ -129,7 +130,9 @@ impl Desktop {
         feed: Box<dyn Feed>,
         setup: impl FnOnce(&mut Renderer),
     ) -> Result<(), String> {
+        let wake = self.inbox();
         let mut app = App {
+            wake,
             options: self.options,
             #[cfg(target_os = "macos")]
             proxy: self.event_loop.create_proxy(),
@@ -161,6 +164,8 @@ pub fn is_fullscreen_key(key: PhysicalKey, control: bool, command: bool) -> bool
 
 struct App<S> {
     options: Options,
+    /// Wakes the event loop from the glyph worker's thread when it finishes a page.
+    wake: Inbox,
     /// Where the display link sends its ticks.
     #[cfg(target_os = "macos")]
     proxy: winit::event_loop::EventLoopProxy<UserEvent>,
@@ -193,6 +198,7 @@ struct Screen {
     window: Arc<Window>,
     /// How long each finished frame is held back before it is shown (`Options::slow_gpu`).
     slow_gpu: Duration,
+    glyphs: Glyphs,
 }
 
 impl Draw for Screen {
@@ -221,6 +227,11 @@ impl Draw for Screen {
 
     fn capture(&mut self, frame: &Frame) -> Option<beryl_render::Readback> {
         Some(self.renderer.read_back_frame(frame, &self.surface))
+    }
+
+    fn assets(&mut self, client: &mut Client) {
+        self.glyphs.rescale(self.window.scale_factor() as f32);
+        self.glyphs.deliver(client, &mut self.renderer);
     }
 }
 
@@ -320,6 +331,12 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
                 surface,
                 window: Arc::clone(&window),
                 slow_gpu: self.options.slow_gpu,
+                glyphs: Glyphs::start(window.scale_factor() as f32, {
+                    let wake = self.wake.clone();
+                    move || {
+                        wake.send(Input::Nudge);
+                    }
+                }),
             },
             translator,
             clipboard: Clipboard::default(),
