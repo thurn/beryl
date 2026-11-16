@@ -20,6 +20,8 @@ impl Client {
         if self.shown != (self.screen, self.sheet) {
             self.shown = (self.screen, self.sheet);
             self.end_gesture();
+            self.cancel_touch();
+            self.inspector.pinned = None;
         }
         self.inspector.due = true;
         self.log.folded = self.permanent_over_log();

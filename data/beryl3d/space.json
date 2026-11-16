@@ -268,7 +268,14 @@
     "smooth_acceleration_ms": 50,
     "lean_steps_per_second": 240,
     "scroll_step_points": 48,
-    "wheel_notch_points": 16
+    "wheel_notch_points": 16,
+    "touch": {
+      "together_ms": 80,
+      "tap_ms": 300,
+      "double_ms": 300,
+      "slop_points": 30,
+      "pickup_ms": 150
+    }
   },
   "slide": {
     "regroup_ms": 170

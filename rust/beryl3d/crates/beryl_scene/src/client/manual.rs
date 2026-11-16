@@ -9,8 +9,7 @@ use glam::Vec2;
 
 use super::{Client, Platform};
 use crate::command::SessionCommand;
-use crate::data::space::pointer::{DRAG_THRESHOLD_POINTS, LONG_PRESS_MS};
-use crate::input::{Button, Pointer, PointerKind, PointerPhase};
+use crate::input::{Button, Pointer, PointerPhase};
 use crate::manual::lobby::Lobby;
 use crate::manual::menus::{self, Act};
 use crate::manual::tokens::TokenChoice;
@@ -20,19 +19,14 @@ use crate::widgets::BACK;
 use beryl_protocol::ipc::TableActReply;
 use beryl_protocol::protocol::TableAction;
 
-/// Nanoseconds in a millisecond, the unit of `Client::frame`'s clock.
-const MILLISECOND: u64 = 1_000_000;
-
 /// The most table actions the client remembers sending without an answer.
 const PENDING: usize = 64;
 
 /// What the client keeps of the manual table: what the table shows over itself
-/// (`TableState`, which `Manual` derefs to), the touch that will open a context menu if it
-/// stays down and still, and the lobby.
+/// (`TableState`, which `Manual` derefs to), the keys held at the last press, and the lobby.
 #[derive(Debug, Default)]
 pub(super) struct Manual {
     pub(super) state: TableState,
-    hold: Option<Hold>,
     /// Whether Cmd (Control off the Mac) was held at the last press of the pointer, which
     /// makes a click on a card add it to the selection or take it out.
     pub(super) meta: bool,
@@ -56,18 +50,6 @@ impl std::ops::DerefMut for Manual {
     }
 }
 
-/// A touch that went down on the table and has not moved `DRAG_THRESHOLD_POINTS` from where it
-/// went down. Held for `LONG_PRESS_MS`, it opens the context menu there, as the web's
-/// `Pointer` does on a long press (`LONG_PRESS_DELAY` in `ui/src/stage/pointer.ts`).
-#[derive(Clone, Copy, Debug)]
-struct Hold {
-    finger: u8,
-    at: Vec2,
-    /// The `now` of the first frame after the touch went down, from which the hold is timed:
-    /// an input has no time of its own.
-    since: Option<u64>,
-}
-
 impl Manual {
     /// The refusal sound, once for a refusal since the last frame, as the web's
     /// `shakeRefusal` plays it.
@@ -76,15 +58,6 @@ impl Manual {
             id: crate::sound::id("no"),
             theirs: false,
         })
-    }
-
-    /// When the touch held still opens its menu, if one is down and its timing has begun.
-    pub(super) fn hold_due(&self) -> Option<u64> {
-        let since = self.hold?.since?;
-        // The hold time is a whole number of milliseconds in `space.json`.
-        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let hold = LONG_PRESS_MS as u64 * MILLISECOND;
-        Some(since + hold)
     }
 }
 
@@ -123,69 +96,9 @@ impl Client {
             && self.open_table_menu_at(pointer.position)
     }
 
-    /// Follows a touch on the table screen that may become a long press: one going down with
-    /// no menu or sheet open starts a `Hold`, and moving `DRAG_THRESHOLD_POINTS` from where it
-    /// went down, lifting or being cancelled ends it. `hold_table_menu` opens the menu once
-    /// it has been held long enough.
-    pub(super) fn follow_hold(&mut self, pointer: &Pointer) {
-        if pointer.kind != PointerKind::Touch {
-            return;
-        }
-        match pointer.phase {
-            PointerPhase::Down => {
-                let table = self.screen == Screen::Table
-                    && self.sheet.is_none()
-                    && self.manual.menu.is_none()
-                    && (self.show.latest()).is_some_and(|update| update.view.table.is_some());
-                self.manual.hold = table.then_some(Hold {
-                    finger: pointer.id,
-                    at: pointer.position,
-                    since: None,
-                });
-            }
-            PointerPhase::Move => {
-                if let Some(hold) = self.manual.hold
-                    && hold.finger == pointer.id
-                    && hold.at.distance(pointer.position) >= DRAG_THRESHOLD_POINTS
-                {
-                    self.manual.hold = None;
-                }
-            }
-            PointerPhase::Up | PointerPhase::Cancel | PointerPhase::Leave => {
-                if self
-                    .manual
-                    .hold
-                    .is_some_and(|hold| hold.finger == pointer.id)
-                {
-                    self.manual.hold = None;
-                }
-            }
-            PointerPhase::Wheel => {}
-        }
-    }
-
-    /// At the frame at `now`, a touch held still since `LONG_PRESS_MS` ago opens the context
-    /// menu where it went down. The touch's press ends there: lifting the finger clicks no
-    /// card, opens no pile and presses no row of the menu that opened under it.
-    pub(super) fn hold_table_menu(&mut self, now: u64) {
-        let Some(hold) = &mut self.manual.hold else {
-            return;
-        };
-        let at = hold.at;
-        hold.since.get_or_insert(now);
-        if self.manual.hold_due().is_none_or(|due| now < due) {
-            return;
-        }
-        self.manual.hold = None;
-        if self.open_table_menu_at(at) {
-            self.show.pointer_mut().cancel();
-            self.end_gesture();
-        }
-    }
-
     /// Opens the context menu of what is at `at` (`manual::target_at`) there, on the table
     /// screen with no sheet over it. Returns whether it did.
-    fn open_table_menu_at(&mut self, at: Vec2) -> bool {
+    pub(super) fn open_table_menu_at(&mut self, at: Vec2) -> bool {
         if self.screen != Screen::Table || self.sheet.is_some() {
             return false;
         }

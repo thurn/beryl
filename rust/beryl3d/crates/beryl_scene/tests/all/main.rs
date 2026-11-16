@@ -45,6 +45,7 @@ mod table;
 mod testing_screen;
 mod text_field;
 mod tokens;
+mod touch;
 mod under;
 mod verbs_count;
 mod verbs_fly;

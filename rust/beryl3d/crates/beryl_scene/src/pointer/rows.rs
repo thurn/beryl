@@ -42,6 +42,11 @@ struct Drag {
 }
 
 impl RowGesture {
+    /// Ends the drag under way, as when a second finger turns a touch into a multi-finger tap.
+    pub fn cancel(&mut self) {
+        self.drag = None;
+    }
+
     /// Takes a pointer event, with `frame`, the last frame drawn, to find what is under the
     /// pointer, and `table` for which groups of each row are in view. Returns the row to scroll,
     /// if the event scrolls one.

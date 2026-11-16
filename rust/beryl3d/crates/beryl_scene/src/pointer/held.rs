@@ -34,6 +34,19 @@ pub(super) struct Grip {
     pub moved: bool,
     /// Whether the press has picked the card up: it is holdable and has `moved`.
     pub held: bool,
+    /// What made the press.
+    pub by: By,
+}
+
+/// What made a press on a card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum By {
+    /// The mouse or a pen.
+    Mouse,
+    /// A finger, whose press that never moved is a tap. It may pick its card up only once
+    /// `ready`: a finger on the manual table waits `PICKUP_MS` first, and one that moved before
+    /// then never picks the card up.
+    Finger { ready: bool },
 }
 
 impl Grip {
@@ -43,7 +56,7 @@ impl Grip {
         self.at = at;
         if self.start.distance(at) >= data::DRAG_THRESHOLD_POINTS {
             self.moved = true;
-            self.held |= self.holdable;
+            self.held |= self.holdable && self.by != By::Finger { ready: false };
         }
     }
 }

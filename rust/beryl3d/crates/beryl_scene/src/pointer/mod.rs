@@ -17,6 +17,7 @@
 mod held;
 
 pub mod rows;
+pub mod touch;
 
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::{Mat3, Quat, Vec2};
@@ -29,7 +30,7 @@ use crate::motion::between;
 use crate::play::compile::Compiled;
 use crate::pose::{Curve, Pose, Segment};
 use crate::table::{CARD_HEIGHT, Camera, Look};
-use held::{Fall, Grip, Lean};
+use held::{By, Fall, Grip, Lean};
 
 /// The most hand cards that can be rising, raised or falling at once (`frame::LIFTED`).
 const LIFTS: usize = crate::frame::LIFTED;
@@ -170,8 +171,24 @@ impl Pointer {
             holdable,
             moved: false,
             held: false,
+            by: By::Mouse,
         });
         self.lean = Lean::FLAT;
+    }
+
+    /// Marks the press just started as a finger's, whose release without moving is a tap
+    /// (`LetGo::Tap`). If `delayed`, it may not pick its card up until `ready`.
+    pub fn by_touch(&mut self, delayed: bool) {
+        if let Some(grip) = &mut self.grip {
+            grip.by = By::Finger { ready: !delayed };
+        }
+    }
+
+    /// Lets the press pick its card up from now on, if it has not moved yet.
+    pub fn ready(&mut self) {
+        if let Some(grip) = self.grip.as_mut().filter(|grip| !grip.moved) {
+            grip.by = By::Finger { ready: true };
+        }
     }
 
     /// Ends the press as a cancelled one: a card it holds falls back where it lay, and it
@@ -397,7 +414,12 @@ fn let_go(
 ) -> Option<LetGo> {
     let (grip, cancelled) = pointer.let_go.take()?;
     if !grip.held {
-        return (!cancelled && !grip.moved).then_some(LetGo::Click(grip.slot));
+        let tap = if grip.by == By::Mouse {
+            LetGo::Click(grip.slot)
+        } else {
+            LetGo::Tap(grip.slot)
+        };
+        return (!cancelled && !grip.moved).then_some(tap);
     }
     pointer.fall = Some(Fall {
         slot: grip.slot,
@@ -424,6 +446,9 @@ fn let_go(
 pub enum LetGo {
     /// A click on the card in this slot.
     Click(usize),
+    /// A finger's tap on the card in this slot: a click if the open prompt can use the card,
+    /// and otherwise a request to show it whole.
+    Tap(usize),
     /// The card in `slot`, held up in a tray, was carried and let go with the pointer at `at`,
     /// in logical points.
     Dropped { slot: usize, at: Vec2 },

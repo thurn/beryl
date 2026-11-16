@@ -773,6 +773,17 @@ constants in the web interface's `ui/src/stage/raised.ts` and `heft.ts`.
   (a `Click::Drop`, or a click on the card). The card gets a segment from its
   held pose to its resting place. If the session's reply moves the card, that
   script's flight starts from the held pose instead.
+- **A touch screen has one active finger.** The first finger down is the only
+  one the table hears. A second finger landing within 80 milliseconds of it
+  makes a multi-finger tap, which ends the first finger's press with nothing
+  done; one landing later is ignored. A tap on a card the prompt can use uses
+  it, and a tap on any other card, the hand's included, shows it whole until the
+  next touch. A finger held still for `long_press_ms` shows its card whole, or
+  opens the manual table's menu, and its lift does nothing. A hand card can be
+  carried off as soon as the finger moves; on the manual table a finger rests
+  `touch.pickup_ms` first. A double tap on bare felt, or with two fingers
+  anywhere, opens the bug report. The timings are under `pointer.touch`, and
+  `beryl_scene`'s `pointer::touch` keeps the fingers' state.
 - **The checks treat a held card as moving.** Its resolved element has the
   `HELD` state bit, and the checks on cards at rest skip it.
 

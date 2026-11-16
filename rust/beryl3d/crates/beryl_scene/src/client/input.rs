@@ -27,16 +27,25 @@ impl Client {
     /// sets its level instead (`slide`). After each, the flat layer is told which element a
     /// press under the pointer would reach and which one is held down, which it draws so.
     ///
-    /// What the primary pointer is doing since it went down is one `Gesture`. A press, or a
-    /// second finger, going down ends the one under way before a branch claims the new one,
+    /// What the primary pointer is doing since it went down is one `Gesture`. A press going
+    /// down ends the one under way before a branch claims the new one,
     /// and the release, Cancel or Leave ends it once every branch has seen that phase.
+    ///
+    /// A finger reaches these only if it is the active one (`hear_touch`), and a double tap
+    /// opens the bug report once the game has heard the finger lift.
     pub(super) fn point(&mut self, pointer: Pointer) {
-        if pointer.phase == PointerPhase::Down && pointer.button == Button::Primary {
-            self.end_gesture();
+        let heard = (pointer.kind == PointerKind::Touch).then(|| self.hear_touch(&pointer));
+        if heard.is_none_or(|heard| heard.game) {
+            if pointer.phase == PointerPhase::Down && pointer.button == Button::Primary {
+                self.end_gesture();
+            }
+            self.claim(&pointer);
+            if ends_gesture(&pointer) {
+                self.end_gesture();
+            }
         }
-        self.claim(&pointer);
-        if ends_gesture(&pointer) {
-            self.end_gesture();
+        if heard.is_some_and(|heard| heard.report) && !self.bug_open() {
+            self.press(&Press::Sheet(Some(Sheet::BugReport)));
         }
     }
 
@@ -67,7 +76,6 @@ impl Client {
             self.press(&Press::Dismiss(Dismiss::Menu));
             return;
         }
-        self.follow_hold(&pointer);
         if self.table_pointer(&pointer)
             || self.scroll_layer(&pointer)
             || self.open_table_menu(&pointer)
@@ -187,6 +195,9 @@ impl Client {
                         let slot = element.id.0 as usize;
                         let holdable = self.holdable(slot, element.place);
                         (self.show.pointer_mut()).press(slot, pointer.position, holdable);
+                        if pointer.kind == PointerKind::Touch {
+                            self.touch_pressed();
+                        }
                     }
                 }
             }

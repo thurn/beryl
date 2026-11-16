@@ -25,6 +25,9 @@ pub(super) struct Inspector {
     shown: Option<Inspected>,
     /// The card the pointer was over when it last looked, which it may not read.
     pub(super) judged: Option<ObjectId>,
+    /// The card a finger tapped or held on to show it whole, until the next touch
+    /// (`Client::card_tapped`). It is shown in place of the card under the pointer.
+    pub(super) pinned: Option<ObjectId>,
     /// The view or prompt changed since it was last laid out.
     pub(super) due: bool,
 }
@@ -75,15 +78,17 @@ impl Client {
         u16::try_from(slot).ok().map(ObjectId)
     }
 
-    /// The card the inspector shows now, from the last frame: the hovered card, at rest and not
-    /// held, on the game screen with no sheet open, when it is one the web interface's
-    /// `Controls` inspects. A card in the viewer's hand rises in the fan to be read instead,
-    /// unless it is face down.
+    /// The card the inspector shows now, from the last frame: the card a finger asked to see
+    /// (`Inspector::pinned`), or else the hovered card, at rest and not held, on the game screen
+    /// with no sheet open, when it is one the web interface's `Controls` inspects. A card in the
+    /// viewer's hand rises in the fan to be read instead, unless it is face down; a finger, which
+    /// raises no card, sees it whole.
     fn inspected_now(&self) -> Option<Inspected> {
         if self.screen != Screen::Game || self.sheet.is_some() {
             return None;
         }
-        let slot = self.hovered_slot()?;
+        let pinned = self.inspector.pinned;
+        let slot = pinned.or(self.hovered_slot())?;
         let frame = &self.frame;
         let id = ElementId(u32::from(slot.0));
         let element = (frame.resolved.iter())
@@ -94,7 +99,7 @@ impl Client {
         let face_down = element.state.has(StateBits::FACE_DOWN);
         let read = match zone {
             ZoneName::Battlefield | ZoneName::Stack => true,
-            ZoneName::Hand => side == Side::You && face_down,
+            ZoneName::Hand => side == Side::You && (face_down || pinned.is_some()),
             _ => false,
         };
         if !read || element.state.has(StateBits::MOVING) || element.state.has(StateBits::HELD) {

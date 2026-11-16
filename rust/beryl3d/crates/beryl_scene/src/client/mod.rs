@@ -11,8 +11,8 @@ mod gesture;
 use std::collections::VecDeque;
 
 use beryl_protocol::prompt::{Click, ClickRequest, PromptView};
-use beryl_protocol::protocol::{DecisionId, ObjectId, SessionId, Side, Status};
-use beryl_protocol::script::{OwnTimings, Subject, Verb, own_timings};
+use beryl_protocol::protocol::{DecisionId, SessionId, Side, Status};
+use beryl_protocol::script::{OwnTimings, Verb, own_timings};
 use beryl_protocol::{AgentView, StartRequest, StopsSetting};
 
 use crate::command::{Reply, Request, SessionCommand};
@@ -31,6 +31,7 @@ use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
 use crate::pointer::LetGo;
 use crate::pointer::rows::RowGesture;
+use crate::pointer::touch::Touch;
 use crate::prompts;
 use crate::screens::{self, Concede, GalleryState, Music, SEED, Screen, Sheet, StartForm};
 use crate::settings::Settings;
@@ -47,6 +48,7 @@ mod screen;
 mod stops;
 mod table_pointer;
 mod testing;
+mod touch;
 mod viewing;
 
 use inspect::Inspector;
@@ -188,8 +190,10 @@ pub struct Client {
     viewing: Viewing,
     /// The bug report and the table's clock, which it freezes (`bug`).
     bug: bug::Bug,
-    /// What the manual table shows over itself and the touch held on it (`manual`).
+    /// What the manual table shows over itself (`manual`).
     manual: manual::Manual,
+    /// The fingers on a touch screen (`touch`).
+    touch: Touch,
 }
 
 /// Whether the pointer is on the open prompt's button that shows what it would tap
@@ -256,6 +260,7 @@ impl Client {
             viewing: Viewing::default(),
             bug: bug::Bug::default(),
             manual: manual::Manual::default(),
+            touch: Touch::default(),
         }
     }
 
@@ -357,11 +362,15 @@ impl Client {
                 size,
                 scale,
                 safe_area,
-            } => self.resize(Window {
-                size,
-                scale,
-                safe_area,
-            }),
+            } => {
+                // A finger's gesture ends with the layout it began on.
+                self.cancel_touch();
+                self.resize(Window {
+                    size,
+                    scale,
+                    safe_area,
+                });
+            }
             Input::Text(_) | Input::Paste(_) => self.type_into(&input),
             Input::Tier(tier) => self.set_tier(tier),
             Input::Lifecycle(Lifecycle::LowMemory) => self.low_memory(),
@@ -414,7 +423,7 @@ impl Client {
         let table_now = self.bug_frame(now);
         let reporting = self.bug_open();
         self.inputs.clear();
-        self.hold_table_menu(now);
+        self.touch_frame(now);
         self.own(table_now);
         self.set_aims(self.table_open());
         self.table_frame(table_now);
@@ -474,16 +483,8 @@ impl Client {
         // up, or a card carried off the hand and let go) clicks the open prompt on that card;
         // one held up in a tray and carried is dropped where it was let go.
         match self.show.point(&mut self.frame, table_now) {
-            Some(LetGo::Click(slot)) => {
-                if let Ok(slot) = u16::try_from(slot)
-                    && !self.table_click(ObjectId(slot))
-                {
-                    let on = Subject::Object {
-                        slot: ObjectId(slot),
-                    };
-                    self.click(Click::On { on });
-                }
-            }
+            Some(LetGo::Click(slot)) => self.card_clicked(slot),
+            Some(LetGo::Tap(slot)) => self.card_tapped(slot),
             Some(LetGo::Dropped { slot, at }) if self.screen == Screen::Table => {
                 self.table_drop(slot, at);
             }
@@ -493,12 +494,13 @@ impl Client {
         // The inspector follows the card just found under the pointer in the next frame, and a
         // prompt whose view has just played out draws its marks in the next frame.
         let own_due = self.own_due && self.show.settled();
-        self.wake = if transitioning || own_due || self.hovered_slot() != self.inspector.judged {
+        let inspecting = self.inspector.due || self.hovered_slot() != self.inspector.judged;
+        self.wake = if transitioning || own_due || inspecting {
             Wake::Now
         } else {
-            // A tooltip waiting for the pointer to rest shows at its time, and a touch held
-            // still on the manual table opens its menu at its time.
-            (self.bug_wake(table_now).or_at(self.layer.tip_due())).or_at(self.manual.hold_due())
+            // A tooltip waiting for the pointer to rest shows at its time, and a finger held
+            // still or waiting to pick a card up acts at its time.
+            (self.bug_wake(table_now).or_at(self.layer.tip_due())).or_at(self.touch.due())
         };
         &self.frame
     }
