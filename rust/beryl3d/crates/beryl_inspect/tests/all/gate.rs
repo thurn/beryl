@@ -1,7 +1,6 @@
 //! The frames `rank` picks for the instruction-count gate, and a playback's shape.
 
 use beryl_inspect::gate::{Phase, REST_FRAMES, play, rank};
-use beryl_inspect::stress::NAMES;
 use beryl_scene::frame::{Frame, Role};
 
 #[test]
@@ -50,7 +49,7 @@ fn rank_sees_the_frame_that_places_the_most_objects() {
 
 #[test]
 fn a_stress_board_rests_then_flies_until_its_script_ends() {
-    for name in NAMES {
+    for name in ["stress-255", "stress-1024"] {
         let mut phases = Vec::new();
         assert!(play(name, |moment, frame| {
             phases.push(moment.phase);
@@ -91,7 +90,7 @@ fn a_flight_draws_only_the_cards_the_rows_show() {
     // undrawn at its end, above the last card shown. While the 40 permanents fly, the cards
     // that stay slide along their rows; one out of view before and after the flight must stay
     // undrawn, or it covers the row's last card and the frame draws the whole battlefield.
-    for name in NAMES {
+    for name in ["stress-255", "stress-1024"] {
         let mut at_rest = 0;
         let mut most_in_flight = 0;
         // The cards drawn, not the records: each permanent also writes the records of its

@@ -1318,6 +1318,54 @@
       "reachable": 172,
       "step-shown": 7
     },
+    "b3d:stress-hand/you/1440x900": {
+      "reachable": 60
+    },
+    "b3d:stress-hand/you/1600x900": {
+      "reachable": 60
+    },
+    "b3d:stress-hand/you/1920x1080": {
+      "reachable": 60
+    },
+    "b3d:stress-hand/you/2560x1080": {
+      "reachable": 60
+    },
+    "b3d:stress-stack/you/1440x900": {
+      "reachable": 27
+    },
+    "b3d:stress-stack/you/1600x900": {
+      "reachable": 26
+    },
+    "b3d:stress-stack/you/1920x1080": {
+      "reachable": 26
+    },
+    "b3d:stress-stack/you/2560x1080": {
+      "reachable": 25
+    },
+    "b3d:stress-verbs/you/1440x900": {
+      "crowded": 1,
+      "no-jumps": 5,
+      "reachable": 47,
+      "step-shown": 31
+    },
+    "b3d:stress-verbs/you/1600x900": {
+      "crowded": 1,
+      "no-jumps": 5,
+      "reachable": 44,
+      "step-shown": 32
+    },
+    "b3d:stress-verbs/you/1920x1080": {
+      "crowded": 1,
+      "no-jumps": 5,
+      "reachable": 25,
+      "step-shown": 32
+    },
+    "b3d:stress-verbs/you/2560x1080": {
+      "crowded": 1,
+      "no-jumps": 5,
+      "reachable": 24,
+      "step-shown": 32
+    },
     "b3d:subtlety/evoked-sacrificed-its-trigger-still-tucks-a-planeswalker-spell/opponent/1440x900": {
       "step-shown": 1
     },

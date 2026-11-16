@@ -15,19 +15,28 @@
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::protocol::{SessionId, Side};
-use beryl_scene::driver::plays_on;
+use beryl_scene::agent::Layout;
+use beryl_scene::driver::{Page, plays_on};
 use beryl_scene::frame::{Frame, Wake, Work};
-use beryl_scene::input::{AssetReady, Input, Insets, Size};
+use beryl_scene::input::{AssetReady, Input, Insets, Pointer, Size};
 use beryl_scene::{Client, Config};
 
 use crate::pages::recording;
-use crate::stress::stress;
+use crate::stress::{STACK_REST_FRAMES, card_records, pointer_moves, stress};
 
-/// The boards the frame gates hold, in the order they are played: the two stress boards, and
+/// The boards the frame gates hold, in the order they are played: the five stress boards, and
 /// two recorded games from the first seat. `verbs-zones` moves cards between every zone, and
 /// `pay-default` opens prompts, so that its worst frame includes one in which `handle` lays out
 /// a prompt bar and its text.
-pub const BOARDS: [&str; 4] = ["stress-255", "stress-1024", "verbs-zones", "pay-default"];
+pub const BOARDS: [&str; 7] = [
+    "stress-255",
+    "stress-1024",
+    "stress-verbs",
+    "stress-hand",
+    "stress-stack",
+    "verbs-zones",
+    "pay-default",
+];
 
 /// The time between two frames, in nanoseconds: 60 frames a second.
 pub const FRAME_NANOS: u64 = 16_666_667;
@@ -95,6 +104,9 @@ pub struct Playback {
     next: usize,
     /// The frame before which the latest view was handed over.
     last_view: Option<usize>,
+    moves: Vec<(u64, Pointer)>,
+    stack_rest: bool,
+    rested: Option<usize>,
 }
 
 impl Playback {
@@ -122,6 +134,7 @@ impl Playback {
         }
         let (mut views, records) = match stress(name) {
             Some(board) => {
+                let records = card_records(name, &board);
                 let views = board
                     .views
                     .into_iter()
@@ -132,10 +145,7 @@ impl Playback {
                         }]
                     })
                     .collect();
-                // The stress boards' permanents have names of their own, which no card in the
-                // store has, so their records hold only the card back and the nameless token's
-                // art.
-                (views, CardRecords::none())
+                (views, records)
             }
             None => recorded(name),
         };
@@ -154,11 +164,23 @@ impl Playback {
         for ready in ready {
             client.handle(Input::Assets(ready));
         }
+        let mut moves = if name == "stress-hand" {
+            let recording = recording(name, Side::You).expect("hand recording");
+            let mut page = Page::new(recording.into(), Side::You, Layout::Desktop, window)
+                .expect("the hand plays");
+            pointer_moves(page.frame())
+        } else {
+            Vec::new()
+        };
+        moves.reverse();
         Some(Self {
             client,
             views,
             next: 0,
             last_view: None,
+            moves,
+            stack_rest: name == "stress-stack",
+            rested: None,
         })
     }
 
@@ -168,6 +190,11 @@ impl Playback {
     fn due(&self) -> bool {
         if self.views.is_empty() {
             return false;
+        }
+        if self.stack_rest && self.views.len() == 1 {
+            return self
+                .rested
+                .is_some_and(|rest| self.next >= rest + STACK_REST_FRAMES);
         }
         match self.last_view {
             None => true,
@@ -185,7 +212,11 @@ impl Playback {
     #[must_use]
     pub fn moment(&self) -> Option<Moment> {
         if let Some(last) = self.last_view {
-            if self.views.is_empty() && self.next > last && self.client.wake() == Wake::Never {
+            if self.views.is_empty()
+                && self.moves.is_empty()
+                && self.next > last
+                && self.client.wake() == Wake::Never
+            {
                 return None;
             }
             assert!(
@@ -193,7 +224,7 @@ impl Playback {
                 "the script had not played out after {MOST_FRAMES} frames"
             );
         }
-        let phase = if self.due() || self.client.wake() != Wake::Never {
+        let phase = if !self.moves.is_empty() || self.due() || self.client.wake() != Wake::Never {
             Phase::Flight
         } else {
             Phase::Rest
@@ -208,13 +239,22 @@ impl Playback {
     /// Hands the client the inputs due before the next frame. This and `frame` together are one
     /// frame of a host's work.
     pub fn handle(&mut self) {
-        if !self.due() {
-            return;
+        if self.stack_rest && self.views.len() == 1 && self.client.wake() == Wake::Never {
+            self.rested.get_or_insert(self.next - 1);
         }
-        let group = self.views.pop().expect("a view is waiting");
-        self.last_view = Some(self.next);
-        for update in group {
-            self.client.handle(Input::Update(Box::new(update)));
+        if self.due() {
+            let group = self.views.pop().expect("a view is waiting");
+            self.last_view = Some(self.next);
+            self.rested = None;
+            for update in group {
+                self.client.handle(Input::Update(Box::new(update)));
+            }
+        }
+        if let Some(&(at, pointer)) = self.moves.last()
+            && at == self.next as u64 * FRAME_NANOS
+        {
+            self.client.handle(Input::Pointer(pointer));
+            self.moves.pop();
         }
     }
 

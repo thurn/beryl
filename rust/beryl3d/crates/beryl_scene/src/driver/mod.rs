@@ -11,6 +11,7 @@
 
 mod action;
 mod check;
+mod cues;
 mod gesture;
 mod glyphs;
 mod moment;
@@ -30,6 +31,7 @@ pub use check::{Checked, Mode, StepMoment, TimelineStep};
 pub use moment::{Duration, Moment, Name, Offset, ParseError};
 pub use recording::{Answer, OPEN, Recording, Responses, plays_on};
 
+use self::cues::Cues;
 use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
 use crate::faces::FaceList;
 use crate::frame::{Frame, Place, Role, Sound, StateBits, Wake};
@@ -111,6 +113,7 @@ pub struct Page {
     layout: Layout,
     size: Size,
     tick: Duration,
+    cues: Cues,
     client: Client,
     /// The clock, in nanoseconds since the recording's start.
     now: u64,
@@ -161,6 +164,7 @@ impl Page {
             layout,
             size,
             tick: TICK,
+            cues: Cues::default(),
             client: Client::new(Config::LARGEST),
             now: 0,
             released: 0,
@@ -202,7 +206,7 @@ impl Page {
     /// rests in the last.
     #[must_use]
     pub fn ended(&self) -> bool {
-        self.released >= self.views.len() && self.rest_since.is_some()
+        self.released >= self.views.len() && self.rest_since.is_some() && self.cues.done()
     }
 
     /// The next verb the client played as an instant change because it is not built yet, each
@@ -342,29 +346,6 @@ impl Page {
     /// Runs the clock for `duration`, giving each recorded reply when it is due.
     pub fn step(&mut self, duration: Duration) {
         self.advance_to(self.now + duration.0);
-    }
-
-    /// Runs the clock until nothing on the table moves.
-    ///
-    /// # Panics
-    ///
-    /// When the table is still moving after ten minutes of the clock.
-    pub fn still(&mut self) {
-        let limit = self.now + STILL_LIMIT.0;
-        self.render();
-        loop {
-            let next = match self.client.wake() {
-                Wake::Never => return,
-                Wake::Now => self.now + self.tick.0,
-                Wake::At(time) => time.max(self.now + 1),
-            };
-            if next > limit {
-                let message = format!("still() ran for {STILL_LIMIT} and the table never rested");
-                panic!("{}", self.error(&message));
-            }
-            self.now = next;
-            self.render();
-        }
     }
 
     /// Plays `script`, one action a line, through the same methods. Blank lines and lines that
@@ -597,6 +578,7 @@ impl Page {
         self.released = 0;
         self.batch = 0;
         self.rest_since = None;
+        self.cues.next = 0;
         self.inputs.clear();
         self.given_at.clear();
         self.begin();
@@ -620,6 +602,7 @@ impl Page {
     /// Computes the frame at the present time, and answers every command it sends from the
     /// recording, until it sends none.
     fn render(&mut self) {
+        self.give_cues();
         loop {
             let sounds = &self.client.frame(self.now).sounds;
             self.heard.extend(sounds.iter().map(|s| (self.now, *s)));
@@ -654,7 +637,7 @@ impl Page {
         if self.released >= self.views.len() {
             return None;
         }
-        self.rest_since.map(|rest| rest + REPLY_DELAY.0)
+        self.rest_since.map(|rest| rest + self.reply_delay().0)
     }
 
     /// Runs the clock to `target`, giving each recorded reply when it is due.
@@ -671,12 +654,10 @@ impl Page {
             if self.now >= target {
                 return;
             }
-            let wake = match self.client.wake() {
-                Wake::Now => self.now + self.tick.0,
-                Wake::At(time) => time.max(self.now + 1),
-                Wake::Never => u64::MAX,
-            };
-            self.now = wake.min(self.reply_due().unwrap_or(u64::MAX)).min(target);
+            self.now = self
+                .next_frame()
+                .min(self.reply_due().unwrap_or(u64::MAX))
+                .min(target);
             self.render();
         }
     }
@@ -702,6 +683,7 @@ impl Page {
             layout: self.layout,
             size: self.size,
             tick: self.tick,
+            cues: self.cues.fresh(),
             client: Client::new(Config::LARGEST),
             now: 0,
             released: 0,
@@ -739,7 +721,7 @@ impl Page {
             if self.released >= self.views.len() {
                 break;
             }
-            let due = self.now + REPLY_DELAY.0;
+            let due = self.now + self.reply_delay().0;
             self.advance_to(due);
         }
         moments.push((Name::End, self.now));

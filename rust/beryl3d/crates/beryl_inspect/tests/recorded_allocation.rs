@@ -190,3 +190,25 @@ fn frames_allocate_nothing_while_a_card_is_held() {
         "frames that allocated, as (frame, allocations)"
     );
 }
+
+#[test]
+fn frames_allocate_nothing_on_stress_boards() {
+    use beryl_inspect::{gate::Playback, stress::NAMES};
+
+    for name in NAMES {
+        let mut board = Playback::new(name).unwrap();
+        while let Some(moment) = board.moment() {
+            board.handle();
+            ALLOCATIONS.with(|n| n.set(0));
+            COUNTING.with(|counting| counting.set(true));
+            std::hint::black_box(board.frame());
+            COUNTING.with(|counting| counting.set(false));
+            assert_eq!(
+                ALLOCATIONS.with(Cell::get),
+                0,
+                "{name} frame {}",
+                moment.frame
+            );
+        }
+    }
+}

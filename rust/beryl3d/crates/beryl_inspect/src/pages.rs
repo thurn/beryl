@@ -3,18 +3,17 @@
 //! on every tick of a recording. A name is a fixture's, a card spec moment's as
 //! `<card>/<moment>`, a stress board's ([`crate::stress`]) or a screen's ([`crate::screens`]).
 
-use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::CARD_RECORDS;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
 use beryl_protocol::{GameUpdate, Seat, SessionId};
 use beryl_scene::agent::Layout;
-use beryl_scene::driver::{Page, Recording, TICK};
+use beryl_scene::driver::{Duration, Page, Recording, TICK};
 use beryl_scene::input::Size;
 
 use crate::faults::Listed;
 use crate::runner::Test;
-use crate::stress::stress;
+use crate::stress::{STACK_REST_FRAMES, card_records, pointer_moves, stress};
 use crate::{recordings, screens};
 
 /// The desktop windows every recording is checked in: the smallest common laptop screen, two
@@ -74,9 +73,17 @@ impl Recorded for Page {
 /// When there is no such recording for `seat`, or it cannot be read.
 pub fn page(name: &str, seat: Side, layout: Layout, size: Size) -> Result<Page, String> {
     let recording = recording(name, seat)?;
-    Page::new(recording.into(), seat, layout, size)
-        .map(|page| page.named(name))
-        .map_err(|error| format!("{name}: {error}"))
+    let mut page = Page::new(recording.into(), seat, layout, size)
+        .map_err(|error| format!("{name}: {error}"))?
+        .named(name);
+    if name == "stress-hand" {
+        let moves = pointer_moves(page.frame());
+        page.set_pointer_moves(moves);
+    }
+    if name == "stress-stack" {
+        page.set_reply_delay(2, Duration(STACK_REST_FRAMES as u64 * TICK.0));
+    }
+    Ok(page)
 }
 
 /// The messages of the recording `name` as `seat` is sent them. A stress board is seen from
@@ -96,18 +103,14 @@ pub fn recording(name: &str, seat: Side) -> Result<Recording, String> {
                 "the stress board {name:?} is seen from P0 only, not {seat:?}"
             ));
         }
+        let records = card_records(name, &board);
         let session = SessionId(1);
         let mut messages: Vec<FixtureMessage> = board
             .views
             .into_iter()
             .map(|view| FixtureMessage::game_update(&GameUpdate { session, view }))
             .collect();
-        // Like every recording in the pack, it starts with the records of the cards it shows:
-        // none, since its permanents have names of their own that the card store does not.
-        messages.insert(
-            0,
-            FixtureMessage::response(CARD_RECORDS, &CardRecords::none()),
-        );
+        messages.insert(0, FixtureMessage::response(CARD_RECORDS, &records));
         return Ok(Recording(messages));
     }
     if let Some(messages) = screens::messages(name) {
