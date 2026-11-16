@@ -321,19 +321,29 @@ fn everything(frame: &Frame) -> Vec<u32> {
         .collect()
 }
 
+/// The part of an element's box a press can land on: its box cut to its clip, or `None` when
+/// the clip hides all of it.
+#[must_use]
+pub fn visible_bounds(element: &Resolved) -> Option<Rect> {
+    let area = bounds(element);
+    match element.clip {
+        Some(clip) => intersection(area, clip),
+        None => Some(area),
+    }
+}
+
 /// The area `Grid` measures element `index` on: its box, cut to its clip.
 fn grid_area(frame: &Frame, index: u32) -> Rect {
     let element = &frame.resolved[index as usize];
-    let area = bounds(element);
-    match element.clip {
-        Some(clip) => intersection(area, clip).unwrap_or(Rect {
+    visible_bounds(element).unwrap_or_else(|| {
+        let area = bounds(element);
+        Rect {
             x: area.x,
             y: area.y,
             width: 0.0,
             height: 0.0,
-        }),
-        None => area,
-    }
+        }
+    })
 }
 
 /// The cells `free_rect` and `covered` measure an element on: its box cut along the edges of

@@ -2627,10 +2627,11 @@ screen, so they cover every card spec that is ever generated.
 - **No overlap.** No two interactive elements of the flat layer intersect,
   unless one contains the other in the tree. Cards are exempt, because rows and
   hands overlap them on purpose.
-- **Reachable.** A hit test at the centre of an interactive flat-layer element
-  returns that element or one inside it. Every interactive card at rest has an
-  uncovered area of at least 24 by 24 points (44 by 44 on the phone layout)
-  where a hit test returns it.
+- **Reachable.** A hit test at the centre of the visible part of an interactive
+  flat-layer element (its box cut to its clip, so a list row scrolled partly out
+  of view is pressed where it shows) returns that element or one inside it.
+  Every interactive card at rest has an uncovered area of at least 24 by 24
+  points (44 by 44 on the phone layout) where a hit test returns it.
 - **No duplicates.** No two elements share an id, a game object has exactly one
   scene object, and no two sibling elements of the flat layer share a role and a
   name. Arrows are left out of that last rule, since two arrows of one kind from

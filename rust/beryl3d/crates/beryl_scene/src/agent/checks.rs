@@ -7,7 +7,9 @@ use std::collections::BTreeMap;
 use glam::Vec2;
 
 use super::fault::{Context, Fault, Layout, Rule, Subject};
-use super::hit::{Overlaps, bounds, contains, has_free_rect, hit, intersection, is_within};
+use super::hit::{
+    Overlaps, bounds, contains, has_free_rect, hit, intersection, is_within, visible_bounds,
+};
 use super::tree::locator_of;
 use crate::data::audit;
 use crate::frame::{Frame, Place, REVEALED_FACE, Role, StateBits};
@@ -116,8 +118,8 @@ pub fn overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults
 }
 
-/// Reachable: a hit test at the centre of an interactive flat-layer element returns that
-/// element (or something inside it). Every interactive card at rest has an uncovered area at
+/// Reachable: a hit test at the centre of the visible part of an interactive flat-layer element
+/// (its box cut to its clip) returns that element (or something inside it). Every interactive card at rest has an uncovered area at
 /// least `TARGET_POINTS` square (`PHONE_TARGET_POINTS` on the phone layout) where a hit test
 /// returns it. Cards are judged only on a frame where nothing on the table moves: a card passing
 /// over another covers it for a moment, which leaves no card out of reach. A hand card the
@@ -171,7 +173,8 @@ pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
         if element.place != Place::Layer {
             continue;
         }
-        let rect = bounds(element);
+        // A row scrolled half out of its list is pressed on the part the list still shows.
+        let rect = visible_bounds(element).unwrap_or_else(|| bounds(element));
         let center = Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
         let reached = hit(frame, center);
         if reached.is_some_and(|at| is_within(frame, at, index)) {

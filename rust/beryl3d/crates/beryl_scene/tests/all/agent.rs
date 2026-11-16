@@ -447,6 +447,21 @@ fn a_covered_button_is_a_fault() {
 }
 
 #[test]
+fn a_row_scrolled_partly_out_of_its_list_is_pressed_where_it_shows() {
+    // A list over a screen's region shows only the top 2 points of its last row, whose box
+    // centre lies over the region below the list.
+    let list = rect(0.0, 0.0, 200.0, 100.0);
+    let frame = frame(vec![
+        layer(Role::Region, "screen", 1, rect(0.0, 0.0, 200.0, 120.0)),
+        layer(Role::List, "recordings", 2, list).parent(0),
+        layer(Role::Button, "last", 3, rect(0.0, 98.0, 200.0, 28.0))
+            .parent(1)
+            .with(|e| e.clip = Some(list)),
+    ]);
+    assert_eq!(summary(&reachable(&frame, &desktop())), vec![]);
+}
+
+#[test]
 fn a_card_with_too_small_an_uncovered_strip_is_a_fault() {
     // The nearer card leaves a strip of the farther one `strip` points wide.
     let strip_of = |strip: f32| {
