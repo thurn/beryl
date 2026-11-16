@@ -687,6 +687,9 @@ pub struct Segment {
     pub turning: Option<Turning>, // when the card turns over, top over bottom,
                            // as shares of its time: edge-on at `at`, turning
                            // from `at - each` to `at + each`
+    pub step: Option<StepTime>, // the step that made it and whether it keeps
+                           // to the step's start or its room, so that a
+                           // script laid out again as it starts moves it
 }
 
 impl Segment {
@@ -1404,7 +1407,12 @@ What the session does and what a client still does:
   screen (a player may have looked at an arrow for five seconds before
   answering), and whether a banner is still passing over the table. The web
   interface's is `laid` in `ui/src/stage/beat.ts`. Beryl 3D's is a port of that
-  one function, in `beryl_scene`'s `beat` module.
+  one function, in `beryl_scene`'s `beat` module. Beryl 3D compiles a script
+  when its update arrives, before both are known, so a script with a step that
+  holds a span (`hold`) or waits for the table to itself (`alone`) is laid out
+  again as it starts (`play::relay`). Every segment and record of the script
+  then moves by how much later the step it keeps to plays. No pose is worked out
+  again, which is exact because the steps that wait move nothing.
 - **A client makes a few steps itself.** While a prompt is open, the client
   draws its marks, its arrows and the cards it holds up as steps of its own,
   made from the prompt's state (`ui/src/stage/prompt.ts`). Their timing is a

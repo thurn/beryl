@@ -32,11 +32,13 @@ pub struct Found<'a> {
     pub timing: &'a StepTiming,
 }
 
-/// A sound at a time on its script's clock, in nanoseconds.
+/// A sound at a time on its script's clock, in nanoseconds. `step` is the number of the step
+/// that asked for it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SoundRun {
     pub sound: Sound,
     pub at: u64,
+    pub step: usize,
 }
 
 /// The id of the sound the manifest names `name`.
@@ -385,13 +387,13 @@ impl Sounds {
         }
     }
 
-    /// Adds the sounds of the step `index` of `beat`, which plays as `laid` says, over `table`,
-    /// the table as the step finds it before its act is played over it, if the script is
-    /// played over one.
+    /// Adds the sounds of the step `index` of `beat`, the script's step `number`, which plays as
+    /// `laid` says, over `table`, the table as the step finds it before its act is played over
+    /// it, if the script is played over one.
     pub(crate) fn step(
         &mut self,
         table: Option<&Played>,
-        (beat, index): (&[Step], usize),
+        (beat, index, number): (&[Step], usize, usize),
         timing: &StepTiming,
         laid: &Laid,
     ) {
@@ -419,6 +421,7 @@ impl Sounds {
                         theirs,
                     },
                     at: nanoseconds(edge + cue.into.unwrap_or(0.0) * span),
+                    step: number,
                 },
             ));
         }

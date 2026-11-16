@@ -7,7 +7,7 @@ use std::f32::consts::PI;
 
 use glam::{Affine3A, Quat, Vec3};
 
-use crate::verbs::Interval;
+use crate::verbs::{Interval, StepTime};
 
 /// Where one object is and how it is turned, in the table's space.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -169,6 +169,10 @@ pub struct Segment {
     /// When its object turns over, if it does so at a moment of its own rather than evenly
     /// along the eased progress.
     pub turning: Option<Turning>,
+    /// The step of its script that made it and which of that step's times it keeps to, so that
+    /// a script laid out again as it starts can move it with that time; `None` for one no step
+    /// made, which stays where it is.
+    pub step: Option<StepTime>,
 }
 
 impl Segment {
@@ -184,6 +188,7 @@ impl Segment {
             arc: 0.0,
             shape: Shape::Line,
             turning: None,
+            step: None,
         }
     }
 }

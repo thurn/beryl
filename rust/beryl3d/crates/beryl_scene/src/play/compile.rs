@@ -72,6 +72,15 @@ pub(crate) struct Compiled {
     pub counts: Vec<CountChange>,
     /// The sounds its steps ask for, ordered by when each begins on its clock.
     pub sounds: Vec<SoundRun>,
+    /// When each of its steps plays, in order, as its beats were laid out; empty when it has no
+    /// steps to play (no script, or timings that do not match its steps).
+    pub laid: Vec<Laid>,
+    /// Room for laying every step out again as the script starts (`relay`), so that doing so
+    /// allocates nothing.
+    pub scratch: Vec<Laid>,
+    /// For each step, when what closed up after it has closed, in milliseconds on the script's
+    /// clock, if anything did: its beat lasts until then.
+    pub closes: Vec<Option<f64>>,
 }
 
 impl Compiled {
@@ -173,11 +182,15 @@ pub(crate) fn compile<'a>(
     compiled.end = lay_out(
         script,
         timings,
-        &mut compiled.unbuilt,
+        (
+            &mut compiled.unbuilt,
+            &mut compiled.laid,
+            &mut compiled.closes,
+        ),
         |(beat, index), step, timing, laid| {
             sounds.step(
                 motion.as_ref().map(|motion| &motion.played),
-                (&script.beats[beat], index),
+                (&script.beats[beat], index, number),
                 timing,
                 laid,
             );
@@ -206,6 +219,7 @@ pub(crate) fn compile<'a>(
     );
     compiled.steps = steps;
     compiled.sounds = sounds.finish();
+    compiled.scratch.clone_from(&compiled.laid);
     // The steps of a beat need not begin in the order they are written, nor their effects.
     compiled.effects.sort_by_key(|run| run.start);
     let Some(motion) = motion else {
@@ -252,17 +266,19 @@ fn ended(played: Option<&Played>, after: &PlayerView, script: &Script) -> Played
 
 /// Lays out each beat of `script` after the one before, calling `each` with every step's beat
 /// and index in its beat, the step, its timing and when it plays, and returns when the last beat
-/// is over, in nanoseconds. Each verb drawn as an instant change sets its bit in `unbuilt`.
-/// `each` returns when what closed up after its step has closed, in milliseconds, if anything
-/// did: a beat is not over until then, as the web stage's is not (`closedBy` in
-/// `ui/src/stage/tracks.ts`).
+/// is over, in nanoseconds. Each verb drawn as an instant change sets its bit in `unbuilt`, and
+/// each step's times go to `all`. `each` returns when what closed up after its step has closed,
+/// in milliseconds, if anything did, which goes to `closed_by`: a beat is not over until then, as
+/// the web stage's is not (`closedBy` in `ui/src/stage/tracks.ts`).
 fn lay_out<'s>(
     script: &'s Script,
     timings: &[StepTiming],
-    unbuilt: &mut u32,
+    (unbuilt, all, closed_by): (&mut u32, &mut Vec<Laid>, &mut Vec<Option<f64>>),
     mut each: impl FnMut((usize, usize), &'s Step, &StepTiming, &Laid) -> Option<f64>,
 ) -> u64 {
     let mut laid = Vec::new();
+    all.reserve_exact(timings.len());
+    closed_by.reserve_exact(timings.len());
     let mut at = 0.0;
     let mut first = 0;
     for (number, steps) in script.beats.iter().enumerate() {
@@ -274,9 +290,12 @@ fn lay_out<'s>(
             if !verbs::built(verb) {
                 *unbuilt |= bit(verb);
             }
-            if let Some(closed) = each((number, index), step, timing, laid) {
+            let closed = each((number, index), step, timing, laid);
+            if let Some(closed) = closed {
                 end = end.max(closed);
             }
+            all.push(*laid);
+            closed_by.push(closed);
         }
         at = end;
         first += steps.len();

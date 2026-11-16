@@ -45,6 +45,26 @@ impl Interval {
     }
 }
 
+/// The step of a script that made something with a time, by its index in the script, and
+/// which of the step's times it keeps to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StepTime {
+    pub number: usize,
+    pub follows: Follows,
+}
+
+/// Which of a step's times something it made keeps to. A step's end is always its start plus
+/// its length, which does not change when its script is laid out again, so what keeps to its
+/// end moves with its start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Follows {
+    /// When the step begins, or ends.
+    Start,
+    /// The time the step leaves for what makes room or closes up round it (`room_of`), which
+    /// begins as its act is applied when that goes ahead of the step (`Laid::opens`).
+    Room,
+}
+
 /// The function that plays `verb`'s steps.
 #[must_use]
 pub fn play(verb: Verb) -> fn(&StepIn<'_>, &mut StepOut<'_>) {

@@ -7,7 +7,7 @@
 use beryl_protocol::script::{Act, Step, StepTiming, Subject, mover_of};
 
 /// When one step of a beat plays, in stage milliseconds.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Laid {
     /// When its turn in its beat came, which its delay counts from.
     pub turn: f64,
@@ -59,12 +59,30 @@ pub fn beat(
     passed: f64,
     steps: &mut Vec<Laid>,
 ) -> f64 {
+    steps.clear();
+    steps.resize(beat.len(), Laid::default());
+    lay(beat, timings, at, whole, passed, steps)
+}
+
+/// `beat`, writing the steps into `steps`, which holds one entry for each step, so that laying
+/// a beat out again allocates nothing.
+///
+/// # Panics
+///
+/// If `timings` or `steps` holds fewer entries than `beat`.
+pub fn lay(
+    beat: &[Step],
+    timings: &[StepTiming],
+    at: f64,
+    whole: impl Fn(&Act) -> Option<f64>,
+    passed: f64,
+    steps: &mut [Laid],
+) -> f64 {
     let [mut from, mut turn, mut last, mut end, mut applied] = [at; 5];
     // When the first of the steps whose acts went ahead, and that have yet to begin, does.
     let mut open = at;
     // Whether the step before went ahead (`StepTiming::ahead`).
     let mut led = false;
-    steps.clear();
     for (i, step) in beat.iter().enumerate() {
         let timing = &timings[i];
         // When each thing a step of the beat moves has come to rest: the latest end of the
@@ -72,7 +90,7 @@ pub fn beat(
         let landed = |name: &Subject| {
             beat[..i]
                 .iter()
-                .zip(steps.iter())
+                .zip(steps[..i].iter())
                 .filter(|(earlier, _)| mover_of(&earlier.act).as_ref() == Some(name))
                 .map(|(_, laid)| laid.to)
                 .reduce(f64::max)
@@ -118,7 +136,7 @@ pub fn beat(
         if timing.leads {
             from = to;
         }
-        steps.push(Laid {
+        steps[i] = Laid {
             turn: own,
             from: began,
             to,
@@ -126,7 +144,7 @@ pub fn beat(
                 at: opens,
                 by: open,
             }),
-        });
+        };
     }
     end
 }

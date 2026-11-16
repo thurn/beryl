@@ -1,8 +1,8 @@
 //! A frame that ends one script and starts the next allocates nothing (docs/beryl-3d.md, "The
 //! frame": no allocation): scripts are compiled when their updates arrive. This binary counts
 //! every heap allocation, so it holds one test, which also checks that the effects a starting
-//! script begins, `Lit::advance`, a frame of twenty streaks, one of forty effects of light and
-//! one with 50 arrows allocate nothing.
+//! script begins, `Lit::advance`, a frame of twenty streaks, one of forty effects of light, one
+//! with 50 arrows and one that lays a script out again as it starts allocate nothing.
 
 mod common;
 
@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use beryl_protocol::protocol::{Mana, ObjectId, Side, ZoneName};
 use beryl_protocol::script::{
-    Act, Arrow, Curve, Edge, Mark, StepEffect, StepTiming, Stream, Subject,
+    self, Act, Arrow, Curve, Edge, Mark, StepEffect, StepTiming, Stream, Subject,
 };
 use beryl_scene::frame::{Frame, FrameBuilder, Material, Role};
 use beryl_scene::light::streaks::RECORDS;
@@ -168,6 +168,56 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
     fifty_arrows_allocate_nothing(&mut show, cards);
     twenty_streaks_allocate_nothing();
     forty_effects_allocate_nothing();
+    laying_a_script_out_again_allocates_nothing();
+}
+
+/// The frame that starts a script whose mark's end waits for the mark to stand whole, and so
+/// lays the script out again, allocates nothing.
+fn laying_a_script_out_again_allocates_nothing() {
+    let (start, cards) = before();
+    let mark = |span| Act::Mark {
+        span,
+        mark: Mark::Selected,
+        on: Subject::Object { slot: cards.angel },
+    };
+    let mut begun = start.clone();
+    begun.view.script = Some(
+        ScriptBuilder::default()
+            .beat([mark(script::Span::Begin)])
+            .build(),
+    );
+    let mut ended = begun.clone();
+    ended.view.script = Some(
+        ScriptBuilder::default()
+            .beat([mark(script::Span::End)])
+            .beat([mark(script::Span::Begin)])
+            .build(),
+    );
+    let held = StepTiming {
+        hold: Some(290.0),
+        with: true,
+        leads: true,
+        ..timing(150.0)
+    };
+    let mut show = show();
+    let mut frame = empty_frame();
+    show.push(Box::new(start), Vec::new());
+    show.push(Box::new(begun), vec![timing(200.0)]);
+    show.push(Box::new(ended), vec![held, timing(150.0)]);
+    // The mark's script plays from 0 to 200 ms, and the next starts at the frame at 200 ms.
+    for now in [0, 100 * MS, 200 * MS, 300 * MS] {
+        let before = ALLOCATIONS.load(Ordering::Relaxed);
+        let mut builder = FrameBuilder::new(&mut frame);
+        show.frame(now, &mut builder);
+        let after = ALLOCATIONS.load(Ordering::Relaxed);
+        assert_eq!(
+            after - before,
+            0,
+            "allocations in the frame at {} ms",
+            now / MS
+        );
+    }
+    assert_eq!(show.relays(), 1, "the script was laid out again");
 }
 
 /// A frame that draws twenty streaks at once allocates nothing.

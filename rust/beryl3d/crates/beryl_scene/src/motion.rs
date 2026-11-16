@@ -514,6 +514,23 @@ impl Track {
         Ok(())
     }
 
+    /// Moves each segment later by what `later` gives for it, keeping them sorted by start and,
+    /// of two that start together, in the order they were added. Allocates nothing.
+    pub fn shift(&mut self, later: impl Fn(&Segment) -> u64) {
+        for segment in self.segments_mut() {
+            segment.start += later(segment);
+        }
+        // An insertion sort, which is stable and allocates nothing; the segments are almost
+        // always in order already.
+        for i in 1..self.len {
+            let mut j = i;
+            while j > 0 && self.segments[j - 1].start > self.segments[j].start {
+                self.segments.swap(j - 1, j);
+                j -= 1;
+            }
+        }
+    }
+
     /// Drops every segment that begins after `t`, and says whether there was one.
     pub fn cut_after(&mut self, t: u64) -> bool {
         let kept = self.segments().partition_point(|s| s.start <= t);

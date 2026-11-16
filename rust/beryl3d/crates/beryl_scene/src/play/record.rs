@@ -11,6 +11,7 @@ use glam::Vec3;
 use crate::effects::EffectRun;
 use crate::motion::pose_at;
 use crate::pose::{Pose, Segment};
+use crate::verbs::{Follows, StepTime};
 
 /// One step of a script, as it was laid out. Times are on the script's own clock, in
 /// nanoseconds.
@@ -108,6 +109,21 @@ pub enum Cause {
     Change(usize),
     /// A test put it there to make a fault (`Plant`).
     Planted,
+}
+
+impl Cause {
+    /// The step a segment made for this cause keeps to: the start of a step whose verb or
+    /// change made it, and the room of one it slid in. A hold before the first move, at the
+    /// start of the script, and a planted fault keep to none.
+    #[must_use]
+    pub fn step_time(self) -> Option<StepTime> {
+        let (number, follows) = match self {
+            Self::Verb(number) | Self::Change(number) => (number, Follows::Start),
+            Self::Slide(number) => (number, Follows::Room),
+            Self::Hold | Self::Planted => return None,
+        };
+        Some(StepTime { number, follows })
+    }
 }
 
 /// A segment on the track of the object in `slot`, and why it is there.

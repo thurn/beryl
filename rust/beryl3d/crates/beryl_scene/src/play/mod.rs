@@ -26,7 +26,9 @@ mod hold;
 pub(crate) use compile::nanoseconds;
 mod index;
 mod notices;
+mod playing;
 pub mod record;
+mod relay;
 mod scene;
 mod scroll;
 mod sounds;
@@ -39,106 +41,26 @@ use std::collections::VecDeque;
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::PlayerView;
-use beryl_protocol::script::{self, Act, StepTiming, Subject, Table as Played, Verb};
+use beryl_protocol::script::{Act, StepTiming, Subject, Table as Played, Verb};
 use glam::Vec2;
 
 use self::compile::{Compiled, bit, compile};
+use self::playing::{Playing, Waiting};
 use self::record::{Plant, ScriptRecord, StepRecord};
 use crate::data::space::catch_up;
 use crate::effects::{self, EffectRun};
 use crate::faces::Faces;
 use crate::frame::FrameBuilder;
 use crate::hud::counts::Counts;
-use crate::light::{self, Lit, StreakRun};
+use crate::light::{self, Lit};
 use crate::notice::Announced;
 use crate::pointer::Pointer;
 use crate::pose::Pose;
 use crate::table::badges::Badges;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Motion, Table, Window, ability_track};
-use crate::verbs::Interval;
 
 /// How many spans, streaks and effects the show holds before holding more allocates.
 const LIGHTS: usize = 256;
-
-/// An update and the timings of its script's steps, compiled to play after the scripts before
-/// it.
-struct Waiting {
-    /// How many scripts the show was given before this one.
-    number: usize,
-    update: Box<GameUpdate>,
-    timings: Vec<StepTiming>,
-    /// The table the script before it ended with, which it is played from.
-    from: Option<Played>,
-    compiled: Compiled,
-}
-
-/// The script under way.
-struct Playing {
-    /// How many scripts the show was given before this one.
-    number: usize,
-    /// Its update, until the table shows it. A script that moves nothing (a reset, the first
-    /// view) shows its view as it starts and then only holds the time its beats take.
-    update: Option<Box<GameUpdate>>,
-    timings: Vec<StepTiming>,
-    /// The table the script before it ended with, which it is played from.
-    from: Option<Played>,
-    compiled: Compiled,
-    /// When it started, in nanoseconds since the client started.
-    start: u64,
-    /// How many times faster than real time its clock runs.
-    rate: u64,
-    /// How many of its `compiled.spans` and `compiled.streaks` have reached the table's `Lit`.
-    spans_given: usize,
-    streaks_given: usize,
-    counts_given: usize,
-    /// How many of its `compiled.sounds` the frames have listed.
-    sounds_given: usize,
-}
-
-impl Playing {
-    /// The time on the script's own clock at `now`.
-    fn clock(&self, now: u64) -> u64 {
-        now.saturating_sub(self.start).saturating_mul(self.rate)
-    }
-
-    /// The real time at which its clock reads `t`, rounded up.
-    fn real(&self, t: u64) -> u64 {
-        self.start + t.div_ceil(self.rate)
-    }
-
-    /// `over`, on its clock, in real time.
-    fn real_interval(&self, over: Interval) -> Interval {
-        Interval {
-            from: self.real(over.from),
-            to: self.real(over.to),
-        }
-    }
-
-    /// Gives `lit` each span change and streak, and `counts` each count change, of the script
-    /// whose real time is at or before `now`, in order, that it has not given yet.
-    fn light(&mut self, now: u64, lit: &mut Lit, counts: &mut Counts) {
-        self.give_counts(now, counts);
-        while let Some(change) = self.compiled.spans.get(self.spans_given) {
-            let over = self.real_interval(change.over);
-            if over.from > now {
-                break;
-            }
-            match change.end {
-                script::Span::Begin => lit.begin(change.span, over),
-                script::Span::End => lit.end(&change.span, over),
-            }
-            self.spans_given += 1;
-        }
-        while let Some(run) = self.compiled.streaks.get(self.streaks_given) {
-            let over = self.real_interval(run.over);
-            if over.from > now {
-                break;
-            }
-            lit.streak(StreakRun { over, ..*run });
-            self.streaks_given += 1;
-        }
-    }
-}
 
 /// The table and the scripts that lead it from view to view.
 pub struct Show {
@@ -185,6 +107,8 @@ pub struct Show {
     counts: Counts,
     /// The numbers the badges on permanents are made of.
     badges: Badges,
+    /// How many scripts were laid out again as they started (`relay`).
+    relays: usize,
 }
 
 impl Show {
@@ -212,6 +136,7 @@ impl Show {
             pointer: Pointer::default(),
             counts: Counts::default(),
             badges: Badges::default(),
+            relays: 0,
         }
     }
 
@@ -545,7 +470,7 @@ impl Show {
                 }
                 self.finish();
             }
-            let Some(waiting) = self.waiting.pop_front() else {
+            let Some(mut waiting) = self.waiting.pop_front() else {
                 break;
             };
             self.unbuilt |= waiting.compiled.unbuilt;
@@ -562,6 +487,7 @@ impl Show {
                 self.notices.clear();
             }
             let start = ended.unwrap_or(now);
+            self.relay(&mut waiting, start, rate);
             self.record_start(waiting.number, start, rate);
             self.playing = Some(Playing {
                 number: waiting.number,
@@ -662,6 +588,7 @@ impl Show {
         let Some(playing) = &mut self.playing else {
             return;
         };
+        relay::follow(&mut compiled, &playing.compiled);
         let t = playing.clock(now);
         let old = &playing.compiled.tracks;
         for (slot, track) in compiled.tracks.iter_mut().enumerate() {

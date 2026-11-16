@@ -5,6 +5,7 @@ use beryl_protocol::script::Subject;
 
 use super::Motion;
 use crate::motion::Track;
+use crate::play::record::Cause;
 use crate::pose::{Pose, Segment};
 use crate::table::ability_track;
 use crate::verbs::{self, Interval};
@@ -31,9 +32,10 @@ impl Motion<'_> {
     /// one it moves itself, a segment to where it rests now: a slide over `room` where the
     /// items below it changed, and an instant change at the start of the step's `own` time
     /// where it comes onto the stack or leaves it without being the step's subject. Returns
-    /// whether any ability slid.
+    /// whether any ability slid. `number` is the step's index in its script.
     pub(super) fn follow_abilities(
         &mut self,
+        number: usize,
         mover: Option<Subject>,
         own: Interval,
         room: Interval,
@@ -57,11 +59,11 @@ impl Motion<'_> {
             }
         }
         for &(id, rested, now) in changed.iter().filter(|(id, ..)| Some(*id) != subject) {
-            let segment = match (rested, now) {
+            let (segment, cause) = match (rested, now) {
                 (Some(_), Some(now)) => {
                     let from = self.ability_placed(id, room.from).unwrap_or(now.pose);
                     slid = true;
-                    verbs::slide(from, now.pose, room)
+                    (verbs::slide(from, now.pose, room), Cause::Slide(number))
                 }
                 (Some(rested), None) => {
                     let from = self.ability_placed(id, own.from).unwrap_or(rested.pose);
@@ -69,18 +71,21 @@ impl Motion<'_> {
                         opacity: 0.0,
                         ..from
                     };
-                    verbs::instant(from, gone, own.from)
+                    (verbs::instant(from, gone, own.from), Cause::Change(number))
                 }
                 (None, Some(now)) => {
                     let unseen = Pose {
                         opacity: 0.0,
                         ..now.pose
                     };
-                    verbs::instant(unseen, now.pose, own.from)
+                    (
+                        verbs::instant(unseen, now.pose, own.from),
+                        Cause::Change(number),
+                    )
                 }
                 (None, None) => continue,
             };
-            self.push_ability(id, segment);
+            self.push_ability(id, segment, cause);
         }
         self.moved = changed;
         slid
@@ -98,7 +103,11 @@ impl Motion<'_> {
 
     /// Adds `segment` to the track of the ability numbered `id`, as `push` does for a card.
     /// The interface checks keep no record of an ability's segments.
-    pub(super) fn push_ability(&mut self, id: u32, segment: Segment) {
+    pub(super) fn push_ability(&mut self, id: u32, segment: Segment, cause: Cause) {
+        let segment = Segment {
+            step: cause.step_time(),
+            ..segment
+        };
         let at = match self
             .ability_tracks
             .binary_search_by_key(&id, |(number, _)| *number)

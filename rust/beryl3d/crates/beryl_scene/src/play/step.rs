@@ -526,7 +526,7 @@ impl<'a> Motion<'a> {
             );
         }
         self.affected = affected;
-        if self.follow_abilities(mover, own, room) && room.to > own.to {
+        if self.follow_abilities(number, mover, own, room) && room.to > own.to {
             self.note_closing(room.to);
         }
         self.commit(&dirty);
@@ -662,7 +662,7 @@ impl<'a> Motion<'a> {
         written.segments = segments;
         let mut segments = std::mem::take(&mut written.ability_segments);
         for (id, segment) in segments.drain(..) {
-            self.push_ability(id, segment);
+            self.push_ability(id, segment, Cause::Verb(number));
         }
         written.ability_segments = segments;
         self.written = written;
@@ -737,6 +737,10 @@ impl<'a> Motion<'a> {
     /// segment comes after one that holds it where it rested before the script, so that it
     /// stands there until it moves.
     fn push(&mut self, slot: usize, segment: Segment, cause: Cause) {
+        let segment = Segment {
+            step: cause.step_time(),
+            ..segment
+        };
         // A segment an earlier step gave the object that has not begun when this one does is
         // out of date: this step has moved the object's resting place since. When three
         // permanents tap at once, the first tap's row waits until its card has turned, but

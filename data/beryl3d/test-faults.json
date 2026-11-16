@@ -94,16 +94,16 @@
       "step-shown": 1
     },
     "b3d:choice-trigger-order/opponent/1440x900": {
-      "step-shown": 33
+      "step-shown": 32
     },
     "b3d:choice-trigger-order/opponent/1600x900": {
-      "step-shown": 33
+      "step-shown": 32
     },
     "b3d:choice-trigger-order/opponent/1920x1080": {
-      "step-shown": 33
+      "step-shown": 32
     },
     "b3d:choice-trigger-order/opponent/2560x1080": {
-      "step-shown": 34
+      "step-shown": 33
     },
     "b3d:choice-trigger-order/you/1440x900": {
       "step-shown": 19
@@ -119,19 +119,19 @@
     },
     "b3d:combat-attackers/opponent/1440x900": {
       "reachable": 2,
-      "step-shown": 12
+      "step-shown": 13
     },
     "b3d:combat-attackers/opponent/1600x900": {
       "reachable": 2,
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:combat-attackers/opponent/1920x1080": {
       "reachable": 2,
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:combat-attackers/opponent/2560x1080": {
       "reachable": 2,
-      "step-shown": 19
+      "step-shown": 18
     },
     "b3d:combat-attackers/you/1440x900": {
       "reachable": 2,
@@ -640,13 +640,13 @@
       "step-shown": 2
     },
     "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-bounced-0/opponent/1440x900": {
-      "step-shown": 3
+      "step-shown": 4
     },
     "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-bounced-0/opponent/1600x900": {
-      "step-shown": 2
+      "step-shown": 4
     },
     "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-bounced-0/opponent/1920x1080": {
-      "step-shown": 2
+      "step-shown": 4
     },
     "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-bounced-0/opponent/2560x1080": {
       "step-shown": 1
@@ -1849,7 +1849,7 @@
       "no-jumps": 1
     },
     "b3d:verbs-zones-theirs/opponent/1440x900": {
-      "step-shown": 2
+      "step-shown": 3
     },
     "b3d:verbs-zones-theirs/opponent/1600x900": {
       "step-shown": 2
