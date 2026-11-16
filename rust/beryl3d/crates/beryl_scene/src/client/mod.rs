@@ -9,7 +9,7 @@ mod editing;
 
 use std::collections::VecDeque;
 
-use beryl_protocol::prompt::{Click, ClickReply, ClickRequest, PromptView};
+use beryl_protocol::prompt::{Click, ClickRequest, PromptView};
 use beryl_protocol::protocol::{DecisionId, ObjectId, SessionId, Side, Status};
 use beryl_protocol::script::{OwnTimings, Subject, Verb, own_timings};
 use beryl_protocol::{AgentView, StartRequest, StopsSetting};
@@ -179,6 +179,9 @@ pub struct Client {
     wake: Wake,
     requests: VecDeque<Request>,
     commands: VecDeque<SessionCommand>,
+    /// The decision of each click sent and not yet answered, oldest first. The session answers
+    /// commands in order, so each `Reply::Click` is for the oldest.
+    clicks: VecDeque<DecisionId>,
     tier: Tier,
     /// Whether the host has said memory is low (`Lifecycle::LowMemory`), which fixes the tier at
     /// Baseline.
@@ -252,6 +255,7 @@ impl Client {
             wake: Wake::Never,
             requests: VecDeque::new(),
             commands: VecDeque::new(),
+            clicks: VecDeque::new(),
             tier: Tier::Baseline,
             low_memory: false,
             inspector: Inspector::default(),
@@ -324,17 +328,10 @@ impl Client {
             }
             Input::Reply(Reply::CardSearch(text, hits)) => self.take_token_hits(text, hits),
             Input::Reply(Reply::TableAct(reply)) => self.take_table_reply(reply),
-            Input::Reply(Reply::Click(Ok(reply))) => {
-                match reply {
-                    ClickReply::Open { prompt } => {
-                        let decision = self.prompt.as_ref().map(|(decision, _)| *decision);
-                        self.set_prompt(decision.map(|decision| (decision, *prompt)));
-                    }
-                    // The views that follow the answer bring the next prompt.
-                    ClickReply::Answered => self.set_prompt(None),
-                }
-                self.prepare_counts();
-                self.show_screen();
+            Input::Reply(Reply::Click(Ok(reply))) => self.click_replied(reply),
+            Input::Reply(Reply::Click(Err(_))) => {
+                self.clicks.pop_front();
+                self.inputs.push(input);
             }
             Input::Lobby(update) => self.take_lobby(*update),
             Input::Reply(Reply::TableLobby(Err(refused))) => self.lobby_refused(&refused),
@@ -667,6 +664,7 @@ impl Client {
         let Some((decision, prompt)) = &self.prompt else {
             return;
         };
+        self.clicks.push_back(*decision);
         self.commands.push_back(SessionCommand::Click(ClickRequest {
             decision: *decision,
             revision: prompt.revision,

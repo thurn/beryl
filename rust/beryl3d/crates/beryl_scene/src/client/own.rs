@@ -6,7 +6,7 @@
 //! (`Steps::tray_step`), from places it worked out as the prompt changed, so that the frame
 //! that moves them lays nothing out.
 
-use beryl_protocol::prompt::{PromptView, Purpose, ShapeBody};
+use beryl_protocol::prompt::{ClickReply, PromptView, Purpose, ShapeBody};
 use beryl_protocol::protocol::{DecisionId, ObjectId, Side, Status};
 use beryl_protocol::script::{Arrow, OwnStep, Subject, Verb};
 use glam::Vec2;
@@ -192,6 +192,27 @@ impl Client {
                 });
             self.changed_prompt(was, suggesting);
         }
+    }
+
+    /// Takes the session's answer to the oldest click in flight. It changes the prompt only
+    /// while that click's decision is still open: the session may already have sent the view
+    /// of the next decision, which an `Answered` for the one before must not close. A reply
+    /// with no click in flight is for the open decision.
+    pub(super) fn click_replied(&mut self, reply: ClickReply) {
+        let open = self.prompt.as_ref().map(|(decision, _)| *decision);
+        let clicked = self.clicks.pop_front().or(open);
+        if clicked.is_none() || clicked != open {
+            return;
+        }
+        match reply {
+            ClickReply::Open { prompt } => {
+                self.set_prompt(open.map(|decision| (decision, *prompt)));
+            }
+            // The views that follow the answer bring the next prompt.
+            ClickReply::Answered => self.set_prompt(None),
+        }
+        self.prepare_counts();
+        self.show_screen();
     }
 
     /// Takes the spell or ability the decision of `status` is for, if it asks one, before the

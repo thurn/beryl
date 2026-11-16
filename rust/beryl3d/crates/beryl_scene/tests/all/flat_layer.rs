@@ -397,6 +397,32 @@ fn a_click_reply_replaces_the_prompt() {
 }
 
 #[test]
+fn an_answer_to_the_decision_before_leaves_the_next_prompt_open() {
+    let mut client = client();
+    client.handle(deciding(prompt("Pay {1}{U}")));
+    let frame = client.frame(0);
+    let cancel = centre(frame, find(frame, Role::Button, "Cancel"));
+    client.handle(pointer(PointerPhase::Down, cancel));
+    client.handle(pointer(PointerPhase::Up, cancel));
+    assert!(matches!(
+        client.next_command(),
+        Some(SessionCommand::Click(_))
+    ));
+    // The game thread sends the next decision's view before the session thread's answer to
+    // the click that ended the decision before it.
+    let mut next = deciding(prompt("Pay {U}"));
+    if let Input::Update(update) = &mut next
+        && let Status::Deciding { decision } = &mut update.view.status
+    {
+        decision.id.seq += 1;
+    }
+    client.handle(next);
+    client.handle(Input::Reply(Reply::Click(Ok(ClickReply::Answered))));
+    let frame = client.frame(1);
+    find(frame, Role::Text, "Pay {U}");
+}
+
+#[test]
 fn two_clients_given_the_same_inputs_return_equal_frames() {
     let run = || {
         let mut client = client();
