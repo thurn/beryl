@@ -1,14 +1,35 @@
 use std::collections::HashSet;
 
-use beryl_inspect::stress::stress;
+use beryl_inspect::stress::{Board, stress};
 use beryl_protocol::script::{Table, failure};
 
 const BOARDS: [(&str, usize); 2] = [("stress-255", 255), ("stress-1024", 1024)];
 
 #[test]
 fn two_calls_are_equal() {
-    for name in beryl_inspect::stress::NAMES {
+    for name in Board::ALL.map(Board::name) {
         assert_eq!(stress(name), stress(name), "{name}");
+    }
+}
+
+#[test]
+fn every_board_round_trips_through_its_name() {
+    for board in Board::ALL {
+        assert_eq!(Board::parse(board.name()), Some(board));
+        assert_eq!(stress(board.name()), Some(board.build()));
+    }
+}
+
+#[test]
+fn only_stress_verbs_has_unjudged_rules() {
+    for board in Board::ALL {
+        assert_eq!(
+            board.unjudged().is_empty(),
+            board != Board::Verbs,
+            "{}",
+            board.name()
+        );
+        assert_eq!(board.build().unjudged, board.unjudged());
     }
 }
 

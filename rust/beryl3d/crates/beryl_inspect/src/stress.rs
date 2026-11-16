@@ -33,38 +33,122 @@ pub struct Stress {
     /// `timings[i]` belongs to `views[i + 1]`, whose script carries the same timings as a
     /// session's does.
     pub timings: Vec<Vec<StepTiming>>,
+    /// What a page or a playback does besides handing over the views.
+    pub drive: Drive,
+    /// The rules the interface checks do not hold this board to.
+    pub unjudged: &'static [Rule],
 }
 
-/// The name of every stress board.
-pub const NAMES: [&str; 5] = [
-    "stress-255",
-    "stress-1024",
-    "stress-verbs",
-    "stress-hand",
-    "stress-stack",
-];
+/// What a page or a playback of a stress board does besides handing over its views.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Drive {
+    /// Moves the pointer over the viewer's hand, as `pointer_moves` lays out.
+    pub pointer_over_hand: bool,
+    /// Waits this many frames, once the table is at rest, before handing over the last view.
+    pub rest_before_last: Option<usize>,
+}
 
-/// Whether the interface checks hold `recording` to `rule`. `stress-verbs` starts every verb's
-/// acts on 100 objects in one beat with no stagger, so that the frame gates draw every verb in
-/// the same frames. No game plays a beat like that, and its steps crowd and cover each other on
-/// purpose, so "not crowded" and "every step shown" do not judge it (docs/beryl-3d.md, "What the
-/// checks run over"). Every other check still runs on it.
+/// A stress board: the one place that maps a board's name to the board.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Board {
+    /// 255 permanents.
+    S255,
+    /// 1024 permanents.
+    S1024,
+    /// Every verb at once.
+    Verbs,
+    /// Sixty cards in hand under a moving pointer.
+    Hand,
+    /// A full stack of spells and abilities.
+    Stack,
+}
+
+impl Board {
+    /// Every stress board, in the order they are listed and played.
+    pub const ALL: [Self; 5] = [
+        Self::S255,
+        Self::S1024,
+        Self::Verbs,
+        Self::Hand,
+        Self::Stack,
+    ];
+
+    /// The board's recording name.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::S255 => "stress-255",
+            Self::S1024 => "stress-1024",
+            Self::Verbs => "stress-verbs",
+            Self::Hand => "stress-hand",
+            Self::Stack => "stress-stack",
+        }
+    }
+
+    /// The board called `name`, if there is one.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|board| board.name() == name)
+    }
+
+    /// How a page or a playback drives the board.
+    #[must_use]
+    pub const fn drive(self) -> Drive {
+        match self {
+            Self::Hand => Drive {
+                pointer_over_hand: true,
+                rest_before_last: None,
+            },
+            Self::Stack => Drive {
+                pointer_over_hand: false,
+                rest_before_last: Some(STACK_REST_FRAMES),
+            },
+            Self::S255 | Self::S1024 | Self::Verbs => Drive {
+                pointer_over_hand: false,
+                rest_before_last: None,
+            },
+        }
+    }
+
+    /// The rules the interface checks do not hold the board to. `Verbs` starts every verb's acts
+    /// on 100 objects in one beat with no stagger, so that the frame gates draw every verb in
+    /// the same frames. No game plays a beat like that, and its steps crowd and cover each other
+    /// on purpose, so "not crowded" and "every step shown" do not judge it (docs/beryl-3d.md,
+    /// "What the checks run over"). Every other check still runs on it.
+    #[must_use]
+    pub const fn unjudged(self) -> &'static [Rule] {
+        match self {
+            Self::Verbs => &[Rule::Crowded, Rule::StepShown],
+            _ => &[],
+        }
+    }
+
+    /// The board's views and timings.
+    #[must_use]
+    pub fn build(self) -> Stress {
+        let mut stress = match self {
+            Self::S255 => board(255),
+            Self::S1024 => board(1024),
+            Self::Verbs => verbs(),
+            Self::Hand => hand(),
+            Self::Stack => stack(),
+        };
+        stress.drive = self.drive();
+        stress.unjudged = self.unjudged();
+        stress
+    }
+}
+
+/// Whether the interface checks hold the recording `recording` to `rule`.
 #[must_use]
 pub fn audited(recording: &str, rule: Rule) -> bool {
-    recording != "stress-verbs" || !matches!(rule, Rule::Crowded | Rule::StepShown)
+    Board::parse(recording).is_none_or(|board| !board.unjudged().contains(&rule))
 }
 
 /// The synthetic recording called `name`, if there is one.
 #[must_use]
 pub fn stress(name: &str) -> Option<Stress> {
-    Some(match name {
-        "stress-255" => board(255),
-        "stress-1024" => board(1024),
-        "stress-verbs" => verbs(),
-        "stress-hand" => hand(),
-        "stress-stack" => stack(),
-        _ => return None,
-    })
+    Board::parse(name).map(Board::build)
 }
 
 /// A battlefield of `count` permanents, then the same one after `FLIGHTS` of them have moved
@@ -105,6 +189,8 @@ fn board(count: u16) -> Stress {
     Stress {
         views: vec![first, second],
         timings: vec![timings],
+        drive: Drive::default(),
+        unjudged: &[],
     }
 }
 
@@ -211,7 +297,12 @@ fn recording(views: Vec<PlayerView>) -> Stress {
                 .clone()
         })
         .collect();
-    Stress { views, timings }
+    Stress {
+        views,
+        timings,
+        drive: Drive::default(),
+        unjudged: &[],
+    }
 }
 
 fn card(index: u16, zone: ZoneName, side: Side) -> ObjectView {

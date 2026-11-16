@@ -193,9 +193,9 @@ fn frames_allocate_nothing_while_a_card_is_held() {
 
 #[test]
 fn frames_allocate_nothing_on_stress_boards() {
-    use beryl_inspect::{gate::Playback, stress::NAMES};
+    use beryl_inspect::{gate::Playback, stress::Board};
 
-    for name in NAMES {
+    for name in Board::ALL.map(Board::name) {
         let mut board = Playback::new(name).unwrap();
         while let Some(moment) = board.moment() {
             board.handle();

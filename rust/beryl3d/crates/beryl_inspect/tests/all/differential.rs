@@ -75,7 +75,7 @@ fn plantings() -> Vec<Planting> {
     let tests: Vec<Test> = runner::tests("")
         .expect("the recordings pack opens")
         .into_iter()
-        .filter(|test| !beryl_inspect::stress::NAMES.contains(&test.recording.as_str()))
+        .filter(|test| beryl_inspect::stress::Board::parse(&test.recording).is_none())
         .collect();
     let mut random = Random(SEED);
     let mut drawn: Vec<usize> = Vec::new();

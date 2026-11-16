@@ -22,21 +22,23 @@ use beryl_scene::input::{AssetReady, Input, Insets, Pointer, Size};
 use beryl_scene::{Client, Config};
 
 use crate::pages::recording;
-use crate::stress::{STACK_REST_FRAMES, card_records, pointer_moves, stress};
+use crate::stress::{Board, Drive, card_records, pointer_moves, stress};
 
 /// The boards the frame gates hold, in the order they are played: the five stress boards, and
 /// two recorded games from the first seat. `verbs-zones` moves cards between every zone, and
 /// `pay-default` opens prompts, so that its worst frame includes one in which `handle` lays out
 /// a prompt bar and its text.
-pub const BOARDS: [&str; 7] = [
-    "stress-255",
-    "stress-1024",
-    "stress-verbs",
-    "stress-hand",
-    "stress-stack",
-    "verbs-zones",
-    "pay-default",
-];
+pub const BOARDS: [&str; 7] = {
+    let mut names = ["verbs-zones"; 7];
+    let mut index = 0;
+    while index < Board::ALL.len() {
+        names[index] = Board::ALL[index].name();
+        index += 1;
+    }
+    names[5] = "verbs-zones";
+    names[6] = "pay-default";
+    names
+};
 
 /// The time between two frames, in nanoseconds: 60 frames a second.
 pub const FRAME_NANOS: u64 = 16_666_667;
@@ -105,7 +107,7 @@ pub struct Playback {
     /// The frame before which the latest view was handed over.
     last_view: Option<usize>,
     moves: Vec<(u64, Pointer)>,
-    stack_rest: bool,
+    drive: Drive,
     rested: Option<usize>,
 }
 
@@ -164,7 +166,8 @@ impl Playback {
         for ready in ready {
             client.handle(Input::Assets(ready));
         }
-        let mut moves = if name == "stress-hand" {
+        let drive = Board::parse(name).map(Board::drive).unwrap_or_default();
+        let mut moves = if drive.pointer_over_hand {
             let recording = recording(name, Side::You).expect("hand recording");
             let mut page = Page::new(recording.into(), Side::You, Layout::Desktop, window)
                 .expect("the hand plays");
@@ -179,7 +182,7 @@ impl Playback {
             next: 0,
             last_view: None,
             moves,
-            stack_rest: name == "stress-stack",
+            drive,
             rested: None,
         })
     }
@@ -191,10 +194,8 @@ impl Playback {
         if self.views.is_empty() {
             return false;
         }
-        if self.stack_rest && self.views.len() == 1 {
-            return self
-                .rested
-                .is_some_and(|rest| self.next >= rest + STACK_REST_FRAMES);
+        if let (Some(frames), 1) = (self.drive.rest_before_last, self.views.len()) {
+            return self.rested.is_some_and(|rest| self.next >= rest + frames);
         }
         match self.last_view {
             None => true,
@@ -239,7 +240,10 @@ impl Playback {
     /// Hands the client the inputs due before the next frame. This and `frame` together are one
     /// frame of a host's work.
     pub fn handle(&mut self) {
-        if self.stack_rest && self.views.len() == 1 && self.client.wake() == Wake::Never {
+        if self.drive.rest_before_last.is_some()
+            && self.views.len() == 1
+            && self.client.wake() == Wake::Never
+        {
             self.rested.get_or_insert(self.next - 1);
         }
         if self.due() {

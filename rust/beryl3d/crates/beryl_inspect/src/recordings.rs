@@ -19,6 +19,7 @@ use beryl_scene::driver::{Page, Recording};
 use beryl_scene::input::Size;
 
 use crate::pack::{self, Entry, Recorder};
+use crate::stress::Board;
 use crate::{pages, screens, stress};
 
 /// One recording, as `just b3d list` shows it.
@@ -87,7 +88,7 @@ pub fn names() -> Result<Vec<(String, Seat)>, String> {
         .entries
         .iter()
         .map(|entry| (entry.name.to_owned(), entry.seat()))
-        .chain(stress::NAMES.map(|name| (name.to_owned(), Seat::P0)))
+        .chain(Board::ALL.map(|board| (board.name().to_owned(), Seat::P0)))
         .chain(screens::NAMES.map(|name| (name.to_owned(), Seat::P0)))
         .collect();
     names.sort_by(|a, b| (&a.0, a.1.get()).cmp(&(&b.0, b.1.get())));
@@ -111,7 +112,7 @@ pub fn listed() -> Result<Vec<String>, String> {
 /// is at the engine's capacity. Zero when there is no such recording.
 #[must_use]
 pub fn weight(name: &str, seat: Seat) -> usize {
-    if stress::NAMES.contains(&name) {
+    if Board::parse(name).is_some() {
         return usize::MAX;
     }
     let Ok(opened) = opened() else {
@@ -154,7 +155,7 @@ pub fn list(prefix: &str) -> Result<Vec<Listed>, String> {
         })
         .collect();
     listed.extend(
-        (stress::NAMES.into_iter())
+        (Board::ALL.map(Board::name).into_iter())
             .chain(screens::NAMES)
             .filter(|name| name.starts_with(prefix))
             .map(listed_made),

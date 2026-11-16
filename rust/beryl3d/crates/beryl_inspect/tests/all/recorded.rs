@@ -340,7 +340,7 @@ fn first_button(tree: &str) -> Option<String> {
 
 #[test]
 fn the_stress_boards_play_to_their_end() {
-    for name in stress::NAMES {
+    for name in stress::Board::ALL.map(stress::Board::name) {
         let mut page = Page::fixture(name, Side::You, Layout::Desktop);
         page.seek(&"end".parse().expect("a moment"))
             .expect("the board has an end");

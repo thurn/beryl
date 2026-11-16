@@ -22,7 +22,7 @@ fn moments() -> Vec<(String, Seat)> {
     recordings::names()
         .expect("the pack opens")
         .into_iter()
-        .filter(|(name, _)| name.contains('/') && !stress::NAMES.contains(&name.as_str()))
+        .filter(|(name, _)| name.contains('/') && stress::Board::parse(name).is_none())
         .collect()
 }
 

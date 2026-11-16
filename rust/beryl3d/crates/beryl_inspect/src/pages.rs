@@ -13,7 +13,7 @@ use beryl_scene::input::Size;
 
 use crate::faults::Listed;
 use crate::runner::Test;
-use crate::stress::{STACK_REST_FRAMES, card_records, pointer_moves, stress};
+use crate::stress::{Board, card_records, pointer_moves, stress};
 use crate::{recordings, screens};
 
 /// The desktop windows every recording is checked in: the smallest common laptop screen, two
@@ -76,12 +76,17 @@ pub fn page(name: &str, seat: Side, layout: Layout, size: Size) -> Result<Page, 
     let mut page = Page::new(recording.into(), seat, layout, size)
         .map_err(|error| format!("{name}: {error}"))?
         .named(name);
-    if name == "stress-hand" {
-        let moves = pointer_moves(page.frame());
-        page.set_pointer_moves(moves);
-    }
-    if name == "stress-stack" {
-        page.set_reply_delay(2, Duration(STACK_REST_FRAMES as u64 * TICK.0));
+    if let Some(board) = Board::parse(name) {
+        let drive = board.drive();
+        if drive.pointer_over_hand {
+            let moves = pointer_moves(page.frame());
+            page.set_pointer_moves(moves);
+        }
+        if let Some(frames) = drive.rest_before_last {
+            // The reply delay applies once every view but the last has been released.
+            let released = board.build().views.len() - 1;
+            page.set_reply_delay(released, Duration(frames as u64 * TICK.0));
+        }
     }
     Ok(page)
 }
