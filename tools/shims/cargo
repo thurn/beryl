@@ -1,0 +1,31 @@
+#!/bin/sh
+# Stands in for cargo so that every cargo command runs inside a lease of the machine's CPU
+# tokens: tools/src/beryl_tools/cargo_pool.py says why and how.
+here=$(cd "$(dirname "$0")" && pwd)
+real=""
+old_ifs=$IFS
+IFS=:
+for dir in $PATH; do
+    if [ "$dir" != "$here" ] && [ -x "$dir/cargo" ]; then
+        real="$dir/cargo"
+        break
+    fi
+done
+IFS=$old_ifs
+if [ -z "$real" ]; then
+    echo "cargo shim: no cargo on PATH after $here" >&2
+    exit 127
+fi
+# Inside a lease already, or with the pool off, cargo runs as it is.
+case "$BERYL_CPU_TOKENS" in
+    '' | *[!0-9]*) ;;
+    *) exec "$real" "$@" ;;
+esac
+if [ "$BERYL_CPU_POOL" = "0" ]; then
+    exec "$real" "$@"
+fi
+export BERYL_REAL_CARGO="$real"
+if [ -n "$BERYL_SHIM_PYTHON" ]; then
+    exec "$BERYL_SHIM_PYTHON" -P -m beryl_tools.cargo_pool "$@"
+fi
+exec uv run --quiet --project "$here/.." python -P -m beryl_tools.cargo_pool "$@"

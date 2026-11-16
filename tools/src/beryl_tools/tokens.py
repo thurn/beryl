@@ -27,6 +27,10 @@ timed out with half the cores idle: ten heavy steps shared nine tokens whether o
 else wanted the rest. Now it may take any token an agent may, and the waiting rule alone puts
 pushes and agents first.
 
+Cargo commands outside a check, whether `by` starts them or a session types them, take tokens
+through a shim that stands in for cargo on PATH (cargo_pool.py), which also lets a build grow
+while it runs.
+
 Long background work (tournaments, the nightly, `just blunder-hunt`) takes no tokens. It runs at
 utility QoS (the justfile's `low`, `system.utility`), under which macOS gives every core to
 normal-priority work first, thread by thread, which no token count can match. A lease is fixed

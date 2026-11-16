@@ -88,5 +88,11 @@
     "label": "Concurrent ui-test runs keep separate fixture recordings so they do not retry checks after deleting each other's files",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+
+  },
+  {
+    "label": "Every cargo command, typed or started by `by`, takes CPU tokens and grows its build as tokens come free",
+    "metric": "machine.saturation",
+    "expect": "down"
   }
 ]

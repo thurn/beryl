@@ -162,7 +162,9 @@ class Steps:
         if lease is None:
             return None, ""
         with tempfile.TemporaryFile("w+", errors="replace") as out, lease:
-            env = {**env, **lease.env()}
+            # A step that holds no tokens still names its class, so that a cargo command it
+            # starts takes tokens as this check, not as a session's own work (cargo_pool.py).
+            env = {**env, tokens.CLASS_ENV: self.klass, **lease.env()}
             with self.lock:
                 if self.over():
                     return None, ""

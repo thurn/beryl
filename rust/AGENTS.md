@@ -5,6 +5,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
 Beryl 3D, the native 3D client, is a separate workspace in `rust/beryl3d` with
 its own build and checks; see `rust/beryl3d/AGENTS.md`.
 
+In a Claude session and under `by`, `cargo` is a shim (`tools/shims/cargo`) that
+runs the real cargo inside a lease of the machine's CPU tokens, so a build may
+wait a moment for cores before it starts. `BERYL_CPU_POOL=0` turns the pool off.
+
 ## Crates and card files
 
 - `crates/beryl_app` is the Tauri shell: the window, IPC commands,

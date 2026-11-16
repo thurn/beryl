@@ -17,6 +17,7 @@ from . import (
     caches,
     card,
     cards,
+    cargo_pool,
     census,
     check_value,
     checks,
@@ -125,6 +126,8 @@ def main(argv: list[str] | None = None) -> int:
     rerun = utf8_rerun(argv)
     if rerun is not None:
         return rerun
+    # Every cargo command `by` starts takes CPU tokens first (cargo_pool.py).
+    cargo_pool.install()
     parser = argparse.ArgumentParser(prog="by", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     for module in MODULES:
