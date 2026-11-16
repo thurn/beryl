@@ -37,7 +37,7 @@ pub(super) struct Laid<'a> {
 /// window for each row is kept in every script's view at rest: as `usize`s they would make each
 /// waiting script larger than 1024 bytes, past which a growing `Vec` of them reallocates more
 /// often.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct RowWindow {
     groups: u16,
     first: u16,
