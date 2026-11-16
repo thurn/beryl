@@ -120,13 +120,14 @@ from .reruns import (
 )
 from .rust_tests import (
     affected_packages,
+    clippy_step,
     fast_rust_tests_step,
     junit_results,
     rust_lane,
     nextest_filter,
     slow_rust_tests_step,
 )
-from .step_runner import Steps
+from .step_runner import BUILDS_CLI, Steps
 
 FAST_BUDGET = int(deadline.TARGET)
 # Slow CI's wall seconds, shown beside its run time; going over files nothing, since slow CI's
@@ -292,7 +293,10 @@ def lane_steps(
         else:
             ended += took(wall, seconds)
         if after[1] - before[1] >= 0.1:
-            ended += f", after waiting {after[1] - before[1]:.1f} s for CPU tokens"
+            ended += (
+                f", after waiting {after[1] - before[1]:.1f} s for CPU tokens"
+                f"{' and the shared build' if f'{lane.name}:{step.name}' in BUILDS_CLI else ''}"
+            )
         if code != 0 and step.failed and code not in (None, CANNOT_RUN):
             # Named before the rerun's output follows, so a rerun of the lot says so.
             checks = step.failed(output)
@@ -631,6 +635,7 @@ def steps() -> dict[str, Callable[..., int]]:
     own imports, before the step modules are whole."""
     return {
         "pytest": python_tests.pytest_step,
+        "clippy": clippy_step,
         "rust-tests": slow_rust_tests_step,
         "fast-rust-tests": fast_rust_tests_step,
         "card-names": card_names.step,

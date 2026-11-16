@@ -58,12 +58,13 @@ from pathlib import Path
 REPO: Path = Path(__file__).resolve().parents[3]
 STAMP = ".beryl-lock"
 KEEP_NODE_MODULES = 3
-# The Tauri CLI's target directory inside rust/target (`paths.TAURI_TARGET`).
+# The Tauri CLI's target directory in rust/target (`paths.TAURI_TARGET`), and the profiles of a
+# target, of the Tauri CLI's and of clippy's (`paths.CLIPPY_TARGET`).
 TAURI = "tauri"
+PROFILES = ("*", f"{TAURI}/*", "clippy/*")
 # What a target's crate builds may hold (`BERYL_TARGET_BUDGET_GB` overrides it), and how long
-# one may go unused. Each worktree builds the workspace crates under new hashes, and nothing
-# removed the old ones: on 2026-11-11 the cache held 45 GB, of which the last build used 5.5,
-# and a copy of it in each Windows worktree filled the disk.
+# one may go unused. Worktrees build the workspace crates under new hashes, and nothing removed
+# old ones: on 2026-11-11 the cache held 45 GB (5.5 used), and its Windows copies filled the disk.
 BUDGET_GB = 15.0
 UNUSED_DAYS = 7
 DAY = 86400.0
@@ -314,10 +315,9 @@ def mark_unread(target: Path) -> int:
     worktree took 48 s with no change made). Cargo reads a unit's fingerprint file whenever a
     build includes that unit, so after this the next such read records the use."""
     count = 0
-    for fingerprints in [
-        *target.glob("*/.fingerprint"),
-        *target.glob(f"{TAURI}/*/.fingerprint"),
-    ]:
+    for fingerprints in (
+        f for profile in PROFILES for f in target.glob(f"{profile}/.fingerprint")
+    ):
         with suppress(OSError):
             for unit in os.scandir(fingerprints):
                 with suppress(OSError), os.scandir(unit.path) as files:
@@ -666,7 +666,7 @@ def prune(target: Path) -> None:
     what has gone unused longest until the rest fits the budget, so that the cache, the disk
     each worktree's copy takes and the time to clone it do not grow with every save. Best
     effort: it runs in Enact's remove hook, which must not fail."""
-    profiles = [*target.glob("*/deps"), *target.glob(f"{TAURI}/*/deps")]
+    profiles = [d for profile in PROFILES for d in target.glob(f"{profile}/deps")]
     try:
         objects = sum(prune_objects(deps) for deps in profiles)
         sessions = sum(

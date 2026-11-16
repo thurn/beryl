@@ -69,14 +69,18 @@ def test_a_build_scripts_watched_files_point_at_the_new_checkout(
     )
 
 
+# The workspace's own profile, and clippy's in its own target directory (paths.CLIPPY_TARGET).
+@pytest.mark.parametrize("profile", ["debug", "clippy/debug"])
 def test_a_clone_points_cargos_records_at_its_checkout_and_keeps_their_times(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, profile: str
 ) -> None:
     monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
     first = tmp_path / "first"
     (first / "ui").mkdir(parents=True)
     (first / "ui" / "package-lock.json").write_text("lock")
-    dep = Path("rust/target/debug/.fingerprint/store-0123456789abcdef/dep-lib-store")
+    dep = Path(
+        f"rust/target/{profile}/.fingerprint/store-0123456789abcdef/dep-lib-store"
+    )
     (first / dep).parent.mkdir(parents=True)
     (first / dep).write_bytes(dep_info(f"{first}/rust/Cargo.toml"))
     built = time.time() - 3600

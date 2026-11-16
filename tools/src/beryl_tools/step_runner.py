@@ -12,8 +12,26 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from . import system, tokens
+from . import paths, system, tokens
 from .clock import Clock
+
+# The steps that start by building `paths.CLI_BUILD` in the checkout's target directory. Each
+# took its CPU tokens and then waited on Cargo's lock on that directory while another built
+# it: in the fast check of 2026-11-15, the script, shots, ui-test and oracle steps held all 18
+# of the pool's tokens while one of them compiled on its share of four and clippy got one token
+# or none, so the run reached its 180 s hard limit with nothing built. Now the first of them to
+# start builds it for all of them with the most tokens one lease may take (`Steps.build_cli`),
+# the others wait for that build holding no tokens, and then each one's own build finds nothing
+# to do.
+BUILDS_CLI: frozenset[str] = frozenset(
+    {
+        "script:script-check",
+        "shots:ui-shots",
+        "ui-test:ui-test",
+        "ui-smoke:ui-test",
+        "oracle:oracle",
+    }
+)
 
 
 def reap(
@@ -71,6 +89,10 @@ class Steps:
         self.heavy_lanes = 0
         # Popen's type depends on its arguments, which pyre reads differently per platform.
         self.running: set[subprocess.Popen[Any]] = set()
+        # The shared build of the binaries the `BUILDS_CLI` steps run (`build_cli`): held while
+        # it runs, and whether it was tried.
+        self.cli_lock = threading.Lock()
+        self.cli_tried = False
 
     def waited(self) -> tuple[float, float]:
         """The adjusted and wall seconds the calling thread's lane has waited for tokens so
@@ -125,6 +147,8 @@ class Steps:
         limit ends with the processes it left running. `command` names the step in the pool's
         log of leases.
         """
+        if command in BUILDS_CLI:
+            self.build_cli(env)
         began, wall = self.clock.now(), self.clock.wall()
         lease = tokens.lease(self.klass, cores, self.cut, command)
         if cores:
@@ -183,6 +207,34 @@ class Steps:
                     f"{output.rstrip()}\n--- processes when it was killed ---\n{hung}\n"
                 )
             return code, output
+
+    def build_cli(self, env: dict[str, str]) -> None:
+        """Builds `paths.CLI_BUILD` once per run, before the first `BUILDS_CLI` step that asks
+        takes its tokens, with the most tokens one lease may take (`tokens.largest`). A step
+        that asks while the build runs waits for it holding no tokens. The time it spends here
+        counts as a wait (`waits`), not as the step's own time, as a wait for tokens does. The
+        step's own build still runs afterwards: it finds nothing to do, or reports a failed
+        build as it always has."""
+        began, wall = self.clock.now(), self.clock.wall()
+        me = threading.get_ident()
+        with self.lock:
+            before = self.waits.get(me, (0.0, 0.0))
+        with self.cli_lock:
+            if not self.cli_tried and not self.over():
+                self.cli_tried = True
+                self.run(
+                    paths.CLI_BUILD,
+                    paths.RUST,
+                    {**env, "CARGO_TARGET_DIR": str(paths.RUN_TARGET)},
+                    tokens.largest(tokens.pool_size()),
+                    None,
+                    "cli-build",
+                )
+        with self.lock:
+            self.waits[me] = (
+                before[0] + self.clock.now() - began,
+                before[1] + self.clock.wall() - wall,
+            )
 
     def charge(self, seconds: float) -> None:
         """Adds a finished step's CPU seconds to the calling thread's lane."""

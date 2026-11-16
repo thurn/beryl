@@ -100,7 +100,12 @@ def rehome(target: Path, checkout: Path) -> int:
     """Rewrites the absolute source paths in `target`, freshly cloned into `checkout`, that name
     another checkout; returns how many files it changed."""
     count = 0
-    profiles = [*target.glob("*/"), *target.glob("tauri/*/")]
+    # The Tauri CLI's and clippy's target directories (warm.NESTED) hold profiles of their own.
+    profiles = [
+        *target.glob("*/"),
+        *target.glob("tauri/*/"),
+        *target.glob("clippy/*/"),
+    ]
     for profile in profiles:
         for dep in profile.glob(".fingerprint/*/dep-*"):
             with suppress(OSError):

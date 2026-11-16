@@ -555,7 +555,7 @@ def test_routine_lanes_leave_the_iroh_build_to_the_nightly() -> None:
     for fast in (True, False):
         whole = checks.rust_lane(fast=fast)
         clippy = next(step for step in whole.steps if step.name == "clippy")
-        assert clippy.cmd[3:6] == ["--workspace", "--exclude", nightly]
+        assert clippy.cmd[-3:] == ["--workspace", "--exclude", nightly]
         assert "clippy" not in {
             step.name for step in checks.rust_lane(fast=fast, packages=[nightly]).steps
         }
@@ -565,7 +565,7 @@ def test_routine_lanes_leave_the_iroh_build_to_the_nightly() -> None:
         # Clippy checks the whole workspace for any change, so that it resolves the same
         # features as the cached target's build and reuses it.
         clippy = next(step for step in app.steps if step.name == "clippy")
-        assert clippy.cmd[3:6] == ["--workspace", "--exclude", nightly]
+        assert clippy.cmd[-3:] == ["--workspace", "--exclude", nightly]
 
 
 def test_a_session_runs_rust_tests_as_the_check_does() -> None:
@@ -677,6 +677,56 @@ def test_a_wait_for_tokens_does_not_count_towards_the_hang_limit(
     # The run being stopped still ends a wait.
     steps.stop()
     assert steps.cut()
+
+
+def test_the_steps_that_run_the_cli_share_one_build_that_holds_no_idle_tokens(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clock: StoppedClock = StoppedClock()
+    steps = checks.Steps(clock, klass="push")
+    builds = tmp_path / "builds"
+    leases: list[tuple[str, int]] = []
+
+    def lease(
+        klass: str, want: int, give_up: Callable[[], bool], command: str = ""
+    ) -> tokens.Lease:
+        leases.append((command, want))
+        if command == "cli-build":
+            clock.t += 30.0  # The shared build's wait and run, on the run's clock.
+        return tokens.Lease(want, [])
+
+    monkeypatch.setattr(checks.tokens, "lease", lease)
+    append = f"open({str(builds)!r}, 'a').write('built\\n')"
+    monkeypatch.setattr(paths, "CLI_BUILD", [sys.executable, "-c", append])
+    for command in ["shots:ui-shots", "oracle:oracle", "rust:clippy"]:
+        steps.run(
+            [sys.executable, "-c", "pass"],
+            Path.cwd(),
+            dict(os.environ),
+            4,
+            None,
+            command,
+        )
+    # Built once, before the first step that runs the CLI took its tokens, with the most
+    # tokens one lease may take; not for clippy, which builds in its own target directory.
+    assert builds.read_text() == "built\n"
+    largest = tokens.largest(tokens.pool_size())
+    assert leases == [
+        ("cli-build", largest),
+        ("shots:ui-shots", 4),
+        ("oracle:oracle", 4),
+        ("rust:clippy", 4),
+    ]
+    # The shared build counts as the first step's wait, not its own time.
+    assert steps.waited() == (30.0, 30.0)
+
+
+def test_clippy_builds_in_its_own_target_directory() -> None:
+    clippy = next(s for s in rust_tests.rust_lane().steps if s.name == "clippy")
+    assert clippy.cmd[-len(paths.BUILD_SCOPE) - 1 :] == ["clippy", *paths.BUILD_SCOPE]
+    assert paths.clippy_env()["CARGO_TARGET_DIR"] == str(paths.CLIPPY_TARGET)
+    assert paths.CLIPPY_TARGET.parent == paths.RUST / "target"
+    assert paths.CLIPPY_TARGET.name == "clippy"
 
 
 def test_the_allocations_binaries_come_from_the_workspace_build() -> None:

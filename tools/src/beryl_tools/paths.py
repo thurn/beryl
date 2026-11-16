@@ -77,6 +77,14 @@ def worktree_names() -> list[str]:
 # the two alternate, and parallel lanes would wait on each other's build lock.
 TAURI_TARGET: Path = RUST / "target" / "tauri"
 
+# Clippy gets its own target directory too. Cargo holds one lock on a target directory for the
+# whole of a command, and clippy's units (check metadata) are not the ones `cargo build` and
+# `cargo test` produce, so the two share no work but did wait on each other: in the fast check,
+# clippy printed "Blocking waiting for file lock on build directory" while the browser, script
+# and oracle lanes built `beryl_cli` ([`CLI_BUILD`]), and from 2026-11-14 to 16 it was killed at
+# the 180 s hard limit in 102 of 160 runs. In its own directory it runs beside the build.
+CLIPPY_TARGET: Path = RUST / "target" / "clippy"
+
 
 # The target directory of the binaries `by` runs while other work builds: on Windows, one of
 # their own. Windows replaces no running binary, so the rust lane would fail to relink the
@@ -125,6 +133,11 @@ CLI_BUILD: list[str] = [
 def run_env() -> dict[str, str]:
     """The environment for cargo building a binary `by` runs ([`RUN_TARGET`])."""
     return {**os.environ, "CARGO_TARGET_DIR": str(RUN_TARGET)}
+
+
+def clippy_env() -> dict[str, str]:
+    """The environment for cargo clippy ([`CLIPPY_TARGET`])."""
+    return {**os.environ, "CARGO_TARGET_DIR": str(CLIPPY_TARGET)}
 
 
 def tauri_env() -> dict[str, str]:

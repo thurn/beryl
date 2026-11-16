@@ -73,10 +73,14 @@
     "label": "The Beryl 3D instruction-count gate counts every frame in one Callgrind run per board, and no bead waits for it before pushing",
     "metric": "bead.agent-minutes",
     "expect": "down"
-
   },
   {
     "label": "Every worktree reuses one of ten slot directories, keeping rustc's incremental caches",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
+  },
+  {
+    "label": "Clippy builds in its own target directory, and the steps that run beryl_cli share one build before taking CPU tokens",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
   }

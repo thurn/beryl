@@ -414,6 +414,16 @@ own busy figure for comparison. `cpu.py` explains how processes are attributed.
   of the pool, and a check's heavy steps take an even share of it among the
   lanes with heavy steps still running, so ten lanes that start at once share
   the pool instead of the first taking most of it.
+- Cargo holds one lock on a target directory for the whole of a command, so two
+  cargo commands in one target run one after the other. Clippy therefore builds
+  in its own target directory, `rust/target/clippy` (`paths.CLIPPY_TARGET`),
+  since its units are not the ones a build or test produces, and runs beside the
+  build. The script, shots, ui-test, ui-smoke and oracle steps all start by
+  building `beryl_cli` (`paths.CLI_BUILD`) in the checkout's target. The first
+  of them to start builds it for all of them, with the most tokens one command
+  may take, before any of them takes its share (`step_runner.BUILDS_CLI`). The
+  others wait for that build holding no tokens, and the wait is reported with
+  the wait for tokens.
 - The classes, highest first, are the merge queue's fast check of a batch of
   pushes (unused while the queue is off), the fast check a push runs in its own
   worktree, a command an agent runs by hand, and slow CI. Every push on the
