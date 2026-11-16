@@ -14,6 +14,7 @@ use crate::input::{Button, Pointer, PointerKind, PointerPhase};
 use crate::manual::menus::{self, Act, OpenMenu};
 use crate::manual::{self, Target, commands};
 use crate::screens::Screen;
+use crate::widgets::BACK;
 
 /// Nanoseconds in a millisecond, the unit of `Client::frame`'s clock.
 const MILLISECOND: u64 = 1_000_000;
@@ -162,12 +163,24 @@ impl Client {
     }
 
     /// The `row`th row of the open context menu was pressed: it closes, and the row's command
-    /// is given.
+    /// is given. On the phone's sheet, a row with a submenu instead shows that submenu's rows
+    /// in the sheet, and `BACK` shows the menu's rows again, as the web's menu pages do.
     pub(super) fn press_table_menu(&mut self, row: u16) {
-        let Some(menu) = self.manual.menu.take() else {
+        let phone = self.window.phone();
+        let Some(menu) = &mut self.manual.menu else {
             return;
         };
-        if let Some(act) = menu.acts.into_iter().nth(usize::from(row)) {
+        let folder = (menu.groups.iter().flat_map(|group| &group.rows))
+            .nth(usize::from(row))
+            .is_some_and(|row| !row.submenu.is_empty());
+        if phone && (row == BACK || folder) {
+            menu.page = (row != BACK).then_some(row);
+            self.show_screen();
+            return;
+        }
+        if let Some(menu) = self.manual.menu.take()
+            && let Some(act) = menu.acts.into_iter().nth(usize::from(row))
+        {
             self.give(act);
         }
         self.show_screen();

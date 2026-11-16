@@ -58,6 +58,25 @@ impl MenuRow {
 /// submenus, in order, after the last of them.
 #[must_use]
 pub fn menu(id: MenuId, title: &str, groups: &[MenuGroup]) -> Element {
+    build(id, title, groups, None)
+}
+
+/// The press of the Back row of a sheet menu showing a submenu's rows (`sheet_menu`), which
+/// no row of a menu has.
+pub const BACK: u16 = u16::MAX;
+
+/// `menu` as the phone's bottom sheet shows it (`Menu.tsx`'s pages): a row with a submenu
+/// presses `Press::Menu(id, n)` like any row, and opens no list beside the menu. With `page`
+/// set to the number of such a row, the sheet instead holds a Back row, pressing
+/// `Press::Menu(id, BACK)`, and the rows of that row's submenu, numbered as `menu` numbers
+/// them.
+#[must_use]
+pub fn sheet_menu(id: MenuId, title: &str, groups: &[MenuGroup], page: Option<u16>) -> Element {
+    build(id, title, groups, Some(page))
+}
+
+/// The panel of `menu` and `sheet_menu`, the latter if `sheet` is set.
+fn build(id: MenuId, title: &str, groups: &[MenuGroup], sheet: Option<Option<u16>>) -> Element {
     let rows = groups.iter().map(|group| group.rows.len()).sum::<usize>();
     let mut next = 0;
     let mut next_nested = u16::try_from(rows).unwrap_or(u16::MAX);
@@ -69,20 +88,48 @@ pub fn menu(id: MenuId, title: &str, groups: &[MenuGroup]) -> Element {
         size::MENU_TITLE_PADDING_SIDE,
     ];
     let mut panel = panel(title).child(heading);
+    if let Some(Some(page)) = sheet {
+        // The rows of the submenu of row `page` take their numbers after those of the
+        // submenus before it.
+        let mut folder = 0;
+        for row in groups.iter().flat_map(|group| &group.rows) {
+            if folder == page {
+                let mut deeper = u16::MAX;
+                let back = menu_row(id, &MenuRow::new("Back"), &mut 0, &mut deeper, true)
+                    .on_press(Press::Menu(id, BACK));
+                panel = panel.child(divider(0, "page")).child(back);
+                for child in &row.submenu {
+                    panel = panel.child(menu_row(id, child, &mut next_nested, &mut deeper, true));
+                }
+                return panel;
+            }
+            next_nested += u16::try_from(row.submenu.len()).unwrap_or(0);
+            folder += 1;
+        }
+    }
     for (index, group) in groups.iter().enumerate() {
-        let gap = size::MENU_GROUP_GAP;
-        panel = panel.child(
-            row()
-                .name(&format!("group {index}"))
-                .height(size::MENU_BORDER)
-                .background(color::METAL)
-                .margin([if index == 0 { 0.0 } else { gap }, 0.0, gap, 0.0]),
-        );
+        panel = panel.child(divider(index, &format!("group {index}")));
         for row in &group.rows {
-            panel = panel.child(menu_row(id, row, &mut next, &mut next_nested));
+            panel = panel.child(menu_row(
+                id,
+                row,
+                &mut next,
+                &mut next_nested,
+                sheet.is_some(),
+            ));
         }
     }
     panel
+}
+
+/// The line above a group of rows, the first group's included.
+fn divider(index: usize, name: &str) -> Element {
+    let gap = size::MENU_GROUP_GAP;
+    row()
+        .name(name)
+        .height(size::MENU_BORDER)
+        .background(color::METAL)
+        .margin([if index == 0 { 0.0 } else { gap }, 0.0, gap, 0.0])
 }
 
 /// `menu` opened at `at`, a point of the window in logical points, as a context menu opens
@@ -109,9 +156,15 @@ fn panel(name: &str) -> Element {
     panel
 }
 
-/// The menu item for `row`. A row without a submenu presses `Press::Menu(id, *next)`, taking
+/// The menu item for `row`. A row without a submenu, or any row if `flat`, presses `Press::Menu(id, *next)`, taking
 /// that number; a row with one opens it, whose rows take numbers from `*nested` on.
-fn menu_row(id: MenuId, row_view: &MenuRow, next: &mut u16, nested: &mut u16) -> Element {
+fn menu_row(
+    id: MenuId,
+    row_view: &MenuRow,
+    next: &mut u16,
+    nested: &mut u16,
+    flat: bool,
+) -> Element {
     let enabled = row_view.enabled;
     let hint = if row_view.submenu.is_empty() {
         row_view.key.clone()
@@ -152,7 +205,7 @@ fn menu_row(id: MenuId, row_view: &MenuRow, next: &mut u16, nested: &mut u16) ->
     // A press on a row highlights it, and a row with a submenu, which has no press, can still
     // be highlighted by the keys.
     item.focus = true;
-    if row_view.submenu.is_empty() {
+    if row_view.submenu.is_empty() || flat {
         item = item.on_press(Press::Menu(id, *next));
     } else {
         // A submenu has no submenus of its own (`Menu.tsx` opens one level), so the numbers a
@@ -160,7 +213,7 @@ fn menu_row(id: MenuId, row_view: &MenuRow, next: &mut u16, nested: &mut u16) ->
         let mut deeper = u16::MAX;
         let mut submenu = panel(&row_view.label);
         for child in &row_view.submenu {
-            submenu = submenu.child(menu_row(id, child, nested, &mut deeper));
+            submenu = submenu.child(menu_row(id, child, nested, &mut deeper, false));
         }
         submenu.anchor = Some(Anchor::Submenu);
         item = item.child(submenu);

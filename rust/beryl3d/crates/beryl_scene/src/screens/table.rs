@@ -16,7 +16,7 @@ use crate::manual::Target;
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::menus::{MENU, OpenMenu};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
-use crate::widgets::{context_menu, menu};
+use crate::widgets::{context_menu, menu, sheet_menu};
 
 /// What the flat layer shows on the table: a region the pointer goes through, so that it
 /// reaches the table's cards, which answers every key of a table command
@@ -58,7 +58,7 @@ fn bottom_sheet(open: &OpenMenu, input: &ScreenIn) -> Element {
     let safe = window.safe_area;
     let width =
         (window.size.width - safe.left - safe.right - 2.0 * MENU_EDGE).min(sheet::MAX_WIDTH);
-    let mut panel = menu(MENU, &open.title, &open.groups)
+    let mut panel = sheet_menu(MENU, &open.title, &open.groups, open.page)
         .min_width(width)
         .max_width(width)
         .max_height(window.size.height - safe.top - safe.bottom - 2.0 * MENU_EDGE)

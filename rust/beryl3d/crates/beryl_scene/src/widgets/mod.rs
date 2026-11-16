@@ -17,7 +17,7 @@ pub use field::{FieldState, Fields, field};
 pub use icon_button::icon_button;
 pub use icons::IconId;
 pub use list::list;
-pub use menu::{MenuGroup, MenuId, MenuRow, context_menu, menu};
+pub use menu::{BACK, MenuGroup, MenuId, MenuRow, context_menu, menu, sheet_menu};
 pub use slider::{STEP, level_at, slider};
 pub use toggle::toggle;
 pub use tooltip::tooltip;

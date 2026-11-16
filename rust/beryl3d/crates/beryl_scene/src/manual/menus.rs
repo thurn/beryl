@@ -49,6 +49,9 @@ pub struct OpenMenu {
     pub title: String,
     pub groups: Vec<MenuGroup>,
     pub acts: Vec<Act>,
+    /// On the phone's sheet, the number of the row whose submenu the sheet shows in place of
+    /// the menu's rows (`widgets::sheet_menu`).
+    pub page: Option<u16>,
 }
 
 /// A run of a menu's rows under one heading, or none, each with what it does.
@@ -137,6 +140,7 @@ pub fn open(target: Target, view: &PlayerView, at: Vec2, mac: bool) -> OpenMenu 
         title: title(target, view),
         groups,
         acts,
+        page: None,
     }
 }
 

@@ -325,3 +325,51 @@ fn a_long_press_on_a_phone_opens_a_bottom_sheet_with_the_card() {
         "the sheet shows no card"
     );
 }
+
+#[test]
+fn a_submenu_row_on_the_phone_sheet_shows_its_rows_with_back() {
+    let view = table_view();
+    let (mut client, _) = client_in(&view, 393.0, 759.0);
+    client.handle(Input::Cards(Box::new(card_records_among(
+        ["Island"],
+        TokenMakers::NONE,
+    ))));
+    let frame = client.frame(MS).clone();
+    let island = middle(&frame, Role::Pile, "Your library");
+    client.handle(touch(PointerPhase::Down, island));
+    client.frame(10 * MS);
+    let frame = client.frame(10 * MS + LONG_PRESS).clone();
+    let first: Vec<String> = menu_rows(&frame).into_iter().map(str::to_owned).collect();
+    let (folder, submenu_rows): (&str, Vec<&str>) = {
+        let name = commands_for(AppliesTo::Library, &view)
+            .iter()
+            .find_map(|entry| entry.menu.and_then(|placement| placement.submenu))
+            .expect("a library has a submenu");
+        let inside = commands_for(AppliesTo::Library, &view)
+            .iter()
+            .filter(|entry| entry.menu.and_then(|placement| placement.submenu) == Some(name))
+            .map(|entry| entry.command.label)
+            .collect();
+        (name, inside)
+    };
+    assert!(first.iter().any(|row| row == folder));
+    let press = |client: &mut Client, frame: &Frame, name: &str| {
+        let at = middle(frame, Role::MenuItem, name);
+        client.handle(touch(PointerPhase::Down, at));
+        client.handle(touch(PointerPhase::Up, at));
+        client.frame(20 * MS + LONG_PRESS).clone()
+    };
+    let frame = press(&mut client, &frame, folder);
+    let rows = menu_rows(&frame);
+    assert_eq!(rows[0], "Back", "{rows:?}");
+    for row in &submenu_rows {
+        assert!(rows.contains(row), "no {row:?} in {rows:?}");
+    }
+    assert!(
+        (frame.resolved.iter())
+            .all(|element| element.role != Role::List || frame.name(element.name) != folder),
+        "the submenu opened as a list beside the sheet"
+    );
+    let frame = press(&mut client, &frame, "Back");
+    assert_eq!(menu_rows(&frame), first);
+}
