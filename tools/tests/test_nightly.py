@@ -388,3 +388,26 @@ def test_a_check_that_passed_its_rerun_is_not_filed() -> None:
     runlog.append(records)
     found = nightly_failures.failed_checks("tip", NOW - timedelta(hours=1), "sweep")
     assert found == {"ui-test": ["ui-test:b"]}
+
+
+def test_the_agents_path_finds_bd(monkeypatch: pytest.MonkeyPatch) -> None:
+    # bd installs to ~/.local/bin, outside the other tools' directories; without it the nightly
+    # filed no bead and kept no verdicts.
+    found = {"bd": "/home/me/.local/bin/bd", "uv": "/opt/homebrew/bin/uv"}
+    monkeypatch.setattr(nightly.shutil, "which", lambda tool: found.get(tool))
+    path = nightly.agent_environment()["PATH"].split(":")
+    assert "/home/me/.local/bin" in path and "/opt/homebrew/bin" in path
+
+
+def test_no_verdicts_found_keeps_the_last_history(
+    own_cache: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    verdicts.save_history({"ui-test:scry": [{"verdict": "catch"}]})
+
+    class Empty(verdicts.Beads):
+        def bd(self, *args: str) -> tuple[int, str]:
+            return -1, ""
+
+    monkeypatch.setattr(verdicts, "STORE", Empty())
+    assert verdicts.refresh_history() == 1
+    assert verdicts.cached_history() == {"ui-test:scry": [{"verdict": "catch"}]}

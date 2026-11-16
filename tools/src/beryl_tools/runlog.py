@@ -447,7 +447,8 @@ def report(args: argparse.Namespace) -> int:
         return pending_report(records, args.json)
     store = verdicts.STORE
     history = store.history(store.checks())
-    verdicts.save_history(history)
+    if history:  # None found means bd failed; keep the last good ones.
+        verdicts.save_history(history)
     if args.prune:
         return prune.report(records, history, since, args.days, args.json)
     checks, lanes = tally(records, history, since)

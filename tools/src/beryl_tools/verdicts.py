@@ -477,6 +477,11 @@ def cached_history() -> dict[str, list[Entry]]:
 def refresh_history() -> int:
     """Fetches every check's verdicts from the beads and keeps them (`save_history`)."""
     history = STORE.history(STORE.checks())
+    if not history:
+        # bd missing or failing reads as no checks; keeping that would erase the last good
+        # history, so the run fails instead.
+        warn(f"found no check's verdicts; {history_path()} keeps its last ones")
+        return 1
     save_history(history)
     print(f"verdicts: kept the verdicts of {len(history)} checks in {history_path()}")
     return 0

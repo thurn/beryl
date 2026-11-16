@@ -389,9 +389,11 @@ def unsupported() -> bool:
 
 def agent_environment() -> dict[str, str]:
     """What launchd's bare environment lacks: a PATH holding the tools coverage runs (uv, node,
-    git, cargo, just), and the cache if it is not the default."""
+    git, cargo, just) and bd, and the cache if it is not the default. Without bd on that PATH
+    (it installs to ~/.local/bin), every nightly filed no nightly-failure bead and kept an
+    empty verdict history for the fast check's ordering, and nothing reported it."""
     directories: list[str] = []
-    for tool in ("uv", "node", "git", "cargo", "just"):
+    for tool in ("uv", "node", "git", "cargo", "just", "bd"):
         found = shutil.which(tool)
         if found and str(Path(found).parent) not in directories:
             directories.append(str(Path(found).parent))
