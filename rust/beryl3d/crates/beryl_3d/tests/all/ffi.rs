@@ -1,14 +1,18 @@
 //! The C functions as a host calls them. `tests/c/header.c` calls every function of
 //! `include/beryl3d.h` with the header's own types and constants, and the frame log the app
 //! wrote shows which of its inputs arrived: each valid one, and neither invalid one. An app
-//! started with no recording plays a live game, whose first view wakes the host.
+//! started with no recording plays a live game, whose first view wakes the host, and whose frame
+//! log is summarized when the app is suspended, since a phone's app never exits by itself.
 
 use std::ffi::{CString, c_char, c_void};
 use std::path::PathBuf;
 use std::sync::mpsc::{Sender, channel};
 use std::time::Duration;
 
-use beryl_3d::ffi::{BerylConfig, beryl3d_close, beryl3d_new};
+use beryl_3d::ffi::{
+    BERYL_SUSPENDED, BerylConfig, beryl3d_close, beryl3d_frame, beryl3d_lifecycle, beryl3d_new,
+    beryl3d_offscreen,
+};
 use beryl_3d::fixture;
 use beryl_3d::frame_log::{self, InputLine};
 
@@ -129,7 +133,35 @@ fn with_no_recording_the_app_plays_a_live_game_whose_views_wake_the_host() {
     assert!(!app.is_null(), "the app starts with no recording");
     // Only a hang reaches this limit: the session's first view comes within a second.
     let woken = woke.recv_timeout(Duration::from_secs(120));
+    // SAFETY: `app` came from `beryl3d_new` and is used on this thread only.
+    unsafe {
+        beryl3d_offscreen(app, 800, 600);
+        beryl3d_frame(app, 1_000_000_000);
+        beryl3d_lifecycle(app, BERYL_SUSPENDED);
+    }
+    // The log's own thread writes the summary; only a hang reaches this limit.
+    let summarized = (0..1200).any(|_| {
+        let found = logged_summary(&dir);
+        if !found {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        found
+    });
     // SAFETY: the app came from `beryl3d_new` and is not used again.
     unsafe { beryl3d_close(app) };
     assert!(woken.is_ok(), "no view of the live game woke the host");
+    assert!(
+        summarized,
+        "suspending a live game wrote no summary before the app closed"
+    );
+}
+
+/// Whether a frame log in `dir` holds a summary line yet.
+fn logged_summary(dir: &std::path::Path) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            entry.path().extension().is_some_and(|e| e == "jsonl")
+                && frame_log::read(&entry.path()).is_ok_and(|log| log.summary.is_some())
+        })
+    })
 }

@@ -30,6 +30,7 @@ from . import (
     live,
     paths,
     phone,
+    phone_search,
     sweep,
     timeline,
     vm,
@@ -571,6 +572,20 @@ COMMANDS: tuple[Command, ...] = (
         ),
         phone.checked(phone.run_android_smoke),
         phone.android_smoke_arguments,
+    ),
+    Command(
+        "phone-search",
+        "plays a live game against expert on the iOS Simulator and the Android emulator, and"
+        " compares late frames while the AI searched and while it did not",
+        (
+            ("just b3d phone-search", "iOS, then Android on Vulkan"),
+            (
+                "just b3d phone-search --gles",
+                "iOS, then Android on Vulkan and on OpenGL ES 3.0",
+            ),
+        ),
+        phone.checked(phone_search.run_phone_search),
+        phone_search.phone_search_arguments,
     ),
     Command(
         "ios-device",

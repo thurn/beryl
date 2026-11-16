@@ -12,7 +12,7 @@ use beryl_host::{Desktop, WindowMode};
 use beryl_host::{Feed, Inbox, Opened, Ticked, Windowless, WindowlessOptions};
 use beryl_scene::command::Request;
 use beryl_scene::frame::Wake;
-use beryl_scene::input::{Input, Size};
+use beryl_scene::input::{Input, Lifecycle, Size};
 use beryl_scene::{Client, Config};
 use beryl_session::protocol::Status;
 use beryl_session::script::Verb;
@@ -92,6 +92,10 @@ enum Finish {
     /// When the run ends, which is when the game is over: with `--agent`, which plays a whole
     /// game with nobody at the table.
     GameOver,
+    /// Never, since a phone's live game never exits by itself: instead its log is summarized
+    /// each time the app is suspended and when the game ends, so that a run reading the log
+    /// from outside (`just b3d phone-search`) finds the counts so far.
+    AtSuspend,
 }
 
 /// The frame log, or why there is none.
@@ -144,14 +148,22 @@ impl Feed for AppFeed {
         if let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
             log.input(input);
         }
+        let mut summarize = false;
         if let Input::Update(update) = input {
             self.searching = matches!(update.view.status, Status::Thinking);
             // A replayed recording ends when its last script has played, not at its game's end.
             let live = matches!(self.source, Some(Source::Live(_)));
             if live && !self.ended && matches!(update.view.status, Status::Over { .. }) {
                 self.ended = true;
+                summarize = self.finish == Finish::AtSuspend;
                 println!("{GAME_OVER}");
             }
+        }
+        if let Input::Lifecycle(Lifecycle::Suspended) = input {
+            summarize = self.finish == Finish::AtSuspend;
+        }
+        if summarize && let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
+            log.summarize();
         }
     }
 
@@ -342,13 +354,12 @@ pub(crate) fn phone_live_feed(
         },
         inbox,
     );
-    // A phone's app never exits by itself, so its live game's log is never finished.
     phone_app(
         Source::Live(commands),
         None,
         data_dir,
         display_hz,
-        Finish::AtExit,
+        Finish::AtSuspend,
     )
 }
 
