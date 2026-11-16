@@ -47,23 +47,35 @@ pub fn trace(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Posit
 /// quiet one. Two definitions of a card that pass the same scenario still differ when their
 /// snapshots do.
 pub fn outcome(cards: &'static CardTable, scenario: &Scenario) -> Result<Vec<Assertion>, Failure> {
+    outcome_with(cards, scenario, |_, _| {})
+}
+
+/// The oracle snapshot, with each scripted decision and its state available for comparisons
+/// that can use Beryl-specific information, such as the mana left after a scripted payment.
+pub fn outcome_with(
+    cards: &'static CardTable,
+    scenario: &Scenario,
+    mut observe: impl FnMut(&State, &Step),
+) -> Result<Vec<Assertion>, Failure> {
     let mut runner = Runner::new(cards, scenario, Slots::Dealt)?;
+    let failed = |action, message| Failure {
+        scenario: scenario.name,
+        action,
+        message,
+    };
     for (i, &action) in scenario.actions.iter().enumerate() {
         runner.upcoming = upcoming(&scenario.actions[i..]);
-        let fail = |message| Failure {
-            scenario: scenario.name,
-            action: Some(i),
-            message,
-        };
-        runner.position().map_err(fail)?;
+        let fail = |message| failed(Some(i), message);
+        let step = runner.position().map_err(fail)?;
+        observe(&runner.s, &step);
         runner.act(action).map_err(fail)?;
     }
     runner.upcoming = None;
-    runner.snapshot().map_err(|message| Failure {
-        scenario: scenario.name,
-        action: None,
-        message,
-    })
+    let fail = |message| failed(None, message);
+    let snapshot = runner.snapshot().map_err(fail)?;
+    let step = runner.position().map_err(fail)?;
+    observe(&runner.s, &step);
+    Ok(snapshot)
 }
 
 /// Runs a scenario like [`trace`], with each deck's slots numbered as `slots` says: its

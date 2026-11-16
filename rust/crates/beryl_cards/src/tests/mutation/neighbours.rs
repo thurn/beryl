@@ -1,4 +1,4 @@
-//! Mutants: a card's definition with one node of its effect data, or one of its targets,
+//! Mutants: a card's definition with one node
 //! replaced by a neighbouring value.
 //!
 //! The neighbours of a node are the values a card writer could plausibly have written in its
@@ -12,12 +12,16 @@
 //! ability, which is never cast. A mutant that survives is then a real gap, or a pair of
 //! definitions that `EQUIVALENT` argues always do the same.
 
-use beryl_card::{Duration, Filter, Node, Prevention, PutOnto, Regeneration};
-use beryl_engine::Zone;
-use beryl_engine::card::{
-    Ability, AbilityKind, Amount, Behavior, CardDef, Condition, Effect, Face, Objects, Players,
-    Recipients, TargetSpec,
-};
+use beryl_card::{Ability, AbilityKind, Behavior, CardDef, Effect, Face, Node, Objects};
+
+mod abilities;
+mod continuous;
+mod costs;
+mod effects;
+mod faces;
+mod operands;
+
+use abilities::{ability_neighbours, preserve};
 
 /// A card's definition with one node replaced.
 pub(super) struct Mutant {
@@ -39,10 +43,7 @@ fn leak_slice<T>(values: Vec<T>) -> &'static [T] {
 /// A node's neighbours, each with its name.
 type Neighbours<T> = Vec<(String, T)>;
 
-/// Every mutant of `def`: each neighbour of each node of the effect data of the abilities and
-/// granted abilities of its faces that resolve (spells, activated and triggered abilities),
-/// each target of those abilities made optional or required, and each such mutant of a token
-/// or emblem the card makes ([`CardDef::tokens`]).
+/// Every mutant of `def`, including single changes to the tokens and emblems it makes.
 pub(super) fn mutants(def: &'static CardDef) -> Vec<Mutant> {
     let mut out = own_mutants(def);
     for (k, &token) in def.tokens.iter().enumerate() {
@@ -113,8 +114,7 @@ fn replaced(
     old: &'static CardDef,
     made: &'static CardDef,
 ) -> Option<Effect> {
-    let inner = |child: &'static Effect| replaced(child, old, made).map(leak);
-    match *effect {
+    rewrite(effect, &|effect| match *effect {
         Effect::CreateTokens {
             player,
             token,
@@ -141,6 +141,20 @@ fn replaced(
                 emblem: made,
             })
         }
+        _ => None,
+    })
+}
+
+/// Replaces matching instructions, copying only the branches that contain them.
+fn rewrite(
+    effect: &'static Effect,
+    replace: &impl Fn(&Effect) -> Option<Effect>,
+) -> Option<Effect> {
+    if let Some(changed) = replace(effect) {
+        return Some(changed);
+    }
+    let inner = |child: &'static Effect| rewrite(child, replace).map(leak);
+    match *effect {
         Effect::Sequence(effects) => {
             let steps: Vec<Option<&'static Effect>> = effects.iter().map(inner).collect();
             steps.iter().any(Option::is_some).then(|| {
@@ -184,7 +198,7 @@ fn replaced(
     }
 }
 
-/// The mutants of the abilities on `def`'s own faces.
+/// The mutants of `def`'s own faces and their abilities.
 fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
     let mut out = Vec::new();
     let reads_link = reads_link(def);
@@ -194,6 +208,22 @@ fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
         } else {
             format!("{}: ", face.name)
         };
+        for (node, neighbour, changed) in faces::neighbours(face) {
+            out.push(Mutant {
+                node: format!("{face_name}{node}"),
+                neighbour,
+                def: with_face(def, f, changed),
+            });
+        }
+        for (index, ability) in face.abilities.iter().enumerate() {
+            if let Some(changed) = every_time(face, index, ability) {
+                out.push(Mutant {
+                    node: format!("{face_name}ability {index}, trigger frequency"),
+                    neighbour: "every time".to_owned(),
+                    def: with_face(def, f, changed),
+                });
+            }
+        }
         for (granted, list) in [(false, face.abilities), (true, face.grants)] {
             for (i, ability) in list.iter().enumerate() {
                 // A spell is cast from its face's own spell ability (`Face::spell_ability_with`),
@@ -209,7 +239,9 @@ fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
                     "ability"
                 };
                 let at = format!("{face_name}{what} {i}");
-                for (node, neighbour, changed) in ability_neighbours(ability, &at) {
+                for (node, neighbour, changed) in
+                    ability_neighbours(ability, list, (!granted).then_some(face), &at)
+                {
                     if !reads_link && neighbour.starts_with(LINKED) {
                         continue;
                     }
@@ -221,27 +253,68 @@ fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
                     } else {
                         with(face, abilities, face.grants)
                     };
-                    let mut faces: Vec<Face> = def
-                        .faces
-                        .iter()
-                        .map(|f| with(f, f.abilities, f.grants))
-                        .collect();
-                    faces[f] = face;
-                    let def = leak(CardDef {
-                        name: def.name,
-                        faces: leak_slice(faces),
-                        tokens: def.tokens,
-                    });
                     out.push(Mutant {
                         node,
                         neighbour,
-                        def,
+                        def: with_face(def, f, face),
                     });
                 }
             }
         }
     }
     out
+}
+
+/// A scheduled trigger with no saved resolution data can instead be a standing
+/// listener. Remove its scheduling instructions so they still reference only
+/// delayed listeners. Triggers that read a carried object or amount need their
+/// scheduling effect's context and have no standing equivalent in the vocabulary.
+fn every_time(face: &Face, index: usize, ability: &Ability) -> Option<Face> {
+    let trigger = ability.trigger().filter(|trigger| trigger.delayed)?;
+    let uses_schedule = |effect: &Effect| matches!(effect, Effect::Delay { ability, .. } if ability.index() == index);
+    let bodies = face
+        .abilities
+        .iter()
+        .chain(face.grants)
+        .filter_map(|ability| match ability.body() {
+            Behavior::Data(effect) => Some(effect),
+            Behavior::Custom(_) => None,
+        });
+    if bodies.clone().any(|effect| {
+        effect.any(&|e| {
+            uses_schedule(e)
+                && matches!(
+                    e,
+                    Effect::Delay {
+                        carrying: Some(_),
+                        ..
+                    } | Effect::Delay {
+                        object: Some(_),
+                        ..
+                    }
+                )
+        })
+    }) || !bodies.clone().any(|effect| effect.any(&uses_schedule))
+    {
+        return None;
+    }
+    let standing = beryl_card::Trigger {
+        delayed: false,
+        ..*trigger
+    };
+    let changed = preserve(ability, Ability::triggered(leak(standing)));
+    let strip = |ability: Ability| match ability.body() {
+        Behavior::Data(effect) => rewrite(effect, &|e| uses_schedule(e).then_some(Effect::NOTHING))
+            .map_or(ability, |effect| ability.effect(leak(effect))),
+        Behavior::Custom(_) => ability,
+    };
+    let mut abilities = face.abilities.to_vec();
+    abilities[index] = changed;
+    Some(with(
+        face,
+        leak_slice(abilities.into_iter().map(strip).collect()),
+        leak_slice(face.grants.iter().copied().map(strip).collect()),
+    ))
 }
 
 /// The name a [`PutOnto::linked`] neighbour starts with.
@@ -267,6 +340,20 @@ fn reads_link(def: &CardDef) -> bool {
             .any(|spec| spec.put_with_this)
 }
 
+fn with_face(def: &CardDef, index: usize, face: Face) -> &'static CardDef {
+    let mut faces: Vec<Face> = def
+        .faces
+        .iter()
+        .map(|f| with(f, f.abilities, f.grants))
+        .collect();
+    faces[index] = face;
+    leak(CardDef {
+        name: def.name,
+        faces: leak_slice(faces),
+        tokens: def.tokens,
+    })
+}
+
 /// `face` with these abilities and granted abilities.
 fn with(face: &Face, abilities: &'static [Ability], grants: &'static [Ability]) -> Face {
     Face {
@@ -287,1000 +374,4 @@ fn with(face: &Face, abilities: &'static [Ability], grants: &'static [Ability]) 
         grants,
         excepts: face.excepts,
     }
-}
-
-/// Each mutant of one ability: its node, its neighbour and the changed ability.
-fn ability_neighbours(ability: &Ability, at: &str) -> Vec<(String, String, Ability)> {
-    let resolves = matches!(
-        ability.kind(),
-        AbilityKind::Spell | AbilityKind::Activated | AbilityKind::Triggered
-    );
-    let Behavior::Data(effect) = ability.body() else {
-        return Vec::new();
-    };
-    if !resolves {
-        return Vec::new();
-    }
-    let mut out = Vec::new();
-    let targets = ability.targets();
-    for (j, spec) in targets.iter().enumerate() {
-        let mut specs: Vec<TargetSpec> = targets.to_vec();
-        specs[j] = TargetSpec {
-            optional: !spec.optional,
-            ..*spec
-        };
-        let neighbour = if spec.optional {
-            "required"
-        } else {
-            "optional"
-        };
-        out.push((
-            format!("{at}, target {j}"),
-            neighbour.to_owned(),
-            ability.targeting(leak_slice(specs)),
-        ));
-    }
-    let mut effects = Vec::new();
-    effect_neighbours(effect, at, &mut effects);
-    for (node, neighbour, changed) in effects {
-        out.push((node, neighbour, ability.effect(leak(changed))));
-    }
-    out
-}
-
-/// Each neighbour of each node of `effect`, at `at`: the node, the neighbour and the whole
-/// effect with that node replaced.
-fn effect_neighbours(effect: &'static Effect, at: &str, out: &mut Vec<(String, String, Effect)>) {
-    for (neighbour, changed) in local(effect) {
-        out.push((at.to_owned(), neighbour, changed));
-    }
-    // A neighbour of a child, with the child replaced in this node.
-    let mut child =
-        |child: &'static Effect, at: String, rebuild: &dyn Fn(&'static Effect) -> Effect| {
-            let mut inner = Vec::new();
-            effect_neighbours(child, &at, &mut inner);
-            for (node, neighbour, changed) in inner {
-                out.push((node, neighbour, rebuild(leak(changed))));
-            }
-        };
-    match *effect {
-        Effect::Sequence(effects) => {
-            for (i, step) in effects.iter().enumerate() {
-                child(step, format!("{at}, step {i}"), &|changed| {
-                    let mut steps = effects.to_vec();
-                    steps[i] = *changed;
-                    Effect::Sequence(leak_slice(steps))
-                });
-            }
-        }
-        Effect::If {
-            condition,
-            then,
-            otherwise,
-        } => {
-            child(then, format!("{at}, then"), &|then| Effect::If {
-                condition,
-                then,
-                otherwise,
-            });
-            if let Some(otherwise) = otherwise {
-                child(otherwise, format!("{at}, otherwise"), &|otherwise| {
-                    Effect::If {
-                        condition,
-                        then,
-                        otherwise: Some(otherwise),
-                    }
-                });
-            }
-        }
-        Effect::May { player, effect } => {
-            child(effect, format!("{at}, inside"), &|effect| Effect::May {
-                player,
-                effect,
-            });
-        }
-        Effect::Unless {
-            effect,
-            player,
-            cost,
-        } => {
-            child(effect, format!("{at}, inside"), &|effect| Effect::Unless {
-                effect,
-                player,
-                cost,
-            });
-        }
-        Effect::ForEachPlayer { players, effect } => {
-            child(effect, format!("{at}, inside"), &|effect| {
-                Effect::ForEachPlayer { players, effect }
-            });
-        }
-        _ => {}
-    }
-}
-
-/// The neighbours of the node `effect` itself, its children unchanged.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one arm per entry of the vocabulary that has fields to change"
-)]
-fn local(effect: &'static Effect) -> Neighbours<Effect> {
-    let mut out: Neighbours<Effect> = Vec::new();
-    let mut add = |name: String, changed: Effect| out.push((name, changed));
-    match *effect {
-        Effect::Sequence(effects) => {
-            for i in 0..effects.len() {
-                let mut steps = effects.to_vec();
-                steps.remove(i);
-                add(
-                    format!("drop step {i}"),
-                    Effect::Sequence(leak_slice(steps)),
-                );
-            }
-        }
-        Effect::If {
-            condition,
-            then,
-            otherwise,
-        } => {
-            let negated = match condition {
-                Condition::Not(inner) => *inner,
-                _ => Condition::Not(leak(condition)),
-            };
-            add(
-                "condition negated".to_owned(),
-                Effect::If {
-                    condition: negated,
-                    then,
-                    otherwise,
-                },
-            );
-        }
-        Effect::May { player, effect } => {
-            add("without the may".to_owned(), *effect);
-            for (name, player) in chooser(player) {
-                add(name, Effect::May { player, effect });
-            }
-        }
-        Effect::Unless { effect, .. } => add("without the unless".to_owned(), *effect),
-        Effect::ForEachPlayer {
-            players: who,
-            effect,
-        } => {
-            for (name, who) in players(who) {
-                add(
-                    name,
-                    Effect::ForEachPlayer {
-                        players: who,
-                        effect,
-                    },
-                );
-            }
-        }
-        Effect::Choose {
-            player,
-            among,
-            prompt,
-            optional,
-            hidden,
-        } => {
-            // A hidden pick is optional (`Malformed::Chosen`), so it is not made required.
-            if !hidden {
-                let name = if optional { "required" } else { "optional" };
-                add(
-                    name.to_owned(),
-                    Effect::Choose {
-                        player,
-                        among,
-                        prompt,
-                        optional: !optional,
-                        hidden,
-                    },
-                );
-            }
-            if optional {
-                let name = if hidden { "revealed" } else { "hidden" };
-                add(
-                    name.to_owned(),
-                    Effect::Choose {
-                        player,
-                        among,
-                        prompt,
-                        optional,
-                        hidden: !hidden,
-                    },
-                );
-            }
-            for (name, among) in objects(among) {
-                add(
-                    name,
-                    Effect::Choose {
-                        player,
-                        among,
-                        prompt,
-                        optional,
-                        hidden,
-                    },
-                );
-            }
-        }
-        Effect::LookAt { player, cards } => {
-            for (name, player) in chooser(player) {
-                add(name, Effect::LookAt { player, cards });
-            }
-        }
-        Effect::CounterInto { spells, zone } => {
-            for (name, zone) in zones(zone) {
-                add(name, Effect::CounterInto { spells, zone });
-            }
-        }
-        Effect::Destroy {
-            objects: which,
-            regeneration,
-        } => {
-            let other = match regeneration {
-                Regeneration::Allowed => Regeneration::Forbidden,
-                Regeneration::Forbidden => Regeneration::Allowed,
-            };
-            add(
-                format!("Regeneration::{other:?}"),
-                Effect::Destroy {
-                    objects: which,
-                    regeneration: other,
-                },
-            );
-            for (name, which) in objects(which) {
-                add(
-                    name,
-                    Effect::Destroy {
-                        objects: which,
-                        regeneration,
-                    },
-                );
-            }
-        }
-        Effect::Counter(o) => objects_of(o, Effect::Counter, &mut add),
-        Effect::Regenerate(o) => objects_of(o, Effect::Regenerate, &mut add),
-        Effect::PhaseOut(o) => objects_of(o, Effect::PhaseOut, &mut add),
-        Effect::Exile(o) => objects_of(o, Effect::Exile, &mut add),
-        Effect::ExileUntilThisLeaves(o) => objects_of(o, Effect::ExileUntilThisLeaves, &mut add),
-        Effect::Sacrifice(o) => objects_of(o, Effect::Sacrifice, &mut add),
-        Effect::ReturnToHand(o) => objects_of(o, Effect::ReturnToHand, &mut add),
-        Effect::PutIntoGraveyard(o) => objects_of(o, Effect::PutIntoGraveyard, &mut add),
-        Effect::ReturnToBattlefield(o) => objects_of(o, Effect::ReturnToBattlefield, &mut add),
-        Effect::PutOntoBattlefield(onto) => {
-            let mut put = |name: String, changed: PutOnto| {
-                add(name, Effect::PutOntoBattlefield(leak(changed)));
-            };
-            for (name, objects) in objects(onto.objects) {
-                put(name, PutOnto { objects, ..*onto });
-            }
-            match onto.under {
-                Some(player) => {
-                    put(
-                        "under owners".to_owned(),
-                        PutOnto {
-                            under: None,
-                            ..*onto
-                        },
-                    );
-                    for (name, player) in players(player) {
-                        put(
-                            name,
-                            PutOnto {
-                                under: Some(player),
-                                ..*onto
-                            },
-                        );
-                    }
-                }
-                None => put(
-                    "under Players::You".to_owned(),
-                    PutOnto {
-                        under: Some(Players::You),
-                        ..*onto
-                    },
-                ),
-            }
-            put(
-                format!("tapped {}", !onto.tapped),
-                PutOnto {
-                    tapped: !onto.tapped,
-                    ..*onto
-                },
-            );
-            put(
-                format!("{LINKED}{}", !onto.linked),
-                PutOnto {
-                    linked: !onto.linked,
-                    ..*onto
-                },
-            );
-        }
-        Effect::GainFlashback(o) => objects_of(o, Effect::GainFlashback, &mut add),
-        Effect::PutIntoLibrary {
-            objects: which,
-            position,
-        } => {
-            for (name, which) in objects(which) {
-                add(
-                    name,
-                    Effect::PutIntoLibrary {
-                        objects: which,
-                        position,
-                    },
-                );
-            }
-        }
-        Effect::PutBack { player, count } => {
-            player_count(
-                player,
-                count,
-                |player, count| Effect::PutBack { player, count },
-                &mut add,
-            );
-        }
-        Effect::ShuffleInto { player, cards } => {
-            for (name, player) in players(player) {
-                add(name, Effect::ShuffleInto { player, cards });
-            }
-        }
-        Effect::Dig {
-            player,
-            look,
-            take,
-            rest,
-        } => {
-            player_count(
-                player,
-                look,
-                |player, look| Effect::Dig {
-                    player,
-                    look,
-                    take,
-                    rest,
-                },
-                &mut add,
-            );
-        }
-        Effect::Fateseal {
-            player,
-            library,
-            count,
-        } => {
-            player_count(
-                library,
-                count,
-                |library, count| Effect::Fateseal {
-                    player,
-                    library,
-                    count,
-                },
-                &mut add,
-            );
-        }
-        Effect::Search {
-            player,
-            filter,
-            count,
-            found,
-        } => {
-            if filter != Filter::Any {
-                add(
-                    "filter Filter::Any".to_owned(),
-                    Effect::Search {
-                        player,
-                        filter: Filter::Any,
-                        count,
-                        found,
-                    },
-                );
-            }
-            for (name, count) in amounts(count) {
-                add(
-                    name,
-                    Effect::Search {
-                        player,
-                        filter,
-                        count,
-                        found,
-                    },
-                );
-            }
-        }
-        Effect::Draw { player, count } => {
-            player_count(
-                player,
-                count,
-                |player, count| Effect::Draw { player, count },
-                &mut add,
-            );
-        }
-        Effect::Discard { player, count } => {
-            player_count(
-                player,
-                count,
-                |player, count| Effect::Discard { player, count },
-                &mut add,
-            );
-        }
-        Effect::Mill { player, count } => {
-            player_count(
-                player,
-                count,
-                |player, count| Effect::Mill { player, count },
-                &mut add,
-            );
-        }
-        Effect::Scry { player, count } => {
-            player_count(
-                player,
-                count,
-                |player, count| Effect::Scry { player, count },
-                &mut add,
-            );
-        }
-        Effect::ManifestDread(player) => {
-            for (name, player) in players(player) {
-                add(name, Effect::ManifestDread(player));
-            }
-        }
-        Effect::DealDamage { to, amount } => {
-            for (name, to) in recipients(to) {
-                add(name, Effect::DealDamage { to, amount });
-            }
-            for (name, amount) in amounts(amount) {
-                add(name, Effect::DealDamage { to, amount });
-            }
-        }
-        Effect::PreventDamage {
-            to,
-            prevention,
-            from,
-        } => {
-            let prevent = |to, prevention, from| Effect::PreventDamage {
-                to,
-                prevention,
-                from,
-            };
-            for (name, to) in recipients(to) {
-                add(name, prevent(to, prevention, from));
-            }
-            let preventions = match prevention {
-                Prevention::NextTime => vec![("the next 1".to_owned(), Prevention::Next(1))],
-                Prevention::Next(n) => {
-                    let mut near = vec![
-                        ("the next time".to_owned(), Prevention::NextTime),
-                        (format!("the next {}", n + 1), Prevention::Next(n + 1)),
-                    ];
-                    if n > 1 {
-                        near.push((format!("the next {}", n - 1), Prevention::Next(n - 1)));
-                    }
-                    near
-                }
-            };
-            for (name, prevention) in preventions {
-                add(name, prevent(to, prevention, from));
-            }
-            if from.is_some() {
-                add("from any source".to_owned(), prevent(to, prevention, None));
-            }
-        }
-        Effect::GainLife { player, amount } => {
-            player_count(
-                player,
-                amount,
-                |player, amount| Effect::GainLife { player, amount },
-                &mut add,
-            );
-        }
-        Effect::LoseLife { player, amount } => {
-            player_count(
-                player,
-                amount,
-                |player, amount| Effect::LoseLife { player, amount },
-                &mut add,
-            );
-        }
-        Effect::CreateTokens {
-            player,
-            token,
-            count,
-        } => {
-            player_count(
-                player,
-                count,
-                |player, count| Effect::CreateTokens {
-                    player,
-                    token,
-                    count,
-                },
-                &mut add,
-            );
-        }
-        Effect::CreateAttackingTokens {
-            player,
-            token,
-            count,
-            attacking,
-        } => {
-            player_count(
-                player,
-                count,
-                |player, count| Effect::CreateAttackingTokens {
-                    player,
-                    token,
-                    count,
-                    attacking,
-                },
-                &mut add,
-            );
-        }
-        Effect::CreateCopies {
-            player,
-            of,
-            count,
-            except,
-        } => {
-            for (name, count) in amounts(count) {
-                add(
-                    name,
-                    Effect::CreateCopies {
-                        player,
-                        of,
-                        count,
-                        except,
-                    },
-                );
-            }
-        }
-        Effect::CopySpell {
-            spells,
-            count,
-            except,
-            new_targets,
-        } => {
-            let copy = |count, except, new_targets| Effect::CopySpell {
-                spells,
-                count,
-                except,
-                new_targets,
-            };
-            for (name, count) in amounts(count) {
-                add(name, copy(count, except, new_targets));
-            }
-            add(
-                format!("new_targets {}", !new_targets),
-                copy(count, except, !new_targets),
-            );
-            if except.is_some() {
-                add("except None".to_owned(), copy(count, None, new_targets));
-            }
-        }
-        Effect::AddCounters {
-            objects: which,
-            kind,
-            count,
-        } => {
-            for (name, which) in objects(which) {
-                add(
-                    name,
-                    Effect::AddCounters {
-                        objects: which,
-                        kind,
-                        count,
-                    },
-                );
-            }
-            for (name, count) in amounts(count) {
-                add(
-                    name,
-                    Effect::AddCounters {
-                        objects: which,
-                        kind,
-                        count,
-                    },
-                );
-            }
-        }
-        Effect::RemoveCounters {
-            objects: which,
-            kind,
-            count,
-        } => {
-            for (name, which) in objects(which) {
-                add(
-                    name,
-                    Effect::RemoveCounters {
-                        objects: which,
-                        kind,
-                        count,
-                    },
-                );
-            }
-            for (name, count) in amounts(count) {
-                add(
-                    name,
-                    Effect::RemoveCounters {
-                        objects: which,
-                        kind,
-                        count,
-                    },
-                );
-            }
-        }
-        Effect::AddManaOfKind {
-            player,
-            kind,
-            amount,
-        } => {
-            for (name, amount) in amounts(amount) {
-                add(
-                    name,
-                    Effect::AddManaOfKind {
-                        player,
-                        kind,
-                        amount,
-                    },
-                );
-            }
-        }
-        Effect::Modify {
-            objects: which,
-            modifications,
-            duration,
-        } => {
-            for (name, which) in objects(which) {
-                add(
-                    name,
-                    Effect::Modify {
-                        objects: which,
-                        modifications,
-                        duration,
-                    },
-                );
-            }
-        }
-        Effect::ChangeText {
-            objects: which,
-            duration,
-        } => {
-            for (name, which) in objects(which) {
-                add(
-                    name,
-                    Effect::ChangeText {
-                        objects: which,
-                        duration,
-                    },
-                );
-            }
-            for other in [Duration::EndOfTurn, Duration::Indefinite] {
-                if other != duration {
-                    add(
-                        format!("lasting {other:?}"),
-                        Effect::ChangeText {
-                            objects: which,
-                            duration: other,
-                        },
-                    );
-                }
-            }
-        }
-        Effect::ExchangeControl(first, second) => {
-            for (name, first) in objects(first) {
-                add(name, Effect::ExchangeControl(first, second));
-            }
-            for (name, second) in objects(second) {
-                add(
-                    format!("second: {name}"),
-                    Effect::ExchangeControl(first, second),
-                );
-            }
-        }
-        Effect::BecomeCopy {
-            objects: which,
-            of,
-            except,
-        } => {
-            let copy = |objects, of| Effect::BecomeCopy {
-                objects,
-                of,
-                except,
-            };
-            for (name, which) in objects(which) {
-                add(name, copy(which, of));
-            }
-            for (name, of) in objects(of) {
-                add(format!("of: {name}"), copy(which, of));
-            }
-        }
-        Effect::Attach { objects: which, to } => {
-            for (name, which) in objects(which) {
-                add(name, Effect::Attach { objects: which, to });
-            }
-            for (name, to) in objects(to) {
-                add(format!("to: {name}"), Effect::Attach { objects: which, to });
-            }
-        }
-        Effect::PermitCast {
-            player,
-            cards,
-            duration,
-            terms,
-        } => {
-            for (name, cards) in objects(cards) {
-                add(
-                    name,
-                    Effect::PermitCast {
-                        player,
-                        cards,
-                        duration,
-                        terms,
-                    },
-                );
-            }
-        }
-        Effect::MayCast { player, card, free } => {
-            add(
-                format!("free: {}", !free),
-                Effect::MayCast {
-                    player,
-                    card,
-                    free: !free,
-                },
-            );
-        }
-        Effect::UntapUpTo {
-            player,
-            count,
-            permanents,
-        } => {
-            for (name, count) in amounts(count) {
-                add(
-                    name,
-                    Effect::UntapUpTo {
-                        player,
-                        count,
-                        permanents,
-                    },
-                );
-            }
-            for (name, permanents) in objects(permanents) {
-                add(
-                    name,
-                    Effect::UntapUpTo {
-                        player,
-                        count,
-                        permanents,
-                    },
-                );
-            }
-        }
-        Effect::Delay {
-            ability,
-            carrying,
-            object,
-        } => {
-            // A delay that carries no number has none to change.
-            for (name, carrying) in carrying.map(amounts).unwrap_or_default() {
-                add(
-                    name,
-                    Effect::Delay {
-                        ability,
-                        carrying: Some(carrying),
-                        object,
-                    },
-                );
-            }
-            for (name, which) in object.map(objects).unwrap_or_default() {
-                let object = Some(which);
-                add(
-                    name,
-                    Effect::Delay {
-                        ability,
-                        carrying,
-                        object,
-                    },
-                );
-            }
-        }
-        Effect::WinGame(player) => {
-            for (name, player) in players(player) {
-                add(name, Effect::WinGame(player));
-            }
-        }
-        Effect::LoseGame(player) => {
-            for (name, player) in players(player) {
-                add(name, Effect::LoseGame(player));
-            }
-        }
-        Effect::ControlPlayer(player) => {
-            for (name, player) in players(player) {
-                add(name, Effect::ControlPlayer(player));
-            }
-        }
-        Effect::ExtraTurn(player) => {
-            for (name, player) in players(player) {
-                add(name, Effect::ExtraTurn(player));
-            }
-        }
-        Effect::ExileLinked(_)
-        | Effect::ReturnTransformed(_)
-        | Effect::Explore(_)
-        | Effect::Mutate(_)
-        | Effect::FlipCoin(_)
-        | Effect::AddMana { .. }
-        | Effect::ChangeRule { .. }
-        | Effect::GetEmblem { .. } => {}
-    }
-    out
-}
-
-/// The neighbours of an instruction over one set of objects.
-/// The neighbours of who is dealt damage: other players or objects, and for both, only the
-/// players or only the permanents of the two.
-fn recipients(to: Recipients) -> Neighbours<Recipients> {
-    match to {
-        Recipients::Players(p) => players(p)
-            .into_iter()
-            .map(|(n, p)| (n, Recipients::Players(p)))
-            .collect(),
-        Recipients::Permanents(o) => objects(o)
-            .into_iter()
-            .map(|(n, o)| (n, Recipients::Permanents(o)))
-            .collect(),
-        Recipients::Both(p, o) => vec![
-            ("only players".to_owned(), Recipients::Players(p)),
-            ("only permanents".to_owned(), Recipients::Permanents(o)),
-        ],
-    }
-}
-
-fn objects_of(which: Objects, build: fn(Objects) -> Effect, add: &mut impl FnMut(String, Effect)) {
-    for (name, which) in objects(which) {
-        add(name, build(which));
-    }
-}
-
-/// The neighbours of an instruction of a player and an amount.
-fn player_count(
-    player: Players,
-    count: Amount,
-    build: impl Fn(Players, Amount) -> Effect,
-    add: &mut impl FnMut(String, Effect),
-) {
-    for (name, player) in players(player) {
-        add(name, build(player, count));
-    }
-    for (name, count) in amounts(count) {
-        add(name, build(player, count));
-    }
-}
-
-/// The other players a card could have named: "you", "each opponent" and "each player" for
-/// one another, and an object's owner for its controller and the reverse.
-fn players(player: Players) -> Neighbours<Players> {
-    const SIMPLE: [Players; 3] = [Players::You, Players::EachOpponent, Players::EachPlayer];
-    match player {
-        Players::You | Players::EachOpponent | Players::EachPlayer => SIMPLE
-            .into_iter()
-            .filter(|&p| p != player)
-            .map(|p| (format!("Players::{p:?}"), p))
-            .collect(),
-        Players::ControllerOf(o) => vec![("Players::OwnerOf".to_owned(), Players::OwnerOf(o))],
-        Players::OwnerOf(o) => vec![("Players::ControllerOf".to_owned(), Players::ControllerOf(o))],
-        Players::Target(_) | Players::ThatPlayer | Players::EachOther(_) => Vec::new(),
-    }
-}
-
-/// The other player a card could have named for one who makes a choice: "you" for "an
-/// opponent" and the reverse. "Each player" is no value of such a field, which asks one
-/// player; the engine asks the first of them in turn order (`Run::one` in `beryl_rules`), and
-/// a card in which each player chooses says so with `Effect::ForEachPlayer`.
-fn chooser(player: Players) -> Neighbours<Players> {
-    match player {
-        Players::You => vec![("Players::EachOpponent".to_owned(), Players::EachOpponent)],
-        Players::EachOpponent => vec![("Players::You".to_owned(), Players::You)],
-        _ => players(player),
-    }
-}
-
-/// An amount one higher and one lower.
-fn amounts(amount: Amount) -> Neighbours<Amount> {
-    match amount {
-        Amount::Fixed(n) => {
-            let mut out = vec![(format!("Amount::Fixed({})", n + 1), Amount::Fixed(n + 1))];
-            if n > 0 {
-                out.push((format!("Amount::Fixed({})", n - 1), Amount::Fixed(n - 1)));
-            }
-            out
-        }
-        Amount::Times(n, of) => {
-            let mut out = vec![(format!("times {}", n + 1), Amount::Times(n + 1, of))];
-            if n > 1 {
-                out.push((format!("times {}", n - 1), Amount::Times(n - 1, of)));
-            }
-            out
-        }
-        Amount::Plus(n, of) => {
-            let mut out = vec![(format!("plus {}", n + 1), Amount::Plus(n + 1, of))];
-            if n > 0 {
-                out.push((format!("plus {}", n - 1), Amount::Plus(n - 1, of)));
-            }
-            out
-        }
-        _ => Vec::new(),
-    }
-}
-
-/// The objects a card could have named instead: the same zone with any filter, and the
-/// cards of the other players named as [`players`] names them.
-fn objects(which: Objects) -> Neighbours<Objects> {
-    let any = "filter Filter::Any".to_owned();
-    match which {
-        Objects::All { zone, filter } if filter != Filter::Any => {
-            vec![(
-                any,
-                Objects::All {
-                    zone,
-                    filter: Filter::Any,
-                },
-            )]
-        }
-        Objects::InZoneOf {
-            zone,
-            players: who,
-            filter,
-        } => {
-            let mut out: Neighbours<Objects> = players(*who)
-                .into_iter()
-                .map(|(name, p)| {
-                    (
-                        name,
-                        Objects::InZoneOf {
-                            zone,
-                            players: leak(p),
-                            filter,
-                        },
-                    )
-                })
-                .collect();
-            if filter != Filter::Any {
-                out.push((
-                    any,
-                    Objects::InZoneOf {
-                        zone,
-                        players: who,
-                        filter: Filter::Any,
-                    },
-                ));
-            }
-            out
-        }
-        Objects::CardsIn {
-            players: who,
-            zones,
-        } => players(*who)
-            .into_iter()
-            .map(|(name, p)| {
-                (
-                    name,
-                    Objects::CardsIn {
-                        players: leak(p),
-                        zones,
-                    },
-                )
-            })
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-
-/// The other zones a card could have put a card into.
-fn zones(zone: Zone) -> Neighbours<Zone> {
-    [Zone::Hand, Zone::Library, Zone::Graveyard, Zone::Exile]
-        .into_iter()
-        .filter(|&z| z != zone)
-        .map(|z| (format!("Zone::{z:?}"), z))
-        .collect()
 }

@@ -38,9 +38,10 @@ The lanes:
   rules text against its Oracle text, with the differences
   `data/card-text-allowlist.json` pins (`card_text.py`), skipped when the change
   cannot reach `beryl_cards` or the check's own lists and code. The tests
-  include the mutation check `every_mutant_of_a_card_is_killed_by_its_scenarios`
-  (about 3 s over every card file), which fails when changing one node of a
-  card's effect data changes the outcome of none of its scenarios.
+  include `every_mutant_of_a_card_is_killed_by_its_scenarios`. The check
+  compares each neighbouring card definition against its scenarios at scripted
+  positions and at the final snapshot. Each surviving mutant needs an
+  equivalence reason.
 - `script`: `beryl_cli script-check`, when a crate it depends on changed. In a
   debug build it runs every card's spec moments from both seats and every UI
   fixture's recording, checking each animation script against its assertions.

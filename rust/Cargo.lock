@@ -323,6 +323,7 @@ dependencies = [
  "beryl_card_shared",
  "beryl_cards",
  "beryl_engine",
+ "beryl_kernel",
  "beryl_scenario",
  "beryl_scenario_types",
  "cards_1993",

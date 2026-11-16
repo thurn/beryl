@@ -1,0 +1,777 @@
+//! The neighbouring values of a single effect instruction, with its children left alone.
+
+use beryl_card::{
+    Amount, Condition, Duration, Effect, Filter, Objects, Players, Prevention, PutOnto, Recipients,
+    Regeneration,
+};
+
+use super::super::continuous::rules;
+use super::super::operands::{amounts, chooser, objects, players, zones};
+use super::super::{LINKED, Neighbours, leak, leak_slice};
+
+/// The neighbours of the node `effect` itself, its children unchanged.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one arm per entry of the vocabulary that has fields to change"
+)]
+pub(super) fn local(effect: &'static Effect) -> Neighbours<Effect> {
+    let mut out: Neighbours<Effect> = Vec::new();
+    let mut add = |name: String, changed: Effect| out.push((name, changed));
+    match *effect {
+        Effect::Sequence(effects) => {
+            for i in 0..effects.len() {
+                let mut steps = effects.to_vec();
+                steps.remove(i);
+                add(
+                    format!("drop step {i}"),
+                    Effect::Sequence(leak_slice(steps)),
+                );
+            }
+        }
+        Effect::If {
+            condition,
+            then,
+            otherwise,
+        } => {
+            let negated = match condition {
+                Condition::Not(inner) => *inner,
+                _ => Condition::Not(leak(condition)),
+            };
+            add(
+                "condition negated".to_owned(),
+                Effect::If {
+                    condition: negated,
+                    then,
+                    otherwise,
+                },
+            );
+        }
+        Effect::May { player, effect } => {
+            add("without the may".to_owned(), *effect);
+            for (name, player) in chooser(player) {
+                add(name, Effect::May { player, effect });
+            }
+        }
+        Effect::Unless { effect, .. } => add("without the unless".to_owned(), *effect),
+        Effect::ForEachPlayer {
+            players: who,
+            effect,
+        } => {
+            for (name, who) in players(who) {
+                add(
+                    name,
+                    Effect::ForEachPlayer {
+                        players: who,
+                        effect,
+                    },
+                );
+            }
+        }
+        Effect::Choose {
+            player,
+            among,
+            prompt,
+            optional,
+            hidden,
+        } => {
+            // A hidden pick is optional (`Malformed::Chosen`), so it is not made required.
+            if !hidden {
+                let name = if optional { "required" } else { "optional" };
+                add(
+                    name.to_owned(),
+                    Effect::Choose {
+                        player,
+                        among,
+                        prompt,
+                        optional: !optional,
+                        hidden,
+                    },
+                );
+            }
+            if optional {
+                let name = if hidden { "revealed" } else { "hidden" };
+                add(
+                    name.to_owned(),
+                    Effect::Choose {
+                        player,
+                        among,
+                        prompt,
+                        optional,
+                        hidden: !hidden,
+                    },
+                );
+            }
+            for (name, among) in objects(among) {
+                add(
+                    name,
+                    Effect::Choose {
+                        player,
+                        among,
+                        prompt,
+                        optional,
+                        hidden,
+                    },
+                );
+            }
+        }
+        Effect::LookAt { player, cards } => {
+            for (name, player) in chooser(player) {
+                add(name, Effect::LookAt { player, cards });
+            }
+        }
+        Effect::CounterInto { spells, zone } => {
+            for (name, zone) in zones(zone) {
+                add(name, Effect::CounterInto { spells, zone });
+            }
+        }
+        Effect::Destroy {
+            objects: which,
+            regeneration,
+        } => {
+            let other = match regeneration {
+                Regeneration::Allowed => Regeneration::Forbidden,
+                Regeneration::Forbidden => Regeneration::Allowed,
+            };
+            add(
+                format!("Regeneration::{other:?}"),
+                Effect::Destroy {
+                    objects: which,
+                    regeneration: other,
+                },
+            );
+            for (name, which) in objects(which) {
+                add(
+                    name,
+                    Effect::Destroy {
+                        objects: which,
+                        regeneration,
+                    },
+                );
+            }
+        }
+        Effect::Counter(o) => objects_of(o, Effect::Counter, &mut add),
+        Effect::Regenerate(o) => objects_of(o, Effect::Regenerate, &mut add),
+        Effect::PhaseOut(o) => objects_of(o, Effect::PhaseOut, &mut add),
+        Effect::Exile(o) => objects_of(o, Effect::Exile, &mut add),
+        Effect::ExileUntilThisLeaves(o) => objects_of(o, Effect::ExileUntilThisLeaves, &mut add),
+        Effect::Sacrifice(o) => objects_of(o, Effect::Sacrifice, &mut add),
+        Effect::ReturnToHand(o) => objects_of(o, Effect::ReturnToHand, &mut add),
+        Effect::PutIntoGraveyard(o) => objects_of(o, Effect::PutIntoGraveyard, &mut add),
+        Effect::ReturnToBattlefield(o) => objects_of(o, Effect::ReturnToBattlefield, &mut add),
+        Effect::PutOntoBattlefield(onto) => {
+            let mut put = |name: String, changed: PutOnto| {
+                add(name, Effect::PutOntoBattlefield(leak(changed)));
+            };
+            for (name, objects) in objects(onto.objects) {
+                put(name, PutOnto { objects, ..*onto });
+            }
+            match onto.under {
+                Some(player) => {
+                    put(
+                        "under owners".to_owned(),
+                        PutOnto {
+                            under: None,
+                            ..*onto
+                        },
+                    );
+                    for (name, player) in players(player) {
+                        put(
+                            name,
+                            PutOnto {
+                                under: Some(player),
+                                ..*onto
+                            },
+                        );
+                    }
+                }
+                None => put(
+                    "under Players::You".to_owned(),
+                    PutOnto {
+                        under: Some(Players::You),
+                        ..*onto
+                    },
+                ),
+            }
+            put(
+                format!("tapped {}", !onto.tapped),
+                PutOnto {
+                    tapped: !onto.tapped,
+                    ..*onto
+                },
+            );
+            put(
+                format!("{LINKED}{}", !onto.linked),
+                PutOnto {
+                    linked: !onto.linked,
+                    ..*onto
+                },
+            );
+        }
+        Effect::GainFlashback(o) => objects_of(o, Effect::GainFlashback, &mut add),
+        Effect::PutIntoLibrary {
+            objects: which,
+            position,
+        } => {
+            for (name, which) in objects(which) {
+                add(
+                    name,
+                    Effect::PutIntoLibrary {
+                        objects: which,
+                        position,
+                    },
+                );
+            }
+        }
+        Effect::PutBack { player, count } => {
+            player_count(
+                player,
+                count,
+                |player, count| Effect::PutBack { player, count },
+                &mut add,
+            );
+        }
+        Effect::ShuffleInto { player, cards } => {
+            for (name, player) in players(player) {
+                add(name, Effect::ShuffleInto { player, cards });
+            }
+        }
+        Effect::Dig {
+            player,
+            look,
+            take,
+            rest,
+        } => {
+            player_count(
+                player,
+                look,
+                |player, look| Effect::Dig {
+                    player,
+                    look,
+                    take,
+                    rest,
+                },
+                &mut add,
+            );
+        }
+        Effect::Fateseal {
+            player,
+            library,
+            count,
+        } => {
+            player_count(
+                library,
+                count,
+                |library, count| Effect::Fateseal {
+                    player,
+                    library,
+                    count,
+                },
+                &mut add,
+            );
+        }
+        Effect::Search {
+            player,
+            filter,
+            count,
+            found,
+        } => {
+            if filter != Filter::Any {
+                add(
+                    "filter Filter::Any".to_owned(),
+                    Effect::Search {
+                        player,
+                        filter: Filter::Any,
+                        count,
+                        found,
+                    },
+                );
+            }
+            for (name, count) in amounts(count) {
+                add(
+                    name,
+                    Effect::Search {
+                        player,
+                        filter,
+                        count,
+                        found,
+                    },
+                );
+            }
+        }
+        Effect::Draw { player, count } => {
+            player_count(
+                player,
+                count,
+                |player, count| Effect::Draw { player, count },
+                &mut add,
+            );
+        }
+        Effect::Discard { player, count } => {
+            player_count(
+                player,
+                count,
+                |player, count| Effect::Discard { player, count },
+                &mut add,
+            );
+        }
+        Effect::Mill { player, count } => {
+            player_count(
+                player,
+                count,
+                |player, count| Effect::Mill { player, count },
+                &mut add,
+            );
+        }
+        Effect::Scry { player, count } => {
+            player_count(
+                player,
+                count,
+                |player, count| Effect::Scry { player, count },
+                &mut add,
+            );
+        }
+        Effect::ManifestDread(player) => {
+            for (name, player) in players(player) {
+                add(name, Effect::ManifestDread(player));
+            }
+        }
+        Effect::DealDamage { to, amount } => {
+            for (name, to) in recipients(to) {
+                add(name, Effect::DealDamage { to, amount });
+            }
+            for (name, amount) in amounts(amount) {
+                add(name, Effect::DealDamage { to, amount });
+            }
+        }
+        Effect::PreventDamage {
+            to,
+            prevention,
+            from,
+        } => {
+            let prevent = |to, prevention, from| Effect::PreventDamage {
+                to,
+                prevention,
+                from,
+            };
+            for (name, to) in recipients(to) {
+                add(name, prevent(to, prevention, from));
+            }
+            let preventions = match prevention {
+                Prevention::NextTime => vec![("the next 1".to_owned(), Prevention::Next(1))],
+                Prevention::Next(n) => {
+                    let mut near = vec![
+                        ("the next time".to_owned(), Prevention::NextTime),
+                        (format!("the next {}", n + 1), Prevention::Next(n + 1)),
+                    ];
+                    if n > 1 {
+                        near.push((format!("the next {}", n - 1), Prevention::Next(n - 1)));
+                    }
+                    near
+                }
+            };
+            for (name, prevention) in preventions {
+                add(name, prevent(to, prevention, from));
+            }
+            if from.is_some() {
+                add("from any source".to_owned(), prevent(to, prevention, None));
+            }
+        }
+        Effect::GainLife { player, amount } => {
+            player_count(
+                player,
+                amount,
+                |player, amount| Effect::GainLife { player, amount },
+                &mut add,
+            );
+        }
+        Effect::LoseLife { player, amount } => {
+            player_count(
+                player,
+                amount,
+                |player, amount| Effect::LoseLife { player, amount },
+                &mut add,
+            );
+        }
+        Effect::CreateTokens {
+            player,
+            token,
+            count,
+        } => {
+            player_count(
+                player,
+                count,
+                |player, count| Effect::CreateTokens {
+                    player,
+                    token,
+                    count,
+                },
+                &mut add,
+            );
+        }
+        Effect::CreateAttackingTokens {
+            player,
+            token,
+            count,
+            attacking,
+        } => {
+            player_count(
+                player,
+                count,
+                |player, count| Effect::CreateAttackingTokens {
+                    player,
+                    token,
+                    count,
+                    attacking,
+                },
+                &mut add,
+            );
+        }
+        Effect::CreateCopies {
+            player,
+            of,
+            count,
+            except,
+        } => {
+            for (name, count) in amounts(count) {
+                add(
+                    name,
+                    Effect::CreateCopies {
+                        player,
+                        of,
+                        count,
+                        except,
+                    },
+                );
+            }
+        }
+        Effect::CopySpell {
+            spells,
+            count,
+            except,
+            new_targets,
+        } => {
+            let copy = |count, except, new_targets| Effect::CopySpell {
+                spells,
+                count,
+                except,
+                new_targets,
+            };
+            for (name, count) in amounts(count) {
+                add(name, copy(count, except, new_targets));
+            }
+            add(
+                format!("new_targets {}", !new_targets),
+                copy(count, except, !new_targets),
+            );
+            if except.is_some() {
+                add("except None".to_owned(), copy(count, None, new_targets));
+            }
+        }
+        Effect::AddCounters {
+            objects: which,
+            kind,
+            count,
+        } => {
+            for (name, which) in objects(which) {
+                add(
+                    name,
+                    Effect::AddCounters {
+                        objects: which,
+                        kind,
+                        count,
+                    },
+                );
+            }
+            for (name, count) in amounts(count) {
+                add(
+                    name,
+                    Effect::AddCounters {
+                        objects: which,
+                        kind,
+                        count,
+                    },
+                );
+            }
+        }
+        Effect::RemoveCounters {
+            objects: which,
+            kind,
+            count,
+        } => {
+            for (name, which) in objects(which) {
+                add(
+                    name,
+                    Effect::RemoveCounters {
+                        objects: which,
+                        kind,
+                        count,
+                    },
+                );
+            }
+            for (name, count) in amounts(count) {
+                add(
+                    name,
+                    Effect::RemoveCounters {
+                        objects: which,
+                        kind,
+                        count,
+                    },
+                );
+            }
+        }
+        Effect::AddManaOfKind {
+            player,
+            kind,
+            amount,
+        } => {
+            for (name, amount) in amounts(amount) {
+                add(
+                    name,
+                    Effect::AddManaOfKind {
+                        player,
+                        kind,
+                        amount,
+                    },
+                );
+            }
+        }
+        Effect::Modify {
+            objects: which,
+            modifications,
+            duration,
+        } => {
+            for (name, which) in objects(which) {
+                add(
+                    name,
+                    Effect::Modify {
+                        objects: which,
+                        modifications,
+                        duration,
+                    },
+                );
+            }
+        }
+        Effect::ChangeText {
+            objects: which,
+            duration,
+        } => {
+            for (name, which) in objects(which) {
+                add(
+                    name,
+                    Effect::ChangeText {
+                        objects: which,
+                        duration,
+                    },
+                );
+            }
+            for other in [Duration::EndOfTurn, Duration::Indefinite] {
+                if other != duration {
+                    add(
+                        format!("lasting {other:?}"),
+                        Effect::ChangeText {
+                            objects: which,
+                            duration: other,
+                        },
+                    );
+                }
+            }
+        }
+        Effect::ExchangeControl(first, second) => {
+            for (name, first) in objects(first) {
+                add(name, Effect::ExchangeControl(first, second));
+            }
+            for (name, second) in objects(second) {
+                add(
+                    format!("second: {name}"),
+                    Effect::ExchangeControl(first, second),
+                );
+            }
+        }
+        Effect::BecomeCopy {
+            objects: which,
+            of,
+            except,
+        } => {
+            let copy = |objects, of| Effect::BecomeCopy {
+                objects,
+                of,
+                except,
+            };
+            for (name, which) in objects(which) {
+                add(name, copy(which, of));
+            }
+            for (name, of) in objects(of) {
+                add(format!("of: {name}"), copy(which, of));
+            }
+        }
+        Effect::Attach { objects: which, to } => {
+            for (name, which) in objects(which) {
+                add(name, Effect::Attach { objects: which, to });
+            }
+            for (name, to) in objects(to) {
+                add(format!("to: {name}"), Effect::Attach { objects: which, to });
+            }
+        }
+        Effect::PermitCast {
+            player,
+            cards,
+            duration,
+            terms,
+        } => {
+            for (name, cards) in objects(cards) {
+                add(
+                    name,
+                    Effect::PermitCast {
+                        player,
+                        cards,
+                        duration,
+                        terms,
+                    },
+                );
+            }
+        }
+        Effect::MayCast { player, card, free } => {
+            add(
+                format!("free: {}", !free),
+                Effect::MayCast {
+                    player,
+                    card,
+                    free: !free,
+                },
+            );
+        }
+        Effect::UntapUpTo {
+            player,
+            count,
+            permanents,
+        } => {
+            for (name, count) in amounts(count) {
+                add(
+                    name,
+                    Effect::UntapUpTo {
+                        player,
+                        count,
+                        permanents,
+                    },
+                );
+            }
+            for (name, permanents) in objects(permanents) {
+                add(
+                    name,
+                    Effect::UntapUpTo {
+                        player,
+                        count,
+                        permanents,
+                    },
+                );
+            }
+        }
+        Effect::Delay {
+            ability,
+            carrying,
+            object,
+        } => {
+            // A delay that carries no number has none to change.
+            for (name, carrying) in carrying.map(amounts).unwrap_or_default() {
+                add(
+                    name,
+                    Effect::Delay {
+                        ability,
+                        carrying: Some(carrying),
+                        object,
+                    },
+                );
+            }
+            for (name, which) in object.map(objects).unwrap_or_default() {
+                let object = Some(which);
+                add(
+                    name,
+                    Effect::Delay {
+                        ability,
+                        carrying,
+                        object,
+                    },
+                );
+            }
+        }
+        Effect::WinGame(player) => {
+            for (name, player) in players(player) {
+                add(name, Effect::WinGame(player));
+            }
+        }
+        Effect::LoseGame(player) => {
+            for (name, player) in players(player) {
+                add(name, Effect::LoseGame(player));
+            }
+        }
+        Effect::ControlPlayer(player) => {
+            for (name, player) in players(player) {
+                add(name, Effect::ControlPlayer(player));
+            }
+        }
+        Effect::ExtraTurn(player) => {
+            for (name, player) in players(player) {
+                add(name, Effect::ExtraTurn(player));
+            }
+        }
+        Effect::ChangeRule { rule, duration } => {
+            for (name, rule) in rules(rule) {
+                add(
+                    name,
+                    Effect::ChangeRule {
+                        rule: leak(rule),
+                        duration,
+                    },
+                );
+            }
+        }
+        Effect::ExileLinked(_)
+        | Effect::ReturnTransformed(_)
+        | Effect::Explore(_)
+        | Effect::Mutate(_)
+        | Effect::FlipCoin(_)
+        | Effect::AddMana { .. }
+        | Effect::GetEmblem { .. } => {}
+    }
+    out
+}
+
+/// The neighbours of who is dealt damage: other players or objects, and for both, only the
+/// players or only the permanents of the two.
+fn recipients(to: Recipients) -> Neighbours<Recipients> {
+    match to {
+        Recipients::Players(p) => players(p)
+            .into_iter()
+            .map(|(n, p)| (n, Recipients::Players(p)))
+            .collect(),
+        Recipients::Permanents(o) => objects(o)
+            .into_iter()
+            .map(|(n, o)| (n, Recipients::Permanents(o)))
+            .collect(),
+        Recipients::Both(p, o) => vec![
+            ("only players".to_owned(), Recipients::Players(p)),
+            ("only permanents".to_owned(), Recipients::Permanents(o)),
+        ],
+    }
+}
+
+fn objects_of(which: Objects, build: fn(Objects) -> Effect, add: &mut impl FnMut(String, Effect)) {
+    for (name, which) in objects(which) {
+        add(name, build(which));
+    }
+}
+
+/// The neighbours of an instruction of a player and an amount.
+fn player_count(
+    player: Players,
+    count: Amount,
+    build: impl Fn(Players, Amount) -> Effect,
+    add: &mut impl FnMut(String, Effect),
+) {
+    for (name, player) in players(player) {
+        add(name, build(player, count));
+    }
+    for (name, count) in amounts(count) {
+        add(name, build(player, count));
+    }
+}

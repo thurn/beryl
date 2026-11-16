@@ -391,13 +391,14 @@ session with no engine source read.
 
 **E1. Mutants for every part of a definition.** The mutation check
 (`beryl_cards/src/tests/mutation/`) changes one node of a card's definition and
-requires some scenario to tell the mutant from the card. It mutates only the
-effects of spell, activated and triggered abilities and each target's `optional`
-flag. `neighbours.rs` gains neighbours for the rest: a static ability's
-modification and affected set, a replacement's event and rewrite, a mana
-ability's product, a trigger's event, subject and condition, each cost part,
-each casting option, each keyword bit dropped and each additional cost. "Every
-mutant is killed" then means every part of the definition is pinned by a test.
+requires some scenario to tell the mutant from the card. It tests effects,
+target optionality, static modifications and affected sets, replacement events
+and rewrites, mana products, triggers, rule changes, activation and casting
+costs, and face keywords. Some gameplay differences disappear before a scenario
+ends. The mutation runner compares scripted positions as well as the final
+oracle snapshot. The runner also checks a scheduled trigger against a standing
+one when it can detach the schedule without losing carried resolution data. A
+mana product neighbour must fit the payment engine's supported sources.
 
 **E2. The bar, and the gates that change.** `just card check` reports, per card,
 the mutants that generated scenarios alone kill. A card whose generated
