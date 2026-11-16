@@ -109,6 +109,23 @@ only the addresses you need. `serve` runs until it is stopped, so start it in
 the background if you need it at all; the text queries answer the same
 questions.
 
+## Not findings
+
+The user schedules work on purpose, so these are never reported as
+opportunities, in answers about velocity or in findings:
+
+- Time a bead waits before anyone schedules it: a ready bead that no active
+  Enact run owns, or the wait from a bead's creation to the start of the run
+  that picks it up.
+- Hours when no bead session is running, such as the gaps between Enact runs or
+  while a run is paused or stopped.
+- An "always-on worker pool" or dispatcher that drains `bd ready` without a
+  run.
+
+When asked about velocity (wall-clock time to shipped beads), measure only work
+the user has scheduled, usually the beads of active Enact runs, and only the
+time while their run was going.
+
 ## Reading the numbers
 
 - **"no data"**: beads that ran on another host or provider whose rows aren't in
