@@ -42,9 +42,6 @@
     "b3d:choice-trigger-order/opponent/1920x1080": {
       "step-shown": 1
     },
-    "b3d:choice-trigger-order/opponent/2560x1080": {
-      "step-shown": 1
-    },
     "b3d:choice-trigger-order/you/1440x900": {
       "step-shown": 8
     },
@@ -55,16 +52,16 @@
       "step-shown": 8
     },
     "b3d:choice-trigger-order/you/2560x1080": {
-      "step-shown": 10
+      "step-shown": 9
     },
     "b3d:combat-attackers/opponent/1600x900": {
-      "step-shown": 3
+      "step-shown": 2
     },
     "b3d:combat-attackers/opponent/1920x1080": {
-      "step-shown": 3
+      "step-shown": 2
     },
     "b3d:combat-attackers/opponent/2560x1080": {
-      "step-shown": 5
+      "step-shown": 1
     },
     "b3d:first-target/you/2560x1080": {
       "step-shown": 1
@@ -139,7 +136,7 @@
       "step-shown": 1
     },
     "b3d:greedy-turn-9/opponent/2560x1080": {
-      "step-shown": 2
+      "step-shown": 1
     },
     "b3d:griselbrand/bounced/opponent/1440x900": {
       "step-shown": 1
@@ -186,15 +183,6 @@
     "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-next-turn/opponent/1920x1080": {
       "step-shown": 1
     },
-    "b3d:late-game/opponent/1600x900": {
-      "step-shown": 1
-    },
-    "b3d:late-game/opponent/1920x1080": {
-      "step-shown": 1
-    },
-    "b3d:late-game/opponent/2560x1080": {
-      "step-shown": 1
-    },
     "b3d:late-game/you/1440x900": {
       "step-shown": 1
     },
@@ -205,7 +193,7 @@
       "step-shown": 1
     },
     "b3d:late-game/you/2560x1080": {
-      "step-shown": 2
+      "step-shown": 1
     },
     "b3d:life-from-the-loam/dredge-a-draw-after-the-same-ability-milled-it/opponent/1440x900": {
       "step-shown": 1
@@ -339,9 +327,6 @@
     "b3d:spellseeker/finds-an-instant/opponent/2560x1080": {
       "step-shown": 1
     },
-    "b3d:stack-tall/opponent/2560x1080": {
-      "step-shown": 1
-    },
     "b3d:stack-tall/you/1440x900": {
       "step-shown": 1
     },
@@ -352,7 +337,7 @@
       "step-shown": 1
     },
     "b3d:stack-tall/you/2560x1080": {
-      "step-shown": 2
+      "step-shown": 1
     },
     "b3d:stress-stack/you/1440x900": {
       "reachable": 4
@@ -381,9 +366,6 @@
     "b3d:stress-verbs/you/2560x1080": {
       "crowded": 1,
       "step-shown": 31
-    },
-    "b3d:table-crowded/you/2560x1080": {
-      "step-shown": 2
     },
     "b3d:teferi-hero-of-dominaria/8s-emblem-triggers-once-for-each-card-of-a-multiple-draw/opponent/2560x1080": {
       "step-shown": 1

@@ -6,9 +6,14 @@
 //!   controller's edge of the table, the opponent's half as far and later, leaning the other way.
 //! - A permanent spell resolving is thrown up off the stack and drops onto its place
 //!   (`Shape::Thrown`).
-//! - The viewer's land glides straight to its place. The opponent's drops out of their hand
-//!   into the open table on the side away from where it is going, tilted, and swings back along
-//!   the table to its place.
+//! - The viewer's card played from their hand onto the table, such as a land, glides straight to
+//!   its place, drawn in front of the cards left in the hand: it looks on screen as the straight
+//!   line has it but is held nearer the eye until half way (`Shape::Lifted`), as the web draws a
+//!   flying card above every other and Arena lifts a played card above the hand. A card from
+//!   the middle of a big hand would otherwise start behind the cards to its right, which each
+//!   face the camera a little nearer the eye, and stay hidden under them.
+//! - The opponent's land drops out of their hand into the open table on the side away from
+//!   where it is going, tilted, and swings back along the table to its place.
 //! - A card the viewer draws alone flies from the library to a place beside the stack, bowing
 //!   up the screen, is held up there large to be read, sinking a little toward the hand, and
 //!   drops into the hand (the web's `heldUp` in `ui/src/stage/drawn.ts`). Each of several drawn
@@ -18,9 +23,10 @@
 //! - An opponent's discard drops along the line from hand to graveyard. Other flights also
 //!   follow a straight line across the table.
 //!
-//! Flights that rise use `verbs.fly.arc` for their height at the middle of the step. A card
-//! whose face changes turns over top over bottom
-//! at moments of its own (`Turning`): a drawn card as it leaves the library, any other a little
+//! Flights that rise use `verbs.fly.arc` for their height at the middle of the step: every
+//! flight but a card's played or cast from the viewer's hand, a drawn card's or an opponent's
+//! discard. A card whose face changes turns over top over bottom at moments of its own
+//! (`Turning`): a drawn card as it leaves the library, any other a little
 //! before half way. The values are under `verbs.fly` in `data/beryl3d/space.json`.
 //!
 //! The web turns a card that lands face down the other way up the table (the opponent's draw)
@@ -34,8 +40,8 @@ use glam::{Quat, Vec3};
 
 use super::{Interval, StepIn, StepOut};
 use crate::data::space;
-use crate::data::space::verbs::fly::{bows, held, thrown, turn};
-use crate::pose::{Bow, Curve, Pose, Segment, Shape, Turning};
+use crate::data::space::verbs::fly::{bows, held, played, thrown, turn};
+use crate::pose::{Bow, Curve, Lift, Pose, Segment, Shape, Turning};
 use crate::table::Camera;
 use beryl_protocol::script::Subject;
 
@@ -116,6 +122,8 @@ const DRAW_TURN: Turning = Turning {
 
 /// The path a flight takes.
 enum Path {
+    /// The straight line, drawn in front of the hand it leaves (`Shape::Lifted`).
+    Lifted,
     /// The straight line, rising `verbs.fly.arc` at its middle when `rises`.
     Straight {
         rises: bool,
@@ -181,7 +189,7 @@ fn path_of(act: &Act, case: Option<&str>) -> Path {
         (ZoneName::Hand, ZoneName::Graveyard) if !mine && *why == Why::Discard => {
             Path::Straight { rises: false }
         }
-        (ZoneName::Hand, ZoneName::Battlefield) if mine => Path::Straight { rises: false },
+        (ZoneName::Hand, ZoneName::Battlefield) if mine => Path::Lifted,
         // The opponent's land bows toward the middle of the table, away from their own edge.
         (ZoneName::Hand, ZoneName::Battlefield) => Path::Bowed {
             bowing: &PLAYED,
@@ -368,6 +376,19 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
             shape: swept(step, (from, to)),
             ..between
         },
+        Path::Lifted => {
+            let camera = step.places.camera();
+            let forward = -axes[2];
+            Segment {
+                shape: Shape::Lifted(Lift {
+                    eye: camera.eye,
+                    forward,
+                    near: camera.depth(from.position) * played::NEAR,
+                    hold: played::HOLD,
+                }),
+                ..between
+            }
+        }
         Path::Straight { rises } => Segment {
             arc: arc(rises),
             ..between

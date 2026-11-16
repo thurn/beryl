@@ -1,13 +1,19 @@
 //! `fly`'s cases (`data/ui-conventions.json`, `fly`): each plays to its end with every card at its
 //! placement and no jump, and each case's path is the one the web interface gives it: a spell
 //! cast bows toward its caster's edge, a permanent resolving is thrown up off the stack, the
-//! viewer's land glides straight and the opponent's swings out into the table first.
+//! viewer's land glides straight, drawn in front of the hand it leaves, and the opponent's swings
+//! out into the table first.
 
 use crate::common::{MS, empty_frame, frame, show, window};
+use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::GameUpdate;
+use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{CardType, ObjectId, Side, StackItem, Why, ZoneName};
 use beryl_protocol::script::{Act, Curve, Room, StepTiming};
 use beryl_scene::agent::steps::{no_jumps, rest_equals_placement, step_times};
+use beryl_scene::agent::{Layout, Rule};
+use beryl_scene::driver::{Mode, Page, Recording};
+use beryl_scene::input::Size;
 use beryl_scene::motion::pose_at;
 use beryl_scene::play::Show;
 use beryl_scene::play::record::ScriptRecord;
@@ -510,4 +516,62 @@ fn a_resize_in_mid_throw_keeps_the_pose() {
             at / MS
         );
     }
+}
+
+/// A card played from the middle of a ten-card hand onto the table is seen for its whole
+/// flight, as "every step shown" asks. Each card of a hand faces the camera a little nearer the
+/// eye than the one before it, so a card that flew along the straight line from its place would
+/// start behind the cards to its right and stay mostly covered by them for half its flight.
+#[test]
+fn a_card_played_from_the_middle_of_a_big_hand_is_seen_as_it_flies() {
+    let mut builder = ViewBuilder::new();
+    for _ in 0..5 {
+        builder.card(ZoneName::Library, Side::You, "Island");
+    }
+    let mut played = None;
+    for index in 0..10 {
+        let card = builder.card(ZoneName::Hand, Side::You, "Plains");
+        card.types = vec![CardType::Land];
+        if index == 4 {
+            played = Some(card.slot);
+        }
+    }
+    builder
+        .card(ZoneName::Battlefield, Side::You, "Island")
+        .types = vec![CardType::Land];
+    builder.script(ScriptBuilder::reset().build());
+    let before = builder.update();
+    let played = played.expect("the hand has a fifth card");
+    let mut after = flown(
+        &before,
+        played,
+        ZoneName::Hand,
+        ZoneName::Battlefield,
+        Why::Play,
+    );
+    after
+        .view
+        .script
+        .as_mut()
+        .expect("the flight has a script")
+        .timing = vec![timed("land played", 315.0, 0.0, Curve::EaseIn, true)];
+    let mut messages = vec![
+        FixtureMessage::game_update(&before),
+        FixtureMessage::game_update(&after),
+    ];
+    messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
+    let size = Size {
+        width: 2560.0,
+        height: 1080.0,
+    };
+    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Desktop, size)
+        .expect("the views can be read");
+    let checked = page.check_all(Mode::EveryTick);
+    let unseen: Vec<&str> = checked
+        .faults
+        .iter()
+        .filter(|fault| fault.rule == Rule::StepShown)
+        .map(|fault| fault.message.as_str())
+        .collect();
+    assert!(unseen.is_empty(), "{unseen:?}");
 }

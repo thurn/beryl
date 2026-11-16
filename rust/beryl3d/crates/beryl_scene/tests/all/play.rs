@@ -66,16 +66,24 @@ fn a_script_of_three_beats_plays_to_its_end() {
         "halfway through its flight the Plains is between the hand and the battlefield"
     );
     // The viewer's land glides straight to its place: halfway through its time it is on the
-    // straight line. The Plains flies to its place in the row as the first beat leaves it, which
-    // the token's arrival later shifts by a little, so the line to its final place is a close
-    // stand-in.
+    // straight line as the screen shows it, though it is drawn nearer the eye than that line so
+    // that it stays in front of the hand. The Plains flies to its place in the row as the first
+    // beat leaves it, which the token's arrival later shifts by a little, so the line to its
+    // final place is a close stand-in up the screen; the row's shift is across it.
     let along = Curve::EASE_OUT.ease(0.5);
     let straight = held.position.lerp(landed.position, along);
+    let camera = show.table().camera();
+    let (seen, line) = (
+        camera.to_screen(flying.position),
+        camera.to_screen(straight),
+    );
     assert!(
-        (flying.position.z - straight.z).abs() < 1.0,
-        "the land glides on the straight line: {} against {}",
-        flying.position.z,
-        straight.z
+        (seen.y - line.y).abs() < 2.0,
+        "the land glides on the straight line on screen: {seen} against {line}"
+    );
+    assert!(
+        camera.depth(flying.position) < camera.depth(straight),
+        "the land is drawn nearer the eye than the straight line"
     );
     assert_eq!(show.wake(210 * MS), Wake::Now, "a segment is under way");
 

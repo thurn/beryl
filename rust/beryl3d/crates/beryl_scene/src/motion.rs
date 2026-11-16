@@ -258,8 +258,18 @@ impl Segment {
             _ => pose.scale + grow,
         };
         let turned = self.turned(elapsed, u);
+        let position = pose.position + offset;
+        // A lifted card is drawn nearer the eye along its line of sight, and smaller by as
+        // much, so that on screen it is where the straight way has it.
+        let (position, scale) = match self.shape {
+            Shape::Lifted(lift) => {
+                let nearer = lift.nearer(position, u);
+                (lift.eye + (position - lift.eye) * nearer, scale * nearer)
+            }
+            _ => (position, scale),
+        };
         Pose {
-            position: pose.position + offset,
+            position,
             rotation: lean * pose.rotation,
             scale,
             turn: self.from.turn + (self.to.turn - self.from.turn) * turned,
@@ -282,9 +292,11 @@ impl Segment {
         }
         let elapsed = self.elapsed(t);
         match self.shape {
-            Shape::Line | Shape::Bowed(_) | Shape::Thrown { .. } | Shape::Swept { .. } => {
-                self.travelled(elapsed)
-            }
+            Shape::Line
+            | Shape::Bowed(_)
+            | Shape::Thrown { .. }
+            | Shape::Swept { .. }
+            | Shape::Lifted(_) => self.travelled(elapsed),
             Shape::TurnedOver => turned_over(&self.from, &self.to, elapsed),
             Shape::Grown => {
                 let u = self.curve.ease(elapsed);

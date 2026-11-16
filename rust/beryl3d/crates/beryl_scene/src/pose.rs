@@ -111,6 +111,41 @@ pub enum Shape {
     /// straight way and whose scale is `2 u (1 - u) grow` over the straight change. `fly` makes
     /// both from the place passed by, so that the curve goes as far as it and no farther.
     Swept { bulge: Vec3, grow: f32 },
+    /// A straight line seen from the eye, with the card drawn nearer the eye than it lies: the
+    /// viewer's card played from their hand onto the table, which leaves the hand in front of the
+    /// cards beside it, as the web interface draws a flying card above every other.
+    Lifted(Lift),
+}
+
+/// How a `Shape::Lifted` path holds its card near the eye. At each moment the card is moved
+/// toward `eye` along the line from the eye through it and shrunk by the same factor, so that
+/// it looks exactly as it would on the straight way and only its depth changes. Until `hold`
+/// of its eased progress the card is no farther from the eye, along `forward`, than `near`
+/// millimetres; from there it eases back to where it lies, which it reaches as it lands.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Lift {
+    pub eye: Vec3,
+    /// The unit direction the camera looks in.
+    pub forward: Vec3,
+    pub near: f32,
+    pub hold: f32,
+}
+
+impl Lift {
+    /// The factor by which a card at `position`, `u` of the eased way through, is drawn nearer
+    /// the eye: 1 where it lies, less where it is held nearer.
+    #[must_use]
+    pub fn nearer(&self, position: Vec3, u: f32) -> f32 {
+        let depth = (position - self.eye).dot(self.forward);
+        let held = if depth > self.near {
+            self.near / depth
+        } else {
+            1.0
+        };
+        let back = ((u - self.hold) / (1.0 - self.hold)).clamp(0.0, 1.0);
+        let back = back * back * (3.0 - 2.0 * back);
+        held + (1.0 - held) * back
+    }
 }
 
 /// When a card turns over on its way, as shares of its segment's time (the web interface's
