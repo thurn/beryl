@@ -1,6 +1,8 @@
 """The fast check's Beryl 3D `cargo-test` step runs the workspace tests that fit the time left
 (beryl3d/test_fit.py)."""
 
+from __future__ import annotations
+
 import json
 import subprocess
 from datetime import datetime, timedelta, timezone
