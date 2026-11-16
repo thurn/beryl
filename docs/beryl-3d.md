@@ -2796,6 +2796,11 @@ those that match. A test's name is also an argument to the other commands:
 `just b3d tree b3d:counterspell/cast/you/1600x900` prints that test's recording
 from its seat at its size.
 
+Before its closing line, `just b3d test` prints how many frames and elements
+each rule judged (`judged`; scripts instead of frames for the checks over a
+script's segments), so a rule that passes because it judged nothing shows a
+zero. 'Phone sizes' is not run until the phone layout exists.
+
 How many there are, as measured on 2026-11-15:
 
 - 1,904 recordings from a seat: each card spec moment and fixture in the pack

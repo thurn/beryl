@@ -14,8 +14,9 @@ steps than its entry. `--update` rewrites the entries to what was measured and r
 raise or add one unless `--raise` is given as well; a commit that raises one says why.
 
 The web side's lines are kept in `$BERYL_CACHE/b3d/web-timelines-<hash>.jsonl`. The hash covers
-the recordings pack, the exported recordings and every source file the web timeline reads, so a
-run that finds the file does not start `node`.
+the recordings pack, the exported recordings and every file the web timeline imports, followed
+from `ui/scripts/timeline.mjs` through relative imports ([`web_sources`]), so a run that finds
+the file does not start `node`.
 
 Measured with `--fixtures` (the lane's step) on 2026-11-15 at load averages of 20 to 60, five
 runs each: with the web lines cached, 24.8, 26.5, 27.3, 57.3 and 59.4 s (median 27.3 s); with
@@ -33,6 +34,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -52,9 +54,15 @@ TOLERANCE_MS = 1.0
 MOST_PRINTED = 20
 # The fields of a step that must be equal, the start and end aside.
 EXACT: tuple[str, ...] = ("verb", "case", "effects")
-# The directories and file the web timeline's output depends on, under `ui/`, besides the
-# recordings pack.
-WEB_SOURCES: tuple[str, ...] = ("src/stage", "src/game", "scripts/timeline.mjs")
+# The web timeline's script, under `ui/`, from which [`web_sources`] follows its imports.
+WEB_ENTRY = "scripts/timeline.mjs"
+# A module specifier in an `import ... from`, `export ... from`, `import "..."` or `import(...)`.
+IMPORT = re.compile(r"""(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']""")
+# Extensions an import with none may name, in the order timeline.mjs's resolve hook tries them.
+IMPLIED = (".ts", ".tsx")
+# Modules whose imports are not followed: timeline.mjs serves a `.tsx` file as its literal
+# constants alone, so what it imports is never loaded.
+UNFOLLOWED = (".tsx", ".json")
 
 # A step as printed on either side, by its keys.
 Step = dict[str, Any]
@@ -172,25 +180,48 @@ def lowered(
     return entries, refused
 
 
+def web_sources(ui: Path) -> list[Path]:
+    """Every file the web timeline loads from the repository: `ui/scripts/timeline.mjs` and
+    the files its relative imports reach, transitively, including JSON data outside `ui/`
+    (the stage's timings import `data/ui-conventions.json`). Packages under `node_modules`
+    are covered by `ui/package-lock.json`, which is included too. Sorted, without repeats.
+    """
+    found: set[Path] = set()
+    waiting = [ui / WEB_ENTRY]
+    while waiting:
+        file = waiting.pop().resolve()
+        if file in found or not file.is_file():
+            continue
+        found.add(file)
+        if file.suffix in UNFOLLOWED:
+            continue
+        for specifier in IMPORT.findall(file.read_text()):
+            if not specifier.startswith(("./", "../")):
+                continue
+            target = file.parent / specifier
+            if target.suffix:
+                waiting.append(target)
+            else:
+                waiting += [target.with_name(target.name + e) for e in IMPLIED]
+    lock = ui / "package-lock.json"
+    if lock.is_file():
+        found.add(lock.resolve())
+    return sorted(found)
+
+
 def web_hash(pack: str, ui: Path, exported: Path) -> str:
     """The hash that names the web timelines' cache file: the pack's name, the content of
-    every recording exported to `exported` and of every file under the web timeline's
-    sources. The exported files count because `b3d export` adds messages of its own to the
-    pack's, so a change to the exporter changes what the web timeline prints."""
+    every recording exported to `exported` and of every file the web timeline loads
+    ([`web_sources`]). The exported files count because `b3d export` adds messages of its own
+    to the pack's, so a change to the exporter changes what the web timeline prints."""
     digest = hashlib.sha256(pack.encode())
     for file in sorted(exported.glob("*.json")):
         digest.update(file.name.encode())
         digest.update(file.read_bytes())
-    for source in WEB_SOURCES:
-        root = ui / source
-        files = (
-            [root]
-            if root.is_file()
-            else sorted(p for p in root.rglob("*") if p.is_file())
-        )
-        for file in files:
-            digest.update(str(file.relative_to(ui)).encode())
-            digest.update(file.read_bytes())
+    root = ui.resolve().parent
+    for file in web_sources(ui):
+        digest.update(str(file.relative_to(root)).encode())
+        digest.update(file.read_bytes())
     return digest.hexdigest()[:16]
 
 

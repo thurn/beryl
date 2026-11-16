@@ -110,3 +110,45 @@ def test_parity_reuses_the_binary_built_with_the_pack(
         == 0
     )
     assert builds == [cli.SHARED_BUILD]
+
+
+def test_web_hash_moves_with_every_file_the_web_timeline_imports(
+    tmp_path: Path,
+) -> None:
+    # The cached web timelines must go stale when any module the script loads changes: a
+    # module of src/ outside the stage, a TSX file served as its constants and JSON data
+    # outside ui/. A file nothing imports, or one a TSX file imports, leaves the cache alone.
+    ui = tmp_path / "ui"
+    (ui / "scripts").mkdir(parents=True)
+    (ui / "src" / "stage").mkdir(parents=True)
+    (ui / "src" / "components").mkdir()
+    (tmp_path / "data").mkdir()
+    exported = tmp_path / "exported"
+    exported.mkdir()
+    files = {
+        ui / timeline.WEB_ENTRY: 'const { s } = await import("../src/stage/stage.ts");',
+        ui
+        / "src/stage/stage.ts": 'import { r } from "../records";\nexport * from "./timing";',
+        ui
+        / "src/stage/timing.ts": 'import c from "../../../data/conventions.json" with { type: "json" };\nimport { W } from "../components/Card";',
+        ui / "src/records.ts": "export const r = 1;",
+        ui / "src/components/Card.tsx": 'import "../browser";\nexport const W = 2;',
+        ui / "src/browser.ts": "window;",
+        ui / "src/unused.ts": "export const u = 3;",
+        tmp_path / "data/conventions.json": "{}",
+    }
+    for file, text in files.items():
+        file.write_text(text)
+    before = timeline.web_hash("pack", ui, exported)
+    for file in [
+        ui / "src/records.ts",
+        ui / "src/stage/timing.ts",
+        ui / "src/components/Card.tsx",
+        tmp_path / "data/conventions.json",
+    ]:
+        file.write_text(file.read_text() + "\n// changed")
+        assert timeline.web_hash("pack", ui, exported) != before, file
+        before = timeline.web_hash("pack", ui, exported)
+    for file in [ui / "src/unused.ts", ui / "src/browser.ts"]:
+        file.write_text(file.read_text() + "\n// changed")
+        assert timeline.web_hash("pack", ui, exported) == before, file
