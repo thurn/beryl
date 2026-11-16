@@ -2,7 +2,8 @@
 //! `AssetReady::Glyphs`). A [`GlyphWorker`] owns a thread that rasterizes each glyph the host
 //! asks for with `swash`, once, into an 8-bit coverage bitmap, packs it into a single-channel
 //! atlas page and sends each new or changed page as a [`Prepared`]. The caller's thread only
-//! sends keys, so the frame thread never rasterizes.
+//! sends keys, so the frame thread never rasterizes. The same thread rasterizes the flat
+//! layer's icons into the same pages ([`GlyphWorker::icons`], [`crate::icons`]).
 
 use std::cell::Cell;
 use std::collections::BTreeSet;
@@ -17,6 +18,7 @@ use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source};
 use swash::zeno::Format;
 
+use crate::icons;
 use crate::packer::{Full, PAGE_SIZE, Shelves};
 use crate::{Prepared, Upload};
 
@@ -98,7 +100,19 @@ impl GlyphWorker {
         }
     }
 
-    /// Waits until every glyph asked for so far has been rasterized and its page sent, so
+    /// Asks for every icon of `beryl_scene::widgets::icons` rasterized at `scale` physical
+    /// pixels per point, which a host does before its first frame and again whenever the
+    /// display's scale changes. The cells come in an `AssetReady::Icons` that replaces the
+    /// client's cells of the old scale, which it draws scaled until then. Asking for the scale
+    /// asked for last does nothing.
+    pub fn icons(&self, scale: f32) {
+        if let Some(requests) = &self.requests {
+            // As in `request`: the worker stops only when nobody wants its pages.
+            let _ = requests.send(Message::Icons(scale));
+        }
+    }
+
+    /// Waits until every glyph and icon asked for so far has been rasterized and its page sent, so
     /// that a host drawing a picture of one moment, such as the headless host, can take every
     /// page it needs before it draws. A host drawing frames as they come never calls it.
     pub fn flush(&self) {
@@ -118,6 +132,8 @@ impl GlyphWorker {
 enum Message {
     /// Glyphs to rasterize.
     Keys(Vec<GlyphKey>),
+    /// Every icon, at this scale.
+    Icons(f32),
     /// Answer once every glyph asked for before this has been sent.
     Flush(SyncSender<()>),
 }
@@ -138,14 +154,19 @@ fn run(inbox: &Receiver<Message>, out: &Sender<Prepared>, wake: &dyn Fn()) {
     let mut atlas = Atlas::new();
     while let Ok(first) = inbox.recv() {
         let mut keys = Vec::new();
+        let mut scale = None;
         let mut flushes = Vec::new();
         for message in std::iter::once(first).chain(inbox.try_iter()) {
             match message {
                 Message::Keys(more) => keys.extend(more),
+                Message::Icons(asked) => scale = Some(asked),
                 Message::Flush(done) => flushes.push(done),
             }
         }
-        let prepared = atlas.add(&keys);
+        let mut prepared = atlas.add(&keys);
+        if let Some(scale) = scale {
+            prepared.extend(atlas.add_icons(scale));
+        }
         let sent = !prepared.is_empty();
         for page in prepared {
             if out.send(page).is_err() {
@@ -169,6 +190,8 @@ struct Atlas {
     page: u16,
     pixels: Vec<u8>,
     shelves: Shelves,
+    /// The scale the icons were last rasterized at.
+    icon_scale: Option<f32>,
 }
 
 impl Atlas {
@@ -179,6 +202,7 @@ impl Atlas {
             page: FIRST_PAGE,
             pixels: blank_page(),
             shelves: Shelves::new(PAGE_SIZE),
+            icon_scale: None,
         }
     }
 
@@ -199,7 +223,8 @@ impl Atlas {
             };
             let (width, height) = (bitmap.width, bitmap.height);
             let placed = self.shelves.insert(width, height).or_else(|Full| {
-                prepared.push(self.finish_page(std::mem::take(&mut cells)));
+                let glyphs = std::mem::take(&mut cells);
+                prepared.push(self.finish_page(|page| AssetReady::Glyphs { page, glyphs }));
                 self.shelves.insert(width, height)
             });
             let Ok(corner) = placed else {
@@ -213,22 +238,61 @@ impl Atlas {
             });
         }
         if !cells.is_empty() {
-            prepared.push(Prepared {
-                upload: Upload::AtlasPage {
-                    page: self.page,
-                    pixels: self.pixels.clone(),
-                },
-                ready: AssetReady::Glyphs {
-                    page: self.page,
-                    glyphs: cells,
-                },
-            });
+            let page = self.page;
+            prepared.push(self.this_page(AssetReady::Glyphs {
+                page,
+                glyphs: cells,
+            }));
         }
         prepared
     }
 
-    /// Hands over the full page with `cells`, its glyphs not yet sent, and starts the next.
-    fn finish_page(&mut self, cells: Vec<GlyphCell>) -> Prepared {
+    /// Rasterizes every icon at `scale` into fresh space of the pages, leaving the cells of
+    /// any earlier scale in place, since the client draws those until these arrive, and
+    /// returns the pages that changed, each with the icons added to it.
+    fn add_icons(&mut self, scale: f32) -> Vec<Prepared> {
+        if self.icon_scale == Some(scale) {
+            return Vec::new();
+        }
+        self.icon_scale = Some(scale);
+        let mut prepared = Vec::new();
+        let mut cells = Vec::new();
+        for artwork in &icons::ALL {
+            let bitmap = icons::rasterize(artwork, scale);
+            let side = bitmap.width;
+            let placed = self.shelves.insert(side, side).or_else(|Full| {
+                let cells = std::mem::take(&mut cells);
+                prepared.push(self.finish_page(|page| AssetReady::Icons { page, cells }));
+                self.shelves.insert(side, side)
+            });
+            // An icon too large for an empty page is never sent, and draws nothing.
+            let Ok(corner) = placed else {
+                continue;
+            };
+            self.blit(&bitmap, corner);
+            cells.push(icons::cell(artwork, [corner[0], corner[1], side, side]));
+        }
+        if !cells.is_empty() {
+            let page = self.page;
+            prepared.push(self.this_page(AssetReady::Icons { page, cells }));
+        }
+        prepared
+    }
+
+    /// The page being filled as it is now, with `ready` naming what was added to it.
+    fn this_page(&self, ready: AssetReady) -> Prepared {
+        Prepared {
+            upload: Upload::AtlasPage {
+                page: self.page,
+                pixels: self.pixels.clone(),
+            },
+            ready,
+        }
+    }
+
+    /// Hands over the full page with what `ready` makes of its number (the cells on it not yet
+    /// sent), and starts the next.
+    fn finish_page(&mut self, ready: impl FnOnce(u16) -> AssetReady) -> Prepared {
         let page = self.page;
         self.page += 1;
         self.shelves = Shelves::new(PAGE_SIZE);
@@ -237,10 +301,7 @@ impl Atlas {
                 page,
                 pixels: std::mem::replace(&mut self.pixels, blank_page()),
             },
-            ready: AssetReady::Glyphs {
-                page,
-                glyphs: cells,
-            },
+            ready: ready(page),
         }
     }
 
@@ -292,13 +353,13 @@ impl Atlas {
     }
 }
 
-/// One rasterized glyph.
-struct Bitmap {
-    width: u16,
-    height: u16,
-    bearing: [i16; 2],
+/// One rasterized glyph or icon.
+pub(crate) struct Bitmap {
+    pub(crate) width: u16,
+    pub(crate) height: u16,
+    pub(crate) bearing: [i16; 2],
     /// `height` rows of `width` coverage bytes.
-    coverage: Vec<u8>,
+    pub(crate) coverage: Vec<u8>,
 }
 
 fn blank_page() -> Vec<u8> {

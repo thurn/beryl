@@ -28,6 +28,7 @@ use crate::frame::{ElementId, Role};
 use crate::input::{Rect, Size};
 use crate::table::Window;
 use crate::text::{Block, Glyphs, Text, TypeStyle};
+use crate::widgets::icons::Icons;
 
 /// Where the desktop layout anchors a screen: its bottom right corner this far in from the
 /// safe area's, where the web interface's action dock stands (`.dock` in
@@ -80,6 +81,7 @@ pub struct Layer {
     text: Text,
     window: Window,
     glyphs: Glyphs,
+    icons: Icons,
     /// Layout nodes computed and texts shaped since `take_work` was last called.
     layout_nodes: u32,
     text_runs: u32,
@@ -112,6 +114,7 @@ impl Layer {
             text: Text::new(),
             window,
             glyphs: Glyphs::default(),
+            icons: Icons::default(),
             layout_nodes: 0,
             text_runs: 0,
         }
@@ -173,6 +176,16 @@ impl Layer {
     /// The glyph table, which `Input::Assets` fills and the host drains of wanted glyphs.
     pub fn glyphs_mut(&mut self) -> &mut Glyphs {
         &mut self.glyphs
+    }
+
+    /// The icon table, which `Input::Assets` fills.
+    #[must_use]
+    pub fn icons(&self) -> &Icons {
+        &self.icons
+    }
+
+    pub fn icons_mut(&mut self) -> &mut Icons {
+        &mut self.icons
     }
 
     /// The fonts and shaped texts, with the glyph table, for text the table draws outside the

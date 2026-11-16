@@ -1,5 +1,6 @@
-//! Panels and glyphs of the flat layer: text rasterized by `beryl_assets`' glyph worker draws
-//! its ink where the glyph has it and nothing in its counters, and a panel draws its fill and
+//! Panels, glyphs and icons of the flat layer: text rasterized by `beryl_assets`' glyph worker
+//! draws its ink where the glyph has it and nothing in its counters, an icon from the same
+//! worker draws its tint on its ink and nothing in its holes, and a panel draws its fill and
 //! border but leaves the corners outside its radius untouched. Every test runs on a device with
 //! wgpu's default limits and on one with its downlevel limits.
 
@@ -13,6 +14,7 @@ use beryl_scene::frame::{Band, Draw, Frame, FrameBuilder, Sprite};
 use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey};
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
 use beryl_scene::text::fonts::Font;
+use beryl_scene::widgets::icons::GEAR;
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
 
@@ -251,5 +253,77 @@ fn a_panel_draws_its_fill_and_border_and_leaves_its_corners_untouched() {
             &format!("{what}: the left border"),
         );
         assert_eq!(at(&pixels, 100, 30), table, "{what}: outside the panel");
+    }
+}
+
+#[test]
+fn the_gear_icon_is_tinted_on_its_teeth_and_empty_in_its_hole() {
+    // The gear at four pixels to a point: an 88-pixel cell.
+    let (out, pages) = mpsc::channel();
+    let worker = GlyphWorker::spawn(out, || {}, || {});
+    worker.icons(4.0);
+    worker.flush();
+    let page = pages.try_recv().expect("the worker sent the icons' page");
+    let (
+        AssetReady::Icons { cells, .. },
+        Upload::AtlasPage {
+            page: number,
+            pixels: atlas,
+        },
+    ) = (&page.ready, &page.upload)
+    else {
+        panic!("only icons were asked for");
+    };
+    let gear = *cells
+        .iter()
+        .find(|cell| cell.icon == GEAR)
+        .expect("the gear");
+    let [x, y, side, _] = gear.rect;
+    let coverage = |dx: u16, dy: u16| {
+        atlas[usize::from(y + dy) * usize::from(PAGE_SIZE) + usize::from(x + dx)]
+    };
+    // A texel the gear covers fully, found along its middle row, and the hole at its centre.
+    let middle = side / 2;
+    let inked = (0..side)
+        .find(|&dx| coverage(dx, middle) == 255)
+        .expect("the gear's middle row crosses a tooth");
+    assert_eq!(coverage(middle, middle), 0, "the hole is empty");
+
+    // The cell drawn at one texel to a pixel, its top left corner at (50, 50), in gold.
+    let gold = [228, 162, 66];
+    let table = [30, 60, 50];
+    let corner = Vec2::splat(50.0);
+    let sprite = Sprite {
+        page: *number,
+        rect: gear.rect,
+    };
+    let icon = (
+        Band::Layer,
+        Draw::icon(
+            over(corner, Vec2::splat(f32::from(side))),
+            [gold[0], gold[1], gold[2], 255],
+            sprite,
+        ),
+    );
+    for limits in BOTH {
+        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        assert!(
+            renderer.upload_page(&page),
+            "{limits:?}: the page was not uploaded"
+        );
+        let pixels = draw(&mut renderer, &[background(table), icon]);
+        let screen = |texel: u16| 50 + u32::from(texel);
+        assert_near(
+            at(&pixels, screen(inked), screen(middle)),
+            gold,
+            8,
+            &format!("{limits:?}: a tooth"),
+        );
+        assert_near(
+            at(&pixels, screen(middle), screen(middle)),
+            table,
+            8,
+            &format!("{limits:?}: the hole"),
+        );
     }
 }

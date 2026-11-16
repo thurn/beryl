@@ -24,6 +24,7 @@ const GLOW: u32 = 3u;
 const STREAK: u32 = 4u;
 const PANEL: u32 = 5u;
 const GLYPH: u32 = 6u;
+const ICON: u32 = 7u;
 
 // A card's printed size and corner radius, in millimetres, as the card mesh is built.
 const CARD_SIZE: vec2<f32> = vec2<f32>(63.0, 88.0);
@@ -200,6 +201,13 @@ fn shade_glyph(sprite: vec4<f32>, tint: vec4<f32>) -> vec4<f32> {
     return vec4<f32>(tint.rgb * a, a);
 }
 
+// An icon: its coverage (the atlas's one channel) times the tint, as a glyph. Where the icon's
+// artwork has a darker fill, its coverage there is scaled down by the fill's brightness.
+fn shade_icon(sprite: vec4<f32>, tint: vec4<f32>) -> vec4<f32> {
+    let a = sprite.r * tint.a;
+    return vec4<f32>(tint.rgb * a, a);
+}
+
 @fragment
 fn fs(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
     // A card seen from behind shows its back. A card turns over top over bottom, so there its
@@ -221,6 +229,7 @@ fn fs(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f3
         case STREAK: { color = shade_streak(picture, in.mesh_uv, in.tint, in.params); }
         case PANEL: { color = shade_panel(in.mesh_uv, mesh_pixel, in.tint, in.rect, in.params); }
         case GLYPH: { color = shade_glyph(picture, in.tint); }
+        case ICON: { color = shade_icon(picture, in.tint); }
         default: {}
     }
     return color * (1.0 - in.edge);

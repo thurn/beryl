@@ -190,6 +190,7 @@ dependencies = [
  "ctt",
  "image",
  "swash",
+ "tiny-skia",
 ]
 
 [[package]]

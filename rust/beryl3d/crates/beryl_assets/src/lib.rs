@@ -9,15 +9,20 @@
 //! `beryl_art`'s scan cache, scale it to board or full size, compress it with its mipmaps
 //! ([`Format`]) and cache the result. A face with no downloaded scan is drawn as its name on a
 //! colored field.
+//!
+//! The glyph worker ([`glyphs::GlyphWorker`]) rasterizes glyphs and the flat layer's icons
+//! ([`icons`]) into the atlas's pages.
 
 mod cache;
 mod encode;
 mod faces;
 pub mod glyphs;
+pub mod icons;
 pub mod light;
 pub mod packer;
 mod placeholder;
 mod prepare;
+mod svg;
 
 use beryl_scene::input::AssetReady;
 

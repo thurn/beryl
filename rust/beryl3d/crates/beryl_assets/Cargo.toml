@@ -31,6 +31,10 @@ image = { version = "0.25.10", default-features = false, features = ["jpeg", "pn
 # Rasterizes glyph outlines to coverage bitmaps, in place of a hand-written TrueType and CFF
 # rasterizer. Pinned to the release the cross-target probe built for every platform.
 swash = "=0.2.10"
+# Fills and strokes the interface's icons from their SVG paths into coverage, in place of a
+# hand-written path rasterizer. The version the lockfile already has (through winit's window
+# decorations), with only the `std` and `simd` features: no PNG support.
+tiny-skia = { version = "=0.11.4", default-features = false, features = ["std", "simd"] }
 
 [dev-dependencies]
 # The crate itself with `decklists`, whose faces the tests prepare.

@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::process::{Command, Output};
 
 use beryl_assets::glyphs::glyphs_rasterized_on_this_thread;
+use beryl_assets::icons::icons_rasterized_on_this_thread;
 use beryl_assets::{MatchFaces, faces_built_on_this_thread};
 use beryl_host::{Headless, Scans};
 use beryl_inspect::pages;
@@ -175,6 +176,11 @@ fn the_prompt_bar_draws_text_rasterized_on_another_thread() {
         glyphs_rasterized_on_this_thread(),
         0,
         "a glyph was rasterized on the drawing thread"
+    );
+    assert_eq!(
+        icons_rasterized_on_this_thread(),
+        0,
+        "an icon was rasterized on the drawing thread"
     );
     // The button is dark with a dull border; only its label's ink is near white.
     let inked = (button.y as u32..(button.y + button.height) as u32)

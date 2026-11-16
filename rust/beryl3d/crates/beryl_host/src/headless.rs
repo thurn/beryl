@@ -99,6 +99,7 @@ impl Headless {
         let glyphs = GlyphWorker::spawn(out, || {}, crate::threads::asset_thread);
         // The test driver lays the page out at one physical pixel to a point.
         glyphs.request(prepare_latin(1.0));
+        glyphs.icons(1.0);
         let mut head = Self {
             page,
             renderer,
@@ -111,8 +112,8 @@ impl Headless {
     }
 
     /// Has the glyph worker rasterize what the present moment's text needs that the client has
-    /// no page for, waits for it, uploads every page it finished and gives the client their
-    /// glyphs. Laying out text never waits for its glyphs, so this changes what is drawn but
+    /// no page for, waits for it, uploads every page it finished (the first time, the icons'
+    /// too) and gives the client their glyphs and icons. Laying out text never waits for its glyphs, so this changes what is drawn but
     /// not where.
     fn text(&mut self) {
         self.page.frame();

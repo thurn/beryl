@@ -182,31 +182,35 @@
   "materials": {
     "card": {
       "samples": 1,
-      "expressions": 98
+      "expressions": 100
     },
     "contact_shadow": {
       "samples": 1,
-      "expressions": 91
+      "expressions": 93
     },
     "glow": {
       "samples": 1,
-      "expressions": 77
+      "expressions": 79
     },
     "glyph": {
       "samples": 1,
-      "expressions": 71
+      "expressions": 73
+    },
+    "icon": {
+      "samples": 1,
+      "expressions": 73
     },
     "panel": {
       "samples": 1,
-      "expressions": 115
+      "expressions": 117
     },
     "table": {
       "samples": 1,
-      "expressions": 69
+      "expressions": 71
     },
     "streak": {
       "samples": 1,
-      "expressions": 94
+      "expressions": 96
     }
   },
   "tests": {

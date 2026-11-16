@@ -8,6 +8,7 @@ use glam::Vec2;
 
 use crate::command::Reply;
 use crate::settings::Settings;
+use crate::widgets::IconId;
 
 /// One thing that has happened, passed to `Client::handle`.
 #[derive(Clone, Debug, PartialEq)]
@@ -30,7 +31,7 @@ pub enum Input {
     Key(Key),
     /// The text field being edited has new contents.
     Text(TextChange),
-    /// A face or a glyph page is ready on the GPU.
+    /// A face, or an atlas page of glyphs or icons, is ready on the GPU.
     Assets(AssetReady),
     /// The app was suspended or resumed, or the system is low on memory.
     Lifecycle(Lifecycle),
@@ -210,6 +211,19 @@ pub enum AssetReady {
     },
     /// Glyphs are in a page of the atlas.
     Glyphs { page: u16, glyphs: Vec<GlyphCell> },
+    /// Icons are in a page of the atlas.
+    Icons { page: u16, cells: Vec<IconCell> },
+}
+
+/// Where one rasterized icon lies in its atlas page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IconCell {
+    pub icon: IconId,
+    /// The size the icon is drawn at, in logical points: the side of its square box.
+    pub size: u16,
+    /// The icon's square cell in texels, `[x, y, width, height]`, rasterized at the display's
+    /// scale, so `size` times the scale texels wide.
+    pub rect: [u16; 4],
 }
 
 /// Where one rasterized glyph lies in its atlas page, and where its picture sits against the

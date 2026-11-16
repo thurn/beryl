@@ -534,7 +534,17 @@ The rules for building a frame:
   (glyph pages, icons, and the shapes of shadows and glows). The atlas is an
   array of single-channel pages, each 1,024 texels square, that hold coverage:
   page 0 holds the shapes of light, which every host uploads before its first
-  frame, and the glyph worker fills the pages after it.
+  frame, and the glyph worker fills the pages after it with glyphs and icons.
+- **Icons are rasterized on the glyph worker.** Each icon of `widgets::icons` is
+  kept in `beryl_assets` as the web interface's own SVG path data, and
+  `GlyphWorker::icons` fills and strokes every one with `tiny-skia` at the
+  display's scale, at the size the web draws it, into a square cell. It sends
+  the cells as an `AssetReady::Icons`, and the client keeps a table from an icon
+  and its size in points to its cell. One channel holds one color, so where the
+  web paints an icon in two colors (the phase icons' dark fills under cream
+  outlines), the darker fill's coverage is scaled by its brightness. When the
+  scale changes, the host asks again: the new cells go into fresh space, and the
+  old ones are drawn scaled until they arrive.
 - **One projection.** Every record's transform is in the table's space. A
   flat-layer record's transform places it on a plane just in front of the
   camera, so the same camera matrix serves the table and the flat layer.
@@ -1871,7 +1881,7 @@ Before a match's opening hand is shown:
    same before its first picture, but never downloads a scan, so a picture shows
    only what the scan cache holds.
 
-Three crates do that work: `tiny-skia` 0.12.0 (a CPU rasterizer for 2D shapes)
+Three crates do that work: `tiny-skia` 0.11.4 (a CPU rasterizer for 2D shapes)
 and `swash` 0.2.10 (a glyph rasterizer) draw Beryl's frame, and `ctt` 0.6.1 (a
 wrapper over several texture encoders) compresses.
 

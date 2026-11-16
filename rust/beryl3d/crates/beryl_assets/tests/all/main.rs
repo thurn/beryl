@@ -4,5 +4,6 @@
 
 mod faces;
 mod glyphs;
+mod icons;
 mod light;
 mod packer;

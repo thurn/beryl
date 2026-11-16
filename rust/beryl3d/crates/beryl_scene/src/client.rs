@@ -217,6 +217,9 @@ impl Client {
                 self.layer.glyphs_mut().add(page, &glyphs);
                 self.show.badges_mut().add(page, &glyphs);
             }
+            Input::Assets(AssetReady::Icons { page, cells }) => {
+                self.layer.icons_mut().add(page, &cells);
+            }
             Input::Surface {
                 size,
                 scale,

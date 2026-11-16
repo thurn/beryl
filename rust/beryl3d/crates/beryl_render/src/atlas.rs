@@ -1,14 +1,15 @@
 //! The atlas (docs/beryl-3d.md, "The frame": three texture arrays): a 2D array texture of
 //! single-channel pages, each `PAGE_SIZE` texels square, holding coverage. Page 0 holds the
 //! shapes of light (`beryl_assets::light`), which a host uploads before its first frame, and the
-//! glyph worker in `beryl_assets` fills the pages after it. Both arrive through
-//! `Renderer::upload_page`.
+//! glyph worker in `beryl_assets` fills the pages after it with glyphs and icons. Both arrive
+//! through `Renderer::upload_page`.
 
 use beryl_assets::packer::PAGE_SIZE;
 use beryl_assets::{Prepared, Upload};
 
-/// How many pages the atlas holds, 1 MB each: the shapes of light and seven of glyphs. The
-/// printable ASCII characters of every type style fill about one.
+/// How many pages the atlas holds, 1 MB each: the shapes of light and seven of glyphs and
+/// icons. The printable ASCII characters of every type style fill about one, and every icon
+/// at two pixels to a point a tenth of one.
 pub const ATLAS_PAGES: u16 = 8;
 
 /// The atlas texture and the view the shader samples.

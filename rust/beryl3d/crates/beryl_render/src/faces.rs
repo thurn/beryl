@@ -342,7 +342,7 @@ impl Waiting {
                 size: FaceSize::Full,
                 ..
             } => self.full.push_back(prepared),
-            AssetReady::Glyphs { .. } => {}
+            AssetReady::Glyphs { .. } | AssetReady::Icons { .. } => {}
         }
     }
 
