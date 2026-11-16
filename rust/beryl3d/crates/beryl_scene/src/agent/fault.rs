@@ -50,6 +50,33 @@ pub enum Rule {
 }
 
 impl Rule {
+    /// Every rule, in the doc's order.
+    pub const ALL: [Self; 14] = [
+        Self::OnScreen,
+        Self::Overlap,
+        Self::Reachable,
+        Self::Duplicate,
+        Self::TextFits,
+        Self::Named,
+        Self::Clips,
+        Self::Jump,
+        Self::RestPlacement,
+        Self::StepTime,
+        Self::StepShown,
+        Self::Crowded,
+        Self::BlankCard,
+        Self::LinesHold,
+    ];
+
+    /// Where the rule is in [`Self::ALL`].
+    #[must_use]
+    pub fn index(self) -> usize {
+        Self::ALL
+            .iter()
+            .position(|&rule| rule == self)
+            .expect("every rule is in ALL")
+    }
+
     /// The word a printed fault names the rule by.
     #[must_use]
     pub fn word(self) -> &'static str {

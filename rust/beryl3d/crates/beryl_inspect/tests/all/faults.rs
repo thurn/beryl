@@ -26,6 +26,7 @@ fn outcome(recording: &str, rules: &[Rule]) -> Outcome {
             })
             .collect(),
         frames: 1,
+        judged: beryl_scene::agent::Judged::default(),
         error: None,
         seconds: 0.0,
     }

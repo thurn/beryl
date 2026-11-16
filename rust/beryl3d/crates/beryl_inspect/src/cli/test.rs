@@ -6,7 +6,7 @@ use std::fmt::Write;
 use std::io::Write as _;
 use std::time::Instant;
 
-use beryl_scene::agent::{Context, Layout};
+use beryl_scene::agent::{Context, Judged, Layout, Rule};
 use beryl_scene::driver::Mode;
 use beryl_scene::input::Insets;
 use serde_json::{Value, json};
@@ -176,6 +176,15 @@ impl Report<'_> {
         self.outcomes.iter().map(|o| o.frames).sum()
     }
 
+    /// What each rule judged over every test.
+    fn judged(&self) -> Judged {
+        let mut judged = Judged::default();
+        for outcome in self.outcomes {
+            judged += &outcome.judged;
+        }
+        judged
+    }
+
     fn median(&self) -> usize {
         self.frames.as_ref().map_or(0, |f| f.median)
     }
@@ -220,6 +229,10 @@ impl Report<'_> {
             })).collect::<Vec<_>>(),
             "seconds": self.seconds,
             "test_ms": self.test_ms(),
+            "judged": Rule::ALL.iter().map(|&rule| {
+                let count = self.judged().of(rule);
+                json!({ "rule": rule.word(), "frames": count.frames, "elements": count.elements })
+            }).collect::<Vec<_>>(),
         });
         format!("{value}\n")
     }
@@ -282,6 +295,19 @@ impl Report<'_> {
             self.median(),
             self.seconds,
             self.test_ms(),
+        );
+        let judged = self.judged();
+        let counts: Vec<String> = Rule::ALL
+            .iter()
+            .map(|&rule| {
+                let count = judged.of(rule);
+                format!("{} {}/{}", rule.word(), count.frames, count.elements)
+            })
+            .collect();
+        let _ = writeln!(
+            out,
+            "judged, in frames (scripts for the segment checks) / elements: {}",
+            counts.join(", ")
         );
         if let Some((tests, rules)) = &self.summary {
             let most: Vec<String> = rules

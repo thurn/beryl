@@ -15,7 +15,7 @@ use std::time::Instant;
 
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::{Fault, Layout};
+use beryl_scene::agent::{Fault, Judged, Layout};
 use beryl_scene::driver::{Mode, Page};
 use beryl_scene::input::Size;
 
@@ -68,6 +68,8 @@ pub struct Outcome {
     pub faults: Vec<Fault>,
     /// How many frames the frame checks ran on.
     pub frames: usize,
+    /// How much each rule judged.
+    pub judged: Judged,
     /// Why the test could not run: its recording could not be read or recorded, or the client
     /// panicked playing it.
     pub error: Option<String>,
@@ -143,14 +145,15 @@ pub fn run(tests: &[Test], mode: Mode) -> Vec<Outcome> {
 fn play(test: Test, mode: Mode) -> Outcome {
     let started = Instant::now();
     let ran = caught(|| test.page().map(|mut page| page.check_all(mode))).and_then(|ran| ran);
-    let (faults, frames, error) = match ran {
-        Ok(checked) => (checked.faults, checked.frames, None),
-        Err(why) => (Vec::new(), 0, Some(why)),
+    let (faults, frames, judged, error) = match ran {
+        Ok(checked) => (checked.faults, checked.frames, checked.judged, None),
+        Err(why) => (Vec::new(), 0, Judged::default(), Some(why)),
     };
     Outcome {
         test,
         faults,
         frames,
+        judged,
         error,
         seconds: started.elapsed().as_secs_f64(),
     }

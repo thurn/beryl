@@ -102,6 +102,7 @@ fn outcome(recording: &str, frames: usize) -> Outcome {
         },
         faults: Vec::new(),
         frames,
+        judged: beryl_scene::agent::Judged::default(),
         error: None,
         seconds: 0.0,
     }

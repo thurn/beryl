@@ -76,6 +76,8 @@ pub struct Checked {
     /// How many pairs of consecutive checked frames "lines hold" compared, each sharing at least
     /// one arrow.
     pub line_pairs: usize,
+    /// How much each rule judged.
+    pub judged: agent::Judged,
 }
 
 /// One step of one script that "every step shown" judges, with what the frames showed of it.
@@ -121,6 +123,10 @@ impl Page {
             }
         };
         let found = steps::segment_checks(&history);
+        let mut tally = agent::Judged::default();
+        for script in &history {
+            tally.script(script);
+        }
         let mut judged = judged(&history);
         // The frames that name the objects of the faults the segment checks found.
         let naming: BTreeSet<u64> = found.iter().map(|found| found.at).collect();
@@ -150,6 +156,8 @@ impl Page {
             let frame = page.frame();
             if checked.contains(&t) {
                 faults.extend(agent::check(frame, &context));
+                tally.frame(frame);
+                tally.lines(&kept, frame);
                 if arrows_held(&kept, frame) > 0 {
                     line_pairs += 1;
                     faults.extend(lines_hold(&kept, frame, &context));
@@ -186,6 +194,7 @@ impl Page {
             faults.push(fault(found, elements));
         }
         for step in judged.iter().filter(|step| step.evaluated) {
+            tally.step_shown(step.samples.len());
             let record = &history[step.script].steps[step.step];
             if let Some(message) = steps::step_shown(record, step.from, step.to, &step.samples) {
                 let elements: Vec<Subject> = step.subject.clone().into_iter().collect();
@@ -203,6 +212,7 @@ impl Page {
             faults,
             frames: all.len(),
             line_pairs,
+            judged: tally,
         }
     }
 

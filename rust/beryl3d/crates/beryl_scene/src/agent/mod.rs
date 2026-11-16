@@ -6,6 +6,7 @@
 pub mod checks;
 pub mod fault;
 pub mod hit;
+pub mod judged;
 pub mod locate;
 pub mod steps;
 pub mod tree;
@@ -13,5 +14,6 @@ pub mod tree;
 pub use checks::check;
 pub use fault::{Context, Fault, Layout, Rule, Subject};
 pub use hit::{hit, uncovered};
+pub use judged::{Count, Judged};
 pub use locate::{LocateError, locate};
 pub use tree::{TreeOptions, tree};
