@@ -456,10 +456,14 @@ own busy figure for comparison. `cpu.py` explains how processes are attributed.
   cargo build that only compiles (`cargo_pool.SHRINKS`) hands its tokens after
   the first back to the pool, one job slot at a time, while a higher class
   waits. A lease that would get fewer tokens than it wants waits up to
-  `tokens.RECLAIM_SECONDS` for such tokens before it takes what is free. Other
-  long work at utility QoS (tournaments, the nightly, the justfile's `low`)
-  takes no tokens, because macOS already gives every core to normal-priority
-  work first.
+  `tokens.RECLAIM_SECONDS` for such tokens before it takes what is free. A Beryl
+  3D program whose work goes through `runner::spread` (`record`, `b3d test`)
+  grows instead: while it runs, its lease takes the tokens that free up, writes
+  its size to the file `BERYL_CPU_TOKENS_FILE` names, and the program starts
+  more threads. A push's or the merge queue's growing lease counts as a waiter
+  while it is short, so freed tokens go to it first. Other long work at utility
+  QoS (tournaments, the nightly, the justfile's `low`) takes no tokens, because
+  macOS already gives every core to normal-priority work first.
 - A check step's wait for tokens does not count against its hang limit or the
   run's budget: the step's log line reports the wait apart from the step's own
   time. `just tokens` shows who holds and waits for tokens. `BERYL_CPU_POOL=0`

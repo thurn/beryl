@@ -64,18 +64,13 @@ impl Recorder for Cli {
         }
         let recorded = Mutex::new(done);
         let next = AtomicUsize::new(0);
-        let threads = beryl_inspect::runner::threads().min(jobs.len().max(1));
-        std::thread::scope(|scope| {
-            for _ in 0..threads {
-                scope.spawn(|| {
-                    while let Some(job) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) {
-                        let one = record(job, &source);
-                        recorded
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .push(one);
-                    }
-                });
+        beryl_inspect::runner::spread(jobs.len(), &next, || {
+            while let Some(job) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) {
+                let one = record(job, &source);
+                recorded
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(one);
             }
         });
         recorded

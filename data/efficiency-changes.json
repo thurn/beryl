@@ -163,5 +163,10 @@
     "label": "A flaky check files its delete bead only when it flakes again in another run within a week, so one-off problems of a run (load, a shared fixture, code changing between attempts) no longer start an Opus session each",
     "metric": "bead.dollars",
     "expect": "down"
+  },
+  {
+    "label": "A Beryl 3D program in a fast check (record, b3d test) takes more CPU tokens while it runs as other steps release them, and adds threads, instead of keeping the one to three tokens it started with",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]

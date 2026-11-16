@@ -58,7 +58,9 @@ A lease is fixed when its step starts, so a step that starts while other heavy l
 small share and keeps it after they finish. On 2026-11-14 the fast check's Rust tests step started
 beside the two browser lanes, took 6 of 18 tokens, and ran nextest 6 tests wide for 44 s after
 those lanes ended about 20 s in, with 12 cores idle. A command inside a lease can take the tokens
-free at a later point without waiting (`top_up`), as the tests step does once its build is done.
+free at a later point without waiting (`top_up`), as the tests step does once its build is done,
+and a program that adds threads as its lease grows can ask `run_program` to keep taking them
+while it runs (`run_growing`).
 
 A lease's size is also fixed from the other side: a long build of a lower class keeps the tokens
 it took while a push that starts later gets what is left. Between 10:00 UTC 2026-11-15 and the
@@ -93,6 +95,7 @@ import os
 import random
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -137,6 +140,15 @@ RECLAIM_SECONDS = 10.0
 # The word after the class in a token's file whose lease can give it back while a higher class
 # waits.
 ELASTIC = "elastic"
+# The file in which a growing program lease (`run_program` with `grow`) keeps the number of tokens
+# it holds now, for the program to read while it runs (`beryl_inspect::runner::granted`).
+GRANT_FILE_ENV = "BERYL_CPU_TOKENS_FILE"
+# How often a growing program lease looks for tokens that have freed.
+GROW_SECONDS = 0.5
+# The classes whose growing program leases wait for tokens as a waiter does, holding lower classes
+# back (`grant`) and making their elastic builds give tokens back (`higher_waiting`): the checks
+# that gate a push, which a session waits on.
+GROW_AS_WAITER: frozenset[str] = frozenset({"queue", "push"})
 
 # A check's steps that run many threads (`lane:step`), which each want a share of the pool
 # (`step_tokens`). Every other step is a script that keeps one core busy at most and takes none.
@@ -235,6 +247,8 @@ class Lease:
     wanted: int = 0
     granted: float = 0.0
     log: Path | None = None
+    # The size it started at, when it grew while its command ran (`grow`); 0 if it never grew.
+    first: int = 0
 
     def env(self) -> dict[str, str]:
         """Environment variables that hold a command and its children to the lease."""
@@ -277,7 +291,8 @@ class Lease:
             "class": self.klass,
             "worktree": paths.REPO.name,
             "command": self.command,
-            "cores": self.size,
+            "cores": self.first or self.size,
+            **({"grown_to": self.size} if self.first else {}),
             "wanted": self.wanted,
             "waited_s": round(self.waited, 1),
             "held_s": round(time.monotonic() - self.granted, 1),
@@ -288,6 +303,16 @@ class Lease:
                 handle.write(json.dumps(line) + "\n")
         except (OSError, ValueError) as error:
             print(f"tokens: could not log the lease to {log}: {error}", file=sys.stderr)
+
+    def grow(self, extra: Lease) -> None:
+        """Takes the tokens of `extra`, a top-up, into this lease, which then returns them with
+        its own and logs the size it reached."""
+        if not extra.files:
+            return
+        self.first = self.first or self.size
+        self.files.extend(extra.files)
+        self.size += len(extra.files)
+        extra.files = []
 
     def __enter__(self) -> Lease:
         return self
@@ -521,15 +546,80 @@ def named_class() -> str:
     return named if named in CLASSES else "agent"
 
 
-def run_program(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+def run_program(
+    command: list[str], grow: bool = False, **kwargs: Any
+) -> subprocess.CompletedProcess[Any]:
     """Runs `command`, a program that spreads its work over as many threads as its lease has
     tokens (`LEASE_ENV`), inside a lease of [`named_class`], or inside the lease its parent
-    already holds."""
+    already holds. With `grow`, a lease that started short of what it wanted takes more tokens
+    while the program runs (`run_growing`); only a program that reads [`GRANT_FILE_ENV`] and
+    adds threads may ask for that, or the extra tokens would sit idle."""
     lease = acquire(named_class(), largest(pool_size()), command=Path(command[0]).name)
     assert lease is not None
     with lease:
         env = {**(kwargs.pop("env", None) or os.environ), **lease.env()}
+        if grow and lease.files and lease.klass and lease.size < lease.wanted:
+            return run_growing(lease, command, env, kwargs)
         return subprocess.run(command, env=env, **kwargs)
+
+
+def run_growing(
+    lease: Lease, command: list[str], env: dict[str, str], kwargs: dict[str, Any]
+) -> subprocess.CompletedProcess[Any]:
+    """Runs `command` while `lease` takes the tokens that free up, until it holds what it
+    wanted, writing its size to a file named in [`GRANT_FILE_ENV`] after each gain.
+
+    A program's lease is otherwise fixed when it starts. In a push's fast check the Beryl 3D
+    lanes start their programs together, while agents and the sweeps hold up to their ceiling,
+    so each program got one to three of the twelve tokens it asked for and kept them: in the
+    fast checks of 2026-11-16, `b3d test` (about 150 CPU-seconds, 11-13 s on twelve threads)
+    and the tests after `record` were cut off at the 180 s limit in every run that reached
+    them. For a push or the merge queue ([`GROW_AS_WAITER`]) the lease also counts as a waiter
+    while it is short, so the tokens agents give back or release come to it rather than to the
+    next agent; such a lease lasts at most the length of the check step."""
+    pool = Pool()
+    klass = lease.klass
+    # The name `top_up` uses for this thread's waiter, so its own file is not a rival.
+    me = pool.root / f"wait-{os.getpid()}-{threading.get_ident()}-{klass}"
+    fd, name = tempfile.mkstemp(prefix="beryl-grant-")
+    grant_file: Path = Path(name)
+    os.close(fd)
+    grant_file.write_text(str(lease.size))
+    done: list[subprocess.CompletedProcess[Any]] = []
+    failed: list[BaseException] = []
+
+    def target() -> None:
+        try:
+            done.append(
+                subprocess.run(
+                    command, env={**env, GRANT_FILE_ENV: str(grant_file)}, **kwargs
+                )
+            )
+        except BaseException as error:  # Raised again on this command's own thread.
+            failed.append(error)
+
+    runner = threading.Thread(target=target, daemon=True)
+    runner.start()
+    try:
+        while runner.is_alive():
+            if lease.size < lease.wanted:
+                if klass in GROW_AS_WAITER:
+                    me.write_text(f"{os.getpid()} {klass}")
+                before = lease.size
+                lease.grow(pool.top_up(klass, lease.size, lease.wanted))
+                if lease.size != before:
+                    tmp = grant_file.with_suffix(".tmp")
+                    tmp.write_text(str(lease.size))
+                    tmp.replace(grant_file)
+            else:
+                me.unlink(missing_ok=True)
+            runner.join(GROW_SECONDS)
+    finally:
+        me.unlink(missing_ok=True)
+        grant_file.unlink(missing_ok=True)
+    if failed:
+        raise failed[0]
+    return done[0]
 
 
 def script_class(script: str) -> str:

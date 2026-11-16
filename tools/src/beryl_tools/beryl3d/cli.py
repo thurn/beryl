@@ -182,7 +182,10 @@ def record() -> int:
     if built != 0:
         return built
     line = [str(program("record"))]
-    return tokens.run_program(line, cwd=paths.WORKSPACE, check=False).returncode
+    # `record` spreads its jobs over `runner::spread`, which adds threads as its lease grows.
+    return tokens.run_program(
+        line, grow=True, cwd=paths.WORKSPACE, check=False
+    ).returncode
 
 
 def run_record(_args: argparse.Namespace) -> int:
@@ -214,19 +217,22 @@ def linked(name: str) -> Path:
     return max(program or found, key=lambda p: p.stat().st_mtime)
 
 
-def run_program(name: str, arguments: list[str], binary: Path | None = None) -> int:
+def run_program(
+    name: str, arguments: list[str], binary: Path | None = None, grow: bool = False
+) -> int:
     """Runs the built program `name` (the file `binary`, or else `linked(name)`) with
     `arguments`, inside a lease of CPU tokens, since its checks spread over as many threads as
-    the lease allows (`beryl_inspect::runner::threads`). When it says the recordings pack is
-    missing, builds the pack and runs it again."""
+    the lease allows (`beryl_inspect::runner::threads`). With `grow`, for a command whose work
+    goes through `runner::spread`, the lease grows while it runs (`tokens.run_program`). When
+    it says the recordings pack is missing, builds the pack and runs it again."""
     line = [str(binary or linked(name)), *arguments]
-    code = tokens.run_program(line, check=False).returncode
+    code = tokens.run_program(line, grow=grow, check=False).returncode
     if code != MISSING_PACK:
         return code
     recorded = record()
     if recorded != 0:
         return recorded
-    return tokens.run_program(line, check=False).returncode
+    return tokens.run_program(line, grow=grow, check=False).returncode
 
 
 def run_b3d(command: str) -> Callable[[argparse.Namespace], int]:
@@ -256,7 +262,8 @@ def run_shared_b3d(command: str) -> Callable[[argparse.Namespace], int]:
         built = shared_build()
         if built != 0:
             return built
-        return run_program("b3d", [command, *args.arguments], program("b3d"))
+        # The shared commands (`test`) play their tests through `runner::spread`.
+        return run_program("b3d", [command, *args.arguments], program("b3d"), grow=True)
 
     return run
 

@@ -190,29 +190,84 @@ pub fn threads() -> usize {
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, std::num::NonZero::get))
 }
 
-/// `f` applied to every item, on as many threads as [`threads`] allows, each thread taking
-/// the next item from a shared index, with the results in the order of `items`. A panic in `f`
-/// is not reported by the default hook while it runs, since `f` reports its own.
+/// The file in which a growing lease keeps how many tokens it holds now (`run_program` with
+/// `grow` in `tools/src/beryl_tools/tokens.py`).
+const GRANT_FILE: &str = "BERYL_CPU_TOKENS_FILE";
+
+/// How often [`spread`] reads the lease's size again while items remain.
+const GROW_POLL: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// How many threads a command may run now: the size its lease last wrote to the file
+/// `BERYL_CPU_TOKENS_FILE` names, when its lease grows while it runs, or else [`threads`].
+#[must_use]
+pub fn granted() -> usize {
+    std::env::var_os(GRANT_FILE)
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|text| text.trim().parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or_else(threads)
+}
+
+/// Runs `work` on as many threads as [`granted`] allows, at most one per job, where each `work`
+/// takes jobs from the shared index `next` until all `jobs` are taken. When the lease grows
+/// while jobs remain, it starts more threads. A lease is otherwise fixed when the program
+/// starts, so a program that started while the machine was busy ran on one or two threads
+/// after the cores freed up: `b3d test` took 150 s instead of 11-13 s.
+pub fn spread(jobs: usize, next: &AtomicUsize, work: impl Fn() + Sync) {
+    spread_by(
+        jobs,
+        next,
+        std::env::var_os(GRANT_FILE).is_some(),
+        granted,
+        work,
+    );
+}
+
+/// [`spread`], reading the threads allowed from `granted`, and again while jobs remain only
+/// when `growing`.
+fn spread_by(
+    jobs: usize,
+    next: &AtomicUsize,
+    growing: bool,
+    granted: impl Fn() -> usize,
+    work: impl Fn() + Sync,
+) {
+    let jobs = jobs.max(1);
+    let work = &work;
+    std::thread::scope(|scope| {
+        let mut started = 0;
+        loop {
+            while started < granted().min(jobs) {
+                scope.spawn(work);
+                started += 1;
+            }
+            if !growing || started >= jobs || next.load(Ordering::Relaxed) >= jobs {
+                break;
+            }
+            std::thread::sleep(GROW_POLL);
+        }
+    });
+}
+
+/// `f` applied to every item, on as many threads as [`granted`] allows (see [`spread`]), each
+/// thread taking the next item from a shared index, with the results in the order of `items`.
+/// A panic in `f` is not reported by the default hook while it runs, since `f` reports its
+/// own.
 pub fn each<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
     let next = AtomicUsize::new(0);
     let results: Mutex<Vec<Option<R>>> = Mutex::new((0..items.len()).map(|_| None).collect());
-    let threads = threads().min(items.len().max(1));
     let hook = panic::take_hook();
     panic::set_hook(Box::new(|_| {}));
-    std::thread::scope(|scope| {
-        for _ in 0..threads {
-            scope.spawn(|| {
-                loop {
-                    let at = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(item) = items.get(at) else {
-                        break;
-                    };
-                    let result = f(item);
-                    results
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)[at] = Some(result);
-                }
-            });
+    spread(items.len(), &next, || {
+        loop {
+            let at = next.fetch_add(1, Ordering::Relaxed);
+            let Some(item) = items.get(at) else {
+                break;
+            };
+            let result = f(item);
+            results
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)[at] = Some(result);
         }
     });
     panic::set_hook(hook);
@@ -324,4 +379,48 @@ pub fn results(outcomes: &[Outcome], failing: &BTreeSet<String>) -> String {
         let _ = writeln!(lines, "{line}");
     }
     lines
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
+
+    use super::spread_by;
+
+    /// The first job raises the grant from one thread to four and waits until four threads have
+    /// taken jobs, which only happens if `spread_by` starts more threads while it runs. Without
+    /// growth it would give up after 5 s with one thread.
+    #[test]
+    fn a_growing_grant_starts_more_threads_while_jobs_remain() {
+        let grant = AtomicUsize::new(1);
+        let next = AtomicUsize::new(0);
+        let threads = Mutex::new(HashSet::new());
+        let seen = || threads.lock().map_or(0, |t| t.len());
+        spread_by(
+            8,
+            &next,
+            true,
+            || grant.load(Ordering::Relaxed),
+            || {
+                while next.fetch_add(1, Ordering::Relaxed) < 8 {
+                    if let Ok(mut t) = threads.lock() {
+                        t.insert(std::thread::current().id());
+                    }
+                    if grant.swap(4, Ordering::Relaxed) == 1 {
+                        let deadline = Instant::now() + Duration::from_secs(5);
+                        while seen() < 4 && Instant::now() < deadline {
+                            std::thread::sleep(Duration::from_millis(10));
+                        }
+                    } else {
+                        // Long enough that one new thread cannot take every other job alone.
+                        std::thread::sleep(Duration::from_millis(50));
+                    }
+                }
+            },
+        );
+        assert_eq!(seen(), 4);
+    }
 }

@@ -365,3 +365,80 @@ def test_a_short_lease_takes_what_is_free_once_it_has_waited(
     assert push is not None and push.size == 1
     push.release()
     fixed.release()
+
+
+# A program that waits until its growing lease's file says it holds `n` tokens, then prints it.
+GROWN_PROGRAM = """
+import os, sys, time
+path, n = os.environ["BERYL_CPU_TOKENS_FILE"], sys.argv[1]
+for _ in range(200):
+    if open(path).read().strip() == n:
+        break
+    time.sleep(0.05)
+print(open(path).read().strip())
+"""
+
+
+def test_a_growing_program_lease_takes_tokens_as_they_free(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root: Path = tmp_path / "pool"
+    monkeypatch.setattr(tokens, "Pool", lambda: Pool(root, 8))
+    monkeypatch.setattr(tokens, "pool_size", lambda: 8)
+    monkeypatch.setattr(tokens, "GROW_SECONDS", 0.05)
+    monkeypatch.setenv(tokens.CLASS_ENV, "push")
+    # Agents hold their ceiling of six tokens, in a lease that cannot shrink.
+    held = Pool(root, 8).acquire("agent", 6, never)
+    assert held is not None
+    agents: tokens.Lease = held
+    seen: list[bool] = []
+
+    def release_agents() -> None:
+        # While the program is short of the six it wants, it holds agents back as a waiter.
+        deadline = time.monotonic() + 5
+        while not Pool(root, 8).higher_waiting("agent") and time.monotonic() < deadline:
+            time.sleep(0.01)
+        seen.append(Pool(root, 8).higher_waiting("agent"))
+        agents.release()
+
+    releaser = threading.Thread(target=release_agents)
+    releaser.start()
+    done = tokens.run_program(
+        [sys.executable, "-c", GROWN_PROGRAM, "6"],
+        grow=True,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    releaser.join(5)
+    assert seen == [True]
+    assert done.stdout.strip() == "6"
+    # It started with the one token pushes had left and logged what it grew to.
+    line = json.loads((root / tokens.LEASE_LOG).read_text().splitlines()[-1])
+    assert (line["class"], line["cores"], line["grown_to"]) == ("push", 1, 6)
+    assert not Pool(root, 8).holders() and not list(root.glob("wait-*"))
+
+
+def test_a_program_lease_grows_only_when_asked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "pool"
+    monkeypatch.setattr(tokens, "Pool", lambda: Pool(root, 8))
+    monkeypatch.setattr(tokens, "pool_size", lambda: 8)
+    monkeypatch.setenv(tokens.CLASS_ENV, "push")
+    agents = Pool(root, 8).acquire("agent", 6, never)
+    assert agents is not None
+    done = tokens.run_program(
+        [
+            sys.executable,
+            "-c",
+            "import os; print(os.environ.get('BERYL_CPU_TOKENS_FILE'))",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    agents.release()
+    assert done.stdout.strip() == "None"
+    line = json.loads((root / tokens.LEASE_LOG).read_text().splitlines()[-1])
+    assert "grown_to" not in line
