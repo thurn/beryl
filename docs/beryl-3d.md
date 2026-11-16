@@ -1012,8 +1012,10 @@ the graphics paths and the build before milestone 4 builds the real hosts on it:
   the lifecycle and the display's time. The display link and the frame callback
   call `beryl3d_frame` on every tick, whatever it returns.
 - **The library** is built with `cargo rustc --crate-type staticlib` for iOS and
-  `cdylib` for Android, so that desktop builds link neither. On Android it needs
-  only the system's libraries and loads at API 24.
+  `cdylib` for Android, so that desktop builds link neither. On Android it loads
+  at API 24 and needs the system's libraries and the NDK's `libc++_shared.so`,
+  which the texture encoders link and `just b3d android-smoke` puts in the APK
+  beside it.
 - **A phone has no recordings pack.** `just b3d ios-smoke` and `android-smoke`
   write the recording on the Mac with
   `beryl3d --fixture <name> --write-fixture <path>` and copy it into the app's

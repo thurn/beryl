@@ -439,6 +439,10 @@ def android_apk() -> Path:
     jni = root / "jniLibs" / "arm64-v8a"
     jni.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(built, jni / "libberyl_3d.so")
+    # The texture encoders (ctt) are C++ and link the NDK's shared C++ runtime, which an app
+    # must bundle beside its library (docs/beryl-3d.md, "Preparation").
+    runtime = prebuilt.parent / "sysroot" / "usr" / "lib" / "aarch64-linux-android"
+    shutil.copyfile(runtime / "libc++_shared.so", jni / "libc++_shared.so")
     started = time.monotonic()
     code = subprocess.run(
         [
