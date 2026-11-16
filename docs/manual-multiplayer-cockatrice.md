@@ -5,14 +5,9 @@ every control in Cockatrice that manipulates a game, read from its source at
 commit `587c4b43c` on 2026-11-12, with the way each is reached on Beryl's manual
 table.*
 
-Cockatrice is an open-source app for playing Magic online with no rules
-enforcement: a shared table where players move the cards by hand. Beryl's manual
-table must let a player do everything Cockatrice does to a game. This document
-is the checklist for that claim. It lists Cockatrice's menus, mouse gestures,
-keyboard shortcuts, setup steps and automatic behaviors, and says for each one
-how Beryl provides it or why it does not.
-
-Three terms come from the design and are used throughout.
+The tables map Cockatrice's menus, gestures, shortcuts and automatic behaviors
+to Beryl's manual table. The key column gives Cockatrice's default. The last
+column gives the Beryl route or marks the control as “Not carried over.”
 
 - **The context menu** is the menu a right-click opens on a card or pile: a list
   of plain labeled rows.
@@ -22,9 +17,9 @@ Three terms come from the design and are used throughout.
 
 ## Related information
 
-- [Manual multiplayer](manual-multiplayer.md): the design this appendix
-  supports. Its Interaction section defines the gestures, the context menu and
-  the command list named in the tables below.
+- [Manual multiplayer](manual-multiplayer.md): the reference for the shipped
+  table. Its Interaction section defines the gestures, the context menu and the
+  command list named in the tables below.
 - [Cockatrice](https://github.com/Cockatrice/Cockatrice): the source surveyed.
   The menus are built in its `game_graphics/player/menu` sources, the default
   shortcuts are in `shortcuts_settings.h`, and the game commands are the
@@ -408,8 +403,8 @@ turn. Beryl lets either player do both.
 
 ## Setup and match
 
-Cockatrice's lobby is a deck view with buttons. Beryl's is the lobby panel the
-design describes.
+Beryl's lobby shows each seat's deck counts, readiness and score. Players can
+open it from the gear at the top right of the table.
 
 | Cockatrice                                         | Key                       | In Beryl                                                                                                                                                       |
 | -------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -425,16 +420,16 @@ design describes.
 | Unload deck                                        | Cmd+Option+U              | Key. "Change" in the lobby.                                                                                                                                    |
 | Sideboard lock; drag cards between main and side   | Cmd+Shift+B               | Changed. In the lobby the key opens the sideboard swap view. There is no lock: changes are open until Start. Beryl's bug report uses this key only at a table. |
 | Ready to start                                     | Cmd+Shift+S               | Key. The guest's "Ready".                                                                                                                                      |
-| Force start                                        | —                         | The host's Start, available once both decks are loaded.                                                                                                        |
+| Force start                                        | —                         | The host's Start, available when both decks are loaded and the guest is ready.                                                                                 |
 | (first seat plays first)                           |                           | Changed. Start rolls for first, or uses the lobby's setting.                                                                                                   |
 | (no opening hand is dealt)                         |                           | Changed. Start deals each hand and offers keep or mulligan.                                                                                                    |
 | Concede / Unconcede                                | F2                        | Key. Asks first. There is no unconcede: the game is over and both players are in the lobby.                                                                    |
 | (rematch: everyone readies again)                  |                           | "Next game" returns to the lobby with the score and sideboards open.                                                                                           |
 | Game information                                   | —                         | The lobby panel, reachable from the table's menu.                                                                                                              |
 | Copy game link; Invite to game…                    | —                         | "Copy" beside the invite code.                                                                                                                                 |
-| Leave game                                         | Cmd+Q                     | The table's menu. Cmd+Q quits Beryl after asking to leave the table.                                                                                           |
+| Leave game                                         | Cmd+Q                     | Leave table in the gear menu. Cmd+Q quits Beryl after confirmation. Quit keeps the saved guest seat.                                                           |
 | Kick from game                                     | —                         | Not carried over. The host leaves, and hosts again for a new invite.                                                                                           |
-| Reconnect to a game in progress                    | —                         | Automatic, with the same invite code.                                                                                                                          |
+| Reconnect to a game in progress                    | —                         | Automatic while the app stays open. After reopening, use Resume table on the start screen.                                                                     |
 
 Cockatrice binds Cmd+N, Cmd+Shift+N and Cmd+Option+U twice: once for one of the
 lobby actions listed just above, and once for a game action listed in an earlier
@@ -520,9 +515,8 @@ it. They are listed so that nothing is left unaccounted for.
 
 ## Protocol coverage
 
-Cockatrice's wire protocol has 37 game commands. This table is the cross-check
-that each has an action on Beryl's table, using the action names defined in the
-design.
+The Beryl column uses the action names in the
+[table reference](manual-multiplayer.md#actions).
 
 | Cockatrice command                                                             | Beryl action                                                                                  |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
@@ -551,23 +545,13 @@ design.
 | KickFromGame, Judge, ReverseTurn, SetPlayerOrder, SetPlaymat, SetSideboardLock | Not carried over. See the tables above.                                                       |
 | (none)                                                                         | `marker`, `remove`, `damage`, `sort_hand`, `next_game`, `rewind`, `batch`: Beryl's additions. |
 
-## Manual QA
+## Verification
 
-This appendix is verified by walking it against the finished table. Start a host
-and a guest with `just table-pair`, as the design's Manual QA section describes.
+`data/table-appendix-map.json` associates each carried-over row with one or more
+command IDs or registered gesture checks. `just ui-unit` verifies that the
+associations exist and checks excluded rows for matching registry labels. The
+live browser checks exercise representative menu, shortcut and gesture routes.
 
-- **Check every row of every table.** For each row whose last column is not "Not
-  carried over", perform the Cockatrice action in Beryl by the route the row
-  names, and confirm the result in both windows.
-- **Check every key.** Press each key in the key column at a table and confirm
-  it does what its row says. Confirm that the keys shared with macOS (Cmd+W,
-  Cmd+M, Cmd+comma, Cmd+R, Cmd+P, Cmd+=, Cmd+−) act on the table and not on the
-  window.
-- **Check the command list is complete.** Open it with nothing typed and confirm
-  every row that is a command, and is not marked "Not carried over", appears in
-  it under some name.
-- **Check the "Not carried over" rows.** Confirm none of them is reachable, and
-  that nothing in the interface refers to chat, spectators or judges.
-- **Compare with Cockatrice directly.** Open the same two decks in a Cockatrice
-  local game, play three turns there and the same three turns in Beryl, and
-  confirm no step needed in Cockatrice was impossible in Beryl.
+Use `just table-pair` for native shortcut checks and an in-window comparison
+with Cockatrice. The [manual QA notes](manual-multiplayer.md#manual-qa) list the
+native and network paths that remain unverified.

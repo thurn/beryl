@@ -14,6 +14,16 @@ wait a moment for cores before it starts. `BERYL_CPU_POOL=0` turns the pool off.
 - `crates/beryl_app` is the Tauri shell: the window, IPC commands,
   `tauri.conf.json`, capabilities and icons. `docs/engine-architecture.md` §16
   describes the other crates.
+- `crates/beryl_protocol` owns the shared views, scripts and IPC definitions,
+  including the manual table commands in `src/ipc/table.rs`.
+  `crates/beryl_card_records` supplies shared printing and art records.
+- `crates/beryl_table` owns manual state, actions, permissions, assists and
+  saves. `crates/beryl_table_session` projects each seat's view and script and
+  runs solo, hosted and joined tables. Run their tests with
+  `just test-rust -p beryl_table -p beryl_table_session`.
+- `crates/beryl_link` supplies the handshake and in-memory and loopback TCP
+  links. `crates/beryl_link_iroh` supplies the optional internet transport.
+  Nightly tests run iroh over loopback with the relay disabled.
 - Each card is one file, `rust/cards/<crate>/<set>/<card>.rs`, placed by the set
   it was first printed in. `just card path <name>` prints the path. Card crates
   depend only on the shared vocabulary crate.
@@ -28,9 +38,9 @@ wait a moment for cores before it starts. `BERYL_CPU_POOL=0` turns the pool off.
   header comment is generated too (`just card header`). Card files name cards as
   `Card::Counterspell` and import everything with `use crate::prelude::*;`; code
   outside the card files uses `beryl_cards::names`.
-- `ui/src/generated/protocol.ts` is generated from `beryl_session` by ts-rs. A
-  test fails when it is out of date, and its header explains how to regenerate
-  it.
+- `ui/src/generated/protocol.ts` uses the shared types in `beryl_protocol`. The
+  TypeScript generation test runs in `beryl_session`. The generated file's
+  header gives the regeneration command.
 - The test decks are `decks::WU_CONTROL` and, before it,
   `decks::VINTAGE_WU_CONTROL`.
 

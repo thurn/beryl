@@ -12,6 +12,9 @@ says how Beryl follows MTG Arena.
   `boards.rs`).
 - `src/generated/protocol.ts` is generated from `beryl_session` by ts-rs. A test
   fails when it is out of date, and its header explains how to regenerate it.
+- `src/screens/Table.tsx` and `src/table/` run the manual table UI, including
+  the stage pointer client, gestures, command dispatch, lobby and link events.
+  Commands and default keys come from `data/table-commands.json`.
 - `src/design/tokens.css`, the CSS variables of colors, sizes and fonts, is
   generated from `data/design-tokens.json` by `just design-tokens`. Edit the
   JSON, never the stylesheet.
@@ -42,6 +45,10 @@ says how Beryl follows MTG Arena.
   (`scripts/verbs.mjs`; `just ui-test verb:` runs only these). Then it runs each
   prompt type, answering it with the clicks recorded in its fixture along with
   the session's replies (`scripts/shapes.mjs`; `just ui-test shape:`).
+- `just ui-test 'manual table'` runs the scripted manual-table checks. The HTTP
+  harness in `scripts/table.mjs` supplies live solo and linked sessions for
+  `scripts/kept-table-*.mjs`. A person can run `just table-pair` to open two
+  native app windows over localhost.
 - `just ui-play [fixtures]` plays every recorded fixture to the end with the
   stage's checks turned on. Manual tables run on desktop. Engine games run on
   desktop and phone.
