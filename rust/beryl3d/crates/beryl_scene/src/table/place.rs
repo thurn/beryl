@@ -15,9 +15,12 @@ mod merged;
 
 use super::hands::hand;
 use super::pile::{PileShown, lay_pile, pile_base, pile_scale};
-use super::rows::{Beneath, Laid, NameIds, RowRules, RowWindow, SameName, face_up, lay_row};
+use super::rows::{
+    Beneath, Laid, NameIds, RowRules, RowWindow, SameName, face_up, lay_row, least_strip,
+};
 use super::stack::{OnStack, on_stack, place_stack, spells};
 use super::{Camera, Layout, lifted};
+use crate::agent::hit;
 use crate::frame::Place;
 use crate::pose::Pose;
 
@@ -29,7 +32,8 @@ pub struct Rest {
     /// False for a card scrolled out of its row's view, which is not drawn.
     pub visible: bool,
     /// How many identical permanents the top card of a pile of them stands for, which it wears
-    /// as a count; 1 for every other card.
+    /// as a count; 0 for each copy beneath a pile's top, which a press reaches through the top
+    /// card as the web interface's does; and 1 for every other card.
     pub copies: u16,
 }
 
@@ -692,10 +696,11 @@ fn battlefield_row(
         Side::You => area.y,
         Side::Opponent => -area.y,
     };
-    let strip = layout.strip / camera.points_per_millimetre(Vec3::new(0.0, y, 0.0));
     let rules = RowRules {
         layout,
-        strip,
+        // The "reachable" check finds an uncovered square only in whole cells of its grid, and
+        // can miss up to a cell beside each of the strip's two slanted edges.
+        strip: least_strip(camera, area, y, layout.strip + 2.0 * hit::CELL),
         scroll: offset,
     };
     let place = |zone| Place::Card {

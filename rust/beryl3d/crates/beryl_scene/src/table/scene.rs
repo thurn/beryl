@@ -439,13 +439,16 @@ impl Table {
         // card shown. One that is out of view both before the script and after it stays
         // undrawn while it slides, or it would cover that card.
         // The same holds for a card under the top two of a pile, which is not drawn. A card
-        // that changes place is drawn on its way, wherever it starts or ends.
+        // that changes place is drawn on its way, wherever it starts or ends. Before its track
+        // first moves it, a card is drawn as where it rests is, and once its track has ended,
+        // as where the script leaves it is.
         let moves = resting.zip(last).is_some_and(|(a, b)| a.place != b.place);
-        let seen = moves
-            || [resting, last]
-                .iter()
-                .flatten()
-                .any(|object| object.visible);
+        let begun = track.begun(motion.t);
+        let seen = match (resting, last) {
+            (Some(resting), _) if !begun => resting.visible,
+            (_, Some(last)) if track.settled(motion.t) => last.visible,
+            _ => moves || resting.is_some_and(|a| a.visible) || last.is_some_and(|b| b.visible),
+        };
         let (object, view) = match last {
             Some(object) => (object, motion.view),
             None => (resting?, view),
@@ -454,10 +457,16 @@ impl Table {
         // more than half of its quarter turn, from the middle of its step.
         let tapped = [resting, last].iter().flatten().any(|object| object.tapped)
             && pose.rotation.angle_between(Quat::IDENTITY) > FRAC_PI_4;
+        // Until its track first moves it, a card stands where it rested, and is a copy beneath
+        // a pile's top only if it rested as one.
+        let copies = resting
+            .filter(|_| !begun)
+            .map_or(object.copies, |a| a.copies);
         let object = SceneObject {
             pose,
             visible: seen && pose.opacity > 0.0,
             tapped,
+            copies,
             ..object
         };
         Some((object, view, track.moving(motion.t)))
@@ -502,7 +511,10 @@ impl Table {
             whiten: 0.0,
             face,
             state,
+            // A copy beneath a pile's top peeks out too little to be pressed by itself; the
+            // pile is pressed through its top card.
             interactive: state & StateBits::FACE_DOWN == 0
+                && object.copies > 0
                 && !name.is_empty()
                 && pointer::takes_pointer(object.place),
         };

@@ -189,9 +189,9 @@ fn unreachable(page: &mut Page) -> usize {
 fn every_card_in_view_keeps_its_strip_after_a_scroll() {
     let mut page = page(&lands(40));
     let spacing = least_spacing(page.frame());
-    // A row packed to the least strip leaves some cards a few points short of a 24 point
-    // square under the camera's perspective before any scroll; a scroll must not add to them.
-    let faults = unreachable(&mut page);
+    // The row is packed to the least strip, which leaves every card a 24 point square to press
+    // even at the row's ends, where the camera's perspective slants the cards' edges most.
+    assert_eq!(unreachable(&mut page), 0);
     for notches in [5.0, 13.0] {
         let point = on_card(&mut page, 1);
         page.wheel(point, NOTCH_DOWN * notches);
@@ -201,7 +201,7 @@ fn every_card_in_view_keeps_its_strip_after_a_scroll() {
             after >= spacing - 0.5,
             "{after} apart after, {spacing} before"
         );
-        assert!(unreachable(&mut page) <= faults);
+        assert_eq!(unreachable(&mut page), 0);
         let frame = page.frame();
         for (number, index) in row(frame) {
             assert!(

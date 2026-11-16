@@ -144,6 +144,12 @@ impl Segment {
         self.start.saturating_add(self.duration)
     }
 
+    /// Whether it changes the pose, rather than holding the object still.
+    #[must_use]
+    pub fn moves(&self) -> bool {
+        self.from != self.to || self.arc != 0.0
+    }
+
     /// The moments besides its start, middle and end, which every check already looks at, when
     /// something can go wrong: when a thrown permanent is first at its greatest height, and when
     /// a card that turns over at a moment of its own begins and ends turning.
@@ -480,11 +486,22 @@ impl Track {
     /// segment that holds the object still does not count.
     #[must_use]
     pub fn moving(&self, t: u64) -> bool {
-        self.segments().iter().any(|segment| {
-            segment.start <= t
-                && t < segment.end()
-                && (segment.from != segment.to || segment.arc != 0.0)
-        })
+        (self.segments().iter())
+            .any(|segment| segment.start <= t && t < segment.end() && segment.moves())
+    }
+
+    /// Whether a segment that changes the object's pose has begun by `t`. Until one has, the
+    /// object holds the pose it started the track in.
+    #[must_use]
+    pub fn begun(&self, t: u64) -> bool {
+        (self.segments().iter()).any(|segment| segment.start <= t && segment.moves())
+    }
+
+    /// Whether every segment that changes the object's pose has ended by `t`. From then on the
+    /// object holds the pose it ends the track in.
+    #[must_use]
+    pub fn settled(&self, t: u64) -> bool {
+        (self.segments().iter()).all(|segment| segment.end() <= t || !segment.moves())
     }
 
     /// Adds `segment` after every segment that starts no later than it, so that of two that

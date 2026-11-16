@@ -8,9 +8,9 @@
 use std::f32::consts::FRAC_PI_2;
 
 use beryl_protocol::protocol::{CardType, Facing, ObjectId, ObjectView};
-use glam::{Quat, Vec3};
+use glam::{Quat, Vec2, Vec3};
 
-use super::{CARD_HEIGHT, CARD_WIDTH, LAYER, Layout, RowArea};
+use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout, RowArea};
 use crate::data::space::card::PHASED_OUT_OPACITY;
 use crate::pose::Pose;
 
@@ -19,7 +19,7 @@ pub(super) struct Laid<'a> {
     pub object: &'a ObjectView,
     pub pose: Pose,
     pub visible: bool,
-    /// The group's size on its top card, and 1 on the copies beneath it.
+    /// The group's size on its top card, and 0 on the copies beneath it (`Rest::copies`).
     pub copies: u16,
 }
 
@@ -223,6 +223,73 @@ pub(super) fn lay_row<'a>(
     RowWindow::new(groups.len(), first, shown, (before, after))
 }
 
+/// The least strip, in millimetres, that leaves an overlapped card of a row at height `y` in
+/// `area` an uncovered square `side` points on a side, wherever in the row it stands. The strip
+/// runs between the card's left edge and its neighbour's. Under the camera's perspective those
+/// edges slant toward the middle of the screen, more the farther from it they stand, so at the
+/// row's ends a strip `side` points wide at the row's centre line holds no square that large.
+/// The strip is the least that holds one at both ends of the row, over the shorter side of a
+/// card, which is how tall a tapped card lies.
+pub(super) fn least_strip(camera: &Camera, area: RowArea, y: f32, side: f32) -> f32 {
+    let flat = side / camera.points_per_millimetre(Vec3::new(0.0, y, 0.0));
+    let holds = |strip: f32| {
+        [area.left, area.right - strip]
+            .into_iter()
+            .all(|left| holds_square(camera, (left, left + strip), y, side))
+    };
+    // Every strip at least `flat` and too narrow to hold the square is narrower than every
+    // strip that holds it, so a bisection finds the least to within a hundredth of a millimetre.
+    let (mut low, mut high) = (flat, flat);
+    while !holds(high) {
+        low = high;
+        high *= 2.0;
+        if high > area.right - area.left {
+            return high;
+        }
+    }
+    while high - low > 0.01 {
+        let middle = f32::midpoint(low, high);
+        if holds(middle) {
+            high = middle;
+        } else {
+            low = middle;
+        }
+    }
+    high
+}
+
+/// Whether the part of the table between `left` and `right`, across a card's shorter side
+/// centred on `y`, holds a square `side` points on a side on screen. Each edge of the part is a
+/// straight line on screen, and points at one height of the table share a height on screen, so
+/// the width a band of the screen holds is the least gap between the edges at its top and its
+/// bottom.
+fn holds_square(camera: &Camera, (left, right): (f32, f32), y: f32, side: f32) -> bool {
+    let point = |x: f32, along: f32| camera.to_screen(Vec3::new(x, y + along, 0.0));
+    let half = CARD_WIDTH / 2.0;
+    let (near_left, far_left) = (point(left, -half), point(left, half));
+    let (near_right, far_right) = (point(right, -half), point(right, half));
+    let (top, bottom) = (far_left.y.min(near_left.y), far_left.y.max(near_left.y));
+    if bottom - top < side {
+        return false;
+    }
+    // Where the line from `from` to `to` crosses height `at` of the screen.
+    let across =
+        |from: Vec2, to: Vec2, at: f32| from.x + (to.x - from.x) * (at - from.y) / (to.y - from.y);
+    let gap = |start: f32| {
+        let end = start + side;
+        let left = across(near_left, far_left, start).max(across(near_left, far_left, end));
+        let right = across(near_right, far_right, start).min(across(near_right, far_right, end));
+        right - left
+    };
+    (0..=SQUARE_BANDS)
+        .map(|band| top + (bottom - top - side) * f32::from(band) / f32::from(SQUARE_BANDS))
+        .any(|start| gap(start) >= side)
+}
+
+/// How many steps `holds_square` tries a band of the screen at, from the part's top to its
+/// bottom.
+const SQUARE_BANDS: u8 = 16;
+
 /// Whether every card, alone, fits the row with at least the least strip of each uncovered.
 fn fits_overlapped(cards: &[&ObjectView], room: f32, rules: &RowRules) -> bool {
     let Some(&last) = cards.last() else {
@@ -314,7 +381,7 @@ fn place_group<'a>(
             copies: if depth == 0 {
                 u16::try_from(group.len()).unwrap_or(u16::MAX)
             } else {
-                1
+                0
             },
         });
     }
