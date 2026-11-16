@@ -20,9 +20,13 @@ impl GreedyAgent {
     }
 
     fn with_rules(t: &GameTable, rules: Rules) -> Self {
+        Self::with_knowledge(t, rules, Knowledge::Tuned)
+    }
+
+    fn with_knowledge(t: &GameTable, rules: Rules, knowledge: Knowledge) -> Self {
         Self {
             table: t.clone(),
-            policy: RolloutPolicy::with_rules(t, Knowledge::Tuned, rules),
+            policy: RolloutPolicy::with_rules(t, knowledge, rules),
         }
     }
 }
@@ -82,6 +86,36 @@ impl Widen for WithCombat<Small> {
 // Every subset uses the same order in the name. These are measurement tools outside
 // the app's list of opponents.
 pub(super) static VARIANTS: &[AgentInfo] = &[
+    AgentInfo {
+        name: "greedy+fitted",
+        title: "Fitted greedy",
+        description: "Plays the rollout policy with fitted values",
+        new: |t, _, _| {
+            Box::new(GreedyAgent::with_knowledge(
+                t,
+                Rules::default(),
+                Knowledge::Fitted,
+            ))
+        },
+    },
+    AgentInfo {
+        name: "greedy+hold+waste+combat+fitted",
+        title: "Fitted greedy",
+        description: "Plays the fitted rollout policy with hold, waste and combat",
+        new: |t, seed, _| {
+            build_greedy(
+                t,
+                seed,
+                Rules {
+                    hold: true,
+                    waste: true,
+                    ..Rules::default()
+                },
+                true,
+                Knowledge::Fitted,
+            )
+        },
+    },
     variant::<true, false, false, false>("greedy+hold"),
     variant::<false, true, false, false>("greedy+waste"),
     variant::<false, false, true, false>("greedy+combat"),
@@ -111,15 +145,28 @@ fn build<const HOLD: bool, const WASTE: bool, const COMBAT: bool, const WALKER: 
     seed: u64,
     _budget: Budget,
 ) -> Box<dyn GameAgent + Send> {
-    let greedy = GreedyAgent::with_rules(
+    build_greedy(
         t,
+        seed,
         Rules {
             hold: HOLD,
             waste: WASTE,
             walker: WALKER,
         },
-    );
-    if COMBAT {
+        COMBAT,
+        Knowledge::Tuned,
+    )
+}
+
+fn build_greedy(
+    t: &GameTable,
+    seed: u64,
+    rules: Rules,
+    combat: bool,
+    knowledge: Knowledge,
+) -> Box<dyn GameAgent + Send> {
+    let greedy = GreedyAgent::with_knowledge(t, rules, knowledge);
+    if combat {
         Box::new(Widening::new(WithCombat {
             greedy,
             seed,

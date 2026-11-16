@@ -345,6 +345,12 @@ tournament *args:
 ladder *args:
     RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- ladder "$@"
 
+# Fit rollout values to accepted paired overrides from ladder match directories
+[group('agents')]
+[no-cd]
+fit *args:
+    RUSTFLAGS="{{ search_cpu }}" {{ low }} cargo run --quiet --profile search --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- fit "$@"
+
 # The ladder's start positions, cut from champion games at low priority: build [--games N] [--seed N] [--work 3M] [--out DIR], or sample [--count N] DIR
 [group('agents')]
 [no-cd]

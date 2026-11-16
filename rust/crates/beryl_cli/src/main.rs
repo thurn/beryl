@@ -54,8 +54,8 @@ use std::process::ExitCode;
 
 use beryl_cli::transcript::Transcript;
 use beryl_cli::{
-    agreement, anchor_replay, blunders, evalfit, fixture, freeze, game, gate, hunt, ladder, number,
-    positions, review, screen, script_check, serve, specs, tournament, why,
+    agreement, anchor_replay, blunders, evalfit, fit, fixture, freeze, game, gate, hunt, ladder,
+    number, positions, review, screen, script_check, serve, specs, tournament, why,
 };
 use beryl_search::Budget;
 
@@ -74,6 +74,7 @@ const USAGE: &str = "usage:
   beryl_cli gate <challenger> --claims NAME,...|none [--vs NAME]
   beryl_cli record-fixture <definitions.json> <out-dir> [name...]
   beryl_cli eval-fit [--games N] [--seed N]
+  beryl_cli fit <match-dir>... [--seed N] [--out FILE]
   beryl_cli serve [--port N]
   beryl_cli specs-serve [--port N]
   beryl_cli specs-check [card...]
@@ -109,6 +110,7 @@ fn main() -> ExitCode {
             fixture::record_all(Path::new(definitions), Path::new(out), names)
         }
         [command, rest @ ..] if command == "eval-fit" => evalfit::main(rest),
+        [command, rest @ ..] if command == "fit" => fit::main(rest),
         [command, rest @ ..] if command == "review" => review::main(rest),
         [command, rest @ ..] if command == "freeze-saves" => freeze::main(rest),
         [command, rest @ ..] if command == "anchor-replay" => anchor_replay::main(rest),

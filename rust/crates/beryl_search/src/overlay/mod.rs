@@ -5,7 +5,7 @@
 //! It was tuned for the WU Control mirror (`decks::WU_CONTROL`) and the Vintage WU Control
 //! deck before it (`decks::VINTAGE_WU_CONTROL`). A card with no entry keeps what
 //! [`crate::CardValues`] derives, and a game of cards none of which have an entry plays
-//! exactly as well as derivation allows. Only [`crate::Knowledge::Tuned`] reads it.
+//! exactly as well as derivation allows. The tuned and fitted policies both read it.
 //!
 //! This is the one place outside the expert system where `beryl_search` names cards (the
 //! card-names check exempts this directory). It holds judgement, not facts a definition
@@ -16,6 +16,8 @@ use beryl_cards::names;
 use beryl_engine::card::{Ability, AbilityKind, Behavior, CardDef, CostAction, Effect};
 
 use crate::values::CardInfo;
+
+pub(crate) mod fitted;
 
 /// The most abilities one card's tuning names.
 const MOST_TUNED_ABILITIES: usize = 2;

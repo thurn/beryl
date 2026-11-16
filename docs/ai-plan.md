@@ -520,12 +520,14 @@ The policy's card values (`values.rs`) and the constants of its rules
   holds a few thousand of these. If that is too few, the build bead adds a
   labelling run: paired rollouts of the policy's top three candidates at
   positions sampled from match games.
-- **The fit.** `just fit` replays each labelled game to its decision, as
-  `eval-fit` replays games, and searches the numbers one at a time for the
-  setting that most often ranks the confirmed move first. It holds out a fifth
-  of the games, and it penalises distance from the hand-set values.
-- **The output** is a third knowledge, `fitted`, beside `tuned` and `17l`, so
-  the challenger is `pimc72/hidden/rollout/fitted/...`.
+- **The fit.** `just fit <match-dir>... --seed 0 --out <file>` replays the
+  labelled decisions and adjusts one number at a time to rank more confirmed
+  moves first. It penalises distance from the hand-set values and assigns
+  roughly a fifth of the starting positions to the holdout, grouping repeat
+  starts and games with swapped seats.
+- **The output** is a Rust table for the `fitted` knowledge, beside `tuned` and
+  `estimate`. The challenger is `pimc72/hidden/rollout/fitted/...`. The fit
+  adjusts card values, targeting thresholds and battlefield value adjustments.
 - **A check before the match.** The fitted policy plays the tuned one alone,
   20,000 games. It must not score under 50%.
 - **A caution.** A policy that agrees with the search more does not have to make

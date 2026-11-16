@@ -37,8 +37,8 @@ pub use long::{
 };
 pub use mcts::{Budget, Mcts, Search, Sight, rollouts_run};
 pub use rollout::{
-    COUNTER_MIN, Inline, REMOVAL_MIN, RolloutPolicy, Rules, Softmax, rollout, rollout_to,
-    soft_rollout, soft_rollout_after, soft_rollout_to,
+    COUNTER_MIN, Inline, PolicyWeights, REMOVAL_MIN, RolloutPolicy, Rules, Softmax, rollout,
+    rollout_to, soft_rollout, soft_rollout_after, soft_rollout_to,
 };
 pub use values::{CardInfo, CardValues, Knowledge};
 
@@ -458,7 +458,7 @@ pub fn find_agent(name: &str) -> Result<Option<&'static AgentInfo>, String> {
     let found = agent(name);
     if found.is_none() && name.starts_with("greedy+") {
         return Err(format!(
-            "{name:?}: greedy rules are hold, waste, combat, walker, each at most once and in that order (walker requires combat)"
+            "{name:?}: greedy rules are hold, waste, combat, walker, each at most once and in that order (walker requires combat). Fitted variants: greedy+fitted and greedy+hold+waste+combat+fitted"
         ));
     }
     Ok(found)

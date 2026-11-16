@@ -57,6 +57,26 @@ const LIBRARY_LOW: usize = 10;
 /// The most a land on the battlefield is worth.
 const LAND_MAX: i32 = 15;
 
+/// The value and targeting constants the fitter can vary.
+#[derive(Clone, Copy, Debug)]
+pub struct PolicyWeights {
+    pub removal_min: i32,
+    pub counter_min: i32,
+    pub land_max: i32,
+    pub power: i32,
+    pub loyalty: i32,
+}
+
+impl PolicyWeights {
+    pub const TUNED: Self = Self {
+        removal_min: REMOVAL_MIN,
+        counter_min: COUNTER_MIN,
+        land_max: LAND_MAX,
+        power: 3,
+        loyalty: 4,
+    };
+}
+
 /// Optional rules for the rollout policy, each off by default.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Rules {
@@ -72,6 +92,7 @@ pub struct Rules {
 pub struct RolloutPolicy {
     values: CardValues,
     rules: Rules,
+    weights: PolicyWeights,
 }
 
 /// One candidate of a decision, objects and options alike.
@@ -112,6 +133,25 @@ impl RolloutPolicy {
         RolloutPolicy {
             values: CardValues::with(t, knowledge),
             rules,
+            weights: if knowledge == Knowledge::Fitted {
+                crate::overlay::fitted::WEIGHTS
+            } else {
+                PolicyWeights::TUNED
+            },
+        }
+    }
+
+    /// Scores decisions using the tuned overlay's flags and candidate fit values.
+    pub fn with_fit(
+        t: &GameTable,
+        rules: Rules,
+        weights: PolicyWeights,
+        overrides: &[(&str, i16)],
+    ) -> Self {
+        Self {
+            values: CardValues::with_overrides(t, Knowledge::Tuned, overrides),
+            rules,
+            weights,
         }
     }
 
@@ -140,6 +180,7 @@ impl RolloutPolicy {
             me,
             expert,
             rules: self.rules,
+            weights: self.weights,
             may_draw: Cell::new(None),
         }
     }

@@ -257,6 +257,7 @@ impl fmt::Display for Family {
         let knowledge = match self.knowledge {
             Knowledge::Estimate => "estimate",
             Knowledge::Tuned => "tuned",
+            Knowledge::Fitted => "fitted",
         };
         write!(f, "/{sight}/")?;
         match self.leaf {
@@ -359,6 +360,7 @@ impl FromStr for Family {
         let knowledge = match knowledge {
             "estimate" => Knowledge::Estimate,
             "tuned" => Knowledge::Tuned,
+            "fitted" => Knowledge::Fitted,
             _ => return Err(bad()),
         };
         Ok(Family {

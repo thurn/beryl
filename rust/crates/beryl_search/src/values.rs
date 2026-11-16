@@ -75,6 +75,9 @@ pub enum Knowledge {
     /// is `tuned`.
     #[default]
     Tuned,
+    /// The tuned overlay's flags with card values and score thresholds fitted to
+    /// the search's paired overrides. Its family name is `fitted`.
+    Fitted,
 }
 
 impl CardValues {
@@ -85,10 +88,27 @@ impl CardValues {
 
     /// The values of the tier `knowledge`.
     pub fn with(t: &GameTable, knowledge: Knowledge) -> CardValues {
+        let overrides = if knowledge == Knowledge::Fitted {
+            overlay::fitted::VALUES
+        } else {
+            &[]
+        };
+        Self::with_overrides(t, knowledge, overrides)
+    }
+
+    pub(crate) fn with_overrides(
+        t: &GameTable,
+        knowledge: Knowledge,
+        overrides: &[(&str, i16)],
+    ) -> Self {
         let mut cards = [CardInfo::default(); CardIx::COUNT];
         let mut more = Vec::new();
         for card in t.indices::<LargeCardIx>() {
-            let row = info(t.def(card), knowledge);
+            let def = t.def(card);
+            let mut row = info(def, knowledge);
+            if let Some(&(_, value)) = overrides.iter().find(|(name, _)| *name == def.name) {
+                row.value = value;
+            }
             match cards.get_mut(card.index()) {
                 Some(flat) => *flat = row,
                 None => more.push(row),
@@ -124,7 +144,7 @@ pub(crate) fn info(def: &CardDef, knowledge: Knowledge) -> CardInfo {
     let mut info = derive(def);
     match knowledge {
         Knowledge::Estimate => info.value = estimate(def),
-        Knowledge::Tuned => {
+        Knowledge::Tuned | Knowledge::Fitted => {
             info.value = shown(def.front());
             overlay::apply(def, &mut info);
         }

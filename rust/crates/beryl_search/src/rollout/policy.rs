@@ -11,7 +11,7 @@ use beryl_engine::state::{AttackTarget, StackEntry};
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{GameTable, Layout, Observation, Opt, Seat, TurnStep, Zone, ZoneKey};
 
-use super::{COUNTER_MIN, Candidate, LAND_MAX, LIBRARY_LOW, REMOVAL_MIN, Rules};
+use super::{Candidate, LIBRARY_LOW, PolicyWeights, Rules};
 use crate::values::{CardInfo, CardValues};
 
 #[cfg(test)]
@@ -29,6 +29,7 @@ pub(crate) struct Policy<'a, L: Layout> {
     /// Whether permanents are valued as the expert values them ([`crate::expert`]).
     pub(crate) expert: bool,
     pub(super) rules: Rules,
+    pub(super) weights: PolicyWeights,
     /// [`Policy::may_draw`], once asked: every option of a decision may ask it.
     pub(super) may_draw: Cell<Option<bool>>,
 }
@@ -40,7 +41,7 @@ impl<L: Layout> Policy<'_, L> {
 
     /// What an object is worth: its card's value, plus a creature's power and a
     /// planeswalker's loyalty as they stand on the battlefield, where a land is worth at most
-    /// [`LAND_MAX`]. An unknown card is worth 0.
+    /// `PolicyWeights::land_max`. An unknown card is worth 0.
     pub(crate) fn value(&self, slot: L::Slot) -> i32 {
         let Some(info) = self.info(slot) else {
             return 0;
@@ -56,13 +57,13 @@ impl<L: Layout> Policy<'_, L> {
             let d = self.obs.derived(slot);
             // A modal double-faced card played as its land face is worth a land.
             if d.types.intersects(Types::LAND) {
-                v = v.min(LAND_MAX);
+                v = v.min(self.weights.land_max);
             }
             if d.types.intersects(Types::CREATURE) {
-                v += 3 * i32::from(d.power.max(0));
+                v += self.weights.power * i32::from(d.power.max(0));
             }
             if d.types.intersects(Types::PLANESWALKER) {
-                v += 4 * i32::from(o.counters().loyalty);
+                v += self.weights.loyalty * i32::from(o.counters().loyalty);
             }
         }
         v
@@ -280,7 +281,7 @@ impl<L: Layout> Policy<'_, L> {
             .any(|o| matches!(o, CastingOption::Overload { .. }));
         if overloaded
             && let Some(spec) = f.spell_ability().and_then(|a| a.targets().first())
-            && self.sweep(spec) < REMOVAL_MIN
+            && self.sweep(spec) < self.weights.removal_min
         {
             return 0;
         }
@@ -394,10 +395,10 @@ impl<L: Layout> Policy<'_, L> {
         let friendly = friendly || matches!(whose(&spec.filter), Some(Players::You));
         let min = match spec.kind {
             _ if friendly => 0,
-            TargetKind::Spell => COUNTER_MIN,
+            TargetKind::Spell => self.weights.counter_min,
             // Damage to an opponent is always worth something, as a player counts 0.
             TargetKind::Player | TargetKind::PermanentOrPlayer => 0,
-            _ => REMOVAL_MIN,
+            _ => self.weights.removal_min,
         };
         // The best target is worth `min` exactly when some target is.
         if self.target_values(spec, friendly).any(|best| best >= min) {

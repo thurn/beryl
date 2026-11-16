@@ -7,6 +7,7 @@ pub mod anchor_replay;
 pub mod blunders;
 mod boards;
 pub mod evalfit;
+pub mod fit;
 pub mod fixture;
 pub mod freeze;
 pub mod game;
