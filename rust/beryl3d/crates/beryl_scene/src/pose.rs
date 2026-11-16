@@ -97,8 +97,19 @@ pub enum Shape {
     /// A line that leaves the straight way between its ends sideways on the screen and leans as
     /// it does, as the web interface's `bowed` (`ui/src/stage/bows.ts`) has it.
     Bowed(Bow),
+    /// The flight in of a card the viewer draws alone and holds up to be read, when it turns
+    /// over on the way, as the web interface's `heldUp` (`ui/src/stage/drawn.ts`) has it: bowed
+    /// as `Bowed` is, and also leaning `lean` radians counterclockwise about the bow's axis by
+    /// `sin(π min(1, elapsed / at))`, where `at` is when its `Segment::turning` has it edge-on,
+    /// so that it is upright again by then. Its size on the screen, its scale over its distance
+    /// from the eye, stays at its start pose's until it is edge-on, then changes to its end
+    /// pose's along a smoothstep over the rest of its time, so that it turns over at about the
+    /// size it had on the library. `eye` is how far along `bow.axis` the camera's eye is, so
+    /// that a position `p` is `eye - p · bow.axis` from it.
+    Held { bow: Bow, lean: f32, eye: f32 },
     /// A permanent's flight off the stack onto its place, as the web interface's `lifted`
-    /// (`ui/src/stage/lift.ts`) has it: it rises by `rise` (millimetres, up the screen) at once,
+    /// (`ui/src/stage/lift.ts`) has it: it rises by `rise` (millimetres, up the screen; `fly`
+    /// caps it so that the card never rises past the top of the window) at once,
     /// crosses most of the way at that height and drops onto its place. Its scale goes from its
     /// start pose's to `aloft` within the first frames and from there to its end pose's as it
     /// comes down. Its progress along the way is launched: it is half way across after about a

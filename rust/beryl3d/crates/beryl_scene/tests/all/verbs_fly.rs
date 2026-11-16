@@ -12,12 +12,15 @@ use beryl_protocol::protocol::{CardType, ObjectId, Side, StackItem, Why, ZoneNam
 use beryl_protocol::script::{Act, Curve, Room, StepTiming};
 use beryl_scene::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use beryl_scene::agent::{Layout, Rule};
+use beryl_scene::data::space;
+use beryl_scene::data::space::verbs::fly::thrown;
 use beryl_scene::driver::{Mode, Page, Recording};
 use beryl_scene::input::Size;
 use beryl_scene::motion::pose_at;
 use beryl_scene::play::Show;
 use beryl_scene::play::record::ScriptRecord;
 use beryl_scene::pose::{Pose, Segment};
+use beryl_scene::table::Window;
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
 use glam::Vec3;
 
@@ -146,7 +149,18 @@ fn flown(
 /// A recording show that has taken `before` and then `after`, played frame by frame at 60 Hz
 /// until both have ended.
 fn played(before: &GameUpdate, after: &GameUpdate, timings: Vec<StepTiming>) -> Show {
+    played_in(before, after, timings, window(1440.0, 900.0))
+}
+
+/// `played`, in `window`.
+fn played_in(
+    before: &GameUpdate,
+    after: &GameUpdate,
+    timings: Vec<StepTiming>,
+    window: Window,
+) -> Show {
     let mut show = show();
+    show.resize(window);
     show.record();
     show.push(Box::new(before.clone()), Vec::new());
     show.push(Box::new(after.clone()), timings);
@@ -227,13 +241,22 @@ fn cases() -> Vec<(&'static str, GameUpdate, GameUpdate, Vec<StepTiming>)> {
         ZoneName::Battlefield,
         Why::Play,
     );
-    let resolves = flown(
-        &before,
-        mine.resolving,
-        ZoneName::Stack,
-        ZoneName::Battlefield,
-        Why::Resolve,
-    );
+    // The permanent spell in `slot` resolving, which the session times alike for either side.
+    let resolves = |case, slot| {
+        let after = flown(
+            &before,
+            slot,
+            ZoneName::Stack,
+            ZoneName::Battlefield,
+            Why::Resolve,
+        );
+        let timing = timed("permanent resolves", 520.0, 330.0, Curve::EaseOut, false);
+        (case, before.clone(), after, vec![timing])
+    };
+    let resolving = [
+        resolves("permanent resolves", mine.resolving),
+        resolves("opponent permanent resolves", theirs.resolving),
+    ];
     let discard = flown(
         &before,
         mine.spell,
@@ -275,18 +298,6 @@ fn cases() -> Vec<(&'static str, GameUpdate, GameUpdate, Vec<StepTiming>)> {
             )],
         ),
         (
-            "permanent resolves",
-            before.clone(),
-            resolves,
-            vec![timed(
-                "permanent resolves",
-                520.0,
-                330.0,
-                Curve::EaseOut,
-                false,
-            )],
-        ),
-        (
             "discard",
             before.clone(),
             discard,
@@ -311,6 +322,9 @@ fn cases() -> Vec<(&'static str, GameUpdate, GameUpdate, Vec<StepTiming>)> {
             )],
         ),
     ]
+    .into_iter()
+    .chain(resolving)
+    .collect()
 }
 
 #[test]
@@ -394,6 +408,58 @@ fn a_resolving_permanent_is_thrown_up_and_half_way_across_at_a_quarter() {
         (across - 0.5).abs() < 0.08,
         "half way across at a quarter of its time: {across}"
     );
+}
+
+/// A permanent resolving never rises past the top of the window's safe area, as the web's
+/// `lifted` caps its rise at the room over its start and its place. The desktop layout leaves
+/// room for the full `thrown.height` over every row, because the opponent's hand lies above
+/// them, so both rise that far in a plain window. With a safe area whose top lies near the
+/// stack's, there is less room: the opponent's then rises less, and its top stays inside the
+/// safe area all the way.
+#[test]
+fn a_thrown_permanent_never_rises_past_the_top_of_the_window() {
+    let inset = window_inset(260.0);
+    for (case, window, capped) in [
+        ("permanent resolves", window(1440.0, 900.0), false),
+        ("opponent permanent resolves", window(1440.0, 900.0), false),
+        ("opponent permanent resolves", inset, true),
+    ] {
+        let (_, before, after, timings) = cases()
+            .into_iter()
+            .find(|(name, ..)| *name == case)
+            .expect("the case");
+        let show = played_in(&before, &after, timings, window);
+        let slot = flight(&show).steps[0].subject.expect("a card flies");
+        let (start, end) = span(&show);
+        let camera = show.table().camera();
+        let (from, to) = (pose(&show, slot, start), pose(&show, slot, end));
+        let [_, up, _] = axes(&show);
+        let mut highest = f32::MIN;
+        for t in (start..=end).step_by(usize::try_from(MS).expect("small")) {
+            let now = pose(&show, slot, t);
+            let (corners, _) = camera.card_box(&now);
+            let top = corners.iter().map(|c| c.y).fold(f32::INFINITY, f32::min);
+            let edge = window.safe_area.top;
+            assert!(
+                top > edge - 1.0,
+                "{case}: its top is at {top} points, above the safe area's at {edge}, at {t}"
+            );
+            highest = highest.max(off_line(now, from, to).dot(up));
+        }
+        let full = thrown::HEIGHT * space::card::WIDTH * from.scale;
+        if capped {
+            assert!(highest < 0.8 * full, "{case}: rises {highest} of {full}");
+        } else {
+            assert!(highest > 0.9 * full, "{case}: rises {highest} of {full}");
+        }
+    }
+}
+
+/// A 1440 by 900 window whose safe area begins `top` points below its top.
+fn window_inset(top: f32) -> Window {
+    let mut window = window(1440.0, 900.0);
+    window.safe_area.top = top;
+    window
 }
 
 /// How far along the way from `from` to `to` `pose` is, from 0 to 1.

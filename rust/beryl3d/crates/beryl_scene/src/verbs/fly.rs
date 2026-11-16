@@ -5,7 +5,7 @@
 //! - A spell cast onto the stack bows off the straight line, sideways on the screen, toward its
 //!   controller's edge of the table, the opponent's half as far and later, leaning the other way.
 //! - A permanent spell resolving is thrown up off the stack and drops onto its place
-//!   (`Shape::Thrown`).
+//!   (`Shape::Thrown`), rising no higher than the top of the window leaves room for.
 //! - The viewer's card played from their hand onto the table, such as a land, glides straight to
 //!   its place, drawn in front of the cards left in the hand: it looks on screen as the straight
 //!   line has it but is held nearer the eye until half way (`Shape::Lifted`), as the web draws a
@@ -15,8 +15,8 @@
 //! - The opponent's land drops out of their hand into the open table on the side away from
 //!   where it is going, tilted, and swings back along the table to its place.
 //! - A card the viewer draws alone flies from the library to a place beside the stack, bowing
-//!   up the screen, is held up there large to be read, sinking a little toward the hand, and
-//!   drops into the hand (the web's `heldUp` in `ui/src/stage/drawn.ts`). Each of several drawn
+//!   up the screen and leaning a little as it lifts off, is held up there large to be read,
+//!   sinking a little toward the hand, and drops into the hand (the web's `heldUp` in `ui/src/stage/drawn.ts`). Each of several drawn
 //!   together sweeps past that place without stopping (`swept`).
 //! - The opponent's draw drops toward the middle of the table and rises into their hand, and so
 //!   does a card no one can read that an effect puts in a hand from a library, farther.
@@ -27,7 +27,9 @@
 //! flight but a card's played or cast from the viewer's hand, a drawn card's or an opponent's
 //! discard. A card whose face changes turns over top over bottom at moments of its own
 //! (`Turning`): a drawn card as it leaves the library, any other a little
-//! before half way. The values are under `verbs.fly` in `data/beryl3d/space.json`.
+//! before half way. A card drawn alone turns at `held.turn` of its flight in, and grows on the
+//! screen toward its held size only once it is edge-on. The values are under `verbs.fly` in
+//! `data/beryl3d/space.json`.
 //!
 //! The web turns a card that lands face down the other way up the table (the opponent's draw)
 //! half round as it leaves, so that it never spins in the table's plane on the way. Beryl 3D's
@@ -118,6 +120,13 @@ const CAST_TURN: Turning = Turning {
 const DRAW_TURN: Turning = Turning {
     at: turn::draw::AT,
     each: turn::draw::EACH,
+};
+
+/// The turn of a card the viewer draws alone and holds up, as shares of its flight in, not of
+/// the step (the web's `HELD_TURNING` in `ui/src/stage/drawn.ts`).
+const HELD_TURN: Turning = Turning {
+    at: held::turn::AT,
+    each: held::turn::EACH,
 };
 
 /// The path a flight takes.
@@ -226,6 +235,25 @@ fn bow(bowing: &Bowing, toward: f32, (from, to): (Pose, Pose), camera: &Camera) 
     }
 }
 
+/// How far, in millimetres up the screen, a card can rise from `from` or `to`, whichever has
+/// less room, before its top passes the top of the window's safe area (the web's `room` in
+/// `lifted`, `ui/src/stage/lift.ts`, which keeps a permanent resolving into the opponent's back
+/// row from rising past the far edge of the table). Each is measured at that pose's depth.
+fn room((from, to): (Pose, Pose), camera: &Camera) -> f32 {
+    let right = camera.axes()[0];
+    let top = camera.window.safe_area.top;
+    [from, to]
+        .map(|pose| {
+            let (corners, _) = camera.card_box(&pose);
+            let highest = corners.iter().map(|c| c.y).fold(f32::INFINITY, f32::min);
+            let points =
+                camera.to_screen(pose.position + right).x - camera.to_screen(pose.position).x;
+            ((highest - top) / points).max(0.0)
+        })
+        .into_iter()
+        .fold(f32::INFINITY, f32::min)
+}
+
 /// Where the viewer's drawn card is held up to be read, for a card that rests at `rest` in
 /// the hand: upright beside the stack, `held.size` times as tall as a card of the hand, placed
 /// relative to the camera as the hand is (the web's `beside` in `ui/src/stage/desktop.ts`).
@@ -275,22 +303,38 @@ fn part(own: Interval, from: f32, to: f32) -> Interval {
 }
 
 /// The viewer's card drawn alone, as the web's `heldUp` has it, in three segments over the
-/// step: the flight in to where it is held, `held.in` of the step, bowed up the screen and
-/// turning over as it leaves the library; the hold, `held.hold` of the step, sinking evenly by
+/// step: the flight in to where it is held, `held.in` of the step, bowed up the screen and, if
+/// its face changes, turning over as it leaves the library at `held.turn` of the flight in,
+/// leaning `held.lean` degrees as it lifts off and growing on the screen only once it is
+/// edge-on (`Shape::Held`); the hold, `held.hold` of the step, sinking evenly by
 /// `held_sink` of the way toward the hand; and the drop into the hand, leaving that pace and
 /// quickening, with no jolt between the two.
 fn held_up(step: &StepIn<'_>, (from, to): (Pose, Pose), out: &mut StepOut<'_>, subject: Subject) {
     let up = held_place(step, to);
     let lowered = lerp(up, to, space::verbs::fly::HELD_SINK);
     let (flying, holding) = (held::IN, held::HOLD);
-    let turning = turns(from, to).then_some(Turning {
-        at: DRAW_TURN.at / flying,
-        each: DRAW_TURN.each / flying,
-    });
+    let camera = step.places.camera();
+    let bowed = bow(&HELD_IN, -1.0, (from, up), camera);
+    // The web leans and holds back the growth only of a card that turns over (its `heldUp`
+    // returns the bowed pose alone for a card already face up).
+    let (shape, turning) = if turns(from, to) {
+        let lean = held::LEAN.to_radians();
+        let eye = camera.eye.dot(bowed.axis);
+        (
+            Shape::Held {
+                bow: bowed,
+                lean,
+                eye,
+            },
+            Some(HELD_TURN),
+        )
+    } else {
+        (Shape::Bowed(bowed), None)
+    };
     out.segment(
         subject,
         Segment {
-            shape: Shape::Bowed(bow(&HELD_IN, -1.0, (from, up), step.places.camera())),
+            shape,
             turning,
             ..Segment::between(from, up, part(step.own, 0.0, flying), step.curve)
         },
@@ -404,8 +448,11 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
         },
         Path::Thrown => Segment {
             shape: Shape::Thrown {
-                // Up the screen by a share of the spell's width.
-                rise: axes[1] * thrown::HEIGHT * space::card::WIDTH * from.scale,
+                // Up the screen by a share of the spell's width, and no higher than the room
+                // over it.
+                rise: axes[1]
+                    * (thrown::HEIGHT * space::card::WIDTH * from.scale)
+                        .min(room((from, to), step.places.camera())),
                 aloft: thrown::SCALE * from.scale,
             },
             ..between

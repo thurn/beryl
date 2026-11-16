@@ -108,7 +108,7 @@ impl Curve {
 /// two poses.
 struct Along {
     /// How far along the straight way it is, from 0 to 1. Every part of the pose but the
-    /// position's offset and a `Thrown` path's scale is eased by it.
+    /// position's offset and a `Thrown` or `Held` path's scale is eased by it.
     u: f32,
     /// How far the position is off the straight way, in millimetres.
     offset: Vec3,
@@ -185,8 +185,8 @@ impl Segment {
         elapsed
     }
 
-    /// Where a travelling path is `elapsed` of its time through: a line, bowed or thrown, each
-    /// rising `arc` above the straight way at the middle of its time. The other shapes keep to
+    /// Where a travelling path is `elapsed` of its time through: a line, bowed, held or thrown,
+    /// each rising `arc` above the straight way at the middle of its time. The other shapes keep to
     /// the straight way, eased by the curve.
     fn along(&self, elapsed: f32) -> Along {
         let eased = self.curve.ease(elapsed);
@@ -198,6 +198,16 @@ impl Segment {
                     u: eased,
                     offset: rise + bow.offset * arch,
                     lean: Quat::from_axis_angle(bow.axis, bow.lean * arch),
+                    grow: 0.0,
+                }
+            }
+            Shape::Held { bow, lean, .. } => {
+                let arch = bow.arch(eased);
+                let leaning = (PI * (elapsed / self.edge_on()).min(1.0)).sin();
+                Along {
+                    u: eased,
+                    offset: rise + bow.offset * arch,
+                    lean: Quat::from_axis_angle(bow.axis, bow.lean * arch + lean * leaning),
                     grow: 0.0,
                 }
             }
@@ -238,6 +248,22 @@ impl Segment {
         }
     }
 
+    /// When, as a share of its time, it is edge-on as it turns over: its `turning`'s `at`, or
+    /// its start where it does not turn.
+    fn edge_on(&self) -> f32 {
+        self.turning.map_or(0.0, |turning| turning.at)
+    }
+
+    /// How much of its change from its start pose's size on the screen to its end pose's a
+    /// `Shape::Held` flight has made `elapsed` of its time through (the web interface's `grown`
+    /// in `ui/src/stage/drawn.ts`): none until it is edge-on, then faster and slower again along a
+    /// smoothstep until it arrives.
+    fn held_grown(&self, elapsed: f32) -> f32 {
+        let at = self.edge_on();
+        let after = ((elapsed - at) / (1.0 - at)).clamp(0.0, 1.0);
+        after * after * (3.0 - 2.0 * after)
+    }
+
     /// How much of its turn the object has made `elapsed` of its time through: by its
     /// `turning` if it has one, else as far as the eased progress `u`.
     fn turned(&self, elapsed: f32, u: f32) -> f32 {
@@ -255,6 +281,13 @@ impl Segment {
         let pose = between(&self.from, &self.to, u);
         let scale = match self.shape {
             Shape::Thrown { aloft, .. } => self.thrown_scale(aloft, elapsed),
+            Shape::Held { bow, eye, .. } => {
+                let depth = |at: Vec3| eye - at.dot(bow.axis);
+                let seen = |pose: &Pose| pose.scale / depth(pose.position);
+                let (from, to) = (seen(&self.from), seen(&self.to));
+                let position = pose.position + offset;
+                (from + (to - from) * self.held_grown(elapsed)) * depth(position)
+            }
             _ => pose.scale + grow,
         };
         let turned = self.turned(elapsed, u);
@@ -294,6 +327,7 @@ impl Segment {
         match self.shape {
             Shape::Line
             | Shape::Bowed(_)
+            | Shape::Held { .. }
             | Shape::Thrown { .. }
             | Shape::Swept { .. }
             | Shape::Lifted(_) => self.travelled(elapsed),
@@ -396,6 +430,7 @@ impl Segment {
         // `(to⁻¹ * now)^(1 / rest)`, where `now` is the pose's rotation before its lean.
         let unleaned = lean.inverse() * pose.rotation;
         let (axis, angle) = (to.rotation.inverse() * unleaned).to_axis_angle();
+        let grown = self.held_grown(elapsed);
         let scale = match &mut self.shape {
             Shape::Thrown { aloft, .. } if elapsed < thrown::SHRUNK => {
                 let share = elapsed / thrown::SHRUNK;
@@ -409,6 +444,8 @@ impl Segment {
                 }
                 self.from.scale
             }
+            // Set below, once the start's position is known.
+            Shape::Held { .. } => self.from.scale,
             _ => back(pose.scale - grow, to.scale),
         };
         // The turn goes by its own share where the segment has a `turning`; once that share is
@@ -419,8 +456,22 @@ impl Segment {
         } else {
             self.from.turn
         };
+        let position = (pose.position - offset - to.position * u) / rest;
+        // A held flight's size on the screen goes by its own share; once that share is whole
+        // the start's no longer matters.
+        let scale = match self.shape {
+            Shape::Held { bow, eye, .. } if grown < 1.0 - 1e-4 => {
+                let depth = |at: Vec3| eye - at.dot(bow.axis);
+                let (now, to) = (
+                    pose.scale / depth(pose.position),
+                    to.scale / depth(to.position),
+                );
+                (now - to * grown) / (1.0 - grown) * depth(position)
+            }
+            _ => scale,
+        };
         self.from = Pose {
-            position: (pose.position - offset - to.position * u) / rest,
+            position,
             rotation: to.rotation * Quat::from_axis_angle(axis, angle / rest),
             scale,
             opacity: back(pose.opacity, to.opacity),

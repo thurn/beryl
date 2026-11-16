@@ -13,7 +13,7 @@ use beryl_scene::data::space::verbs::fly::{held, turn};
 use beryl_scene::motion::{Track, pose_at};
 use beryl_scene::play::Show;
 use beryl_scene::play::record::ScriptRecord;
-use beryl_scene::pose::{Pose, Segment};
+use beryl_scene::pose::{Pose, Segment, Shape};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 
@@ -216,19 +216,86 @@ fn every_draw_plays_to_its_placement_with_no_jump_for_its_time() {
     }
 }
 
-/// A card drawn turns face up as it leaves the library: it shows its back until `turn.draw.at`
-/// of its flight and its face from then on.
+/// A card drawn alone turns face up as it leaves the library, at the web's `HELD_TURNING`
+/// moments of its flight in to where it is held (`held.turn`, as shares of `held.in` of the
+/// step): it has not begun turning just before `at - each`, is face up just after `at`, has
+/// finished just after `at + each`, and stays face up.
 #[test]
-fn a_drawn_card_is_face_up_from_the_draw_turn() {
+fn a_card_drawn_alone_turns_at_the_held_turn() {
     let (before, cards) = table();
     let slot = cards.library[0];
     let show = played(&before, after(&before, &[&[(slot, ZoneName::Hand)]]));
     let segments = segments(&show, slot);
     let step = span(&show, slot);
-    let face_down = |t: u64| pose_at(&segments, t).turn > 0.5;
-    assert!(face_down(at(step, turn::draw::AT - 0.01)));
-    assert!(!face_down(at(step, turn::draw::AT + 0.005)));
-    assert!(!face_down(step.1));
+    let turn_at = |share: f32| pose_at(&segments, at(step, held::IN * share)).turn;
+    let (edge_on, each) = (held::turn::AT, held::turn::EACH);
+    assert!(
+        turn_at(edge_on - each - 0.01) > 1.0 - 1e-4,
+        "not yet turning"
+    );
+    assert!(
+        turn_at(edge_on - 0.01) > 0.5,
+        "face down before it is edge-on"
+    );
+    assert!(turn_at(edge_on + 0.01) < 0.5, "face up after it is edge-on");
+    assert!(turn_at(edge_on + each + 0.01) < 1e-4, "turned");
+    assert!(pose_at(&segments, step.1).turn < 1e-4);
+}
+
+/// On its way to where it is held, a card drawn alone leans `held.lean` degrees
+/// counterclockwise, as the camera sees it, half way to being edge-on, and is upright again
+/// once it is edge-on; and on the window it stays about as wide as it was on the library until
+/// it is edge-on, and then grows to its held size (the web's `leaning` and `grown` in
+/// `ui/src/stage/drawn.ts`). The lean is measured against the same flight with no lean.
+#[test]
+fn a_card_drawn_alone_leans_as_it_lifts_off_and_grows_once_edge_on() {
+    let (before, cards) = table();
+    let slot = cards.library[0];
+    let show = played(&before, after(&before, &[&[(slot, ZoneName::Hand)]]));
+    let segments = segments(&show, slot);
+    let (flying, bow) = segments
+        .iter()
+        .find_map(|segment| match segment.shape {
+            Shape::Held { bow, .. } => Some((*segment, bow)),
+            _ => None,
+        })
+        .expect("the flight in is held");
+    let plain = Segment {
+        shape: Shape::Bowed(bow),
+        ..flying
+    };
+    let time = |share: f32| at((flying.start, flying.end()), share);
+    let lean = |share: f32| {
+        let (held, plain) = (flying.pose_at(time(share)), plain.pose_at(time(share)));
+        let (axis, angle) = (held.rotation * plain.rotation.inverse()).to_axis_angle();
+        angle.to_degrees() * axis.dot(bow.axis).signum()
+    };
+    let edge_on = held::turn::AT;
+    let peak = lean(edge_on / 2.0);
+    assert!((peak - held::LEAN).abs() < 0.1, "leans {peak} degrees");
+    assert!(lean(edge_on).abs() < 0.1, "upright when edge-on");
+    assert!(lean(0.8).abs() < 0.1, "upright after");
+    // Its width on the window: the length of its bottom edge, which stays across the screen
+    // as it turns over top over bottom.
+    let camera = show.table().camera();
+    let width = |share: f32| {
+        let corners = camera.card_box(&flying.pose_at(time(share))).0;
+        corners[0].distance(corners[1])
+    };
+    let (small, large) = (width(0.0), width(1.0));
+    assert!(large > small * 2.0, "it grows: {small} to {large} points");
+    for share in [edge_on / 2.0, edge_on] {
+        let seen = width(share) / small;
+        assert!(
+            (0.95..1.05).contains(&seen),
+            "{seen} times its width on the library {share} of the way in"
+        );
+    }
+    let growing = width(0.65);
+    assert!(
+        growing > small * 1.2 && growing < large,
+        "growing after: {growing}"
+    );
 }
 
 /// Where a pose's centre is on the window, in logical points.
@@ -333,15 +400,16 @@ fn a_draw_then_a_cast_fits_on_one_track() {
     }
 }
 
-/// When the window changes shape during a flight that turns over or sweeps past a place, the
-/// segment under way takes its new end pose and keeps the card where it was at that instant,
-/// face and size included.
+/// When the window changes shape during a flight that turns over, sweeps past a place or is
+/// held up, the segment under way takes its new end pose and keeps the card where it was at
+/// that instant, face, size and lean included.
 #[test]
 fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
-    use beryl_scene::pose::{Curve, Shape, Turning};
+    use beryl_scene::pose::{Bow, Curve, Shape, Turning};
     use beryl_scene::verbs::Interval;
     use glam::Vec3;
     let from = Pose {
+        position: Vec3::new(-200.0, 50.0, 0.0),
         turn: 1.0,
         ..Pose::default()
     };
@@ -350,42 +418,71 @@ fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
         scale: 1.5,
         ..Pose::default()
     };
-    let flight = Segment {
-        shape: Shape::Swept {
-            bulge: Vec3::new(40.0, 120.0, 60.0),
-            grow: 0.4,
+    let held = Shape::Held {
+        bow: Bow {
+            offset: Vec3::new(0.0, 60.0, 30.0),
+            sharpness: 1.3,
+            lean: 0.0,
+            axis: Vec3::new(0.0, -0.6, 0.8),
         },
-        turning: Some(Turning {
-            at: turn::draw::AT,
-            each: turn::draw::EACH,
-        }),
-        ..Segment::between(
-            from,
-            to,
-            Interval {
-                from: 0,
-                to: 700 * MS,
-            },
-            Curve::EASE_OUT,
-        )
+        lean: held::LEAN.to_radians(),
+        eye: 1500.0,
     };
-    for t in [60 * MS, 112 * MS, 150 * MS, 400 * MS] {
-        let now = flight.pose_at(t);
-        let mut moved = Segment {
-            to: Pose {
-                position: Vec3::new(260.0, -130.0, 30.0),
-                scale: 1.3,
-                ..to
+    let swept = Shape::Swept {
+        bulge: Vec3::new(40.0, 120.0, 60.0),
+        grow: 0.4,
+    };
+    for (shape, turning) in [
+        (
+            swept,
+            Turning {
+                at: turn::draw::AT,
+                each: turn::draw::EACH,
             },
-            ..flight
+        ),
+        (
+            held,
+            Turning {
+                at: held::turn::AT,
+                each: held::turn::EACH,
+            },
+        ),
+    ] {
+        let flight = Segment {
+            shape,
+            turning: Some(turning),
+            ..Segment::between(
+                from,
+                to,
+                Interval {
+                    from: 0,
+                    to: 700 * MS,
+                },
+                Curve::EASE_OUT,
+            )
         };
-        moved.through(t, now);
-        let kept = moved.pose_at(t);
-        assert!(
-            kept.position.distance(now.position) < 1e-2,
-            "{t}: {kept:?} {now:?}"
-        );
-        assert!((kept.scale - now.scale).abs() < 1e-4, "{t}");
-        assert!((kept.turn - now.turn).abs() < 1e-4, "{t}");
+        for t in [60 * MS, 112 * MS, 150 * MS, 210 * MS, 400 * MS] {
+            let now = flight.pose_at(t);
+            let mut moved = Segment {
+                to: Pose {
+                    position: Vec3::new(260.0, -130.0, 30.0),
+                    scale: 1.3,
+                    ..to
+                },
+                ..flight
+            };
+            moved.through(t, now);
+            let kept = moved.pose_at(t);
+            assert!(
+                kept.position.distance(now.position) < 1e-2,
+                "{shape:?} {t}: {kept:?} {now:?}"
+            );
+            assert!((kept.scale - now.scale).abs() < 1e-4, "{shape:?} {t}");
+            assert!((kept.turn - now.turn).abs() < 1e-4, "{shape:?} {t}");
+            assert!(
+                kept.rotation.dot(now.rotation).abs() > 1.0 - 1e-5,
+                "{shape:?} {t}"
+            );
+        }
     }
 }
