@@ -123,5 +123,10 @@
     "label": "Beryl 3D's export command writes the recordings on as many threads as its CPU tokens allow",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Every six hours each worktree's rust/target and rust/beryl3d/target delete the builds that newer builds of the same units replaced, deleting them in the background, so a reused slot holds one build instead of a day's worth",
+    "metric": "machine.saturation",
+    "expect": "down"
   }
 ]

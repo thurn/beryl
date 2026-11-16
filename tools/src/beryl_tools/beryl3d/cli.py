@@ -52,8 +52,9 @@ def run_lane(_args: argparse.Namespace) -> int:
 def warm_target() -> None:
     """Before each cargo command, clones `$BERYL_CACHE/b3d/target` into the workspace's
     `target` when the cache holds one and the workspace has none, or else prunes the workspace's
-    `target` when it is crowded (caches.tidy_target): a worktree that lives long held every
-    artifact of every build it ran, 46-53 GB in each of five worktrees on 2026-11-16."""
+    `target` when it is crowded, and sweeps the builds newer ones replaced every few hours
+    (caches.tidy_target): a worktree that lives long held every artifact of every build it
+    ran, 46-53 GB in each of five worktrees on 2026-11-16."""
     target = paths.WORKSPACE / "target"
     cached = paths.cache() / "target"
     if target.exists():
@@ -73,8 +74,8 @@ def warm_target() -> None:
             warm.restore_sources(repo_paths.REPO, target)
             warm.rehome_paths(target, repo_paths.REPO)
             # So that the builds' reads of units they do not rebuild count as uses, and
-            # `warm.prune` keeps those units (`warm.mark_unread`).
-            warm.mark_unread(target)
+            # `warm.prune` and `target_sweep.sweep` keep those units (`warm.mark`).
+            warm.mark(target)
 
 
 def cargo(arguments: list[str], env: dict[str, str] | None = None) -> int:

@@ -33,13 +33,13 @@ import shutil
 import subprocess
 import sys
 import time
-from contextlib import suppress
+from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import IO
 
-from . import paths, system, warm
+from . import paths, system, target_sweep, warm
 
 # The cache folders that hold one folder per checkout, named for it (`paths.REPO.name`):
 # shots.py's, specs.py's and motion.py's output.
@@ -94,15 +94,37 @@ def tidy_target(target: Path) -> bool:
     time in a fresh worktree on the same commit. Bisection trees are pruned only in low-disk
     mode ([`prune_bisections`]) and are covered here too.
     Cargo takes an exclusive lock on `<profile>/.cargo-lock` for a build (flock on Unix), so
-    holding it keeps a pruning from deleting files a build is writing or linking."""
+    holding the lock of every profile it prunes, clippy's own target's (`clippy/debug`) among
+    them, keeps a pruning from deleting files a build is writing or linking.
+
+    Every [`target_sweep.SWEEP_AFTER`], crowded or not, it also deletes the builds that newer
+    builds of the same units replaced (`target_sweep.sweep`): a Beryl 3D target with fewer
+    files than the threshold still held 26 GB, most of it replaced builds."""
     lock = target / "debug" / ".cargo-lock"
-    if not lock.parent.is_dir() or not crowded(target):
+    if not lock.parent.is_dir():
+        return False
+    now = time.time()
+    crowd = crowded(target)
+    if not crowd and not target_sweep.sweep_due(target, now):
         return False
     try:
-        with system.file_lock(lock, timeout=0):
-            warm.prune(target)
+        with ExitStack() as held:
+            for profile_lock in [
+                lock,
+                *(
+                    other
+                    for profile in warm.PROFILES
+                    for other in target.glob(f"{profile}/.cargo-lock")
+                    if other != lock
+                ),
+            ]:
+                held.enter_context(system.file_lock(profile_lock, timeout=0))
+            if target_sweep.sweep_due(target, now):
+                target_sweep.sweep(target)
+            if crowd:
+                warm.prune(target)
     except system.LockHeld:
-        warm.log(f"a cargo build holds {target}; left it crowded")
+        warm.log(f"a cargo build holds {target}; left it to the next build")
         return False
     return True
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import caches, paths, system, warm
+from beryl_tools import caches, paths, system, target_sweep, warm
 
 NOW: float = time.time()
 DAY: float = timedelta(days=1).total_seconds()
@@ -224,6 +224,7 @@ def test_a_target_under_the_threshold_is_left_alone(
 ) -> None:
     monkeypatch.setattr(caches, "CROWDED_DEPS", 10)
     checkout = crowded_checkout(tmp_path, 5)
+    (checkout / "rust" / "target" / target_sweep.MARK).touch()  # Swept just now.
     assert not caches.tidy_target(checkout / "rust" / "target")
     assert len(list((checkout / "rust" / "target" / "debug" / "deps").iterdir())) == 6
 

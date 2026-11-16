@@ -285,7 +285,7 @@ def ensure_target(checkout: Path, tauri: bool) -> bool:
         forget_module_caches(target)
         restore_sources(checkout, target)
         rehome_paths(target, checkout)
-        mark_unread(target)
+        mark(target)
     if tauri and not (target / TAURI).exists():
         for source in sources:
             if (source / TAURI).is_dir() and clone_into(source / TAURI, target / TAURI):
@@ -303,6 +303,14 @@ def rehome_paths(target: Path, checkout: Path) -> None:
     from .rehome import rehome
 
     log(f"pointed {rehome(target, checkout)} build records at {checkout}")
+
+
+def mark(target: Path) -> None:
+    """Marks every unit of the freshly cloned `target` unread and records when
+    (target_sweep.py, `mark`). Imported here, not at the top, as `rehome_paths` is."""
+    from .target_sweep import mark as mark_target
+
+    mark_target(target)
 
 
 def mark_unread(target: Path) -> int:

@@ -466,3 +466,10 @@ own busy figure for comparison. `cpu.py` explains how processes are attributed.
   cache in seconds (copy-on-write, `tools/src/beryl_tools/warm.py`), and
   removing the worktree saves them back. Plain `npm` or `cargo` commands don't
   do this, so run `just warm` (or `just ui-typecheck`, `just ui-unit`) first.
+- A slot's `rust/target` and `rust/beryl3d/target` would otherwise grow with
+  every change on staging, since cargo builds a crate under a new hash whenever
+  a crate it depends on changes. Every six hours, the next check or `just b3d`
+  command in a slot deletes the builds that a newer build of the same unit
+  replaced and that no command has read since the last sweep
+  (`tools/src/beryl_tools/target_sweep.py`). The newest build of every unit
+  stays, so the build after a sweep compiles nothing more.
