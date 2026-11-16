@@ -4,13 +4,17 @@
 //! overlap nor share a name, a notice lays nothing out once shown, `Show::passed` is when the
 //! banner ends, and a spell left to be read is drawn focused for its step.
 
+use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::GameUpdate;
+use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{ObjectId, Side, StackItem, Why, ZoneName};
 use beryl_protocol::script::{Act, Notice, Subject, Table as Played, time_script};
 use beryl_scene::agent::checks::{duplicates, overlap};
-use beryl_scene::agent::{Context, Layout};
+use beryl_scene::agent::{Context, Layout, Rule};
+use beryl_scene::driver::{Mode, Page, Recording};
 use beryl_scene::frame::{Frame, Role, StateBits, Wake};
 use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::play::record::Planted;
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::{Client, Config};
 use glam::Vec2;
@@ -112,6 +116,29 @@ fn life_box(frame: &Frame, name: &str) -> (Vec2, Vec2) {
     let min = corners.into_iter().reduce(Vec2::min).expect("four corners");
     let max = corners.into_iter().reduce(Vec2::max).expect("four corners");
     (min, max)
+}
+
+#[test]
+fn a_fault_can_be_planted_while_a_banner_outlasts_its_script() {
+    let [start, after] = scripted(vec![vec![turn(Side::You)]], |_| {});
+    let mut messages = vec![
+        FixtureMessage::game_update(&start),
+        FixtureMessage::game_update(&after),
+    ];
+    messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
+    let size = Size {
+        width: WIDTH,
+        height: HEIGHT,
+    };
+    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Desktop, size).unwrap();
+    let banner = page.steps().pop().expect("the turn banner");
+    page.plant(Planted::Crowded, banner.middle).unwrap();
+    assert!(
+        page.check_all(Mode::AtCheckTimes)
+            .faults
+            .iter()
+            .any(|fault| fault.rule == Rule::Crowded)
+    );
 }
 
 #[test]
