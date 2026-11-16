@@ -130,7 +130,7 @@ pub fn group_sets(text: &str, name: &str) -> Result<Vec<String>, String> {
 /// `text` without its reminder text, which is in parentheses
 /// ([CR 207.2a](https://yawgatog.com/resources/magic-rules/#R2072a)): "Reminder text is
 /// italicized text within parentheses that summarizes a rule that applies to that card."
-fn without_reminders(text: &str) -> String {
+pub(crate) fn without_reminders(text: &str) -> String {
     let mut out = String::new();
     let mut depth = 0usize;
     for c in text.chars() {

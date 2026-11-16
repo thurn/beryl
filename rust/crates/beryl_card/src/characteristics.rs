@@ -147,6 +147,13 @@ bitset! {
         /// damage, and they ignore the state-based action that checks for lethal damage (see
         /// rule 704.5g)."
         INDESTRUCTIBLE = 13,
+        /// [CR 702.73a](https://yawgatog.com/resources/magic-rules/#R70273a): "Changeling is a
+        /// characteristic-defining ability. 'Changeling' means 'This object is every creature
+        /// type.'" The bit only shows the keyword in the rules text. What it does is in the
+        /// face's printed subtypes, which `beryl_card_build` makes every creature type for a
+        /// face whose Oracle text has changeling. An effect that grants this bit alone would
+        /// change no creature type.
+        CHANGELING = 14,
         /// Landwalk for each basic land type, a bit each
         /// ([CR 702.14c](https://yawgatog.com/resources/magic-rules/#R70214c)): "A creature
         /// with landwalk can't be blocked as long as the defending player controls at least

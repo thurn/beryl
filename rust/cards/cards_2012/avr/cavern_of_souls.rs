@@ -140,6 +140,47 @@ pub mod scenarios {
                 Resolve,
                 ME.controls(Prop::FlashCreature, 1),
             ]),
+        // Universal Automaton has changeling, so it is an Elk as it is cast: the Cavern's colored
+        // mana pays its {1}, and Counterspell does nothing to it. The Cavern's {C} could pay it
+        // too, so two payments are offered, the colored first. The Elk in the library makes
+        // "Elk" one of the creature types the Cavern offers.
+        Scenario::new("Cavern of Souls' mana pays for a changeling of the chosen type")
+            .interaction(&[Card::UniversalAutomaton])
+            .hand(P0, &[Card::CavernOfSouls, Card::UniversalAutomaton])
+            .library(P0, &[Prop::Vanilla])
+            .battlefield(P1, &[Card::Island, Card::Island])
+            .hand(P1, &[Card::Counterspell])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Elk"),
+                ME.casts(Card::UniversalAutomaton),
+                ME.deciding(DecisionKind::PaymentPlan, 2),
+                ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 0 }),
+                ME.tapped(Card::CavernOfSouls, 1),
+                THEM.casts(Card::Counterspell),
+                Resolve,
+                THEM.has(Zone::Graveyard, Card::Counterspell, 1),
+                ME.controls(Card::UniversalAutomaton, 1),
+            ]),
+        // A changeling is every creature type, including one that no card of the game names.
+        Scenario::new("Cavern of Souls' mana pays for a changeling of another type")
+            .interaction(&[Card::UniversalAutomaton])
+            .hand(P0, &[Card::CavernOfSouls, Card::UniversalAutomaton])
+            .library(P0, &[Prop::Vanilla])
+            .battlefield(P1, &[Card::Island, Card::Island])
+            .hand(P1, &[Card::Counterspell])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Another creature type"),
+                ME.casts(Card::UniversalAutomaton),
+                ME.deciding(DecisionKind::PaymentPlan, 2),
+                ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 0 }),
+                ME.tapped(Card::CavernOfSouls, 1),
+                THEM.casts(Card::Counterspell),
+                Resolve,
+                THEM.has(Zone::Graveyard, Card::Counterspell, 1),
+                ME.controls(Card::UniversalAutomaton, 1),
+            ]),
         // Force of Will counters with the same effect as Counterspell, and the rider stops it too.
         Scenario::new("Cavern of Souls' creature spell can't be countered by Force of Will")
             .interaction(&[Card::ForceOfWill])

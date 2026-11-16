@@ -5,7 +5,7 @@ mod complete;
 use crate::complete::Group;
 use crate::files::{card_files, set_crates};
 use crate::names::{camel, card_module, constant, constant_of_camel, set_module};
-use crate::printed::Subtypes;
+use crate::printed::{Subtypes, face_source};
 use crate::store::Store;
 use crate::{Printed, names_source, registry_source, set_crate_source, shared_source};
 
@@ -369,5 +369,39 @@ fn typed_or_unknown_characteristics_fail_the_build() {
     assert!(
         error.contains("Plains: no subtype Plains in data/catalogs.json"),
         "{error}"
+    );
+}
+
+/// A face with changeling, a characteristic-defining ability, prints every creature type, with
+/// its printed ones too; reminder text and other words don't make one.
+#[test]
+fn a_changeling_face_is_every_creature_type() {
+    let face = |text: &str| -> beryl_card_store::Face {
+        serde_json::from_str(&face(
+            "Shapeshifter",
+            "Creature — Human",
+            &format!(",\"oracle_text\":{text:?}"),
+        ))
+        .unwrap()
+    };
+    let every = "\n    .subtypes(beryl_card::Subtypes::every(beryl_card::Types::CREATURE)\
+                 .union(beryl_card::Subtypes::of(&[beryl_card::Subtype::Human])))";
+    for text in [
+        "Changeling (This card is every creature type.)",
+        "Flying, changeling",
+    ] {
+        let source = face_source(&face(text), 0, "normal", &subtypes()).unwrap();
+        assert!(source.contains(every), "{text}: {source}");
+    }
+    let source = face_source(
+        &face("Creatures you control have changeling."),
+        0,
+        "normal",
+        &subtypes(),
+    )
+    .unwrap();
+    assert!(
+        source.contains("\n    .subtypes(beryl_card::Subtypes::of(&[beryl_card::Subtype::Human]))"),
+        "{source}"
     );
 }

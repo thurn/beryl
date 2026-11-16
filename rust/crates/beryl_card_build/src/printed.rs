@@ -183,6 +183,20 @@ fn strength(value: &str) -> Option<i8> {
     value.parse().ok()
 }
 
+/// Whether `face`'s rules text has changeling, a characteristic-defining ability that holds in
+/// every zone ([CR 702.73a]): "Changeling is a characteristic-defining ability. 'Changeling'
+/// means 'This object is every creature type.' This ability works everywhere, even outside the
+/// game." So the face's printed subtypes are every creature type. A card file could not say
+/// that, since it never types a subtype. The card file still writes `Keywords::CHANGELING`,
+/// which its rules text shows.
+///
+/// [CR 702.73a]: https://yawgatog.com/resources/magic-rules/#R70273a
+fn is_changeling(face: &Face) -> bool {
+    let text = crate::complete::without_reminders(face.oracle_text.as_deref().unwrap_or_default());
+    text.split(['\n', ','])
+        .any(|words| words.trim().eq_ignore_ascii_case("changeling"))
+}
+
 /// The source of a `beryl_card::Face` constant holding `face`'s printed characteristics: the
 /// face at `index` of a card or token of `layout`. A front face takes its card's name, so
 /// only a later face names itself; the back face of a transforming card is never cast
@@ -222,9 +236,16 @@ pub fn face_source(
         .into_iter()
         .map(|variant| format!("beryl_card::Subtype::{variant}"))
         .collect();
-    if !variants.is_empty() {
-        let of = variants.join(", ");
-        write!(out, "\n    .subtypes(beryl_card::Subtypes::of(&[{of}]))").unwrap();
+    let of = (!variants.is_empty())
+        .then(|| format!("beryl_card::Subtypes::of(&[{}])", variants.join(", ")));
+    match (is_changeling(face), of) {
+        (true, of) => {
+            let every = "beryl_card::Subtypes::every(beryl_card::Types::CREATURE)";
+            let all = of.map_or(every.to_string(), |of| format!("{every}.union({of})"));
+            write!(out, "\n    .subtypes({all})").unwrap();
+        }
+        (false, Some(of)) => write!(out, "\n    .subtypes({of})").unwrap(),
+        (false, None) => {}
     }
     // A color indicator sets a face's color where its cost cannot
     // ([CR 202.2e](https://yawgatog.com/resources/magic-rules/#R2022e)): "That object is each
