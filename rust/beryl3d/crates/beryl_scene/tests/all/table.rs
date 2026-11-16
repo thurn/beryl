@@ -474,7 +474,7 @@ fn inner_corners(corners: [Vec2; 4], side: Side) -> [Vec2; 2] {
 
 #[test]
 fn hands_of_any_size_lie_inside_the_window_each_card_with_its_strip_uncovered() {
-    for count in [1, 5, 7, 10, 60] {
+    for count in [1, 2, 5, 7, 10, 20, 60] {
         let view = hands(count);
         for (width, height) in DESKTOP_WINDOWS {
             let camera = Camera::fit(DESKTOP.camera, window(width, height));

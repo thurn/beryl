@@ -263,3 +263,22 @@ fn the_viewers_cards_at_rest_are_interactive_and_judged_reachable() {
     let faults = reachable(&frame, &context);
     assert!(faults.len() < cards.len(), "{faults:?}");
 }
+
+#[test]
+fn a_raised_hand_card_leaves_its_neighbours_reachable() {
+    let card = "card \"Memory Lapse\"";
+    let mut page = page(&[sample()]);
+    let context = Context {
+        recording: "sample".to_owned(),
+        seat: Side::You,
+        layout: Layout::Desktop,
+        size: WINDOW,
+        safe_area: Insets::default(),
+        at: 0,
+    };
+    let at_rest = reachable(page.frame(), &context);
+    page.hover(card);
+    page.step(ms(100));
+    let raised = reachable(page.frame(), &context);
+    assert_eq!(raised.len(), at_rest.len(), "{raised:#?}");
+}

@@ -24,6 +24,8 @@ SOURCES: tuple[str, ...] = (
     "docs/sample-decks",
     "ui/src/generated",
     "ui/fixtures.json",
+    # `beryl_scene`'s build script reads the sound names from it.
+    "ui/src/audio/manifest.json",
 )
 # In the machine: where the sources arrive, and the copy the gates build from.
 INCOMING = "$HOME/b3d-incoming"

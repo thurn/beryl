@@ -28,7 +28,11 @@ pub(super) struct Grip {
     pub at: Vec2,
     /// Whether the open prompt lets this card be picked up (`Client`'s `holdable`).
     pub holdable: bool,
-    /// Whether the press has travelled `DRAG_THRESHOLD_POINTS` and picked the card up.
+    /// Whether the press has travelled `DRAG_THRESHOLD_POINTS` from where it began. A press
+    /// that has is a drag, which is never a click on its card, whether or not it picked the
+    /// card up: a drag across a battlefield row scrolls the row (`rows`).
+    pub moved: bool,
+    /// Whether the press has picked the card up: it is holdable and has `moved`.
     pub held: bool,
 }
 
@@ -37,8 +41,9 @@ impl Grip {
     /// `DRAG_THRESHOLD_POINTS` from where it began, as the web interface's `Pointer` has it.
     pub fn moved(&mut self, at: Vec2) {
         self.at = at;
-        if self.holdable && self.start.distance(at) >= data::DRAG_THRESHOLD_POINTS {
-            self.held = true;
+        if self.start.distance(at) >= data::DRAG_THRESHOLD_POINTS {
+            self.moved = true;
+            self.held |= self.holdable;
         }
     }
 }

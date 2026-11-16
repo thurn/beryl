@@ -265,3 +265,37 @@ fn a_card_the_prompt_does_not_mark_cannot_be_picked_up() {
     assert!(!state.has(StateBits::HELD));
     assert!(centre.distance(start) < 0.01, "it stays where it lies");
 }
+
+#[test]
+fn a_drag_that_picks_nothing_up_clicks_nothing_and_a_press_clicks() {
+    // A drag on a card no prompt lets the player pick up, such as one that scrolls a
+    // battlefield row, ends with no click, as the web interface's `Pointer.release` has it.
+    let mut table = Table::new();
+    let island = "Island";
+    let (_, start) = table.card(island);
+    table.pointer(PointerPhase::Down, start);
+    table.now += 16 * MILLISECOND;
+    table.pointer(PointerPhase::Move, start + DRAG);
+    table.frame();
+    table.pointer(PointerPhase::Up, start + DRAG);
+    table.frame();
+    assert_eq!(table.commands(), []);
+    // A press that does not travel the drag threshold is a click on the card.
+    table.now += 16 * MILLISECOND;
+    table.pointer(PointerPhase::Down, start);
+    table.pointer(PointerPhase::Up, start + Vec2::new(2.0, 0.0));
+    table.frame();
+    let clicked = table.commands();
+    assert!(
+        matches!(
+            clicked.as_slice(),
+            [SessionCommand::Click(ClickRequest {
+                click: Click::On {
+                    on: Subject::Object { .. }
+                },
+                ..
+            })]
+        ),
+        "{clicked:?}"
+    );
+}

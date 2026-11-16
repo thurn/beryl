@@ -168,6 +168,7 @@ impl Pointer {
             start: at,
             at,
             holdable,
+            moved: false,
             held: false,
         });
         self.lean = Lean::FLAT;
@@ -373,7 +374,9 @@ pub(crate) fn update(
 
 /// Decides what the press on a card that ended since the last frame means, at `now`, and
 /// returns the card it clicked, as the web interface's `Pointer.release` and the prompt's
-/// `#dropped` do. A press that never picked its card up is a click on it. A card held and let go
+/// `#dropped` do. A press that never travelled `DRAG_THRESHOLD_POINTS` is a click on its card;
+/// one that travelled that far without picking its card up, such as a drag that scrolled a
+/// battlefield row, is not, as `Pointer.release` has it (`unheldDrag`). A card held and let go
 /// higher on the screen than the top of where it rests, so over the battlefield or the stack, is
 /// a click on it too, and one let go lower, back over the hand, is not. A held card let go falls
 /// back from where it was to where it rests (`rest`), clicked or not, unless a script moves it
@@ -385,7 +388,7 @@ fn let_go(
 ) -> Option<usize> {
     let (grip, cancelled) = pointer.let_go.take()?;
     if !grip.held {
-        return (!cancelled).then_some(grip.slot);
+        return (!cancelled && !grip.moved).then_some(grip.slot);
     }
     pointer.fall = Some(Fall {
         slot: grip.slot,
