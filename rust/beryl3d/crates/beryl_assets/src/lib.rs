@@ -7,8 +7,9 @@
 //! [`MatchFaces`] says where each is found. The face workers ([`Preparer`])
 //! read each from the compressed cache ([`CacheKey`]) or, on a miss, decode its scan from
 //! `beryl_art`'s scan cache, scale it to board or full size, compress it with its mipmaps
-//! ([`Format`]) and cache the result. A face with no downloaded scan is drawn as its name on a
-//! colored field.
+//! ([`Format`]) and cache the result. A face with no downloaded scan is drawn as Beryl's own
+//! card frame ([`frame`]), and its scan replaces that picture once the download queue fetches
+//! it.
 //!
 //! The glyph worker ([`glyphs::GlyphWorker`]) rasterizes glyphs and the flat layer's icons
 //! ([`icons`]) into the atlas's pages.
@@ -16,11 +17,11 @@
 mod cache;
 mod encode;
 mod faces;
+mod frame;
 pub mod glyphs;
 pub mod icons;
 pub mod light;
 pub mod packer;
-mod placeholder;
 mod prepare;
 mod svg;
 
@@ -31,7 +32,7 @@ pub use encode::{ENCODER_VERSION, EncodeError, Format, Layer, decode, dimensions
 #[cfg(feature = "decklists")]
 pub use faces::decklist_faces;
 pub use faces::{CARD_BACK, MatchFace, MatchFaces};
-pub use placeholder::placeholder;
+pub use frame::{frame, frames_drawn_on_this_thread, plate_over};
 pub use prepare::{
     Config, FULL_LAYERS, Full, Preparer, Source, default_workers, faces_built_on_this_thread,
 };

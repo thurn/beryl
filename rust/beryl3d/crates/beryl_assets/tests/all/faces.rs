@@ -11,7 +11,7 @@ use std::time::Duration;
 use beryl_art::{ArtCache, Origins};
 use beryl_assets::{
     CacheKey, Config, ENCODER_VERSION, Format, Full, Layer, Prepared, Preparer, Source, Upload,
-    decklist_faces, faces_built_on_this_thread,
+    decklist_faces, faces_built_on_this_thread, frames_drawn_on_this_thread,
 };
 use beryl_scene::input::{AssetReady, FaceId, FaceSize};
 
@@ -131,7 +131,7 @@ fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
     assert!(prepared.iter().all(|p| face_layer(p).1 == Source::Encoded));
     drop(first);
 
-    // The scans go: a face read from anywhere but the compressed cache would be a placeholder.
+    // The scans go: a face read from anywhere but the compressed cache would be a drawn frame.
     fs::remove_dir_all(scratch.0.join("art")).unwrap();
     let mut second = preparer(&scratch.0);
     let results = second.prepare_match(&faces, &formats);
@@ -158,15 +158,15 @@ fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
 }
 
 #[test]
-fn a_face_with_no_scan_is_a_placeholder_and_is_not_cached() {
-    let scratch = Scratch::new("placeholder");
+fn a_face_with_no_scan_is_drawn_and_is_not_cached() {
+    let scratch = Scratch::new("drawn");
     let mut assets = preparer(&scratch.0);
     let results = assets.prepare_match(&decklist_faces(&[&wu_control()]), &[Format::Etc2Rgba8]);
     let count = assets.faces().unwrap().faces.len();
     let prepared = receive(&results, count);
     for prepared in &prepared {
         let (layer, source) = face_layer(prepared);
-        assert_eq!(source, Source::Placeholder);
+        assert_eq!(source, Source::Drawn);
         assert_eq!((layer.width, layer.height), (256, 360));
         assert_eq!(layer.format, Format::Etc2Rgba8);
         // A 256 by 360 face halves to 1 by 1 in nine levels; 8 bits a pixel at the top.
@@ -175,6 +175,63 @@ fn a_face_with_no_scan_is_a_placeholder_and_is_not_cached() {
     }
     assert!(!scratch.0.join("faces").exists());
     assert_eq!(faces_built_on_this_thread(), 0);
+    assert_eq!(frames_drawn_on_this_thread(), 0);
+}
+
+/// An address that answers every request with `body`, until the test ends.
+fn serve(body: Vec<u8>) -> String {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut request = [0; 4096];
+            let _ = stream.read(&mut request);
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\
+                 Connection: close\r\n\r\n",
+                body.len()
+            );
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.write_all(&body);
+        }
+    });
+    address
+}
+
+#[test]
+fn a_drawn_face_is_sent_again_from_its_scan_once_the_scan_downloads() {
+    let scratch = Scratch::new("late");
+    let origin = serve(scan());
+    let origins = Origins {
+        cards: &origin,
+        backs: &origin,
+    };
+    let mut assets = Preparer::new(Config {
+        art: Arc::new(ArtCache::new(scratch.0.join("art"), origins)),
+        faces_dir: scratch.0.join("faces"),
+        workers: 2,
+        wake: Arc::new(|| {}),
+        start: || {},
+    });
+    let results = assets.prepare_match(&decklist_faces(&[&[(1, "Island")]]), &[Format::Rgba8]);
+    let count = assets.faces().unwrap().faces.len();
+    // Every face is drawn first, since no scan is cached, and then sent again, under the same
+    // face and layer, once the download queue has fetched its scan. The renderer holds such a
+    // face until no card is moving (`faces_that_arrive_during_play_wait_for_a_still_client` in
+    // beryl_render).
+    let drawn = receive(&results, count);
+    assert!(drawn.iter().all(|p| face_layer(p).1 == Source::Drawn));
+    let late = receive(&results, count);
+    assert!(late.iter().all(|p| face_layer(p).1 == Source::Encoded));
+    let mut first: Vec<_> = drawn.iter().map(|p| p.ready.clone()).collect();
+    let mut again: Vec<_> = late.iter().map(|p| p.ready.clone()).collect();
+    first.sort_by_key(|ready| format!("{ready:?}"));
+    again.sort_by_key(|ready| format!("{ready:?}"));
+    assert_eq!(first, again);
+    assert_eq!(faces_built_on_this_thread(), 0);
+    assert_eq!(frames_drawn_on_this_thread(), 0);
 }
 
 #[test]

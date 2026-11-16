@@ -6,6 +6,12 @@
 //! recently used first. Each finished face arrives on the match's channel as a [`Prepared`],
 //! after which the worker calls the host's `wake`.
 //!
+//! A face whose scan has not been downloaded is drawn as Beryl's own card frame, and its scan
+//! is queued for download. One more thread waits for those downloads in the order they were
+//! queued and, as each scan lands, sends the face again made from its scan, under the same
+//! layer. The host holds such a face until the client is still (`Renderer::hold`), so that a
+//! card never changes its picture in the middle of a flight.
+//!
 //! The thread that calls the `Preparer` only lists faces and sends jobs down a channel; it takes
 //! no lock that a worker takes. Workers share the job queue's lock among themselves.
 
@@ -17,14 +23,14 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
-use beryl_art::{ArtCache, Fetch};
+use beryl_art::{ArtCache, ArtError, Fetch};
 use beryl_scene::faces::FaceList;
 use beryl_scene::input::{AssetReady, FaceId, FaceSize};
 
 use crate::cache::{self, CacheKey};
 use crate::encode::{ENCODER_VERSION, Format, Layer, decode, encode};
-use crate::faces::MatchFaces;
-use crate::placeholder::placeholder;
+use crate::faces::{MatchFace, MatchFaces};
+use crate::frame::{frame, plate_over};
 use crate::{Prepared, Upload};
 
 /// How many full-size faces are kept: the layers of the full-size texture array.
@@ -60,9 +66,10 @@ pub enum Source {
     Cache,
     /// Decoded from its scan and compressed, then written to the compressed cache.
     Encoded,
-    /// Drawn because its scan has not been downloaded. It is not cached: a later match draws
-    /// the scan once the download queue has fetched it.
-    Placeholder,
+    /// Drawn as Beryl's card frame because its scan has not been downloaded. It is not cached:
+    /// the face is sent again from its scan when the download lands, and a later match reads
+    /// the scan.
+    Drawn,
 }
 
 /// The answer to [`Preparer::full`].
@@ -92,6 +99,15 @@ struct Match {
     faces: MatchFaces,
     format: Format,
     results: Sender<Prepared>,
+}
+
+/// Where the download queue answers with a scan's file, or the failure.
+type Download = Receiver<Result<PathBuf, ArtError>>;
+
+/// A face drawn as Beryl's frame, waiting for its scan's download.
+struct Late {
+    job: Job,
+    answer: Download,
 }
 
 struct Job {
@@ -139,7 +155,8 @@ pub struct Preparer {
 }
 
 impl Preparer {
-    /// Starts `config.workers` worker threads (at least one).
+    /// Starts `config.workers` worker threads (at least one), and the thread that waits for
+    /// late scans.
     #[must_use]
     pub fn new(config: Config) -> Self {
         let (jobs, queue) = mpsc::channel();
@@ -153,18 +170,30 @@ impl Preparer {
             send: Mutex::new(()),
         });
         let start = config.start;
+        let (late, waiting) = mpsc::channel();
         let workers = (0..config.workers.max(1))
             .map(|i| {
                 let shared = Arc::clone(&shared);
+                let late = late.clone();
                 thread::Builder::new()
                     .name(format!("beryl-assets-{i}"))
                     .spawn(move || {
                         start();
-                        work(&shared);
+                        work(&shared, &late);
                     })
                     .expect("failed to start an asset worker")
             })
             .collect();
+        // Not joined: it may be waiting on a download when the preparer drops. It ends once the
+        // workers have, after dropping what it still holds as no longer wanted.
+        let watcher = Arc::clone(&shared);
+        thread::Builder::new()
+            .name("beryl-assets-late".to_owned())
+            .spawn(move || {
+                start();
+                watch(&watcher, &waiting);
+            })
+            .expect("failed to start the late scan thread");
         Self {
             jobs: Some(jobs),
             workers,
@@ -254,12 +283,14 @@ impl Preparer {
 }
 
 impl Drop for Preparer {
-    /// Closes the queue and waits for each worker to finish the face it is on.
+    /// Closes the queue and waits for each worker to finish the faces queued. Faces still
+    /// waiting for their scans are dropped.
     fn drop(&mut self) {
         self.jobs = None;
         for worker in self.workers.drain(..) {
             let _ = worker.join();
         }
+        self.shared.current.store(0, Ordering::SeqCst);
     }
 }
 
@@ -273,7 +304,7 @@ impl Shared {
     }
 }
 
-fn work(shared: &Shared) {
+fn work(shared: &Shared, late: &Sender<Late>) {
     loop {
         let job = {
             let Ok(queue) = shared.jobs.lock() else {
@@ -287,72 +318,128 @@ fn work(shared: &Shared) {
         if !shared.wanted(&job) {
             continue;
         }
-        let Some((layer, source)) = build(shared, &job) else {
+        let Some((layer, source, answer)) = build(shared, &job) else {
             continue;
         };
-        let ready = AssetReady::Face {
-            face: job.face,
-            size: job.size,
-            layer: job.slot.map_or(job.face.0, |(layer, _)| layer),
-        };
-        let sent = {
-            let _sending = shared.send.lock();
-            // The receiver may have been dropped; nobody else wants the face.
-            shared.wanted(&job)
-                && job
-                    .game
-                    .results
-                    .send(Prepared {
-                        upload: Upload::Face { layer, source },
-                        ready,
-                    })
-                    .is_ok()
-        };
-        if sent {
-            (shared.wake)();
+        deliver(shared, &job, layer, source);
+        if let Some(answer) = answer {
+            // The late thread ends only after every worker, so a send cannot fail.
+            let _ = late.send(Late { job, answer });
         }
     }
 }
 
-/// The face's layer from the compressed cache, or else made from its scan and cached, or else a
-/// placeholder. `None`, with a log line, when the encoder fails.
-fn build(shared: &Shared, job: &Job) -> Option<(Layer, Source)> {
-    FACES_BUILT.with(|built| built.set(built.get() + 1));
-    let face = job.game.faces.get(job.face)?;
-    let format = job.game.format;
-    let file = CacheKey {
+/// Sends a finished face on its match's channel, if it is still wanted, and wakes the host.
+fn deliver(shared: &Shared, job: &Job, layer: Layer, source: Source) {
+    let ready = AssetReady::Face {
+        face: job.face,
+        size: job.size,
+        layer: job.slot.map_or(job.face.0, |(layer, _)| layer),
+    };
+    let sent = {
+        let _sending = shared.send.lock();
+        // The receiver may have been dropped; nobody else wants the face.
+        shared.wanted(job)
+            && job
+                .game
+                .results
+                .send(Prepared {
+                    upload: Upload::Face { layer, source },
+                    ready,
+                })
+                .is_ok()
+    };
+    if sent {
+        (shared.wake)();
+    }
+}
+
+/// Waits for each drawn face's scan, in the order the download queue fetches them, and sends
+/// the face again made from its scan. A face no longer wanted (its match or its full-size layer
+/// replaced) is dropped without waiting.
+fn watch(shared: &Shared, waiting: &Receiver<Late>) {
+    for Late { job, answer } in waiting {
+        if !shared.wanted(&job) {
+            continue;
+        }
+        let Ok(Ok(path)) = answer.recv() else {
+            continue;
+        };
+        if !shared.wanted(&job) {
+            continue;
+        }
+        let Some(face) = job.game.faces.get(job.face) else {
+            continue;
+        };
+        FACES_BUILT.with(|built| built.set(built.get() + 1));
+        let Some(pixels) = fs::read(path)
+            .ok()
+            .and_then(|bytes| from_scan(&bytes, face, job.size))
+        else {
+            continue;
+        };
+        let file = cache_file(shared, &job, face);
+        if let Some(layer) = compress(&pixels, &job, face, Some(&file)) {
+            deliver(shared, &job, layer, Source::Encoded);
+        }
+    }
+}
+
+/// Where the face of `job` is kept in the compressed cache.
+fn cache_file(shared: &Shared, job: &Job, face: &MatchFace) -> PathBuf {
+    CacheKey {
         image: &face.key,
         size: job.size,
-        format,
+        format: job.game.format,
         encoder: ENCODER_VERSION,
     }
-    .file(&shared.faces_dir);
-    if let Some(layer) = cache::read(&file, format) {
-        return Some((layer, Source::Cache));
-    }
-    // A scan not in the cache is queued for download and the receiver dropped: the queue
-    // still fetches it, so the next match has it.
-    let scan = match shared.art.request(&face.scan) {
-        Ok(Fetch::Cached(path)) => fs::read(path).ok(),
-        Ok(Fetch::Queued(_)) | Err(_) => None,
-    };
-    let decoded = scan.and_then(|bytes| decode(&bytes, job.size).ok());
-    let (pixels, source) = if let Some(pixels) = decoded {
-        (pixels, Source::Encoded)
-    } else {
-        let name = face.names.first().map_or("", String::as_str);
-        (
-            placeholder(name, &face.colors, job.size),
-            Source::Placeholder,
-        )
-    };
-    let layer = encode(&pixels, job.size, format)
+    .file(&shared.faces_dir)
+}
+
+/// The face's pixels from its scan's bytes: the scan scaled to the face's size, and for a face
+/// that shows an ability on the stack, its plate drawn over it.
+fn from_scan(bytes: &[u8], face: &MatchFace, size: FaceSize) -> Option<Vec<u8>> {
+    let pixels = decode(bytes, size).ok()?;
+    Some(match &face.plate {
+        Some(plate) => plate_over(pixels, plate, size),
+        None => pixels,
+    })
+}
+
+/// The face's pixels compressed with their mipmaps and, when `file` is given, written to the
+/// compressed cache. `None`, with a log line, when the encoder fails.
+fn compress(pixels: &[u8], job: &Job, face: &MatchFace, file: Option<&PathBuf>) -> Option<Layer> {
+    let layer = encode(pixels, job.size, job.game.format)
         .inspect_err(|e| eprintln!("beryl_assets: could not compress {}: {e}", face.key))
         .ok()?;
-    if source == Source::Encoded
-        && let Err(e) = cache::write(&file, &layer)
+    if let Some(file) = file
+        && let Err(e) = cache::write(file, &layer)
     {
         eprintln!("beryl_assets: could not cache {}: {e}", file.display());
     }
-    Some((layer, source))
+    Some(layer)
+}
+
+/// The face's layer from the compressed cache, or else made from its scan and cached, or else
+/// drawn as Beryl's frame, with the receiver of its scan's download when one was queued.
+/// `None`, with a log line, when the encoder fails.
+fn build(shared: &Shared, job: &Job) -> Option<(Layer, Source, Option<Download>)> {
+    FACES_BUILT.with(|built| built.set(built.get() + 1));
+    let face = job.game.faces.get(job.face)?;
+    let format = job.game.format;
+    let file = cache_file(shared, job, face);
+    if let Some(layer) = cache::read(&file, format) {
+        return Some((layer, Source::Cache, None));
+    }
+    let (scan, answer) = match shared.art.request(&face.scan) {
+        Ok(Fetch::Cached(path)) => (fs::read(path).ok(), None),
+        Ok(Fetch::Queued(answer)) => (None, Some(answer)),
+        Err(_) => (None, None),
+    };
+    if let Some(pixels) = scan.and_then(|bytes| from_scan(&bytes, face, job.size)) {
+        let layer = compress(&pixels, job, face, Some(&file))?;
+        return Some((layer, Source::Encoded, None));
+    }
+    let layer = compress(&frame(face, job.size), job, face, None)?;
+    Some((layer, Source::Drawn, answer))
 }

@@ -190,6 +190,7 @@ dependencies = [
  "beryl_scene",
  "ctt",
  "image",
+ "parley",
  "swash",
  "tiny-skia",
 ]

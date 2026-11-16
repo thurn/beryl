@@ -5,8 +5,8 @@
 //!
 //! Before its first picture it has `beryl_assets`' workers prepare every face of the recording's
 //! match and uploads them all, as the app does behind its loading screen (docs/beryl-3d.md,
-//! "Preparation"), so a card shows its scan when the scan cache has it and a placeholder with its
-//! name when not. It never downloads a scan, so a picture depends only on what the cache holds.
+//! "Preparation"), so a card shows its scan when the scan cache has it and Beryl's drawn card
+//! frame when not. It never downloads a scan, so a picture depends only on what the cache holds.
 //!
 //! Text is drawn from glyphs that `beryl_assets`' glyph worker rasterizes on its own thread:
 //! the printable ASCII characters of every type style before the first picture, and before each
@@ -40,10 +40,17 @@ pub struct Scans {
 impl Scans {
     /// The app's own caches, in the directory Tauri gives the app: `~/Library/Caches/<app>` on
     /// macOS, `%LOCALAPPDATA%\<app>` on Windows and `$XDG_CACHE_HOME/<app>` (or `~/.cache`)
-    /// elsewhere.
+    /// elsewhere. `BERYL3D_SCANS` names another directory to use in their place, such as an
+    /// empty one, to see every face drawn as Beryl's frame.
     #[must_use]
     pub fn app() -> Self {
         let var = |name: &str| std::env::var_os(name).map(PathBuf::from);
+        if let Some(dir) = var("BERYL3D_SCANS") {
+            return Self {
+                art: dir.join("art"),
+                faces: dir.join("faces"),
+            };
+        }
         let home = || var("HOME").unwrap_or_default();
         let base = if cfg!(windows) {
             var("LOCALAPPDATA").unwrap_or_default()
@@ -174,7 +181,7 @@ impl Headless {
 }
 
 /// Makes `renderer`'s face arrays for the faces of `list` and uploads every face, as the asset
-/// workers read it from the compressed cache, compress it from its scan or draw its placeholder.
+/// workers read it from the compressed cache, compress it from its scan or draw its frame.
 /// This thread only waits and uploads: the workers do every file read, decode and compression.
 fn load_faces(renderer: &mut Renderer, list: &FaceList, scans: &Scans) {
     let format = Format::choose(&renderer.formats());

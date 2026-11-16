@@ -3,8 +3,9 @@
 //! uploaded only as fast as the client's animations allow. Every test runs on a device with
 //! wgpu's default limits and on one with its downlevel limits.
 
-use beryl_assets::{Format, Layer, Prepared, Source, Upload, dimensions, encode};
+use beryl_assets::{Format, Layer, MatchFace, Prepared, Source, Upload, dimensions, encode, frame};
 use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
+use beryl_scene::faces::PrintedText;
 use beryl_scene::frame::{Band, Draw, Frame, FrameBuilder, Wake};
 use beryl_scene::input::{AssetReady, FaceId, FaceSize};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
@@ -148,6 +149,43 @@ fn every_format_draws_the_same_placeholders() {
                 }
             }
         }
+    }
+}
+
+#[test]
+fn a_drawn_island_shows_its_blue_frame_s_pale_name_bar() {
+    let island = MatchFace {
+        scan: String::new(),
+        key: String::new(),
+        names: vec!["Island".to_owned()],
+        colors: Vec::new(),
+        text: PrintedText {
+            type_line: "Basic Land — Island".to_owned(),
+            rules: Some("({T}: Add {U}.)".to_owned()),
+            ..PrintedText::default()
+        },
+        plate: None,
+    };
+    let pixels = frame(&island, FaceSize::Board);
+    let layer = encode(&pixels, FaceSize::Board, Format::Rgba8).expect("the face compresses");
+    for limits in BOTH {
+        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        renderer.set_faces(&["", "Island"], Format::Rgba8);
+        assert!(renderer.upload_layer(&prepared(1, FaceSize::Board, 1, layer.clone())));
+        // The card is 63 by 88 millimetres, its top edge 44 millimetres up. The battlefield
+        // frame's name bar is a tenth of the card's width tall, its middle about 6.5 millimetres
+        // below the top edge; its right part, past the name, is the blue palette's bar color.
+        let picture = draw_card(&mut renderer, 1, 50.0);
+        let bar = at(&picture, 18.0, 44.0 - 6.5);
+        assert_near(
+            bar,
+            [0xb9, 0xd3, 0xea],
+            24,
+            &format!("{limits:?}: the name bar"),
+        );
+        // The rim beside it is the palette's deep blue.
+        let rim = at(&picture, 0.0, 44.0 - 2.4);
+        assert!(rim[2] > rim[0] + 60, "{limits:?}: the rim is {rim:?}");
     }
 }
 

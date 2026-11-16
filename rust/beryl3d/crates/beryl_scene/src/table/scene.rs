@@ -690,7 +690,8 @@ impl Table {
 
     /// Writes the resolved element and the draw record of the ability numbered `id`: `object`
     /// as `view`'s stack shows it, moving if `under_way`, drawn as a card with the board-size
-    /// face of its source's name, or the blank layer 0 when it has no source.
+    /// plate face of the ability (its source's picture wearing a plate that says it), or its
+    /// source's face while it has none, or the blank layer 0 when it has no source.
     fn write_ability(
         &self,
         id: u32,
@@ -699,11 +700,25 @@ impl Table {
         (back, dress): (u16, &Dress<'_>),
         builder: &mut FrameBuilder,
     ) {
-        let StackItem::Ability { source, name, .. } = &view.stack[object.view_index as usize]
+        let StackItem::Ability {
+            source,
+            name,
+            triggered,
+            nth,
+            text,
+            ..
+        } = &view.stack[object.view_index as usize]
         else {
             return;
         };
-        let face = source.and_then(|_| faces.board_layer(name));
+        // The plate face says the ability over its source's picture. An ability whose words are
+        // not a paragraph of its source's printed text (`text` is given) has no plate face, and
+        // shows its source's face alone.
+        let plate = text
+            .is_none()
+            .then(|| faces.plate_layer(name, *triggered, *nth))
+            .flatten();
+        let face = source.and_then(|_| plate.or_else(|| faces.board_layer(name)));
         let mut look = Look {
             pose: object.pose,
             tint: [255, 255, 255],

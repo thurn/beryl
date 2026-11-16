@@ -3,6 +3,7 @@
 //! after each edit.
 
 mod faces;
+mod frame;
 mod glyphs;
 mod icons;
 mod light;

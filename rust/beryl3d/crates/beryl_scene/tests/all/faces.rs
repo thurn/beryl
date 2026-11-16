@@ -205,3 +205,24 @@ fn low_memory_forgets_full_size_faces_and_keeps_the_tier_at_baseline() {
         "the tier stays Baseline after low memory"
     );
 }
+
+#[test]
+fn an_ability_on_the_stack_has_a_plate_face_of_its_own_beside_its_source_s() {
+    let records = card_records_among(
+        ["Snapcaster Mage", "Teferi, Time Raveler"],
+        TokenMakers::NONE,
+    );
+    let list = FaceList::from_records(&records);
+    let snapcaster = list.find("Snapcaster Mage").unwrap();
+    let plate = list
+        .plate("Snapcaster Mage", true, 0)
+        .expect("its trigger has a plate");
+    assert_ne!(plate, snapcaster);
+    let listed = list.get(plate).unwrap();
+    assert_eq!(listed.image, list.get(snapcaster).unwrap().image);
+    assert!(listed.plate.as_ref().unwrap().rules.starts_with("When"));
+    // A plate is found by its kind and its place among that kind's paragraphs.
+    assert!(list.plate("Snapcaster Mage", false, 0).is_none());
+    assert!(list.plate("Teferi, Time Raveler", false, 1).is_some());
+    assert!(list.plate("Teferi, Time Raveler", false, 2).is_none());
+}

@@ -27,15 +27,50 @@ pub struct ListedFace {
     /// The power and toughness printed on the face, when both are numbers: a battlefield
     /// plaque inks a value raised or lowered against them.
     pub printed: Option<[i32; 2]>,
+    /// What Beryl's drawn frame prints on the face when its scan has not been downloaded.
+    pub text: PrintedText,
+    /// For a face that shows one ability on the stack, which ability: its source's picture
+    /// wearing a plate that says the ability. `None` for a card's own face.
+    pub plate: Option<Plate>,
+}
+
+/// The words a face prints, as the card store gives them, which Beryl's drawn frame sets.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PrintedText {
+    /// The mana cost in `{...}` notation, such as `{1}{U}{U}`.
+    pub mana_cost: Option<String>,
+    pub type_line: String,
+    /// The rules text, one ability to a line, with symbols in `{...}` notation.
+    pub rules: Option<String>,
+    pub power: Option<String>,
+    pub toughness: Option<String>,
+    pub loyalty: Option<String>,
+    /// The face is a token's, which the frame draws in pewter where a card's is black.
+    pub token: bool,
+}
+
+/// One ability of a face, said on a plate over the face's lower half, as an ability on the
+/// stack shows it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Plate {
+    /// The face whose picture the plate covers.
+    pub source: FaceId,
+    /// A triggered ability rather than an activated one, which the plate's label says.
+    pub triggered: bool,
+    /// The paragraph of the source's rules text that says the ability.
+    pub rules: String,
 }
 
 /// Every face of a match, in [`FaceId`] order: the card back, then each card's faces, then
-/// each token's.
+/// each token's, then a plate face for each ability paragraph of those faces' rules text.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FaceList {
     faces: Vec<ListedFace>,
     by_name: BTreeMap<String, FaceId>,
     by_image: BTreeMap<String, FaceId>,
+    /// The plate face of each ability, by its source's face, whether it is triggered, and how
+    /// many paragraphs of that kind come before it (`StackItem::Ability`'s `nth`).
+    plates: BTreeMap<(FaceId, bool, u8), FaceId>,
 }
 
 impl FaceList {
@@ -44,11 +79,67 @@ impl FaceList {
     #[must_use]
     pub fn from_records(records: &CardRecords) -> Self {
         let mut list = Self::default();
-        list.add(&records.card_back, Vec::new(), &[], None);
-        for (asked, entry) in records.cards.iter().chain(&records.tokens) {
-            list.add_entry(asked, entry);
+        list.add(
+            &records.card_back,
+            Vec::new(),
+            &[],
+            None,
+            PrintedText::default(),
+        );
+        for (asked, entry) in &records.cards {
+            list.add_entry(asked, entry, false);
         }
+        for (asked, entry) in &records.tokens {
+            list.add_entry(asked, entry, true);
+        }
+        list.add_plates();
         list
+    }
+
+    /// Lists a plate face for each paragraph of each face's rules text that says a triggered
+    /// or an activated ability.
+    fn add_plates(&mut self) {
+        let sources = self.faces.len();
+        for at in 0..sources {
+            let source = FaceId(u16::try_from(at).expect("a match has under 2^16 faces"));
+            let Some(rules) = self.faces[at].text.rules.clone() else {
+                continue;
+            };
+            for triggered in [true, false] {
+                let paragraphs = rules.lines().filter(|p| says_ability(p, triggered));
+                for (nth, paragraph) in paragraphs.enumerate() {
+                    let Ok(nth) = u8::try_from(nth) else {
+                        break;
+                    };
+                    let id = FaceId(
+                        u16::try_from(self.faces.len()).expect("a match has under 2^16 faces"),
+                    );
+                    let face = &self.faces[at];
+                    self.faces.push(ListedFace {
+                        image: face.image.clone(),
+                        names: Vec::new(),
+                        colors: face.colors.clone(),
+                        printed: None,
+                        text: face.text.clone(),
+                        plate: Some(Plate {
+                            source,
+                            triggered,
+                            rules: paragraph.to_owned(),
+                        }),
+                    });
+                    self.plates.insert((source, triggered, nth), id);
+                }
+            }
+        }
+    }
+
+    /// The plate face of the ability of the face named `name` that is the `nth` triggered (or
+    /// activated) ability its rules text says, as `StackItem::Ability` names it. Allocates
+    /// nothing.
+    #[must_use]
+    pub fn plate(&self, name: &str, triggered: bool, nth: u8) -> Option<FaceId> {
+        let source = self.find(name)?;
+        self.plates.get(&(source, triggered, nth)).copied()
     }
 
     /// The faces, in [`FaceId`] order.
@@ -82,7 +173,7 @@ impl FaceList {
         self.by_name.get(name).copied()
     }
 
-    fn add_entry(&mut self, asked: &str, entry: &CardEntry) {
+    fn add_entry(&mut self, asked: &str, entry: &CardEntry, token: bool) {
         for (i, face) in entry.faces.iter().enumerate() {
             let mut names = vec![face.name.clone()];
             if i == 0 {
@@ -95,7 +186,16 @@ impl FaceList {
                 .and_then(|(power, toughness)| {
                     Some([power.parse().ok()?, toughness.parse().ok()?])
                 });
-            self.add(&face.images.large, names, &face.colors, printed);
+            let text = PrintedText {
+                mana_cost: face.mana_cost.clone(),
+                type_line: face.type_line.clone(),
+                rules: face.oracle_text.clone(),
+                power: face.power.clone(),
+                toughness: face.toughness.clone(),
+                loyalty: face.loyalty.clone(),
+                token,
+            };
+            self.add(&face.images.large, names, &face.colors, printed, text);
         }
     }
 
@@ -107,6 +207,7 @@ impl FaceList {
         names: Vec<String>,
         colors: &[String],
         printed: Option<[i32; 2]>,
+        text: PrintedText,
     ) {
         let next = FaceId(u16::try_from(self.faces.len()).expect("a match has under 2^16 faces"));
         let id = *self.by_image.entry(image.to_owned()).or_insert(next);
@@ -116,6 +217,8 @@ impl FaceList {
                 names: Vec::new(),
                 colors: colors.to_vec(),
                 printed,
+                text,
+                plate: None,
             });
         }
         let listed = &mut self.faces[usize::from(id.0)];
@@ -126,6 +229,45 @@ impl FaceList {
             self.by_name.entry(name).or_insert(id);
         }
     }
+}
+
+/// Whether `paragraph` of a face's rules text says a triggered ability (it begins "When",
+/// "Whenever" or "At", or its reminder text says one, as offspring's does) or an activated one
+/// (a cost and a colon before any reminder text, loyalty abilities included). The web
+/// interface finds an ability's paragraph by the same rule (`abilityParagraph` in
+/// `ui/src/game/faces.ts`), and the session counts paragraphs as both do.
+#[must_use]
+pub fn says_ability(paragraph: &str, triggered: bool) -> bool {
+    if !triggered {
+        let before_reminder = paragraph.split('(').next().unwrap_or("");
+        return before_reminder.contains(':');
+    }
+    let begins = ["When", "Whenever", "At"].iter().any(|word| {
+        paragraph
+            .strip_prefix(word)
+            .is_some_and(|rest| !rest.starts_with(|c: char| c.is_alphanumeric() || c == '_'))
+    });
+    let reminder = paragraph.find('(').is_some_and(|open| {
+        let inside = &paragraph[open..];
+        ["when", "When", "whenever", "Whenever"]
+            .iter()
+            .any(|word| has_word(inside, word))
+            || inside.contains("At the beginning")
+    });
+    begins || reminder
+}
+
+/// Whether `word` appears in `text` with no letter, digit or underscore on either side.
+fn has_word(text: &str, word: &str) -> bool {
+    let joins = |c: char| c.is_alphanumeric() || c == '_';
+    text.match_indices(word).any(|(at, _)| {
+        let before = text[..at].chars().next_back().is_none_or(|c| !joins(c));
+        let after = text[at + word.len()..]
+            .chars()
+            .next()
+            .is_none_or(|c| !joins(c));
+        before && after
+    })
 }
 
 /// The client's faces: the match's list, and the layer each face has landed in at each size.
@@ -191,6 +333,13 @@ impl Faces {
     #[must_use]
     pub fn board_layer_of(&self, face: FaceId) -> Option<u16> {
         self.board.get(usize::from(face.0)).copied().flatten()
+    }
+
+    /// The board-size layer of the plate face of an ability on the stack (`FaceList::plate`),
+    /// once it has one. Allocates nothing.
+    #[must_use]
+    pub fn plate_layer(&self, name: &str, triggered: bool, nth: u8) -> Option<u16> {
+        self.board_layer_of(self.list.plate(name, triggered, nth)?)
     }
 
     /// The full-size layer of `face`, once it has one.

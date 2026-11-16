@@ -1958,7 +1958,27 @@ returns the `AssetReady` of each upload for the host to give the client.
   takes 15 seconds or more to fetch, and the match does not wait for it. Such a
   face starts as Beryl's drawn frame. The scan replaces it only in a frame with
   no animation playing, one layer per frame, so a card never changes its picture
-  in the middle of a flight.
+  in the middle of a flight. One thread of `beryl_assets`' own waits for those
+  downloads in the order they were queued and sends each face again made from
+  its scan, under the same layer; the renderer holds it until the client is
+  still (`Renderer::hold`).
+
+**Beryl's drawn frame** (`beryl_assets`' `frame` module) is the web interface's
+`Card` frame drawn into the texture: the battlefield frame (`card-field`) at
+board size and the full frame (`card-full`) at full size, with the name, the
+mana cost as Mana font symbols, a stand-in painting, and on the full frame the
+type line and the rules text shrunk to fit its box, and the printed power and
+toughness or loyalty. A token's body is pewter. `tiny-skia` draws the shapes,
+parley sets the text and `swash` rasterizes it.
+
+**An ability on the stack** shows a face of its own, listed after the cards and
+tokens: its source's picture (scan or drawn frame) with the web interface's
+`AbilityPlate` over the lower half, saying the ability. The client lists one
+plate face for each paragraph of a face's rules text that says a triggered or
+activated ability (`FaceList::plate`, by the kind and `nth` that
+`StackItem::Ability` gives), and draws the source's own face for an ability
+whose words are not one of those paragraphs. Plate faces add to the 150 faces
+above.
 
 The download queue and disk cache already exist in the Tauri shell. They move,
 unchanged in behavior, into `beryl_art`, a small crate of the main workspace
