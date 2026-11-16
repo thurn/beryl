@@ -339,29 +339,17 @@
     "b3d:stack-tall/you/2560x1080": {
       "step-shown": 1
     },
-    "b3d:stress-stack/you/1440x900": {
-      "reachable": 4
-    },
-    "b3d:stress-stack/you/1600x900": {
-      "reachable": 3
-    },
-    "b3d:stress-stack/you/1920x1080": {
-      "reachable": 3
-    },
     "b3d:stress-verbs/you/1440x900": {
       "crowded": 1,
-      "reachable": 3,
       "step-shown": 30
     },
     "b3d:stress-verbs/you/1600x900": {
       "crowded": 1,
-      "reachable": 1,
-      "step-shown": 32
+      "step-shown": 30
     },
     "b3d:stress-verbs/you/1920x1080": {
       "crowded": 1,
-      "reachable": 1,
-      "step-shown": 31
+      "step-shown": 32
     },
     "b3d:stress-verbs/you/2560x1080": {
       "crowded": 1,

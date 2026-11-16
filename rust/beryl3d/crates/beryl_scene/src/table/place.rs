@@ -18,7 +18,7 @@ use super::pile::{PileShown, lay_pile, pile_base, pile_scale};
 use super::rows::{
     Beneath, Laid, NameIds, RowRules, RowWindow, SameName, face_up, lay_row, least_strip,
 };
-use super::stack::{OnStack, on_stack, place_stack, spells};
+use super::stack::{OnStack, on_stack, place_stack, row_area, spells};
 use super::{Camera, Layout, lifted};
 use crate::agent::hit;
 use crate::frame::Place;
@@ -681,11 +681,7 @@ fn battlefield_row(
     offset: usize,
     ids: Option<&NameIds<'_>>,
 ) {
-    let area = match row {
-        RowName::Creatures => layout.creatures,
-        RowName::Lands => layout.lands,
-        RowName::Others => layout.others,
-    };
+    let (area, y) = row_area((layout, camera), side, row);
     // The cards under merged permanents, which `members` lists after the row's permanents. A
     // row with none, as nearly every row is, is laid out with no copy of its list.
     let (merged, permanents): (Vec<&ObjectView>, Vec<&ObjectView>);
@@ -705,10 +701,6 @@ fn battlefield_row(
         (&sorted[..], Some(names))
     } else {
         (cards, None)
-    };
-    let y = match side {
-        Side::You => area.y,
-        Side::Opponent => -area.y,
     };
     let rules = RowRules {
         layout,

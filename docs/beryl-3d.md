@@ -1244,12 +1244,17 @@ flight start exactly where the card was.
   by 900 window) stands in rows instead, which the web interface does not do:
   each row stands a little above the one in front of it, and each item a little
   to the left of the one in front of it in its row, so every item keeps an
-  uncovered corner `stack.spare` times the square's side. The rows run left no
-  further than the leaning stack reaches, and the items shrink alike to fit
-  under the stack's top, to no less than half their full size: past that the
-  rows grow longer. A spell that is resolving, which the game has taken off its
-  stack while its card stays in the stack's zone, stays the top item until it
-  leaves.
+  uncovered corner `stack.spare` times the square's side. Each row holds as many
+  items as lets the items be largest while the rows fit under the stack's top
+  and reach left no further than the leaning stack ever does, to no less than
+  0.4 of their full size: past that the rows grow longer. As the web interface
+  ends the permanents' rows left of its stack (`ROOM.end`), a battlefield row
+  whose cards the stack's band of the screen would cover past the reachable
+  check's square (both creatures' rows) ends a gap left of the furthest the
+  leaning stack ever reaches, however tall the stack is, so no card under the
+  stack loses its square and no row moves as the stack grows. A spell that is
+  resolving, which the game has taken off its stack while its card stays in the
+  stack's zone, stays the top item until it leaves.
 - **Cards a prompt holds up lie in the tray.** `table::tray` ports the web
   interface's `laidOut` for one pile (rows about the middle of the space) and
   two (boxes side by side), in the space `desktopTray` gives, placed relative to

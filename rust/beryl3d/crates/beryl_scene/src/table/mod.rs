@@ -32,6 +32,7 @@ pub(crate) use rows::NameIds;
 pub use rows::RowWindow;
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub(crate) use scene::{Objects, ability_track};
+pub(crate) use stack::row_area;
 pub use tray::{Held, TraySpace, tray};
 
 use crate::data::space;

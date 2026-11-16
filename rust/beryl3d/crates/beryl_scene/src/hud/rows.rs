@@ -14,7 +14,7 @@ use glam::{Vec2, Vec3};
 use crate::data::space::layout::desktop::ROW_COUNT_GAP;
 use crate::element::{Element, FloatId, floats, text};
 use crate::layout::{FloatLook, Layer};
-use crate::table::{ROWS, Rows, Table};
+use crate::table::{ROWS, Rows, Table, row_area};
 
 /// Each side has three rows, each with two ends.
 const COUNTS: usize = 12;
@@ -71,15 +71,7 @@ impl RowCounts {
             if want.is_none() {
                 continue;
             }
-            let area = match row {
-                RowName::Creatures => layout.creatures,
-                RowName::Lands => layout.lands,
-                RowName::Others => layout.others,
-            };
-            let y = match side {
-                Side::You => area.y,
-                Side::Opponent => -area.y,
-            };
+            let (area, y) = row_area((layout, camera), side, row);
             let x = if right { area.right } else { area.left };
             let end = camera.to_screen(Vec3::new(x, y, 0.0));
             // Beside the end, on the row's middle line: the left count ends a gap before the
