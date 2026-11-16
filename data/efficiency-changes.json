@@ -88,10 +88,14 @@
     "label": "Concurrent ui-test runs keep separate fixture recordings so they do not retry checks after deleting each other's files",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
-
   },
   {
     "label": "Every cargo command, typed or started by `by`, takes CPU tokens and grows its build as tokens come free",
+    "metric": "machine.saturation",
+    "expect": "down"
+  },
+  {
+    "label": "Beryl 3D trees clone the cached build directory once, and sweep and coverage trees reuse one path",
     "metric": "machine.saturation",
     "expect": "down"
   }

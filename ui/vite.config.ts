@@ -6,6 +6,32 @@ const env =
   (globalThis as { process?: { env: Record<string, string | undefined> } })
     .process?.env ?? {};
 
+// A browser check's server (tools' `served_ui`) is told the check's process id and exits once
+// that process is gone. A check killed at its hang limit never ran the code that stops its
+// server, and on 2026-11-15 thirteen such servers had been running for up to eleven days in
+// worktrees that no longer existed.
+const parentPid = Number(env.BERYL_PARENT_PID ?? "");
+if (parentPid > 0) {
+  const nodeProcess = (
+    globalThis as {
+      process?: {
+        kill(pid: number, signal: number): void;
+        exit(code: number): never;
+      };
+    }
+  ).process;
+  const timer = setInterval(() => {
+    try {
+      // Signal 0 only checks that the process exists.
+      nodeProcess?.kill(parentPid, 0);
+    } catch {
+      nodeProcess?.exit(0);
+    }
+  }, 2000) as unknown as { unref?: () => void };
+  // The check never keeps Vite running by itself.
+  timer.unref?.();
+}
+
 // Tauri loads the dev server from a fixed port and prints Rust errors to the same terminal.
 export default defineConfig({
   plugins: [react()],

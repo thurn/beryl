@@ -2,7 +2,8 @@
 
 import os
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 import pytest
@@ -135,3 +136,32 @@ def test_picture_commands_hand_every_argument_to_the_b3d_render_program(
         "1500ms",
         "--tree",
     ]
+
+
+def test_a_target_another_step_cloned_while_this_one_waited_is_not_cloned_again(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    workspace: Path = tmp_path / "beryl3d"
+    workspace.mkdir()
+    (tmp_path / "b3d" / "target").mkdir(parents=True)
+    monkeypatch.setattr(cli.paths, "WORKSPACE", workspace)
+    monkeypatch.setattr(cli.paths, "cache", lambda: tmp_path / "b3d")
+    monkeypatch.setattr(cli.paths, "target_lock", lambda: tmp_path / "lock")
+    real_lock: Callable[[Path], AbstractContextManager[None, bool | None]] = (
+        cli.system.file_lock
+    )
+
+    def lock_after_another_clone(
+        path: Path,
+    ) -> AbstractContextManager[None, bool | None]:
+        # The step that held the lock first finished its clone.
+        (workspace / "target").mkdir()
+        return real_lock(path)
+
+    monkeypatch.setattr(cli.system, "file_lock", lock_after_another_clone)
+    clones: list[Path] = []
+    monkeypatch.setattr(
+        cli.warm, "clone_into", lambda _source, dest: clones.append(dest) or True
+    )
+    cli.warm_target()
+    assert clones == []

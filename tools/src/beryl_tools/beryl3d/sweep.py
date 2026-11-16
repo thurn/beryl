@@ -351,8 +351,8 @@ def run_in_tree(commit: str, command: list[str], output: Path, part: str) -> int
     and to this process's. The tree needs no clone of the main workspace's build directory:
     Beryl 3D's workspace has its own."""
     # Not the sweep's own folder, whose lock the firing holds while this runs, and a folder per
-    # part: coverage.in_tree holds the folder's lock for the whole run and names the tree after
-    # the commit, so two parts in one folder could not run at once.
+    # part: coverage.in_tree holds the folder's lock for the whole run and keeps one tree per
+    # folder, so two parts in one folder could not run at once.
     work = folder() / ("work" if part == QUICK else f"work-{part}")
     work.mkdir(exist_ok=True)
     with open(output, "w") as out:

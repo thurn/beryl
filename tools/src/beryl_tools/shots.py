@@ -168,6 +168,9 @@ def served_ui(
     """
     if not hot:
         env = {**env, "BERYL_UI_FIXED": "1"}
+    # Vite exits once this process is gone (ui/vite.config.ts), even when this process is
+    # killed before its `finally` can stop the server.
+    env = {**env, "BERYL_PARENT_PID": str(os.getpid())}
     port = port or free_port()
     url = f"http://127.0.0.1:{port}/"
     mode = ["preview", "--strictPort"] if preview else []

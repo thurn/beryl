@@ -376,7 +376,16 @@ def in_tree(
                 check=False,
             )
         sha = git("rev-parse", "--verify", f"{commit}^{{commit}}")
-        tree = place / "trees" / sha[:12]
+        # One path for every run under `place`, whose lock allows one run at a time. A tree
+        # named after its commit made each run's checkout and build directory (133,575 files
+        # in Beryl 3D's) paths macOS's file-event daemon had never seen. That daemon, fseventsd,
+        # appears to keep every path it has seen: on 2026-11-15 it held 72 GB, nearly all of
+        # the swap. A run killed before its `finally` also left its tree behind for good; now
+        # the next run removes it, and the trees older runs named after commits.
+        tree = place / "tree"
+        for old in sorted((place / "trees").glob("*")):
+            remove_tree(old)
+        shutil.rmtree(place / "trees", ignore_errors=True)
         remove_tree(tree)
         git("worktree", "add", "--detach", "--quiet", str(tree), sha)
         try:

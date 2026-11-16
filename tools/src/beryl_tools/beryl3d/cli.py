@@ -56,7 +56,10 @@ def warm_target() -> None:
     if target.exists():
         return
     with system.file_lock(paths.target_lock()):
-        if cached.is_dir():
+        # Again under the lock: the sweep's steps start together, and each one that found no
+        # target before the first clone landed cloned all 133,575 files again and threw the
+        # copy away (five clones for one sweep on 2026-11-15).
+        if cached.is_dir() and not target.exists():
             warm.clone_into(cached, target)
 
 

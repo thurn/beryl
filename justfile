@@ -414,6 +414,11 @@ coverage *args:
 nightly *args:
     {{ by }} nightly "$@"
 
+# The file-event daemon's memory footprint, and whether the watchdog that restarts it is installed
+[group('checks')]
+fseventsd:
+    {{ by }} fseventsd
+
 # Remove the cache folders of checkouts that are gone, unchanged for a day (--dry-run lists them), and prune the cached rust/target to its budget; part of the nightly
 [group('checks')]
 prune-caches *args:
