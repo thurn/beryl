@@ -376,7 +376,7 @@ const DEEP_SEER: Family = Family {
     },
 };
 
-/// `pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired@30M`.
+/// `pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired@30M`.
 /// It deals 72 worlds using the searcher's visible information and spends up to 30M engine
 /// steps a decision across all cores, regardless of the caller's `budget`.
 ///
@@ -390,7 +390,8 @@ fn deep_searcher(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent
 /// proxy budget unless told otherwise.
 /// The ladder added `guard` after a score of 52.4% over 574 games at 3M steps.
 /// It added `sure`, `hold` and `combat` after a score of 53.3% over 430 games at 3M steps.
-/// This family added `paired` after scoring 55.0% over 318 games at 3M steps.
+/// The ladder added `paired` after scoring 55.0% over 318 games at 3M steps.
+/// It added `waste` after scoring 62.8% over 148 games at 1M steps.
 pub const DEEP_SEARCHER: Family = Family {
     method: Method::Pimc { worlds: 72 },
     sight: Sight::Hidden,
@@ -403,7 +404,7 @@ pub const DEEP_SEARCHER: Family = Family {
         mid: false,
         means: false,
         hold: true,
-        waste: false,
+        waste: true,
         combat: true,
         order: false,
         sure: true,

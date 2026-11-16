@@ -1,6 +1,6 @@
 # The ladder
 
-Champion: `pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired`
+Champion: pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired
 
 One row a match or audit, newest first. docs/ai-plan.md §4 says how each row is
 made. Rows up to 2026-11-13 were made by the plan before it, whose gate stopped
@@ -8,6 +8,7 @@ a rung at the suite on any one lower entry.
 
 | Date       | Challenger                                                                | Champion                                                            | Budget | Games | Score | Elo (95%)        | Verdict             | Suite open / fixed | Human games |
 | ---------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------ | ----- | ----- | ---------------- | ------------------- | ------------------ | ----------- |
+| 2026-11-16 | pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired@1M | pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired@1M | 1M     | 148   | 62.8% | +130 [+55, +217] | pass                | 3 / 17 (356/400)   | ?           |
 | 2026-11-16 | pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired+prior@3M | pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired@3M | 3M     | 60    | 23.3% | -174 [-309, -73] | fail                | 2 / 18 (369/400)   | ?           |
 | 2026-11-16 | pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired@10M      | pimc72/hidden/rollout/tuned/anchor+guard@10M                        | 10M    | 400   | 53.8% | +26 [-8, +60]    | audit               | 4 / 16 (351/400)   | ?           |
 | 2026-11-15 | pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired+first@3M | pimc72/hidden/rollout/tuned/anchor+guard+hold+combat+sure+paired@3M | 3M     | 294   | 41.5% | -80 [-131, -32]  | fail                | 3 / 17 (353/400)   | ?           |
