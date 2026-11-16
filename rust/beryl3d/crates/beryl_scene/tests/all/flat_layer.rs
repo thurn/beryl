@@ -219,14 +219,14 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
     assert!(!frame.resolved[title].interactive);
     assert!(text_fits(frame, &context()).is_empty());
     // A panel for the bar, one for each button, one under each player's life total and one under
-    // the count of each of the six piles, and the disc of each of the title's two mana symbols,
+    // the count of each of the six piles, the settings gear and the disc of each of the title's two mana symbols,
     // all in the flat layer's band.
     let layer = &frame.draws[frame.layer as usize..];
     let panels = layer
         .iter()
         .filter(|draw| draw.material == Material::Panel as u8)
         .count();
-    assert_eq!(panels, 13);
+    assert_eq!(panels, 14);
 }
 
 #[test]
@@ -466,14 +466,15 @@ fn a_prompt_opens_only_once_its_view_has_played_out() {
     client.handle(Input::Update(update));
 
     // While the card flies, the bar is neither drawn nor pressed. The life totals, which are
-    // floats, are drawn.
+    // floats, are drawn, and so is the settings gear, another float.
     let frame = client.frame(MS);
     assert!(
         !frame
             .resolved
             .iter()
             .any(|element| element.place == Place::Layer
-                && !matches!(element.role, Role::Player | Role::Text)),
+                && !matches!(element.role, Role::Player | Role::Text)
+                && frame.name(element.name) != "Settings"),
         "no prompt bar while the draw plays"
     );
     let open = {

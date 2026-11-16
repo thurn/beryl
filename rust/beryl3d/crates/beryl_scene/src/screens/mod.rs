@@ -14,6 +14,8 @@ mod testing;
 
 pub use start::{SEED, StartForm, in_progress, seed};
 
+pub use settings::{GEAR_INSET, gear};
+
 use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};
 use beryl_protocol::{AgentView, PlayerView};
@@ -86,6 +88,8 @@ impl Sheet {
 /// Everything a screen function reads.
 #[derive(Clone, Copy, Debug)]
 pub struct ScreenIn<'a> {
+    /// The screen the client is on, which a sheet opens over.
+    pub screen: Screen,
     pub window: Window,
     /// The latest view of the game, if one has started.
     pub view: Option<&'a PlayerView>,

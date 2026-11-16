@@ -31,6 +31,7 @@ mod pointer;
 mod relay;
 mod screens;
 mod scroll;
+mod settings_sheet;
 mod shadows;
 mod sound;
 mod table;

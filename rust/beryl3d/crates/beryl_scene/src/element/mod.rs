@@ -315,4 +315,6 @@ pub mod floats {
     /// The inspector: the card under the pointer at full size beside the table
     /// (`inspect::inspector`).
     pub const INSPECTOR: FloatId = FloatId(28);
+    /// The gear at the window's top right that opens the settings sheet.
+    pub const GEAR: FloatId = FloatId(29);
 }

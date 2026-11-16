@@ -26,7 +26,7 @@ use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
 use crate::pointer::rows::RowGesture;
 use crate::prompts;
-use crate::screens::{self, Music, SEED, Screen, ScreenIn, Sheet, StartForm};
+use crate::screens::{self, Music, SEED, Screen, Sheet, StartForm};
 use crate::settings::{Setting, Settings};
 use crate::table::{Table, Window};
 use crate::widgets::Fields;
@@ -34,6 +34,7 @@ use crate::widgets::Fields;
 mod input;
 mod inspect;
 mod own;
+mod screen;
 mod testing;
 
 use inspect::Inspector;
@@ -445,50 +446,12 @@ impl Client {
         self.show.lit_mut()
     }
 
-    /// Rebuilds the flat layer's screen, or the sheet open over it, from what the client holds
-    /// now, and asks the host for the music it calls for if that has changed.
-    fn show_screen(&mut self) {
-        self.inspector.due = true;
-        let view = self.show.latest().map(|update| &update.view);
-        let input = ScreenIn {
-            window: self.window,
-            view,
-            prompt: self.prompt.as_ref().map(|(_, prompt)| prompt),
-            settings: &self.settings,
-            hovered: None,
-            sheet: self.sheet,
-            agents: &self.agents,
-            start: &self.start,
-            recordings: &self.recordings,
-            seat: self.seat,
-            fields: &self.fields,
-            inspected: None,
-            faces: Some(self.show.faces().list()),
-        };
-        // Until the sheets are built, an open sheet takes the screen's place in the flat layer.
-        // The game screen shows nothing while no prompt is open and the game goes on, so that no
-        // empty panel is drawn over the table (and none is built); once the game has ended it
-        // shows the result.
-        let ended =
-            view.is_some_and(|view| matches!(view.status, Status::Over { .. } | Status::Stopped));
-        let shown = match self.sheet {
-            Some(sheet) => Some(screens::sheet(sheet, &input)),
-            None if self.screen == Screen::Game && input.prompt.is_none() && !ended => None,
-            None => Some(screens::screen(self.screen, &input)),
-        };
-        let music = screens::music(self.screen, view);
-        self.layer.show(shown);
-        if music != self.music {
-            self.music = music;
-            self.requests.push_back(Request::Music(music));
-        }
-    }
-
     /// Lays the table and the flat layer out in a window of a new size, scale or safe area.
     fn resize(&mut self, window: Window) {
         self.window = window;
         self.show.resize(window);
         self.layer.resize(window);
+        self.show_gear();
         (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
         if self.show.badges_mut().shaped() {
             let glyphs = self.layer.glyphs_mut();
@@ -547,6 +510,7 @@ impl Client {
                 self.save_stops();
             }
             Press::Concede => {
+                self.press(&Press::Sheet(None));
                 if let Some(session) = self.session {
                     self.commands.push_back(SessionCommand::Concede(session));
                 }

@@ -68,11 +68,18 @@ impl Setting {
 }
 
 impl Settings {
-    /// Makes the change `setting` says. A level over 100 is taken as 100.
+    /// Makes the change `setting` says. A level over 100 is taken as 100, and moving a level
+    /// turns the sound back on, as the web interface's sound panel does.
     pub fn apply(&mut self, setting: Setting) {
         match setting {
-            Setting::Music(level) => self.music = level.min(100),
-            Setting::Effects(level) => self.effects = level.min(100),
+            Setting::Music(level) => {
+                self.music = level.min(100);
+                self.muted = false;
+            }
+            Setting::Effects(level) => {
+                self.effects = level.min(100);
+                self.muted = false;
+            }
             Setting::Muted(muted) => self.muted = muted,
             Setting::FullControl(on) => {
                 self.full_control = on;

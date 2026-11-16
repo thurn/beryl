@@ -191,6 +191,7 @@ mod milestone_three {
 
     fn input<'a>(prompt: Option<&'a PromptView>, settings: &'a Settings) -> ScreenIn<'a> {
         ScreenIn {
+            screen: Screen::Game,
             window: Window::default(),
             view: None,
             prompt,

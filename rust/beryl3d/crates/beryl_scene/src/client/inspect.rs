@@ -48,6 +48,7 @@ impl Client {
         }
         let view = self.show.latest().map(|update| &update.view);
         let input = ScreenIn {
+            screen: self.screen,
             window: self.window,
             view,
             prompt: self.prompt.as_ref().map(|(_, prompt)| prompt),
