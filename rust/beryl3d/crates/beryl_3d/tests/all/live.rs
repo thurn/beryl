@@ -1,5 +1,5 @@
-//! The live socket: an app replaying `pay-default` with no window answers `tree` with the
-//! prompt's buttons, `do` with the result of the action, and `png` with the path of a picture.
+//! The live socket: an app paused on the first frame of `pay-default` answers `tree` with
+//! the table, `do` with the result of the action, and `png` with the path of a picture.
 
 #![cfg(unix)]
 
@@ -7,7 +7,9 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::process::{Child, Command, Stdio};
 
-use beryl_3d::app::LIVE_SOCKET;
+use beryl_3d::app::{FIRST_SHOWN, LIVE_SOCKET};
+
+const CARD: &str = "card \"Staff of the Storyteller\"";
 
 /// The app, stopped when dropped.
 struct App(Child);
@@ -39,15 +41,14 @@ fn a_running_app_answers_tree_do_and_png() {
     let folder = std::path::PathBuf::from(format!("/tmp/b3d-live-{}", std::process::id()));
     std::fs::create_dir_all(&folder).expect("a folder for the socket and pictures");
     let mut child = Command::new(env!("CARGO_BIN_EXE_beryl3d"))
-        .args(["--fixture", "pay-default", "--pause-at", "prompt:2"])
-        .args(["--window", "none", "--for", "60s"])
+        .args(["--fixture", "pay-default", "--pause-at", "0ms"])
+        .args(["--window", "none"])
         .env("TMPDIR", &folder)
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
         .spawn()
         .expect("the app starts");
     let stdout = child.stdout.take().expect("the app's output is a pipe");
-    let _app = App(child);
+    let app = App(child);
     // Kept open to the end: the app dies when it prints to a closed pipe.
     let mut lines = BufReader::new(stdout).lines();
     let path = lines
@@ -63,19 +64,18 @@ fn a_running_app_answers_tree_do_and_png() {
         "{path}"
     );
 
-    // The clock runs on in real time until it stops at the pause, so the first trees show the
-    // moments before it. The tries are only a bound on a hang.
-    let mut tree = String::new();
-    for _ in 0..400 {
-        let (status, body) = ask(&path, "tree");
-        assert_eq!(status, "ok", "{body}");
-        tree = body;
-        if tree.contains("button \"Auto Pay\"") {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
-    assert!(tree.contains("button \"Auto Pay\""), "{tree}");
+    // The socket opens before the renderer is ready. The first frame shows the fixture's
+    // initial board, even if the host misses ticks while starting up.
+    assert!(
+        lines
+            .by_ref()
+            .map_while(Result::ok)
+            .any(|line| line.starts_with(FIRST_SHOWN)),
+        "the app exited before showing its first frame"
+    );
+    let (status, tree) = ask(&path, "tree");
+    assert_eq!(status, "ok", "{tree}");
+    assert!(tree.contains(CARD), "{tree}");
 
     let (status, picture) = ask(&path, "png");
     assert_eq!(status, "ok", "{picture}");
@@ -85,7 +85,7 @@ fn a_running_app_answers_tree_do_and_png() {
     assert!(size > 1000, "{picture} holds {size} bytes");
     let _ = std::fs::remove_file(picture.trim());
 
-    let (status, body) = ask(&path, "do press button \"Auto Pay\"");
+    let (status, body) = ask(&path, &format!("do hover {CARD}"));
     assert_eq!(status, "ok", "{body}");
 
     let (status, why) = ask(&path, "do press button \"No Such Button\"");
@@ -95,6 +95,6 @@ fn a_running_app_answers_tree_do_and_png() {
     let (status, why) = ask(&path, "jump");
     assert_eq!(status, "error");
     assert!(why.contains("tree, png or do"), "{why}");
+    drop(app);
     let _ = std::fs::remove_dir_all(&folder);
-    drop(lines);
 }
