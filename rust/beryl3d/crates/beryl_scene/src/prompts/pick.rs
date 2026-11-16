@@ -14,10 +14,10 @@
 //! has it: it shows the prompt bar and draws nothing on the table.
 
 use beryl_protocol::prompt::{PromptView, ShapeBody};
-use beryl_protocol::protocol::{ObjectId, ZoneName};
-use beryl_protocol::script::{Arrow, Mark, OwnStep, Subject};
+use beryl_protocol::protocol::ZoneName;
+use beryl_protocol::script::{Arrow, Mark, Subject};
 
-use super::{Shown, Steps, begin_spans, end_spans, mark_spans, prompt_bar};
+use super::{Shown, Steps, mark_spans, prompt_bar, tray};
 use crate::element::Element;
 use crate::light::{ArrowSpan, MarkSpan, Span};
 use crate::screens::ScreenIn;
@@ -33,30 +33,9 @@ pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
 }
 
 /// Makes what the table shows for the prompt `shown` replace what it showed for `was`, as one
-/// beat, as the web interface's `#mark` in `ui/src/stage/prompt.ts` plays it: the spans `was`
-/// drew and `shown` does not end, then the tray lifts the cards of `shown` or lets those of
-/// `was` go, then the spans new in `shown` begin. Allocates nothing.
+/// beat (`tray::own`): its marks and arrows, and the cards its tray holds up.
 pub(super) fn own(shown: Option<Shown>, was: Option<Shown>, steps: &mut Steps) {
-    end_spans(spans, shown, was, steps);
-    let (now, then) = (tray(shown), tray(was));
-    if now != then {
-        steps.tray(if now.is_empty() {
-            OwnStep::TrayLetGo
-        } else {
-            OwnStep::TrayLifts {
-                sorted: !then.is_empty(),
-            }
-        });
-    }
-    begin_spans(spans, shown, was, steps);
-}
-
-/// The cards `prompt`'s tray holds up, in order: none for a prompt that picks where they lie.
-pub(crate) fn tray(prompt: Option<Shown<'_>>) -> &[ObjectId] {
-    match prompt.map(|shown| &shown.prompt.body) {
-        Some(ShapeBody::Pick { tray, .. }) => tray,
-        _ => &[],
-    }
+    tray::own(shown, was, spans, steps);
 }
 
 /// The spans the table draws for `prompt`, as `Prompts.#mark` does: each of its marks; an arrow

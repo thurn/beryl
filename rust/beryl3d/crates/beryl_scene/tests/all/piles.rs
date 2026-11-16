@@ -10,7 +10,9 @@ use beryl_scene::frame::{Frame, Role};
 use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::motion::pose_at;
 use beryl_scene::pose::{Pose, Segment};
-use beryl_scene::table::{Camera, DESKTOP, LAYER, Table, TraySpace, tray};
+use beryl_scene::table::{
+    Camera, DESKTOP, Held, LAYER, Table, TraySpace, landing, tray, tray_boxes,
+};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, object, timing};
 use beryl_scene::{Client, Config};
 use glam::{Vec2, Vec3};
@@ -247,4 +249,55 @@ fn a_tray_lies_inside_the_window_with_every_card_seen() {
             }
         }
     }
+}
+
+#[test]
+fn a_card_let_go_in_a_box_lands_before_the_first_card_whose_middle_is_past_it() {
+    let size = Size {
+        width: 1600.0,
+        height: 900.0,
+    };
+    let space = TraySpace::DESKTOP;
+    let held = Held {
+        piles: vec![vec![ObjectId(1)], vec![ObjectId(2), ObjectId(3)]],
+        rooms: vec![None, None],
+    };
+    let boxes = tray_boxes(&held, space, size);
+    assert_eq!(boxes.len(), 2, "a box for each pile");
+    let second = boxes[1];
+    let y = second.y + second.height / 2.0;
+    assert_eq!(
+        landing(&held, space, size, Vec2::new(second.x + 2.0, y)),
+        Some((1, 0)),
+        "at the second box's left edge: before its first card"
+    );
+    assert_eq!(
+        landing(
+            &held,
+            space,
+            size,
+            Vec2::new(second.x + second.width - 2.0, y)
+        ),
+        Some((1, 2)),
+        "at its right edge: at its end"
+    );
+    assert_eq!(
+        landing(&held, space, size, Vec2::new(10.0, 10.0)),
+        None,
+        "outside both boxes: nowhere"
+    );
+    let one = Held {
+        piles: vec![vec![ObjectId(1), ObjectId(2)]],
+        rooms: Vec::new(),
+    };
+    assert!(
+        tray_boxes(&one, space, size).is_empty(),
+        "one pile has no box"
+    );
+    let centre = Vec2::new(size.width / 2.0, size.height / 2.0);
+    assert_eq!(
+        landing(&one, space, size, centre),
+        None,
+        "nor any order to give"
+    );
 }

@@ -197,14 +197,9 @@ impl Client {
         }
         self.suggesting.now = suggesting;
         self.own_due = true;
-        let tray = match self.prompt.as_ref().map(|(_, prompt)| &prompt.body) {
-            Some(ShapeBody::Pick { tray, .. }) if !tray.is_empty() => Some(tray),
-            _ => None,
-        };
-        self.owned.lift = tray.map(|tray| {
-            let held = Held {
-                piles: vec![tray.clone()],
-            };
+        let piles = (self.prompt.as_ref()).and_then(|(_, prompt)| prompts::Piles::of(prompt));
+        self.owned.lift = piles.map(|piles| {
+            let held = piles.held();
             let poses = self.show.table().tray_poses(&held);
             (held, poses)
         });

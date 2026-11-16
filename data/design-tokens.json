@@ -499,6 +499,14 @@
       "FIELD_RADIUS": {
         "value": 6,
         "note": "The radius of a text field's corners: `.bug-text`'s `border-radius`."
+      },
+      "TRAY_PILE_BORDER": {
+        "value": 1,
+        "note": "The width of the rim of a pile's box in a tray: `.stage-tray-pile`'s `border`."
+      },
+      "TRAY_PILE_RADIUS": {
+        "value": 10,
+        "note": "The radius of a pile's box in a tray: `.stage-tray-pile`'s `border-radius`."
       }
     },
     "color": {
@@ -570,6 +578,10 @@
       "TIP": {
         "value": "rgb(24 21 19 / 94%)",
         "note": "A tooltip's face: the `background` of `.tip`."
+      },
+      "TRAY_PILE_RIM": {
+        "value": "rgb(233 173 74 / 45%)",
+        "note": "The rim of a pile's box under the cards a split holds up: `.stage-tray-pile`'s `border` in `ui/src/stage/stage.css`."
       }
     },
     "mana": {

@@ -8,14 +8,14 @@ mod editing;
 use std::collections::VecDeque;
 
 use beryl_protocol::prompt::{Click, ClickReply, ClickRequest, PromptView};
-use beryl_protocol::protocol::{DecisionId, ObjectId, SessionId, Side, Status, StepSet, ZoneName};
+use beryl_protocol::protocol::{DecisionId, ObjectId, SessionId, Side, Status, StepSet};
 use beryl_protocol::script::{OwnTimings, Subject, Verb, own_timings};
 use beryl_protocol::{AgentView, StartRequest};
 
 use crate::command::{Reply, Request, SessionCommand};
 use crate::element::Press;
 use crate::faces::{FaceList, Faces};
-use crate::frame::{self, ElementId, Frame, FrameBuilder, Place, Sound, Wake};
+use crate::frame::{self, ElementId, Frame, FrameBuilder, Sound, Wake};
 use crate::hud::counts::CountFloats;
 use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
@@ -24,6 +24,7 @@ use crate::input::{AssetReady, FaceId, GlyphKey, Input, Lifecycle, Tier};
 use crate::layout::{self, Layer};
 use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
+use crate::pointer::LetGo;
 use crate::pointer::rows::RowGesture;
 use crate::prompts;
 use crate::screens::{self, Music, SEED, Screen, Sheet, StartForm};
@@ -413,14 +414,19 @@ impl Client {
         builder.finish();
         // The element a press under the mouse would reach is drawn `hovered`. A press on a card
         // that ended since the last frame and means a click on it (a press that picked nothing
-        // up, or a card carried off the hand and let go) clicks the open prompt on that card.
-        if let Some(slot) = self.show.point(&mut self.frame, now)
-            && let Ok(slot) = u16::try_from(slot)
-        {
-            let on = Subject::Object {
-                slot: ObjectId(slot),
-            };
-            self.click(Click::On { on });
+        // up, or a card carried off the hand and let go) clicks the open prompt on that card;
+        // one held up in a tray and carried is dropped where it was let go.
+        match self.show.point(&mut self.frame, now) {
+            Some(LetGo::Click(slot)) => {
+                if let Ok(slot) = u16::try_from(slot) {
+                    let on = Subject::Object {
+                        slot: ObjectId(slot),
+                    };
+                    self.click(Click::On { on });
+                }
+            }
+            Some(LetGo::Dropped { slot, at }) => self.drop_held(slot, at),
+            None => {}
         }
         // The inspector follows the card just found under the pointer in the next frame, and a
         // prompt whose view has just played out draws its marks in the next frame.
@@ -457,28 +463,6 @@ impl Client {
             let glyphs = self.layer.glyphs_mut();
             (self.show.badges_mut()).rescale(window.scale, glyphs);
         }
-    }
-
-    /// Whether a press may pick up the card in `slot`, resting at `place`: a card in the
-    /// viewer's hand that the open prompt marks, once the prompt is drawn. This is the web
-    /// interface's `#lifts` in `ui/src/stage/prompt.ts`, except that a card in a pile of a tray
-    /// is not yet holdable: the prompts of a split or an order add those piles.
-    fn holdable(&self, slot: usize, place: Place) -> bool {
-        let Some((_, prompt)) = self.prompt.as_ref().filter(|_| self.open) else {
-            return false;
-        };
-        let in_hand = matches!(
-            place,
-            Place::Card {
-                zone: ZoneName::Hand,
-                side: Side::You,
-                ..
-            }
-        );
-        let on = u16::try_from(slot).map(|slot| Subject::Object {
-            slot: ObjectId(slot),
-        });
-        in_hand && (prompt.marks.iter()).any(|marked| Ok(marked.on) == on)
     }
 
     /// Carries out what a press on an element means: a command for the session, a request of

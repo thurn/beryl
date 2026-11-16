@@ -8,7 +8,8 @@
 //! (`ui/src/stage/desktop.ts`) gives. Here the same space is measured in stage pixels of a stage
 //! as tall as the window, `layout.desktop.tray` in `space.json`, and each card is placed relative
 //! to the camera, so that the tray keeps its size and place on screen at any window shape. The
-//! put-back and pick trays, which a prompt alone makes, are not ported here.
+//! put-back and pick trays of a split (the web's `putBack` and `fan`) are not ported here: a
+//! split's two piles are always laid out as two boxes.
 
 use beryl_protocol::protocol::{ObjectId, PlayerView};
 use glam::{Quat, Vec2};
@@ -17,6 +18,7 @@ use super::scene::SceneObject;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Placement, Rest, Table};
 use crate::data::space::layout::desktop::tray as data;
 use crate::frame::OBJECTS;
+use crate::input::{Rect, Size};
 use crate::motion::between;
 use crate::pose::{Curve, Pose};
 
@@ -65,6 +67,26 @@ impl TraySpace {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Held {
     pub piles: Vec<Vec<ObjectId>>,
+    /// How many cards each pile of two is laid out for, where the prompt says it must come to
+    /// hold so many, as the web's `Heap.room`. A pile with none here is laid out for every card
+    /// the tray holds, so that its box keeps its place whatever is moved between the piles.
+    pub rooms: Vec<Option<usize>>,
+}
+
+/// A tray laid out on the stage: where each card lies, in the order of the piles and then of
+/// their cards, and the box of each pile of a tray of two, as the web's `Laid`.
+struct Laid {
+    spots: Vec<Spot>,
+    boxes: Vec<Area>,
+}
+
+/// A rectangle of the stage, in stage pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Area {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
 }
 
 /// A card's place on the stage: its top left corner and its width.
@@ -149,14 +171,14 @@ fn rows(count: usize, space: &TraySpace, (left, wide): (f32, f32)) -> Vec<Spot> 
 }
 
 /// Several piles, a box each, side by side about the middle of the space, as the web's
-/// `boxes`. The web gives each box room for what its pile can come to hold (`roomsOf`), which a
-/// prompt says, and room for every card the tray holds when it says nothing. `Held` does not
-/// say what a prompt can move yet, so each box has room for the cards it holds now.
+/// `boxes`. Each box has room for what its pile can come to hold (`rooms`, the web's
+/// `roomsOf`), and its cards lie in a row from its left edge, closed up where they would
+/// overflow it.
 #[expect(clippy::cast_precision_loss, reason = "a tray holds a few dozen cards")]
-fn boxes(counts: &[usize], space: &TraySpace, (left, wide): (f32, f32)) -> Vec<Spot> {
+fn boxes(counts: &[usize], rooms: &[usize], space: &TraySpace, (left, wide): (f32, f32)) -> Laid {
     let (gap, heading) = (space.gap, space.heading);
     let piles = counts.len() as f32;
-    let between: f32 = counts.iter().map(|&count| count.max(1) as f32 - 1.0).sum();
+    let between: f32 = rooms.iter().map(|&room| room.max(1) as f32 - 1.0).sum();
     // What is not a card's own width or the step to the next: the boxes' edges and the gaps
     // between the boxes.
     let edges = piles * 2.0 * gap + (piles - 1.0) * gap;
@@ -177,41 +199,126 @@ fn boxes(counts: &[usize], space: &TraySpace, (left, wide): (f32, f32)) -> Vec<S
     let whole = piles * width + between * step + edges;
     let y = space.y + ((space.height - height) / 2.0).max(0.0);
     let mut x = left + (wide - whole) / 2.0;
-    let mut spots = Vec::with_capacity(counts.iter().sum());
-    for &count in counts {
-        let box_wide = width + (count.max(1) as f32 - 1.0) * step + 2.0 * gap;
+    let mut laid = Laid {
+        spots: Vec::with_capacity(counts.iter().sum()),
+        boxes: Vec::with_capacity(counts.len()),
+    };
+    for (&count, &room) in counts.iter().zip(rooms) {
+        let box_wide = width + (room.max(1) as f32 - 1.0) * step + 2.0 * gap;
         let own = f32::min(
             step,
             (box_wide - 2.0 * gap - width) / (count.max(2) - 1) as f32,
         );
         for index in 0..count {
-            spots.push(Spot {
+            laid.spots.push(Spot {
                 x: x + gap + index as f32 * own,
                 y: y + heading + gap,
                 width,
             });
         }
+        laid.boxes.push(Area {
+            x,
+            y,
+            width: box_wide,
+            height,
+        });
         x += box_wide + gap;
     }
-    spots
+    laid
+}
+
+/// `piles` laid out in `space` on a stage `stage_width` wide: one pile in rows, several in
+/// boxes with room for `rooms` (every card of the tray for a pile with none).
+fn laid_out<T>(
+    piles: &[&[T]],
+    rooms: &[Option<usize>],
+    space: &TraySpace,
+    stage_width: f32,
+) -> Laid {
+    let span = across(space, stage_width);
+    let counts: Vec<usize> = piles.iter().map(|pile| pile.len()).collect();
+    if counts.len() == 1 {
+        return Laid {
+            spots: rows(counts[0], space, span),
+            boxes: Vec::new(),
+        };
+    }
+    let total = counts.iter().sum();
+    let rooms: Vec<usize> = (0..counts.len())
+        .map(|pile| rooms.get(pile).copied().flatten().unwrap_or(total))
+        .collect();
+    boxes(&counts, &rooms, space, span)
+}
+
+/// Stage pixels per logical point of a window `size`, and the width of the stage it shows.
+fn stage_of(space: &TraySpace, size: Size) -> (f32, f32) {
+    let per_point = space.stage_height / size.height;
+    (per_point, size.width * per_point)
+}
+
+/// The box of each pile of `held`, a tray of two piles laid out in `space`, on a window
+/// `size`, in logical points, as the web's `TrayUnder` draws them: none for a tray of one pile.
+#[must_use]
+pub fn tray_boxes(held: &Held, space: TraySpace, size: Size) -> Vec<Rect> {
+    let (per_point, stage_width) = stage_of(&space, size);
+    let piles: Vec<&[ObjectId]> = held.piles.iter().map(Vec::as_slice).collect();
+    let laid = laid_out(&piles, &held.rooms, &space, stage_width);
+    (laid.boxes.iter())
+        .map(|area| Rect {
+            x: area.x / per_point,
+            y: area.y / per_point,
+            width: area.width / per_point,
+            height: area.height / per_point,
+        })
+        .collect()
+}
+
+/// Where a card let go at `point`, in logical points of a window `size`, lands in `held` laid
+/// out in `space`, as the web's `landing`: the index of the pile whose box the point is in, and
+/// before which of that pile's cards, counting those whose middle lies left of the point (the
+/// pile's length for its end). None outside every box, and in a tray of one pile, which has no
+/// order to give.
+#[must_use]
+pub fn landing(held: &Held, space: TraySpace, size: Size, point: Vec2) -> Option<(usize, usize)> {
+    let (per_point, stage_width) = stage_of(&space, size);
+    let point = point * per_point;
+    let piles: Vec<&[ObjectId]> = held.piles.iter().map(Vec::as_slice).collect();
+    let laid = laid_out(&piles, &held.rooms, &space, stage_width);
+    let pile = laid.boxes.iter().position(|area| {
+        (area.x..=area.x + area.width).contains(&point.x)
+            && (area.y..=area.y + area.height).contains(&point.y)
+    })?;
+    let first: usize = piles[..pile].iter().map(|cards| cards.len()).sum();
+    let spots = &laid.spots[first..first + piles[pile].len()];
+    Some((
+        pile,
+        (spots.iter())
+            .filter(|spot| spot.x + spot.width / 2.0 < point.x)
+            .count(),
+    ))
 }
 
 /// Where each card of `piles`, one pile or two, each its cards in order, lies held up in
 /// `space`, seen through `camera`: one pose for each card, in the order of the piles and then
 /// of their cards. Each is face up and faces the camera; a later card lies nearer the eye.
+/// Each of two piles is laid out with room for the cards it holds.
 #[must_use]
 pub fn tray<T>(piles: &[&[T]], space: TraySpace, camera: &Camera) -> Vec<Pose> {
-    let size = camera.window.size;
-    // Stage pixels per logical point of the window.
-    let per_point = space.stage_height / size.height;
-    let stage_width = size.width * per_point;
-    let span = across(&space, stage_width);
-    let counts: Vec<usize> = piles.iter().map(|pile| pile.len()).collect();
-    let spots = if counts.len() == 1 {
-        rows(counts[0], &space, span)
-    } else {
-        boxes(&counts, &space, span)
-    };
+    let rooms: Vec<Option<usize>> = piles.iter().map(|pile| Some(pile.len())).collect();
+    tray_with_rooms(piles, &rooms, space, camera)
+}
+
+/// `tray`, with two piles each laid out for as many cards as `rooms` gives it, and a pile with
+/// none for every card of the tray (`Held::rooms`).
+#[must_use]
+pub fn tray_with_rooms<T>(
+    piles: &[&[T]],
+    rooms: &[Option<usize>],
+    space: TraySpace,
+    camera: &Camera,
+) -> Vec<Pose> {
+    let (_, stage_width) = stage_of(&space, camera.window.size);
+    let spots = laid_out(piles, rooms, &space, stage_width).spots;
     #[expect(clippy::cast_precision_loss, reason = "a tray holds a few dozen cards")]
     let poses = spots
         .iter()
@@ -240,7 +347,7 @@ impl Placement {
     /// finds it in its zone, and is drawn, wherever in its zone it lies.
     pub fn hold(&mut self, held: &Held, space: TraySpace, camera: &Camera) {
         let piles: Vec<&[ObjectId]> = held.piles.iter().map(Vec::as_slice).collect();
-        let poses = tray(&piles, space, camera);
+        let poses = tray_with_rooms(&piles, &held.rooms, space, camera);
         for (&slot, pose) in held.piles.iter().flatten().zip(poses) {
             if let Some(rest) = self.get(slot).copied() {
                 self.set(
@@ -351,7 +458,7 @@ impl Table {
     #[must_use]
     pub fn tray_poses(&self, held: &Held) -> Vec<(ObjectId, Pose)> {
         let piles: Vec<&[ObjectId]> = held.piles.iter().map(Vec::as_slice).collect();
-        let poses = tray(&piles, self.layout().tray, self.camera());
+        let poses = tray_with_rooms(&piles, &held.rooms, self.layout().tray, self.camera());
         held.piles.iter().flatten().copied().zip(poses).collect()
     }
 

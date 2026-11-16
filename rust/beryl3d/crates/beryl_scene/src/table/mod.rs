@@ -33,7 +33,7 @@ pub use rows::RowWindow;
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub(crate) use scene::{Objects, ability_track};
 pub(crate) use stack::{OnStack, on_stack, row_area};
-pub use tray::{Held, TraySpace, tray};
+pub use tray::{Held, TraySpace, landing, tray, tray_boxes, tray_with_rooms};
 
 use crate::data::space;
 use crate::input::{Insets, Size};

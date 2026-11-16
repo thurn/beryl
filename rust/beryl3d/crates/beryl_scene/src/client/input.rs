@@ -2,14 +2,20 @@
 //! layer or a card, a drag that scrolls or sets a slider, and the keys of shortcuts, focus and
 //! the bug report.
 
+use beryl_protocol::prompt::{Click, ShapeBody};
+use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
+use beryl_protocol::script::Subject;
+use glam::Vec2;
+
 use super::{Client, Platform};
 use crate::agent::hit;
 use crate::element::{Chord, Dismiss, Press};
-use crate::frame::Role;
+use crate::frame::{Place, Role};
 use crate::input::{Button, Input, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
 use crate::layout::{Edit, Navigation};
 use crate::prompts;
 use crate::screens::{Screen, Sheet};
+use crate::table;
 use crate::widgets::{STEP, level_at};
 
 impl Client {
@@ -271,5 +277,64 @@ impl Client {
             level.saturating_sub(STEP)
         };
         (to != level).then_some(Press::Setting(setting.at_level(to)))
+    }
+
+    /// Whether a press may pick up the card in `slot`, resting at `place`: a card the open
+    /// prompt marks, once the prompt is drawn, in the viewer's hand or held up in a tray of two
+    /// piles. This is the web interface's `#lifts` in `ui/src/stage/prompt.ts`.
+    pub(super) fn holdable(&self, slot: usize, place: Place) -> bool {
+        let Some((_, prompt)) = self.prompt.as_ref().filter(|_| self.open) else {
+            return false;
+        };
+        let in_hand = matches!(
+            place,
+            Place::Card {
+                zone: ZoneName::Hand,
+                side: Side::You,
+                ..
+            }
+        );
+        let on = u16::try_from(slot).map(|slot| Subject::Object {
+            slot: ObjectId(slot),
+        });
+        // A card in a tray of piles is carried from pile to pile, as the web's `#piled` has it.
+        let piled = (self.show.table().held()).is_some_and(|held| held.piles.len() > 1)
+            && self.show.table().in_tray(slot);
+        (in_hand || piled) && (prompt.marks.iter()).any(|marked| Ok(marked.on) == on)
+    }
+
+    /// The card in `slot`, held up in the open prompt's tray of piles, was let go at `at`: if it
+    /// lands in a pile that is not closed, the prompt is told it was dropped there, before the
+    /// card it landed in front of (`table::landing`), as the web's `#dropped` does. Let go
+    /// outside every box, or in a closed pile, it goes back where it lay and nothing is sent.
+    pub(super) fn drop_held(&mut self, slot: usize, at: Vec2) {
+        let Some((_, prompt)) = self.prompt.as_ref().filter(|_| self.open) else {
+            return;
+        };
+        let (ShapeBody::Split { piles }, Some(held)) = (&prompt.body, prompts::Piles::of(prompt))
+        else {
+            return;
+        };
+        let space = self.show.table().layout().tray;
+        let Some((pile, before)) = table::landing(&held.held(), space, self.window.size, at) else {
+            return;
+        };
+        if piles.get(pile).is_none_or(|pile| pile.closed) {
+            return;
+        }
+        if let (Ok(slot), Ok(pile), Ok(before)) = (
+            u16::try_from(slot),
+            u8::try_from(pile),
+            u16::try_from(before),
+        ) {
+            let on = Subject::Object {
+                slot: ObjectId(slot),
+            };
+            self.click(Click::Drop {
+                on,
+                pile,
+                at: before,
+            });
+        }
     }
 }

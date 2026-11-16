@@ -3,7 +3,7 @@
 
 use super::Show;
 use crate::frame::Frame;
-use crate::pointer::{self, Pointer};
+use crate::pointer::{self, LetGo, Pointer};
 
 impl Show {
     /// The pointer on the table.
@@ -12,13 +12,14 @@ impl Show {
         &self.pointer
     }
 
-    /// Finds and marks what the pointer is over in `frame`, just built at `now`, and returns the
-    /// card a press that ended since the last frame clicked (`pointer::update`).
-    pub fn point(&mut self, frame: &mut Frame, now: u64) -> Option<usize> {
+    /// Finds and marks what the pointer is over in `frame`, just built at `now`, and returns what
+    /// a press on a card that ended since the last frame meant (`pointer::update`).
+    pub fn point(&mut self, frame: &mut Frame, now: u64) -> Option<LetGo> {
         let mut pointer = std::mem::replace(&mut self.pointer, Pointer::EMPTY);
         let camera = self.table.camera();
         let rest = |slot| self.pose(slot, now);
-        let clicked = pointer::update(&mut pointer, frame, rest, (now, camera));
+        let in_tray = |slot| self.table.in_tray(slot);
+        let clicked = pointer::update(&mut pointer, frame, (rest, in_tray), (now, camera));
         self.pointer = pointer;
         clicked
     }

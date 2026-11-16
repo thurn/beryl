@@ -343,18 +343,18 @@ pub fn takes_pointer(place: Place) -> bool {
 /// the flat layer under the pointer is marked `HOVERED` instead. A card a script is moving is
 /// not hovered until it arrives, and nothing is hovered while a card is held.
 ///
-/// A press on a card that ended since the last frame is decided here, and the card it clicked is
+/// A press on a card that ended since the last frame is decided here, and what it meant is
 /// returned (`let_go`).
 pub(crate) fn update(
     pointer: &mut Pointer,
     frame: &mut Frame,
-    rest: impl Fn(usize) -> Option<Pose>,
+    (rest, in_tray): (impl Fn(usize) -> Option<Pose>, impl Fn(usize) -> bool),
     (now, camera): (u64, &Camera),
-) -> Option<usize> {
+) -> Option<LetGo> {
     pointer
         .lifts
         .retain(|lift| lift.to > 0.0 || !lift.done(now));
-    let clicked = let_go(pointer, &rest, (now, camera));
+    let clicked = let_go(pointer, &rest, in_tray, (now, camera));
     hover_under(
         pointer,
         frame,
@@ -370,30 +370,49 @@ pub(crate) fn update(
 /// one that travelled that far without picking its card up, such as a drag that scrolled a
 /// battlefield row, is not, as `Pointer.release` has it (`unheldDrag`). A card held and let go
 /// higher on the screen than the top of where it rests, so over the battlefield or the stack, is
-/// a click on it too, and one let go lower, back over the hand, is not. A held card let go falls
-/// back from where it was to where it rests (`rest`), clicked or not, unless a script moves it
-/// first. A cancelled press clicks nothing.
+/// a click on it too, and one let go lower, back over the hand, is not. A card held up in a
+/// tray (`in_tray`) and carried is let go where the pointer is, for the client to find the pile
+/// it lands in (`LetGo::Dropped`), as the prompt's `#dropped` does for a tray. A held card let
+/// go falls back from where it was to where it rests (`rest`), clicked or not, unless a script
+/// moves it first. A cancelled press clicks nothing.
 fn let_go(
     pointer: &mut Pointer,
     rest: impl Fn(usize) -> Option<Pose>,
+    in_tray: impl Fn(usize) -> bool,
     (now, camera): (u64, &Camera),
-) -> Option<usize> {
+) -> Option<LetGo> {
     let (grip, cancelled) = pointer.let_go.take()?;
     if !grip.held {
-        return (!cancelled && !grip.moved).then_some(grip.slot);
+        return (!cancelled && !grip.moved).then_some(LetGo::Click(grip.slot));
     }
     pointer.fall = Some(Fall {
         slot: grip.slot,
         from: held::pose(camera, grip.at, pointer.lean.tilt()),
         since: now,
     });
+    if in_tray(grip.slot) {
+        return (!cancelled).then_some(LetGo::Dropped {
+            slot: grip.slot,
+            at: grip.at,
+        });
+    }
     let resting = rest(grip.slot)?;
     let (corners, _) = camera.card_box(&resting);
     let top = corners
         .iter()
         .map(|corner| corner.y)
         .fold(f32::INFINITY, f32::min);
-    (!cancelled && grip.at.y < top).then_some(grip.slot)
+    (!cancelled && grip.at.y < top).then_some(LetGo::Click(grip.slot))
+}
+
+/// What a press on a card meant once it ended (`update`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LetGo {
+    /// A click on the card in this slot.
+    Click(usize),
+    /// The card in `slot`, held up in a tray, was carried and let go with the pointer at `at`,
+    /// in logical points.
+    Dropped { slot: usize, at: Vec2 },
 }
 
 /// Hands the card the pointer holds or let go over to `compiled`, a script that starts at

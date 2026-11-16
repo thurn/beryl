@@ -12,12 +12,14 @@ mod order;
 mod pay;
 mod pick;
 mod split;
+mod tray;
 
 use beryl_protocol::prompt::{ButtonId, Marked, PromptView, ShapeBody};
 use beryl_protocol::protocol::{ObjectId, PlayerView, ZoneName};
 use beryl_protocol::script::{Mark, OwnStep, OwnTimings, StepTiming, Verb};
 
 pub use bar::prompt_bar;
+pub use tray::Piles;
 
 use crate::element::Element;
 use crate::light::{ArrowSpan, Lit, MarkSpan, Span};
