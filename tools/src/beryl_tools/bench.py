@@ -45,6 +45,8 @@ BUILD_PROCESSES = ("rustc", "cargo", "clippy-driver", "clang", "swift-frontend")
 
 VM = "beryl-bench"
 VM_LOCK = "$HOME/bench-count.lock"  # held while a run provisions, builds and counts
+# Held shared by each run someone waits for, so that a sweep's run goes after it ([`locked`]).
+VM_TURN = "$HOME/bench-turn.lock"
 # Inside the VM, which mounts the checkout read-only, each worktree has a target dir and a
 # Gungraun home named after it, so its artifacts and "old" results are its own.
 VM_TARGETS = "$HOME/targets"
@@ -351,13 +353,35 @@ def vm_shell(script: str, vm: str = VM, workdir: str | None = None) -> int:
     return subprocess.run(vm_command(script, vm, workdir), check=False).returncode
 
 
-def locked(script: str) -> str:
-    """`script` holding the VM's lock, which the kernel drops when the shell exits, however."""
-    return f"""exec 9>"{VM_LOCK}"
+def locked(script: str, background: bool | None = None) -> str:
+    """`script` holding the VM's lock, which the kernel drops when the shell exits, however. A
+    run someone waits for holds `VM_TURN` shared while it waits and runs; a sweep's run
+    (`background`, by default `vm_host.background`) takes `VM_LOCK` only while it can hold
+    `VM_TURN` alone. `flock` hands a freed lock to any waiter, so a worker's `just b3d gate
+    --gpu` once waited 66 minutes behind sweep steps. A run that has started still goes first.
+    """
+    if background is None:
+        background = vm_host.background()
+    if not background:
+        return f"""exec 8>"{VM_TURN}"
+flock -s 8
+exec 9>"{VM_LOCK}"
 if ! flock -n 9; then
   echo "bench: another bench-count run is using the VM; waiting for it" >&2
   flock 9
 fi
+{script}"""
+    return f"""exec 8>"{VM_TURN}"
+exec 9>"{VM_LOCK}"
+waited=""
+while :; do
+  flock -x 8
+  if flock -n 9; then flock -u 8; break; fi
+  flock -u 8
+  [ -n "$waited" ] || echo "bench: the VM is busy or a waited-for run goes first; waiting" >&2
+  waited=1
+  sleep 5
+done
 {script}"""
 
 

@@ -113,3 +113,14 @@ def test_low_priority_work_runs_its_machine_in_the_background(
         ["taskpolicy", "-b", "-p", "4242"],
         ["taskpolicy", "-B", "-p", "4242"],
     ]
+
+
+def test_a_sweeps_run_and_low_priority_work_are_background_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert not vm_host.background()
+    monkeypatch.setenv(tokens.CLASS_ENV, "sweep")
+    assert vm_host.background()
+    monkeypatch.setenv(tokens.CLASS_ENV, "agent")
+    monkeypatch.setenv("BERYL_LOW_PRIORITY", "1")
+    assert vm_host.background()

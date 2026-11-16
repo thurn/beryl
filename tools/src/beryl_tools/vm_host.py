@@ -102,6 +102,13 @@ def low_priority() -> bool:
     return os.environ.get("BERYL_LOW_PRIORITY") == "1"
 
 
+def background() -> bool:
+    """Whether this command is work nobody is waiting for: low-priority work, or a sweep's,
+    whose steps take tokens of the `sweep` class (tokens.py). Such a run takes a machine only
+    when no other run is waiting for it (`bench.locked`)."""
+    return low_priority() or tokens.named_class() == "sweep"
+
+
 def set_priority(vm: str, low: bool) -> None:
     """Gives `vm`'s process the background priority, or takes it away."""
     pid = machine_process(vm)
