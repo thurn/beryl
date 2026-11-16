@@ -18,6 +18,7 @@ use crate::verbs::{self, Interval};
 mod abilities;
 mod counts;
 mod out;
+mod placement;
 mod places;
 mod room;
 mod still;
@@ -69,7 +70,7 @@ pub(crate) struct Motion<'a> {
     /// Every object's resting place as the table now stands.
     rests: Placement,
     /// The slots each group placed when it was last placed, by `Group::index`.
-    members: Vec<Vec<ObjectId>>,
+    members: [Vec<ObjectId>; Group::ALL.len()],
     /// The group each slot was last placed in, by `Group::index`, indexed by slot.
     groups: Vec<Option<usize>>,
     /// The order of the cards of `played`'s hands and exile piles, by slot (`table::arrival`).
@@ -92,7 +93,7 @@ pub(crate) struct Motion<'a> {
     fresh: Placement,
     /// The slots each group a step placed again placed, by `Group::index`, until the step makes
     /// them its `members`.
-    next: Vec<Vec<ObjectId>>,
+    next: [Vec<ObjectId>; Group::ALL.len()],
     /// The slots the step's act named.
     touched: Vec<ObjectId>,
     /// The numbers of the names of `played`'s objects.
@@ -137,7 +138,7 @@ impl<'a> Motion<'a> {
             table.placement(before, &numbers_of(played))
         };
         // Each object's group, read from where it rests.
-        let mut members = vec![Vec::new(); Group::ALL.len()];
+        let mut members = [const { Vec::new() }; Group::ALL.len()];
         let mut groups = vec![None; rests.rests.len()];
         for (slot, rest) in rests.rests.iter().enumerate() {
             if let Some(group) = rest.and_then(|rest| Group::at(rest.place)) {
@@ -164,7 +165,7 @@ impl<'a> Motion<'a> {
             unplaced: 0,
             first: true,
             fresh: Placement::default(),
-            next: vec![Vec::new(); Group::ALL.len()],
+            next: [const { Vec::new() }; Group::ALL.len()],
             touched: Vec::new(),
             marks: Vec::new(),
             affected: Vec::new(),
@@ -180,78 +181,6 @@ impl<'a> Motion<'a> {
                 timings.iter().any(|timing| timing.duration > 0.0),
             ),
         }
-    }
-
-    /// Applies `act` to the table and places again every group whose resting places it may
-    /// have changed: the groups that held or now hold an object the act named, and the stack
-    /// where the act may change it without naming an object on it (`restacks`). Their resting
-    /// places go to `fresh` and their slots to `next`; `rests` is left as it was. Returns which
-    /// groups it placed, or none if the table could not take the act.
-    fn place(&mut self, act: &'a Act, timed: bool) -> Option<[bool; Group::ALL.len()]> {
-        let touched = &mut self.touched;
-        touched.clear();
-        if self
-            .played
-            .apply_noting(act, &mut |slot| touched.push(slot))
-            .is_err()
-        {
-            self.whole = true;
-            self.unplaced += 1;
-            return None;
-        }
-        let mut dirty = [self.whole; Group::ALL.len()];
-        // The resting places a script starts from may not number an ability the table played
-        // over does, so its first step places the stack again whatever its act.
-        dirty[Group::Stack.index()] |= self.first || index::restacks(act);
-        self.look.follow((act, timed), &self.played, &mut dirty);
-        let zones = index::step_zones(self.index.as_mut(), &self.played, act, &self.touched)
-            .handled(self.look.handled())
-            .arrived(&self.arrival);
-        if self.first {
-            for group in Group::ALL
-                .into_iter()
-                .filter(|group| group.in_object_order())
-            {
-                dirty[group.index()] = true;
-            }
-        }
-        for object in self.touched.iter().filter_map(|&slot| zones.get(slot)) {
-            self.names.note(object);
-        }
-        for &slot in &self.touched {
-            let was = self.groups.get(usize::from(slot.0)).copied().flatten();
-            let now = zones.get(slot).and_then(|object| zones.group_of(object));
-            if let Some(group) = was {
-                dirty[group] = true;
-            }
-            if let Some(group) = now {
-                dirty[group.index()] = true;
-            }
-            // A permanent that enters or leaves a row takes the cards that lie under it along
-            // or lets them go to their own groups, though the act names none of them
-            // (`place::under`).
-            let row = |index: usize| matches!(Group::ALL[index], Group::Row { .. });
-            if was != now.map(Group::index)
-                && (was.is_some_and(row) || now.is_some_and(|g| row(g.index())))
-            {
-                for object in zones.naming_as_host(slot) {
-                    let index = usize::from(object.slot.0);
-                    if let Some(group) = self.groups.get(index).copied().flatten() {
-                        dirty[group] = true;
-                    }
-                    if let Some(group) = zones.group_of(object) {
-                        dirty[group.index()] = true;
-                    }
-                }
-            }
-        }
-        for (group, next) in Group::ALL.into_iter().zip(&mut self.next) {
-            if dirty[group.index()] {
-                let zones = (&zones, &self.names);
-                self.table.place_group(zones, group, &mut self.fresh, next);
-            }
-        }
-        Some(dirty)
     }
 
     /// Every object's resting place in `view`, the view the script leads to. The table played
@@ -275,10 +204,9 @@ impl<'a> Motion<'a> {
     }
 
     /// Where the object in `slot` rests after the step, given the groups `dirty` it placed again.
-    fn now(&self, slot: usize, dirty: &[bool]) -> Option<Rest> {
-        let id = ObjectId(u16::try_from(slot).expect("a slot fits an object id"));
-        if let Some(rest) = self.fresh.get(id) {
-            return Some(*rest);
+    fn now(&self, slot: usize, dirty: &[bool]) -> Option<&Rest> {
+        if let Some(rest) = self.fresh.rests.get(slot).and_then(Option::as_ref) {
+            return Some(rest);
         }
         let left = self.whole
             || self
@@ -290,7 +218,7 @@ impl<'a> Motion<'a> {
         if left {
             None
         } else {
-            self.rests.get(id).copied()
+            self.rests.rests.get(slot).and_then(Option::as_ref)
         }
     }
 
@@ -338,8 +266,10 @@ impl<'a> Motion<'a> {
         for (group, members) in self.members.iter().enumerate() {
             if dirty[group] && !self.whole {
                 for &slot in members {
-                    self.rests.unset(slot);
-                    self.groups[usize::from(slot.0)] = None;
+                    if self.fresh.get(slot).is_none() {
+                        self.rests.unset(slot);
+                        self.groups[usize::from(slot.0)] = None;
+                    }
                 }
             }
         }
@@ -443,13 +373,11 @@ impl<'a> Motion<'a> {
             {
                 continue;
             }
-            let rested = self.rests.rests.get(slot).copied().flatten();
-            let now = self.now(slot, &dirty);
             if Some(slot) == subject {
                 let from = self.pose(slot, own.from);
-                let to = match now {
+                let to = match self.now(slot, &dirty) {
                     Some(rest) => Some(rest.pose),
-                    None if rested.is_some() => Some(Pose {
+                    None if self.rests.rests.get(slot).is_some_and(Option::is_some) => Some(Pose {
                         opacity: 0.0,
                         ..from
                     }),
@@ -468,12 +396,9 @@ impl<'a> Motion<'a> {
                 played = true;
                 continue;
             }
-            let segment = if still && !(regroup.is_some() && self.stays_in_hand(slot)) {
-                self.change(slot, (rested, now), number, own)
-            } else {
-                self.follow(slot, (rested, now), number, own, (room, regroup))
-            };
-            if let Some((segment, cause)) = segment {
+            if let Some((segment, cause)) =
+                self.follow(slot, (&dirty, still), number, own, (room, regroup))
+            {
                 self.push(slot, segment, cause);
                 if matches!(cause, Cause::Slide(_)) && segment.end() > own.to {
                     self.note_closing(Some(slot), segment.end(), number);
@@ -546,32 +471,43 @@ impl<'a> Motion<'a> {
     fn follow(
         &mut self,
         slot: usize,
-        (rested, now): (Option<Rest>, Option<Rest>),
+        (dirty, still): (&[bool], bool),
         number: usize,
         own: Interval,
         (room, regroup): (Interval, Option<Interval>),
     ) -> Option<(Segment, Cause)> {
-        match (rested, now) {
-            (Some(rested), Some(now)) if rested.pose != now.pose => {
+        let rested = self
+            .rests
+            .rests
+            .get(slot)
+            .and_then(Option::as_ref)
+            .map(|rest| &rest.pose);
+        let now = self.now(slot, dirty).map(|rest| &rest.pose);
+        if still && !(regroup.is_some() && self.stays_in_hand(slot)) {
+            return self.change(slot, (rested.copied(), now.copied()), number, own);
+        }
+        if rested == now {
+            return None;
+        }
+        match (rested.copied(), now.copied()) {
+            (Some(rested), Some(now)) => {
                 let room = match regroup {
                     Some(regroup) if self.stays_in_hand(slot) => regroup,
                     _ => room,
                 };
+                if self.retarget(slot, room.from, rested, now) {
+                    return None;
+                }
                 let from = self.pose(slot, room.from);
-                if self.retarget(slot, room.from, rested.pose, now.pose) {
-                    None
-                } else if only_height(from, now.pose) {
+                if only_height(from, now) {
                     // A card that only lies higher or lower among the cards of its row (one
                     // `LAYER` for each card placed before it, so that two never flicker where
                     // they overlap) has not moved: it takes its new height at once. The web
                     // stage gives a card no such height, so nothing closes up after the step
                     // for it there.
-                    Some((
-                        verbs::instant(from, now.pose, room.from),
-                        Cause::Change(number),
-                    ))
+                    Some((verbs::instant(from, now, room.from), Cause::Change(number)))
                 } else {
-                    Some((verbs::slide(from, now.pose, room), Cause::Slide(number)))
+                    Some((verbs::slide(from, now, room), Cause::Slide(number)))
                 }
             }
             (Some(_), None) => {
@@ -592,9 +528,9 @@ impl<'a> Motion<'a> {
                 verbs::instant(
                     Pose {
                         opacity: 0.0,
-                        ..now.pose
+                        ..now
                     },
-                    now.pose,
+                    now,
                     own.from,
                 ),
                 Cause::Change(number),

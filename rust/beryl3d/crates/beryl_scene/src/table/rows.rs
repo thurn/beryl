@@ -5,7 +5,7 @@
 //! a merged permanent, and the cards a permanent holds in exile, peek out from under it, as the
 //! web interface's `tuck` draws the cards a permanent holds (`ui/src/game/battlefield.ts`).
 
-use std::f32::consts::FRAC_PI_2;
+use std::f32::consts::FRAC_1_SQRT_2;
 
 use beryl_protocol::protocol::{CardType, Facing, ObjectId, ObjectView, ZoneName};
 use glam::{Quat, Vec2, Vec3};
@@ -14,6 +14,9 @@ use super::place::host_slot;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout, RowArea};
 use crate::data::space::card::PHASED_OUT_OPACITY;
 use crate::pose::Pose;
+
+mod change;
+pub(crate) use change::RowChange;
 
 /// One card of a laid-out row: its pose, and whether it is drawn.
 pub(super) struct Laid<'a> {
@@ -384,48 +387,50 @@ fn place_group<'a>(
     for (depth, &object) in group.iter().enumerate().rev() {
         let offset = rules.layout.pile_step * depth as f32;
         let centre = left + card_width(object) / 2.0 + offset.x;
-        // The cards under a permanent peek out away from the viewer on both sides, as the copies
-        // of a pile do, where the web's peek toward their controller. A card nearer the viewer
-        // is nearer the camera, which the interface checks and the hit test take for in front,
-        // so one peeking out below its permanent would read as covering it. A land keeps them
-        // level, as the web keeps them clear of the badges above the lands' row.
-        let rise = if object.types.contains(&CardType::Land) {
-            0.0
-        } else {
-            step.y * CARD_HEIGHT
-        };
-        // The cards to its right, then those to its left, each lower than the one nearer it.
-        let right = beneath
-            .of(object.slot, false)
-            .enumerate()
-            .map(|(i, c)| (i, c, 1.0));
-        let left_of = beneath
-            .of(object.slot, true)
-            .enumerate()
-            .map(|(i, c)| (i, c, -1.0));
-        let under: Vec<(usize, &ObjectView, f32)> = right.chain(left_of).collect();
-        for &(index, card, across) in under.iter().rev() {
-            let reach = (index + 1) as f32;
-            let pose = Pose {
-                position: Vec3::new(
-                    centre + across * reach * across_step,
-                    y + offset.y + reach * rise,
-                    LAYER * *height as f32,
-                ),
-                rotation: Quat::IDENTITY,
-                turn: if face_up(card) { 0.0 } else { 1.0 },
-                ..Pose::default()
+        if !beneath.cards.is_empty() {
+            // The cards under a permanent peek out away from the viewer on both sides, as the copies
+            // of a pile do, where the web's peek toward their controller. A card nearer the viewer
+            // is nearer the camera, which the interface checks and the hit test take for in front,
+            // so one peeking out below its permanent would read as covering it. A land keeps them
+            // level, as the web keeps them clear of the badges above the lands' row.
+            let rise = if object.types.contains(&CardType::Land) {
+                0.0
+            } else {
+                step.y * CARD_HEIGHT
             };
-            *height += 1;
-            laid(Laid {
-                object: card,
-                pose,
-                visible,
-                copies: 1,
-            });
+            // The cards to its right, then those to its left, each lower than the one nearer it.
+            let right = beneath
+                .of(object.slot, false)
+                .enumerate()
+                .map(|(i, c)| (i, c, 1.0));
+            let left_of = beneath
+                .of(object.slot, true)
+                .enumerate()
+                .map(|(i, c)| (i, c, -1.0));
+            let under: Vec<(usize, &ObjectView, f32)> = right.chain(left_of).collect();
+            for &(index, card, across) in under.iter().rev() {
+                let reach = (index + 1) as f32;
+                let pose = Pose {
+                    position: Vec3::new(
+                        centre + across * reach * across_step,
+                        y + offset.y + reach * rise,
+                        LAYER * *height as f32,
+                    ),
+                    rotation: Quat::IDENTITY,
+                    turn: if face_up(card) { 0.0 } else { 1.0 },
+                    ..Pose::default()
+                };
+                *height += 1;
+                laid(Laid {
+                    object: card,
+                    pose,
+                    visible,
+                    copies: 1,
+                });
+            }
         }
         let rotation = if object.tapped {
-            Quat::from_rotation_z(-FRAC_PI_2)
+            Quat::from_xyzw(0.0, 0.0, -FRAC_1_SQRT_2, FRAC_1_SQRT_2)
         } else {
             Quat::IDENTITY
         };
@@ -650,26 +655,24 @@ pub(super) struct SameName {
 
 impl SameName {
     pub(super) fn of(cards: &[&ObjectView], ids: Option<&NameIds<'_>>) -> Self {
-        if let Some(ids) = ids
-            && let Some(numbered) = cards
-                .iter()
-                .map(|card| ids.get(card))
-                .collect::<Option<Vec<usize>>>()
-        {
+        if let Some(ids) = ids {
             // By name number, the index of the last card seen with that name, or `u32::MAX`.
             let mut last = vec![u32::MAX; ids.count()];
-            let previous = numbered
+            let previous = cards
                 .iter()
                 .enumerate()
-                .map(|(index, &id)| {
+                .map(|(index, card)| {
+                    let id = ids.get(card)?;
                     let before = std::mem::replace(
                         &mut last[id],
                         u32::try_from(index).expect("a row holds fewer than 2^32 cards"),
                     );
-                    (before != u32::MAX).then_some(before as usize)
+                    Some((before != u32::MAX).then_some(before as usize))
                 })
                 .collect();
-            return Self { previous };
+            if let Some(previous) = previous {
+                return Self { previous };
+            }
         }
         let mut order: Vec<(u64, usize)> = cards
             .iter()
@@ -698,7 +701,7 @@ impl SameName {
     }
 
     /// Whether any two cards share a name.
-    fn repeats(&self) -> bool {
+    pub(super) fn repeats(&self) -> bool {
         self.previous.iter().any(Option::is_some)
     }
 
@@ -756,9 +759,11 @@ fn plain(object: &ObjectView) -> bool {
 
 /// Whether two permanents are alike in everything the table shows of them.
 fn twins(a: &ObjectView, b: &ObjectView) -> bool {
-    a.slot != b.slot
-        && a.name.is_some()
-        && a.name == b.name
+    a.slot != b.slot && a.name.is_some() && same_pile_face(a, b)
+}
+
+fn same_pile_face(a: &ObjectView, b: &ObjectView) -> bool {
+    a.name == b.name
         && a.facing == b.facing
         && a.owner == b.owner
         && a.controller == b.controller

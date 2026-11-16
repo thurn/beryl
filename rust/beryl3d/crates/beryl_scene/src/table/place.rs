@@ -11,17 +11,17 @@ use beryl_protocol::script::{Piles, Table as Played};
 
 mod indexed;
 pub(crate) use indexed::arrival;
+mod row;
+pub(crate) use row::RowFits;
+use row::battlefield_row;
 mod under;
-pub(crate) use under::host_slot;
+pub(crate) use under::{host_slot, names_host};
 
 use super::hands::hand;
 use super::pile::{PileShown, lay_pile, pile_base, pile_scale};
-use super::rows::{
-    Beneath, Laid, NameIds, RowRules, RowWindow, SameName, face_up, lay_row, least_strip,
-};
-use super::stack::{OnStack, on_stack, place_stack, row_area, spells};
+use super::rows::{NameIds, RowWindow, face_up};
+use super::stack::{OnStack, on_stack, place_stack, spells};
 use super::{Camera, Layout, lifted};
-use crate::agent::hit;
 use crate::frame::Place;
 use crate::pose::Pose;
 
@@ -112,19 +112,17 @@ pub fn place(
     camera: &Camera,
     scroll: &Scroll,
 ) -> Placement {
-    place_zones(&Zones::of_view(view, abilities), layout, camera, scroll)
+    let fits = RowFits::new(layout, camera);
+    place_zones(
+        &Zones::of_view(view, abilities),
+        (layout, camera, scroll, &fits, None),
+    )
 }
 
 /// Every object's resting place in `zones`, seen through `camera`.
-pub(crate) fn place_zones(
-    zones: &Zones,
-    layout: &Layout,
-    camera: &Camera,
-    scroll: &Scroll,
-) -> Placement {
+pub(crate) fn place_zones(zones: &Zones, rules: Rules<'_>) -> Placement {
     let mut placement = Placement::default();
     for (group, objects) in Group::ALL.into_iter().zip(all_members(zones)) {
-        let rules = (layout, camera, scroll, None);
         lay(
             group,
             &objects,
@@ -143,9 +141,7 @@ pub(crate) fn place_zones(
 pub(crate) fn place_reusing(
     zones: &Zones,
     (known_zones, known): (&Zones, &Placement),
-    layout: &Layout,
-    camera: &Camera,
-    scroll: &Scroll,
+    rules: Rules<'_>,
 ) -> (Placement, usize) {
     let mut placement = Placement {
         rests: Vec::with_capacity(known.rests.len()),
@@ -182,7 +178,7 @@ pub(crate) fn place_reusing(
                 group,
                 &objects,
                 &zones.stack,
-                ((layout, camera, scroll, None), zones.handling.as_ref()),
+                (rules, zones.handling.as_ref()),
                 &mut placement,
             );
         }
@@ -213,8 +209,14 @@ pub(crate) fn place_group(
 }
 
 /// What placement follows besides the objects: the layout, the camera, the rows' scroll offsets
-/// and, if the caller keeps them, the numbers of the objects' names.
-pub(crate) type Rules<'r> = (&'r Layout, &'r Camera, &'r Scroll, Option<&'r NameIds<'r>>);
+/// and fitted geometry, and the numbers of the objects' names if the caller keeps them.
+pub(crate) type Rules<'r> = (
+    &'r Layout,
+    &'r Camera,
+    &'r Scroll,
+    &'r RowFits,
+    Option<&'r NameIds<'r>>,
+);
 
 /// What `Zones::of_table_grouped` holds for a slot with no object, or one the table does not
 /// show: no `Group::number`.
@@ -393,6 +395,8 @@ pub(crate) struct Zones<'a> {
     /// The `Group::number` of the object in each slot, or `NO_GROUP`, where the caller keeps
     /// them (`of_table_grouped`).
     groups: Option<&'a [u8]>,
+    /// Slots of cards with a possible host, when the script indexes them.
+    tucked: Option<&'a [ObjectId]>,
     /// Permanents, in the order they entered.
     battlefield: &'a [ObjectId],
     /// The spells and numbered abilities on the stack, bottom first.
@@ -435,12 +439,13 @@ impl<'a> Zones<'a> {
                 .filter(|item| on(item))
                 .map(|item| (item, None)),
             abilities,
-            view.objects.iter(),
+            stack_slots(view.objects.iter()),
         );
         let zones = Self {
             in_view_order: Some(&view.objects),
             slots: Cow::Owned(slots),
             groups: None,
+            tucked: None,
             battlefield: &view.battlefield,
             stack: Cow::Owned(stack),
             piles: [player(&view.players.you), player(&view.players.opponent)],
@@ -463,11 +468,12 @@ impl<'a> Zones<'a> {
             in_view_order: None,
             slots: Cow::Owned(by_slot(end, table.objects.values())),
             groups: None,
+            tucked: None,
             battlefield: &table.battlefield,
             stack: Cow::Owned(on_stack(
                 table.stack.iter().map(|entry| (&entry.item, entry.id)),
                 &[],
-                table.objects.values(),
+                stack_slots(table.objects.values()),
             )),
             piles: [piles(&table.you), piles(&table.opponent)],
             handling: None,
@@ -517,6 +523,15 @@ impl<'a> Zones<'a> {
     fn listed(&self, slots: &[ObjectId]) -> Vec<&'a ObjectView> {
         slots.iter().filter_map(|&slot| self.get(slot)).collect()
     }
+}
+
+/// The slots of cards in the stack zone, in the order the caller lists them.
+pub(crate) fn stack_slots<'a>(
+    objects: impl Iterator<Item = &'a ObjectView>,
+) -> impl Iterator<Item = ObjectId> {
+    objects
+        .filter(|object| object.zone == ZoneName::Stack)
+        .map(|object| object.slot)
 }
 
 /// `objects`, none of whose slots is `end` or more, by slot.
@@ -621,7 +636,7 @@ fn lay(
     (rules, handled): (Rules, Option<&lifted::Handled>),
     placement: &mut Placement,
 ) {
-    let (layout, camera, scroll, ids) = rules;
+    let (layout, camera, scroll, fits, ids) = rules;
     match group {
         Group::Pile { side, zone } => {
             let at = pile_base(layout, camera, side, zone);
@@ -645,7 +660,7 @@ fn lay(
                 placement,
                 objects,
                 (side, row),
-                (layout, camera),
+                (layout, fits.get(side, row)),
                 offset,
                 ids,
             );
@@ -681,111 +696,4 @@ fn row_of(object: &ObjectView) -> RowName {
     } else {
         RowName::Others
     })
-}
-
-/// One of one side's three battlefield rows, `cards` in the order they entered. They keep that
-/// order, except that lands stand untapped first, so how much mana is open reads at a glance,
-/// and each name together, in the order the names first appear.
-fn battlefield_row(
-    placement: &mut Placement,
-    cards: &[&ObjectView],
-    (side, row): (Side, RowName),
-    (layout, camera): (&Layout, &Camera),
-    offset: usize,
-    ids: Option<&NameIds<'_>>,
-) {
-    let (area, y) = row_area((layout, camera), side, row);
-    // The cards that lie under permanents, which `members` lists after the row's permanents. A
-    // row with none, as nearly every row is, is laid out with no copy of its list.
-    let in_row = |slot: ObjectId| cards.iter().copied().find(|object| object.slot == slot);
-    let lies_under = |object: &&ObjectView| host_slot(object, in_row).is_some();
-    let (under, permanents): (Vec<&ObjectView>, Vec<&ObjectView>);
-    let cards = if cards.iter().any(lies_under) {
-        (under, permanents) = cards.iter().copied().partition(lies_under);
-        &permanents[..]
-    } else {
-        under = Vec::new();
-        cards
-    };
-    let sorted;
-    let (cards, names) = if row == RowName::Lands {
-        let names;
-        (sorted, names) = lands_in_order(cards, ids);
-        (&sorted[..], Some(names))
-    } else {
-        (cards, None)
-    };
-    let rules = RowRules {
-        layout,
-        // The "reachable" check finds an uncovered square only in whole cells of its grid, and
-        // can miss up to a cell beside each of the strip's two slanted edges.
-        strip: least_strip(camera, area, y, layout.strip + 2.0 * hit::CELL),
-        scroll: offset,
-    };
-    let place = |zone| Place::Card {
-        zone,
-        side,
-        row: Some(row),
-    };
-    let mut set = |Laid {
-                       object,
-                       pose,
-                       visible,
-                       copies,
-                   }| {
-        placement.set(
-            object.slot,
-            Rest {
-                pose,
-                place: place(object.zone),
-                visible,
-                copies,
-            },
-        );
-    };
-    let beneath = Beneath::new(under, cards);
-    placement.rows[side_index(side)][row_index(row)] =
-        lay_row((cards, &beneath), (names, ids), area, y, &rules, &mut set);
-}
-
-/// A lands row's cards in the order they stand: untapped first, and each name together, in the
-/// order the names first appear in `cards`. Otherwise the order of `cards` is kept. Also links
-/// each card, in that order, to the one before it with its name.
-fn lands_in_order<'a>(
-    cards: &[&'a ObjectView],
-    ids: Option<&NameIds<'_>>,
-) -> (Vec<&'a ObjectView>, SameName) {
-    let names = SameName::of(cards, ids);
-    // The index of the first card with each card's name, and the next card after each with the
-    // same name.
-    let mut first = Vec::with_capacity(cards.len());
-    let mut after: Vec<Option<usize>> = vec![None; cards.len()];
-    for index in 0..cards.len() {
-        first.push(names.first(index, &first));
-        if let Some(previous) = names.before(index) {
-            after[previous] = Some(index);
-        }
-    }
-    // Each name's cards, untapped and then tapped, from its first card. `latest` holds where
-    // the card last put in order with each name went, by the index of that name's first card.
-    let mut order = Vec::with_capacity(cards.len());
-    let mut previous = Vec::with_capacity(cards.len());
-    let mut latest: Vec<Option<usize>> = vec![None; cards.len()];
-    for tapped in [false, true] {
-        for (index, &first) in first.iter().enumerate() {
-            if first != index {
-                continue;
-            }
-            let mut next = Some(index);
-            while let Some(card) = next {
-                if cards[card].tapped == tapped {
-                    previous.push(latest[index]);
-                    latest[index] = Some(order.len());
-                    order.push(cards[card]);
-                }
-                next = after[card];
-            }
-        }
-    }
-    (order, SameName::from_previous(previous))
 }

@@ -12,7 +12,7 @@
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView};
 use beryl_protocol::script::{Act, Fact, Table as Played, Tally};
 
-use crate::table::{Group, NO_GROUP, OnStack, Zones, on_stack};
+use crate::table::{Group, NO_GROUP, OnStack, Zones, names_host, on_stack, stack_slots};
 
 /// The fewest steps a script needs for its index to be built: building it reads every object of
 /// the table about four times as long as listing them for one step does, so a script of a step or
@@ -31,6 +31,11 @@ pub(super) struct Index<'a> {
     /// The items of the table's stack (`on_stack`), listed again only after a step that may
     /// have changed them, since listing them reads every object of the table.
     stack: Vec<OnStack>,
+    /// Slots of cards in the stack zone, sorted as the table lists its objects. A resolving
+    /// spell can still be in this zone after its entry has left the stack.
+    stack_slots: Vec<ObjectId>,
+    /// Slots of cards that name a possible host, in the table's order by slot.
+    tucked: Vec<ObjectId>,
 }
 
 /// Whether `act` may change the stack without naming an object on it: put an ability on it,
@@ -49,11 +54,11 @@ pub(super) fn restacks(act: &Act) -> bool {
 }
 
 /// The items of `played`'s stack, as placement reads them.
-fn stack_of(played: &Played) -> Vec<OnStack> {
+fn stack_of(played: &Played, slots: &[ObjectId]) -> Vec<OnStack> {
     on_stack(
         played.stack.iter().map(|entry| (&entry.item, entry.id)),
         &[],
-        played.objects.values(),
+        slots.iter().copied(),
     )
 }
 
@@ -65,8 +70,12 @@ impl<'a> Index<'a> {
             .last_key_value()
             .map_or(0, |(slot, _)| usize::from(slot.0) + 1);
         let mut groups = vec![NO_GROUP; end];
+        let mut tucked = Vec::new();
         for object in played.objects.values() {
             groups[usize::from(object.slot.0)] = group_number(Some(object));
+            if names_host(object) {
+                tucked.push(object.slot);
+            }
         }
         let end = before
             .objects
@@ -84,10 +93,13 @@ impl<'a> Index<'a> {
             && played.objects.values().all(|object| {
                 objects.get(usize::from(object.slot.0)).copied().flatten() == Some(object)
             });
+        let stack_slots: Vec<_> = stack_slots(played.objects.values()).collect();
         Self {
             objects: same.then_some(objects),
             groups,
-            stack: stack_of(played),
+            stack: stack_of(played, &stack_slots),
+            stack_slots,
+            tucked,
         }
     }
 
@@ -103,7 +115,16 @@ impl<'a> Index<'a> {
                 self.groups.resize(index + 1, NO_GROUP);
             }
             let group = group_number(now);
-            restacked |= group == stacked || self.groups[index] == stacked;
+            let was_on_stack = self.groups[index] == stacked;
+            let on_stack = group == stacked;
+            if on_stack || was_on_stack {
+                update_slots(&mut self.stack_slots, slot, on_stack);
+                restacked = true;
+            }
+            let tucked = now.is_some_and(names_host);
+            if !self.tucked.is_empty() || tucked {
+                update_slots(&mut self.tucked, slot, tucked);
+            }
             self.groups[index] = group;
             let Some(objects) = &mut self.objects else {
                 continue;
@@ -133,16 +154,28 @@ impl<'a> Index<'a> {
             self.objects = None;
         }
         if restacked {
-            self.stack = stack_of(played);
+            self.stack = stack_of(played, &self.stack_slots);
         }
     }
 
     /// The zones of `played`, the table this indexes.
     pub(super) fn zones<'z>(&'z self, played: &'z Played) -> Zones<'z> {
+        let groups = (&self.groups[..], &self.tucked[..]);
         match &self.objects {
-            Some(objects) => Zones::of_table_indexed(played, (objects, &self.stack), &self.groups),
-            None => Zones::of_table_grouped(played, &self.groups),
+            Some(objects) => Zones::of_table_indexed(played, (objects, &self.stack), groups),
+            None => Zones::of_table_grouped(played, groups),
         }
+    }
+}
+
+/// Keeps a slot in a sorted list exactly while it belongs there.
+fn update_slots(slots: &mut Vec<ObjectId>, slot: ObjectId, belongs: bool) {
+    match slots.binary_search(&slot) {
+        Ok(at) if !belongs => {
+            slots.remove(at);
+        }
+        Err(at) if belongs => slots.insert(at, slot),
+        _ => {}
     }
 }
 

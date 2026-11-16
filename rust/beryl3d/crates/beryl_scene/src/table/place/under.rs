@@ -47,7 +47,30 @@ pub(crate) fn host_slot<'a>(
     })
 }
 
+/// Whether a card names any permanent it could lie under, even if that host is absent.
+pub(crate) fn names_host(object: &ObjectView) -> bool {
+    object.part_of.is_some()
+        || object.exiled_by.is_some()
+        || object.exiled_with.is_some()
+        || object.attached_to.is_some()
+}
+
 impl<'a> Zones<'a> {
+    /// Cards that may lie under a permanent, in the order the table lists them.
+    fn possible_tucks(&self) -> impl Iterator<Item = &'a ObjectView> + '_ {
+        self.tucked
+            .into_iter()
+            .flatten()
+            .filter_map(|&slot| self.get(slot))
+            .chain(
+                self.tucked
+                    .is_none()
+                    .then(|| self.objects())
+                    .into_iter()
+                    .flatten(),
+            )
+    }
+
     /// The group `object` belongs in: `Group::of`, or for a card that lies under a permanent
     /// (`host`), that permanent's row.
     pub(crate) fn group_of(&self, object: &ObjectView) -> Option<Group> {
@@ -62,7 +85,7 @@ impl<'a> Zones<'a> {
     /// The cards that lie under the permanents among `permanents`, in the order the table lists
     /// them.
     pub(super) fn under(&self, permanents: &[&ObjectView]) -> Vec<&'a ObjectView> {
-        self.objects()
+        self.possible_tucks()
             .filter(|object| {
                 self.host(object)
                     .is_some_and(|host| permanents.iter().any(|p| p.slot == host.slot))
@@ -76,7 +99,7 @@ impl<'a> Zones<'a> {
         &self,
         slot: ObjectId,
     ) -> impl Iterator<Item = &'a ObjectView> + '_ {
-        self.objects().filter(move |object| {
+        self.possible_tucks().filter(move |object| {
             [
                 object.part_of,
                 object.exiled_by,

@@ -13,13 +13,10 @@ use super::badges;
 use super::look::{Dress, Look};
 use super::own::{self, Fights};
 use super::pile::PileShown;
-use super::place::{
-    Group, Placement, Rest, Rows, Scroll, Zones, place_group, place_reusing, place_zones,
-};
-use super::rows::NameIds;
+use super::place::{Placement, Rest, RowFits, Rows, Scroll};
 use super::shadows::Floors;
 use super::tray::{Held, TrayMotion};
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, place};
+use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window};
 use crate::effects::{self, Effect};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{
@@ -33,6 +30,7 @@ use crate::pose::Pose;
 
 mod motion;
 mod objects;
+mod placement;
 mod scroll;
 
 pub use motion::{Motion, Turn};
@@ -111,6 +109,7 @@ pub(crate) fn ability_track(tracks: &[(u32, Track)], id: u32) -> Option<&Track> 
 pub struct Table {
     layout: Layout,
     camera: Camera,
+    row_fits: RowFits,
     scroll: Scroll,
     /// The cards of the row scrolled last, sliding to their new places.
     slide: scroll::Slide,
@@ -155,9 +154,11 @@ impl Default for Table {
 impl Table {
     #[must_use]
     pub fn new(layout: Layout, window: Window) -> Self {
+        let camera = Camera::fit(layout.camera, window);
         Self {
             layout,
-            camera: Camera::fit(layout.camera, window),
+            row_fits: RowFits::new(&layout, &camera),
+            camera,
             scroll: Scroll::default(),
             slide: scroll::Slide::default(),
             objects: Objects::default(),
@@ -227,6 +228,7 @@ impl Table {
     /// Fits the camera to a window of a new shape and recomputes every resting place.
     pub fn resize(&mut self, window: Window, view: Option<&PlayerView>) {
         self.camera = Camera::fit(self.layout.camera, window);
+        self.row_fits = RowFits::new(&self.layout, &self.camera);
         if let Some(view) = view {
             self.apply(view);
         }
@@ -248,15 +250,6 @@ impl Table {
     #[must_use]
     pub fn abilities(&self) -> &[u32] {
         &self.objects.numbers
-    }
-
-    /// Every object's resting place in `view`, whose stack's abilities `abilities` numbers,
-    /// bottom first, for this window.
-    #[must_use]
-    pub fn placement(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
-        let placement = place(view, abilities, &self.layout, &self.camera, &self.scroll);
-        self.placed.add(placement.count());
-        placement
     }
 
     /// How many objects the table has placed since the last call, and starts counting again.
@@ -300,41 +293,6 @@ impl Table {
         };
         self.unhold(&mut placement);
         placement
-    }
-
-    /// Every object's resting place in `zones`, for this window.
-    pub(crate) fn placement_of(&self, zones: &Zones) -> Placement {
-        let placement = place_zones(zones, &self.layout, &self.camera, &self.scroll);
-        self.placed.add(placement.count());
-        placement
-    }
-
-    /// Every object's resting place in `zones`, for this window, taking each group's from
-    /// `known`, this window's placement of `known_zones`, where that group holds the same objects
-    /// in both.
-    pub(crate) fn placement_reusing(
-        &self,
-        zones: &Zones,
-        known: (&Zones, &Placement),
-    ) -> Placement {
-        let (placement, laid) =
-            place_reusing(zones, known, &self.layout, &self.camera, &self.scroll);
-        self.placed.add(laid);
-        placement
-    }
-
-    /// Places the objects of `group` in `zones` into `placement` for this window, and leaves the
-    /// slots it placed in `placed`. `ids` numbers the names of `zones`' objects.
-    pub(crate) fn place_group(
-        &self,
-        (zones, ids): (&Zones, &NameIds<'_>),
-        group: Group,
-        placement: &mut Placement,
-        placed: &mut Vec<ObjectId>,
-    ) {
-        let rules = (&self.layout, &self.camera, &self.scroll, Some(ids));
-        place_group(zones, group, rules, placement, placed);
-        self.placed.add(placed.len());
     }
 
     /// Puts every object of `view` at its resting place, and forgets the objects it no longer
@@ -452,8 +410,6 @@ impl Table {
             }
             return Some((resting, view, false));
         };
-        builder.segment();
-        let pose = track.pose_at(motion.t);
         let last = motion.finals.cards.get(slot).copied().flatten();
         // A card a row has scrolled out of view rests undrawn at the row's end, above the last
         // card shown, as does a card under the top two of a pile. One out of view before the
@@ -464,17 +420,25 @@ impl Table {
         // track first moves it, a card is drawn as where it rests is; once its track has ended,
         // as where the script leaves it is.
         let moves = resting.zip(last).is_some_and(|(a, b)| a.place != b.place);
+        if !moves
+            && !resting.is_some_and(|object| object.visible)
+            && !last.is_some_and(|object| object.visible)
+            && !track.carried(motion.t)
+        {
+            return None;
+        }
         let begun = track.begun(motion.t);
-        let seen = match (resting, last) {
-            (Some(resting), _) if !begun => resting.visible,
-            (_, Some(last)) if track.settled(motion.t) => last.visible,
-            _ => {
-                moves
-                    || track.carried(motion.t)
-                    || resting.is_some_and(|a| a.visible)
-                    || last.is_some_and(|b| b.visible)
+        match (resting, last) {
+            (Some(resting), _) if !begun => {
+                if !resting.visible {
+                    return None;
+                }
             }
-        };
+            (_, Some(last)) if !last.visible && track.settled(motion.t) => return None,
+            _ => {}
+        }
+        builder.segment();
+        let pose = track.pose_at(motion.t);
         let veiled = turn.is_some_and(|(_, at)| motion.t < at);
         let (object, view) = match (last, resting) {
             (Some(_), Some(object)) if veiled => (object, view),
@@ -494,7 +458,7 @@ impl Table {
         };
         let object = SceneObject {
             pose,
-            visible: seen && pose.opacity > 0.0,
+            visible: pose.opacity > 0.0,
             tapped,
             place,
             copies,

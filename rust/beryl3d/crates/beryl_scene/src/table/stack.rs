@@ -27,12 +27,12 @@ pub(crate) enum OnStack {
 
 /// The items of `stack`, in order, each given with its number if it has one. An ability with
 /// none takes the next of `numbers`, and one with neither is unnumbered. A spell resolving is
-/// the top item: the game takes it off the stack as it begins to resolve, but its card, one of
-/// `objects`, stays in the stack's zone until it is put into its next zone.
+/// the top item: the game takes it off the stack as it begins to resolve, but its card's slot
+/// stays among `stack_slots` until the card leaves the stack zone.
 pub(crate) fn on_stack<'a>(
     stack: impl Iterator<Item = (&'a StackItem, Option<u32>)>,
     numbers: &[u32],
-    objects: impl Iterator<Item = &'a ObjectView>,
+    stack_slots: impl Iterator<Item = ObjectId>,
 ) -> Vec<OnStack> {
     let mut numbers = numbers.iter().copied();
     let mut items: Vec<OnStack> = stack
@@ -47,9 +47,9 @@ pub(crate) fn on_stack<'a>(
             },
         })
         .collect();
-    for object in objects.filter(|object| object.zone == ZoneName::Stack) {
-        if !items.contains(&OnStack::Spell(object.slot)) {
-            items.push(OnStack::Spell(object.slot));
+    for slot in stack_slots {
+        if !items.contains(&OnStack::Spell(slot)) {
+            items.push(OnStack::Spell(slot));
         }
     }
     items

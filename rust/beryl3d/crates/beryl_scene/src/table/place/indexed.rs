@@ -1,7 +1,7 @@
 //! The zones of the table a script plays over for one step, read from what the script's player
 //! keeps between steps: the group of the object in each slot, and the table's objects by slot.
 
-use beryl_protocol::protocol::{ObjectView, PlayerView, RowName, Side, ZoneName};
+use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, RowName, Side, ZoneName};
 use beryl_protocol::script::{Piles, Table as Played};
 use std::borrow::Cow;
 
@@ -12,9 +12,13 @@ impl<'a> Zones<'a> {
     /// holds the `Group::number` of the object in each slot (`Group::of`), or `NO_GROUP`: a
     /// battlefield row then finds its cards by comparing one number each, without reading each
     /// card's side and types.
-    pub(crate) fn of_table_grouped(table: &'a Played, groups: &'a [u8]) -> Self {
+    pub(crate) fn of_table_grouped(
+        table: &'a Played,
+        (groups, tucked): (&'a [u8], &'a [ObjectId]),
+    ) -> Self {
         let mut zones = Self::of_table(table);
         zones.groups = Some(groups);
+        zones.tucked = Some(tucked);
         zones
     }
 
@@ -24,13 +28,14 @@ impl<'a> Zones<'a> {
     pub(crate) fn of_table_indexed(
         table: &'a Played,
         (slots, stack): (&'a [Option<&'a ObjectView>], &'a [OnStack]),
-        groups: &'a [u8],
+        (groups, tucked): (&'a [u8], &'a [ObjectId]),
     ) -> Self {
         let piles = |piles: &'a Piles| [&piles.library[..], &piles.graveyard[..]];
         Self {
             in_view_order: None,
             slots: Cow::Borrowed(slots),
             groups: Some(groups),
+            tucked: Some(tucked),
             battlefield: &table.battlefield,
             stack: Cow::Borrowed(stack),
             piles: [piles(&table.you), piles(&table.opponent)],

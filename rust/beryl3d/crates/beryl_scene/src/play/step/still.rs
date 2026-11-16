@@ -4,7 +4,6 @@
 use super::super::record::Cause;
 use super::Motion;
 use crate::pose::{Pose, Segment};
-use crate::table::Rest;
 use crate::verbs::{self, Interval};
 
 impl Motion<'_> {
@@ -14,13 +13,13 @@ impl Motion<'_> {
     pub(super) fn change(
         &mut self,
         slot: usize,
-        (rested, now): (Option<Rest>, Option<Rest>),
+        (rested, now): (Option<Pose>, Option<Pose>),
         number: usize,
         own: Interval,
     ) -> Option<(Segment, Cause)> {
         let from = self.pose(slot, own.from);
         let to = match (rested, now) {
-            (_, Some(now)) => now.pose,
+            (_, Some(now)) => now,
             (Some(_), None) => Pose {
                 opacity: 0.0,
                 ..from
