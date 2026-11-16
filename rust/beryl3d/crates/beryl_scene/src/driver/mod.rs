@@ -555,6 +555,12 @@ impl Page {
             self.client.press(&press);
         }
         self.release();
+        // After the first views, as the live app sends them once it has resumed a game, so
+        // that a recording of a game stays on the game screen and one with no views shows the
+        // start screen. Every recording the web's fixtures share answers `list_agents`.
+        if let Ok(Some(agents)) = self.recording.agents() {
+            self.give(Input::Agents(agents));
+        }
         self.render();
     }
 

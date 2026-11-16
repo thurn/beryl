@@ -56,6 +56,7 @@ impl Client {
                 .map(|inspected| ElementId(u32::from(inspected.slot.0))),
             sheet: self.sheet,
             agents: &self.agents,
+            start: &self.start,
             fields: &self.fields,
             inspected: self.inspector.shown.as_ref(),
             faces: Some(self.show.faces().list()),

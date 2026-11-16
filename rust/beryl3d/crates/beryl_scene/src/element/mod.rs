@@ -44,9 +44,17 @@ pub enum Press {
     Stop { step: Step, theirs: bool },
     /// Concede the game.
     Concede,
-    /// Start a game against the `agent`th agent the host listed (`Input::Agents`), counting
-    /// from 0.
-    Start { agent: u16 },
+    /// Start a game with what the start screen holds: the chosen opponent, the seed and the
+    /// fair-deal box. With a game in progress the first press asks to confirm, and the next
+    /// concedes that game before starting the new one.
+    Start,
+    /// Choose the `n`th agent the host listed (`Input::Agents`), counting from 0, as the
+    /// opponent of the next game.
+    Agent(u16),
+    /// Turn the start screen's fair-deal box on or off.
+    FairDeal,
+    /// Save every bug report to one file (`Request::ExportBugs`).
+    ExportBugs,
     /// A row of an open menu, counting from 0 over all its groups.
     Menu(MenuId, u16),
     /// Give the keys to an element, such as a text field.

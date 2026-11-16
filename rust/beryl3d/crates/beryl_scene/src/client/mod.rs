@@ -7,10 +7,10 @@ mod editing;
 
 use std::collections::VecDeque;
 
-use beryl_protocol::StartRequest;
 use beryl_protocol::prompt::{Click, ClickReply, ClickRequest, PromptView};
 use beryl_protocol::protocol::{DecisionId, ObjectId, SessionId, Side, Status, StepSet, ZoneName};
 use beryl_protocol::script::{OwnTimings, Subject, Verb, own_timings};
+use beryl_protocol::{AgentView, StartRequest};
 
 use crate::command::{Reply, Request, SessionCommand};
 use crate::element::Press;
@@ -26,7 +26,7 @@ use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
 use crate::pointer::rows::RowGesture;
 use crate::prompts;
-use crate::screens::{self, Music, Screen, ScreenIn, Sheet};
+use crate::screens::{self, Music, SEED, Screen, ScreenIn, Sheet, StartForm};
 use crate::settings::{Setting, Settings};
 use crate::table::{Table, Window};
 use crate::widgets::Fields;
@@ -92,8 +92,13 @@ pub struct Client {
     /// The sheet open over the screen, if any.
     sheet: Option<Sheet>,
     settings: Settings,
-    /// The names of the agents a person may play, as the host listed them.
-    agents: Vec<String>,
+    /// The agents a person may play, as the host listed them.
+    agents: Vec<AgentView>,
+    /// What the person has chosen on the start screen.
+    start: StartForm,
+    /// The screen the first view of all opens, if the client is on the start screen only
+    /// because the agents arrived before any view: the game, which the host resumed or started.
+    first_view_opens: Option<Screen>,
     /// The session the latest view came from, which stop and concede commands name.
     session: Option<SessionId>,
     /// The music last asked of the host, so that it is asked for again only when it changes.
@@ -175,6 +180,8 @@ impl Client {
             sheet: None,
             settings: Settings::default(),
             agents: Vec::new(),
+            start: StartForm::default(),
+            first_view_opens: None,
             session: None,
             music: None,
             own_timings: own_timings(),
@@ -217,6 +224,11 @@ impl Client {
     pub fn handle(&mut self, input: Input) {
         match input {
             Input::Update(update) => {
+                // The first view of all is of a game the host resumed or started, which may
+                // reach the client after the agents put it on the start screen.
+                if let Some(screen) = self.first_view_opens.take() {
+                    self.screen = screen;
+                }
                 self.views += 1;
                 self.session = Some(update.session);
                 self.set_source(&update.view.status);
@@ -276,10 +288,7 @@ impl Client {
                 self.settings = settings;
                 self.show_screen();
             }
-            Input::Agents(agents) => {
-                self.agents = agents;
-                self.show_screen();
-            }
+            Input::Agents(agents) => self.take_agents(agents),
             Input::Nudge => {}
             Input::Pointer(pointer) => self.point(pointer),
             Input::Key(key) => self.key(key),
@@ -315,6 +324,19 @@ impl Client {
         }
         self.follow_entry();
         self.wake = Wake::Now;
+    }
+
+    /// Keeps the agents a person may play and chooses the first to offer. The live app sends
+    /// them once it has resumed a game or found none to resume, so agents that arrive before
+    /// any view mean there is no game yet: the person starts one on the start screen.
+    fn take_agents(&mut self, agents: Vec<AgentView>) {
+        if self.views == 0 {
+            self.screen = Screen::Start;
+            self.first_view_opens = Some(Screen::Game);
+        }
+        self.start.agent = StartForm::first_agent(&agents);
+        self.agents = agents;
+        self.show_screen();
     }
 
     /// Takes the tier the host's rate rule chose, unless memory has run low, after which the
@@ -425,6 +447,7 @@ impl Client {
             hovered: None,
             sheet: self.sheet,
             agents: &self.agents,
+            start: &self.start,
             fields: &self.fields,
             inspected: None,
             faces: None,
@@ -487,6 +510,7 @@ impl Client {
             Press::Button(button) => self.click(Click::Button { button }),
             Press::Prompt(click) => self.click(click),
             Press::Open(screen) => {
+                self.first_view_opens = None;
                 self.screen = screen;
                 self.sheet = None;
                 self.show_screen();
@@ -511,24 +535,55 @@ impl Client {
                     self.commands.push_back(SessionCommand::Concede(session));
                 }
             }
-            Press::Start { agent } => {
-                if let Some(name) = self.agents.get(usize::from(agent)) {
-                    self.commands.push_back(SessionCommand::Start(StartRequest {
-                        agent: name.clone(),
-                        seed: None,
-                        fair: false,
-                    }));
-                    self.screen = Screen::Game;
-                    self.sheet = None;
-                    self.show_screen();
-                }
+            Press::Start => self.start_game(),
+            Press::Agent(agent) => {
+                self.start.agent = Some(agent);
+                self.show_screen();
             }
+            Press::FairDeal => {
+                self.start.fair = !self.start.fair;
+                self.show_screen();
+            }
+            Press::ExportBugs => self.requests.push_back(Request::ExportBugs),
             Press::Focus(id) => self.layer.focus(Some(id)),
             Press::Field(id, ref text) => self.keep_field(id, text),
             // No screen opens a menu or a viewer yet, so there is nothing for these to act on:
             // the screens that open them give them their arms.
             Press::Menu(..) | Press::Dismiss(_) => {}
         }
+    }
+
+    /// Starts a game with what the start screen holds, as the web's `StartScreen` does: nothing
+    /// while no opponent is chosen or the seed is not one; with a game in progress, the first
+    /// press only asks to confirm ("Concede & Start") and the next concedes that game and then
+    /// starts the new one, whether or not the concession lands first.
+    fn start_game(&mut self) {
+        let Some(agent) = (self.start.agent).and_then(|at| self.agents.get(usize::from(at))) else {
+            return;
+        };
+        let Ok(seed) = screens::seed(&self.fields.get(SEED).text) else {
+            return;
+        };
+        let view = self.show.latest().map(|update| &update.view);
+        let going_on = self.session.filter(|_| screens::in_progress(view));
+        if going_on.is_some() && !self.start.confirming {
+            self.start.confirming = true;
+            self.show_screen();
+            return;
+        }
+        if let Some(session) = going_on {
+            self.commands.push_back(SessionCommand::Concede(session));
+        }
+        self.commands.push_back(SessionCommand::Start(StartRequest {
+            agent: agent.name.clone(),
+            seed,
+            fair: self.start.fair,
+        }));
+        self.start.confirming = false;
+        self.first_view_opens = None;
+        self.screen = Screen::Game;
+        self.sheet = None;
+        self.show_screen();
     }
 
     /// Clicks the open prompt, naming the decision and the prompt's state the click was made

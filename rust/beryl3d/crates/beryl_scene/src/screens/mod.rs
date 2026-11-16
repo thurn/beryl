@@ -12,9 +12,11 @@ mod start;
 mod table;
 mod testing;
 
-use beryl_protocol::PlayerView;
+pub use start::{SEED, StartForm, in_progress, seed};
+
 use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};
+use beryl_protocol::{AgentView, PlayerView};
 
 use crate::element::Element;
 use crate::faces::FaceList;
@@ -94,8 +96,10 @@ pub struct ScreenIn<'a> {
     pub hovered: Option<ElementId>,
     /// The sheet open over the screen, if any.
     pub sheet: Option<Sheet>,
-    /// The names of the agents a person may play, in the order the host listed them.
-    pub agents: &'a [String],
+    /// The agents a person may play, in the order the host listed them.
+    pub agents: &'a [AgentView],
+    /// What the person has chosen on the start screen.
+    pub start: &'a StartForm,
     /// What each text field holds, by its name.
     pub fields: &'a Fields,
     /// The card the pointer is over that the inspector shows, if any (`inspect::inspector`).

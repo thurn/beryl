@@ -50,6 +50,8 @@ pub enum Request {
     Copy(String),
     /// Read the platform's clipboard and hand its text back as `Input::Paste`.
     Paste,
+    /// Save every bug report the app keeps to one file, as the web's `exportBugs` does.
+    ExportBugs,
     /// Offer the file at `path` to the platform's share sheet.
     Share {
         path: PathBuf,

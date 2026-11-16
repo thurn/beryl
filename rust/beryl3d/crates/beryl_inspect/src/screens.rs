@@ -3,10 +3,10 @@
 //! `screen/<name>`, and `data/beryl3d/screens.json` lists them for the parity list.
 
 use beryl_protocol::card_records::CardRecords;
-use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage};
+use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, LIST_AGENTS};
 use beryl_protocol::protocol::PlayerState;
 use beryl_protocol::script::Reset;
-use beryl_protocol::{GameUpdate, PlayerView, SessionId};
+use beryl_protocol::{AgentView, GameUpdate, PlayerView, SessionId};
 use beryl_scene::driver::OPEN;
 use beryl_scene::testing;
 
@@ -23,8 +23,37 @@ pub const NAMES: [&str; 6] = [
     "screen/bug-report",
 ];
 
+/// The agents the screen recordings offer: three of the host's, one of which cheats, so that the
+/// start screen shows each kind of row.
+fn agents() -> Vec<AgentView> {
+    [
+        (
+            "mcts-omniscient-quick",
+            "Quick Seer",
+            "Cheats as the Seer does, answering in a moment",
+        ),
+        (
+            "mcts-hidden",
+            "Searcher",
+            "Searches many guesses at the cards it cannot see, playing each out greedily",
+        ),
+        (
+            "expert",
+            "Expert",
+            "Plays by a strong player's rules for this deck, and works out combat",
+        ),
+    ]
+    .map(|(name, title, description)| AgentView {
+        name: name.to_owned(),
+        title: title.to_owned(),
+        description: description.to_owned(),
+    })
+    .to_vec()
+}
+
 /// The messages of the screen recording `name`, or none for any other name: the records of no
-/// cards, the event that opens the screen or sheet (over the start screen), and one empty view.
+/// cards, the agents a person may play, the event that opens the screen or sheet (over the
+/// start screen), and one empty view.
 #[must_use]
 pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
     if !NAMES.contains(&name) {
@@ -41,7 +70,10 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         Vec::new(),
         Vec::new(),
     ));
-    let mut messages = vec![FixtureMessage::response(CARD_RECORDS, &CardRecords::none())];
+    let mut messages = vec![
+        FixtureMessage::response(CARD_RECORDS, &CardRecords::none()),
+        FixtureMessage::response(LIST_AGENTS, &agents()),
+    ];
     messages.extend(opens.into_iter().map(|opened| FixtureMessage::Event {
         event: OPEN.to_owned(),
         payload: opened.into(),

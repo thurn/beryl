@@ -179,7 +179,7 @@ mod milestone_three {
     use beryl_scene::command::{Request, SessionCommand};
     use beryl_scene::element::Press;
     use beryl_scene::prompts;
-    use beryl_scene::screens::{self, Music, Screen, ScreenIn, Sheet};
+    use beryl_scene::screens::{self, Music, Screen, ScreenIn, Sheet, StartForm};
     use beryl_scene::settings::{Setting, Settings};
     use beryl_scene::table::Window;
     use beryl_scene::testing::ViewBuilder;
@@ -198,6 +198,11 @@ mod milestone_three {
             hovered: None,
             sheet: None,
             agents: &[],
+            start: &StartForm {
+                agent: None,
+                fair: false,
+                confirming: false,
+            },
             fields: &FIELDS,
             inspected: None,
             faces: None,

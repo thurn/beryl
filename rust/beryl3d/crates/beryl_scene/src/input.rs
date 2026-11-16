@@ -2,8 +2,8 @@
 //! finished assets and platform events. Everything here is plain data with no time of its own
 //! (docs/beryl-3d.md, "Hosts" and "Determinism").
 
-use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
+use beryl_protocol::{AgentView, GameUpdate};
 use glam::Vec2;
 
 use crate::command::Reply;
@@ -50,9 +50,9 @@ pub enum Input {
     Reply(Reply),
     /// The player's saved settings, which the host hands over at startup.
     Settings(Settings),
-    /// The names of the agents a person may play, in the order they are offered
-    /// (`beryl_session::agents`).
-    Agents(Vec<String>),
+    /// The agents a person may play, in the order they are offered (`beryl_session::agents`).
+    /// The client shows the start screen when they arrive before any view of a game.
+    Agents(Vec<AgentView>),
     /// Nothing changes. A thread other than the host's sends it to wake a host that sleeps until
     /// an event, so that the host looks at what the thread left for it (`Feed::wake`).
     Nudge,

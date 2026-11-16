@@ -9,7 +9,6 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
-use beryl_protocol::CandidateIndex;
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::{
@@ -18,6 +17,7 @@ use beryl_protocol::ipc::{
 };
 use beryl_protocol::prompt::{Click, ClickReply};
 use beryl_protocol::protocol::Status;
+use beryl_protocol::{AgentView, CandidateIndex};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -70,6 +70,28 @@ impl Recording {
         CardRecords::deserialize(value)
             .map(Some)
             .map_err(|error| format!("the recorded `card_records` answer is not one: {error}"))
+    }
+}
+
+impl Recording {
+    /// The agents the recording answered `list_agents` with, if it holds them: a screen's
+    /// recording does, so that the start screen has opponents to offer.
+    ///
+    /// # Errors
+    ///
+    /// When the recorded answer is not a list of agents.
+    pub fn agents(&self) -> Result<Option<Vec<AgentView>>, String> {
+        let Some(value) = self.0.iter().find_map(|message| match message {
+            FixtureMessage::Response { command, value, .. } if command == ipc::LIST_AGENTS => {
+                Some(value)
+            }
+            _ => None,
+        }) else {
+            return Ok(None);
+        };
+        Vec::<AgentView>::deserialize(value)
+            .map(Some)
+            .map_err(|error| format!("the recorded `list_agents` answer is not one: {error}"))
     }
 }
 

@@ -263,7 +263,9 @@ pub fn request_to_c(request: &Request, text: &mut CString) -> Option<BerylReques
         }
         // A phone's text is edited in its native field, which copies and pastes for itself, so
         // the clipboard requests of a field edited in place never come from a phone's client.
+        // Nothing exports bug reports from a phone yet.
         Request::SaveSettings(_)
+        | Request::ExportBugs
         | Request::Music(_)
         | Request::Audio { .. }
         | Request::Copy(_)

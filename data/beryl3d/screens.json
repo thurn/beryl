@@ -1,6 +1,6 @@
 {
   "screens": [
-    { "name": "start", "screen": "start", "recording": "screen/start", "built": false },
+    { "name": "start", "screen": "start", "recording": "screen/start", "built": true },
     { "name": "opening", "screen": "game", "recording": "opening-keep", "built": false },
     { "name": "game", "screen": "game", "recording": "pay-default", "built": true },
     { "name": "game over", "screen": "game", "recording": "game-over", "built": false },

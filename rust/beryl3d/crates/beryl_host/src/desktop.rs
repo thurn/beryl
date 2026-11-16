@@ -563,8 +563,9 @@ fn carry_out(window: &Window, clipboard: &mut Clipboard, request: Request) -> Op
         Request::Share { path } => reveal(&path),
         Request::OpenUrl(url) => open_url(url),
         // A desktop has no haptics. The app's feed saves the settings and plays the sound, as
-        // it sees each request first (`Feed::request`).
+        // it sees each request first (`Feed::request`). Nothing exports bug reports yet.
         Request::Haptic(_)
+        | Request::ExportBugs
         | Request::SaveSettings(_)
         | Request::Music(_)
         | Request::Audio { .. } => {}

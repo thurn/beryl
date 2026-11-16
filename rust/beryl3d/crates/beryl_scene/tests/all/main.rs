@@ -28,6 +28,7 @@ mod piles;
 mod play;
 mod pointer;
 mod relay;
+mod screens;
 mod scroll;
 mod shadows;
 mod sound;

@@ -16,7 +16,7 @@ use beryl_host::{Class, Inbox};
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::input::Input;
 use beryl_session::ai::AgentMove;
-use beryl_session::{Seat, Sessions, StartGame, StartRequest, StopsSetting};
+use beryl_session::{Seat, Sessions, StartGame, StopsSetting};
 use beryl_shell::Dirs;
 
 /// What answers the frame thread's commands: `Sessions`, or a test's stand-in.
@@ -100,6 +100,8 @@ pub fn spawn<S: Session>(
 /// The real session. Its views go to the host's inbox as they are emitted.
 pub struct Live {
     sessions: Sessions,
+    /// The host's inbox, which `begin` sends the agents to.
+    inbox: Inbox,
     /// The game `--agent` asked for, and the agent that answers for the viewer in it.
     played_by: Option<(StartGame, String)>,
 }
@@ -109,8 +111,9 @@ impl Live {
     /// or keep none without it, and send every view to `inbox`.
     #[must_use]
     pub fn new(dirs: Option<Dirs>, inbox: Inbox) -> Self {
+        let views = inbox.clone();
         let emit = move |update| {
-            inbox.send(Input::Update(Box::new(update)));
+            views.send(Input::Update(Box::new(update)));
         };
         let sessions = match dirs {
             Some(dirs) => beryl_shell::sessions(&dirs, emit),
@@ -118,6 +121,7 @@ impl Live {
         };
         Self {
             sessions,
+            inbox,
             played_by: None,
         }
     }
@@ -196,31 +200,18 @@ pub fn search_report(searches: &[Searched]) -> Option<String> {
 }
 
 impl Session for Live {
-    /// Starts the game `played_by` asked for. Otherwise resumes the newest unfinished game, as
-    /// the web app does on launch, or else starts a game against the first agent a person is
-    /// offered: the app has no start screen yet.
+    /// Starts the game `played_by` asked for, or otherwise resumes the newest unfinished game,
+    /// as the web app does on launch. Then it sends the agents a person may play, which put the
+    /// client on the start screen when no game has sent a view.
     fn begin(&mut self) {
         if let Some((start, agent)) = &self.played_by {
             if let Err(error) = self.sessions.start_game(start, Some(agent)) {
                 eprintln!("beryl3d: the game did not start: {error:?}");
             }
-            return;
+        } else {
+            beryl_shell::resume_latest(&self.sessions);
         }
-        if beryl_shell::resume_latest(&self.sessions).is_some() {
-            return;
-        }
-        let Some(agent) = beryl_session::agents().into_iter().next() else {
-            eprintln!("beryl3d: no agent to play against");
-            return;
-        };
-        let request = StartRequest {
-            agent: agent.name,
-            seed: None,
-            fair: false,
-        };
-        if let Err(error) = self.sessions.start(&request) {
-            eprintln!("beryl3d: the game did not start: {error:?}");
-        }
+        self.inbox.send(Input::Agents(beryl_session::agents()));
     }
 
     fn run(&mut self, command: SessionCommand) -> Reply {
