@@ -9,7 +9,7 @@ use beryl_protocol::protocol::ZoneName;
 use glam::{Affine3A, Vec2, Vec3};
 
 use super::pile::pile_base;
-use super::scene::Table;
+use super::scene::{SceneObject, Table};
 use super::{CARD_HEIGHT, CARD_WIDTH};
 use crate::data::space::shadow;
 use crate::frame::{Band, Draw, FrameBuilder, Place};
@@ -86,36 +86,112 @@ impl Table {
 
     /// The height of what lies at `point` on the table: the highest card lying on the table at
     /// rest (in a pile or a battlefield row) whose face covers it, leaving out the card in
-    /// `slot`; 0 where none does.
+    /// `slot`; 0 where none does. Only the cards of `Objects::floors` whose centres lie within
+    /// reach of `point` are looked at.
     fn floor(&self, point: Vec2, slot: Option<usize>) -> f32 {
+        let floors = &self.objects.floors;
         let mut floor = 0.0_f32;
-        for (index, object) in self.objects.cards.iter().enumerate() {
-            let Some(object) = object else {
-                continue;
-            };
-            let Place::Card { zone, .. } = object.place else {
-                continue;
-            };
-            let lying = matches!(
-                zone,
-                ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile | ZoneName::Battlefield
-            );
-            let pose = object.pose();
-            if !lying || slot == Some(index) || pose.position.z <= floor {
-                continue;
-            }
-            let offset = point - pose.position.truncate();
-            let reach = HALF_DIAGONAL * pose.scale;
-            if offset.x.abs() > reach || offset.y.abs() > reach {
-                continue;
-            }
-            let local = pose.rotation.inverse() * offset.extend(0.0) / pose.scale;
-            if local.x.abs() <= CARD_WIDTH / 2.0 && local.y.abs() <= CARD_HEIGHT / 2.0 {
-                floor = pose.position.z;
+        if floors.lying.is_empty() {
+            return floor;
+        }
+        let (low, high) = (point.x - floors.reach, point.x + floors.reach);
+        for band in floors.band(point.y - floors.reach)..=floors.band(point.y + floors.reach) {
+            let from = floors
+                .lying
+                .partition_point(|lying| (lying.band, lying.x) < (band, low));
+            for lying in &floors.lying[from..] {
+                if lying.band != band || lying.x > high {
+                    break;
+                }
+                let index = lying.slot as usize;
+                let Some(object) = self.objects.cards.get(index).copied().flatten() else {
+                    continue;
+                };
+                let pose = object.pose();
+                if slot == Some(index) || pose.position.z <= floor {
+                    continue;
+                }
+                let offset = point - pose.position.truncate();
+                let reach = HALF_DIAGONAL * pose.scale;
+                if offset.x.abs() > reach || offset.y.abs() > reach {
+                    continue;
+                }
+                let local = pose.rotation.inverse() * offset.extend(0.0) / pose.scale;
+                if local.x.abs() <= CARD_WIDTH / 2.0 && local.y.abs() <= CARD_HEIGHT / 2.0 {
+                    floor = pose.position.z;
+                }
             }
         }
         floor
     }
+}
+
+/// The cards lying on the table at rest, in a pile or a battlefield row, for `Table::floor`:
+/// sorted by the band across the table their centre lies in, each band as tall as `reach`, and
+/// within one by the x of their centre. Every card that rises or moves looks for what lies under
+/// its shadow twice a frame, and looking through every card each time made a frame with 255
+/// cards in flight cost eight times what it did before shadows. Made with the scene objects,
+/// when a view or a script arrives, so a frame allocates nothing for it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct Floors {
+    lying: Vec<Lying>,
+    /// The farthest any of their faces reaches from its centre, in millimetres.
+    reach: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Lying {
+    band: i32,
+    x: f32,
+    slot: u32,
+}
+
+impl Floors {
+    /// The cards of `cards`, by slot, that lie on the table.
+    pub(crate) fn of(cards: &[Option<SceneObject>]) -> Self {
+        let lies = |object: &&SceneObject| {
+            matches!(
+                object.place,
+                Place::Card {
+                    zone: ZoneName::Library
+                        | ZoneName::Graveyard
+                        | ZoneName::Exile
+                        | ZoneName::Battlefield,
+                    ..
+                }
+            )
+        };
+        let reach = (cards.iter().flatten().filter(lies))
+            .map(|object| HALF_DIAGONAL * object.pose().scale)
+            .fold(0.0_f32, f32::max);
+        let mut lying: Vec<Lying> = (cards.iter().enumerate())
+            .filter_map(|(slot, object)| {
+                let position = object.as_ref().filter(lies)?.pose().position;
+                Some(Lying {
+                    band: band(position.y, reach),
+                    x: position.x,
+                    slot: u32::try_from(slot).expect("slots are u16"),
+                })
+            })
+            .collect();
+        lying.sort_unstable_by(|a, b| a.band.cmp(&b.band).then(a.x.total_cmp(&b.x)));
+        Floors { lying, reach }
+    }
+
+    /// The band across the table that `y` lies in.
+    fn band(&self, y: f32) -> i32 {
+        band(y, self.reach)
+    }
+}
+
+/// The band across the table that `y` lies in, when each is `reach` tall.
+fn band(y: f32, reach: f32) -> i32 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a table is far narrower than 2^31 bands"
+    )]
+    let band = (y / reach.max(1.0)).floor() as i32;
+    band
 }
 
 /// How far a shadow falls on the table for each millimetre of height: toward the viewer (down

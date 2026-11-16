@@ -17,6 +17,7 @@ use super::place::{
     Group, Placement, Rest, Rows, Scroll, Zones, place_group, place_reusing, place_zones,
 };
 use super::rows::NameIds;
+use super::shadows::Floors;
 use super::tray::Held;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, place};
 use crate::data::space::effects as effects_space;
@@ -31,6 +32,7 @@ use crate::motion::Track;
 use crate::pointer;
 use crate::pose::Pose;
 
+mod objects;
 mod scroll;
 
 /// How large the table cloth is, in millimetres: past every edge of any window.
@@ -74,6 +76,8 @@ pub(crate) struct Objects {
     pub piles: [PileShown; 6],
     /// Which groups of each battlefield row are in view.
     pub rows: Rows,
+    /// The cards among `cards` that lie on the table, for contact shadows.
+    pub floors: Floors,
 }
 
 impl Objects {
@@ -347,68 +351,6 @@ impl Table {
         let numbers = std::mem::take(&mut self.objects.numbers);
         let placement = self.placement(view, &numbers);
         self.objects = Self::objects_for(view, numbers, &placement);
-    }
-
-    /// The scene objects of `view`, whose stack's abilities `numbers` numbers, each at its
-    /// resting place in `placement`.
-    pub(crate) fn objects_for(
-        view: &PlayerView,
-        numbers: Vec<u32>,
-        placement: &Placement,
-    ) -> Objects {
-        let mut abilities = Vec::with_capacity(placement.abilities.len());
-        let stack = view
-            .stack
-            .iter()
-            .enumerate()
-            .filter(|(_, item)| matches!(item, StackItem::Ability { .. }));
-        for ((index, _), &id) in stack.zip(&numbers) {
-            let Some(rest) = placement.ability(id) else {
-                continue;
-            };
-            abilities.push((
-                id,
-                SceneObject {
-                    pose: rest.pose,
-                    place: rest.place,
-                    visible: rest.visible,
-                    tapped: false,
-                    copies: 1,
-                    view_index: u32::try_from(index).expect("a stack holds fewer than 2^32 items"),
-                },
-            ));
-        }
-        abilities.sort_unstable_by_key(|(id, _)| *id);
-        Objects {
-            cards: Self::cards_for(view, placement),
-            abilities,
-            numbers,
-            piles: placement.piles,
-            rows: placement.rows,
-        }
-    }
-
-    /// The scene objects of `view`'s cards, each at its resting place in `placement`, by slot.
-    fn cards_for(view: &PlayerView, placement: &Placement) -> Vec<Option<SceneObject>> {
-        let mut objects = Vec::new();
-        for (index, object) in view.objects.iter().enumerate() {
-            let Some(rest) = placement.get(object.slot) else {
-                continue;
-            };
-            let slot = usize::from(object.slot.0);
-            if objects.len() <= slot {
-                objects.resize(slot + 1, None);
-            }
-            objects[slot] = Some(SceneObject {
-                pose: rest.pose,
-                place: rest.place,
-                visible: rest.visible,
-                tapped: object.tapped,
-                copies: rest.copies,
-                view_index: u32::try_from(index).expect("a view holds fewer than 2^32 objects"),
-            });
-        }
-        objects
     }
 
     /// Exchanges the scene objects for `objects`, which `objects_for` made for the view the
