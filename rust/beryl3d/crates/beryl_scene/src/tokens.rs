@@ -89,6 +89,9 @@ pub mod color {
     /// The edge of a permanent its owner does not control: the border of `.card-stolen-edge`
     /// (`ui/src/design/components/card-marks-and-piles.css`).
     pub const OUTLINE: [u8; 4] = STOLEN;
+    /// The burst of light over a permanent that lands (`settle`): the glow of the
+    /// `.stage-effect-settle` rule's `box-shadow` in `ui/src/stage/effects.css`.
+    pub const SETTLE_BURST: [u8; 4] = [255, 226, 170, 217];
 }
 
 /// The colors of the badges on a permanent (`table::badges`), from the web interface's CSS

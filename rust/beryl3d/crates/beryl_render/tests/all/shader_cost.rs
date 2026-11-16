@@ -114,8 +114,8 @@ fn each_material_is_within_its_limits() {
 fn a_second_sample_in_a_material_is_counted() {
     let before = costs(SHADER)["card"];
     let planted = SHADER.replacen(
-        "fn shade_card(face: vec4<f32>, tint: vec4<f32>, params: vec4<f32>) -> vec4<f32> {",
-        "fn shade_card(face: vec4<f32>, tint: vec4<f32>, params: vec4<f32>) -> vec4<f32> {\n    \
+        "fn shade_card(face: vec4<f32>, mesh_uv: vec2<f32>, tint: vec4<f32>, params: vec4<f32>) -> vec4<f32> {",
+        "fn shade_card(face: vec4<f32>, mesh_uv: vec2<f32>, tint: vec4<f32>, params: vec4<f32>) -> vec4<f32> {\n    \
          let again = textureSample(pictures, picture_sampler, vec2<f32>(0.0), 0);",
         1,
     );

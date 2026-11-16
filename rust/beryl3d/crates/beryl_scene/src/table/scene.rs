@@ -16,7 +16,8 @@ use super::place::{
 };
 use super::rows::NameIds;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, place};
-use crate::effects::{self, EffectRun};
+use crate::data::space::effects as effects_space;
+use crate::effects::{self, Effect, EffectRun};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{
     Band, Draw, ElementId, FrameBuilder, OBJECTS, Place, Resolved, Role, StateBits,
@@ -449,7 +450,7 @@ impl Table {
             .max(self.objects.cards.len());
         for slot in 0..slots {
             builder.visit();
-            let Some((object, view, under_way)) = self.object_at(slot, view, motion, builder)
+            let Some((object, drawn, under_way)) = self.object_at(slot, view, motion, builder)
             else {
                 self.fights.forget(slot);
                 continue;
@@ -460,8 +461,8 @@ impl Table {
             }
             self.write_card(
                 slot,
-                (&object, view, under_way),
-                faces,
+                (&object, drawn, under_way),
+                (view, faces),
                 (back, dress),
                 builder,
             );
@@ -523,12 +524,13 @@ impl Table {
 
     /// Writes the resolved element and the draw record of the card in `slot`: `object` as
     /// `view` shows it, moving if `under_way`. Its face comes from `faces`, its back from layer
-    /// `back`, and how it looks is changed by `dress`.
+    /// `back`, and how it looks is changed by `dress`. `shown_view` is the view the table shows
+    /// before the playing script, whose face a `cover` shows until half way.
     fn write_card(
         &self,
         slot: usize,
         (object, view, under_way): (&SceneObject, &PlayerView, bool),
-        faces: &Faces,
+        (shown_view, faces): (&PlayerView, &Faces),
         (back, dress): (u16, &Dress<'_>),
         builder: &mut FrameBuilder,
     ) {
@@ -562,9 +564,20 @@ impl Table {
         let on = Subject::Object {
             slot: ObjectId(u16::try_from(slot).expect("slots are u16")),
         };
-        effects::card::look(dress.effects, on, dress.now, &mut look);
+        let covered = dress
+            .effects
+            .iter()
+            .any(|run| run.effect == Effect::Cover && run.on == on);
+        let earlier_face = match self.objects.cards.get(slot).copied().flatten() {
+            Some(resting) if covered => {
+                face_of(faces, &shown_view.objects[resting.view_index as usize])
+            }
+            _ => face,
+        };
+        effects::card::look(dress.effects, on, dress.now, earlier_face, &mut look);
         light::marks::look(dress.lit, on, dress.now, &mut look);
         pointer::look(dress.pointer, slot, &mut look);
+        effects::card::write(dress.effects, on, dress.now, &look, builder);
         if shown.zone == ZoneName::Battlefield {
             own::write((slot, shown), &look, &self.fights, dress.now, builder);
         } else {
@@ -628,13 +641,16 @@ impl Table {
         );
         let opacity = (look.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
         let [red, green, blue] = look.tint;
-        // A card fading in or out is partly transparent. The opaque pass neither blends nor
-        // leaves what is behind it to be seen, so such a card would darken toward black and
-        // hide the cards beneath it: it is drawn with the blended records, after them.
-        let band = if opacity == 255 {
+        // A card that is fading, breaking up or washed with light is drawn with the blended
+        // records, after the opaque ones, among the marks of cards at its height. The opaque
+        // pass neither blends nor shows what is behind a record, so a fading or broken card
+        // drawn there would darken toward black and hide the cards beneath it.
+        let band = if opacity == 255 && look.dissolve <= 0.0 && look.whiten <= 0.0 {
             Band::Opaque
-        } else {
+        } else if look.pose.position.z < effects_space::ON_TABLE_BELOW {
             Band::TableMarks
+        } else {
+            Band::RaisedMarks
         };
         builder.draw(
             band,
@@ -746,8 +762,9 @@ impl Table {
             interactive: false,
         };
         let on = Subject::Ability { id };
-        effects::card::look(dress.effects, on, dress.now, &mut look);
+        effects::card::look(dress.effects, on, dress.now, face, &mut look);
         light::marks::look(dress.lit, on, dress.now, &mut look);
+        effects::card::write(dress.effects, on, dress.now, &look, builder);
         self.write_look(
             name,
             (ElementId(ABILITY_IDS + id % ABILITY_IDS), Role::Ability),

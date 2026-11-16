@@ -61,7 +61,7 @@
       "worst_frame_segments": 22,
       "total_segments": 15230,
       "worst_frame_records": 81,
-      "total_records": 55827,
+      "total_records": 55853,
       "worst_frame_layout_nodes": 8,
       "total_layout_nodes": 39,
       "worst_frame_text_runs": 17,
@@ -113,31 +113,31 @@
   "materials": {
     "card": {
       "samples": 1,
-      "expressions": 76
+      "expressions": 98
     },
     "contact_shadow": {
       "samples": 1,
-      "expressions": 90
+      "expressions": 91
     },
     "glow": {
       "samples": 1,
-      "expressions": 76
+      "expressions": 77
     },
     "glyph": {
       "samples": 1,
-      "expressions": 70
+      "expressions": 71
     },
     "panel": {
       "samples": 1,
-      "expressions": 114
+      "expressions": 115
     },
     "table": {
       "samples": 1,
-      "expressions": 68
+      "expressions": 69
     },
     "streak": {
       "samples": 1,
-      "expressions": 93
+      "expressions": 94
     }
   },
   "tests": {

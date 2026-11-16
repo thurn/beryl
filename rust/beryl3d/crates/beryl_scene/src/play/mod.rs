@@ -609,7 +609,8 @@ impl Show {
         light::marks::write(&self.lit, now, &scene, builder);
         light::streaks::write(&self.lit, now, &scene, builder);
         effects::light::write(&self.effects, now, &scene, builder);
-        builder.shake(effects::shake::offset(&self.effects, now));
+        let scale = self.table.camera().window.scale;
+        builder.shake(effects::shake::offset(&self.effects, now, scale));
     }
 
     /// Ends the playing script: the table shows its view, at rest, with its life totals and

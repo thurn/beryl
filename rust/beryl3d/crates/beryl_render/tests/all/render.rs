@@ -466,3 +466,107 @@ fn twenty_cards_with_three_raised_draw_in_perspective() {
         }
     }
 }
+
+/// A card half dissolved has broken up from the top down: near its top the table shows
+/// through, and near its bottom it is drawn as it is whole.
+#[test]
+fn a_half_dissolved_card_is_gone_at_its_top_and_whole_at_its_bottom() {
+    let table = rectangle(Vec2::ZERO, Vec2::splat(400.0), 0.0, [0, 0, 0]);
+    let at = |dissolve: f32| {
+        Draw::card(
+            Affine3A::from_translation(Vec3::new(0.0, 0.0, 1.0)),
+            [255; 4],
+            FaceSize::Board,
+            1,
+            BACK_LAYER,
+            dissolve,
+            0.0,
+        )
+    };
+    // The card reaches from y = -44 to 44.
+    let (top, bottom) = (40.0, -40.0);
+    for limits in BOTH {
+        let mut renderer = renderer(limits);
+        let mut picture = |dissolve: f32| {
+            let records = [(Band::Opaque, table), (Band::TableMarks, at(dissolve))];
+            draw(&mut renderer, overhead(), (200, 200), &records).0
+        };
+        let whole = picture(0.0);
+        let half = picture(0.5);
+        let black = [0, 0, 0];
+        assert!(!close(whole.overhead(0.0, top), black), "{limits:?}");
+        assert!(
+            close(half.overhead(0.0, top), black),
+            "{limits:?}: near its top the card is {:?}",
+            half.overhead(0.0, top)
+        );
+        assert!(
+            close(half.overhead(0.0, bottom), whole.overhead(0.0, bottom)),
+            "{limits:?}: near its bottom the card is {:?}, whole {:?}",
+            half.overhead(0.0, bottom),
+            whole.overhead(0.0, bottom)
+        );
+    }
+}
+
+/// A frame shaken by (8, 0) draws what is on the table 8 pixels to the right, and the flat
+/// layer where it was.
+#[test]
+fn a_shake_moves_the_table_and_not_the_flat_layer() {
+    let table = rectangle(Vec2::ZERO, Vec2::splat(400.0), 0.0, [0, 0, 0]);
+    let lying = card(Vec3::new(-40.0, 0.0, 1.0), 1, [255; 4]);
+    // A flat-layer panel, drawn with no depth test after everything on the table.
+    let panel = rectangle(
+        Vec2::new(50.0, 0.0),
+        Vec2::splat(40.0),
+        500.0,
+        [40, 180, 60],
+    );
+    let records = [
+        (Band::Opaque, lying),
+        (Band::Opaque, table),
+        (Band::Layer, panel),
+    ];
+    for limits in BOTH {
+        let mut renderer = renderer(limits);
+        let mut picture = |shake: Vec2| {
+            let mut frame = Frame::with_capacity(0, records.len(), 0);
+            let mut builder = FrameBuilder::new(&mut frame);
+            builder.camera(overhead());
+            builder.shake(shake);
+            for &(band, record) in &records {
+                builder.draw(band, record);
+            }
+            let frame = builder.finish();
+            let mut target = Target::offscreen(&renderer, 200, 200);
+            renderer.render(frame, &mut target);
+            Picture {
+                pixels: renderer.read(&target),
+                width: 200,
+            }
+        };
+        let still = picture(Vec2::ZERO);
+        let shaken = picture(Vec2::new(8.0, 0.0));
+        let black = [0, 0, 0];
+        // The card's left edge is at x = -71.5, pixel 28.5.
+        for y in [-30, 0, 30] {
+            let row = (100 - y) as u32;
+            assert!(!close(still.at(31, row), black), "{limits:?}");
+            assert!(close(shaken.at(31, row), black), "{limits:?} at row {row}");
+            for x in [31, 40, 50] {
+                assert!(
+                    close(shaken.at(x + 8, row), still.at(x, row)),
+                    "{limits:?}: ({x}, {row}) is not drawn 8 pixels to the right"
+                );
+            }
+            // The panel's left edge is at x = 30, pixel 130.
+            for x in [128, 132, 140] {
+                assert_eq!(
+                    shaken.at(x, row),
+                    still.at(x, row),
+                    "{limits:?} at ({x}, {row})"
+                );
+            }
+        }
+    }
+}

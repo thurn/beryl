@@ -11,7 +11,7 @@ use beryl_scene::play::Show;
 use crate::common::{MS, before, discard, empty_frame, frame, show};
 
 /// An effect named `name` that begins at `when` of its step, with nothing else set.
-fn effect(name: &str, when: Edge) -> StepEffect {
+pub(crate) fn effect(name: &str, when: Edge) -> StepEffect {
     StepEffect {
         name: name.to_owned(),
         when,
@@ -26,7 +26,7 @@ fn effect(name: &str, when: Edge) -> StepEffect {
 /// A show whose first script shows the table, and whose second discards a card in one step
 /// from 100 to 500 ms that begins `effects`. Both have started by the frame at 0, so that each
 /// script time is also a real time. Returns the show and the discarded card.
-fn started(effects: Vec<StepEffect>) -> (Show, Subject) {
+pub(crate) fn started(effects: Vec<StepEffect>) -> (Show, Subject) {
     let (start, cards) = before();
     let (after, mut timings) = discard(&start, cards);
     timings[0] = StepTiming {

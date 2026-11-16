@@ -118,10 +118,29 @@ fn shade_table(tint: vec4<f32>) -> vec4<f32> {
     return vec4<f32>(tint.rgb * tint.a, tint.a);
 }
 
-// A card: its face times its tint, turned toward white by `whiten` (params.y). No lighting.
-fn shade_card(face: vec4<f32>, tint: vec4<f32>, params: vec4<f32>) -> vec4<f32> {
+// A card's broken edge as it dissolves: the cells of a 24 by 34 grid over the card, each with
+// a fixed pseudo-random value, so that the edge is stippled rather than straight.
+const DISSOLVE_GRID: vec2<f32> = vec2<f32>(24.0, 34.0);
+// How much of the stipple is the cell's random value; the rest is how far down the card the
+// pixel is, so that the card breaks up from the top down.
+const DISSOLVE_SCATTER: f32 = 0.25;
+// How wide the soft edge between kept and dropped pixels is, on the stipple's scale of 0 to 1.
+const DISSOLVE_EDGE: f32 = 0.05;
+
+// A card: its face times its tint, turned toward white by `whiten` (params.y), and broken up
+// from the top down by `dissolve` (params.x): a pixel is dropped where its stipple, from the
+// card's own texture coordinates `mesh_uv` (0 at the top), is under the threshold. A dropped
+// pixel has zero opacity. No second texture is read and nothing is discarded, since a
+// dissolving card is among the blended records. No lighting.
+fn shade_card(face: vec4<f32>, mesh_uv: vec2<f32>, tint: vec4<f32>, params: vec4<f32>) -> vec4<f32> {
     let color = mix(face.rgb * tint.rgb, vec3<f32>(1.0), params.y);
-    return vec4<f32>(color * tint.a, tint.a);
+    let cell = floor(mesh_uv * DISSOLVE_GRID);
+    let scatter = fract(sin(dot(cell, vec2<f32>(12.9898, 78.233))) * 43758.547);
+    let stipple = mix(mesh_uv.y, scatter, DISSOLVE_SCATTER);
+    // At `dissolve` 0 every stipple, from 0 up, is kept; at 1 none is.
+    let threshold = params.x * (1.0 + DISSOLVE_EDGE);
+    let a = tint.a * smoothstep(threshold - DISSOLVE_EDGE, threshold, stipple);
+    return vec4<f32>(color * a, a);
 }
 
 // The soft shadow under a raised card: the card's rounded rectangle, blurred by `params.x`
@@ -196,7 +215,7 @@ fn fs(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f3
     var color = vec4<f32>(0.0);
     switch in.material {
         case TABLE: { color = shade_table(in.tint); }
-        case CARD: { color = shade_card(picture, in.tint, in.params); }
+        case CARD: { color = shade_card(picture, in.mesh_uv, in.tint, in.params); }
         case CONTACT_SHADOW: { color = shade_contact_shadow(in.mesh_uv, in.tint, in.params); }
         case GLOW: { color = shade_glow(picture, in.tint, in.params); }
         case STREAK: { color = shade_streak(picture, in.mesh_uv, in.tint, in.params); }

@@ -354,5 +354,33 @@
       "border": 0.06,
       "numerals": 1.15
     }
+  },
+  "effects": {
+    "on_table_below": 1,
+    "settle": {
+      "still": 0.071,
+      "white": 0.3,
+      "burst_cards": 1.5
+    },
+    "dissolve": {
+      "dark": 0.35,
+      "darkened": 0.3
+    },
+    "dim": {
+      "dark": 0.35,
+      "darkened": 0.3
+    },
+    "blanch": {
+      "white": 0.5
+    },
+    "cover": {
+      "white": 0.4,
+      "held": 0.6,
+      "face": 0.5
+    },
+    "shake": {
+      "x": 6,
+      "y": 2
+    }
   }
 }

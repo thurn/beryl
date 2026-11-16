@@ -12,6 +12,7 @@ mod common;
 mod contract;
 mod driver;
 mod effects;
+mod effects_card;
 mod faces;
 mod flat_layer;
 mod light;
