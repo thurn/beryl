@@ -560,8 +560,12 @@ The rules for building a frame:
   transparent, as one fading out is, is drawn with the blended records instead.
   The [Rendering](#rendering) section below says why this matters on old GPUs.
 - **Then blended, in a fixed order of bands.** Everything translucent follows,
-  farthest first. A **band** is a group of records drawn together. The bands, in
-  order:
+  farthest first. Within a band of the table, a record is then moved earlier to
+  join records drawn with the same mesh, texture array and clip, past only
+  records it does not overlap on screen, so that a fading card among marks does
+  not cut the band into many draw calls. Records that share no pixel blend the
+  same in either order. A **band** is a group of records drawn together. The
+  bands, in order:
   1. contact shadows of cards above the table;
   2. the soft edges of cards, and the marks on cards lying on the table;
   3. marks on cards above the table (in flight, in a hand, on the stack, held up
@@ -1631,13 +1635,16 @@ as many pixels opaque as it can.
 - **A blended pass, back to front**, for the bands of the draw list: shadows,
   card edges, marks, glows and the flat layer. Colors are premultiplied by their
   opacity, so ordinary and additive shapes share one blend setting.
-- **Two pipelines and three meshes.** One opaque pipeline and one blended, each
-  a single shader that picks its branch from the record's `material`. A
-  pipeline's depth test is fixed when it is created, so the blended pipeline is
-  made twice, tested against the depth buffer for the table's bands and untested
-  for the flat layer's, with the same shader: three pipeline objects, all made
-  at startup. The card mesh, its edge strip and a unit quad are the only meshes.
-  The 80-byte records are uploaded as the instance buffer unchanged. Each run of
+- **Two pipelines and four meshes.** One opaque pipeline and one blended, each a
+  single shader that picks its branch from the record's `material`. A pipeline's
+  depth test is fixed when it is created, so the blended pipeline is made twice,
+  tested against the depth buffer for the table's bands and untested for the
+  flat layer's, with the same shader: three pipeline objects, all made at
+  startup. The card mesh, its edge strip, a unit quad and the ring of that quad
+  that the card-shaped outline sprite covers are the only meshes. The ring
+  leaves out the outline's empty middle and sides, three quarters of the quad,
+  which every outline glow and mark would otherwise shade for nothing. The
+  80-byte records are uploaded as the instance buffer unchanged. Each run of
   records is bound from its offset in that buffer and drawn from instance 0,
   because OpenGL ES 3.0 has no first instance and no base vertex.
 - **Colors are blended as stored.** Faces, tints and the target hold sRGB

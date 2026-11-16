@@ -93,3 +93,36 @@ fn the_outline_is_solid_on_its_edge() {
         .max();
     assert_eq!(top_edge, Some(255));
 }
+
+/// Where texel `(x, y)` of a cell lies on a unit quad drawn with the whole cell, from -0.5 to
+/// 0.5 across, y up.
+fn on_quad(x: u16, y: u16) -> (f32, f32) {
+    let cell = f32::from(sprites::CELL);
+    (
+        (f32::from(x) + 0.5) / cell - 0.5,
+        0.5 - (f32::from(y) + 0.5) / cell,
+    )
+}
+
+#[test]
+fn the_outline_is_empty_where_its_mesh_leaves_the_quad_out() {
+    // A texel within two texels of a part the mesh leaves out is sampled there by bilinear
+    // filtering, so it must be empty too.
+    let page = light_page();
+    let margin = 2.0 / f32::from(sprites::CELL);
+    let [outer, hole] = [sprites::OUTLINE_OUTER, sprites::OUTLINE_HOLE];
+    for y in 0..sprites::CELL {
+        for x in 0..sprites::CELL {
+            let (qx, qy) = on_quad(x, y);
+            let outside = qx.abs() > outer[0] - margin || qy.abs() > outer[1] - margin;
+            let inside = qx.abs() < hole[0] + margin && qy.abs() < hole[1] + margin;
+            if outside || inside {
+                assert_eq!(
+                    at(&page, sprites::OUTLINE, x, y),
+                    0,
+                    "texel ({x}, {y}) is drawn, outside the outline's mesh"
+                );
+            }
+        }
+    }
+}

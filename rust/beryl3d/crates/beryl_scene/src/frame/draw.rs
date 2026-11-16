@@ -70,6 +70,11 @@ pub enum Mesh {
     CardEdge = 1,
     /// A square from -0.5 to 0.5.
     Quad = 2,
+    /// The part of that square the `sprites::OUTLINE` shape covers: the ring between the
+    /// rectangles `sprites::OUTLINE_OUTER` and `sprites::OUTLINE_HOLE`. An outline drawn as
+    /// a whole square would shade the empty card-sized middle and the empty sides of its cell
+    /// too, three quarters of its pixels.
+    Outline = 3,
 }
 
 /// A rectangle of one atlas page: `rect` is `[x, y, width, height]` in texels.
@@ -111,6 +116,16 @@ pub mod sprites {
     pub const MOON: Sprite = cell(768, 512);
     pub const PLAQUE: Sprite = cell(0, 768);
     pub const COIN: Sprite = cell(256, 768);
+
+    /// Half the width and height of the rectangle outside which `OUTLINE`'s cell is empty, in
+    /// the units of a unit quad drawn with the whole cell (-0.5 to 0.5 across). The outline is
+    /// card-shaped, narrower than its square cell.
+    pub const OUTLINE_OUTER: [f32; 2] = [0.37, 0.5];
+    /// Half the width and height of the rectangle inside which `OUTLINE`'s cell is empty, in
+    /// the same units: the middle of the outline, where the card it rings shows through.
+    /// `beryl_assets`' tests hold both rectangles to the shape it draws, with a margin for
+    /// filtering.
+    pub const OUTLINE_HOLE: [f32; 2] = [0.29, 0.42];
 }
 
 const MESH_SHIFT: u8 = 2;
@@ -169,11 +184,15 @@ impl Draw {
         draw
     }
 
-    /// A glow `progress` of the way through, from 0 to 1.
+    /// A glow `progress` of the way through, from 0 to 1. The outline is drawn with the mesh
+    /// that leaves out the parts of its cell it leaves empty, which shades the same pixels.
     #[must_use]
     pub fn glow(transform: Affine3A, tint: [u8; 4], sprite: Sprite, progress: f32) -> Self {
         let mut draw = Self::sprite(transform, tint, Material::Glow, sprite);
         draw.params = [progress, 0.0, 0.0, 0.0];
+        if sprite == sprites::OUTLINE {
+            draw.flags = (draw.flags & !MESH_BITS) | ((Mesh::Outline as u8) << MESH_SHIFT);
+        }
         draw
     }
 

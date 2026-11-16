@@ -57,7 +57,7 @@ pub struct Renderer {
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     /// The index range of each mesh, by `Mesh` value.
-    ranges: [std::ops::Range<u32>; 3],
+    ranges: [std::ops::Range<u32>; 4],
     /// The board-size and full-size card face arrays, by `FaceSize` value.
     faces: [FaceArray; 2],
     /// The atlas of glyph pages and shapes.

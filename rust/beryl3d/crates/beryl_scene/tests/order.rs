@@ -7,7 +7,7 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
-use beryl_scene::frame::{Band, CLIPS, DRAWS, Draw, Frame, FrameBuilder, OBJECTS, Sprite};
+use beryl_scene::frame::{Band, CLIPS, DRAWS, Draw, Frame, FrameBuilder, OBJECTS, Sprite, sprites};
 use beryl_scene::input::{FaceSize, Rect};
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
@@ -164,6 +164,107 @@ fn screen_areas_are_counted_in_screens() {
     assert!((load.blended_area - 1.25).abs() < 1e-6, "{load:?}");
 }
 
+/// Where a small record lies with the identity camera: `x` across the screen, which is 2 wide,
+/// and `depth` into it. `size` is how far across it is.
+fn small(x: f32, depth: f32, size: Vec2) -> Affine3A {
+    Affine3A::from_scale_rotation_translation(
+        size.extend(1.0),
+        glam::Quat::IDENTITY,
+        Vec3::new(x, 0.0, depth),
+    )
+}
+
+/// A fading card 0.1 across, at `x` and `depth`.
+fn fading(id: u8, x: f32, depth: f32) -> Draw {
+    let size = Vec2::new(0.1 / CARD_WIDTH, 0.1 / CARD_HEIGHT);
+    Draw::card(
+        small(x, depth, size),
+        [id, 0, 0, 128],
+        FaceSize::Board,
+        1,
+        0,
+        0.0,
+        0.0,
+    )
+}
+
+/// A badge 0.1 across, at `x` and `depth`, drawn with the quad mesh and the atlas.
+fn badge(id: u8, x: f32, depth: f32) -> Draw {
+    Draw::icon(
+        small(x, depth, Vec2::splat(0.1)),
+        tag(id),
+        Sprite::default(),
+    )
+}
+
+/// The order of `frame`'s records, by the ids in their tints.
+fn order(frame: &Frame) -> Vec<u8> {
+    frame.draws.iter().map(|draw| draw.tint[0]).collect()
+}
+
+#[test]
+fn records_drawn_alike_that_share_no_pixel_are_drawn_in_one_call() {
+    let mut frame = Frame::with_capacity(0, 8, 0);
+    let mut builder = FrameBuilder::new(&mut frame);
+    builder.camera(Mat4::IDENTITY);
+    // Fading cards and badges, apart on the screen, alternating from far to near.
+    builder.draw(Band::TableMarks, fading(1, -0.8, 0.9));
+    builder.draw(Band::TableMarks, badge(2, -0.4, 0.8));
+    builder.draw(Band::TableMarks, fading(3, 0.0, 0.7));
+    builder.draw(Band::TableMarks, badge(4, 0.4, 0.6));
+    let frame = builder.finish();
+    assert_eq!(order(frame), [1, 3, 2, 4]);
+    assert_eq!(frame.load.draw_calls, 2);
+}
+
+#[test]
+fn a_record_is_never_drawn_before_one_under_it() {
+    let mut frame = Frame::with_capacity(0, 8, 0);
+    let mut builder = FrameBuilder::new(&mut frame);
+    builder.camera(Mat4::IDENTITY);
+    // The second card lies over the badge, so it waits for it. Nothing lies over the first.
+    builder.draw(Band::TableMarks, fading(1, -0.5, 0.9));
+    builder.draw(Band::TableMarks, badge(2, 0.5, 0.8));
+    builder.draw(Band::TableMarks, fading(3, 0.52, 0.7));
+    let frame = builder.finish();
+    assert_eq!(order(frame), [1, 2, 3]);
+    assert_eq!(frame.load.draw_calls, 3);
+}
+
+#[test]
+fn light_that_only_adds_is_drawn_in_one_call_where_it_overlaps() {
+    let mut frame = Frame::with_capacity(0, 8, 0);
+    let mut builder = FrameBuilder::new(&mut frame);
+    builder.camera(Mat4::IDENTITY);
+    // Two outlines with a burst between them, all over one another. Light adds, so the order
+    // makes no difference and the outlines come together.
+    let glow =
+        |id, sprite, depth| Draw::glow(small(0.0, depth, Vec2::splat(0.5)), tag(id), sprite, 0.0);
+    builder.draw(Band::Glows, glow(1, sprites::OUTLINE, 0.9));
+    builder.draw(Band::Glows, glow(2, sprites::BURST, 0.8));
+    builder.draw(Band::Glows, glow(3, sprites::OUTLINE, 0.7));
+    let frame = builder.finish();
+    assert_eq!(order(frame), [1, 3, 2]);
+    assert_eq!(frame.load.draw_calls, 2);
+}
+
+#[test]
+fn an_outline_counts_only_the_ring_its_mesh_covers() {
+    let mut frame = Frame::with_capacity(0, 8, 0);
+    let mut builder = FrameBuilder::new(&mut frame);
+    builder.camera(Mat4::IDENTITY);
+    builder.draw(
+        Band::Glows,
+        Draw::glow(Affine3A::IDENTITY, tag(1), sprites::OUTLINE, 0.0),
+    );
+    let load = builder.finish().load;
+    // A unit quad covers a quarter of the screen; the ring is the outer rectangle less the
+    // hole, as shares of the quad.
+    let [outer, hole] = [sprites::OUTLINE_OUTER, sprites::OUTLINE_HOLE];
+    let ring = 4.0 * (outer[0] * outer[1] - hole[0] * hole[1]);
+    assert!((load.blended_area - 0.25 * ring).abs() < 1e-6, "{load:?}");
+}
+
 #[test]
 fn a_sixteenth_clip_sets_the_flag() {
     let mut frame = Frame::with_capacity(0, 0, 0);
@@ -192,6 +293,19 @@ fn build(frame: &mut Frame, cards: u16) {
         let card = Draw::card(transform, [255; 4], FaceSize::Board, index, 0, 0.0, 0.0);
         builder.draw(Band::Opaque, card);
         builder.draw(Band::TableMarks, card.edge());
+        // Now and then a fading card among the edges, so that the band is batched.
+        if index % 7 == 0 {
+            let fading = Draw::card(
+                transform,
+                [255, 255, 255, 128],
+                FaceSize::Board,
+                index,
+                0,
+                0.0,
+                0.0,
+            );
+            builder.draw(Band::TableMarks, fading);
+        }
         if index % 10 == 0 {
             builder.draw(
                 Band::ContactShadows,

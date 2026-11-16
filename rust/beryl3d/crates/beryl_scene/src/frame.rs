@@ -432,7 +432,7 @@ impl<'a> FrameBuilder<'a> {
     /// Adds a record to `band`. Within the flat layer's band, records are drawn in the order
     /// they are pushed, which is the order of its tree.
     pub fn draw(&mut self, band: Band, draw: Draw) {
-        self.frame.scratch.push(band, self.frame.draws.len());
+        self.frame.scratch.push(band, self.frame.draws.len(), &draw);
         self.frame.draws.push(draw);
         self.frame.work.records += 1;
     }

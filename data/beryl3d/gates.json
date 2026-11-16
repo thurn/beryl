@@ -28,7 +28,7 @@
       "handle_allocations": 2511,
       "frame_allocations": 0,
       "worst_frame_instructions": 3577801,
-      "total_instructions": 101195666,
+      "total_instructions": 102728013,
       "worst_frame_placed": 2550,
       "total_placed": 2805
     },
@@ -85,13 +85,13 @@
       "total_layout_nodes": 18,
       "worst_frame_text_runs": 18,
       "total_text_runs": 22,
-      "worst_frame_draw_calls": 4,
+      "worst_frame_draw_calls": 5,
       "worst_frame_upload_bytes": 3040,
       "worst_frame_blended_area": 0.1576,
       "handle_allocations": 1316,
       "frame_allocations": 0,
       "worst_frame_instructions": 925109,
-      "total_instructions": 7556050,
+      "total_instructions": 7723297,
       "worst_frame_placed": 23,
       "total_placed": 34
     },
@@ -108,13 +108,13 @@
       "total_text_runs": 21,
       "worst_frame_placed": 2419,
       "total_placed": 2519,
-      "worst_frame_draw_calls": 23,
+      "worst_frame_draw_calls": 12,
       "worst_frame_upload_bytes": 30480,
-      "worst_frame_blended_area": 1.2648,
+      "worst_frame_blended_area": 0.8877,
       "handle_allocations": 2655,
       "frame_allocations": 0,
       "worst_frame_instructions": 4131479,
-      "total_instructions": 85360669
+      "total_instructions": 89998450
     },
     "stress-hand": {
       "worst_frame_elements": 63,
@@ -135,7 +135,7 @@
       "handle_allocations": 605,
       "frame_allocations": 0,
       "worst_frame_instructions": 927483,
-      "total_instructions": 55693968
+      "total_instructions": 56633419
     },
     "stress-stack": {
       "worst_frame_elements": 105,
@@ -155,8 +155,8 @@
       "worst_frame_blended_area": 0.1011,
       "handle_allocations": 2130,
       "frame_allocations": 0,
-      "worst_frame_instructions": 3854216,
-      "total_instructions": 284400186
+      "worst_frame_instructions": 3908226,
+      "total_instructions": 288666351
     }
   },
   "tiers": {
@@ -164,9 +164,9 @@
       "fragments": {
         "stress-255": 1.072816,
         "stress-1024": 1.087257,
-        "verbs-zones": 1.038961,
-        "pay-default": 1.035885,
-        "stress-verbs": 1.456404,
+        "verbs-zones": 1.014938,
+        "pay-default": 1.012555,
+        "stress-verbs": 1.32009,
         "stress-hand": 1.00132,
         "stress-stack": 1.099233
       }
