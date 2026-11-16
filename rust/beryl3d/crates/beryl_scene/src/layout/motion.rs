@@ -59,6 +59,13 @@ impl Node {
             .map_or(self.element.style.opacity, |motion| motion.opacity)
     }
 
+    /// Whether no frame has drawn this node yet: it is fading in from nothing, and no frame has
+    /// begun the fade.
+    pub(super) fn unseen(&self) -> bool {
+        self.motion
+            .is_some_and(|motion| motion.start.is_none() && motion.from_opacity <= 0.0)
+    }
+
     /// Begins a transition from where the node stands now and how opaque it is now, `moved`
     /// further from its laid-out place: the change in that place.
     pub(super) fn transition(&mut self, moved: Vec2, opacity: f32) {

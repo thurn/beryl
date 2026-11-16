@@ -339,6 +339,34 @@ fn a_fading_node_is_partway_through_its_transition() {
 }
 
 #[test]
+fn a_screen_built_again_before_its_first_frame_glides_nothing() {
+    // The start screen is built before the host's agents arrive and again with them, both
+    // before any frame draws it. The rows push the title above them to a new place, but no
+    // frame ever drew the title at its old one, so it must not glide there as the screen
+    // fades in.
+    let mut layer = layer();
+    let screen = |rows: usize| {
+        let rows = (0..rows).map(|at| region(&format!("row {at}")).width(100.0).height(50.0));
+        column()
+            .name("screen")
+            .width(200.0)
+            .child(text("Title"))
+            .child(column().name("rows").children(rows))
+    };
+    layer.show(Some(screen(0)));
+    layer.show(Some(screen(2)));
+    layer.tick(0);
+    assert!(layer.tick(10 * MS), "the screen is fading in");
+    let (_, fading) = find(&write(&mut layer), Role::Text, "Title");
+    assert!(!layer.tick(1_000 * MS), "the fade in has ended");
+    let (_, rest) = find(&write(&mut layer), Role::Text, "Title");
+    assert!(
+        close(fading[1], rest[1]),
+        "the title stands at {fading:?} while the screen fades in, not where it rests, {rest:?}"
+    );
+}
+
+#[test]
 fn tab_moves_the_focus_to_the_next_button_and_return_presses_it() {
     let mut client = client();
     client.handle(deciding(prompt("Pay {1}{U}")));

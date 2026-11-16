@@ -133,7 +133,7 @@ impl Layer {
         self.layout_nodes += self.dirty(&node);
         compute(&mut self.taffy, &mut self.text, node.taffy, CONTENT);
         compute_anchored(&mut self.taffy, &mut self.text, &node);
-        self.place(&mut node, Vec2::ZERO);
+        self.place(&mut node, Vec2::ZERO, false);
         self.text_runs += self.text.take_runs();
         want_node(&node, self.window.scale, &mut self.glyphs);
         self.prepared.push(Prepared { id, key, node });

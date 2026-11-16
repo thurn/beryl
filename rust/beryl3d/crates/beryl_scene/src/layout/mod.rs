@@ -362,7 +362,7 @@ impl Layer {
                     compute(&mut self.taffy, &mut self.text, node.taffy, CONTENT);
                 }
                 compute_anchored(&mut self.taffy, &mut self.text, &node);
-                self.place(&mut node, glam::Vec2::ZERO);
+                self.place(&mut node, glam::Vec2::ZERO, false);
                 let tree = node.corner().unwrap_or(glam::Vec2::ZERO);
                 menu::place_menus(&mut node, tree, None, self.window.size);
                 self.screen = Some(node);
@@ -380,7 +380,7 @@ impl Layer {
                     compute(&mut self.taffy, &mut self.text, root, CONTENT);
                 }
                 compute_anchored(&mut self.taffy, &mut self.text, &float.node);
-                self.place(&mut float.node, glam::Vec2::ZERO);
+                self.place(&mut float.node, glam::Vec2::ZERO, false);
             }
             self.floats = floats;
         }
@@ -424,8 +424,10 @@ impl Layer {
     }
 
     /// Reads `node`'s computed box, with its parent's top left corner at `origin`, and breaks
-    /// its text at its content box's width where that width has changed.
-    fn place(&mut self, node: &mut Node, origin: glam::Vec2) {
+    /// its text at its content box's width where that width has changed. `unseen` says that no
+    /// frame has drawn the node's parent yet, because it or an ancestor is fading in and no
+    /// frame has begun that fade.
+    fn place(&mut self, node: &mut Node, origin: glam::Vec2, unseen: bool) {
         let layout = self
             .taffy
             .layout(node.taffy)
@@ -437,13 +439,18 @@ impl Layer {
         node.scroll = node.scroll.clamp(glam::Vec2::ZERO, node.most_scroll());
         // A kept node of the screen that its layout moves on the window moves there. A node
         // that stays where it was stays still, whatever its parent does, and one whose size
-        // changes is drawn at its new place at once, since its size does not transition.
+        // changes is drawn at its new place at once, since its size does not transition. A node
+        // that no frame has drawn yet has no place on the window to move from: a screen built
+        // and then built again before the next frame, as the start screen is when the host's
+        // agents arrive, is drawn at its last layout, fading in.
+        let unseen = unseen || node.unseen();
         let resized = node.rect.width.to_bits() != layout.size.width.to_bits()
             || node.rect.height.to_bits() != layout.size.height.to_bits();
         if self.animating
             && let Some(was) = node.location
             && was != corner
             && !resized
+            && !unseen
         {
             node.transition(was - corner, node.opacity());
         }
@@ -486,7 +493,7 @@ impl Layer {
             } else {
                 corner
             };
-            self.place(child, origin);
+            self.place(child, origin, unseen);
         }
     }
 
