@@ -278,3 +278,66 @@ def test_the_step_stops_nextest_before_the_hard_limit_and_keeps_what_finished(
     if broken:
         assert ("b3d-test:beryl_scene::pose::broken", "fail", 0.2) in logged
     assert "2 tests deferred to the Beryl 3D sweep: stopped" in capsys.readouterr().out
+
+
+def test_a_short_lease_runs_the_tests_in_waves_that_take_the_tokens_freed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """nextest keeps the threads it started with, so a lease that got 1 of the tokens it wanted
+    would run every test on one thread while the rest of the pool freed up. The step runs the
+    tests in waves instead and grows the lease before each one."""
+    pool = tokens.Pool(tmp_path / "pool", 4)
+    monkeypatch.setattr(test_fit.tokens, "Pool", lambda: pool)
+    blocker = pool.acquire("push", 3, command="other")
+    assert blocker is not None and blocker.size == 3
+    lease = pool.acquire("push", 1)
+    assert lease is not None
+    lease.wanted = 4
+    monkeypatch.setattr(test_fit.tokens, "acquire", lambda *_a, **_k: lease)
+    monkeypatch.setattr(test_fit.deadline, "until_hard_limit", lambda: 160.0)
+    junit: Path = tmp_path / "junit.xml"
+    monkeypatch.setattr(test_fit, "JUNIT", junit)
+    logged: list[tuple[str, str, float]] = []
+    monkeypatch.setattr(runlog, "result", lambda c, o, s, *_: logged.append((c, o, s)))
+    names = ["c", "a", "d", "b"]
+    monkeypatch.setattr(
+        rust_fit, "listed", lambda *_a: [f"beryl_scene t::{n}" for n in names]
+    )
+    waves: list[tuple[str, list[str]]] = []
+
+    class Wave:
+        def __init__(self, command: list[str], **kwargs: Any) -> None:
+            expression = command[command.index("-E") + 1]
+            ran = [n for n in names if f"test(=t::{n})" in expression]
+            waves.append((kwargs["env"]["NEXTEST_TEST_THREADS"], ran))
+            cases = "".join(
+                f'<testcase classname="beryl_scene" name="t::{n}" time="1.0"/>'
+                for n in ran
+            )
+            junit.write_text(f"<testsuites><testsuite>{cases}</testsuite></testsuites>")
+            # The other step's tokens free up while the first wave runs.
+            blocker.release()
+
+        def wait(self, timeout: float | None = None) -> int:
+            return 0
+
+    monkeypatch.setattr(test_fit.subprocess, "Popen", Wave)
+    records = {
+        "b3d-test:beryl_scene::t::a": Record(0, 0, 10, 10.0),
+        "b3d-test:beryl_scene::t::b": Record(0, 0, 10, 9.0),
+        "b3d-test:beryl_scene::t::c": Record(0, 0, 10, 1.0),
+        "b3d-test:beryl_scene::t::d": Record(0, 0, 10, 1.0),
+    }
+    # pyre-ignore[6]: a stand-in for test_fit.Known
+    assert test_fit.run(Known(records)) == 0
+    # On one thread the longest test fills the first wave's 8 s; with the pool's other three
+    # tokens taken, the rest run together on four.
+    assert waves == [("1", ["a"]), ("4", ["c", "d", "b"])]
+    assert sorted(c for c, o, _ in logged if o == "pass") == [
+        f"b3d-test:beryl_scene::t::{n}" for n in "abcd"
+    ]
+    assert "2 waves on 1, 4 threads" in capsys.readouterr().out
+    assert not list(pool.root.glob("wait-*"))
+    assert len(list(pool.root.glob("[0-9]*"))) == 0

@@ -193,5 +193,10 @@
     "label": "The commands `just b3d tree`, `png` and `film` start their rebuild without waiting for CPU tokens, run their one-thread program outside the pool, and build `dev` without ThinLTO, so a one-line edit to `beryl_scene` shows in about 3 s instead of 4 to 127 s",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The fast check's Beryl 3D cargo-test step runs its tests in waves when its CPU lease got fewer tokens than it wanted, taking the tokens that free up before each wave, instead of running every test on the 1-2 threads it started with (60-115 s on one thread against 18-25 s on twelve)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

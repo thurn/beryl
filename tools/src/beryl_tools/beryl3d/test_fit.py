@@ -41,6 +41,15 @@ cut test is.
 Every full run, the sweep's included, writes each test's time to the run log from nextest's
 JUnit report, as `b3d-test:<binary>::<test>`. Plans read the times from the fast check's lane
 and the sweep's, so a test the fast check keeps cutting is still timed by the sweep.
+
+nextest fixes its thread count when it starts, so a step whose lease got few of the tokens it
+asked for kept that many threads to the end. Between 19:00 and 22:10 UTC on 2026-11-16, 20 of 45
+fast-check nextest leases got 1 of the 12 tokens they wanted, at once rather than after a wait,
+and those runs took 60-115 s against 18-25 s for runs that got 12. The pool's tokens free up
+within tens of seconds (sampled every 2 s, 18 held fell to 4 in 30 s), and the run kept none of
+them. So inside a fast check, a step whose lease is short runs its tests in waves of about
+[`WAVE`] seconds each, takes the tokens free before each wave, and runs everything left in one
+wave once the lease is full ([`run_waves`]).
 """
 
 from __future__ import annotations
@@ -56,7 +65,7 @@ from pathlib import Path
 
 from .. import deadline, runlog, runstore, rust_fit, tokens
 from ..rust_tests import NEXTEST_PROFILE, junit_results, nextest_filter
-from ..selection import Record
+from ..selection import DEFAULT_SECONDS, Record
 from . import paths
 
 # The run-log lanes the step runs in: the fast check's (lane.GROUPS) and the sweep's (each of
@@ -74,6 +83,10 @@ MARGIN = 20.0
 # The seconds before the hard limit at which the step stops nextest: enough for nextest to stop
 # its tests and write its report, and for the step to log the results and exit.
 STOP = 8.0
+# The seconds of tests, by their records, that one wave runs on a short lease's threads
+# ([`run_waves`]). Starting nextest again inside a lease takes about 0.5 s once the tests are
+# built, so a wave this long spends little on starting and still takes freed tokens often.
+WAVE = 8.0
 # How far back a test's failure keeps it from being cut. A branch's retries and the sweeps of
 # the staging it is based on fall within a few hours, and each hour of the run log is about
 # 100 MB to scan.
@@ -209,6 +222,7 @@ def run(records: Known | None) -> int:
     with lease:
         env = {**os.environ, **lease.env()}
         expression = "all()"
+        tests: list[str] | None = None
         if records is not None and deadline.until_hard_limit() is not None:
             tests = rust_fit.listed(["--workspace"], "all()", paths.WORKSPACE, env)
             # Read after the listing, which runs every test binary and may take a while
@@ -231,6 +245,9 @@ def run(records: Known | None) -> int:
                     if not chosen:
                         return 0
                     expression = nextest_filter(chosen)
+        planned = chosen if chosen is not None else tests
+        if records is not None and planned and short(lease):
+            return run_waves(lease, planned, records.get())
         JUNIT.unlink(missing_ok=True)
         limit = deadline.until_hard_limit()
         code, stopped = nextest(
@@ -246,6 +263,94 @@ def run(records: Known | None) -> int:
             runlog.result(check_of(check), outcome, took)
         return code
     return log_stopped(results, chosen)
+
+
+def short(lease: tokens.Lease) -> bool:
+    """Whether `lease` owns tokens of a class and holds fewer than it wanted, so that the tests
+    run in waves that take the tokens that free up ([`run_waves`])."""
+    return bool(lease.files) and bool(lease.klass) and lease.size < lease.wanted
+
+
+def read_results() -> list[tuple[str, str, float]]:
+    try:
+        return junit_results(JUNIT.read_text())
+    except (OSError, ET.ParseError) as e:
+        print(f"cargo-test: no per-test results for the run log: {e}", flush=True)
+        return []
+
+
+def next_wave(
+    order: list[str], records: dict[str, Record], threads: int, full: bool
+) -> list[str]:
+    """The tests from the front of `order` that make up the next wave: all of them once the
+    lease is `full`, and otherwise those whose recorded seconds fill about [`WAVE`] seconds on
+    `threads` threads, at least one."""
+    if full:
+        return order
+    wave: list[str] = []
+    spent = 0.0
+    for test in order:
+        if wave and spent / max(1, threads) >= WAVE:
+            break
+        wave.append(test)
+        spent += seconds_of(test, records)
+    return wave
+
+
+def seconds_of(test: str, records: dict[str, Record]) -> float:
+    record = records.get(rust_fit.check_id(test, PREFIX))
+    return record.seconds if record is not None else DEFAULT_SECONDS
+
+
+def run_waves(lease: tokens.Lease, tests: list[str], records: dict[str, Record]) -> int:
+    """Runs `tests` in waves, growing `lease` before each wave by the tokens free then, and
+    logs every test's result. Tests run longest first, so the long ones are not left for the
+    end. While the lease is short it counts as a push's waiter, as a growing program's does
+    (tokens.run_growing), so lower classes take no tokens and their elastic builds give theirs
+    back. Once it is full, the rest run in one last wave. A wave stopped [`STOP`] seconds before
+    the hard limit logs the tests that finished, in every wave, and defers the rest."""
+    pool = tokens.Pool()
+    me = pool.waiter(lease.klass)
+    order = sorted(tests, key=lambda t: -seconds_of(t, records))
+    results: list[tuple[str, str, float]] = []
+    code = 0
+    sizes: list[int] = []
+    try:
+        while order:
+            if short(lease):
+                if lease.klass in tokens.GROW_AS_WAITER:
+                    me.write_text(f"{os.getpid()} {lease.klass}")
+                lease.grow(pool.top_up(lease.klass, lease.size, lease.wanted))
+            full = not short(lease)
+            if full:
+                me.unlink(missing_ok=True)
+            wave = next_wave(order, records, lease.size, full)
+            order = order[len(wave) :]
+            sizes.append(lease.size)
+            JUNIT.unlink(missing_ok=True)
+            limit = deadline.until_hard_limit()
+            wave_code, stopped = nextest(
+                nextest_filter(wave),
+                {**os.environ, **lease.env()},
+                None if limit is None else limit - STOP,
+            )
+            if stopped:
+                print(waves_line(sizes), flush=True)
+                return log_stopped(results + read_results(), tests)
+            results += read_results()
+            code = code or wave_code
+    finally:
+        me.unlink(missing_ok=True)
+    print(waves_line(sizes), flush=True)
+    for check, outcome, took in results:
+        runlog.result(check_of(check), outcome, took)
+    return code
+
+
+def waves_line(sizes: list[int]) -> str:
+    return (
+        f"cargo-test: {len(sizes)} waves on " + ", ".join(map(str, sizes)) + " threads"
+    )
 
 
 def log_stopped(results: list[tuple[str, str, float]], chosen: list[str] | None) -> int:
