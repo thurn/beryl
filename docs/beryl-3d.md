@@ -1234,7 +1234,7 @@ camera, how game objects are placed in it and how verbs move them.
   layout instead. The fixed orientation (pitch 10 degrees from straight down,
   field of view 24.29 degrees, both in `layout.phone` of `space.json`) was
   chosen so that a tapped card in the far row keeps a 44-point square at 375 by
-  647\. Only the distance is fitted: the required rectangle must match the
+  647 points. Only the distance is fitted: the required rectangle must match the
   battlefield rectangle that `phoneLayout` (`ui/src/mobile/layout.ts`) gives at
   393 by 759, sized as `useViewport` (`ui/src/mobile/chrome.tsx`) sizes the
   viewport. That is a column inside 8-point gutters, from the top safe inset
