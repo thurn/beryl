@@ -15,6 +15,8 @@ await check(
     "manual table lobby imports, swaps, reloads and starts a solo deck",
     async (page) => {
         const lobby = page.getByRole("main", { name: "Table lobby" });
+        const deck = lobby.getByRole("region", { name: "Deck", exact: true });
+        const picker = lobby.getByRole("region", { name: "Choose a deck" });
         await page.getByRole("button", { name: "Host a table" }).click();
         await page.getByRole("button", { name: "Host", exact: true }).waitFor();
         await page.getByRole("button", { name: "Cancel" }).click();
@@ -42,12 +44,10 @@ await check(
         await page.keyboard.press(mac ? "Meta+Alt+u" : "Control+Alt+u");
         await lobby.getByText("No deck loaded").waitFor();
         await lobby.getByRole("button", { name: "Change" }).click();
-        await lobby.getByRole("button", { name: "Solo check" }).click();
-        await lobby.getByText("11 main · 2 sideboard").waitFor();
-        // The view can arrive before the load command returns and enables shortcuts.
-        await lobby
-            .getByRole("button", { name: "Sideboard", exact: true })
-            .click({ trial: true });
+        await picker.getByRole("button", { name: "Solo check" }).click();
+        // The picker closes after the load command returns and enables shortcuts.
+        await picker.waitFor({ state: "hidden" });
+        await deck.getByText("11 main · 2 sideboard").waitFor();
         await page.keyboard.press(mac ? "Meta+Shift+b" : "Control+Shift+b");
         await lobby
             .getByRole("button", { name: "Move Plains to main deck" })

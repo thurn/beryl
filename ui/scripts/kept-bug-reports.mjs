@@ -1,10 +1,21 @@
 import assert from "node:assert/strict";
 import { check } from "./kept-harness.mjs";
+import { tableRoute } from "./table.mjs";
+
+const reportPath = "/invoke/report_bug";
 
 // The audits cannot compare the viewport sent to Rust with the one at the start of selection.
 await check(
     "a bug report uses the viewport from before the keyboard opened",
     async (page) => {
+        await page.route(
+            (url) => url.pathname === reportPath,
+            (route) =>
+                route.fulfill({
+                    headers: { "Access-Control-Allow-Origin": "*" },
+                    json: { ok: { id: "test", path: "" } },
+                }),
+        );
         await page.evaluate(() =>
             window.dispatchEvent(new Event("beryl:report-bug")),
         );
@@ -19,49 +30,20 @@ await check(
         await page
             .getByPlaceholder("What went wrong?")
             .fill("A cropped report");
-        await page.getByRole("button", { name: "Submit", exact: true }).click();
-        const report = await page.waitForFunction(() => window.savedReport);
-        const { page: viewport, region } = await report.jsonValue();
+        const [request] = await Promise.all([
+            page.waitForRequest(
+                (request) => new URL(request.url()).pathname === reportPath,
+            ),
+            page.getByRole("button", { name: "Submit", exact: true }).click(),
+        ]);
+        const { page: viewport, region } = request.postDataJSON().request;
         assert.deepEqual([viewport.width, viewport.height], before);
         assert.deepEqual(region, { x: 80, y: 190, width: 140, height: 130 });
     },
     {
         viewport: { width: 402, height: 874 },
         phone: true,
-        hash: "#/",
+        route: (page) => tableRoute(page, true),
         ready: "body.phone",
-        init: () => {
-            history.replaceState(null, "", "?live=/report-test&phone#/");
-            window.EventSource = class {
-                static OPEN = 1;
-                readyState = 1;
-                addEventListener() {}
-                removeEventListener() {}
-            };
-            const fetchOriginal = window.fetch.bind(window);
-            window.fetch = async (url, options) => {
-                if (!String(url).startsWith("/report-test/invoke/")) {
-                    return fetchOriginal(url, options);
-                }
-                const command = String(url).split("/").at(-1);
-                if (command === "report_bug") {
-                    window.savedReport = JSON.parse(options.body).request;
-                }
-                const responses = {
-                    app_info: {
-                        version: "test",
-                        smoke: false,
-                        platform: "linux",
-                        simulator: false,
-                        wire: "",
-                        profile: null,
-                    },
-                    list_agents: [],
-                    stage_timings: { entries: [] },
-                    report_bug: { id: "test" },
-                };
-                return Response.json({ ok: responses[command] ?? null });
-            };
-        },
     },
 );

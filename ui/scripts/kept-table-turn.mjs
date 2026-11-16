@@ -5,6 +5,7 @@ import { check } from "./kept-harness.mjs";
 import {
     clickTable,
     clickTableResult,
+    showTableView,
     startTable,
     tableActionRef,
     tableRoute,
@@ -140,6 +141,7 @@ await check(
     async (page) => {
         await startTable(page, deck, [moveTappedLand, phase("end")]);
         const before = await tableView();
+        await showTableView(page, before);
         const after = await press(page, "Shift+Tab");
         assert.equal(after.table.phase, "untap");
         assert.equal(after.turn.number, before.turn.number);
