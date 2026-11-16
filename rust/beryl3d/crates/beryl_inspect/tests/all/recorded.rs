@@ -13,7 +13,7 @@ use beryl_scene::agent::tree::line;
 use beryl_scene::agent::{Layout, locate};
 use beryl_scene::driver::{Duration, Moment, Page, TICK};
 use beryl_scene::frame::{Frame, FrameBuilder, Wake};
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::input::{Input, Insets, Size, Tier};
 use beryl_scene::play::Show;
 use beryl_scene::table::{DESKTOP, Table, Window};
 use beryl_scene::{Client, Config};
@@ -155,7 +155,7 @@ fn after_each_verbs_zones_script_every_object_rests_at_its_placement() {
         let mut now = 0;
         for (index, update) in views.into_iter().enumerate() {
             show.push(Box::new(update.clone()), timings(&update));
-            show.frame(now, &mut FrameBuilder::new(&mut frame));
+            show.frame(now, &mut FrameBuilder::new(&mut frame, Tier::Baseline));
             let placement = show.table().placement(&update.view, &[]);
             // Far past the script's end, each moving object is where its track ends, once every
             // step is compiled, as the frames up to then would compile them.
@@ -181,7 +181,7 @@ fn after_each_verbs_zones_script_every_object_rests_at_its_placement() {
                     Wake::Now => now + 16_666_667,
                     Wake::At(at) => at.max(now + 1),
                 };
-                show.frame(now, &mut FrameBuilder::new(&mut frame));
+                show.frame(now, &mut FrameBuilder::new(&mut frame, Tier::Baseline));
             }
             for object in &update.view.objects {
                 let rest = placement.get(object.slot).map(|rest| rest.pose);

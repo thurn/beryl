@@ -1,6 +1,6 @@
 //! Putting a frame's draw list in drawing order and counting its load (docs/beryl-3d.md, "The
 //! frame"): the opaque records first, cards nearest the camera first and the table last; then
-//! the seven blended bands in order, farthest first within a band, and the flat layer's band in
+//! the eight blended bands in order, farthest first within a band, and the flat layer's band in
 //! the order of its tree. Nothing here allocates once the frame's arrays have their capacity:
 //! the sort keys and the reordered records live in a scratch array the frame keeps.
 //!
@@ -13,7 +13,7 @@
 
 use glam::{Mat4, Vec2, Vec4};
 
-use super::{Band, Draw, Frame, Material, Mesh, sprites};
+use super::{BANDS, Band, Draw, Frame, Material, Mesh, sprites};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 
 /// The low bits of a sort key hold the record's index in push order, so that records that tie
@@ -36,11 +36,8 @@ pub(super) struct Scratch {
     first_calls: [Option<u8>; BANDS],
     /// A bit for each band, by `Band` value, holding records of more than one call key, which
     /// alone `batch` may need to reorder.
-    mixed: u8,
+    mixed: u16,
 }
-
-/// How many bands there are.
-const BANDS: usize = 8;
 
 /// What `batch` works in: for each record of one band, its rectangle on screen and whether it
 /// has been placed, and the sort keys in their new order. Sized for every record of a frame.
@@ -88,13 +85,13 @@ impl Scratch {
         self.keys.push(((band as u64) << BAND_SHIFT) | index as u64);
         let first = self.first_calls[band as usize].get_or_insert(draw.flags);
         if *first != draw.flags {
-            self.mixed |= 1 << band as u8;
+            self.mixed |= 1 << band as u16;
         }
     }
 }
 
-/// Puts `frame.draws` in drawing order, sets `opaque` and `layer`, and counts the load, all but
-/// the screen areas, which `areas` measures when a gate asks for them.
+/// Puts `frame.draws` in drawing order, sets `opaque`, `layer` and `bands`, and counts the
+/// load, all but the screen areas, which `areas` measures when a gate asks for them.
 pub(super) fn finish(frame: &mut Frame) {
     let view_projection = frame.view_projection;
     let Frame {
@@ -117,12 +114,17 @@ pub(super) fn finish(frame: &mut Frame) {
     );
     std::mem::swap(draws, &mut scratch.draws);
 
-    let opaque = scratch
-        .keys
-        .partition_point(|&key| band_of(key) == Band::Opaque);
-    let layer = scratch
-        .keys
-        .partition_point(|&key| band_of(key) < Band::Layer);
+    for (band, start) in frame.bands.iter_mut().enumerate() {
+        *start = super::index(
+            scratch
+                .keys
+                .partition_point(|&key| (band_of(key) as usize) < band),
+        );
+    }
+    let (opaque, layer) = (
+        frame.bands[Band::ContactShadows as usize] as usize,
+        frame.bands[Band::Layer as usize] as usize,
+    );
     frame.opaque = super::index(opaque);
     frame.layer = super::index(layer);
 
@@ -174,8 +176,9 @@ fn band_of(key: u64) -> Band {
         2 => Band::TableMarks,
         3 => Band::RaisedMarks,
         4 => Band::Glows,
-        5 => Band::Layer,
-        6 => Band::LayerCards,
+        5 => Band::Particles,
+        6 => Band::Layer,
+        7 => Band::LayerCards,
         _ => Band::LayerCover,
     }
 }
@@ -263,7 +266,7 @@ fn batch_bands(scratch: &mut Scratch, draws: &[Draw], view_projection: &Mat4) {
     while start < end {
         let band = band_of(keys[start]);
         let len = keys[start..end].partition_point(|&key| band_of(key) == band);
-        if *mixed & (1 << band as u8) != 0 {
+        if *mixed & (1 << band as u16) != 0 {
             batch(
                 &mut keys[start..start + len],
                 draws,

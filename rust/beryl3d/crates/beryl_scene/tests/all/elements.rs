@@ -8,7 +8,7 @@ use beryl_scene::element::{
     Anchor, Chord, Display, Element, Overflow, Position, Press, Track, column, row, text,
 };
 use beryl_scene::frame::{ElementId, Frame, FrameBuilder, Role, StateBits};
-use beryl_scene::input::{Input, Key, KeyCode, KeyPhase, Modifiers};
+use beryl_scene::input::{Input, Key, KeyCode, KeyPhase, Modifiers, Tier};
 use beryl_scene::layout::{Layer, centre_of};
 use beryl_scene::pose::Curve;
 use beryl_scene::table::Table;
@@ -20,7 +20,7 @@ use crate::flat_layer::{client, deciding, decision, prompt};
 /// The frame `layer` writes on its own, with the layout work done since the last one.
 fn write(layer: &mut Layer) -> Frame {
     let mut frame = Frame::with_capacity(64, 256, 4096);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     let (layout_nodes, text_runs) = layer.take_work();
     builder.layout_work(layout_nodes, text_runs);
     layer.write(&mut builder, Table::default().camera(), true);
@@ -147,7 +147,7 @@ fn an_element_anchored_to_a_card_stays_on_it_while_it_flies() {
     let mut centres = Vec::new();
     let mut now = 0;
     while now <= 600 * MS {
-        let mut builder = FrameBuilder::new(&mut frame);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         show.frame(now, &mut builder);
         let card = builder.centre(ElementId(u32::from(cards.land.0)));
         layer.follow(|subject| centre_of(&builder, show.table(), subject));

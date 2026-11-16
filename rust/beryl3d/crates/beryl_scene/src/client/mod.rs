@@ -438,7 +438,7 @@ impl Client {
         self.inspect();
         self.write_pill(self.screen == Screen::Game && self.sheet.is_none());
         let visible = self.hud_shown();
-        let mut builder = FrameBuilder::new(&mut self.frame);
+        let mut builder = FrameBuilder::new(&mut self.frame, self.tier);
         builder.sounds(self.manual.take_refusal());
         self.show.frame(table_now, &mut builder);
         // Elements anchored to a card, an ability or a player stand where the table drew it.

@@ -10,7 +10,7 @@ use glam::{Mat4, Vec2};
 
 pub use draw::{Draw, Material, Mesh, Sprite, TextureArray, sprites};
 
-use crate::input::Rect;
+use crate::input::{Rect, Tier};
 
 /// A card's element id is its object's slot in the view, and the face of that card in the
 /// Revealed Cards pile's is `REVEALED_FACE` more. A flat-layer element's is given when it first
@@ -202,6 +202,8 @@ pub struct Load {
     pub draw_calls: u32,
     pub instances: u32,
     pub upload_bytes: u32,
+    /// The particle records of the frame, which only the Enhanced tier writes.
+    pub particles: u32,
 }
 
 /// The screen area of a frame's records, in screens (`Frame::areas`).
@@ -261,7 +263,7 @@ impl Wake {
     }
 }
 
-/// A group of records drawn together. The opaque pass comes first, then the seven blended
+/// A group of records drawn together. The opaque pass comes first, then the eight blended
 /// bands in this order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Band {
@@ -275,6 +277,9 @@ pub enum Band {
     RaisedMarks,
     /// Glows and streaks.
     Glows,
+    /// Particles, which only the Enhanced tier draws: blended, tested against the depth
+    /// buffer like the other bands of the table, farthest first.
+    Particles,
     /// The flat layer, in the order of its tree.
     Layer,
     /// Cards shown inside flat-layer elements, such as a card browser, with their marks.
@@ -296,8 +301,13 @@ pub const RECORDS_PER_OBJECT: usize = 12;
 pub const LAYER_RECORDS: usize = 4096;
 /// The most abilities on the stack a frame draws as cards.
 pub const ABILITIES: usize = 64;
+/// The most particle records a frame holds (`Band::Particles`), which only the Enhanced tier
+/// writes.
+pub const PARTICLES: usize = 2000;
 /// The most records a frame holds, so that ordering the largest board allocates nothing.
-pub const DRAWS: usize = (OBJECTS + ABILITIES) * RECORDS_PER_OBJECT + LAYER_RECORDS;
+pub const DRAWS: usize = (OBJECTS + ABILITIES) * RECORDS_PER_OBJECT + LAYER_RECORDS + PARTICLES;
+/// How many bands there are (`Band`).
+pub const BANDS: usize = 9;
 /// The most elements of the flat layer a frame holds.
 pub const LAYER_ELEMENTS: usize = 3072;
 /// The most resolved elements a frame holds: one for each card and each ability on the stack,
@@ -320,6 +330,12 @@ pub struct Frame {
     pub opaque: u32,
     /// `draws[layer..]` are the flat layer's records, drawn with no depth test and not shaken.
     pub layer: u32,
+    /// The index in `draws` where each band starts, by `Band` value, and the end of `draws`
+    /// as the last entry, so that `draws[bands[b]..bands[b + 1]]` are band `b`'s records.
+    pub bands: [u32; BANDS + 1],
+    /// The visual tier the frame is drawn in (docs/beryl-3d.md, "Choosing a tier"). The
+    /// renderer chooses its passes from this alone.
+    pub tier: Tier,
     /// The camera's view and projection: from the table's space to the renderer's clip space,
     /// with depth from 0 at the near plane to 1 at the far one. It serves every record,
     /// because a flat-layer record is placed on a plane just in front of the camera.
@@ -400,6 +416,8 @@ impl Frame {
             draws: Vec::with_capacity(draws),
             opaque: 0,
             layer: 0,
+            bands: [0; BANDS + 1],
+            tier: Tier::Baseline,
             view_projection: Mat4::IDENTITY,
             clips: [Rect::default(); CLIPS],
             clips_full: false,
@@ -452,12 +470,15 @@ pub struct FrameBuilder<'a> {
 }
 
 impl<'a> FrameBuilder<'a> {
-    pub fn new(frame: &'a mut Frame) -> Self {
+    /// Starts a frame drawn in `tier`.
+    pub fn new(frame: &'a mut Frame, tier: Tier) -> Self {
         frame.resolved.clear();
         frame.names.clear();
         frame.draws.clear();
         frame.opaque = 0;
         frame.layer = 0;
+        frame.bands = [0; BANDS + 1];
+        frame.tier = tier;
         frame.view_projection = Mat4::IDENTITY;
         frame.clips = [Rect::default(); CLIPS];
         frame.clips_full = false;
@@ -469,6 +490,13 @@ impl<'a> FrameBuilder<'a> {
         frame.work = Work::default();
         frame.scratch.clear();
         Self { frame, clips: 0 }
+    }
+
+    /// The visual tier the frame is drawn in, which decides the records only one tier writes:
+    /// contact shadows in Baseline, particles in Enhanced.
+    #[must_use]
+    pub fn tier(&self) -> Tier {
+        self.frame.tier
     }
 
     /// Adds `element` named `name`, and returns its index. The builder sets `element.name`.
@@ -520,6 +548,12 @@ impl<'a> FrameBuilder<'a> {
     /// Adds a record to `band`. Within the flat layer's band, records are drawn in the order
     /// they are pushed, which is the order of its tree.
     pub fn draw(&mut self, band: Band, draw: Draw) {
+        let particle = draw.material == Material::Particle as u8;
+        debug_assert!(
+            !particle || self.frame.tier == Tier::Enhanced,
+            "a particle record pushed in the Baseline tier"
+        );
+        self.frame.load.particles += u32::from(particle);
         self.frame.scratch.push(band, self.frame.draws.len(), &draw);
         self.frame.draws.push(draw);
         self.frame.work.records += 1;
@@ -577,8 +611,8 @@ impl<'a> FrameBuilder<'a> {
         Some(self.clips)
     }
 
-    /// Puts the records in drawing order, sets `Frame::opaque` and `Frame::layer`, and counts
-    /// the frame's `Load` (see `order`).
+    /// Puts the records in drawing order, sets `Frame::opaque`, `Frame::layer` and
+    /// `Frame::bands`, and counts the frame's `Load` (see `order`).
     pub fn finish(self) -> &'a Frame {
         order::finish(self.frame);
         self.frame

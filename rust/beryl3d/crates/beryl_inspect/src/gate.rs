@@ -18,7 +18,7 @@ use beryl_protocol::protocol::{SessionId, Side};
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Page, plays_on};
 use beryl_scene::frame::{Frame, Wake, Work};
-use beryl_scene::input::{AssetReady, Input, Insets, Pointer, Size};
+use beryl_scene::input::{AssetReady, Input, Insets, Pointer, Size, Tier};
 use beryl_scene::{Client, Config};
 
 use crate::pages::recording;
@@ -185,6 +185,19 @@ impl Playback {
             drive,
             rested: None,
         })
+    }
+
+    /// This playback with every frame drawn in `tier`: the client is handed `Input::Tier`
+    /// before its first frame.
+    ///
+    /// # Panics
+    ///
+    /// When a frame has already been drawn.
+    #[must_use]
+    pub fn with_tier(mut self, tier: Tier) -> Self {
+        assert_eq!(self.next, 0, "the tier is set before the first frame");
+        self.client.handle(Input::Tier(tier));
+        self
     }
 
     /// Whether the next group of views is handed over before the next frame: the first at

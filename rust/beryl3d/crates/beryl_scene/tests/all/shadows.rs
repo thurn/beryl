@@ -4,8 +4,8 @@
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{CardType, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
-use beryl_scene::frame::{Draw, Frame, Material};
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::frame::{BANDS, Band, Draw, Frame, Material};
+use beryl_scene::input::{Input, Insets, Size, Tier};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, object, timing};
 use beryl_scene::{Client, Config};
 
@@ -139,4 +139,59 @@ fn a_card_drawn_off_a_tall_library_casts_its_shadow_on_the_librarys_top() {
         break;
     }
     assert!(checked, "the card rises clear of the library while over it");
+}
+
+/// Each record lies between the start of its band and the start of the next in
+/// `Frame::bands`, and the last entry is the end of the draw list.
+fn assert_bands_bracket_records(frame: &Frame) {
+    assert_eq!(frame.bands[BANDS] as usize, frame.draws.len());
+    assert!(frame.bands.is_sorted(), "{:?}", frame.bands);
+    for index in 0..frame.draws.len() {
+        let band = frame
+            .band(index)
+            .expect("a finished frame bands every record") as usize;
+        let range = frame.bands[band] as usize..frame.bands[band + 1] as usize;
+        assert!(
+            range.contains(&index),
+            "record {index} of band {band} outside {range:?}"
+        );
+    }
+}
+
+#[test]
+fn a_card_in_hand_casts_a_contact_shadow_in_baseline_and_none_in_enhanced() {
+    let mut builder = ViewBuilder::new();
+    builder.card(ZoneName::Hand, Side::You, "Opt");
+    builder
+        .card(ZoneName::Battlefield, Side::You, "Island")
+        .types = vec![CardType::Land];
+    builder.script(ScriptBuilder::reset().build());
+    let mut client = Client::new(Config {
+        elements: 256,
+        draws: 1024,
+        name_bytes: 8192,
+    });
+    client.handle(Input::Surface {
+        size: Size {
+            width: 1440.0,
+            height: 900.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    });
+    client.handle(Input::Update(Box::new(builder.update())));
+
+    let frame = client.frame(0);
+    assert_eq!(frame.tier, Tier::Baseline);
+    assert_eq!(shadows(frame).len(), 1);
+    assert_bands_bracket_records(frame);
+    let start = frame.bands[Band::ContactShadows as usize] as usize;
+    let end = frame.bands[Band::ContactShadows as usize + 1] as usize;
+    assert_eq!(end - start, 1, "{:?}", frame.bands);
+
+    client.handle(Input::Tier(Tier::Enhanced));
+    let frame = client.frame(MS);
+    assert_eq!(frame.tier, Tier::Enhanced);
+    assert!(shadows(frame).is_empty());
+    assert_bands_bracket_records(frame);
 }

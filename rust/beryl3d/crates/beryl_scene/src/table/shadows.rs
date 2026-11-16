@@ -13,6 +13,7 @@ use super::scene::{SceneObject, Table};
 use super::{CARD_HEIGHT, CARD_WIDTH};
 use crate::data::space::shadow;
 use crate::frame::{Band, Draw, FrameBuilder, Place};
+use crate::input::Tier;
 use crate::pose::Pose;
 
 /// Half a card's diagonal, in millimetres at a scale of 1: no point of a card lies farther from
@@ -31,6 +32,11 @@ impl Table {
         under_way: bool,
         builder: &mut FrameBuilder,
     ) {
+        // The Enhanced tier's shadow map shades every card's shadow, so it writes no contact
+        // shadows (docs/beryl-3d.md, "The Enhanced tier").
+        if builder.tier() == Tier::Enhanced {
+            return;
+        }
         // A card a box of the flat layer shows casts no shadow on the table under the box.
         let boxed = slot.is_some_and(|slot| self.in_box(slot));
         if boxed

@@ -8,7 +8,7 @@ use beryl_protocol::protocol::{
 };
 use beryl_protocol::script::{Act, Fact, StepTiming, Subject, Table as Played, time_script};
 use beryl_scene::frame::{Frame, FrameBuilder};
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::input::{Input, Insets, Size, Tier};
 use beryl_scene::play::Show;
 use beryl_scene::table::{DESKTOP, Table, Window};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, object, timing};
@@ -37,7 +37,7 @@ pub fn empty_frame() -> Frame {
 
 /// The frame `show` draws at `now`.
 pub fn frame(show: &mut Show, frame: &mut Frame, now: u64) -> Frame {
-    let mut builder = FrameBuilder::new(frame);
+    let mut builder = FrameBuilder::new(frame, Tier::Baseline);
     show.frame(now, &mut builder);
     builder.finish().clone()
 }

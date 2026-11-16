@@ -103,7 +103,7 @@ impl Iterator for Runs<'_> {
 #[cfg(test)]
 mod tests {
     use beryl_scene::frame::{Band, FrameBuilder, Sprite};
-    use beryl_scene::input::FaceSize;
+    use beryl_scene::input::{FaceSize, Tier};
     use glam::Affine3A;
 
     use super::*;
@@ -123,7 +123,7 @@ mod tests {
     #[test]
     fn records_split_by_pass_mesh_array_and_clip() {
         let mut frame = Frame::with_capacity(0, 16, 0);
-        let mut builder = FrameBuilder::new(&mut frame);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         builder.draw(Band::Opaque, card());
         builder.draw(
             Band::Opaque,

@@ -17,7 +17,9 @@ use beryl_scene::driver::Recording;
 use beryl_scene::frame::{
     ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits,
 };
-use beryl_scene::input::{Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
+use beryl_scene::input::{
+    Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Tier,
+};
 use beryl_scene::input::{Rect, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, table};
 use beryl_scene::{Client, Config};
@@ -498,7 +500,7 @@ fn strip_card(id: u32, x: f32, depth: f32) -> Resolved {
 #[test]
 fn a_finger_in_a_44_point_strip_reaches_the_card_under_the_one_over_it() {
     let mut frame = Frame::with_capacity(2, 0, 64);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     builder.resolved("Island", strip_card(0, 100.0, 2.0));
     builder.resolved("Plains", strip_card(1, 144.0, 1.0));
     builder.finish();

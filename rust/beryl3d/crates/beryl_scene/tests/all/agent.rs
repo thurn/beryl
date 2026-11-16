@@ -11,7 +11,7 @@ use beryl_scene::agent::{Context, Fault, Layout, Rule, TreeOptions, hit, locate,
 use beryl_scene::frame::{
     ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits,
 };
-use beryl_scene::input::{Insets, Rect, Size};
+use beryl_scene::input::{Insets, Rect, Size, Tier};
 use glam::Vec2;
 
 const LANDS: Place = Place::Card {
@@ -90,7 +90,7 @@ impl Spec {
 
 fn frame(specs: Vec<Spec>) -> Frame {
     let mut frame = Frame::with_capacity(specs.len(), 0, 4096);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     for spec in specs {
         builder.resolved(spec.name, spec.element);
     }
@@ -457,7 +457,7 @@ fn an_enabled_button_one_point_into_any_inset_is_off_screen() {
 /// of its text at `text` points.
 fn sized(width: f32, height: f32, text: f32) -> Frame {
     let mut frame = Frame::with_capacity(1, 1, 4096);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     let spec = layer(Role::Button, "Done", 1, rect(100.0, 300.0, width, height));
     builder.resolved(spec.name, spec.element);
     builder.line(0, rect(104.0, 310.0, 30.0, text), text);

@@ -7,7 +7,7 @@ use beryl_assets::Format;
 use beryl_assets::light;
 use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
 use beryl_scene::frame::{Band, DRAWS, Draw, Frame, FrameBuilder, sprites};
-use beryl_scene::input::FaceSize;
+use beryl_scene::input::{FaceSize, Tier};
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Window};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
@@ -65,7 +65,7 @@ fn draw(
     records: &[(Band, Draw)],
 ) -> (Picture, u32) {
     let mut frame = Frame::with_capacity(0, records.len(), 0);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     builder.camera(view_projection);
     for &(band, record) in records {
         builder.draw(band, record);
@@ -165,7 +165,7 @@ fn frames_drawn_back_to_back_keep_their_own_records() {
             .iter()
             .map(|&color| {
                 let mut frame = Frame::with_capacity(0, 1, 0);
-                let mut builder = FrameBuilder::new(&mut frame);
+                let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
                 builder.camera(overhead());
                 builder.draw(
                     Band::Opaque,
@@ -429,7 +429,7 @@ fn twenty_cards_with_three_raised_draw_in_perspective() {
     for limits in BOTH {
         let mut renderer = renderer(limits);
         let mut frame = Frame::with_capacity(0, records.len(), 0);
-        let mut builder = FrameBuilder::new(&mut frame);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         builder.camera(camera.view_projection);
         for &(band, record) in &records {
             builder.draw(band, record);
@@ -531,7 +531,7 @@ fn a_shake_moves_the_table_and_not_the_flat_layer() {
         let mut renderer = renderer(limits);
         let mut picture = |shake: Vec2| {
             let mut frame = Frame::with_capacity(0, records.len(), 0);
-            let mut builder = FrameBuilder::new(&mut frame);
+            let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
             builder.camera(overhead());
             builder.shake(shake);
             for &(band, record) in &records {

@@ -7,7 +7,7 @@ use beryl_assets::{Format, Layer, MatchFace, Prepared, Source, Upload, dimension
 use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
 use beryl_scene::faces::PrintedText;
 use beryl_scene::frame::{Band, Draw, Frame, FrameBuilder, Wake};
-use beryl_scene::input::{AssetReady, FaceId, FaceSize};
+use beryl_scene::input::{AssetReady, FaceId, FaceSize, Tier};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Vec3};
 
@@ -42,7 +42,7 @@ fn draw_card(renderer: &mut Renderer, face: u16, half: f32) -> Picture {
         0.0,
     );
     let mut frame = Frame::with_capacity(0, 1, 0);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     builder.camera(camera);
     builder.draw(Band::Opaque, card);
     let frame = builder.finish();

@@ -18,7 +18,7 @@ use beryl_scene::element::{Press, floats, row, text};
 use beryl_scene::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
 use beryl_scene::input::{
     AssetReady, Button, GlyphCell, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size,
+    Size, Tier,
 };
 use beryl_scene::layout::{FloatLook, Layer};
 use beryl_scene::table::Table;
@@ -326,7 +326,7 @@ fn a_title_too_long_for_its_box_fails_text_fits() {
         ),
     ));
     let mut frame = Frame::with_capacity(16, 16, 1024);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     layer.write(&mut builder, Table::default().camera(), true);
     let frame = builder.finish();
     let faults = text_fits(frame, &context());
@@ -546,7 +546,7 @@ fn centred_at(point: Vec2) -> FloatLook {
 /// done since the last frame.
 pub(super) fn write_layer(layer: &mut Layer, open: bool) -> Frame {
     let mut frame = Frame::with_capacity(64, 256, 1024);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     let (layout_nodes, text_runs) = layer.take_work();
     builder.layout_work(layout_nodes, text_runs);
     layer.write(&mut builder, Table::default().camera(), open);

@@ -24,7 +24,7 @@ use beryl_scene::element::{Anchor, floats, row, text};
 use beryl_scene::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
 use beryl_scene::input::{
     AssetReady, Button, GlyphCell, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size,
+    Size, Tier,
 };
 use beryl_scene::layout::{FloatLook, Layer, centre_of};
 use beryl_scene::light::{MarkSpan, Span};
@@ -483,7 +483,7 @@ fn a_moved_float_allocates_nothing() {
             tint: Some([255, 0, 0, 255]),
         },
     );
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     layer.write(&mut builder, table.camera(), false);
     let elements = builder.finish().resolved.len();
     let after = ALLOCATIONS.load(Ordering::Relaxed);
@@ -514,7 +514,7 @@ fn an_anchored_element_allocates_nothing() {
     for now in (0..30).map(|index| index * 16 * common::MS) {
         show.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
-        let mut builder = FrameBuilder::new(&mut frame);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         show.frame(now, &mut builder);
         layer.follow(|subject| centre_of(&builder, show.table(), subject));
         layer.write(&mut builder, show.table().camera(), true);
@@ -550,7 +550,7 @@ fn a_transition_allocates_nothing() {
     for now in (0..12).map(|index| common::MS * (1_000 + index * 16)) {
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let moving = layer.tick(now);
-        let mut builder = FrameBuilder::new(&mut frame);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         layer.write(&mut builder, table.camera(), true);
         builder.finish();
         let after = ALLOCATIONS.load(Ordering::Relaxed);

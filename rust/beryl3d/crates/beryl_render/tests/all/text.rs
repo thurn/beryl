@@ -11,7 +11,7 @@ use beryl_assets::packer::PAGE_SIZE;
 use beryl_assets::{Prepared, Upload};
 use beryl_render::{Limits, Renderer, Target};
 use beryl_scene::frame::{Band, Draw, Frame, FrameBuilder, Sprite};
-use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey};
+use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey, Tier};
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
 use beryl_scene::text::fonts::Font;
 use beryl_scene::widgets::icons::GEAR;
@@ -45,7 +45,7 @@ fn over(corner: Vec2, size: Vec2) -> Affine3A {
 /// Draws `records`, each with its band, and returns the target's RGBA pixels.
 fn draw(renderer: &mut Renderer, records: &[(Band, Draw)]) -> Vec<u8> {
     let mut frame = Frame::with_capacity(0, records.len(), 0);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     builder.camera(camera());
     for &(band, record) in records {
         builder.draw(band, record);

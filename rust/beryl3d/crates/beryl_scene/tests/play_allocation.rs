@@ -6,6 +6,7 @@
 
 mod common;
 
+use beryl_scene::input::Tier;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -115,7 +116,7 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
         }
         show.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
-        let mut builder = FrameBuilder::new(&mut frame);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         show.frame(now, &mut builder);
         let drawn = builder.finish();
         let ability = (drawn.resolved.iter()).any(|element| element.role == Role::Ability);
@@ -205,7 +206,7 @@ fn laying_a_script_out_again_allocates_nothing() {
     for now in [0, 100 * MS, 200 * MS, 300 * MS] {
         show.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
-        let mut builder = FrameBuilder::new(&mut frame);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         show.frame(now, &mut builder);
         let after = ALLOCATIONS.load(Ordering::Relaxed);
         assert_eq!(
@@ -249,7 +250,7 @@ fn twenty_streaks_allocate_nothing() {
     for now in [0, 150 * MS] {
         show.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
-        let mut builder = FrameBuilder::new(&mut frame);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         show.frame(now, &mut builder);
         let drawn = builder
             .finish()
@@ -296,7 +297,7 @@ fn forty_effects_allocate_nothing() {
     for now in [0, 150 * MS, 300 * MS] {
         show.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
-        let mut builder = FrameBuilder::new(&mut frame);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         show.frame(now, &mut builder);
         let lights = builder
             .finish()
@@ -346,7 +347,7 @@ fn fifty_arrows_allocate_nothing(show: &mut Show, cards: Cards) {
     let mut frame = Frame::with_capacity(512, 2048, 16384);
     show.prepare(1_900 * MS);
     let before = ALLOCATIONS.load(Ordering::Relaxed);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     show.frame(1_900 * MS, &mut builder);
     let arrows = builder
         .finish()
@@ -367,7 +368,7 @@ fn fifty_arrows_allocate_nothing(show: &mut Show, cards: Cards) {
 fn counted_frame(show: &mut Show, frame: &mut Frame, now: u64) -> (usize, usize) {
     show.prepare(now);
     let before = ALLOCATIONS.load(Ordering::Relaxed);
-    let mut builder = FrameBuilder::new(frame);
+    let mut builder = FrameBuilder::new(frame, Tier::Baseline);
     show.frame(now, &mut builder);
     let records = builder.finish().draws.len();
     (records, ALLOCATIONS.load(Ordering::Relaxed) - before)

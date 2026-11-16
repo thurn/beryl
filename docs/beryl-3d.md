@@ -534,6 +534,7 @@ The rules for building a frame:
   board the engine can hold. After a game has started, `frame` performs zero
   heap allocations; a frame that outgrew an array would grow it, and the
   allocation gate would fail.
+
 - **A card has two layers.** A card that turns over shows its face from one side
   and its back from the other, so its record must name two layers. A card's face
   always fills its layer, so a card record has no use for the `uv` rectangle,
@@ -541,12 +542,14 @@ The rules for building a frame:
   side of the triangle faces the camera, and mirrors the texture coordinates on
   the back. The prototype confirmed this works with one mesh and no second
   record.
+
 - **Three texture arrays.** A record's `flags` name one of them: the small card
   faces, the full-size card faces, or **the atlas**, which holds everything else
   (glyph pages, icons, and the shapes of shadows and glows). The atlas is an
   array of single-channel pages, each 1,024 texels square, that hold coverage:
   page 0 holds the shapes of light, which every host uploads before its first
   frame, and the glyph worker fills the pages after it with glyphs and icons.
+
 - **Icons are rasterized on the glyph worker.** Each icon of `widgets::icons` is
   kept in `beryl_assets` as the web interface's own SVG path data, and
   `GlyphWorker::icons` fills and strokes every one with `tiny-skia` at the
@@ -557,20 +560,24 @@ The rules for building a frame:
   outlines), the darker fill's coverage is scaled by its brightness. When the
   scale changes, the host asks again: the new cells go into fresh space, and the
   old ones are drawn scaled until they arrive.
+
 - **One projection.** Every record's transform is in the table's space. A
   flat-layer record's transform places it on a plane just in front of the
   camera, so the same camera matrix serves the table and the flat layer.
+
 - **Closed materials.** A **material** is one way of shading a shape. The list
   is closed and short: table, card, contact shadow, glow, streak, panel, glyph,
   icon and particle. A record's `material` selects a branch of a shader, so
   shapes of different materials can be drawn by one call. Every GPU pipeline is
   created at startup, and nothing is compiled during play.
+
 - **Opaque first, nearest first.** Cards and the table are opaque. Their records
   come first in the list, cards nearest the camera first and the table last, and
   are drawn with a depth buffer. A pixel of the table that a card covers, or of
   a card that a nearer card covers, is then never shaded. A card that is partly
   transparent, as one fading out is, is drawn with the blended records instead.
   The [Rendering](#rendering) section below says why this matters on old GPUs.
+
 - **Then blended, in a fixed order of bands.** Everything translucent follows,
   farthest first. Within a band of the table, a record is then moved earlier to
   join records drawn with the same mesh, texture array and clip, past only
@@ -578,15 +585,25 @@ The rules for building a frame:
   not cut the band into many draw calls. Records that share no pixel blend the
   same in either order. A **band** is a group of records drawn together. The
   bands, in order:
+
   1. contact shadows of cards above the table;
   2. the soft edges of cards, and the marks on cards lying on the table;
   3. marks on cards above the table (in flight, in a hand, on the stack, held up
      to be read);
   4. glows and streaks;
-  5. the flat layer, in the order of its tree;
-  6. cards shown inside flat-layer elements, such as a card browser, with their
+  5. particles, which only the Enhanced tier draws, tested against the depth
+     buffer like the bands before them;
+  6. the flat layer, in the order of its tree;
+  7. cards shown inside flat-layer elements, such as a card browser, with their
      marks;
-  7. flat-layer elements that must cover those cards, such as a tooltip.
+  8. flat-layer elements that must cover those cards, such as a tooltip.
+
+  `Frame::bands` gives the index in the draw list where each band starts, so
+  that a pass can draw one band's records again, as bloom does the glows.
+  `Frame::tier` is the tier the frame is drawn in. The two tiers' draw lists are
+  the same but for contact shadows, which only Baseline writes, and particles,
+  which only Enhanced writes.
+
 - **Marks are hidden with their cards.** Blended records on the table are tested
   against the depth buffer, so a mark on a card that another card covers is
   covered too. Every card in a row lies 0.3 millimetres above the one before it,
@@ -595,6 +612,7 @@ The rules for building a frame:
   and flicker where they overlap (the prototype showed this). Which card is on
   top is therefore a matter of position, never of drawing order. The flat layer
   is drawn without the depth test.
+
 - **Few draw calls.** Consecutive records that use the same mesh and texture
   array are one instanced draw call, whatever their materials. The table and a
   shadow can be the card mesh scaled, its rounded corners far off screen or
@@ -603,6 +621,7 @@ The rules for building a frame:
   blended record outside a card face samples the atlas, so a whole band is one
   call. The flat layer's quads are a third call, cards at full size a fourth,
   and each clip adds two, so a frame is normally two to six calls.
+
 - **Load counted as it is built.** While it builds the list, the client core
   adds up numbers that predict GPU load: draw calls, instances and bytes to
   upload. The screen area of its opaque and of its blended records, each divided
@@ -613,6 +632,7 @@ The rules for building a frame:
   and counts the pixels actually shaded. A record's area is the rectangle that
   bounds its mesh, cut to the view volume. The one-pixel edge strip counts as no
   area, and clip rectangles are not taken into account.
+
 - **Ordered once, without allocating.** Records may be pushed in any order;
   `FrameBuilder::finish` sorts them by band, then by depth, then by the order
   they were pushed, with keys held in a scratch array the frame keeps. The

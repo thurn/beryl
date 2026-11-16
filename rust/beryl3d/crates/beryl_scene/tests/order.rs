@@ -8,7 +8,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
 use beryl_scene::frame::{Band, CLIPS, DRAWS, Draw, Frame, FrameBuilder, OBJECTS, Sprite, sprites};
-use beryl_scene::input::{FaceSize, Rect};
+use beryl_scene::input::{FaceSize, Rect, Tier};
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Vec2, Vec3};
@@ -67,7 +67,7 @@ fn quad(id: u8, depth: f32) -> Draw {
 #[test]
 fn records_are_put_in_drawing_order_and_cut_into_draw_calls() {
     let mut frame = Frame::with_capacity(0, 32, 0);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     // With the identity camera, a record's depth is its z.
     builder.camera(Mat4::IDENTITY);
     builder.draw(Band::LayerCover, quad(14, 0.0));
@@ -122,7 +122,7 @@ fn records_are_put_in_drawing_order_and_cut_into_draw_calls() {
 #[test]
 fn a_clip_ends_a_draw_call() {
     let mut frame = Frame::with_capacity(0, 8, 0);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     let clip = builder.clip(Rect::default()).unwrap();
     builder.draw(Band::Layer, quad(1, 0.0));
     builder.draw(Band::Layer, quad(2, 0.0).with_clip(clip));
@@ -134,7 +134,7 @@ fn a_clip_ends_a_draw_call() {
 #[test]
 fn screen_areas_are_counted_in_screens() {
     let mut frame = Frame::with_capacity(0, 8, 0);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     builder.camera(Mat4::IDENTITY);
     // A card scaled to half the screen's width and height covers a quarter of a screen, which
     // is two units wide in clip space.
@@ -205,7 +205,7 @@ fn order(frame: &Frame) -> Vec<u8> {
 #[test]
 fn records_drawn_alike_that_share_no_pixel_are_drawn_in_one_call() {
     let mut frame = Frame::with_capacity(0, 8, 0);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     builder.camera(Mat4::IDENTITY);
     // Fading cards and badges, apart on the screen, alternating from far to near.
     builder.draw(Band::TableMarks, fading(1, -0.8, 0.9));
@@ -220,7 +220,7 @@ fn records_drawn_alike_that_share_no_pixel_are_drawn_in_one_call() {
 #[test]
 fn a_record_is_never_drawn_before_one_under_it() {
     let mut frame = Frame::with_capacity(0, 8, 0);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     builder.camera(Mat4::IDENTITY);
     // The second card lies over the badge, so it waits for it. Nothing lies over the first.
     builder.draw(Band::TableMarks, fading(1, -0.5, 0.9));
@@ -234,7 +234,7 @@ fn a_record_is_never_drawn_before_one_under_it() {
 #[test]
 fn light_that_only_adds_is_drawn_in_one_call_where_it_overlaps() {
     let mut frame = Frame::with_capacity(0, 8, 0);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     builder.camera(Mat4::IDENTITY);
     // Two outlines with a burst between them, all over one another. Light adds, so the order
     // makes no difference and the outlines come together.
@@ -251,7 +251,7 @@ fn light_that_only_adds_is_drawn_in_one_call_where_it_overlaps() {
 #[test]
 fn an_outline_counts_only_the_ring_its_mesh_covers() {
     let mut frame = Frame::with_capacity(0, 8, 0);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     builder.camera(Mat4::IDENTITY);
     builder.draw(
         Band::Glows,
@@ -268,20 +268,24 @@ fn an_outline_counts_only_the_ring_its_mesh_covers() {
 #[test]
 fn a_sixteenth_clip_sets_the_flag() {
     let mut frame = Frame::with_capacity(0, 0, 0);
-    let mut builder = FrameBuilder::new(&mut frame);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     for entry in 1..CLIPS {
         assert_eq!(builder.clip(Rect::default()), Some(entry as u8));
     }
     assert_eq!(builder.clip(Rect::default()), None);
     assert!(builder.finish().clips_full);
     // A new frame starts with the flag clear.
-    assert!(!FrameBuilder::new(&mut frame).finish().clips_full);
+    assert!(
+        !FrameBuilder::new(&mut frame, Tier::Baseline)
+            .finish()
+            .clips_full
+    );
 }
 
 /// Writes `cards` cards spread over the table with their edges and shadows, and a few
 /// flat-layer records, in the order a scene would push them.
 fn build(frame: &mut Frame, cards: u16) {
-    let mut builder = FrameBuilder::new(frame);
+    let mut builder = FrameBuilder::new(frame, Tier::Baseline);
     builder.camera(
         directx::perspective(0.8, 1.6, 10.0, 2000.0)
             * look_at_mat4(Vec3::new(0.0, -400.0, 800.0), Vec3::ZERO, Vec3::Y),
