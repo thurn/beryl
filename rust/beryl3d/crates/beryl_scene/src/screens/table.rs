@@ -20,13 +20,14 @@ use crate::manual::{TableState, ask, log, order, palette, tokens};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::widgets::{context_menu, menu, sheet_menu};
 
-/// What the flat layer shows on the table: a region with no box of its own, which answers every key of a table command
-/// (`data/table-commands.json`, its aliases too) with `Press::Command`, the log, and the open
-/// context menu, command list, ask prompt, token search or order tray, if any.
+/// What the flat layer shows on the table: a region with no box of its own, which answers every
+/// key of a table command with `Press::Command`, the log, and the open context menu, command
+/// list, ask prompt, token search, custom token form or order tray, if any.
 ///
-/// The keys are written as the Mac's bindings: `Chord::parse` reads `Cmd` as Control and
-/// `Option` as Alt elsewhere, and the file's other bindings differ from the Mac's only in
-/// writing those.
+/// A command's keys are the one the player bound to it, or else its own and its aliases from
+/// `data/table-commands.json` (`Bindings::keys`). Those are written as the Mac's bindings:
+/// `Chord::parse` reads `Cmd` as Control and `Option` as Alt elsewhere, and the file's other
+/// bindings differ from the Mac's only in writing those.
 #[must_use]
 pub fn table(input: &ScreenIn) -> Element {
     // The region has no box of its own, since everything in it stands at a point of the
@@ -40,8 +41,8 @@ pub fn table(input: &ScreenIn) -> Element {
         if command.scope != Scope::Table {
             continue;
         }
-        for key in command.key.iter().chain(command.key_aliases) {
-            screen = screen.shortcut(key.mac, Press::Command(index));
+        for key in input.settings.bindings.keys(command) {
+            screen = screen.shortcut(key, Press::Command(index));
         }
     }
     let state = input.table;
@@ -49,7 +50,7 @@ pub fn table(input: &ScreenIn) -> Element {
         .view
         .and_then(|view| view.table.as_ref())
         .map(|table| &table.log[..]);
-    let log = lines.and_then(|lines| log::log(lines, state.log_open));
+    let log = lines.and_then(|lines| log::log(lines, state.log_open, &state.blocked));
     let open = state.menu.as_ref().map(|open| {
         if input.window.phone() {
             bottom_sheet(open, input)
@@ -63,7 +64,8 @@ pub fn table(input: &ScreenIn) -> Element {
         .children(over(state, input))
 }
 
-/// The command list, ask prompt, token search or order tray the table shows, if one is open.
+/// The command list, ask prompt, token search, custom token form or order tray the table
+/// shows, if one is open.
 fn over(state: &TableState, input: &ScreenIn) -> Option<Element> {
     let window = input.window.size;
     if let Some(open) = &state.palette {
@@ -71,6 +73,9 @@ fn over(state: &TableState, input: &ScreenIn) -> Option<Element> {
     }
     if let Some(open) = &state.ask {
         return Some(ask::dock(open, input.fields, window));
+    }
+    if let Some(open) = &state.custom {
+        return Some(tokens::custom_panel(open, input.fields, window));
     }
     let view = input.view?;
     if let Some(open) = &state.tokens {

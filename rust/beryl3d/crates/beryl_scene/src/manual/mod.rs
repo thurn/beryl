@@ -2,10 +2,12 @@
 //! hand, with no engine. Its commands (`commands`), the context menu a right click opens on a
 //! card, a pile, a hand, a life total or the table (`menus`), what the pointer is on
 //! (`target_at`), which a menu or a key acts on, and what the table shows over itself: the
-//! command list (`palette`), the ask prompt (`ask`), the token search (`tokens`), the library
-//! order tray (`order`) and the log (`log`).
+//! command list (`palette`) with the keys the player bound (`bindings`), the ask prompt
+//! (`ask`), the token search and custom token form (`tokens`), the library order tray (`order`)
+//! and the log (`log`).
 
 pub mod ask;
+pub mod bindings;
 pub mod commands;
 pub mod lobby;
 pub mod log;
@@ -21,7 +23,39 @@ use glam::Vec2;
 
 use crate::agent::hit;
 use crate::frame::{Frame, Place, Role};
+use bindings::Bindings;
 use commands::AppliesTo;
+use tokens::TokenChoice;
+
+/// What the client knows beyond the table's view that decides which commands it offers and
+/// what they show: whether it runs on the Mac, which writes keys its own way; the keys the
+/// player bound (`bindings`); and the last token the player made, which Create another token
+/// makes again.
+#[derive(Clone, Copy, Debug)]
+pub struct Context<'a> {
+    pub mac: bool,
+    pub bindings: &'a Bindings,
+    pub last_token: Option<&'a TokenChoice>,
+}
+
+impl<'a> Context<'a> {
+    /// The context with the player's `bindings`, on the Mac if `mac`, and no token made yet.
+    #[must_use]
+    pub const fn new(mac: bool, bindings: &'a Bindings) -> Self {
+        Self {
+            mac,
+            bindings,
+            last_token: None,
+        }
+    }
+
+    /// The words a menu row or the command list shows for the key of `command`, if it has one.
+    #[must_use]
+    pub fn key(&self, command: &commands::Command) -> Option<String> {
+        let binding = self.bindings.get(command, self.mac)?;
+        Some(crate::element::describe(binding, self.mac))
+    }
+}
 
 /// A press on something the table shows over itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,23 +78,50 @@ pub enum TablePress {
     Rewind(u32),
     /// Open or fold the log.
     ToggleLog,
-    /// Close the command list, ask prompt, token search or order tray.
+    /// The custom token form's color `n` of `tokens::COLORS`, turned on or off.
+    CustomColor(u8),
+    /// The custom token form's Create token.
+    CustomCreate,
+    /// Stop waiting for a key to bind to the command list's highlighted row.
+    CancelCapture,
+    /// Close the command list, ask prompt, token search, custom token form or order tray.
     Close,
 }
 
 /// What the client keeps of the manual table: the open context menu, command list, ask
-/// prompt, token search and library order tray, each if any (at most one of the last four is
-/// open), whether the log is open, and whether Shift was held at the last press of the
-/// pointer, which runs a command list row's shifted form.
+/// prompt, token search, custom token form and library order tray, each if any (at most one of
+/// the last five is open), whether the log is open, the log lines that stopped the last undo,
+/// the last token made, the table actions sent and not yet answered, and whether Shift was held
+/// at the last press of the pointer, which runs a command list row's shifted form.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TableState {
     pub menu: Option<menus::OpenMenu>,
     pub palette: Option<palette::Palette>,
     pub ask: Option<ask::Ask>,
     pub tokens: Option<tokens::TokenSearch>,
+    pub custom: Option<tokens::CustomToken>,
     pub order: Option<order::LibraryOrder>,
     pub log_open: bool,
+    /// The numbers of the log lines whose actions stopped the last undo or rewind, which the
+    /// log highlights (`blocked` in the web's `TableLogControls`).
+    pub blocked: Vec<u32>,
+    /// The token the table last made at the player's asking (`#lastToken` in the web's
+    /// `TableCommands`).
+    pub last_token: Option<TokenChoice>,
+    /// For each table action sent and not yet answered, oldest first, what the client does
+    /// with the table's answer to it.
+    pub pending: std::collections::VecDeque<Sent>,
     pub shift: bool,
+}
+
+/// What a table action the client sent asks of the table's answer to it: to remember the
+/// token it makes once the table takes it, to show the log lines that stop an undo or a rewind
+/// the table refuses, or nothing.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Sent {
+    Token(TokenChoice),
+    History,
+    Other,
 }
 
 impl TableState {
@@ -72,29 +133,35 @@ impl TableState {
             palette: None,
             ask: None,
             tokens: None,
+            custom: None,
             order: None,
             log_open: false,
+            blocked: Vec::new(),
+            last_token: None,
+            pending: std::collections::VecDeque::new(),
             shift: false,
         }
     }
 
-    /// Whether the command list, ask prompt, token search or order tray is open, which takes
-    /// the keys from the table.
+    /// Whether the command list, ask prompt, token search, custom token form or order tray is
+    /// open, which takes the keys from the table.
     #[must_use]
     pub fn overlay_open(&self) -> bool {
         self.palette.is_some()
             || self.ask.is_some()
             || self.tokens.is_some()
+            || self.custom.is_some()
             || self.order.is_some()
     }
 
-    /// Closes the command list, ask prompt, token search and order tray. Returns whether one
-    /// was open.
+    /// Closes the command list, ask prompt, token search, custom token form and order tray.
+    /// Returns whether one was open.
     pub fn close_overlay(&mut self) -> bool {
         let open = self.overlay_open();
         self.palette = None;
         self.ask = None;
         self.tokens = None;
+        self.custom = None;
         self.order = None;
         open
     }

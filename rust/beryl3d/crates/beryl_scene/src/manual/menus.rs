@@ -7,9 +7,8 @@ use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{Side, TableAction, ZoneName};
 use glam::Vec2;
 
-use super::Target;
-use super::commands::{self, Asks, Command, Entry};
-use crate::element::describe;
+use super::commands::{self, Asks, Command, Entry, Values};
+use super::{Context, Target};
 use crate::widgets::{MenuGroup, MenuId, MenuRow};
 
 /// The id of the table's context menu, which its rows' presses (`Press::Menu`) carry.
@@ -17,9 +16,9 @@ pub const MENU: MenuId = MenuId(1);
 
 /// What giving a command does: send these table actions, leave the table, open the ask prompt
 /// for the command at this index of `COMMANDS` (`super::ask`), open the token search for it
-/// (`super::tokens`), open the command list (`super::palette`), or nothing yet (a command
-/// whose viewer, selection or arrow the client has not built, or one that makes no action for
-/// this target).
+/// (`super::tokens`), open the command list (`super::palette`), open it with the row that
+/// resets the keys at its top (Shortcuts), or nothing yet (a command whose viewer, selection
+/// or arrow the client has not built, or one that makes no action for this target).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Act {
     Actions(Vec<TableAction>),
@@ -27,16 +26,34 @@ pub enum Act {
     Ask(u16),
     Tokens(u16),
     Palette,
+    Shortcuts,
     Nothing,
 }
 
-/// What `command` does for `target` at `view`.
+/// What `command` does for `target` at `view`, with what the client knows (`context`): Create
+/// another token makes the last token made again, with its note (`tokenChoice` in
+/// `ui/src/table/commandActions.ts`).
 #[must_use]
-pub fn act(command: &Command, target: Target, view: &PlayerView) -> Act {
+pub fn act(command: &Command, target: Target, view: &PlayerView, context: &Context) -> Act {
     match command.client {
         Some("leave_table") => return Act::Leave,
         Some("open_command_list") => return Act::Palette,
+        Some("open_shortcuts") => return Act::Shortcuts,
         _ => {}
+    }
+    if command.id == "token.repeat" {
+        let Some(last) = context.last_token else {
+            return Act::Nothing;
+        };
+        let mut values = Values::new();
+        values.insert("card", last.card.clone());
+        values.insert("text", last.note.clone().into());
+        let actions = commands::actions_with(command, target, view, &values);
+        return if actions.is_empty() {
+            Act::Nothing
+        } else {
+            Act::Actions(actions)
+        };
     }
     match command.asks {
         Asks::Number | Asks::Text | Asks::TextAndNumber | Asks::Stats => {
@@ -84,11 +101,12 @@ const UNHEADED: [&str; 8] = [
     "",
 ];
 
-/// The context menu of `target` at `view`, opened at `at`, with each row's key written for the
-/// Mac if `mac`. A row is enabled when giving its command does something here (`act`).
+/// The context menu of `target` at `view`, opened at `at`, with each row's key as the player
+/// bound it, written for the platform (`context`). A row is enabled when giving its command
+/// does something here (`act`).
 #[must_use]
-pub fn open(target: Target, view: &PlayerView, at: Vec2, mac: bool) -> OpenMenu {
-    let mut entries: Vec<Entry> = commands::commands_for(target.applies_to(view), view)
+pub fn open(target: Target, view: &PlayerView, at: Vec2, context: &Context) -> OpenMenu {
+    let mut entries: Vec<Entry> = commands::commands_for(target.applies_to(view), view, context)
         .into_iter()
         .filter(|entry| entry.menu.is_some())
         .collect();
@@ -109,12 +127,9 @@ pub fn open(target: Target, view: &PlayerView, at: Vec2, mac: bool) -> OpenMenu 
             sections.push((heading, Vec::new()));
         }
         let section = sections.len() - 1;
-        let act = act(entry.command, target, view);
+        let act = act(entry.command, target, view, context);
         let mut row = MenuRow::new(&label(entry.command, target, view));
-        row.key = entry
-            .command
-            .key
-            .map(|key| describe(if mac { key.mac } else { key.other }, mac));
+        row.key = context.key(entry.command);
         row.enabled = act != Act::Nothing;
         match placement.submenu {
             Some(folder) => {

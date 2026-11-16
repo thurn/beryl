@@ -1,13 +1,17 @@
-//! The player's settings: sound levels and stops (docs/beryl-3d.md, "Sound"). The host saves
+//! The player's settings: sound levels, stops and the keys bound to the manual table's
+//! commands (docs/beryl-3d.md, "Sound"). The host saves
 //! them and hands them back at startup as `Input::Settings`; a change made on the settings
 //! sheet arrives as a `Press::Setting` and is sent back to be saved as
 //! `Request::SaveSettings`.
 
 use beryl_protocol::StopsSetting;
 
+use crate::manual::bindings::Bindings;
+
 /// Everything the player sets that outlives a game: the web interface's `AudioSettings`
-/// (`ui/src/audio/sound.ts`) and its stops (`beryl.stops` in `ui/src/game/stops.ts`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// (`ui/src/audio/sound.ts`), its stops (`beryl.stops` in `ui/src/game/stops.ts`) and its
+/// table key bindings (`beryl.table.bindings` in `ui/src/table/bindings.ts`).
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
     /// The music's level, from 0 to 100.
     pub music: u8,
@@ -20,10 +24,13 @@ pub struct Settings {
     pub full_control: bool,
     /// Where the player stops with the stack empty.
     pub stops: StopsSetting,
+    /// The keys the player bound to the manual table's commands.
+    pub bindings: Bindings,
 }
 
 impl Default for Settings {
-    /// The web interface's defaults: music at 35, effects at 70, sound on, and the smart stops.
+    /// The web interface's defaults: music at 35, effects at 70, sound on, the smart stops, and
+    /// every table command on its own keys.
     fn default() -> Self {
         Self {
             music: 35,
@@ -31,6 +38,7 @@ impl Default for Settings {
             muted: false,
             full_control: false,
             stops: StopsSetting::SMART,
+            bindings: Bindings::new(),
         }
     }
 }

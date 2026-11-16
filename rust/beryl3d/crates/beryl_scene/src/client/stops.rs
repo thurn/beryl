@@ -12,7 +12,7 @@ impl Client {
     pub(super) fn set(&mut self, setting: Setting) {
         self.settings.apply(setting);
         self.requests
-            .push_back(Request::SaveSettings(self.settings));
+            .push_back(Request::SaveSettings(self.settings.clone()));
         match setting {
             Setting::Music(_) | Setting::Effects(_) | Setting::Muted(_) => {
                 self.requests.push_back(Request::Audio {
@@ -30,7 +30,7 @@ impl Client {
     /// session.
     pub(super) fn save_stops(&mut self) {
         self.requests
-            .push_back(Request::SaveSettings(self.settings));
+            .push_back(Request::SaveSettings(self.settings.clone()));
         self.send_stops();
         self.show_screen();
     }

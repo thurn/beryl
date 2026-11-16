@@ -14,7 +14,7 @@ use beryl_protocol::protocol::{
 use beryl_protocol::script::Subject;
 use serde_json::Value;
 
-use super::Target;
+use super::{Context, Target};
 
 /// What a command applies to: the kind of thing a menu is opened on or a key acts on
 /// (`AppliesTo` in commands.ts).
@@ -120,16 +120,18 @@ pub struct Entry {
 /// The commands of the table's scope that apply to `applies_to`, in the file's order, with
 /// their menu placement there, as the web's `commandsFor` gives them: a command of an assist
 /// only while `view` has that assist on, and a command with a condition only while the
-/// condition holds (`conditions`).
+/// condition holds (`conditions`) at `view` and in what the client knows (`context`).
 #[must_use]
-pub fn commands_for(applies_to: AppliesTo, view: &PlayerView) -> Vec<Entry> {
+pub fn commands_for(applies_to: AppliesTo, view: &PlayerView, context: &Context) -> Vec<Entry> {
     let mut entries = Vec::new();
     for (index, command) in COMMANDS.iter().enumerate() {
         if command.scope != Scope::Table
             || command
                 .assist
                 .is_some_and(|assist| !assist_on(view, assist))
-            || command.when.is_some_and(|when| !condition(view, when))
+            || command
+                .when
+                .is_some_and(|when| !condition(view, context, when))
         {
             continue;
         }
@@ -182,15 +184,17 @@ fn assist_on(view: &PlayerView, assist: Assist) -> bool {
     }
 }
 
-/// Whether the condition `when` holds at `view`'s table. Only `last_draw` is read here: the
-/// conditions on a selection, a viewer, tokens and flows hold once the client has those, and
-/// until then their commands are not offered, as the web offers none whose condition fails.
-fn condition(view: &PlayerView, when: &str) -> bool {
+/// Whether the condition `when` holds at `view`'s table, with what the client knows
+/// (`context`). Only `last_draw`, `last_token` and the deck tokens are read here: the
+/// conditions on a selection, a viewer and flows hold once the client has those, and until
+/// then their commands are not offered, as the web offers none whose condition fails.
+fn condition(view: &PlayerView, context: &Context, when: &str) -> bool {
     let Some(table) = &view.table else {
         return false;
     };
     match when {
         "last_draw" => table.last_draw.is_some(),
+        "last_token" => context.last_token.is_some(),
         _ => deck_token(when, "deck_token_").is_some_and(|n| n < table.deck_tokens.len()),
     }
 }

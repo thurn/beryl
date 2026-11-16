@@ -54,8 +54,6 @@ enum Stage {
     Text,
     /// The number after `text`.
     Count { text: String },
-    /// The name of a custom token.
-    TokenName,
 }
 
 /// An open ask prompt: the command it asks for (an index of `COMMANDS`), what the command acts
@@ -70,8 +68,6 @@ pub struct Ask {
     pub field: String,
     /// What the field holds when the prompt opens.
     pub start: String,
-    /// Whether the token this prompt makes is made face down.
-    pub face_down: bool,
     stage: Stage,
     /// The word the confirm button starts with, before the number.
     verb: String,
@@ -145,7 +141,6 @@ impl Ask {
             kind,
             field: field.to_owned(),
             start,
-            face_down: false,
             stage,
             verb: verb.to_owned(),
         };
@@ -181,22 +176,6 @@ impl Ask {
             }
             Asks::None | Asks::Target | Asks::Token => return None,
         })
-    }
-
-    /// The prompt that names a custom token for the token search's command at `index`, made
-    /// face down if `face_down`.
-    #[must_use]
-    pub fn custom_token(index: u16, face_down: bool) -> Self {
-        Self {
-            command: index,
-            target: Target::Table,
-            kind: Kind::Text,
-            field: "Name".to_owned(),
-            start: String::new(),
-            face_down,
-            stage: Stage::TokenName,
-            verb: "Create token".to_owned(),
-        }
     }
 
     /// The field's state when the prompt opens: its starting text, all selected.
@@ -273,7 +252,7 @@ impl Ask {
 
     /// Confirms `text`: the next prompt of a command that asks for two things, or the actions
     /// the command makes with what was typed at `view`. `None` while the text is no value, or
-    /// is an empty name where one is needed.
+    /// is empty where a text is needed first.
     #[must_use]
     pub fn confirm(&self, text: &str, view: &PlayerView) -> Option<Confirmed> {
         let entry = self.read(text)?;
@@ -319,17 +298,6 @@ impl Ask {
             (Stage::Count { text }, Entry::Number { value, .. }) => {
                 values.insert("text", text.clone().into());
                 values.insert("number", value.into());
-            }
-            (Stage::TokenName, Entry::Text(name)) => {
-                let name = name.trim();
-                if name.is_empty() {
-                    return None;
-                }
-                let card = serde_json::json!({
-                    "custom": { "name": name, "types": "", "colors": [], "stats": null }
-                });
-                values.insert("card", card);
-                values.insert("face_down", self.face_down.into());
             }
             (_, Entry::Number { value, change: by }) => {
                 values.insert("number", value.into());
@@ -410,7 +378,6 @@ fn number(command: &Command, target: Target, view: &PlayerView, label: &str, ind
         },
         field: field.to_owned(),
         start: start.clamp(min, max).to_string(),
-        face_down: false,
         stage: Stage::Only,
         verb: verb.to_owned(),
     }

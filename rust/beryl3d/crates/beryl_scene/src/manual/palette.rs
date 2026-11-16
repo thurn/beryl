@@ -4,16 +4,19 @@
 //! then those of the table, the player's library, hand and life total, grouped by what they act
 //! on with their keys, and keeps the highlighted row under the up and down keys. Return runs
 //! the highlighted command and Shift+Return its shifted form (a token face down); a command
-//! that needs a value opens the ask prompt. This is the web's `TablePalette` and `CommandList`
-//! (`ui/src/table/TablePalette.tsx`, `CommandList.tsx`) with `match` (`filter.ts`).
+//! that needs a value opens the ask prompt. Option+Return waits for a key and binds it to the
+//! highlighted command (`super::bindings`), and the list Shortcuts opens has a row at its top
+//! that puts every command back on its own keys. This is the web's `TablePalette` and
+//! `CommandList` (`ui/src/table/TablePalette.tsx`, `CommandList.tsx`) with `match`
+//! (`filter.ts`).
 
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
 
-use super::commands::{self, COMMANDS};
+use super::commands;
 use super::menus::{self, Act};
-use super::{TablePress, Target};
+use super::{Context, TablePress, Target};
 use crate::element::{Align, Anchor, Element, Overflow, Press, column, row, text};
 use crate::frame::Role;
 use crate::input::Size;
@@ -32,9 +35,16 @@ const DEFAULTS: [Target; 4] = [
     Target::Life(Side::You),
 ];
 
-/// One row of the command list: the command (an index of `COMMANDS`), what it acts on, its
-/// label, its group, its key written for the platform and, for a row acting on something other
-/// than the list's target, what that is.
+/// The command a row names in place of an index of `COMMANDS` when it is the row that puts
+/// every command back on its own keys.
+pub const RESET: u16 = u16::MAX;
+
+/// What the list shows once the keys are reset (`setNotice` in `TablePalette`).
+pub const RESET_NOTICE: &str = "Shortcuts reset.";
+
+/// One row of the command list: the command (an index of `COMMANDS`, or `RESET`), what it acts
+/// on, its label, its group, its key written for the platform and, for a row acting on
+/// something other than the list's target, what that is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
     pub command: u16,
@@ -46,7 +56,9 @@ pub struct Row {
 }
 
 /// The open command list: what it acts on, every row it offers, the row the keys highlight
-/// among those the query matches, and the query that highlight was chosen under.
+/// among those the query matches, the query that highlight was chosen under, whether it was
+/// opened by Shortcuts and so offers to reset the keys, whether it waits for a key to bind to
+/// the highlighted row, and what it says of the last binding.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Palette {
     pub target: Target,
@@ -55,19 +67,31 @@ pub struct Palette {
     pub rows: Vec<Row>,
     pub highlight: usize,
     pub query: String,
+    pub settings: bool,
+    pub capturing: bool,
+    pub notice: Option<String>,
 }
 
 impl Palette {
-    /// The command list acting on `target` at `view`, with keys written for the Mac if `mac`.
+    /// The command list acting on `target` at `view`, with what the client knows (`context`),
+    /// and with the row that resets the keys at its top if `settings`.
     #[must_use]
-    pub fn open(target: Target, view: &PlayerView, mac: bool) -> Self {
+    pub fn open(target: Target, view: &PlayerView, context: &Context, settings: bool) -> Self {
         Self {
             target,
             title: menus::title(target, view),
-            rows: rows(target, view, mac),
+            rows: rows(target, view, context, settings),
             highlight: 0,
             query: String::new(),
+            settings,
+            capturing: false,
+            notice: None,
         }
+    }
+
+    /// Builds the rows again, as the keys they show have changed, keeping the highlight.
+    pub fn refresh(&mut self, view: &PlayerView, context: &Context) {
+        self.rows = rows(self.target, view, context, self.settings);
     }
 
     /// The rows `query` matches, in the order the list shows them (`matching`).
@@ -112,24 +136,33 @@ impl Palette {
     }
 }
 
-/// The rows the command list offers acting on `target`: its commands, then those of each
-/// default target of another kind, each command once, leaving out the list's own command and
-/// those the client cannot give yet (`TableCommands.list` with `#supports`).
+/// The rows the command list offers acting on `target`: the row that resets the keys if
+/// `settings`, then the target's commands, then those of each default target of another
+/// kind, each command once, leaving out the list's own command and those the client cannot
+/// give yet (`TableCommands.list` with `#supports`).
 #[must_use]
-pub fn rows(target: Target, view: &PlayerView, mac: bool) -> Vec<Row> {
+pub fn rows(target: Target, view: &PlayerView, context: &Context, settings: bool) -> Vec<Row> {
     let mut rows: Vec<Row> = Vec::new();
+    if settings {
+        rows.push(Row {
+            command: RESET,
+            target: Target::Table,
+            label: "Reset shortcuts",
+            group: "Shortcuts",
+            key: None,
+            detail: None,
+        });
+    }
     let kind = target.applies_to(view);
     let others = DEFAULTS
         .into_iter()
         .filter(|other| other.applies_to(view) != kind);
     for (at, each) in std::iter::once(target).chain(others).enumerate() {
-        for entry in commands::commands_for(each.applies_to(view), view) {
+        for entry in commands::commands_for(each.applies_to(view), view, context) {
             let command = entry.command;
-            let act = menus::act(command, each, view);
+            let act = menus::act(command, each, view, context);
             if matches!(act, Act::Palette | Act::Nothing)
-                || rows
-                    .iter()
-                    .any(|row| COMMANDS[usize::from(row.command)].id == command.id)
+                || (rows.iter()).any(|row| row.command == entry.index)
             {
                 continue;
             }
@@ -138,9 +171,7 @@ pub fn rows(target: Target, view: &PlayerView, mac: bool) -> Vec<Row> {
                 target: each,
                 label: command.label,
                 group: command.group,
-                key: (command.key).map(|key| {
-                    crate::element::describe(if mac { key.mac } else { key.other }, mac)
-                }),
+                key: context.key(command),
                 detail: (at > 0).then(|| detail(each)).flatten(),
             });
         }
@@ -225,6 +256,12 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
     if matched.is_empty() {
         results.push(text("No matching commands").color(color::TEXT_DIM));
     }
+    let capture = palette.capturing.then(|| {
+        crate::widgets::button("Press a key · Esc cancels")
+            .name("capture")
+            .on_press(Press::Table(TablePress::CancelCapture))
+    });
+    let notice = (palette.notice.as_deref()).map(|words| text(words).color(color::TEXT_DIM));
     let metrics = crate::data::space::flat::table::palette::WIDTH;
     let mut list = column()
         .name("Commands")
@@ -234,7 +271,7 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
         .children(results);
     list.role = Role::List;
     let hints = row().name("hints").gap(space::L).children(
-        ["Enter run", "Shift+Enter shifted", "Esc close"].map(|hint| {
+        ["Enter run", "Option+Enter bind a key", "Esc close"].map(|hint| {
             text(hint)
                 .style(type_style::MENU_HINT)
                 .color(color::TEXT_DIM)
@@ -250,6 +287,8 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
         .radius(size::MENU_RADIUS)
         .child(header)
         .child(list)
+        .children(capture)
+        .children(notice)
         .child(hints);
     let top = crate::data::space::flat::table::palette::TOP;
     panel.anchor = Some(Anchor::Point(

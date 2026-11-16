@@ -3,9 +3,11 @@
 //! and writes it again for each `Request::SaveSettings`, on a thread of its own so that the
 //! frame thread does no file I/O.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Sender};
 
+use beryl_scene::manual::bindings::Bindings;
 use beryl_scene::settings::Settings;
 use beryl_session::protocol::StopsSetting;
 use serde::{Deserialize, Serialize};
@@ -23,6 +25,8 @@ struct Saved {
     muted: bool,
     full_control: bool,
     stops: StopsSetting,
+    /// The table commands whose keys the player changed, by command id (`Bindings`).
+    bindings: BTreeMap<String, Option<String>>,
 }
 
 impl Default for Saved {
@@ -39,6 +43,7 @@ impl From<Settings> for Saved {
             muted: settings.muted,
             full_control: settings.full_control,
             stops: settings.stops,
+            bindings: settings.bindings.overrides().clone(),
         }
     }
 }
@@ -51,6 +56,7 @@ impl From<Saved> for Settings {
             muted: saved.muted,
             full_control: saved.full_control,
             stops: saved.stops,
+            bindings: Bindings::from_overrides(saved.bindings),
         }
     }
 }

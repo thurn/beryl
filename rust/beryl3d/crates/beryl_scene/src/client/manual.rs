@@ -11,15 +11,20 @@ use super::{Client, Platform};
 use crate::command::SessionCommand;
 use crate::data::space::pointer::{DRAG_THRESHOLD_POINTS, LONG_PRESS_MS};
 use crate::input::{Button, Pointer, PointerKind, PointerPhase};
-use crate::manual::TableState;
 use crate::manual::lobby::Lobby;
 use crate::manual::menus::{self, Act};
-use crate::manual::{self, Target, commands};
+use crate::manual::tokens::TokenChoice;
+use crate::manual::{self, Context, Sent, TableState, Target, commands};
 use crate::screens::Screen;
 use crate::widgets::BACK;
+use beryl_protocol::ipc::TableActReply;
+use beryl_protocol::protocol::TableAction;
 
 /// Nanoseconds in a millisecond, the unit of `Client::frame`'s clock.
 const MILLISECOND: u64 = 1_000_000;
+
+/// The most table actions the client remembers sending without an answer.
+const PENDING: usize = 64;
 
 /// What the client keeps of the manual table: what the table shows over itself
 /// (`TableState`, which `Manual` derefs to), the touch that will open a context menu if it
@@ -171,8 +176,8 @@ impl Client {
             return false;
         }
         let target = manual::target_at(&self.frame, at);
-        let mac = self.platform == Platform::Mac;
-        self.manual.menu = Some(menus::open(target, view, at, mac));
+        let menu = menus::open(target, view, at, &self.table_context());
+        self.manual.menu = Some(menu);
         self.show_screen();
         true
     }
@@ -223,19 +228,77 @@ impl Client {
         }
         let target =
             (self.owned.mouse).map_or(Target::Table, |at| manual::target_at(&self.frame, at));
-        let act = menus::act(command, target, view);
+        let act = menus::act(command, target, view, &self.table_context());
         self.give(act, target, false);
     }
 
+    /// What the client knows beyond the table's view that decides which commands it offers:
+    /// the platform, the keys the player bound and the last token made.
+    pub(super) fn table_context(&self) -> Context<'_> {
+        Context {
+            mac: self.platform == Platform::Mac,
+            bindings: &self.settings.bindings,
+            last_token: self.manual.last_token.as_ref(),
+        }
+    }
+
+    /// Sends `actions` to the table, in order, keeping for each what its answer asks of the
+    /// client (`Sent`). Sending an undo or a rewind stops highlighting the lines that blocked
+    /// the last one, as the web's `sendHistory` clears them before it sends.
+    pub(super) fn send_table(&mut self, actions: Vec<TableAction>) {
+        for action in actions {
+            let sent = match (&action, TokenChoice::of(&action)) {
+                (_, Some(token)) => Sent::Token(token),
+                (TableAction::Undo { .. } | TableAction::Rewind { .. }, None) => {
+                    self.manual.blocked.clear();
+                    Sent::History
+                }
+                _ => Sent::Other,
+            };
+            // A driver that never answers, such as a recording's, would otherwise make the
+            // list grow for as long as the table is open.
+            if self.manual.pending.len() >= PENDING {
+                self.manual.pending.pop_front();
+            }
+            self.manual.pending.push_back(sent);
+            self.commands.push_back(SessionCommand::TableAct(action));
+        }
+    }
+
+    /// The table answered the oldest table action not yet answered: a token it made is the one
+    /// Create another token makes again, and an undo or rewind it refused because later lines
+    /// depend on it opens the log with those lines highlighted.
+    pub(super) fn take_table_reply(&mut self, reply: TableActReply) {
+        let Some(sent) = self.manual.pending.pop_front() else {
+            return;
+        };
+        match (sent, reply) {
+            (Sent::Token(token), TableActReply::Ok { .. }) => {
+                self.manual.last_token = Some(token);
+            }
+            (Sent::History, TableActReply::Refused(refused)) => {
+                let blocked = refused.blocked_by.unwrap_or_default();
+                if !blocked.is_empty() {
+                    self.manual.blocked = blocked;
+                    self.manual.log_open = true;
+                }
+            }
+            _ => return,
+        }
+        self.show_screen();
+    }
+
     /// Does what a command does for `target`: sends its table actions; opens the ask prompt,
-    /// the token search (whose token is made face down if `shift`) or the command list; or
-    /// leaves the table and shows the start screen.
+    /// the token search (whose token is made face down if `shift`) or the command list, with
+    /// the row that resets the keys for Shortcuts; or leaves the table and shows the start
+    /// screen.
     pub(super) fn give(&mut self, act: Act, target: Target, shift: bool) {
         match act {
             Act::Actions(actions) => self.send_table(actions),
             Act::Ask(index) => self.open_ask(index, target),
             Act::Tokens(index) => self.open_tokens(index, shift),
-            Act::Palette => self.open_palette(target),
+            Act::Palette => self.open_palette(target, false),
+            Act::Shortcuts => self.open_palette(target, true),
             Act::Leave => self.leave_table(),
             Act::Nothing => {}
         }

@@ -5,16 +5,17 @@
 
 use beryl_card_records::{TokenMakers, card_records_among};
 use beryl_protocol::ipc::decks::{CardSearchHit, CardTokenLink};
+use beryl_protocol::ipc::{TableActReply, TableRefusalReason, TableRefused};
 use beryl_protocol::protocol::{LogLine, Side, TableAction, ZoneName};
-use beryl_scene::command::Reply;
-use beryl_scene::command::SessionCommand;
-use beryl_scene::frame::{Frame, Role, Wake};
+use beryl_scene::command::{Reply, Request, SessionCommand};
+use beryl_scene::frame::{Frame, Role, StateBits, Wake};
 use beryl_scene::input::{
     Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
     Size, TextChange,
 };
+use beryl_scene::manual::bindings::Bindings;
 use beryl_scene::manual::commands::{AppliesTo, commands_for};
-use beryl_scene::manual::{Target, target_at};
+use beryl_scene::manual::{Context, Target, target_at};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, table};
 use beryl_scene::{Client, Config};
 use glam::Vec2;
@@ -137,10 +138,14 @@ fn the_commands_for_a_permanent_are_the_files_permanent_commands_in_order() {
         .map(|command| command["id"].as_str().unwrap())
         .collect();
     let view = table_view();
-    let ids: Vec<&str> = commands_for(AppliesTo::Permanent, &view)
-        .iter()
-        .map(|entry| entry.command.id)
-        .collect();
+    let ids: Vec<&str> = commands_for(
+        AppliesTo::Permanent,
+        &view,
+        &Context::new(true, &Bindings::new()),
+    )
+    .iter()
+    .map(|entry| entry.command.id)
+    .collect();
     assert_eq!(ids, expected);
     assert!(ids.contains(&"permanent.tap"));
 }
@@ -169,7 +174,11 @@ fn right_clicking_a_permanent_opens_its_menu() {
         .map(|element| frame.name(element.name))
         .collect();
     // Every placed command outside a submenu is a row, and every submenu a row of its own.
-    for entry in commands_for(AppliesTo::Permanent, &view) {
+    for entry in commands_for(
+        AppliesTo::Permanent,
+        &view,
+        &Context::new(true, &Bindings::new()),
+    ) {
         let Some(placement) = entry.menu else {
             continue;
         };
@@ -344,15 +353,23 @@ fn a_submenu_row_on_the_phone_sheet_shows_its_rows_with_back() {
     let frame = client.frame(10 * MS + LONG_PRESS).clone();
     let first: Vec<String> = menu_rows(&frame).into_iter().map(str::to_owned).collect();
     let (folder, submenu_rows): (&str, Vec<&str>) = {
-        let name = commands_for(AppliesTo::Library, &view)
-            .iter()
-            .find_map(|entry| entry.menu.and_then(|placement| placement.submenu))
-            .expect("a library has a submenu");
-        let inside = commands_for(AppliesTo::Library, &view)
-            .iter()
-            .filter(|entry| entry.menu.and_then(|placement| placement.submenu) == Some(name))
-            .map(|entry| entry.command.label)
-            .collect();
+        let name = commands_for(
+            AppliesTo::Library,
+            &view,
+            &Context::new(true, &Bindings::new()),
+        )
+        .iter()
+        .find_map(|entry| entry.menu.and_then(|placement| placement.submenu))
+        .expect("a library has a submenu");
+        let inside = commands_for(
+            AppliesTo::Library,
+            &view,
+            &Context::new(true, &Bindings::new()),
+        )
+        .iter()
+        .filter(|entry| entry.menu.and_then(|placement| placement.submenu) == Some(name))
+        .map(|entry| entry.command.label)
+        .collect();
         (name, inside)
     };
     assert!(first.iter().any(|row| row == folder));
@@ -595,4 +612,189 @@ fn the_library_order_puts_the_first_card_on_top() {
         })
         .collect();
     assert_eq!(moved, [u32::from(hand[0].0), u32::from(hand[1].0)]);
+}
+
+/// Presses the first element drawn at `now` with `role` whose name starts with `name`.
+fn press(client: &mut Client, now: u64, role: Role, name: &str) {
+    let at = middle(&client.frame(now).clone(), role, name);
+    client.handle(pointer(PointerPhase::Down, at, Button::Primary));
+    client.handle(pointer(PointerPhase::Up, at, Button::Primary));
+}
+
+/// The settings the client last asked to save, if it asked.
+fn saved(client: &mut Client) -> Option<beryl_scene::settings::Settings> {
+    std::iter::from_fn(|| client.next_request())
+        .filter_map(|request| match request {
+            Request::SaveSettings(settings) => Some(settings),
+            _ => None,
+        })
+        .last()
+}
+
+#[test]
+fn option_return_binds_a_key_and_reset_shortcuts_takes_it_back() {
+    let view = table_view();
+    let (mut client, _) = client_at_table(&view);
+    let shuffle = action(serde_json::json!({ "shuffle": { "seat": 0, "portion": "all" } }));
+    client.handle(key(KeyCode::K, cmd()));
+    type_in(&mut client, "shuf");
+    let option = Modifiers {
+        alt: true,
+        ..Modifiers::default()
+    };
+    client.handle(key(KeyCode::Enter, option));
+    // F9 is Second main phase's own key, which it loses to Shuffle.
+    client.handle(key(KeyCode::F9, Modifiers::default()));
+    let frame = client.frame(1).clone();
+    assert!(
+        (frame.resolved.iter())
+            .any(|element| frame.name(element.name) == "Second main phase lost its shortcut."),
+        "the list says which command lost its key"
+    );
+    assert!(saved(&mut client).is_some(), "the binding is saved");
+    let shown = rows(&mut client, 2);
+    assert_eq!(shown.first().map(String::as_str), Some("Shuffle"));
+    client.handle(key(KeyCode::Escape, Modifiers::default()));
+    client.handle(key(KeyCode::F9, Modifiers::default()));
+    assert_eq!(acts(&mut client), vec![shuffle.clone()], "F9 now shuffles");
+
+    // Shortcuts opens the list with Reset shortcuts at its top, which puts F9 back.
+    client.handle(key(KeyCode::K, cmd()));
+    type_in(&mut client, "shortcuts");
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    assert_eq!(
+        rows(&mut client, 3).first().map(String::as_str),
+        Some("Reset shortcuts")
+    );
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    let reset = saved(&mut client).expect("the reset is saved");
+    assert!(reset.bindings.overrides().is_empty());
+    client.handle(key(KeyCode::Escape, Modifiers::default()));
+    client.handle(key(KeyCode::F9, Modifiers::default()));
+    let phase = action(serde_json::json!({ "phase": { "phase": "second_main" } }));
+    assert_eq!(acts(&mut client), vec![phase]);
+}
+
+#[test]
+fn the_custom_token_form_takes_a_type_line_colors_stats_and_a_note() {
+    let view = table_view();
+    let (mut client, _) = client_at_table(&view);
+    client.handle(key(KeyCode::T, cmd()));
+    assert_eq!(
+        rows(&mut client, 1).last().map(String::as_str),
+        Some("Custom token")
+    );
+    client.handle(key(KeyCode::ArrowUp, Modifiers::default()));
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    // The name is focused as the form opens.
+    type_in(&mut client, "Germ");
+    for (field, words) in [
+        ("Type line", "Creature — Phyrexian Germ"),
+        ("Power", "0"),
+        ("Toughness", "0"),
+        ("Note", "Equipped"),
+    ] {
+        press(&mut client, 2, Role::Field, field);
+        type_in(&mut client, words);
+    }
+    press(&mut client, 3, Role::Toggle, "Black");
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    let expected = action(serde_json::json!({ "token": {
+        "card": { "custom": {
+            "name": "Germ", "types": "Creature — Phyrexian Germ", "colors": ["B"], "stats": [0, 0]
+        } },
+        "count": 1,
+        "attached_to": null,
+        "note": "Equipped",
+    }}));
+    assert_eq!(acts(&mut client), vec![expected]);
+}
+
+#[test]
+fn create_another_token_makes_the_last_token_the_table_took() {
+    let mut view = table_view();
+    view.table.as_mut().unwrap().deck_tokens = vec![CardTokenLink {
+        name: "Spirit".to_owned(),
+        scryfall_id: "spirit-1".to_owned(),
+    }];
+    let (mut client, _) = client_at_table(&view);
+    client.handle(key(KeyCode::T, cmd()));
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    let made = acts(&mut client);
+    assert_eq!(made.len(), 1, "the Spirit was asked for");
+    // Until the table takes it, there is no last token to make again.
+    client.handle(key(KeyCode::G, cmd()));
+    assert!(acts(&mut client).is_empty());
+    client.handle(Input::Reply(Reply::TableAct(TableActReply::Ok {
+        ok: true,
+    })));
+    client.handle(key(KeyCode::G, cmd()));
+    assert_eq!(acts(&mut client), made);
+    client.handle(key(KeyCode::K, cmd()));
+    assert!(
+        rows(&mut client, 1)
+            .iter()
+            .any(|row| row == "Create another token")
+    );
+}
+
+#[test]
+fn a_refused_undo_opens_the_log_on_the_lines_that_block_it() {
+    let mut view = table_view();
+    let line = |n: u32, undoable: bool, blocked_by: Vec<u32>| LogLine {
+        n,
+        by: "You".to_owned(),
+        text: "Drew a card.".to_owned(),
+        struck: false,
+        undoable,
+        blocked_by,
+    };
+    view.table.as_mut().unwrap().log = vec![line(1, false, vec![2]), line(2, true, Vec::new())];
+    let (mut client, _) = client_at_table(&view);
+    press(&mut client, 1, Role::Button, "Show log");
+    press(&mut client, 2, Role::Button, "Undo");
+    assert_eq!(
+        acts(&mut client),
+        vec![action(serde_json::json!({ "undo": { "entry": 1 } }))]
+    );
+    press(&mut client, 3, Role::Button, "Hide log");
+    client.handle(Input::Reply(Reply::TableAct(TableActReply::Refused(
+        TableRefused {
+            refused: TableRefusalReason::Invalid,
+            blocked_by: Some(vec![2]),
+        },
+    ))));
+    let frame = client.frame(4);
+    let selected = |name: &str| {
+        (frame.resolved.iter())
+            .find(|element| frame.name(element.name) == name)
+            .unwrap_or_else(|| panic!("the log shows {name}"))
+            .state
+            .has(StateBits::SELECTED)
+    };
+    assert!(selected("line 2"), "the blocking line is highlighted");
+    assert!(!selected("line 1"));
+}
+
+#[test]
+fn the_log_stays_folded_to_a_button_until_opened() {
+    let mut view = table_view();
+    view.table.as_mut().unwrap().log = vec![LogLine {
+        n: 1,
+        by: "You".to_owned(),
+        text: "Shuffled your library.".to_owned(),
+        struck: false,
+        undoable: false,
+        blocked_by: Vec::new(),
+    }];
+    // The sample board has no permanent near the log's column, and still the log is folded,
+    // as the web's desktop table always folds it.
+    let (_, frame) = client_at_table(&view);
+    let names: Vec<&str> = frame
+        .resolved
+        .iter()
+        .map(|element| frame.name(element.name))
+        .collect();
+    assert!(names.contains(&"Show log"), "{names:?}");
+    assert!(!names.contains(&"line 1"));
 }

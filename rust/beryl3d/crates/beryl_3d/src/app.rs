@@ -275,7 +275,7 @@ impl Feed for AppFeed {
             }
             Request::SaveSettings(settings) => {
                 if let Some(saver) = &self.saver {
-                    saver.save(*settings);
+                    saver.save(settings.clone());
                 }
             }
             #[cfg(feature = "tools")]
@@ -462,7 +462,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
     let drive = options.drive.as_deref().map(drive).transpose()?;
     let slow_gpu = options.slow_gpu.unwrap_or_default();
     let (settings, saver) = player_settings(options);
-    let audio = start_audio(options.window, settings.unwrap_or_default());
+    let audio = start_audio(options.window, &settings.clone().unwrap_or_default());
     let log = Rc::new(RefCell::new(None));
     let mut feed = AppFeed {
         source: None,
@@ -614,7 +614,7 @@ fn run_of(options: &Options, pause_at: Option<u64>) -> Run {
 
 /// The audio thread, at the levels `settings` give. A run with no window plays no sound, so
 /// that agents' and checks' runs are silent.
-fn start_audio(window: Window, settings: beryl_scene::settings::Settings) -> Audio {
+fn start_audio(window: Window, settings: &beryl_scene::settings::Settings) -> Audio {
     let audio = Audio::start(if window == Window::None {
         Output::Silent
     } else {

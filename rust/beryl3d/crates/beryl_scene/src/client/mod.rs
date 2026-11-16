@@ -313,6 +313,7 @@ impl Client {
                 self.show_screen();
             }
             Input::Reply(Reply::CardSearch(text, hits)) => self.take_token_hits(text, hits),
+            Input::Reply(Reply::TableAct(reply)) => self.take_table_reply(reply),
             Input::Reply(Reply::Click(Ok(reply))) => {
                 match reply {
                     ClickReply::Open { prompt } => {
