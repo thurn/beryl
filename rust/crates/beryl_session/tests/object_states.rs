@@ -2,7 +2,7 @@
 //! merged under it, and the card a copy really is.
 
 use beryl_cards::names;
-use beryl_session::protocol::{ObjectView, PlayerView, Side, ZoneName};
+use beryl_session::protocol::{Facing, ObjectView, PlayerView, Side, ZoneName};
 
 use crate::common;
 
@@ -66,6 +66,47 @@ fn a_copy_says_what_card_it_really_is() {
     for view in seen {
         assert_eq!(copied(view), vec!["Glasspool Mimic".to_owned()]);
     }
+}
+
+/// Gemrazer mutating over a creature Abhorrent Oculus manifested makes a face-up Gemrazer that
+/// both seats see, while the card under it stays face down: its controller's view names it, and
+/// the opponent's draws it face down with no name ([CR 731.2e]): "If a merged permanent contains face-up
+/// and face-down components, the permanent's status is determined by its topmost component."
+///
+/// [CR 731.2e]: https://yawgatog.com/resources/magic-rules/#R7312e
+#[test]
+fn a_face_down_card_under_a_merged_permanent_stays_hidden() {
+    let views = common::views(
+        names::GEMRAZER,
+        "Gemrazer over a face-down creature: a face-up Gemrazer, its card hidden",
+        |_, _, _| {},
+    );
+    // The card drawn under the merged Gemrazer: its name and whether it is face down.
+    let under = |view: &PlayerView| {
+        let [gemrazer] = named(view, "Gemrazer")[..] else {
+            panic!("one Gemrazer in {:?}", view.objects);
+        };
+        assert_eq!(gemrazer.zone, ZoneName::Battlefield);
+        assert_eq!(gemrazer.facing, Facing::Up);
+        let [card] = (view.objects.iter())
+            .filter(|o| o.part_of == Some(gemrazer.slot))
+            .collect::<Vec<_>>()[..]
+        else {
+            panic!("one card under Gemrazer");
+        };
+        (card.name.clone(), card.facing)
+    };
+    let [mine, theirs] = views.last().expect("a view");
+    assert_eq!(
+        under(mine),
+        (Some("Wetland Sambar".to_owned()), Facing::Up),
+        "its controller knows the card under it"
+    );
+    assert_eq!(
+        under(theirs),
+        (None, Facing::Down),
+        "the opponent never saw the card under it"
+    );
 }
 
 /// Teferi's Protection phases out its controller's permanents ([CR 702.26b]): they stay on

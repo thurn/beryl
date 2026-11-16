@@ -429,6 +429,49 @@ pub mod scenarios {
                 advance_to(2, TurnStep::EndOfCombat),
                 ME.life(18),
             ]),
+        // Over a creature manifested by Abhorrent Oculus, the merged creature is a face-up 4/4
+        // Gemrazer that both players see, and its card under it stays face down, known only to
+        // P0 (CR 731.2e).
+        Scenario::new("Gemrazer over a face-down creature: a face-up Gemrazer, its card hidden")
+            .interaction(&[Card::AbhorrentOculus])
+            .at(1, P0, TurnStep::PostcombatMain)
+            .battlefield(
+                P0,
+                &[
+                    Card::Forest,
+                    Card::Forest,
+                    Card::Forest,
+                    Card::AbhorrentOculus,
+                ],
+            )
+            .hand(P0, &[Card::Gemrazer])
+            .library(
+                P0,
+                &[
+                    Prop::Vanilla,
+                    Card::Counterspell,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .battlefield(P1, &[Card::LeoninScimitar])
+            .library(P1, &[Card::Island, Card::Island])
+            .actions(&[
+                advance_to(2, TurnStep::Upkeep),
+                Resolve,
+                ME.picks(Prop::Vanilla),
+                ME.face_down(Prop::Vanilla, 1),
+                advance_to(3, TurnStep::PrecombatMain),
+                MUTATE,
+                ME.targets(Prop::Vanilla),
+                Resolve,
+                ME.yes(),
+                Resolve,
+                THEM.controls(Card::LeoninScimitar, 0),
+                ME.controls(Card::Gemrazer, 1),
+                ME.face_down(Card::Gemrazer, 0),
+                ME.pt(Card::Gemrazer, 4, 4),
+            ]),
         // CR 702.140a: a mutating creature spell targets a non-Human creature its caster owns. The
         // only creature P0 has is a Human (Hired Blade), so with the three Forests that pay for
         // mutate and not the four that pay the mana cost, the cast is not offered.

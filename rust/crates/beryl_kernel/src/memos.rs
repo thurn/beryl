@@ -25,6 +25,7 @@ use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation, check};
 use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
+use crate::player_set::PlayerSet;
 use crate::relayout::{Relayout, queue, slot};
 use crate::state::{State, Zone};
 use crate::store::{Duration, Ended, Store};
@@ -109,12 +110,26 @@ pub enum Memo<L: Layout = Small> {
     ///
     /// [CR 731.2]: https://yawgatog.com/resources/magic-rules/#R7312
     PartOf(L::Slot),
+    /// The card the permanent really is ([`Memo::Really`]) was face down when a card merged
+    /// over it, and stays a face-down component of the merged permanent, which only these
+    /// players know ([CR 731.2e]): "If a merged permanent contains face-up and face-down
+    /// components, the permanent's status is determined by its topmost component." The
+    /// merged permanent itself is face up and every player knows it, so its slot is known to
+    /// all ([`State::knows`]); this says who knows the card behind it
+    /// ([`State::knows_card_really_is`]). It is revealed as the permanent leaves the
+    /// battlefield ([CR 708.9]): "If a face-down permanent or a face-down component of a
+    /// merged permanent moves from the battlefield to any other zone, its owner must reveal
+    /// it to all players as they move it."
+    ///
+    /// [CR 731.2e]: https://yawgatog.com/resources/magic-rules/#R7312e
+    /// [CR 708.9]: https://yawgatog.com/resources/magic-rules/#R7089
+    FaceDownUnder(PlayerSet),
 }
 
 impl<L: Layout> Memo<L> {
     /// The bits of its kinds in a store's [`Kinds`].
     #[inline]
-    fn kinds(self) -> u16 {
+    fn kinds(self) -> u32 {
         match self {
             Memo::Paid(paid) => Kinds::paid(paid),
             Memo::X(_) => Kinds::X,
@@ -125,6 +140,7 @@ impl<L: Layout> Memo<L> {
             Memo::PutOntoBattlefieldWith(_) => Kinds::PUT_WITH,
             Memo::PhasedOutUnder(_) => Kinds::PHASED_OUT_UNDER,
             Memo::PartOf(_) => Kinds::PART_OF,
+            Memo::FaceDownUnder(_) => Kinds::FACE_DOWN_UNDER,
         }
     }
 
@@ -138,7 +154,8 @@ impl<L: Layout> Memo<L> {
             | Memo::Chosen(_)
             | Memo::Really(_)
             | Memo::PutOntoBattlefieldWith(_)
-            | Memo::PhasedOutUnder(_) => Zone::Battlefield,
+            | Memo::PhasedOutUnder(_)
+            | Memo::FaceDownUnder(_) => Zone::Battlefield,
             Memo::ExiledWith(_) | Memo::ExiledUntil(_) => Zone::Exile,
             Memo::PartOf(_) => Zone::Merged,
         }
@@ -162,7 +179,8 @@ impl<L: Layout> Memo<L> {
             | Memo::X(_)
             | Memo::Chosen(_)
             | Memo::Really(_)
-            | Memo::PhasedOutUnder(_) => None,
+            | Memo::PhasedOutUnder(_)
+            | Memo::FaceDownUnder(_) => None,
             Memo::ExiledWith(by)
             | Memo::ExiledUntil(by)
             | Memo::PutOntoBattlefieldWith(by)
@@ -179,6 +197,8 @@ impl<L: Layout> Memo<L> {
             Memo::Paid(paid) => !paid.is_empty(),
             Memo::Chosen(value) => value.holds(),
             Memo::Really(_) | Memo::PhasedOutUnder(_) => true,
+            // Somebody knew the face-down card: at least its controller (CR 708.5).
+            Memo::FaceDownUnder(knew) => !knew.is_empty(),
             // What exiled it left a card or a token in its slot.
             Memo::ExiledWith(by) | Memo::PutOntoBattlefieldWith(by) => zone(by) != Zone::Nowhere,
             // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).
@@ -200,6 +220,7 @@ impl<L: Layout> Memo<L> {
             Memo::PutOntoBattlefieldWith(by) => Memo::PutOntoBattlefieldWith(slot(by)),
             Memo::PhasedOutUnder(player) => Memo::PhasedOutUnder(player),
             Memo::PartOf(of) => Memo::PartOf(slot(of)),
+            Memo::FaceDownUnder(knew) => Memo::FaceDownUnder(knew),
         }
     }
 
@@ -215,27 +236,28 @@ impl<L: Layout> Memo<L> {
 /// cost the vocabulary's list has, one for each way a card remembers what exiled it, and one
 /// for a chosen value.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Kinds(u16);
+struct Kinds(u32);
 
 impl Kinds {
-    const X: u16 = 1 << 0;
-    const EXILED_WITH: u16 = 1 << 9;
-    const EXILED_UNTIL: u16 = 1 << 10;
-    const CHOSEN: u16 = 1 << 11;
-    const REALLY: u16 = 1 << 12;
-    const PUT_WITH: u16 = 1 << 13;
-    const PHASED_OUT_UNDER: u16 = 1 << 14;
-    const PART_OF: u16 = 1 << 15;
+    const X: u32 = 1 << 0;
+    const EXILED_WITH: u32 = 1 << 9;
+    const EXILED_UNTIL: u32 = 1 << 10;
+    const CHOSEN: u32 = 1 << 11;
+    const REALLY: u32 = 1 << 12;
+    const PUT_WITH: u32 = 1 << 13;
+    const PHASED_OUT_UNDER: u32 = 1 << 14;
+    const PART_OF: u32 = 1 << 15;
+    const FACE_DOWN_UNDER: u32 = 1 << 16;
     /// The kinds whose memo names a slot ([`Memo::names`]).
-    const NAMING: u16 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL | Kinds::PUT_WITH | Kinds::PART_OF;
+    const NAMING: u32 = Kinds::EXILED_WITH | Kinds::EXILED_UNTIL | Kinds::PUT_WITH | Kinds::PART_OF;
     /// The kinds whose memo ends as a new object arrives in the slot it names
     /// ([`State::forget_links_to`]).
-    const LINKS: u16 = Kinds::EXILED_WITH | Kinds::PUT_WITH;
+    const LINKS: u32 = Kinds::EXILED_WITH | Kinds::PUT_WITH;
 
     /// The bits of the kinds of cost in `paid`.
     #[inline]
-    const fn paid(paid: CastingKinds) -> u16 {
-        (paid.bits() as u16) << 1
+    const fn paid(paid: CastingKinds) -> u32 {
+        (paid.bits() as u32) << 1
     }
 }
 
@@ -279,7 +301,7 @@ impl<L: Layout> std::hash::Hash for Memos<L> {
 impl<L: Layout> Memos<L> {
     /// The entries, if one of them has a memo of a kind in `kinds`; none otherwise.
     #[inline]
-    fn of(&self, kinds: u16) -> &[Remembered<L>] {
+    fn of(&self, kinds: u32) -> &[Remembered<L>] {
         if self.kinds.0 & kinds == 0 {
             return &[];
         }
@@ -307,7 +329,7 @@ impl<L: Layout> Memos<L> {
 
     /// The objects that remember exactly `memo`, if a memo of a kind in `kinds` is live.
     #[inline]
-    fn remembering(&self, kinds: u16, memo: Memo<L>) -> Bitboard<L::Slot> {
+    fn remembering(&self, kinds: u32, memo: Memo<L>) -> Bitboard<L::Slot> {
         self.of(kinds)
             .iter()
             .filter(|e| e.memo == memo)
@@ -552,6 +574,33 @@ impl<L: Layout> State<L> {
                 Memo::Really(card) if e.slot == slot => Some(card),
                 _ => None,
             })
+    }
+
+    /// Whether `player` knows the card the object in `slot` really is
+    /// ([`State::card_really_is`]): for a merged permanent over a face-down component, the
+    /// players who knew that card ([`Memo::FaceDownUnder`]); for any other object, whoever
+    /// knows the object ([`State::knows`]). With no such permanent in the game, one AND.
+    #[inline]
+    pub fn knows_card_really_is(&self, player: Seat, slot: L::Slot) -> bool {
+        let knew = self
+            .memos
+            .of(Kinds::FACE_DOWN_UNDER)
+            .iter()
+            .find_map(|e| match e.memo {
+                Memo::FaceDownUnder(knew) if e.slot == slot => Some(knew),
+                _ => None,
+            });
+        knew.map_or_else(|| self.knows(player, slot), |knew| knew.contains(player))
+    }
+
+    /// Makes the card the permanent in `slot` really is `card` ([`Memo::Really`]), in a
+    /// position dealt for a player who does not know it ([`Observation`]).
+    pub(crate) fn deal_card_really_is(&mut self, slot: L::Slot, card: L::Card) {
+        for e in self.memos.entries.as_mut_slice() {
+            if e.slot == slot && matches!(e.memo, Memo::Really(_)) {
+                e.memo = Memo::Really(card);
+            }
+        }
     }
 
     /// The cards of the merged permanent in `slot` other than the one in its own slot, in the

@@ -63,7 +63,10 @@ impl<L: Layout> State<L> {
         }
         // [CR 708.9](https://yawgatog.com/resources/magic-rules/#R7089): "If a face-down permanent
         // ... moves from the battlefield to any other zone, its owner must reveal it to all players
-        // as they move it." Whatever zone it goes to, a hidden one included.
+        // as they move it." Whatever zone it goes to, a hidden one included. A face-down
+        // component under a merged permanent's face-up top is revealed too: its slot is known
+        // to every player already, and the card it becomes is that component
+        // ([`crate::Memo::FaceDownUnder`]).
         let o = *self.object(slot);
         if o.zone == Zone::Battlefield && o.face == FaceIx::DOWN {
             for k in self.knowledge.as_mut_slice() {

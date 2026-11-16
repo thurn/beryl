@@ -181,13 +181,24 @@ fn add_battlefield_objects<L: Layout>(
     // A merged permanent with a mutating card over it keeps its own card in its slot, under a
     // copy effect: the card in the merged zone that it shows is the one over it, so the view
     // names the card under it by the permanent's own.
+    // A card under it that was face down when the mutating card went over it stays face down,
+    // and the view of a player who never saw it draws it so, with no name ([CR 731.2e]): "If
+    // a merged permanent contains face-up and face-down components, the permanent's status is
+    // determined by its topmost component."
+    //
+    // [CR 731.2e]: https://yawgatog.com/resources/magic-rules/#R7312e
     for &host in obs.battlefield() {
         let mut own = really(t, obs, host);
+        let mut hidden = obs.shown().really(host).is_some() && obs.really(host).is_none();
         let top = name(t, obs, host);
         for s in obs.shown().pile(host) {
             let mut view = object_view(t, obs, s);
             if own.is_some() && view.name.as_deref() == top {
                 view.name = own.take().map(str::to_owned);
+            } else if hidden && view.name.as_deref() == top {
+                hidden = false;
+                view.name = None;
+                view.facing = Facing::Down;
             }
             objects.push(view);
         }
@@ -466,7 +477,7 @@ fn really<L: Layout>(
     if !obs.knows(slot) || obs.object(slot).zone() != Zone::Battlefield {
         return None;
     }
-    let card = t.def(obs.shown().really(slot)?).face_name(FaceIx::FRONT);
+    let card = t.def(obs.really(slot)?).face_name(FaceIx::FRONT);
     (Some(card) != name(t, obs, slot)).then_some(card)
 }
 

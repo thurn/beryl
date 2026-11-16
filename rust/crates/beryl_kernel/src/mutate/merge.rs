@@ -21,7 +21,7 @@ use beryl_card::FaceIx;
 
 use crate::event::Sink;
 use crate::fixed::Full;
-use crate::layout::Layout;
+use crate::layout::{Layout, Table};
 use crate::memos::Memo;
 use crate::object::ObjectRef;
 use crate::query::Copiable;
@@ -39,6 +39,7 @@ impl<L: Layout> State<L> {
     /// really is. [`Full`] if the stores or the values had no room.
     ///
     /// [CR 702.140c]: https://yawgatog.com/resources/magic-rules/#R702140c
+    /// [CR 731.2e]: https://yawgatog.com/resources/magic-rules/#R7312e
     pub fn merge(
         &mut self,
         sink: &mut Sink<L>,
@@ -55,6 +56,21 @@ impl<L: Layout> State<L> {
             .merged_with(definition, face, top)?;
         self.move_object(sink, card.slot, Zone::Merged, Place::Top)?;
         self.remember(card.slot, Memo::PartOf(onto.slot))?;
-        self.become_copy(definition, onto, values)
+        // Over a face-down permanent, the merged permanent is face up and every player sees
+        // it, but its face-down card stays hidden from those who didn't know it ([CR 731.2e]):
+        // "If a merged permanent contains face-up and face-down components, the permanent's
+        // status is determined by its topmost component."
+        let hidden = top && self.object(onto.slot).face == FaceIx::DOWN;
+        if hidden {
+            let knew = self.who_knows(onto.slot);
+            self.remember(onto.slot, Memo::FaceDownUnder(knew))?;
+        }
+        self.become_copy(definition, onto, values)?;
+        if hidden {
+            for k in self.knowledge.as_mut_slice() {
+                k.insert(onto.slot);
+            }
+        }
+        Ok(())
     }
 }

@@ -445,3 +445,47 @@ fn scried_cards_are_known_where_they_went() {
     varies(&t, &s, Seat::P0, &library[1..library.len() - 1]);
     varies(&t, &s, Seat::P1, &[top, bottom]);
 }
+
+/// Gemrazer mutating over a creature Abhorrent Oculus manifested makes a face-up merged
+/// permanent that both players know, over a face-down card that only its controller knows
+/// ([CR 731.2e]): "If a merged permanent contains face-up and face-down components, the
+/// permanent's status is determined by its topmost component." Every world dealt for the
+/// opponent keeps the merged permanent a Gemrazer and deals the card under it from the rest of
+/// its owner's decklist, and every such world keeps the engine's invariants.
+///
+/// [CR 731.2e]: https://yawgatog.com/resources/magic-rules/#R7312e
+#[test]
+fn a_face_down_card_under_a_merged_permanent_stays_hidden() {
+    let scenario = crate::tests::scenarios_of(names::GEMRAZER)
+        .iter()
+        .find(|s| {
+            s.name == "Gemrazer over a face-down creature: a face-up Gemrazer, its card hidden"
+        })
+        .expect("the scenario");
+    let mut last = None;
+    beryl_scenario::visit(&CARDS, scenario, |t, s, _| last = Some((t.clone(), *s))).unwrap();
+    let (t, s) = last.expect("a decision");
+    let merged = s
+        .battlefield()
+        .iter()
+        .copied()
+        .find(|&slot| s.pile(slot).next().is_some())
+        .expect("the merged permanent");
+    let gemrazer = s.card_behind(merged);
+    assert!(s.knows(Seat::P0, merged) && s.knows(Seat::P1, merged));
+    assert!(s.knows_card_really_is(Seat::P0, merged));
+    assert!(!s.knows_card_really_is(Seat::P1, merged));
+    let hidden = s.card_really_is(merged);
+    let mut dealt_otherwise = false;
+    for seed in 0..WORLDS {
+        let det = Observation::new(&s, Seat::P1).determinize(&t, &mut SplitMix64::new(seed));
+        det.check_invariants(&t).unwrap();
+        assert_eq!(det.card_behind(merged), gemrazer);
+        dealt_otherwise |= det.card_really_is(merged) != hidden;
+    }
+    assert!(dealt_otherwise, "the card under it is dealt at random");
+    for seed in 0..WORLDS {
+        let det = Observation::new(&s, Seat::P0).determinize(&t, &mut SplitMix64::new(seed));
+        assert_eq!(det.card_really_is(merged), hidden);
+    }
+}

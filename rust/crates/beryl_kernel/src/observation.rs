@@ -65,6 +65,16 @@ impl<'a, L: Layout> Observation<'a, L> {
         self.knows(slot).then(|| self.state.card(slot))
     }
 
+    /// The card a permanent under a copy effect really is ([`State::really`]), if one does
+    /// and the viewer knows it: not a face-down component under a merged permanent's face-up
+    /// top that the viewer never saw ([`crate::Memo::FaceDownUnder`]).
+    pub fn really(&self, slot: L::Slot) -> Option<L::Card> {
+        let card = self.state.really(slot)?;
+        self.state
+            .knows_card_really_is(self.viewer, slot)
+            .then_some(card)
+    }
+
     /// The copiable values of the object in a slot ([`State::copiable`]), if the viewer
     /// knows its card. A merged permanent's other cards are as public as it is
     /// ([`crate::query::Copiable::merged_faces`]).
@@ -236,9 +246,18 @@ impl<'a, L: Layout> Observation<'a, L> {
                 remainder.push_bounded(card);
             }
             let mut unknown: L::Deck<L::Slot> = Default::default();
+            // Merged permanents the viewer sees, over a face-down card the viewer doesn't
+            // know ([`crate::Memo::FaceDownUnder`]): that card is dealt in its memo.
+            let mut under: L::Deck<L::Slot> = Default::default();
             for i in 0..t.deck_len(player) {
                 let slot = L::Slot::deck(player, i);
-                if self.root.knows(self.viewer, slot) || shown(slot) {
+                if !shown(slot)
+                    && self.root.knows(self.viewer, slot)
+                    && !self.root.knows_card_really_is(self.viewer, slot)
+                {
+                    // One of the deck's slots, of which the layout has no more than these.
+                    under.push_bounded(slot);
+                } else if self.root.knows(self.viewer, slot) || shown(slot) {
                     // The card it really is, even under a copy effect.
                     let card = s.card_really_is(slot);
                     let at = remainder
@@ -253,6 +272,10 @@ impl<'a, L: Layout> Observation<'a, L> {
             rng.shuffle(remainder.as_mut_slice());
             for (&slot, &card) in unknown.iter().zip(remainder.iter()) {
                 s.object_mut(slot).card = card;
+            }
+            let dealt = remainder.iter().skip(unknown.len());
+            for (&slot, &card) in under.iter().zip(dealt) {
+                s.deal_card_really_is(slot, card);
             }
             if let Some(picks) = &picks {
                 picks.deal(&mut s, t, unknown.as_slice());

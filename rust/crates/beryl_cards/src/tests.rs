@@ -34,7 +34,7 @@ fn crate_dir() -> PathBuf {
 }
 
 /// The scenarios in the file of the card called `name`.
-fn scenarios_of(name: &str) -> &'static [beryl_scenario::Scenario] {
+pub(crate) fn scenarios_of(name: &str) -> &'static [beryl_scenario::Scenario] {
     let found = crate::scenarios().iter().find(|(card, _)| *card == name);
     found.unwrap_or_else(|| panic!("{name} has no scenarios")).1
 }

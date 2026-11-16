@@ -6,6 +6,30 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Mutating over a face-down creature left the merged permanent unknown to the
+  opponent.** The nightly fuzz panicked with "a public card unknown": a player
+  cast Gemrazer for its mutate cost over a creature that Abhorrent Oculus had
+  manifested, and put Gemrazer on top. The merged permanent stays the object in
+  the face-down card's slot (CR 731.2c), and a copy effect gives it Gemrazer's
+  face-up values. Knowledge is tracked per slot, though, and only the controller
+  knew that slot, so the face-up Gemrazer on the battlefield was hidden from its
+  opponent. Revealing the slot alone would have been wrong in the other
+  direction: the manifested card underneath stays a face-down component, known
+  only to its controller, until it leaves the battlefield (CR 731.2e, CR 708.9).
+  Fixed: `State::merge` records who knew the face-down card in a new memo,
+  `Memo::FaceDownUnder`, and then reveals the slot to every player.
+  `State::knows_card_really_is` answers who knows the card behind it, the AI's
+  dealt worlds (`Observation::determinize`) deal that card at random for a
+  player who doesn't know it, and the session's view draws it face down with no
+  name for that player. A Gemrazer scenario over a manifested card and tests in
+  `beryl_cards` (`knowledge.rs`) and `beryl_session` (`object_states.rs`) hold
+  it. Prevention: a slot can now carry two identities with different audiences,
+  the permanent and the card behind it. Any reader of the card behind a slot
+  (`State::really`, `State::card_really_is`) on behalf of a player must ask
+  `knows_card_really_is`, not `knows`. No type enforces this yet, but the
+  invariant check and the determinization tests catch the first misuse in a
+  scenario.
+
 - **Delve could exile the cards an escape cost needed.** The nightly fuzz
   panicked with "enough cards to pay the cost" in `cast::parts::choices`: Gurmag
   Angler, cast with the escape that Underworld Breach grants, reached the step
