@@ -57,7 +57,7 @@ use crate::notice::Announced;
 use crate::pointer::Pointer;
 use crate::pose::Pose;
 use crate::table::badges::Badges;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Motion, Table, Window, ability_track};
+use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Table, Window, ability_track};
 
 /// How many spans, streaks and effects the show holds before holding more allocates.
 const LIGHTS: usize = 256;
@@ -550,16 +550,10 @@ impl Show {
         let Some(shown) = self.shown.as_ref().map(|update| &update.view) else {
             return;
         };
-        let motion = self.playing.as_ref().and_then(|playing| {
-            let update = playing.update.as_ref()?;
-            Some(Motion {
-                tracks: &playing.compiled.tracks,
-                ability_tracks: &playing.compiled.ability_tracks,
-                t: playing.clock(now),
-                finals: &playing.compiled.finals,
-                view: &update.view,
-            })
-        });
+        let motion = self
+            .playing
+            .as_ref()
+            .and_then(|playing| playing.motion(now));
         let dress = Dress {
             effects: &self.effects,
             badges: &self.badges,

@@ -47,6 +47,19 @@ impl Pose {
             self.position,
         )
     }
+
+    /// How the side of the card that faces up is turned: as `transform` turns the card while
+    /// it turns over, edge-on half way, but always the side that faces up, so that what is
+    /// drawn on the card (its plaque, its marks) turns with it and lies flat on whichever side
+    /// it shows at rest, as the web interface's children of a card turn with it.
+    #[must_use]
+    pub fn upward(&self) -> Affine3A {
+        Affine3A::from_scale_rotation_translation(
+            Vec3::splat(self.scale),
+            self.rotation * Quat::from_rotation_x(PI * (self.turn - self.turn.round())),
+            self.position,
+        )
+    }
 }
 
 /// A cubic Bezier easing from (0, 0) to (1, 1), as CSS writes it: the control points

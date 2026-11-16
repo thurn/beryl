@@ -20,7 +20,6 @@ use super::rows::NameIds;
 use super::shadows::Floors;
 use super::tray::Held;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, place};
-use crate::data::space::effects as effects_space;
 use crate::effects::{self, Effect};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{
@@ -32,8 +31,11 @@ use crate::motion::Track;
 use crate::pointer;
 use crate::pose::Pose;
 
+mod motion;
 mod objects;
 mod scroll;
+
+pub use motion::{Motion, Turn};
 
 /// How large the table cloth is, in millimetres: past every edge of any window.
 const CLOTH: f32 = 4000.0;
@@ -89,19 +91,6 @@ impl Objects {
             .ok()?;
         Some(self.abilities[at].1)
     }
-}
-
-/// What moves while a script plays: a track for each object that moves, by slot, and for each
-/// ability that moves, by number; the time on the script's clock; and the scene objects at
-/// rest in the view the script leads to.
-#[derive(Clone, Copy, Debug)]
-pub struct Motion<'a> {
-    pub tracks: &'a [Track],
-    /// Sorted by number.
-    pub ability_tracks: &'a [(u32, Track)],
-    pub t: u64,
-    pub(crate) finals: &'a Objects,
-    pub view: &'a PlayerView,
 }
 
 /// The id of the resolved element of the ability numbered `number`: past every card's and
@@ -425,12 +414,36 @@ impl Table {
         builder: &mut FrameBuilder,
     ) -> Option<(SceneObject, &'v PlayerView, bool)> {
         let resting = self.objects.cards.get(slot).copied().flatten();
+        // When this card first shows the record the script leads to, if a step says.
+        let turn = motion.and_then(|motion| {
+            let at = motion
+                .turns
+                .iter()
+                .filter(|turn| turn.slot == slot)
+                .map(|turn| turn.at)
+                .min()?;
+            Some((motion, at))
+        });
         let track = motion.and_then(|motion| {
             let track = motion.tracks.get(slot)?;
             (!track.segments().is_empty()).then_some((motion, track))
         });
         let Some((motion, track)) = track else {
-            return resting.map(|object| (object, view, false));
+            let resting = resting?;
+            // A card that stands still shows its new record from its turn on, where it stands.
+            if let Some((motion, at)) = turn
+                && motion.t >= at
+                && let Some(last) = motion.finals.cards.get(slot).copied().flatten()
+            {
+                let object = SceneObject {
+                    pose: resting.pose,
+                    visible: resting.visible,
+                    tapped: resting.tapped,
+                    ..last
+                };
+                return Some((object, motion.view, false));
+            }
+            return Some((resting, view, false));
         };
         builder.segment();
         let pose = track.pose_at(motion.t);
@@ -448,9 +461,11 @@ impl Table {
             (_, Some(last)) if track.settled(motion.t) => last.visible,
             _ => moves || resting.is_some_and(|a| a.visible) || last.is_some_and(|b| b.visible),
         };
-        let (object, view) = match last {
-            Some(object) => (object, motion.view),
-            None => (resting?, view),
+        let veiled = turn.is_some_and(|(_, at)| motion.t < at);
+        let (object, view) = match (last, resting) {
+            (Some(_), Some(object)) if veiled => (object, view),
+            (Some(object), _) => (object, motion.view),
+            (None, _) => (resting?, view),
         };
         // A permanent that taps or untaps on its track reads as tapped once it has turned
         // more than half of its quarter turn, from the middle of its step.
@@ -609,10 +624,12 @@ impl Table {
         // A card that is fading, breaking up or washed with light is drawn with the blended
         // records, after the opaque ones, among the marks of cards at its height. The opaque
         // pass neither blends nor shows what is behind a record, so a fading or broken card
-        // drawn there would darken toward black and hide the cards beneath it.
+        // drawn there would darken toward black and hide the cards beneath it. It takes the
+        // band its own marks take (`light::marks::band`), or a mark drawn before it would lie
+        // under it.
         let band = if opacity == 255 && look.dissolve <= 0.0 && look.whiten <= 0.0 {
             Band::Opaque
-        } else if look.pose.position.z < effects_space::ON_TABLE_BELOW {
+        } else if look.pose.position.z < crate::data::space::light::ON_TABLE_BELOW {
             Band::TableMarks
         } else {
             Band::RaisedMarks

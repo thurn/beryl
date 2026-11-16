@@ -385,3 +385,33 @@ fn a_beat_combines_its_rules() {
         ]
     );
 }
+
+/// What is drawn on a card (its plaque, its marks) lies on the side of the card that faces up:
+/// flat on its face while face up and on its back while face down, and edge-on with the card
+/// half way through turning over.
+#[test]
+fn what_is_drawn_on_a_card_turns_over_with_it() {
+    let normal = |turn: f32| {
+        let pose = beryl_scene::pose::Pose {
+            turn,
+            ..beryl_scene::pose::Pose::default()
+        };
+        pose.upward().transform_vector3(glam::Vec3::Z)
+    };
+    for turn in [0.0, 1.0] {
+        assert!(
+            (normal(turn) - glam::Vec3::Z).length() < 1e-5,
+            "flat and facing up at turn {turn}: {}",
+            normal(turn)
+        );
+    }
+    assert!(
+        normal(0.5).z.abs() < 1e-5,
+        "edge-on half way: {}",
+        normal(0.5)
+    );
+    assert!(
+        normal(0.25).z > 0.5 && normal(0.75).z > 0.5,
+        "always the upper side"
+    );
+}

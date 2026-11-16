@@ -331,3 +331,30 @@ fn a_spell_left_to_be_read_is_focused_for_its_step() {
     assert!(focused(client.frame(to - 1)), "until its end");
     assert!(!focused(client.frame(to)), "and no longer");
 }
+
+/// Each kind of notice fades as the web stage's does (`.stage-notice` in
+/// `ui/src/stage/stage.css`): a fifth of the way through its run, the turn banner is still
+/// coming up, over its first 28%, while a scry's pill, which comes up over its first 5%, stands
+/// whole.
+#[test]
+fn each_kind_of_notice_fades_as_the_webs_does() {
+    let opacity_at = |act: Act, words: &str, share: u64| {
+        let (mut client, steps) = client(scripted(vec![vec![act]], |_| {}));
+        let (from, to) = steps[0];
+        let frame = client.frame(from + (to - from) * share / 100);
+        (frame.resolved.iter())
+            .find(|element| frame.name(element.name) == words)
+            .expect("the notice is shown")
+            .opacity
+    };
+    let banner = opacity_at(turn(Side::You), "Your Turn", 20);
+    assert!(
+        (0.6..0.8).contains(&banner),
+        "the banner is about 0.2 / 0.28 of the way up: {banner}"
+    );
+    let pill = opacity_at(scry(Side::You), "Scry: 1 top, 1 bottom.", 20);
+    assert!(
+        (pill - 1.0).abs() < f32::EPSILON,
+        "the pill stands whole: {pill}"
+    );
+}

@@ -459,7 +459,6 @@
     }
   },
   "effects": {
-    "on_table_below": 1,
     "settle": {
       "still": 0.071,
       "white": 0.3,
@@ -563,6 +562,20 @@
   "flat": {
     "transition": {
       "ms": 180
+    }
+  },
+  "notices": {
+    "turn": {
+      "in": 0.28,
+      "out": 0.14
+    },
+    "pill": {
+      "in": 0.05,
+      "out": 0.1
+    },
+    "banner": {
+      "in": 0.06,
+      "out": 0.08
     }
   }
 }

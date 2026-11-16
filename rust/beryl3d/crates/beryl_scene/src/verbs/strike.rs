@@ -6,6 +6,12 @@
 //! onto its place, slowing, by the step's end. It leans toward the side what it strikes is on
 //! from the start of its rear until it drifts back. What it strikes does not move.
 //!
+//! The web's blow lands over what it strikes, overlapping it by `STRIKE.bite` of the striker's
+//! width, and on something much smaller it lands whole, shrinking (`STRIKE.small`). Here the
+//! striker comes down to the table's height as it lands, where a card over the one it strikes
+//! would pass through it, so it stops `near` outside that card's edge instead, and keeps its
+//! size.
+//!
 //! The values are `verbs.strike` in `data/beryl3d/space.json`: `wind` and `stay` are shares of
 //! the step, `rear` and `least` shares of the creature's card width, `lift` how much larger it
 //! is drawn at its poise, `lean` an angle in degrees and `near` how far its middle stops outside
@@ -98,6 +104,9 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
         (landed, half_way, (stay, home), INTO),
         (half_way, to, (home, 1.0), OUT),
     ];
+    // What the blow does shows as it lands, on the creature and on what it strikes.
+    out.turn(subject, at(hit));
+    out.turn(*struck, at(hit));
     for (start, end, (begins, ends), curve) in spans {
         let interval = Interval {
             from: at(begins),

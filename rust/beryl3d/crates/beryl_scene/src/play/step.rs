@@ -9,10 +9,7 @@ use super::compile::{nanoseconds, subject_of};
 use super::index::{self, Index};
 use super::record::{Cause, SegmentRecord};
 use crate::beat::Laid;
-use crate::hud::counts::CountChange;
-use crate::light::{SpanChange, StreakRun};
 use crate::motion::Track;
-use crate::notice::NoticeRun;
 use crate::pose::{Curve, Pose, Segment};
 use crate::table::lifted::Look;
 use crate::table::{Group, NameIds, Placement, Rest, Table, Zones};
@@ -20,6 +17,7 @@ use crate::verbs::{self, Interval};
 
 mod abilities;
 mod counts;
+mod out;
 mod places;
 mod room;
 mod still;
@@ -29,6 +27,8 @@ use room::{only_height, room_of};
 use tracks::same;
 pub(crate) use tracks::{add, numbers_of};
 
+pub use out::StepOut;
+pub(crate) use out::Written;
 pub use places::Places;
 
 /// What a verb is given for one step.
@@ -60,76 +60,6 @@ pub struct StepIn<'a> {
     /// The script's table after the act.
     pub table: &'a Played,
     pub places: &'a Places<'a>,
-}
-
-/// What the verbs of a script have written so far, beside the segments `Motion` adds to its
-/// tracks. Kept between steps, so that a step need not allocate it.
-#[derive(Default)]
-pub(crate) struct Written {
-    /// The segments of the step being played, by slot, until `Motion` adds them to its tracks.
-    segments: Vec<(usize, Segment)>,
-    /// The same for abilities, by number.
-    ability_segments: Vec<(u32, Segment)>,
-    pub spans: Vec<SpanChange>,
-    pub streaks: Vec<StreakRun>,
-    pub notices: Vec<NoticeRun>,
-    pub counts: Vec<CountChange>,
-}
-
-/// What a verb writes for one step.
-pub struct StepOut<'a> {
-    number: usize,
-    own: Interval,
-    subject: Option<Subject>,
-    from: Option<Pose>,
-    to: Option<Pose>,
-    written: &'a mut Written,
-}
-
-impl StepOut<'_> {
-    /// Gives `subject` `segment`, made by this step's verb. A player has no scene object to
-    /// move: a segment for one is dropped.
-    pub fn segment(&mut self, subject: Subject, segment: Segment) {
-        match subject {
-            Subject::Object { slot } => self.written.segments.push((usize::from(slot.0), segment)),
-            Subject::Ability { id } => self.written.ability_segments.push((id, segment)),
-            Subject::Player { .. } => {}
-        }
-    }
-
-    /// The subject is at `to` from `own.from` on: an instant change. One that changes nothing
-    /// needs no segment.
-    pub fn instant(&mut self) {
-        if let (Some(subject), Some(from), Some(to)) = (self.subject, self.from, self.to)
-            && from != to
-        {
-            self.segment(subject, verbs::instant(from, to, self.own.from));
-        }
-    }
-
-    /// A span begins or ends.
-    pub fn span(&mut self, change: SpanChange) {
-        self.written.spans.push(SpanChange {
-            step: self.number,
-            ..change
-        });
-    }
-
-    /// Mana or damage streams from one thing to another.
-    pub fn streak(&mut self, run: StreakRun) {
-        self.written.streaks.push(StreakRun {
-            step: self.number,
-            ..run
-        });
-    }
-
-    /// A banner or pill is shown.
-    pub fn notice(&mut self, run: NoticeRun) {
-        self.written.notices.push(NoticeRun {
-            step: self.number,
-            ..run
-        });
-    }
 }
 
 /// The table as a script plays over it, and the tracks its steps have made so far.

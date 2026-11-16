@@ -23,7 +23,7 @@ use std::cell::Cell;
 use std::f32::consts::PI;
 
 use beryl_protocol::protocol::{Combat, ObjectView, Side};
-use glam::{Affine3A, Quat, Vec2, Vec3};
+use glam::{Affine3A, Quat, Vec2};
 
 use super::{CARD_HEIGHT, CARD_WIDTH, Look};
 use crate::data::space::own;
@@ -141,11 +141,7 @@ impl<'b, 'f> Marks<'b, 'f> {
     fn on(look: &Look, builder: &'b mut FrameBuilder<'f>) -> Self {
         let pose = look.pose;
         Self {
-            card: Affine3A::from_scale_rotation_translation(
-                Vec3::splat(pose.scale),
-                pose.rotation,
-                pose.position,
-            ),
+            card: pose.upward(),
             band: if look.state & StateBits::MOVING == 0 {
                 Band::TableMarks
             } else {

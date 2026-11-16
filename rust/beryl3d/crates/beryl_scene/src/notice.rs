@@ -10,6 +10,7 @@
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Notice;
 
+use crate::data::space::notices;
 use crate::verbs::Interval;
 
 /// A notice shown over `over`, on the script's clock. `passes` says whether the table goes on
@@ -53,12 +54,38 @@ impl Place {
     }
 }
 
+/// The shares of a notice's run over which it fades in and out, as the web stage's
+/// `.stage-notice` rules in `ui/src/stage/stage.css` have them for its kind: the turn banner,
+/// the pill of a scry, and the other banners (a coin's among them). The values are `notices` in
+/// `data/beryl3d/space.json`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Fade {
+    pub fade_in: f32,
+    pub fade_out: f32,
+}
+
+impl Fade {
+    /// How `notice` fades.
+    #[must_use]
+    pub const fn of(notice: &Notice) -> Self {
+        let (fade_in, fade_out) = match notice {
+            Notice::Turn { .. } => (notices::turn::IN, notices::turn::OUT),
+            Notice::Scry { .. } | Notice::TopOrBottom { .. } => {
+                (notices::pill::IN, notices::pill::OUT)
+            }
+            _ => (notices::banner::IN, notices::banner::OUT),
+        };
+        Self { fade_in, fade_out }
+    }
+}
+
 /// A notice the show holds, in nanoseconds since the client started, until it ends: where it is
-/// shown, the key its element is laid out under (`key`), when it is shown and whether the table
+/// shown, how it fades, the key its element is laid out under (`key`), when it is shown and whether the table
 /// plays on under it. It holds no words, so that keeping one allocates nothing.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Announced {
     pub place: Place,
+    pub fade: Fade,
     pub key: u64,
     pub over: Interval,
     pub passes: bool,

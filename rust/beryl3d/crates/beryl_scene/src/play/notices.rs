@@ -4,7 +4,7 @@
 use beryl_protocol::protocol::PlayerView;
 
 use super::{Playing, Show};
-use crate::notice::{self, Announced, NoticeRun, Place};
+use crate::notice::{self, Announced, Fade, NoticeRun, Place};
 
 /// How many notices the show holds before holding more allocates.
 pub(super) const NOTICES: usize = 8;
@@ -16,6 +16,7 @@ impl Playing {
         for run in &self.compiled.notices {
             let announced = Announced {
                 place: Place::of(&run.notice),
+                fade: Fade::of(&run.notice),
                 key: notice::key(self.number, run.step),
                 over: self.real_interval(run.over),
                 passes: run.passes,

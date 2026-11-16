@@ -49,13 +49,13 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         )]
         let share = (now - run.over.from) as f32 / run.over.duration() as f32;
         let through = run.curve.ease(share);
-        // A source rises out of its row toward the middle of the table: one on the viewer's
-        // side away from the eye, one on the opponent's toward it. A pool faces neither way and
-        // rises away, as the web's does.
+        // A source rises out of its row toward the middle of the table, the way its controller
+        // faces (`Scene::toward`, which is -1 up the screen): the viewer's away from the eye,
+        // the opponent's toward it, wherever it lies. A pool faces neither way and rises away,
+        // as the web's does (`from.toward || -1` in `cometOf`).
         let faces = match run.from {
-            Some(Subject::Player { .. }) => 1.0,
-            _ if from.pose.position.y > 0.0 => -1.0,
-            _ => 1.0,
+            Some(Subject::Player { .. }) | None => 1.0,
+            Some(source) => -scene.toward(source),
         };
         let comet = Comet::new(from, to, through, run.amount, nth, faces);
         let eye = scene.table().camera().eye;
@@ -154,11 +154,12 @@ impl Comet {
         let sheaf = if nth % 2 == 1 { -1.0 } else { 1.0 } * (1.0 + streak::FAN * pair);
         let high = from.half.y.max(to.half.y);
         let rise = (streak::BOW * far).min(streak::RISE * 2.0 * high) * sheaf;
-        // For a way straight across the table, the side to its right.
-        let mut side = way.perp().normalize_or(Vec2::X);
-        if side.y * faces < 0.0 || (side.y == 0.0 && side.x < 0.0) {
-            side = -side;
-        }
+        // The side of the way `faces` says, as the web's `side` picks it: the way's left turned
+        // by the sign of how far it goes across the screen, and for a way straight up or down
+        // the screen, its left for a source that faces away and its right for one that faces
+        // the viewer.
+        let across = if way.x == 0.0 { 1.0 } else { way.x.signum() };
+        let side = way.perp().normalize_or(Vec2::X) * across * faces;
         let c = (a + b) * 0.5 + (side * rise).extend(0.0);
         let units = f32::from(amount.max(1)).min(streak::UNITS);
         let wide = (streak::HEAD * to.half.x).clamp(streak::LEAST, streak::MOST)

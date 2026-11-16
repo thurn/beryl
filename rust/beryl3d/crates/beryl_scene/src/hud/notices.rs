@@ -8,8 +8,8 @@
 //!   scripts as each update arrives, under the notice's key (`notice::key`), so that a frame
 //!   lays nothing out.
 //! - `NoticeFloats::write` shows in each float the notice under way there that began last, as
-//!   the web's `announced` picks one, and sets its look: it fades in over the first
-//!   `FADE_IN` of its run and out over the last `FADE_OUT`.
+//!   the web's `announced` picks one, and sets its look: it fades in and out over the shares
+//!   of its run its kind gives (`notice::Fade`).
 
 use std::fmt::Write as _;
 
@@ -24,11 +24,6 @@ use crate::layout::{FloatLook, Layer};
 use crate::notice::{Announced, NoticeRun, Place};
 use crate::table::Layout;
 use crate::tokens::{color, space, type_style};
-
-/// The share of a notice's run over which it fades in.
-const FADE_IN: f32 = 0.15;
-/// The share of a notice's run over which it fades out.
-const FADE_OUT: f32 = 0.2;
 
 /// Every float a notice is shown in, with the place that shows there.
 const FLOATS: [(FloatId, Place); 4] = [
@@ -142,8 +137,8 @@ const fn name_of(place: Place) -> &'static str {
     }
 }
 
-/// How opaque `announced` is at `now`: rising from 0 to 1 over the first `FADE_IN` of its run,
-/// and falling back to 0 over the last `FADE_OUT`.
+/// How opaque `announced` is at `now`: rising from 0 to 1 over the first `fade_in` of its run,
+/// and falling back to 0 over the last `fade_out` (`notice::Fade`).
 fn opacity(announced: &Announced, now: u64) -> f32 {
     let over = announced.over;
     if over.duration() == 0 {
@@ -151,8 +146,8 @@ fn opacity(announced: &Announced, now: u64) -> f32 {
     }
     #[expect(clippy::cast_precision_loss, reason = "a notice lasts seconds at most")]
     let through = (now.saturating_sub(over.from)) as f32 / over.duration() as f32;
-    (through / FADE_IN)
-        .min((1.0 - through) / FADE_OUT)
+    (through / announced.fade.fade_in)
+        .min((1.0 - through) / announced.fade.fade_out)
         .clamp(0.0, 1.0)
 }
 

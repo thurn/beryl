@@ -111,7 +111,7 @@
       "worst_frame_draw_calls": 12,
       "worst_frame_upload_bytes": 30480,
       "worst_frame_blended_area": 0.8876,
-      "handle_allocations": 2655,
+      "handle_allocations": 2658,
       "frame_allocations": 0,
       "worst_frame_instructions": 4131479,
       "total_instructions": 89998450

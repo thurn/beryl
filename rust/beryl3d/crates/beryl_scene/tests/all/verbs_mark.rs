@@ -293,10 +293,27 @@ fn a_permanent_picked_to_pay_turns_and_wears_a_tap_symbol() {
         sprites_of(after, sprites::OUTLINE.rect).is_empty(),
         "no outline"
     );
-    assert_eq!(
-        sprites_of(after, sprites::TAP.rect).len(),
-        1,
-        "a tap symbol"
+    let taps = sprites_of(after, sprites::TAP.rect);
+    assert_eq!(taps.len(), 1, "a tap symbol");
+    // The symbol lies over the card's face, which the mark lifts off the table, so that the
+    // card does not hide it from the depth test.
+    let tap = quad_point(taps[0], 0.0, 0.0);
+    let face = after
+        .draws
+        .iter()
+        .filter(|draw| draw.material == Material::Card as u8)
+        .map(|draw| quad_point(draw, 0.0, 0.0))
+        .min_by(|a, b| {
+            a.truncate()
+                .distance(tap.truncate())
+                .total_cmp(&b.truncate().distance(tap.truncate()))
+        })
+        .expect("the card is drawn");
+    assert!(
+        tap.z > face.z,
+        "the tap symbol at height {} lies over the paying card's face at {}",
+        tap.z,
+        face.z
     );
 }
 

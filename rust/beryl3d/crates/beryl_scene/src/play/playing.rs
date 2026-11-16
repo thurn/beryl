@@ -6,6 +6,7 @@ use beryl_protocol::script::{self, StepTiming, Table as Played};
 use super::compile::Compiled;
 use crate::hud::counts::Counts;
 use crate::light::{Lit, StreakRun};
+use crate::table::Motion;
 use crate::verbs::Interval;
 
 /// An update and the timings of its script's steps, compiled to play after the scripts before
@@ -44,6 +45,19 @@ pub(super) struct Playing {
 }
 
 impl Playing {
+    /// What moves on the table at `now` while this script plays, once its update is in hand.
+    pub(super) fn motion(&self, now: u64) -> Option<Motion<'_>> {
+        let update = self.update.as_ref()?;
+        Some(Motion {
+            tracks: &self.compiled.tracks,
+            ability_tracks: &self.compiled.ability_tracks,
+            t: self.clock(now),
+            finals: &self.compiled.finals,
+            view: &update.view,
+            turns: &self.compiled.turns,
+        })
+    }
+
     /// The time on the script's own clock at `now`.
     pub(super) fn clock(&self, now: u64) -> u64 {
         now.saturating_sub(self.start).saturating_mul(self.rate)

@@ -14,7 +14,7 @@
 //! has and allocates nothing.
 
 use beryl_protocol::protocol::{Counter, ObjectView, ZoneName};
-use glam::{Affine3A, Quat, Vec2, Vec3};
+use glam::{Affine3A, Quat, Vec2};
 
 use super::{CARD_HEIGHT, CARD_WIDTH};
 use crate::data::space::badges as data;
@@ -206,13 +206,9 @@ impl Badges {
         if object.zone != ZoneName::Battlefield || self.pieces.is_empty() {
             return;
         }
-        // The face's own plane, unturned, so that a face-down permanent wears its badges on
-        // its back as the web interface draws them.
-        let card = Affine3A::from_scale_rotation_translation(
-            Vec3::splat(on.pose.scale),
-            on.pose.rotation,
-            on.pose.position,
-        );
+        // The side that faces up, so that a face-down permanent wears its badges on its back
+        // as the web interface draws them, and a card turning over turns them with it.
+        let card = on.pose.upward();
         let mut left = BUDGET;
         let corner = Vec2::new(CARD_WIDTH, CARD_HEIGHT) / 2.0;
         if let Some((label, fill)) = plaque(object, face) {

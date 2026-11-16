@@ -3,13 +3,16 @@
 
 use crate::common::{MS, empty_frame, frame, show};
 use beryl_protocol::GameUpdate;
-use beryl_protocol::protocol::{CardType, ObjectId, Side, ZoneName};
+use beryl_protocol::protocol::{CardType, ObjectId, PowerToughness, Side, ZoneName};
 use beryl_protocol::script::{Act, Phase, StepTiming, Subject};
 use beryl_scene::agent::steps::{no_jumps, rest_equals_placement, step_times};
+use beryl_scene::input::{GlyphCell, GlyphKey};
 use beryl_scene::play::Show;
 use beryl_scene::play::record::ScriptRecord;
+use beryl_scene::table::badges::STYLE;
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
+use beryl_scene::text::{Glyphs, Text, glyph_key};
 use glam::{Vec2, Vec3};
 
 /// A strike's duration in both cases, in milliseconds, and its phases as shares of the step
@@ -51,6 +54,11 @@ fn strike(case: &str, at: Option<Subject>) -> Struck {
 
 /// As `strike`, and with `back` the Wall strikes the Angel back in the same beat.
 fn strikes(case: &str, at: Option<Subject>, back: bool) -> Struck {
+    strikes_dealing(case, at, back, 0)
+}
+
+/// As `strikes`, with the Wall marked with `damage` in the view the script leads to.
+fn strikes_dealing(case: &str, at: Option<Subject>, back: bool, damage: i32) -> Struck {
     let mut builder = ViewBuilder::new();
     let attacker = builder.card(ZoneName::Battlefield, Side::You, "Serra Angel");
     attacker.types = vec![CardType::Creature];
@@ -58,6 +66,11 @@ fn strikes(case: &str, at: Option<Subject>, back: bool) -> Struck {
     let attacker = attacker.slot;
     let blocker = builder.card(ZoneName::Battlefield, Side::Opponent, "Wall of Omens");
     blocker.types = vec![CardType::Creature];
+    // Its plaque shows its toughness less its damage.
+    blocker.pt = Some(PowerToughness {
+        power: 0,
+        toughness: 4,
+    });
     let blocker_record = blocker.clone();
     let blocker = blocker.slot;
     builder.script(ScriptBuilder::reset().build());
@@ -86,9 +99,17 @@ fn strikes(case: &str, at: Option<Subject>, back: bool) -> Struck {
         })
         .collect();
     let mut after = start.view.clone();
+    if let Some(wall) = after
+        .objects
+        .iter_mut()
+        .find(|object| object.slot == blocker)
+    {
+        wall.damage = damage;
+    }
     after.script = Some(ScriptBuilder::default().beat(acts).build());
     let mut show = show();
     show.record();
+    shape_badges(&mut show);
     show.push(Box::new(start), Vec::new());
     show.push(
         Box::new(GameUpdate {
@@ -110,6 +131,23 @@ fn strikes(case: &str, at: Option<Subject>, back: bool) -> Struck {
         attacker,
         blocker,
     }
+}
+
+/// Shapes the badges of `show`, with every glyph in the atlas, so that its plaques are drawn.
+fn shape_badges(show: &mut Show) {
+    const SCALE: f32 = 2.0;
+    let mut wanted = Glyphs::default();
+    let badges = show.badges_mut();
+    badges.shape(&mut Text::new(), &mut wanted, SCALE);
+    let cells: Vec<GlyphCell> = (0..2_000)
+        .map(|glyph| GlyphCell {
+            key: glyph_key(STYLE, SCALE, glyph),
+            rect: [glyph, 0, 16, 20],
+            bearing: [0, -20],
+        })
+        .collect();
+    badges.add(1, &cells);
+    let _: Vec<GlyphKey> = wanted.drain_wanted().collect();
 }
 
 impl Struck {
@@ -271,4 +309,31 @@ fn two_creatures_that_strike_each_other_meet_half_way() {
         "the Angel at {attacker} and the Wall at {blocker} stop short of the middle {middle}"
     );
     assert!(blocker.y < wall.y, "the Wall strikes too");
+}
+
+/// What a blow does shows as it lands, as the web stage's `cover` has it: until the hit the
+/// creature it strikes is drawn from the record the table showed before the script, and from
+/// the hit from the record the script leads to, whether it strikes back (and so moves) or
+/// stands still.
+#[test]
+fn the_damage_of_a_blow_shows_as_it_lands() {
+    for back in [false, true] {
+        let mut unhurt = strikes_dealing("blocked attacker", None, back, 0);
+        let mut hurt = strikes_dealing("blocked attacker", None, back, 3);
+        let mut scratch = empty_frame();
+        let mut draws = |struck: &mut Struck, share: f64| {
+            let now = struck.at(share);
+            frame(&mut struck.show, &mut scratch, now).draws
+        };
+        for share in [0.1, HIT - 0.05] {
+            assert!(
+                draws(&mut unhurt, share) == draws(&mut hurt, share),
+                "before its blow lands (at {share} of the strike, back {back}) the Wall shows no damage"
+            );
+        }
+        assert!(
+            draws(&mut unhurt, HIT + 0.05) != draws(&mut hurt, HIT + 0.05),
+            "once the blow has landed (back {back}) the Wall shows its damage"
+        );
+    }
 }

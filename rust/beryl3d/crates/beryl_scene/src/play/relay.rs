@@ -215,6 +215,7 @@ fn shift(compiled: &mut Compiled, end: u64) {
         effects,
         counts,
         sounds,
+        turns,
         ..
     } = compiled;
     // A test may plant a step of its own in the records (`Plant`), which no beat laid out and
@@ -279,6 +280,10 @@ fn shift(compiled: &mut Compiled, end: u64) {
         run.at += start(run.step);
     }
     settle(sounds, |run| run.at);
+    for turn in turns.iter_mut() {
+        turn.at += start(turn.step);
+    }
+    settle(turns, |turn| turn.at);
     compiled.end = end;
     std::mem::swap(&mut compiled.laid, &mut compiled.scratch);
 }

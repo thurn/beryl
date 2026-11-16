@@ -30,7 +30,7 @@ pub(crate) use place::{Group, NO_GROUP, Zones, arrival};
 pub use place::{Placement, ROWS, Rest, Rows, Scroll, place};
 pub(crate) use rows::NameIds;
 pub use rows::RowWindow;
-pub use scene::{ABILITY_IDS, Motion, Table};
+pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub(crate) use scene::{Objects, ability_track};
 pub use tray::{Held, TraySpace, tray};
 

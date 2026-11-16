@@ -210,3 +210,72 @@ fn fifty_arrows_hold_for_two_seconds_then_the_top_ability_resolves() {
     );
     assert_eq!(final_counts, (49, 24));
 }
+
+/// Every frame of the board that plays every verb at once is a function of its time: drawn
+/// after stepping every tick to a moment, or straight at that moment with every frame before
+/// it skipped, it is the same frame. Only the held card's spring, the open spans, the running
+/// effects and notices and the scroll offsets may be kept from one frame to the next, and each
+/// of those must still give the same picture however many frames came before.
+#[test]
+fn a_frame_of_every_verb_is_the_same_however_many_frames_came_before() {
+    use beryl_scene::driver::{Duration, Page};
+    use beryl_scene::frame::Frame;
+    let open = || -> Page {
+        beryl_inspect::pages::page(
+            "stress-verbs",
+            beryl_protocol::protocol::Side::You,
+            beryl_scene::agent::Layout::Desktop,
+            beryl_inspect::pages::DESKTOP_WINDOWS[0],
+        )
+        .unwrap()
+    };
+    let mut every = open();
+    let start = every.now();
+    // Every 35 ms through the script and a little past its end. 35 ms falls on no tick, so
+    // the skipping page draws times the ticking one only reaches as the end of a step.
+    let shown = |frame: &Frame| {
+        (
+            frame.draws.clone(),
+            frame.resolved.clone(),
+            frame.names.clone(),
+            frame.shake,
+            frame.opaque,
+            frame.layer,
+        )
+    };
+    let mut changes = 0;
+    let mut previous = None;
+    for at in (1..=60).map(|n| n * 35_000_000) {
+        every.step(Duration(start + at - every.now()));
+        let mut skipping = open();
+        skipping.set_tick(Duration(at));
+        skipping.step(Duration(at));
+        assert_eq!(every.now(), skipping.now());
+        let (a, b) = (shown(every.frame()), shown(skipping.frame()));
+        if a != b {
+            let first =
+                a.0.iter()
+                    .zip(&b.0)
+                    .position(|(x, y)| x != y)
+                    .map(|i| format!("draw {i}: {:?} vs {:?}", a.0[i], b.0[i]));
+            panic!(
+                "at {} ms the frame drawn every tick differs from the one drawn once: {} draws vs {}, {} elements vs {}, shake {:?} vs {:?}; first differing {first:?}",
+                at / 1_000_000,
+                a.0.len(),
+                b.0.len(),
+                a.1.len(),
+                b.1.len(),
+                a.3,
+                b.3,
+            );
+        }
+        if previous.as_ref().is_some_and(|previous| *previous != a.0) {
+            changes += 1;
+        }
+        previous = Some(a.0);
+    }
+    assert!(
+        changes > 30,
+        "the verbs move on most of the sampled frames: {changes}"
+    );
+}
