@@ -2,7 +2,7 @@
 //! the game's randomness, and the choices taken at its decisions, each an index taken modulo
 //! the decision's candidate count; it plays until its choices run out or it ends. proptest
 //! generates the choices, and when a game breaks the property (an invariant or a reference
-//! violated, a capacity run out, a panic) it shrinks them to the fewest that still break it
+//! violated or a panic) it shrinks them to the fewest that still break it
 //! and the test prints that game as a scenario to paste into a card's file.
 //! `BERYL_FUZZ_GAMES=<n>` plays more games, as `just fuzz` does.
 //!
@@ -18,8 +18,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use beryl_cards::CARDS;
 use beryl_cards::decks::fuzz_deck;
 use beryl_engine::{
-    Choice, Decision, DecisionKind, GameTable, Outcome, Profile, Replay, Scratch, Seat,
-    StallReason, State, Step, Stops, Zone, ZoneKey, apply, next,
+    Choice, Decision, DecisionKind, GameTable, Profile, Replay, Scratch, Seat, State, Step, Stops,
+    Zone, ZoneKey, apply, next,
 };
 use beryl_scenario::{
     Check, Live, Scenario, answer, describe, invariants, script, setup_source, source,
@@ -73,9 +73,11 @@ impl Game {
                 check(&t, &s)?;
                 let d = match step {
                     Step::Decide(d) => d,
-                    Step::Over(Outcome::Stalled(StallReason::Capacity)) => {
-                        return Err("a capacity ran out".to_owned());
-                    }
+                    // A game that outgrows `Small`'s lists goes on in `Large` in the app,
+                    // as a card exiling every other permanent its controller has can make
+                    // it do in a long game. `Check` reads only `Small` states, so the game
+                    // ends here; `games.rs` fuzzes the widening and holds `Large` to never
+                    // running out.
                     Step::Over(_) => return Ok(()),
                 };
                 if d.is_empty() {
