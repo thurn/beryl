@@ -621,23 +621,103 @@ fn a_card_played_from_the_middle_of_a_big_hand_is_seen_as_it_flies() {
         .as_mut()
         .expect("the flight has a script")
         .timing = vec![timed("land played", 315.0, 0.0, Curve::EaseIn, true)];
-    let mut messages = vec![
-        FixtureMessage::game_update(&before),
-        FixtureMessage::game_update(&after),
-    ];
-    messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
     let size = Size {
         width: 2560.0,
         height: 1080.0,
     };
-    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Desktop, size)
-        .expect("the views can be read");
-    let checked = page.check_all(Mode::EveryTick);
-    let unseen: Vec<&str> = checked
-        .faults
-        .iter()
-        .filter(|fault| fault.rule == Rule::StepShown)
-        .map(|fault| fault.message.as_str())
-        .collect();
+    let unseen = unseen_steps(&before, &after, Side::You, size);
     assert!(unseen.is_empty(), "{unseen:?}");
+}
+
+/// The "every step shown" faults of a recording of `before` and then `after`, played from
+/// `seat` in a window of `size` and checked at every tick. A flight's fault says its card was
+/// seen in fewer than `audit.seen` of the frames it flies in.
+fn unseen_steps(before: &GameUpdate, after: &GameUpdate, seat: Side, size: Size) -> Vec<String> {
+    let mut messages = vec![
+        FixtureMessage::game_update(before),
+        FixtureMessage::game_update(after),
+    ];
+    messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
+    let mut page = Page::new(Recording(messages).into(), seat, Layout::Desktop, size)
+        .expect("the views can be read");
+    page.check_all(Mode::EveryTick)
+        .faults
+        .into_iter()
+        .filter(|fault| fault.rule == Rule::StepShown)
+        .map(|fault| fault.message)
+        .collect()
+}
+
+/// The opponent's discard is seen for at least `audit.seen` of its flight in every desktop
+/// window. Their hand is held mostly above the window and their graveyard lies at its top right,
+/// so a flight along its own line in the table's space, between ends at very different depths,
+/// curves above the top edge on the window, where the card turns edge-on as it turns face up.
+#[test]
+fn the_opponents_discard_is_seen_as_it_flies_to_their_graveyard() {
+    let mut builder = ViewBuilder::new();
+    for side in [Side::You, Side::Opponent] {
+        for _ in 0..5 {
+            builder.card(ZoneName::Library, side, "Island");
+        }
+    }
+    // A full hand, face down to the viewer, so that the second card from the left flies far
+    // across the top of the window and turns over on its way.
+    let mut discarded = None;
+    for index in 0..7 {
+        let card = builder.card(ZoneName::Hand, Side::Opponent, "Island");
+        card.name = None;
+        if index == 1 {
+            discarded = Some(card.slot);
+        }
+    }
+    builder.script(ScriptBuilder::reset().build());
+    let before = builder.update();
+    let discarded = discarded.expect("the hand has a second card");
+    let mut after = flown(
+        &before,
+        discarded,
+        ZoneName::Hand,
+        ZoneName::Graveyard,
+        Why::Discard,
+    );
+    after
+        .view
+        .script
+        .as_mut()
+        .expect("the flight has a script")
+        .timing = vec![timed("discard", 165.0, 0.0, Curve::EaseOut, true)];
+    // The card comes back from the graveyard into the hand, as dredge brings one back.
+    let mut returned = flown(
+        &after,
+        discarded,
+        ZoneName::Graveyard,
+        ZoneName::Hand,
+        Why::Return,
+    );
+    returned
+        .view
+        .players
+        .opponent
+        .graveyard
+        .retain(|slot| *slot != discarded);
+    let script = returned
+        .view
+        .script
+        .as_mut()
+        .expect("the return has a script");
+    script.timing = vec![timed("return", 400.0, 0.0, Curve::EaseOut, true)];
+    let mut discarded_before = after.clone();
+    discarded_before.view.script = Some(ScriptBuilder::reset().build());
+    for (width, height) in [
+        (1440.0, 900.0),
+        (1600.0, 900.0),
+        (1920.0, 1080.0),
+        (2560.0, 1080.0),
+    ] {
+        let size = Size { width, height };
+        let unseen = unseen_steps(&before, &after, Side::You, size);
+        assert!(unseen.is_empty(), "discard at {width}x{height}: {unseen:?}");
+        let unseen = unseen_steps(&discarded_before, &returned, Side::You, size);
+        assert!(unseen.is_empty(), "return at {width}x{height}: {unseen:?}");
+    }
 }

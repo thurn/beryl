@@ -22,6 +22,9 @@
 //!   does a card no one can read that an effect puts in a hand from a library, farther.
 //! - An opponent's discard drops along the line from hand to graveyard. Other flights also
 //!   follow a straight line across the table.
+//! - Any straight or bowed flight that would carry its card's centre past the top or right edge
+//!   of the window is bowed down or left on the screen until it does not (`kept_in_window`):
+//!   the opponent's hand and their piles all lie along the top of the window.
 //!
 //! Flights that rise use `verbs.fly.arc` for their height at the middle of the step: every
 //! flight but a card's played or cast from the viewer's hand, a drawn card's or an opponent's
@@ -38,7 +41,7 @@
 
 use beryl_protocol::protocol::{Side, Why, ZoneName};
 use beryl_protocol::script::Act;
-use glam::{Quat, Vec3};
+use glam::{Quat, Vec2, Vec3};
 
 use super::{Interval, StepIn, StepOut};
 use crate::data::space;
@@ -482,5 +485,83 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
             ..between
         },
     };
-    out.segment(subject, Segment { turning, ..segment });
+    let segment = kept_in_window(Segment { turning, ..segment }, step.places.camera());
+    out.segment(subject, segment);
+}
+
+/// How many moments of a flight `kept_in_window` looks at.
+const LOOKS: u16 = 24;
+
+/// How much of its bow a moment must have for `kept_in_window` to push the card from there:
+/// near either end a bow moves the card hardly at all, and the ends are where the card rests.
+const PUSHED_FROM: f32 = 0.2;
+
+/// `segment`, bowed down or left on the screen as far as it takes for its card's centre to stay
+/// inside the top and right edges of the window's safe area, so that at least half the card is
+/// seen, at every moment of its flight but those near its ends. The opponent's hand is held
+/// mostly above the window, and their graveyard, exile and library lie along the top right, so a
+/// flight between them that keeps to its own line in the table's space is mostly out of sight:
+/// its ends lie at very different depths, so that line curves above the top edge on the window.
+/// A segment whose card stays inside comes back as it was. Only straight and bowed paths are
+/// pushed, since the others already keep to the window by their own rules.
+fn kept_in_window(segment: Segment, camera: &Camera) -> Segment {
+    let [right, up, back] = camera.axes();
+    let mut bow = match segment.shape {
+        Shape::Line => Bow {
+            offset: Vec3::ZERO,
+            sharpness: 1.0,
+            lean: 0.0,
+            axis: back,
+        },
+        Shape::Bowed(bow) | Shape::BowedNear { bow, .. } => bow,
+        _ => return segment,
+    };
+    let with = |bow: Bow| Segment {
+        shape: match segment.shape {
+            Shape::BowedNear { lift, .. } => Shape::BowedNear { bow, lift },
+            _ => Shape::Bowed(bow),
+        },
+        ..segment
+    };
+    let (size, insets) = (camera.window.size, camera.window.safe_area);
+    let mut pushed = false;
+    // The window's projection is not linear in depth, so a push is measured again after it is
+    // made, and made again for what is still short.
+    for _ in 0..3 {
+        let bowed = with(bow);
+        let (mut down, mut left) = (0.0_f32, 0.0_f32);
+        for look in 1..LOOKS {
+            let elapsed = f32::from(look) / f32::from(LOOKS);
+            let arch = bow.arch(segment.curve.ease(elapsed));
+            if arch < PUSHED_FROM {
+                continue;
+            }
+            #[expect(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "a step lasts seconds, far below f64's exact range"
+            )]
+            let t = segment.start + (segment.duration as f64 * f64::from(elapsed)) as u64;
+            let pose = bowed.pose_at(t);
+            let (corners, _) = camera.card_box(&pose);
+            let (low, high) = corners
+                .iter()
+                .fold((Vec2::INFINITY, Vec2::NEG_INFINITY), |(low, high), c| {
+                    (low.min(*c), high.max(*c))
+                });
+            let centre = (low + high) / 2.0;
+            let points = camera.points_per_millimetre(pose.position);
+            let short_down = insets.top - centre.y;
+            let short_left = centre.x - (size.width - insets.right);
+            down = down.max(short_down / points / arch);
+            left = left.max(short_left / points / arch);
+        }
+        if down <= 0.0 && left <= 0.0 {
+            break;
+        }
+        bow.offset -= up * down.max(0.0) + right * left.max(0.0);
+        pushed = true;
+    }
+    if pushed { with(bow) } else { segment }
 }
