@@ -26,7 +26,7 @@ use glam::Vec2;
 pub use camera::{Camera, CameraData};
 pub use look::{Dress, Look};
 pub use pile::{PILE_IDS, PileShown, pile_name};
-pub(crate) use place::{Group, NO_GROUP, Zones};
+pub(crate) use place::{Group, NO_GROUP, Zones, arrival};
 pub use place::{Placement, ROWS, Rest, Rows, Scroll, place};
 pub(crate) use rows::NameIds;
 pub use rows::RowWindow;

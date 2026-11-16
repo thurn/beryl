@@ -423,55 +423,8 @@
       "crowded": 1,
       "step-shown": 31
     },
-    "b3d:table-board/you/1440x900": {
-      "rest-placement": 34
-    },
-    "b3d:table-board/you/1600x900": {
-      "rest-placement": 34
-    },
-    "b3d:table-board/you/1920x1080": {
-      "rest-placement": 34
-    },
-    "b3d:table-board/you/2560x1080": {
-      "rest-placement": 34
-    },
-    "b3d:table-crowded/you/1440x900": {
-      "rest-placement": 50
-    },
-    "b3d:table-crowded/you/1600x900": {
-      "rest-placement": 50
-    },
-    "b3d:table-crowded/you/1920x1080": {
-      "rest-placement": 50
-    },
     "b3d:table-crowded/you/2560x1080": {
-      "rest-placement": 50,
-      "step-shown": 1
-    },
-    "b3d:table-drawn/you/1440x900": {
-      "rest-placement": 64
-    },
-    "b3d:table-drawn/you/1600x900": {
-      "rest-placement": 64
-    },
-    "b3d:table-drawn/you/1920x1080": {
-      "rest-placement": 64
-    },
-    "b3d:table-drawn/you/2560x1080": {
-      "rest-placement": 64,
-      "step-shown": 1
-    },
-    "b3d:table-stack/you/1440x900": {
-      "rest-placement": 50
-    },
-    "b3d:table-stack/you/1600x900": {
-      "rest-placement": 50
-    },
-    "b3d:table-stack/you/1920x1080": {
-      "rest-placement": 50
-    },
-    "b3d:table-stack/you/2560x1080": {
-      "rest-placement": 50
+      "step-shown": 2
     },
     "b3d:teferi-hero-of-dominaria/8s-emblem-triggers-once-for-each-card-of-a-multiple-draw/opponent/2560x1080": {
       "step-shown": 1

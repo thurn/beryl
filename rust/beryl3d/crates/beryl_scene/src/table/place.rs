@@ -10,6 +10,7 @@ use beryl_protocol::protocol::{
 use beryl_protocol::script::{Piles, Table as Played};
 
 mod indexed;
+pub(crate) use indexed::arrival;
 mod merged;
 
 use super::hands::hand;
@@ -395,6 +396,9 @@ pub(crate) struct Zones<'a> {
     piles: [[&'a [ObjectId]; 2]; 2],
     /// The cards the opponent is handling, which rest lifted off their pile (`lifted`).
     pub(crate) handling: Option<lifted::Handled>,
+    /// For the table a script plays over, the order in which its hands and exile piles list
+    /// their cards, by slot (`arrived`); none to list them by slot.
+    arrival: Option<&'a [u32]>,
 }
 
 impl<'a> Zones<'a> {
@@ -436,6 +440,7 @@ impl<'a> Zones<'a> {
             stack,
             piles: [player(&view.players.you), player(&view.players.opponent)],
             handling: None,
+            arrival: None,
         };
         let handled = lifted::Handled::of_view(&zones, view.handling);
         zones.handled(handled)
@@ -461,6 +466,7 @@ impl<'a> Zones<'a> {
             ),
             piles: [piles(&table.you), piles(&table.opponent)],
             handling: None,
+            arrival: None,
         }
     }
 
@@ -492,9 +498,12 @@ impl<'a> Zones<'a> {
 
     /// The objects in one side's `zone`, in the order the table lists them.
     fn in_zone(&self, side: Side, zone: ZoneName) -> Vec<&'a ObjectView> {
-        self.objects()
+        let mut found: Vec<&'a ObjectView> = self
+            .objects()
             .filter(|object| object.zone == zone && side_of(object) == side)
-            .collect()
+            .collect();
+        self.in_arrival_order(&mut found);
+        found
     }
 
     /// The objects in `slots`, in that order, leaving out any slot the table holds nothing in.
@@ -579,6 +588,12 @@ fn all_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
         if let Some(group) = zones.group_of(object) {
             all[group.index()].push(object);
         }
+    }
+    for group in Group::ALL
+        .into_iter()
+        .filter(|group| group.in_object_order())
+    {
+        zones.in_arrival_order(&mut all[group.index()]);
     }
     all[Group::Stack.index()] = zones.listed(&spells(&zones.stack));
     all

@@ -142,6 +142,9 @@ pub(crate) struct Motion<'a> {
     members: Vec<Vec<ObjectId>>,
     /// The group each slot was last placed in, by `Group::index`, indexed by slot.
     groups: Vec<Option<usize>>,
+    /// The order in which the hands and exile piles of `played` list their cards, by slot
+    /// (`table::arrival`).
+    arrival: Vec<u32>,
     /// `played`'s objects and their groups by slot, kept up to date step by step, for a script
     /// with steps enough to repay building it (`index::LEAST_STEPS`).
     index: Option<Index<'a>>,
@@ -222,6 +225,7 @@ impl<'a> Motion<'a> {
             table,
             names: NameIds::of(&before.objects),
             played: played.clone(),
+            arrival: crate::table::arrival(before, after),
             rests,
             members,
             groups,
@@ -269,7 +273,8 @@ impl<'a> Motion<'a> {
         dirty[Group::Stack.index()] = true;
         self.look.follow((act, timed), &self.played, &mut dirty);
         let zones = index::step_zones(self.index.as_mut(), &self.played, act, &self.touched)
-            .handled(self.look.handled());
+            .handled(self.look.handled())
+            .arrived(&self.arrival);
         if self.first {
             for group in Group::ALL
                 .into_iter()
@@ -307,7 +312,9 @@ impl<'a> Motion<'a> {
         if self.whole {
             return self.table.placement(view, abilities);
         }
-        let played = Zones::of_table(&self.played).handled(self.look.handled());
+        let played = Zones::of_table(&self.played)
+            .handled(self.look.handled())
+            .arrived(&self.arrival);
         self.table
             .placement_reusing(&Zones::of_view(view, abilities), (&played, &self.rests))
     }
@@ -409,9 +416,11 @@ impl<'a> Motion<'a> {
             assert!(
                 same(
                     &self.rests,
-                    &self
-                        .table
-                        .placement_of(&Zones::of_table(&self.played).handled(self.look.handled()))
+                    &self.table.placement_of(
+                        &Zones::of_table(&self.played)
+                            .handled(self.look.handled())
+                            .arrived(&self.arrival)
+                    )
                 ),
                 "placing only the groups a step changed gives what placing every group does"
             );
