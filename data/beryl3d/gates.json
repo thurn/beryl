@@ -103,9 +103,9 @@
   "tiers": {
     "baseline": {
       "fragments": {
-        "stress-255": 1.0,
-        "stress-1024": 1.0,
-        "verbs-zones": 1.0,
+        "stress-255": 1.037073,
+        "stress-1024": 1.037109,
+        "verbs-zones": 1.002685,
         "pay-default": 1.012234
       }
     }
