@@ -17,6 +17,7 @@ These commands are in neither the lane nor the sweep: milestone 4 adds them.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import shutil
@@ -30,6 +31,7 @@ from typing import Any
 
 from .. import checks, mobile, paths as repo_paths, system
 from . import app, paths
+from .command import Command
 from .phone_log import (
     android_touch_faults,
     lifecycle_faults,
@@ -721,3 +723,75 @@ def checked(
             raise
 
     return wrapped
+
+
+def _later(module: str, name: str) -> Any:
+    """`name` of the sibling `module`, looked up when called: those modules import this one."""
+
+    def call(*args: Any) -> Any:
+        return getattr(importlib.import_module(f".{module}", __package__), name)(*args)
+
+    return call
+
+
+COMMANDS: tuple[Command, ...] = (
+    Command(
+        "ios-smoke",
+        "replays a recording in the app's iOS host in the headless Simulator, and saves the screen",
+        (
+            (
+                "just b3d ios-smoke --touch",
+                "touch, rotate and idle a live game through a UI test",
+            ),
+            (
+                "just b3d ios-smoke --lifecycle",
+                "suspend and resume a replay, trim memory and exercise platform requests",
+            ),
+        ),
+        checked(_later("ios_smoke", "run_ios_smoke")),
+        _later("ios_smoke", "ios_smoke_arguments"),
+    ),
+    Command(
+        "android-smoke",
+        "replays a recording in the app's Android host in a headless emulator, on Vulkan or GLES",
+        (
+            (
+                "just b3d android-smoke --touch",
+                "replay verbs-zones on Vulkan and check touch, Back, rotation and idle",
+            ),
+            (
+                "just b3d android-smoke --lifecycle --gles",
+                "check Android lifecycle and requests on OpenGL ES 3.0",
+            ),
+        ),
+        checked(run_android_smoke),
+        android_smoke_arguments,
+    ),
+    Command(
+        "phone-search",
+        "plays a live game against mcts-hidden on the iOS Simulator and the Android emulator, and"
+        " compares late frames while the AI searched and while it did not",
+        (
+            ("just b3d phone-search", "iOS, then Android on Vulkan"),
+            (
+                "just b3d phone-search --gles",
+                "iOS, then Android on Vulkan and on OpenGL ES 3.0",
+            ),
+        ),
+        checked(_later("phone_search", "run_phone_search")),
+        _later("phone_search", "phone_search_arguments"),
+    ),
+    Command(
+        "ios-device",
+        "installs the app's iOS host on the paired iPhone and replays two recordings, when asked",
+        (
+            (
+                "just b3d ios-device --user-asked",
+                "the user asked for it: install and replay",
+            ),
+            ("just b3d ios-device", "a person's run, which needs no flag"),
+        ),
+        checked(run_ios_device),
+        ios_device_arguments,
+    ),
+)

@@ -13,6 +13,7 @@ import shlex
 
 from .. import bench
 from . import paths
+from .command import Command
 
 NAME = "beryl3d-bench"
 # The machine's size. The gates build with several compilers at once (`JOBS_SCRIPT`) and the
@@ -84,3 +85,20 @@ def vm_arguments(parser: argparse.ArgumentParser) -> None:
         nargs=argparse.REMAINDER,
         help="a command to run in the machine, from the checkout's rust/ directory",
     )
+
+
+COMMANDS: tuple[Command, ...] = (
+    Command(
+        "vm",
+        "creates and provisions the beryl3d-bench count machine; runs a command there",
+        (
+            ("just b3d vm", "create, start and provision the machine"),
+            (
+                "just b3d vm vulkaninfo --summary",
+                "run a command in the machine, from rust/",
+            ),
+        ),
+        run_vm,
+        vm_arguments,
+    ),
+)

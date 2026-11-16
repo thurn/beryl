@@ -160,6 +160,16 @@ def test_the_listing_names_every_text_command() -> None:
         assert f"\n  {name} " in listed
 
 
+def test_the_listing_names_every_command_once_and_includes_the_phone_commands() -> None:
+    names = [command.name for command in cli.COMMANDS]
+    assert len(names) == len(set(names))
+    listed = cli.listing()
+    for name in names:
+        assert f"\n  {name} " in listed
+    for name in ("ios-smoke", "android-smoke", "phone-search", "ios-device"):
+        assert name in names
+
+
 def test_picture_commands_hand_every_argument_to_the_b3d_render_program(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

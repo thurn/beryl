@@ -16,7 +16,6 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 
 from .. import caches, cargo_pool, deadline, system, tokens, warm
@@ -25,37 +24,20 @@ from . import (
     app,
     camera,
     gate,
-    ios_smoke,
     lane,
     live,
     paths,
     phone,
-    phone_search,
     stand_in,
     sweep,
     test_fit,
     timeline,
     vm,
 )
+from .command import Command
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
 USAGE = 2
-
-
-@dataclass(frozen=True)
-class Command:
-    name: str
-    # The one line `just b3d` lists it with.
-    summary: str
-    # Two command lines, each with what it does, for `--help`; none for a passthrough command,
-    # whose program prints its own.
-    examples: tuple[tuple[str, str], ...]
-    run: Callable[[argparse.Namespace], int]
-    # Adds the command's own arguments to its parser.
-    arguments: Callable[[argparse.ArgumentParser], None] = lambda _parser: None
-    # Whether the command's arguments, `--help` among them, go unread to a program that parses
-    # them and prints its own first line (the `b3d` program's text commands).
-    passthrough: bool = False
 
 
 def run_lane(_args: argparse.Namespace) -> int:
@@ -386,7 +368,11 @@ def run_fmt(args: argparse.Namespace) -> int:
     return cargo(["fmt", "--all", *(["--check"] if args.check else [])])
 
 
-COMMANDS: tuple[Command, ...] = (
+# The commands of the modules that register their own, listed after this module's, in order. A
+# module adds a command by writing `COMMANDS` and adding its name here.
+MODULES = (phone, camera, vm)
+
+OWN_COMMANDS: tuple[Command, ...] = (
     b3d_command(
         "list",
         "every recording whose name starts with a prefix, with its length and views",
@@ -636,91 +622,11 @@ COMMANDS: tuple[Command, ...] = (
         app.run_frames,
         app.frames_arguments,
     ),
-    Command(
-        "ios-smoke",
-        "replays a recording in the app's iOS host in the headless Simulator, and saves the screen",
-        (
-            (
-                "just b3d ios-smoke --touch",
-                "touch, rotate and idle a live game through a UI test",
-            ),
-            (
-                "just b3d ios-smoke --lifecycle",
-                "suspend and resume a replay, trim memory and exercise platform requests",
-            ),
-        ),
-        phone.checked(ios_smoke.run_ios_smoke),
-        ios_smoke.ios_smoke_arguments,
-    ),
-    Command(
-        "android-smoke",
-        "replays a recording in the app's Android host in a headless emulator, on Vulkan or GLES",
-        (
-            (
-                "just b3d android-smoke --touch",
-                "replay verbs-zones on Vulkan and check touch, Back, rotation and idle",
-            ),
-            (
-                "just b3d android-smoke --lifecycle --gles",
-                "check Android lifecycle and requests on OpenGL ES 3.0",
-            ),
-        ),
-        phone.checked(phone.run_android_smoke),
-        phone.android_smoke_arguments,
-    ),
-    Command(
-        "phone-search",
-        "plays a live game against mcts-hidden on the iOS Simulator and the Android emulator, and"
-        " compares late frames while the AI searched and while it did not",
-        (
-            ("just b3d phone-search", "iOS, then Android on Vulkan"),
-            (
-                "just b3d phone-search --gles",
-                "iOS, then Android on Vulkan and on OpenGL ES 3.0",
-            ),
-        ),
-        phone.checked(phone_search.run_phone_search),
-        phone_search.phone_search_arguments,
-    ),
-    Command(
-        "ios-device",
-        "installs the app's iOS host on the paired iPhone and replays two recordings, when asked",
-        (
-            (
-                "just b3d ios-device --user-asked",
-                "the user asked for it: install and replay",
-            ),
-            ("just b3d ios-device", "a person's run, which needs no flag"),
-        ),
-        phone.checked(phone.run_ios_device),
-        phone.ios_device_arguments,
-    ),
-    Command(
-        "camera-fit",
-        "solves the desktop camera's pitch and field of view from cards measured in Arena",
-        (
-            ("just b3d camera-fit", "fit data/beryl3d/camera-fit.json"),
-            (
-                "just b3d camera-fit --file cards.json",
-                "fit another file of measured cards",
-            ),
-        ),
-        camera.run_camera_fit,
-        camera.camera_fit_arguments,
-    ),
-    Command(
-        "vm",
-        "creates and provisions the beryl3d-bench count machine; runs a command there",
-        (
-            ("just b3d vm", "create, start and provision the machine"),
-            (
-                "just b3d vm vulkaninfo --summary",
-                "run a command in the machine, from rust/",
-            ),
-        ),
-        vm.run_vm,
-        vm.vm_arguments,
-    ),
+)
+
+COMMANDS: tuple[Command, ...] = (
+    *OWN_COMMANDS,
+    *(command for module in MODULES for command in module.COMMANDS),
 )
 
 

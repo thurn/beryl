@@ -35,6 +35,8 @@ from pathlib import Path
 
 from .. import paths
 
+from .command import Command
+
 # The frame the corners are measured in.
 FRAME_WIDTH = 1920.0
 FRAME_HEIGHT = 1080.0
@@ -383,3 +385,20 @@ def camera_fit_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--file", help="the measured cards, by default data/beryl3d/camera-fit.json"
     )
+
+
+COMMANDS: tuple[Command, ...] = (
+    Command(
+        "camera-fit",
+        "solves the desktop camera's pitch and field of view from cards measured in Arena",
+        (
+            ("just b3d camera-fit", "fit data/beryl3d/camera-fit.json"),
+            (
+                "just b3d camera-fit --file cards.json",
+                "fit another file of measured cards",
+            ),
+        ),
+        run_camera_fit,
+        camera_fit_arguments,
+    ),
+)
