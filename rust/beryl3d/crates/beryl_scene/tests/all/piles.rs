@@ -11,7 +11,7 @@ use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::motion::pose_at;
 use beryl_scene::pose::{Pose, Segment};
 use beryl_scene::table::{
-    Camera, DESKTOP, Held, LAYER, Table, TraySpace, landing, tray, tray_boxes,
+    Camera, DESKTOP, Held, LAYER, Table, TrayKind, TraySpace, landing, tray, tray_boxes,
 };
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, object, timing};
 use beryl_scene::{Client, Config};
@@ -261,13 +261,20 @@ fn a_card_let_go_in_a_box_lands_before_the_first_card_whose_middle_is_past_it() 
     let held = Held {
         piles: vec![vec![ObjectId(1)], vec![ObjectId(2), ObjectId(3)]],
         rooms: vec![None, None],
+        kind: TrayKind::Boxes,
     };
     let boxes = tray_boxes(&held, space, size);
     assert_eq!(boxes.len(), 2, "a box for each pile");
     let second = boxes[1];
     let y = second.y + second.height / 2.0;
     assert_eq!(
-        landing(&held, space, size, Vec2::new(second.x + 2.0, y)),
+        landing(
+            &held,
+            space,
+            size,
+            Vec2::new(second.x + 2.0, y),
+            ObjectId(1)
+        ),
         Some((1, 0)),
         "at the second box's left edge: before its first card"
     );
@@ -276,19 +283,21 @@ fn a_card_let_go_in_a_box_lands_before_the_first_card_whose_middle_is_past_it() 
             &held,
             space,
             size,
-            Vec2::new(second.x + second.width - 2.0, y)
+            Vec2::new(second.x + second.width - 2.0, y),
+            ObjectId(1)
         ),
         Some((1, 2)),
         "at its right edge: at its end"
     );
     assert_eq!(
-        landing(&held, space, size, Vec2::new(10.0, 10.0)),
+        landing(&held, space, size, Vec2::new(10.0, 10.0), ObjectId(1)),
         None,
         "outside both boxes: nowhere"
     );
     let one = Held {
         piles: vec![vec![ObjectId(1), ObjectId(2)]],
         rooms: Vec::new(),
+        kind: TrayKind::Boxes,
     };
     assert!(
         tray_boxes(&one, space, size).is_empty(),
@@ -296,7 +305,7 @@ fn a_card_let_go_in_a_box_lands_before_the_first_card_whose_middle_is_past_it() 
     );
     let centre = Vec2::new(size.width / 2.0, size.height / 2.0);
     assert_eq!(
-        landing(&one, space, size, centre),
+        landing(&one, space, size, centre, ObjectId(1)),
         None,
         "nor any order to give"
     );

@@ -15,7 +15,7 @@ use super::Client;
 use crate::light::Aim;
 use crate::pose::Pose;
 use crate::prompts;
-use crate::table::Held;
+use crate::table::{Held, TrayPoses};
 
 /// What the prompt's own steps depend on besides the prompt, now and when `prompts::own` last
 /// ran (beside `Client::was`).
@@ -33,7 +33,7 @@ pub(super) struct Owned {
     pub(super) mouse: Option<Vec2>,
     /// The cards the open prompt's tray holds up and where each lies, and where the cards the
     /// tray holds now go back to in their zones.
-    lift: Option<(Held, Vec<(ObjectId, Pose)>)>,
+    lift: Option<(Held, TrayPoses)>,
     rests: Vec<(ObjectId, Pose, bool)>,
     /// While the client keeps a record, the times at which what the prompts draw changes: the
     /// start, middle and end of each of their steps and of each move of the tray's cards, in
@@ -198,8 +198,9 @@ impl Client {
         self.suggesting.now = suggesting;
         self.own_due = true;
         let piles = (self.prompt.as_ref()).and_then(|(_, prompt)| prompts::Piles::of(prompt));
+        let up = self.show.table().held();
         self.owned.lift = piles.map(|piles| {
-            let held = piles.held();
+            let held = piles.held(up);
             let poses = self.show.table().tray_poses(&held);
             (held, poses)
         });

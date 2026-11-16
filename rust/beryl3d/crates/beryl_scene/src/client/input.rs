@@ -354,8 +354,13 @@ impl Client {
         else {
             return;
         };
-        let space = self.show.table().layout().tray;
-        let Some((pile, before)) = table::landing(&held.held(), space, self.window.size, at) else {
+        let (table, size) = (self.show.table(), self.window.size);
+        let held = held.held(table.held());
+        let Ok(card) = u16::try_from(slot) else {
+            return;
+        };
+        let landed = table::landing(&held, table.layout().tray, size, at, ObjectId(card));
+        let Some((pile, before)) = landed else {
             return;
         };
         if piles.get(pile).is_none_or(|pile| pile.closed) {

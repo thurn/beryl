@@ -1,9 +1,15 @@
 //! The prompt shape `Split`: cards dealt out between two piles, such as a scry's top and bottom
-//! of the library. The two piles are held up in the tray as two boxes side by side, each under
-//! the session's name for it, as the web interface's `TrayUnder` (`ui/src/stage/Tray.tsx`)
-//! draws them. A click on a card sends it to the other pile, and a card carried into a box is
-//! dropped there before the card it was let go in front of (`Client::drop_held`). Which
-//! cards may move, and where each lies after a click, is the session's: its reply is drawn.
+//! of the library. The two piles are held up in the tray (`table::tray_layout`) as two boxes
+//! side by side, each under the session's name for it, as the web interface's `TrayUnder`
+//! (`ui/src/stage/Tray.tsx`) draws them. A click on a card sends it to the other pile, and a
+//! card carried into a box is dropped there before the card it was let go in front of
+//! (`Client::drop_held`). Which cards may move, and where each lies after a click, is the
+//! session's: its reply is drawn.
+//!
+//! Cards picked out of the library from among the rest lie in one fan with no boxes, the picked
+//! ones marked by the prompt. Cards put back from the hand onto the library lie as the library
+//! and the hand, and their piles' boxes are drawn with their names and no edges, as the web's
+//! `TrayPiles` draws them; the table draws the library's card backs under the cards on it.
 //!
 //! The flat layer is drawn over the table, so a box is its rim and its name alone, and lets the
 //! pointer through to the cards in it: the web's translucent fill would cover them.
@@ -24,7 +30,8 @@ const LABEL_SHARE: f32 = 0.5;
 const LABEL_LEAST: f32 = 12.0;
 
 /// What the flat layer shows for `prompt`: the prompt bar, and a box round each pile's place in
-/// the tray, its name in the strip over its cards.
+/// the tray, its name in the strip over its cards; none for a fan, and none of their edges for
+/// a put-back.
 #[expect(
     clippy::unnecessary_wraps,
     reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
@@ -44,23 +51,26 @@ pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
         line_height: 1.0,
         ..type_style::BODY
     };
-    let boxes = tray_boxes(&held.held(), space, size);
+    let edged = !held.put_back();
+    let boxes = tray_boxes(&held.held(None), space, size);
     Some(bar.children(piles.iter().zip(boxes).map(|(pile, area)| {
         let mut pile_box = row()
             .name(&pile.label)
             .width(area.width)
             .height(area.height)
-            .border((color::TRAY_PILE_RIM, size::TRAY_PILE_BORDER))
-            .radius(size::TRAY_PILE_RADIUS)
-            .passes(true)
-            .child(
-                text(&pile.label)
-                    .style(label)
-                    .color(color::GOLD)
-                    .text_align(TextAlign::Center)
-                    .grow(1.0)
-                    .height(heading),
-            );
+            .passes(true);
+        if edged {
+            pile_box = (pile_box.border((color::TRAY_PILE_RIM, size::TRAY_PILE_BORDER)))
+                .radius(size::TRAY_PILE_RADIUS);
+        }
+        pile_box = pile_box.child(
+            text(&pile.label)
+                .style(label)
+                .color(color::GOLD)
+                .text_align(TextAlign::Center)
+                .grow(1.0)
+                .height(heading),
+        );
         pile_box.anchor = Some(Anchor::Point(Vec2::new(area.x, area.y), Vec2::ZERO));
         pile_box
     })))

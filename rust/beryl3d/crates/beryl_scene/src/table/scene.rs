@@ -16,7 +16,8 @@ use super::pile::PileShown;
 use super::place::{Placement, Rest, RowFits, Rows, Scroll};
 use super::shadows::Floors;
 use super::shown::Shown;
-use super::tray::{Held, TrayMotion};
+use super::tray::TrayMotion;
+use super::tray_layout::Held;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window};
 use crate::effects::{self, Effect};
 use crate::faces::{CARD_BACK, Faces};
@@ -349,6 +350,7 @@ impl Table {
             );
         }
         self.write_piles(builder);
+        self.write_tray_library(back, builder);
         self.write_abilities(view, motion, faces, (back, dress), builder);
         self.write_revealed(faces, (back, dress), builder);
         let cloth = Affine3A::from_scale_rotation_translation(

@@ -139,3 +139,96 @@ fn a_click_on_a_pile_of_identical_tokens_is_on_its_top_token() {
         "the reply puts the token's ability on the stack"
     );
 }
+
+/// `shape-split`'s fifth prompt is Stock Up: of the five cards looked at, put two into the hand
+/// and the rest on the bottom. The session's piles are "Hand" and "Bottom", and the five cards
+/// open in "Bottom": the Plains #4, Mana Drain #10, Oust #20, Damn #19 and Reprieve #5.
+const STOCK_UP: usize = 5;
+
+#[test]
+fn a_look_that_takes_cards_out_of_the_library_holds_them_in_one_fan_with_no_boxes() {
+    let mut page = at_prompt("shape-split", STOCK_UP);
+    for pile in ["region \"Hand\"", "region \"Bottom\""] {
+        assert!(page.try_find(pile).is_err(), "no box for {pile}");
+    }
+    let cards = ["#4", "#10", "#20", "#19", "#5"].map(|slot| {
+        let locator = format!("card {slot}");
+        (page.find(&locator).rect(), locator)
+    });
+    let mut by_x = cards.clone();
+    by_x.sort_by(|a, b| a.0.x.total_cmp(&b.0.x));
+    for pair in by_x.windows(2) {
+        let ((left, a), (right, b)) = (&pair[0], &pair[1]);
+        assert!(
+            right.x < left.x + left.width,
+            "{b} overlaps {a}, its neighbor in the fan: {left:?} and {right:?}"
+        );
+        assert!(
+            (middle(*right).y - middle(*left).y).abs() < left.height / 4.0,
+            "the fan lies in one row: {left:?} and {right:?}"
+        );
+    }
+    // Clicked, a card is picked where it lies: the fan keeps its order.
+    page.press("card #10");
+    page.step(Duration::from_millis(600));
+    for (before, locator) in &cards {
+        let after = page.find(locator).rect();
+        assert!(
+            middle(after).distance(middle(*before)) < 1.0,
+            "{locator} stays in its place in the fan: {before:?} then {after:?}"
+        );
+    }
+}
+
+/// `shape-split`'s seventh prompt is Jace's Brainstorm: put two cards from the hand on top of
+/// the library. The session's piles are "Top", empty, and "Hand", which holds the six cards in
+/// hand: Counterspell #3, Tundra #6, Counterspell #9, Mana Drain #10, Island #17 and Oust #20.
+const BRAINSTORM: usize = 7;
+
+#[test]
+fn a_card_put_back_from_the_hand_is_dropped_on_the_librarys_top_place() {
+    let mut page = at_prompt("shape-split", BRAINSTORM);
+    let library = page.find("region \"Top\"").rect();
+    let hand = page.find("region \"Hand\"").rect();
+    assert!(
+        library.x + library.width <= hand.x + 1.0,
+        "the library lies left of the hand: {library:?} and {hand:?}"
+    );
+    // As the player did: a click on the first Counterspell puts it on the library.
+    page.press("card #3");
+    page.step(Duration::from_millis(600));
+    // The pointer, left where the Counterspell lay, would raise the Tundra now there over the
+    // fan: move it off the cards first.
+    page.move_to(Vec2::new(SIZE.width / 2.0, 20.0));
+    page.still();
+    let counterspell = page.find("card #3").rect();
+    assert!(
+        inside(counterspell, library),
+        "the reply puts it on the library: {counterspell:?} in {library:?}"
+    );
+    // Then Mana Drain, held by its left edge, which the Island over it leaves uncovered, and
+    // let go a name bar below the Counterspell, where the library's top card lies:
+    // `Click::Drop` into pile 0 at 0, the drop the recording answers.
+    let drain = page.find("card #10").rect();
+    assert!(
+        inside(drain, hand),
+        "Mana Drain lies in the hand's fan: {drain:?}"
+    );
+    let grip = Vec2::new(drain.x + drain.width * 0.15, drain.y + drain.height / 2.0);
+    let top_place = middle(counterspell) + Vec2::new(0.0, 0.165 * counterspell.height);
+    page.drag_between(grip, top_place);
+    page.step(Duration::from_millis(600));
+    page.move_to(Vec2::new(SIZE.width / 2.0, 20.0));
+    page.still();
+    let drain = page.find("card #10").rect();
+    let counterspell = page.find("card #3").rect();
+    assert!(
+        inside(drain, library),
+        "the reply puts Mana Drain on the library: {drain:?} in {library:?}"
+    );
+    assert!(
+        drain.y > counterspell.y,
+        "Mana Drain is the library's top card, lowest in its column: {drain:?} and \
+         {counterspell:?}"
+    );
+}

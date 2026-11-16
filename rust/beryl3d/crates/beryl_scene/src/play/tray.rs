@@ -9,7 +9,7 @@ use super::Show;
 use crate::input::Rect;
 use crate::light::Lit;
 use crate::pose::{Curve, Pose};
-use crate::table::{CARD_WIDTH, Held, Moves};
+use crate::table::{CARD_WIDTH, Held, Moves, TrayPoses};
 
 impl Show {
     /// The latest view, which says where each object lies, and the spans the table shows, for
@@ -27,13 +27,7 @@ impl Show {
 
     /// Holds up the cards of `held`, each going to its place in `poses` over `over`, in
     /// nanoseconds since the client started (`Table::lift`).
-    pub fn lift_tray(
-        &mut self,
-        held: Held,
-        poses: Vec<(ObjectId, Pose)>,
-        over: (u64, u64),
-        curve: Curve,
-    ) {
+    pub fn lift_tray(&mut self, held: Held, poses: TrayPoses, over: (u64, u64), curve: Curve) {
         self.table.lift(held, poses, over, curve);
     }
 
