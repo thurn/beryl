@@ -7,7 +7,7 @@
     { "name": "settings", "screen": "settings", "recording": "screen/settings", "built": false },
     { "name": "bug report", "screen": "bug-report", "recording": "screen/bug-report", "built": false },
     { "name": "gallery", "screen": "gallery", "recording": "screen/gallery", "built": false },
-    { "name": "testing", "screen": "testing", "recording": "screen/testing", "built": false },
+    { "name": "testing", "screen": "testing", "recording": "screen/testing", "built": true },
     { "name": "manual table", "screen": "table", "recording": "screen/table", "built": false }
   ]
 }

@@ -53,6 +53,9 @@ pub enum Input {
     /// The agents a person may play, in the order they are offered (`beryl_session::agents`).
     /// The client shows the start screen when they arrive before any view of a game.
     Agents(Vec<AgentView>),
+    /// The names of the recordings the testing screen lists, sorted. Only a tools build of the
+    /// app sends it, so a release build's client has no testing screen to go to.
+    Recordings(Vec<String>),
     /// Nothing changes. A thread other than the host's sends it to wake a host that sleeps until
     /// an event, so that the host looks at what the thread left for it (`Feed::wake`).
     Nudge,

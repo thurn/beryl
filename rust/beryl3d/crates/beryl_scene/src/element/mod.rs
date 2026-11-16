@@ -8,7 +8,7 @@ mod style;
 use std::ops::Range;
 
 use beryl_protocol::prompt::{ButtonId, Click};
-use beryl_protocol::protocol::Step;
+use beryl_protocol::protocol::{Side, Step};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
@@ -55,6 +55,11 @@ pub enum Press {
     FairDeal,
     /// Save every bug report to one file (`Request::ExportBugs`).
     ExportBugs,
+    /// Replay the `recording`th recording the host listed (`Input::Recordings`), counting
+    /// from 0, from the seat the testing screen's toggle shows.
+    Replay { recording: u16 },
+    /// Set the seat the testing screen replays recordings from.
+    Seat(Side),
     /// A row of an open menu, counting from 0 over all its groups.
     Menu(MenuId, u16),
     /// Give the keys to an element, such as a text field.

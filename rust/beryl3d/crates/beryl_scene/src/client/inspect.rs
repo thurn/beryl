@@ -57,6 +57,8 @@ impl Client {
             sheet: self.sheet,
             agents: &self.agents,
             start: &self.start,
+            recordings: &self.recordings,
+            seat: self.seat,
             fields: &self.fields,
             inspected: self.inspector.shown.as_ref(),
             faces: Some(self.show.faces().list()),

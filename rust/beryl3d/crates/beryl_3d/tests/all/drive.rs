@@ -10,6 +10,7 @@ use beryl_scene::agent::{TreeOptions, tree};
 use beryl_scene::frame::{Frame, Wake};
 use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::{Client, Config};
+use beryl_session::protocol::Side;
 
 /// A 60 Hz display's interval, in nanoseconds.
 const INTERVAL: u64 = 16_666_667;
@@ -63,7 +64,7 @@ impl Draw for Trees {
 /// ends, and returns every frame drawn and how the script ended.
 fn play(script: &str, ticks: u64) -> (Vec<String>, Option<Result<(), String>>) {
     let drive = Drive::parse("test", script).expect("the script reads");
-    let fixture = Fixture::new("verbs-zones").expect("the recording reads");
+    let fixture = Fixture::new("verbs-zones", Side::You).expect("the recording reads");
     let mut frames = FrameLoop::new(Client::new(Config::LARGEST), TestTicks)
         .with_feed(Box::new(Replay(fixture)))
         .driven(Some(drive));

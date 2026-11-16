@@ -100,7 +100,23 @@ impl Recording {
 /// screen or the sheet (`Screen::name`, `Sheet::name`).
 pub const OPEN: &str = "beryl3d-open";
 
+/// The event that a recording made with no engine, such as the testing screen's, holds to give
+/// the client the names of the recordings a tools build lists (`Input::Recordings`). Its
+/// payload is an array of the names.
+pub const RECORDINGS: &str = "beryl3d-recordings";
+
 impl Recording {
+    /// The names its `RECORDINGS` event lists, if it has one.
+    #[must_use]
+    pub fn recordings(&self) -> Option<Vec<String>> {
+        self.0.iter().find_map(|message| match message {
+            FixtureMessage::Event { event, payload } if event == RECORDINGS => {
+                Vec::<String>::deserialize(payload).ok()
+            }
+            _ => None,
+        })
+    }
+
     /// The presses that its `OPEN` events stand for, in order.
     ///
     /// # Panics

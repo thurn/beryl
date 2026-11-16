@@ -34,6 +34,7 @@ use crate::widgets::Fields;
 mod input;
 mod inspect;
 mod own;
+mod testing;
 
 use inspect::Inspector;
 
@@ -99,6 +100,10 @@ pub struct Client {
     /// The screen the first view of all opens, if the client is on the start screen only
     /// because the agents arrived before any view: the game, which the host resumed or started.
     first_view_opens: Option<Screen>,
+    /// The names of the recordings the testing screen lists, as the host listed them.
+    recordings: Vec<String>,
+    /// The seat the testing screen replays recordings from.
+    seat: Side,
     /// The session the latest view came from, which stop and concede commands name.
     session: Option<SessionId>,
     /// The music last asked of the host, so that it is asked for again only when it changes.
@@ -182,6 +187,8 @@ impl Client {
             agents: Vec::new(),
             start: StartForm::default(),
             first_view_opens: None,
+            recordings: Vec::new(),
+            seat: Side::You,
             session: None,
             music: None,
             own_timings: own_timings(),
@@ -289,6 +296,10 @@ impl Client {
                 self.show_screen();
             }
             Input::Agents(agents) => self.take_agents(agents),
+            Input::Recordings(recordings) => {
+                self.recordings = recordings;
+                self.show_screen();
+            }
             Input::Nudge => {}
             Input::Pointer(pointer) => self.point(pointer),
             Input::Key(key) => self.key(key),
@@ -448,6 +459,8 @@ impl Client {
             sheet: self.sheet,
             agents: &self.agents,
             start: &self.start,
+            recordings: &self.recordings,
+            seat: self.seat,
             fields: &self.fields,
             inspected: None,
             faces: None,
@@ -545,6 +558,8 @@ impl Client {
                 self.show_screen();
             }
             Press::ExportBugs => self.requests.push_back(Request::ExportBugs),
+            Press::Replay { recording } => self.replay(recording),
+            Press::Seat(seat) => self.set_seat(seat),
             Press::Focus(id) => self.layer.focus(Some(id)),
             Press::Field(id, ref text) => self.keep_field(id, text),
             // No screen opens a menu or a viewer yet, so there is nothing for these to act on:

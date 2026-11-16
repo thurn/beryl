@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use beryl_protocol::ipc::ChooseRequest;
 use beryl_protocol::prompt::{ClickReply, ClickRequest};
+use beryl_protocol::protocol::Side;
 use beryl_protocol::{DecisionId, SessionError, SessionId, StartRequest, StopsSetting};
 
 use crate::frame::ElementId;
@@ -68,6 +69,13 @@ pub enum Request {
         music: u8,
         effects: u8,
         muted: bool,
+    },
+    /// Replay the recording `name` from its start as `seat` sees it, in place of whatever
+    /// feeds the client now, as the app's `--fixture` does. Sent from the testing screen, which
+    /// only a tools build reaches.
+    Replay {
+        name: String,
+        seat: Side,
     },
 }
 

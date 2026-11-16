@@ -203,6 +203,8 @@ mod milestone_three {
                 fair: false,
                 confirming: false,
             },
+            recordings: &[],
+            seat: Side::You,
             fields: &FIELDS,
             inspected: None,
             faces: None,

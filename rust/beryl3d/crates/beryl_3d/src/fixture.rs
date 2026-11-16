@@ -34,14 +34,14 @@ pub struct Fixture {
 }
 
 impl Fixture {
-    /// The recording `name` from the recordings pack, as the first seat sees it.
+    /// The recording `name` from the recordings pack, as `seat` sees it.
     ///
     /// # Errors
     ///
-    /// When there is no such recording, or it cannot be read.
+    /// When there is no such recording for `seat`, or it cannot be read.
     #[cfg(feature = "tools")]
-    pub fn new(name: &str) -> Result<Self, String> {
-        Self::replaying(&pages::recording(name, Side::You)?)
+    pub fn new(name: &str, seat: Side) -> Result<Self, String> {
+        Self::replaying(&pages::recording(name, seat)?)
     }
 
     /// The recording `name` from the file `<name>.json` in `dir`, as `write` left it.

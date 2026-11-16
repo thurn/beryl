@@ -30,7 +30,7 @@ use glam::Vec2;
 pub use action::{Action, key_code};
 pub use check::{Checked, Mode, StepMoment, TimelineStep};
 pub use moment::{Duration, Moment, Name, Offset, ParseError};
-pub use recording::{Answer, OPEN, Recording, Responses, plays_on};
+pub use recording::{Answer, OPEN, RECORDINGS, Recording, Responses, plays_on};
 
 use self::cues::Cues;
 use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
@@ -550,6 +550,9 @@ impl Page {
         }
         for ready in self.glyphs.clone() {
             self.give(Input::Assets(ready));
+        }
+        if let Some(names) = self.recording.recordings() {
+            self.give(Input::Recordings(names));
         }
         for press in self.recording.opens() {
             self.client.press(&press);

@@ -100,6 +100,11 @@ pub struct ScreenIn<'a> {
     pub agents: &'a [AgentView],
     /// What the person has chosen on the start screen.
     pub start: &'a StartForm,
+    /// The names of the recordings the testing screen lists, as the host listed them: none
+    /// outside a tools build.
+    pub recordings: &'a [String],
+    /// The seat the testing screen replays recordings from.
+    pub seat: Side,
     /// What each text field holds, by its name.
     pub fields: &'a Fields,
     /// The card the pointer is over that the inspector shows, if any (`inspect::inspector`).

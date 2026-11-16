@@ -800,6 +800,7 @@ pub enum Input {
     Lifecycle(Lifecycle),                    // suspended, resumed, low memory
     Tier(Tier),                              // Baseline or Enhanced
     Reply(Reply),                            // the session's answer to a command
+    Recordings(Vec<String>),                 // a tools build's recordings, for the testing screen
 }
 
 /// What the client asks of the session: one variant for each function of
@@ -838,8 +839,18 @@ pub enum Request {
     Share { path: PathBuf },
     Haptic(Haptic),
     OpenUrl(String),
+    Replay { name: String, seat: Side },     // the testing screen's press on a recording
 }
 ```
+
+The testing screen exists only in a tools build of the desktop app (the `tools`
+feature of `beryl_3d`). That build sends `Input::Recordings` at startup with the
+name of every recording in the recordings pack, and the start screen answers the
+key T with the testing screen once some are listed. The screen filters the names
+by what is typed in its field, and a press on one asks for `Request::Replay`,
+which the app answers by replaying that recording from its start, as `--fixture`
+does, from the seat the screen's toggle shows. A release build sends no
+recordings, so its client never shows the screen.
 
 What a worker tells the client core when it finishes. The pixels themselves go
 to the renderer, and the client core learns only where they are:

@@ -156,7 +156,8 @@ pub fn in_progress(view: Option<&beryl_protocol::PlayerView>) -> bool {
     })
 }
 
-/// What the flat layer shows on the screen.
+/// What the flat layer shows on the screen. In a tools build of the app, which lists the
+/// recordings (`ScreenIn::recordings`), the key T opens the testing screen.
 #[must_use]
 pub fn start(input: &ScreenIn) -> Element {
     let form = input.start;
@@ -226,7 +227,7 @@ pub fn start(input: &ScreenIn) -> Element {
     };
     // The layer draws a screen's top element as a panel unless its style says otherwise; this
     // one fills the window and only holds the panel and the corner, so it is clear.
-    column()
+    let screen = column()
         .name("start")
         .background([0; 4])
         .border(([0; 4], 0.0))
@@ -236,7 +237,14 @@ pub fn start(input: &ScreenIn) -> Element {
         .justify_content(Justify::Center)
         .child(panel)
         .child(corner())
-        .shortcut("Enter", enter)
+        .shortcut("Enter", enter);
+    // In a tools build of the app, which lists the recordings, the key T opens the testing
+    // screen.
+    if input.recordings.is_empty() {
+        screen
+    } else {
+        screen.shortcut("T", Press::Open(Screen::Testing))
+    }
 }
 
 /// The seed's label and text field, holding `state`, drawn in ember unless `ok`.

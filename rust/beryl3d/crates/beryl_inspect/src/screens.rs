@@ -7,7 +7,7 @@ use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, LIST_AGENTS};
 use beryl_protocol::protocol::PlayerState;
 use beryl_protocol::script::Reset;
 use beryl_protocol::{AgentView, GameUpdate, PlayerView, SessionId};
-use beryl_scene::driver::OPEN;
+use beryl_scene::driver::{OPEN, RECORDINGS};
 use beryl_scene::testing;
 
 /// What every screen recording's name starts with.
@@ -74,6 +74,12 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         FixtureMessage::response(CARD_RECORDS, &CardRecords::none()),
         FixtureMessage::response(LIST_AGENTS, &agents()),
     ];
+    if opened == "testing" {
+        messages.push(FixtureMessage::Event {
+            event: RECORDINGS.to_owned(),
+            payload: crate::recordings::listed().unwrap_or_default().into(),
+        });
+    }
     messages.extend(opens.into_iter().map(|opened| FixtureMessage::Event {
         event: OPEN.to_owned(),
         payload: opened.into(),

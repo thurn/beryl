@@ -14,6 +14,8 @@ use beryl_scene::command::Request;
 use beryl_scene::frame::Wake;
 use beryl_scene::input::{Input, Lifecycle, Size};
 use beryl_scene::{Client, Config};
+#[cfg(feature = "tools")]
+use beryl_session::protocol::Side;
 use beryl_session::protocol::Status;
 use beryl_session::script::Verb;
 
@@ -111,6 +113,20 @@ impl AppFeed {
         }
         self.source = Some(source(options, inbox)?);
         Ok(())
+    }
+
+    /// Replays the recording `name` from its start as `seat` sees it, in place of the game or
+    /// the recording that fed the client until now: the testing screen's press on a recording.
+    /// A recording that cannot be had leaves the source as it was, and says why.
+    #[cfg(feature = "tools")]
+    fn replay(&mut self, name: &str, seat: Side) {
+        match Fixture::new(name, seat) {
+            Ok(fixture) => {
+                self.source = Some(Source::Fixture(fixture));
+                self.ended = false;
+            }
+            Err(error) => eprintln!("beryl3d: {error}"),
+        }
     }
 
     /// Gives the client an input from the feed itself, noting what the view says first.
@@ -256,6 +272,8 @@ impl Feed for AppFeed {
                     saver.save(*settings);
                 }
             }
+            #[cfg(feature = "tools")]
+            Request::Replay { name, seat } => self.replay(name, *seat),
             _ => {}
         }
     }
@@ -442,6 +460,12 @@ pub fn run(options: &Options) -> Result<Finished, String> {
     if let Some(settings) = settings {
         client.handle(Input::Settings(settings));
     }
+    // A tools build lists the recordings, so its start screen offers the testing screen.
+    #[cfg(feature = "tools")]
+    match beryl_inspect::recordings::listed() {
+        Ok(names) => client.handle(Input::Recordings(names)),
+        Err(error) => eprintln!("beryl3d: the testing screen has no recordings: {error}"),
+    }
     let hosted = match options.window {
         Window::None => {
             let host = Windowless::new(WindowlessOptions {
@@ -506,7 +530,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
 fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
     #[cfg(feature = "tools")]
     if let Some(name) = &options.fixture {
-        return Fixture::new(name).map(Source::Fixture);
+        return Fixture::new(name, Side::You).map(Source::Fixture);
     }
     #[cfg(not(feature = "tools"))]
     let _ = options;

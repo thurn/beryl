@@ -94,6 +94,18 @@ pub fn names() -> Result<Vec<(String, Seat)>, String> {
     Ok(names)
 }
 
+/// The name of every recording, each once whatever seats it has, sorted: the list the testing
+/// screen shows (`Input::Recordings`).
+///
+/// # Errors
+///
+/// When the pack cannot be built or read.
+pub fn listed() -> Result<Vec<String>, String> {
+    let mut names: Vec<String> = names()?.into_iter().map(|(name, _)| name).collect();
+    names.dedup();
+    Ok(names)
+}
+
 /// A guess at how long the recording `name` takes to play for `seat`, for running the longest
 /// first: the size of its deflated messages, or the most for a stress board, whose battlefield
 /// is at the engine's capacity. Zero when there is no such recording.
