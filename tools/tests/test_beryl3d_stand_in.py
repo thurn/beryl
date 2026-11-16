@@ -88,3 +88,9 @@ def test_the_board_counts_life_piles_and_cards_by_place_not_position() -> None:
     assert stand_in.board(moved) == board
     hurt = stand_in.parse_tree(DISCARD.replace('"You 20"', '"You 17"'))
     assert stand_in.board(hurt) != board
+    gone = stand_in.parse_tree(
+        DISCARD.replace(
+            "  layer\n", '    card "Portable Hole" #9 nowhere.yours 1,1 2x2\n  layer\n'
+        )
+    )
+    assert stand_in.board(gone) == board

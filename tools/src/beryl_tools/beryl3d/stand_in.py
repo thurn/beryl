@@ -162,10 +162,17 @@ def prompt_key(tree: Tree) -> tuple[str, ...]:
     )
 
 
+def nowhere(place: str) -> bool:
+    """Whether `place` is `nowhere`, where a card goes that has left every zone of the game: a
+    resumed client never shows one there, so it is no part of the board."""
+    return place.split(".")[0] == "nowhere"
+
+
 def board(tree: Tree) -> Counter[str]:
     """What must be the same after a resume: the life totals and pile counts (players and
-    texts), and each card by its name, or its id when it is face down, and place. The tree
-    shows no turn number, so the cards in each zone stand for it."""
+    texts), and each card by its name, or its id when it is face down, and place, leaving out
+    cards `nowhere`. The tree shows no turn number, so the cards in each zone stand for it.
+    """
     seen: Counter[str] = Counter()
     for element in tree.elements:
         words = (element.name or "").split()
@@ -174,7 +181,7 @@ def board(tree: Tree) -> Counter[str]:
         )
         if element.role == "player" or counted:
             seen[f"{element.role} {element.name}"] += 1
-        elif element.role == "card" and element.place:
+        elif element.role == "card" and element.place and not nowhere(element.place):
             seen[f"card {element.name or '#' + str(element.id)} {element.place}"] += 1
     return seen
 
