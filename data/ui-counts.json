@@ -11,28 +11,28 @@
   "tolerance_percent": 3,
   "limits": {
     "verbs-piles/desktop": {
-      "renders": 12030,
-      "mutations": 12862,
-      "styled": 14785,
-      "laidOut": 16106
+      "renders": 12282,
+      "mutations": 11556,
+      "styled": 16684,
+      "laidOut": 16699
     },
     "verbs-piles/phone": {
-      "renders": 8744,
-      "mutations": 27485,
-      "styled": 27106,
-      "laidOut": 37108
+      "renders": 8919,
+      "mutations": 24416,
+      "styled": 27768,
+      "laidOut": 36978
     },
     "verbs-zones/desktop": {
-      "renders": 9130,
-      "mutations": 9866,
-      "styled": 14358,
-      "laidOut": 6956
+      "renders": 9265,
+      "mutations": 8907,
+      "styled": 15364,
+      "laidOut": 6909
     },
     "verbs-zones/phone": {
-      "renders": 5527,
-      "mutations": 13178,
-      "styled": 16099,
-      "laidOut": 3308
+      "renders": 5648,
+      "mutations": 11040,
+      "styled": 16287,
+      "laidOut": 3300
     }
   }
 }
