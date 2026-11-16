@@ -272,11 +272,13 @@ export function ManaPool({
   pulse = 0,
   counters,
   adjust,
+  remove,
 }: {
   pool: Pool;
   pulse?: number;
   counters?: NamedCounter[];
   adjust?(name: string, event: MouseEvent<HTMLElement>): void;
+  remove?(name: string, event: MouseEvent<HTMLElement>): void;
 }) {
   const [held, setHeld] = useState<{ pool: Pool; pulse: number }>();
   useEffect(() => {
@@ -291,19 +293,40 @@ export function ManaPool({
   const symbols = shown
     ? POOL_SYMBOLS.filter(([k]) => adjust || shown[k] > 0)
     : [];
-  const counterButton = (name: string, count: number, content: ReactNode) => (
-    <button
-      key={name}
-      type="button"
-      className="manual-counter-button"
-      aria-label={`${name} counter: ${count}`}
-      data-counter={name}
-      onClick={(event) => adjust?.(name, event)}
-      onContextMenu={(event) => adjust?.(name, event)}
-    >
-      {content}
-    </button>
-  );
+  const counterButton = (name: string, count: number, content: ReactNode) => {
+    const add = (
+      <button
+        key={name}
+        type="button"
+        className="manual-counter-button"
+        aria-label={
+          remove
+            ? `Add ${name}, current count ${count}`
+            : `${name} counter: ${count}`
+        }
+        data-counter={name}
+        onClick={(event) => adjust?.(name, event)}
+        onContextMenu={(event) => adjust?.(name, event)}
+      >
+        {content}
+      </button>
+    );
+    return remove ? (
+      <div className="manual-counter-pair" key={name}>
+        {add}
+        <button
+          type="button"
+          className="manual-counter-button"
+          aria-label={`Remove ${name}`}
+          onClick={(event) => remove(name, event)}
+        >
+          −
+        </button>
+      </div>
+    ) : (
+      add
+    );
+  };
   const mana =
     shown && symbols.length > 0 ? (
       <div

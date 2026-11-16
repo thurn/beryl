@@ -77,17 +77,13 @@ await check(
     async (page) => {
         await startTable(page, deck, [moveLand]);
         const [land] = field(await tableView());
-        // Let the phone finish laying out the table before comparing its
-        // existing mana control faults with the open sheet.
-        await page.clock.runFor(500);
-        const boardFaults = await phoneFaults(page);
         await hold(page, card(page, land.slot));
         await sheet(page).locator(".table-menu-preview .card-full").waitFor();
         assert.deepEqual(await clippedText(page), []);
         assert.deepEqual(await screenFaults(page), []);
         assert.deepEqual(await crowdedControls(page), []);
         assert.deepEqual(await stageFaults(page), []);
-        assert.deepEqual(await phoneFaults(page), boardFaults);
+        assert.deepEqual(await phoneFaults(page), []);
         const view = await clickTable(page, row(page, "Tap"), { tap: true });
         assert.equal(field(view)[0].tapped, true);
 
@@ -162,6 +158,56 @@ await check(
         await bar.getByRole("button", { name: "Done" }).tap();
         await bar.waitFor({ state: "hidden" });
         assert.equal(await page.locator(".manual-selection-mark").count(), 0);
+    },
+    phone,
+);
+
+// The audits cover both the strip and sheet. The host result verifies each
+// touch dispatches the right adjustment.
+await check(
+    "manual table touch adjusts mana and counters",
+    async (page) => {
+        await startTable(page, deck, [
+            moveLand,
+            (view) => ({
+                move: { ...moveLand(view).move, to: { graveyard: 0 } },
+            }),
+            { player_counter: { seat: 0, name: "W", set: 2 } },
+            { player_counter: { seat: 0, name: "energy", set: 1 } },
+        ]);
+        const mana = page.getByRole("button", { name: /^Your mana:/ });
+        const panel = page.getByRole("dialog", {
+            name: "Your mana and counters",
+        });
+        const counter = (name) => panel.locator(`[data-counter="${name}"]`);
+        const remove = (name) =>
+            panel.getByRole("button", { name: `Remove ${name}`, exact: true });
+
+        for (const viewport of [phone.viewport, { width: 375, height: 647 }]) {
+            await page.setViewportSize(viewport);
+            await page.clock.runFor(500);
+            assert.deepEqual(await phoneFaults(page), []);
+            assert.deepEqual(await crowdedControls(page), []);
+            await mana.tap();
+            assert.deepEqual(await phoneFaults(page), []);
+            assert.deepEqual(await crowdedControls(page), []);
+            assert.deepEqual(await clippedText(page), []);
+            assert.deepEqual(await screenFaults(page), []);
+
+            let view = await clickTable(page, counter("W"), { tap: true });
+            assert.equal(view.players.you.mana.white, 3);
+            assert.equal(await mana.getAttribute("aria-label"), "Your mana: 3");
+            view = await clickTable(page, remove("W"), { tap: true });
+            assert.equal(view.players.you.mana.white, 2);
+
+            view = await clickTable(page, counter("energy"), { tap: true });
+            assert.equal(view.players.you.namedCounters[0].count, 2);
+            view = await clickTable(page, remove("energy"), { tap: true });
+            assert.equal(view.players.you.namedCounters[0].count, 1);
+            await panel.getByRole("button", { name: "Done" }).tap();
+            await panel.waitFor({ state: "hidden" });
+            assert.equal(await mana.getAttribute("aria-label"), "Your mana: 2");
+        }
     },
     phone,
 );

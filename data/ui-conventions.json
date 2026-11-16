@@ -842,7 +842,7 @@
     {
       "kind": "no-equivalent",
       "name": "Manual table: a click acts",
-      "rule": "Click to tap or untap a permanent, play a card, resolve a stack entry, draw from the library, or open a graveyard or exile viewer. Shift-click plays face down. Click a life total to edit it in the number prompt. Click a mana symbol or a player counter to add one, or right-click to remove one. The press shows immediately. A refused action shakes what was clicked."
+      "rule": "Click to tap or untap a permanent, play a card, resolve a stack entry, draw from the library, or open a graveyard or exile viewer. Shift-click plays face down. Click a life total to edit it in the number prompt. Click a mana symbol or a player counter to add one, or right-click to remove one. On phones, the mana total beside the life orb opens a sheet. Tap a symbol or counter to add one, or its minus button to remove one. The press shows immediately. A refused action shakes what was clicked."
     },
     {
       "kind": "no-equivalent",

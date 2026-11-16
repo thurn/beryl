@@ -14,6 +14,7 @@ import {
 } from "react";
 import { requestBugReport } from "../components/BugReport";
 import { Button } from "../components/Controls";
+import { ManaPool } from "../components/Player";
 import type {
   LogLine,
   ObjectView,
@@ -51,6 +52,7 @@ import {
 } from "../mobile/layout";
 import { SelectionMark, useTableSelection } from "../table/Selection";
 import type { TableClient } from "../table/client";
+import { counterControls } from "../table/controls";
 import type { Name, Resting } from "./layout.ts";
 import { announced, endWords, scryWords, stepAnnouncement } from "./notices.ts";
 import type { ScriptStage } from "./stage.ts";
@@ -178,6 +180,45 @@ function Sheet({
         {children}
       </div>
     </div>
+  );
+}
+
+export function ManaSheet({
+  player,
+  client,
+  side,
+  onClose,
+}: {
+  player: PlayerView["players"][Side];
+  client?: TableClient;
+  side: Side;
+  onClose(): void;
+}) {
+  return (
+    <Sheet
+      label={
+        side === "you"
+          ? "Your mana and counters"
+          : "Opponent’s mana and counters"
+      }
+      className="phone-sheet phone-mana-sheet"
+      onClose={onClose}
+    >
+      <div className="phone-viewer-header">
+        <h2 className="phone-sheet-title">Mana</h2>
+        <Button variant="secondary" size="small" onClick={onClose}>
+          Done
+        </Button>
+      </div>
+      <div className="phone-mana-list">
+        <ManaPool
+          pool={player.mana}
+          counters={player.namedCounters}
+          adjust={counterControls(client, side)}
+          remove={counterControls(client, side, true)}
+        />
+      </div>
+    </Sheet>
   );
 }
 

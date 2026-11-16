@@ -25,6 +25,7 @@ import { ManaPool, Thinking } from "../components/Player";
 import type {
   ObjectView,
   PlayerView,
+  Side,
   StopsSetting,
 } from "../generated/protocol";
 import { incoming } from "../game/combat";
@@ -45,6 +46,7 @@ import { phone, phoneRevealed, phoneTray } from "./phone.ts";
 import {
   Inspected,
   LogSheet,
+  ManaSheet,
   Menu,
   MiddleEnd,
   Notices,
@@ -62,7 +64,7 @@ import {
 } from "../table/Selection";
 import type { TableClient } from "../table/client";
 import { TablePileViewer, usePileViewer } from "../table/TableViewer";
-import { counterControls, pickPile } from "../table/controls";
+import { pickPile } from "../table/controls";
 import { type BoardStage, pageStage } from "./playback.ts";
 import { Entries, Shares, Ways } from "./Choose.tsx";
 import {
@@ -174,7 +176,7 @@ export function PhoneStageBoard({
   const piles = useMemo(() => (table ? phonePiles(table) : []), [table]);
   const manualPile = usePileViewer(client);
   const [sheet, setSheet] = useState<
-    "menu" | "log" | Pick<PhonePile, "side" | "zone">
+    "menu" | "log" | { mana: Side } | Pick<PhonePile, "side" | "zone">
   >();
   const blockers = tableLog?.blocked;
   useLayoutEffect(() => {
@@ -246,7 +248,7 @@ export function PhoneStageBoard({
         )
       : inspecting;
   const pile =
-    typeof sheet === "object"
+    typeof sheet === "object" && "zone" in sheet
       ? piles.find((p) => p.side === sheet.side && p.zone === sheet.zone)
       : undefined;
   const decision =
@@ -284,19 +286,19 @@ export function PhoneStageBoard({
             >
               <Piles side={side} view={landed(table, resting)} tops={false} />
               <div className="phone-pool" data-side={side}>
-                <ManaPool
-                  pool={table.players[side].mana}
-                  pulse={side === "you" ? lost : 0}
-                  counters={
-                    client ? table.players[side].namedCounters : undefined
-                  }
-                  adjust={counterControls(
-                    side === "you" || view.table?.seats === 2
-                      ? client
-                      : undefined,
-                    side,
-                  )}
-                />
+                {client ? (
+                  <ManaButton
+                    player={table.players[side]}
+                    side={side}
+                    editable={side === "you" || view.table?.seats === 2}
+                    onOpen={() => setSheet({ mana: side })}
+                  />
+                ) : (
+                  <ManaPool
+                    pool={table.players[side].mana}
+                    pulse={side === "you" ? lost : 0}
+                  />
+                )}
               </div>
               <Orb
                 side={side}
@@ -506,6 +508,16 @@ export function PhoneStageBoard({
           phone
         />
       )}
+      {typeof sheet === "object" && "mana" in sheet && table && (
+        <ManaSheet
+          player={table.players[sheet.mana]}
+          client={
+            sheet.mana === "you" || view.table?.seats === 2 ? client : undefined
+          }
+          side={sheet.mana}
+          onClose={() => setSheet(undefined)}
+        />
+      )}
       {pile && (
         <PileSheet
           pile={pile}
@@ -548,5 +560,38 @@ export function PhoneStageBoard({
         </div>
       )}
     </>
+  );
+}
+
+function ManaButton({
+  player,
+  side,
+  editable,
+  onOpen,
+}: {
+  player: PlayerView["players"][Side];
+  side: Side;
+  editable: boolean;
+  onOpen(): void;
+}) {
+  const total = Object.values(player.mana).reduce(
+    (sum, count) => sum + count,
+    0,
+  );
+  if (!editable && !total && !player.namedCounters?.some(({ count }) => count))
+    return null;
+  return (
+    <button
+      type="button"
+      className="icon-button phone-mana-button"
+      aria-label={
+        side === "you" ? `Your mana: ${total}` : `Opponent’s mana: ${total}`
+      }
+      aria-haspopup="dialog"
+      onClick={onOpen}
+    >
+      Mana
+      <b>{total}</b>
+    </button>
   );
 }

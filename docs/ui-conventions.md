@@ -252,8 +252,9 @@ restore the old behavior.
   card, resolve a stack entry, draw from the library, or open a graveyard or
   exile viewer. Shift-click plays face down. Click a life total to edit it in
   the number prompt. Click a mana symbol or a player counter to add one, or
-  right-click to remove one. The press shows immediately. A refused action
-  shakes what was clicked.
+  right-click to remove one. On phones, the mana total beside the life orb opens
+  a sheet. Tap a symbol or counter to add one, or its minus button to remove
+  one. The press shows immediately. A refused action shakes what was clicked.
 - **Manual table log.** The log shows numbered entries with their actors.
   Rewinding strikes the entries after the chosen line. Cmd+Z and the undo button
   undo the viewer's latest action. Cmd+Shift+D undoes the viewer's latest draw.

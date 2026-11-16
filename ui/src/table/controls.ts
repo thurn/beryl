@@ -39,11 +39,16 @@ export function pickViewerCard(
   else client.click(target, keys(event), event.currentTarget);
 }
 
-export function counterControls(client: TableClient | undefined, side: Side) {
+export function counterControls(
+  client: TableClient | undefined,
+  side: Side,
+  remove = false,
+) {
   if (!client) return undefined;
   return (counter: string, event: ClickEvent) => {
     const target = { kind: "counter" as const, side, counter };
-    if (event.type === "contextmenu") secondaryControl(client, target, event);
+    if (remove || event.type === "contextmenu")
+      secondaryControl(client, target, event);
     else client.click(target, keys(event), event.currentTarget);
   };
 }
