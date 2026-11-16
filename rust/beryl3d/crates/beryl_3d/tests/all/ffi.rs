@@ -52,6 +52,11 @@ fn the_header_test_calls_every_function_and_its_valid_inputs_arrive() {
         );
     };
     let log = frame_log::read(log).expect("the frame log reads");
+    assert!(
+        (log.run.display_hz - 120.0).abs() < 1e-3,
+        "the log counts frames against the display rate the host gave, not {}",
+        log.run.display_hz
+    );
     let pointers: Vec<(u8, &str)> = log
         .inputs
         .iter()

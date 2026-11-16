@@ -32,6 +32,9 @@ pub struct Phone {
     receiver: Receiver<Input>,
     /// The display's highest refresh rate, as the platform reads it.
     display_hz: f32,
+    /// The platform's time of the last tick that drew a frame, in nanoseconds since
+    /// `started`.
+    last_drawn: Option<u64>,
     /// The platform's time of the first frame asked for, in nanoseconds: the client's clock
     /// counts from it.
     started: Option<u64>,
@@ -64,18 +67,29 @@ impl Phone {
             }),
             None => Inbox::new(sender, || true),
         };
+        // A rate the platform could not read would leave the rule nothing to divide.
+        let display_hz = if display_hz.is_finite() && display_hz >= 1.0 {
+            display_hz
+        } else {
+            60.0
+        };
         Self {
             state: State::Waiting(Box::new((client, feed(inbox)))),
             receiver,
             display_hz,
+            last_drawn: None,
             started: None,
         }
     }
 
-    /// The rate the platform should ask its display for from now on.
+    /// The rate the platform should ask its display for from now on: the rate rule's choice
+    /// (`crate::rate`), which starts at the display's highest.
     #[must_use]
     pub fn hz(&self) -> f32 {
-        60.0
+        match &self.state {
+            State::Running(running) => running.frames.ticks_ref().hz(),
+            _ => self.display_hz,
+        }
     }
 
     /// The platform has a surface to draw in, `width` by `height` physical pixels at `scale`
@@ -186,11 +200,11 @@ impl Phone {
             adapter: renderer.adapter().to_owned(),
         });
         crate::threads::interactive_thread();
-        // The phone hosts cannot change their display's rate yet, so frames are counted
-        // against 60 Hz and the rate never steps.
-        let mut frames = FrameLoop::new(client, Platform)
+        // The rule starts at the display's highest rate and steps as frames miss or keep it.
+        // The tier is not chosen automatically yet, so it never drops.
+        let mut frames = FrameLoop::new(client, Platform::default())
             .with_feed(feed)
-            .fixed_at(60.0);
+            .paced(self.display_hz, false);
         frames.handle(size);
         self.state = State::Running(Box::new(Running {
             frames,
@@ -258,13 +272,39 @@ impl Phone {
         }
         let started = *self.started.get_or_insert(now);
         let since = now.saturating_sub(started);
-        frames.tick(since, screen);
-        frames.schedule(since);
+        // A display that ticks faster than the rule's rate, because the platform cannot
+        // change it or ignored the request, draws only on the ticks the rate falls on.
+        if due(
+            self.last_drawn,
+            since,
+            frames.ticks_ref().hz(),
+            self.display_hz,
+        ) {
+            if frames.tick(since, screen).is_some() {
+                self.last_drawn = Some(since);
+            }
+            frames.schedule(since);
+        }
         match frames.next_wake(since) {
             Wake::At(at) => Wake::At(started + at),
             wake => wake,
         }
     }
+}
+
+/// Whether a tick of the display at `now` should draw, when the last tick that drew was at
+/// `last_drawn` (both in nanoseconds), the rate rule has chosen `hz` and the display ticks at
+/// up to `display_hz`. A tick draws once the chosen rate's interval has passed, less half of
+/// the display's interval for the ticks' jitter: with the display at 120 Hz and the rule at 60
+/// Hz, every other tick draws. The first tick always draws.
+#[must_use]
+pub fn due(last_drawn: Option<u64>, now: u64, hz: f32, display_hz: f32) -> bool {
+    let Some(last) = last_drawn else {
+        return true;
+    };
+    let interval = 1e9 / f64::from(hz.max(1.0));
+    let display_interval = 1e9 / f64::from(display_hz.max(1.0));
+    now.saturating_sub(last) as f64 >= interval - display_interval / 2.0
 }
 
 /// The `Surface` input for a surface of `width` by `height` physical pixels at `scale`.
@@ -285,11 +325,34 @@ struct Running {
     screen: Screen,
 }
 
-/// The platform's ticks, which the Swift or Kotlin app runs for as long as it is in front.
-struct Platform;
+/// The platform's ticks: the Swift or Kotlin app's display link or frame callback. The app
+/// asks its display for the rate stored here, which it reads from each frame's wake, and pauses
+/// its ticks when the wake says no frame is wanted.
+#[derive(Debug)]
+pub struct Platform {
+    hz: f32,
+}
+
+impl Platform {
+    /// The rate the frame loop last asked for.
+    #[must_use]
+    pub fn hz(&self) -> f32 {
+        self.hz
+    }
+}
+
+impl Default for Platform {
+    fn default() -> Self {
+        Self { hz: 60.0 }
+    }
+}
 
 impl Ticks for Platform {
     fn set_running(&mut self, _running: bool) {}
+
+    fn set_rate(&mut self, hz: f32) {
+        self.hz = hz;
+    }
 }
 
 /// The renderer and what it draws in.

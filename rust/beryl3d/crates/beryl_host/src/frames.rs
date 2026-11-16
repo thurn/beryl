@@ -309,6 +309,12 @@ impl<T: Ticks> FrameLoop<T> {
         &mut self.ticks
     }
 
+    /// The source of ticks, to read.
+    #[must_use]
+    pub fn ticks_ref(&self) -> &T {
+        &self.ticks
+    }
+
     /// Feeds an animating frame to the rate rule, and carries out the step it returns: a
     /// tier for the client, a rate for the ticks.
     fn pace(&mut self, since_last: Option<u64>, client: u64, shown: Option<Shown>) -> Option<Step> {

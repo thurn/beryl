@@ -53,7 +53,7 @@ int beryl3d_header_test(const char *data_dir) {
     config.fixture = "verbs-zones";
     config.data_dir = data_dir;
     config.stand_in = NULL;
-    config.display_hz = 60.0f;
+    config.display_hz = 120.0f;
     config.wake = NULL;
     config.context = NULL;
     app = beryl3d_new(&config);

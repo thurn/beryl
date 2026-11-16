@@ -268,22 +268,32 @@ impl Feed for AppFeed {
 }
 
 /// The feed of a phone's app (`beryl_3d`'s C functions): it replays `fixture`, the recording
-/// `name`, writes its frame log in `log_dir`, and finishes the log when the replay ends.
-pub(crate) fn phone_feed(name: &str, fixture: Fixture, log_dir: PathBuf) -> Box<dyn Feed> {
+/// `name`, writes its frame log in `log_dir`, and finishes the log when the replay ends. The
+/// log counts frames against `display_hz`, the display's highest rate, where the host's rate
+/// rule starts.
+pub(crate) fn phone_feed(
+    name: &str,
+    fixture: Fixture,
+    log_dir: PathBuf,
+    display_hz: f32,
+) -> Box<dyn Feed> {
     phone_app(
         Source::Fixture(fixture),
         Some(name.to_owned()),
         log_dir,
+        display_hz,
         Finish::AtFixtureEnd,
     )
 }
 
 /// The feed of a phone's app that plays a live game: the session thread keeps its replays and
 /// its ledger of games in `data_dir`, where the frame log is written too, and sends its views
-/// to `inbox`. With `stand_in`, that agent answers the person's decisions in a fresh game.
+/// to `inbox`. With `stand_in`, that agent answers the person's decisions in a fresh game. The
+/// log names `display_hz`, as `phone_feed`'s does.
 pub(crate) fn phone_live_feed(
     data_dir: PathBuf,
     stand_in: Option<String>,
+    display_hz: f32,
     inbox: Inbox,
 ) -> Box<dyn Feed> {
     let data = data_dir.clone();
@@ -302,14 +312,21 @@ pub(crate) fn phone_live_feed(
         inbox,
     );
     // A phone's app never exits by itself, so its live game's log is never finished.
-    phone_app(Source::Live(commands), None, data_dir, Finish::AtExit)
+    phone_app(
+        Source::Live(commands),
+        None,
+        data_dir,
+        display_hz,
+        Finish::AtExit,
+    )
 }
 
-/// A phone's app feed of `source`, writing its frame log in `log_dir`.
+/// A phone's app feed of `source`, writing its frame log in `log_dir` against `display_hz`.
 fn phone_app(
     source: Source,
     fixture: Option<String>,
     log_dir: PathBuf,
+    display_hz: f32,
     finish: Finish,
 ) -> Box<dyn Feed> {
     Box::new(AppFeed {
@@ -323,7 +340,7 @@ fn phone_app(
             pid: std::process::id(),
             started_ms: now_ms(),
             window: "phone".to_owned(),
-            display_hz: 0.0,
+            display_hz,
             adapter: String::new(),
             load: None,
             fixture,

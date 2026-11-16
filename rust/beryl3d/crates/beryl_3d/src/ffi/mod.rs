@@ -159,11 +159,11 @@ impl Beryl3d {
         let phone = match fixture {
             Some(name) => {
                 let replay = Fixture::read(&data_dir, &name)?;
-                let feed = phone_feed(&name, replay, data_dir);
+                let feed = phone_feed(&name, replay, data_dir, display_hz);
                 Phone::new(client, display_hz, wake, |_| feed)
             }
             None => Phone::new(client, display_hz, wake, |inbox| {
-                phone_live_feed(data_dir, stand_in, inbox)
+                phone_live_feed(data_dir, stand_in, display_hz, inbox)
             }),
         };
         Ok(Self {

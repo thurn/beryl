@@ -600,7 +600,9 @@ and heat.
   is animating), at a given time (for example when the turn banner is due to
   disappear) or never (wait for input).
 - The platform program asks for display refresh callbacks only while the answer
-  is "now".
+  is "now". The phone hosts pause their display link or frame callback when
+  `beryl3d_frame`'s wake says at a time or never, and start it again at that
+  time or when the library calls their wake callback.
 - Any input ends the wait. A session update or a finished asset counts: the
   thread that sends one also wakes the host's event loop.
 
@@ -913,10 +915,17 @@ thresholds are `frame_rate` in `data/beryl3d/space.json`.
 - **Who steps.** The macOS display link asks for exactly the chosen rate. The
   windowless host's timer steps the same way, so `--slow-gpu` shows the rule at
   work in a run with no window. winit's redraw requests on Windows cannot ask
-  for a rate, and the phone spike's apps do not yet change theirs, so those
-  count frames against a fixed rate and never step. Milestone 4's phone hosts
-  call the same rule and change `CADisplayLink`'s preferred frame rate range and
-  Android's `Surface.setFrameRate`.
+  for a rate, so Windows counts frames against a fixed rate and never steps. The
+  phones step: the host passes the display's highest rate in `BerylConfig`, the
+  rule starts there, and every `BerylWake` carries the rate it has chosen, which
+  the iOS host applies to `CADisplayLink`'s preferred frame rate range and the
+  Android host to `Surface.setFrameRate` when it changes. Some cannot change it:
+  Android below API 30 has no `Surface.setFrameRate`, and a display may ignore
+  the request. So the library draws on a tick only once the chosen rate's
+  interval has passed since the last tick it drew, less half the display's
+  interval (`beryl_host::phone::due`). With the display at 120 Hz and the rule
+  at 60 Hz every other tick draws, and a skipped tick is not a frame to the
+  rule.
 
 The C functions the phone hosts call, as `include/beryl3d.h` in `beryl_3d`
 declares them. Every enumerated value is a `uint32_t` with named constants, and
@@ -1011,7 +1020,8 @@ the graphics paths and the build before milestone 4 builds the real hosts on it:
   Their bundle and application ids are `ca.thurn.beryl3d`, so both apps can be
   installed beside the Tauri app. They hold no logic beyond passing the surface,
   the lifecycle and the display's time. The display link and the frame callback
-  call `beryl3d_frame` on every tick, whatever it returns.
+  still call `beryl3d_frame` on every tick, whatever it returns, and do not yet
+  apply its rate: milestone 4's host work does both.
 - **The library** is built with `cargo rustc --crate-type staticlib` for iOS and
   `cdylib` for Android, so that desktop builds link neither. On Android it loads
   at API 24 and needs the system's libraries and the NDK's `libc++_shared.so`,
