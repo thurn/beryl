@@ -1550,9 +1550,12 @@ What the session does and what a client still does:
   begins its own, even where they are the same marks. A beat with a tray step
   has the client move the tray's cards from places it worked out as the prompt
   changed, so that the frame lays nothing out. The steps that end a closed
-  prompt's marks are written under the view that closed it, and the tray letting
-  its cards go first in that view's beat, where the web lets it go as the
-  answer's script begins.
+  prompt's marks are written under the view that closed it. The tray of a closed
+  prompt lets its cards go as a step of the answer's script, the first script
+  given after the prompt closed, as the web's `lowered` has it: first in the
+  script's first beat with a step about a card the tray held (or its first
+  beat), at that beat's turn on the script's clock (`Show::place_let_go`). Until
+  then the cards stay where the tray held them.
 - **Segments are made from the laid-out beat.** Each step becomes segments, at
   absolute times, on the scene objects it concerns.
 - **Reduced motion** is a client's choice: it plays every step with no duration,

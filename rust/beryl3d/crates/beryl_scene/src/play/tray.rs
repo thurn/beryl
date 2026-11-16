@@ -4,8 +4,11 @@
 //! interface's `Hold.keeps` (`ui/src/stage/table.ts`) has it.
 
 use beryl_protocol::protocol::{ObjectId, PlayerView};
+use beryl_protocol::script::Script;
 
 use super::Show;
+use super::compile::{nanoseconds, subject_of};
+use crate::beat::Laid;
 use crate::input::Rect;
 use crate::light::Lit;
 use crate::pose::{Curve, Pose};
@@ -51,10 +54,55 @@ impl Show {
         }
     }
 
-    /// Lets the cards held up go back to `rests`, over `length` nanoseconds from the next frame
-    /// (`Table::let_go`).
-    pub fn let_go_tray(&mut self, rests: &[(ObjectId, Pose, bool)], length: u64, curve: Curve) {
-        self.table.let_go(rests, length, curve);
+    /// Lets the cards held up go back to `rests` over `length` nanoseconds: from the next frame,
+    /// or, where `script` names the script that answers a closed prompt, from the beat of that
+    /// script that `place_let_go` finds (`Table::let_go`).
+    pub fn let_go_tray(
+        &mut self,
+        rests: &[(ObjectId, Pose, bool)],
+        (length, script): (u64, Option<usize>),
+        curve: Curve,
+    ) {
+        self.table.let_go(rests, (length, script), curve);
+    }
+
+    /// Begins the let-go of the tray's cards that waits for the script answering a closed
+    /// prompt, once that script plays. The web interface puts the end of the tray first in the
+    /// answer's first beat with a step about a card the tray held, or in its first beat where
+    /// none has one (`lowered` in `ui/src/stage/prompt.ts`), so the cards go back as that
+    /// beat's turn comes on the script's clock. A script later than the one awaited, which
+    /// should not happen, lets them go at once.
+    pub(super) fn place_let_go(&mut self, now: u64) {
+        let (Some((number, letting)), Some(playing)) =
+            (self.table.let_go_waits_for(), self.playing.as_ref())
+        else {
+            return;
+        };
+        if playing.number < number {
+            return;
+        }
+        let (beat, from) = if playing.number == number {
+            let update = playing.update.as_deref().or(self.shown.as_deref());
+            let script = update.and_then(|update| update.view.script.as_ref());
+            first_about(script, &playing.compiled.laid, letting)
+        } else {
+            (0, playing.clock(now))
+        };
+        let view = playing.number + 1;
+        let start = playing.real(from);
+        let length = self.table.start_let_go(start);
+        self.placed_let_go = Some(PlacedLetGo {
+            view,
+            beat,
+            from,
+            length,
+            start,
+        });
+    }
+
+    /// Where the let-go that waited for its script was placed since this was last called.
+    pub fn take_placed_let_go(&mut self) -> Option<PlacedLetGo> {
+        self.placed_let_go.take()
     }
 
     /// Hands each card the tray let go over to the script that just started, if the script
@@ -117,4 +165,38 @@ impl Show {
             self.playing = Some(playing);
         }
     }
+}
+
+/// Where a let-go of the tray's cards that waited for the script answering a closed prompt was
+/// placed, for the client's record of the steps it makes itself (`prompts::OwnRecord`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlacedLetGo {
+    /// The view the script leads to, counted from 1, and the beat of it the let-go is first in.
+    pub view: usize,
+    pub beat: usize,
+    /// When it begins, in nanoseconds on the script's clock, and how long it takes.
+    pub from: u64,
+    pub length: u64,
+    /// When it begins, in nanoseconds since the client started.
+    pub start: u64,
+}
+
+/// The first beat of `script`, laid out as `laid`, with a step about one of the cards in
+/// `letting` (by slot), and when that beat's turn comes, in nanoseconds on the script's clock;
+/// its first beat, at its start, where no beat has one or its steps were not laid out.
+fn first_about(script: Option<&Script>, laid: &[Laid], letting: &[usize]) -> (usize, u64) {
+    let Some(script) = script else {
+        return (0, 0);
+    };
+    let mut first = 0;
+    for (beat, steps) in script.beats.iter().enumerate() {
+        let about =
+            (steps.iter()).any(|step| subject_of(step).is_some_and(|slot| letting.contains(&slot)));
+        if about {
+            let turn = laid.get(first).map_or(0, |laid| nanoseconds(laid.turn));
+            return (beat, turn);
+        }
+        first += steps.len();
+    }
+    (0, 0)
 }

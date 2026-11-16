@@ -35,7 +35,8 @@ impl Placement {
 /// The cards of a tray on their way into it or back out of it: for each slot, where the card
 /// was drawn as the move began, which it goes from to where it now rests over `over` (in
 /// nanoseconds since the client started), eased by `curve`. A move that is waiting for its
-/// first frame has no `over` yet, only its length.
+/// first frame, or for the script that answers a closed prompt to start, has no `over` yet,
+/// only its length.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct TrayMotion {
     /// Where each card held up lies in the tray, and, by slot, where it rests in its zone and
@@ -46,8 +47,11 @@ pub(crate) struct TrayMotion {
     zone: Vec<Option<(Pose, bool)>>,
     from: Vec<Option<Pose>>,
     over: Option<(u64, u64)>,
-    /// How long a move waiting for its first frame takes, in nanoseconds.
-    waiting: Option<u64>,
+    /// A move that has not begun yet (`over` is `None`).
+    waiting: Option<Wait>,
+    /// The cards a let-go puts back, by slot, which `Show::place_let_go` looks for in the steps
+    /// of the script that answers the closed prompt.
+    letting: Vec<usize>,
     curve: Curve,
     /// Whether the cards are going back out of the tray.
     leaving: bool,
@@ -68,6 +72,7 @@ impl TrayMotion {
             from: vec![None; OBJECTS],
             over: None,
             waiting: None,
+            letting: Vec::new(),
             curve: Curve::EASE_OUT,
             leaving: false,
             handed: Vec::new(),
@@ -75,9 +80,12 @@ impl TrayMotion {
         }
     }
 
-    /// How far through the move is at `now`, eased, or `None` once it is over.
+    /// How far through the move is at `now`, eased, or `None` once it is over. A move that has
+    /// not begun has the cards where they were drawn as it was asked for.
     fn share(&self, now: u64) -> Option<f32> {
-        let (from, to) = self.over?;
+        let Some((from, to)) = self.over else {
+            return self.waiting.map(|_| self.curve.ease(0.0));
+        };
         if now >= to {
             return None;
         }
@@ -95,6 +103,15 @@ impl TrayMotion {
             *from = Some(pose);
         }
     }
+}
+
+/// A move of the tray's cards that has not begun: how long it takes, in nanoseconds, and the
+/// number of the script whose start places it (`Table::start_let_go`), if it waits for one
+/// rather than for the next frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Wait {
+    length: u64,
+    script: Option<usize>,
 }
 
 impl Table {
@@ -207,16 +224,26 @@ impl Table {
             .collect()
     }
 
-    /// Lets the cards held up go back to their places in `rests` (from `zone_rests`), over
-    /// `length` nanoseconds from the next frame, eased by `curve`: each rests there from now on
-    /// and is drawn on its way. A card a script moves meanwhile starts from the tray instead
-    /// (`Show::hand_over_tray`). Allocates nothing.
-    pub fn let_go(&mut self, rests: &[(ObjectId, Pose, bool)], length: u64, curve: Curve) {
+    /// Lets the cards held up go back to their places in `rests` (from `zone_rests`) over
+    /// `length` nanoseconds, eased by `curve`: each rests there from now on and is drawn on its
+    /// way. The move begins at the next frame, or, where `script` names the script that answers
+    /// the closed prompt, when that script's start places it (`start_let_go`); until then each
+    /// card is drawn where the tray held it. A card a script moves meanwhile starts from the
+    /// tray instead (`Show::hand_over_tray`). Allocates nothing once the tray has let go of as
+    /// many cards before.
+    pub fn let_go(
+        &mut self,
+        rests: &[(ObjectId, Pose, bool)],
+        (length, script): (u64, Option<usize>),
+        curve: Curve,
+    ) {
         if self.held.take().is_none() {
             return;
         }
         self.tray.poses.clear();
         self.tray.library.clear();
+        self.tray.letting.clear();
+        (self.tray.letting).extend(rests.iter().map(|&(slot, ..)| usize::from(slot.0)));
         for &(slot, pose, visible) in rests {
             let index = usize::from(slot.0);
             let Some(Some(mut object)) = self.objects.cards.get(index).copied() else {
@@ -229,16 +256,38 @@ impl Table {
             self.objects.cards[index] = Some(object);
         }
         self.tray.over = None;
-        self.tray.waiting = Some(length);
+        self.tray.waiting = Some(Wait { length, script });
         self.tray.curve = curve;
         self.tray.leaving = true;
+    }
+
+    /// The number of the script whose start places the let-go of the tray's cards, while one
+    /// waits for it, and the cards it lets go, by slot.
+    pub(crate) fn let_go_waits_for(&self) -> Option<(usize, &[usize])> {
+        let script = self.tray.waiting?.script?;
+        Some((script, &self.tray.letting))
+    }
+
+    /// Begins the let-go that waits for a script at `at`, in nanoseconds since the client
+    /// started, and returns how long it takes.
+    pub(crate) fn start_let_go(&mut self, at: u64) -> u64 {
+        let Some(Wait { length, .. }) = self.tray.waiting.take() else {
+            return 0;
+        };
+        self.tray.over = Some((at, at + length));
+        length
     }
 
     /// Takes `now`, the time of the frame being drawn, and begins a move of the tray's cards
     /// that waits for it.
     pub(crate) fn advance_tray(&mut self, now: u64) {
         self.tray.now = now;
-        if let Some(length) = self.tray.waiting.take() {
+        if let Some(Wait {
+            length,
+            script: None,
+        }) = self.tray.waiting
+        {
+            self.tray.waiting = None;
             self.tray.over = Some((now, now + length));
         }
     }
@@ -263,10 +312,12 @@ impl Table {
         true
     }
 
-    /// Whether a card of the tray moves at `now`.
+    /// Whether a card of the tray moves at `now`. A let-go that waits for its script holds
+    /// still until the script places it.
     #[must_use]
     pub fn tray_moving(&self, now: u64) -> bool {
-        self.tray.share(now).is_some() || self.tray.waiting.is_some()
+        self.tray.over.is_some_and(|(_, to)| now < to)
+            || self.tray.waiting.is_some_and(|wait| wait.script.is_none())
     }
 
     /// Whether the tray has let its cards go and no script has started since: the script that

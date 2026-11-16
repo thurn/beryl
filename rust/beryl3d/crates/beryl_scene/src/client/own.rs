@@ -8,11 +8,12 @@
 
 use beryl_protocol::prompt::{PromptView, Purpose, ShapeBody};
 use beryl_protocol::protocol::{DecisionId, ObjectId, Side, Status};
-use beryl_protocol::script::{Arrow, OwnStep, Subject};
+use beryl_protocol::script::{Arrow, OwnStep, Subject, Verb};
 use glam::Vec2;
 
 use super::Client;
 use crate::light::Aim;
+use crate::play::PlacedLetGo;
 use crate::pose::Pose;
 use crate::prompts;
 use crate::table::{Held, TrayPoses};
@@ -29,6 +30,13 @@ pub(super) struct Owned {
     /// that end a closed prompt's marks are written under: a batch of views that play on can
     /// arrive before the next frame plays those steps.
     was_view: usize,
+    /// How many scripts the show had been given then: the number of the script that answers
+    /// the prompt if it closed, the first given after it closed, whose beat a closed prompt's
+    /// tray lets go in.
+    was_given: usize,
+    /// The record of a closed prompt's tray letting go whose start waits for that script, by
+    /// its index in the client's record.
+    letting_record: Option<usize>,
     /// Where the mouse is over the window, while it is.
     pub(super) mouse: Option<Vec2>,
     /// The cards the open prompt's tray holds up and where each lies, and where the cards the
@@ -111,15 +119,18 @@ impl Client {
         let Some((step, over, curve)) = tray else {
             return;
         };
-        if let Some(record) = &mut self.own_record {
-            self.owned.times.extend([over.from, over.to]);
-            // The web interface lets a closed prompt's tray go as the first step of the
-            // script that plays the answer (`lowered` in `ui/src/stage/prompt.ts`), not after
-            // the ends of its marks: the timeline places it first in its view's beat.
-            if shown.is_none()
-                && let Some(last) = record.last_mut()
-            {
-                last.index = 0;
+        // A closed prompt's tray lets its cards go in the beat of the answer's script that
+        // `Show::place_let_go` finds, as the web interface lets it go as a step of that script
+        // (`lowered` in `ui/src/stage/prompt.ts`), not after the ends of its marks.
+        let answer = (shown.is_none() && !matches!(step, OwnStep::TrayLifts { .. }))
+            .then_some(self.owned.was_given);
+        if let Some(record) = &self.own_record {
+            if answer.is_some() {
+                // The tray's step is the last of its beat (`prompts::own`).
+                self.owned.letting_record =
+                    (record.len().checked_sub(1)).filter(|&last| record[last].verb == Verb::Lift);
+            } else {
+                self.owned.times.extend([over.from, over.to]);
             }
         }
         if let OwnStep::TrayLifts { .. } = step {
@@ -129,8 +140,36 @@ impl Client {
             }
         } else {
             let rests = std::mem::take(&mut self.owned.rests);
-            self.show.let_go_tray(&rests, over.to - over.from, curve);
+            self.show
+                .let_go_tray(&rests, (over.to - over.from, answer), curve);
             self.owned.rests = rests;
+        }
+    }
+
+    /// Writes where the show placed a closed prompt's tray letting go, once the script that
+    /// answered the prompt started, into the record of the steps the client made itself and
+    /// the times at which what the prompts draw changes.
+    pub(super) fn placed_let_go(&mut self) {
+        let Some(placed) = self.show.take_placed_let_go() else {
+            return;
+        };
+        let PlacedLetGo {
+            view,
+            beat,
+            from,
+            length,
+            start,
+        } = placed;
+        let Some(record) = &mut self.own_record else {
+            return;
+        };
+        self.owned.times.extend([start, start + length]);
+        if let Some(step) = (self.owned.letting_record.take()).and_then(|at| record.get_mut(at)) {
+            step.view = view;
+            step.beat = beat;
+            step.index = 0;
+            step.from = from;
+            step.to = from + length;
         }
     }
 
@@ -196,6 +235,7 @@ impl Client {
             self.owned.was_source = self.owned.source;
             self.owned.was_carried = self.owned.carried;
             self.owned.was_view = self.views;
+            self.owned.was_given = self.show.given();
         }
         self.suggesting.now = suggesting;
         self.own_due = true;

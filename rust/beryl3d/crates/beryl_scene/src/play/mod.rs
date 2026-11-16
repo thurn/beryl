@@ -37,6 +37,7 @@ mod tray;
 mod wake;
 
 pub use scene::{Reach, Scene};
+pub use tray::PlacedLetGo;
 
 use std::cell::Cell;
 use std::collections::VecDeque;
@@ -116,6 +117,9 @@ pub struct Show {
     badges: Badges,
     /// How many scripts were laid out again as they started (`relay`).
     relays: usize,
+    /// Where the let-go of the tray's cards that waited for its script was placed, until the
+    /// client takes it (`take_placed_let_go`).
+    placed_let_go: Option<PlacedLetGo>,
 }
 
 impl Show {
@@ -147,6 +151,7 @@ impl Show {
             counts: Counts::default(),
             badges: Badges::default(),
             relays: 0,
+            placed_let_go: None,
         }
     }
 
@@ -406,6 +411,12 @@ impl Show {
         self.table.ability_rest(id)
     }
 
+    /// How many scripts the show has been given: the number the next script given will have.
+    #[must_use]
+    pub fn given(&self) -> usize {
+        self.given
+    }
+
     /// How many updates wait for the playing script to end.
     #[must_use]
     pub fn waiting(&self) -> usize {
@@ -586,6 +597,7 @@ impl Show {
             });
             self.hand_over(now);
             self.hand_over_tray();
+            self.place_let_go(now);
             if let Some(playing) = &self.playing {
                 playing.affect(&mut self.effects);
                 playing.announce(&mut self.notices);
@@ -594,6 +606,7 @@ impl Show {
                 self.show_playing();
             }
         }
+        self.place_let_go(now);
         if let Some(playing) = &mut self.playing {
             playing.give(now, (&mut self.lit, &mut self.counts), builder);
         }

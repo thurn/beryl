@@ -344,11 +344,15 @@ pub struct Steps<'a> {
 }
 
 /// One step a prompt made itself, as the timeline prints it: the number of views the client
-/// had been given when it played, its place in its beat, its verb, the timing the session gave
-/// it, if any, and when it began and ended, in nanoseconds from the start of its beat.
+/// had been given when it played, its beat and its place in it, its verb, the timing the
+/// session gave it, if any, and when it began and ended, in nanoseconds from the start of its
+/// beat. A closed prompt's tray letting its cards go is the exception: it is written under the
+/// view whose script answered the prompt, first in the beat of that script it plays in, with
+/// times on that script's clock (`Show::place_let_go`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct OwnRecord {
     pub view: usize,
+    pub beat: usize,
     pub index: usize,
     pub verb: Verb,
     pub timing: Option<StepTiming>,
@@ -431,6 +435,7 @@ impl<'a> Steps<'a> {
         if let Some((view, record)) = &mut self.record {
             record.push(OwnRecord {
                 view: *view,
+                beat: 0,
                 index: self.played,
                 verb,
                 timing: timing.cloned(),

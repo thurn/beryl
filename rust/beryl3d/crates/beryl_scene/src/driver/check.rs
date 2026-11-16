@@ -55,7 +55,9 @@ pub struct TimelineStep {
     pub effects: Vec<(String, Edge, Option<f64>)>,
     /// Whether the client made the step itself while a prompt was open (`prompts::own`),
     /// rather than the session sending it in a script. Its `view` is then the number of views
-    /// given when it played, its `beat` 0, and its times are on the clock of that one beat.
+    /// given when it played, its `beat` 0, and its times are on the clock of that one beat,
+    /// except for a closed prompt's tray letting go, which is placed in the answer's script
+    /// (`prompts::OwnRecord`).
     pub own: bool,
 }
 
@@ -375,7 +377,7 @@ impl Page {
             let timing = step.timing.as_ref();
             TimelineStep {
                 view: step.view,
-                beat: 0,
+                beat: step.beat,
                 index: step.index,
                 verb: step.verb,
                 case: timing.and_then(|timing| timing.case.clone()),

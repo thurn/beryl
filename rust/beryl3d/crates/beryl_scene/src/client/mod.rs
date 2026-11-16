@@ -462,6 +462,7 @@ impl Client {
         };
         (self.layer).write_with(&mut builder, self.show.table().camera(), self.open, faces);
         builder.finish();
+        self.placed_let_go();
         // The element a press under the mouse would reach is drawn `hovered`. A press on a card
         // that ended since the last frame and means a click on it (a press that picked nothing
         // up, or a card carried off the hand and let go) clicks the open prompt on that card;
