@@ -436,11 +436,10 @@ impl Table {
         let pose = track.pose_at(motion.t);
         let last = motion.finals.cards.get(slot).copied().flatten();
         // A card a row has scrolled out of view rests undrawn at the row's end, above the last
-        // card shown. One that is out of view both before the script and after it stays
-        // undrawn while it slides, or it would cover that card.
-        // The same holds for a card under the top two of a pile, which is not drawn. A card
-        // that changes place is drawn on its way, wherever it starts or ends. Before its track
-        // first moves it, a card is drawn as where it rests is, and once its track has ended,
+        // card shown, as does a card under the top two of a pile. One out of view before the
+        // script and after it stays undrawn while it slides, or it would cover that card. A
+        // card that changes place is drawn on its way, wherever it starts or ends. Before its
+        // track first moves it, a card is drawn as where it rests is; once its track has ended,
         // as where the script leaves it is.
         let moves = resting.zip(last).is_some_and(|(a, b)| a.place != b.place);
         let begun = track.begun(motion.t);
@@ -453,19 +452,21 @@ impl Table {
             Some(object) => (object, motion.view),
             None => (resting?, view),
         };
-        // A permanent that taps or untaps on its track reads as tapped once it has turned
-        // more than half of its quarter turn, from the middle of its step.
+        // A permanent tapping or untapping on its track reads as tapped past half its turn.
         let tapped = [resting, last].iter().flatten().any(|object| object.tapped)
             && pose.rotation.angle_between(Quat::IDENTITY) > FRAC_PI_4;
-        // Until its track first moves it, a card stands where it rested, and is a copy beneath
-        // a pile's top only if it rested as one.
-        let copies = resting
-            .filter(|_| !begun)
-            .map_or(object.copies, |a| a.copies);
+        // Until its track first moves it, a card stands where it rested: a copy beneath a pile's
+        // top only if it rested as one, and out of the pointer's reach if it rested in a pile.
+        let (place, copies) = match resting.filter(|_| !begun) {
+            Some(a) if !pointer::takes_pointer(a.place) => (a.place, a.copies),
+            Some(a) => (object.place, a.copies),
+            None => (object.place, object.copies),
+        };
         let object = SceneObject {
             pose,
             visible: seen && pose.opacity > 0.0,
             tapped,
+            place,
             copies,
             ..object
         };
