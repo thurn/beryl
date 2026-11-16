@@ -33,6 +33,7 @@ from . import (
     motion,
     nightly,
     oracles,
+    paths,
     runlog,
     rust_tests,
     scale,
@@ -49,6 +50,7 @@ from . import (
     warm,
 )
 from .beryl3d import cli as beryl3d_cli
+from .beryl3d import gates_merge
 
 
 def utf8_rerun(argv: list[str] | None) -> int | None:
@@ -132,6 +134,8 @@ def main(argv: list[str] | None = None) -> int:
         return rerun
     # Every cargo command `by` starts takes CPU tokens first (cargo_pool.py).
     cargo_pool.install()
+    # So that a rebase merges data/beryl3d/gates.json's limits as numbers (gates_merge.py).
+    gates_merge.install(paths.REPO)
     parser = argparse.ArgumentParser(prog="by", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     for module in MODULES:

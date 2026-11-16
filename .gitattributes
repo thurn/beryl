@@ -4,3 +4,5 @@
 *.ico binary
 *.gz binary
 data/card-store.tsv linguist-generated=true
+# Merged as numbers by tools/src/beryl_tools/beryl3d/gates_merge.py, which `by` registers.
+data/beryl3d/gates.json merge=b3d-gates

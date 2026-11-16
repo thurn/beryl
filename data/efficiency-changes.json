@@ -108,5 +108,10 @@
     "label": "Beryl 3D's saved build cache and worktree build directories are held to the 15 GB budget, so each clone copies one build instead of every earlier one",
     "metric": "machine.saturation",
     "expect": "down"
+  },
+  {
+    "label": "A rebase merges data/beryl3d/gates.json's limits as numbers instead of stopping on a conflict, and a new worktree's Beryl 3D build reuses the cached build instead of rebuilding every crate",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

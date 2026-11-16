@@ -177,6 +177,19 @@ project, and selects the main lanes.
   commit that raises it gives the old and new numbers. It needs nobody's
   approval.
 
+  A rebase does not stop on gates.json when two branches both raised the same
+  limits. The repository's `.gitattributes` gives the file to a merge driver,
+  `tools/src/beryl_tools/beryl3d/gates_merge.py`, which `by` names in the git
+  config before every command, so every machine that ran a `just` command has
+  it. The driver merges the three versions key by key: a number only one side
+  changed takes that side's value, and a number both sides changed gets both
+  changes, `base + (ours - base) + (theirs - base)`. Anything else both sides
+  changed differently is a conflict with git's usual markers. The sum is right
+  for totals, but two raises of a `worst_frame_` limit may not add up. The fast
+  check's `just b3d gate` still holds every board to exactly its limit, so a
+  wrong number fails the push instead of landing. Lower it with `--update`, or
+  raise it by hand, with the old and new numbers in the commit body as above.
+
   Under `materials.<name>` are the most texture samples and naga expressions
   each material's `shade_` function in `beryl_render`'s shader may take per
   fragment (the `shader_cost` test), and under
