@@ -46,6 +46,14 @@ log = { version = "0.4.35", features = ["std"] }
 # The frame log's lines, in place of a hand-written JSON writer and reader.
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+# Decodes the sounds and plays them on the audio device, in place of the web interface's Web
+# Audio (src/audio.rs). `wav` decodes the effects (WAV files) and `mp4` the music (AAC in M4A
+# files), both through Symphonia. `playback` (the output device, through cpal) is added below
+# for every platform but Android, where cpal would link AAudio, which API levels 24 and 25 lack.
+rodio = { version = "0.23.0", default-features = false, features = ["wav", "mp4"] }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+rodio = { version = "0.23.0", default-features = false, features = ["playback", "wav", "mp4"] }
 
 # The Kotlin host's strings and Surface, in place of hand-written JNI and NDK declarations. The
 # releases wgpu already links on Android.

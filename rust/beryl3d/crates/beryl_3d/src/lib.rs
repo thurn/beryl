@@ -3,9 +3,11 @@
 //! and Kotlin apps call.
 
 pub mod app;
+pub mod audio;
 pub mod ffi;
 pub mod fixture;
 pub mod frame_log;
 pub mod load;
 pub mod options;
 pub mod session;
+pub mod settings;

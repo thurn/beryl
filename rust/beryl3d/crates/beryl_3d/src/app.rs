@@ -10,16 +10,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use beryl_host::{Desktop, WindowMode};
 use beryl_host::{Feed, Inbox, Opened, Ticked, Windowless, WindowlessOptions};
+use beryl_scene::command::Request;
 use beryl_scene::frame::Wake;
 use beryl_scene::input::{Input, Size};
 use beryl_scene::{Client, Config};
 use beryl_session::protocol::Status;
 use beryl_session::script::Verb;
 
+use crate::audio::{Audio, Output};
 use crate::fixture::Fixture;
 use crate::frame_log::{FrameLog, InputLine, Run, Summary};
 use crate::options::{Options, Window};
 use crate::session::{self, Commands, Live};
+use crate::settings::{self, Saver};
 
 /// The window the app opens, and the windowless host stands in for, in logical points: the
 /// size `just b3d` draws a recording at unless told otherwise.
@@ -68,6 +71,10 @@ struct AppFeed {
     /// Whether the latest view says the AI is searching.
     searching: bool,
     shown_first: bool,
+    /// The audio thread, which plays each frame's sounds and the music the client asks for.
+    audio: Option<Audio>,
+    /// Writes the settings the client asks to save, in a live game.
+    saver: Option<Saver>,
 }
 
 /// When the frame log is finished and its summary written.
@@ -170,6 +177,11 @@ impl Feed for AppFeed {
     }
 
     fn after(&mut self, client: &mut Client, ticked: &Ticked) {
+        if let Some(audio) = &self.audio {
+            for sound in client.sounds() {
+                audio.play(*sound);
+            }
+        }
         while let Some(command) = client.next_command() {
             match &mut self.source {
                 Some(Source::Live(commands)) => commands.send(command),
@@ -215,6 +227,31 @@ impl Feed for AppFeed {
             self.shown_first = true;
             // One short line, once, which `just b3d smoke` waits for.
             println!("{FIRST_SHOWN} at {:.1} ms", ticked.tick as f64 / 1e6);
+        }
+    }
+
+    fn request(&mut self, request: &Request) {
+        match request {
+            Request::Music(music) => {
+                if let Some(audio) = &self.audio {
+                    audio.music(*music);
+                }
+            }
+            Request::Audio {
+                music,
+                effects,
+                muted,
+            } => {
+                if let Some(audio) = &self.audio {
+                    audio.levels(*music, *effects, *muted);
+                }
+            }
+            Request::SaveSettings(settings) => {
+                if let Some(saver) = &self.saver {
+                    saver.save(*settings);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -298,6 +335,8 @@ fn phone_app(
         },
         searching: false,
         shown_first: false,
+        audio: None,
+        saver: None,
     })
 }
 
@@ -309,30 +348,7 @@ fn phone_app(
 /// written.
 pub fn run(options: &Options) -> Result<Finished, String> {
     let pause_at = pause_at(options)?;
-    let run = Run {
-        checkout: checkout(),
-        pid: std::process::id(),
-        started_ms: now_ms(),
-        window: options.window.word().to_owned(),
-        display_hz: 0.0,
-        adapter: String::new(),
-        load: load(),
-        fixture: options.fixture.clone(),
-        pause_at_ms: pause_at.map(|at| at as f64 / 1e6),
-        drive: options.drive.clone(),
-        load_threads: options
-            .load
-            .map(|(threads, class)| format!("{threads}:{}", class.word())),
-        slow_gpu_ms: options.slow_gpu.map(|slow| slow.as_secs_f64() * 1e3),
-        game: options.agent.as_ref().map(|agent| {
-            format!(
-                "{agent} against {}, seed {}, search class {}",
-                options.opponent,
-                options.seed,
-                options.search_class.word()
-            )
-        }),
-    };
+    let run = run_of(options, pause_at);
     // Started before the host, from the main thread, and stopped when the run ends.
     let _load = options
         .load
@@ -340,6 +356,8 @@ pub fn run(options: &Options) -> Result<Finished, String> {
     #[cfg(feature = "tools")]
     let drive = options.drive.as_deref().map(drive).transpose()?;
     let slow_gpu = options.slow_gpu.unwrap_or_default();
+    let (settings, saver) = player_settings(options);
+    let audio = start_audio(options.window, settings.unwrap_or_default());
     let log = Rc::new(RefCell::new(None));
     let mut feed = AppFeed {
         source: None,
@@ -354,8 +372,13 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         run: run.clone(),
         searching: false,
         shown_first: false,
+        audio: Some(audio),
+        saver,
     };
-    let client = Client::new(Config::LARGEST);
+    let mut client = Client::new(Config::LARGEST);
+    if let Some(settings) = settings {
+        client.handle(Input::Settings(settings));
+    }
     let hosted = match options.window {
         Window::None => {
             let host = Windowless::new(WindowlessOptions {
@@ -445,6 +468,67 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
         },
         inbox,
     )))
+}
+
+/// What the frame log says of a run `options` describe, stopped at `pause_at`.
+fn run_of(options: &Options, pause_at: Option<u64>) -> Run {
+    Run {
+        checkout: checkout(),
+        pid: std::process::id(),
+        started_ms: now_ms(),
+        window: options.window.word().to_owned(),
+        display_hz: 0.0,
+        adapter: String::new(),
+        load: load(),
+        fixture: options.fixture.clone(),
+        pause_at_ms: pause_at.map(|at| at as f64 / 1e6),
+        drive: options.drive.clone(),
+        load_threads: options
+            .load
+            .map(|(threads, class)| format!("{threads}:{}", class.word())),
+        slow_gpu_ms: options.slow_gpu.map(|slow| slow.as_secs_f64() * 1e3),
+        game: options.agent.as_ref().map(|agent| {
+            format!(
+                "{agent} against {}, seed {}, search class {}",
+                options.opponent,
+                options.seed,
+                options.search_class.word()
+            )
+        }),
+    }
+}
+
+/// The audio thread, at the levels `settings` give. A run with no window plays no sound, so
+/// that agents' and checks' runs are silent.
+fn start_audio(window: Window, settings: beryl_scene::settings::Settings) -> Audio {
+    let audio = Audio::start(if window == Window::None {
+        Output::Silent
+    } else {
+        Output::Device
+    });
+    audio.levels(settings.music, settings.effects, settings.muted);
+    audio
+}
+
+/// The player's saved settings and the writer of their changes, in a live game the viewer
+/// plays. A replayed recording and a game `--agent` plays start from the defaults and save
+/// nothing, so that a test's or an agent's run never changes the player's settings.
+fn player_settings(options: &Options) -> (Option<beryl_scene::settings::Settings>, Option<Saver>) {
+    #[cfg(feature = "tools")]
+    if options.fixture.is_some() {
+        return (None, None);
+    }
+    if options.agent.is_some() {
+        return (None, None);
+    }
+    let Some(dir) = data_dir() else {
+        return (None, None);
+    };
+    let settings = settings::load(&dir).unwrap_or_else(|error| {
+        eprintln!("beryl3d: the saved settings could not be read, so the defaults apply: {error}");
+        None
+    });
+    (settings, Some(Saver::start(dir)))
 }
 
 /// The drive script `name` names: a file in `rust/beryl3d/drive` named `<name>.drive`, or a

@@ -146,7 +146,11 @@ impl Windowless {
                         next += interval;
                     }
                     timer.next = Some(next);
-                    frames.tick(since(now), &mut screen);
+                    // The feed sees each request (`Feed::request`); with no window, the host
+                    // itself carries out none.
+                    if frames.tick(since(now), &mut screen).is_some() {
+                        while frames.next_request().is_some() {}
+                    }
                     continue;
                 }
                 Some(tick)

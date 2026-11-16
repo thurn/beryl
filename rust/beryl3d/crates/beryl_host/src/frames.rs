@@ -6,6 +6,7 @@
 use std::time::Instant;
 
 use beryl_scene::Client;
+use beryl_scene::command::Request;
 use beryl_scene::frame::{Frame, Wake};
 use beryl_scene::input::{Input, Tier};
 
@@ -85,6 +86,10 @@ pub trait Feed {
 
     /// Called after each frame the loop drew.
     fn after(&mut self, _client: &mut Client, _ticked: &Ticked) {}
+
+    /// Sees each of the client's requests before the host carries it out, as the sound
+    /// requests that the app plays and the settings it saves.
+    fn request(&mut self, _request: &Request) {}
 
     /// When the feed next needs a frame, beside the client's own wake.
     fn wake(&self) -> Wake {
@@ -285,6 +290,14 @@ impl<T: Ticks> FrameLoop<T> {
     #[must_use]
     pub fn next_wake(&self, now: u64) -> Wake {
         self.wake(now)
+    }
+
+    /// The next thing the client asks of the platform, shown to the feed first. A host drains
+    /// these after each frame and carries out the ones it can.
+    pub fn next_request(&mut self) -> Option<Request> {
+        let request = self.client.next_request()?;
+        self.feed.request(&request);
+        Some(request)
     }
 
     /// The client, for draining what it asks of the platform after a frame.

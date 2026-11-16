@@ -353,7 +353,7 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
             return;
         };
         if running.frames.tick(now, &mut running.screen).is_some() {
-            while let Some(request) = running.frames.client().next_request() {
+            while let Some(request) = running.frames.next_request() {
                 carry_out(&running.window, request);
             }
         }
@@ -541,8 +541,8 @@ fn carry_out(window: &Window, request: Request) {
         Request::EndTextEntry => window.set_ime_allowed(false),
         Request::Share { path } => reveal(&path),
         Request::OpenUrl(url) => open_url(url),
-        // A desktop has no haptics. Saving settings and playing sound are not built in the
-        // desktop host yet: the shell and sound tracks of the flat layer's milestone build them.
+        // A desktop has no haptics. The app's feed saves the settings and plays the sound, as
+        // it sees each request first (`Feed::request`).
         Request::Haptic(_)
         | Request::SaveSettings(_)
         | Request::Music(_)

@@ -14,7 +14,7 @@ use crate::agent::hit;
 use crate::command::{Reply, Request, SessionCommand};
 use crate::element::Press;
 use crate::faces::{FaceList, Faces};
-use crate::frame::{self, ElementId, Frame, FrameBuilder, Place, Role, Wake};
+use crate::frame::{self, ElementId, Frame, FrameBuilder, Place, Role, Sound, Wake};
 use crate::hud::counts::CountFloats;
 use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
@@ -584,6 +584,12 @@ impl Client {
             .enumerate()
             .filter(move |(index, _)| verbs & (1 << index) != 0)
             .map(|(_, verb)| *verb)
+    }
+
+    /// The sounds that begin in the last frame made (`Frame::sounds`), for the host to play.
+    #[must_use]
+    pub fn sounds(&self) -> &[Sound] {
+        &self.frame.sounds
     }
 
     /// The next thing the client asks of the platform, if any.

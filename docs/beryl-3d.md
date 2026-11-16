@@ -1924,7 +1924,9 @@ reason to wait on another thread.
   frame thread would otherwise share its class.
 - **The frame log's writer** runs in the utility class, below everything else,
   since nothing waits for it.
-- **The audio thread** is the audio device's callback.
+- **The audio thread** takes the frame thread's sound messages and owns the
+  output device, and the device's own callback thread mixes what plays. Workers
+  decode the sound files beside it.
 
 Communication is by channels only:
 
@@ -3333,13 +3335,31 @@ one-shot sounds tied to script steps and looping ambience.
   files under `sfx/`), listed in `ui/src/audio/manifest.json`, with
   `ui/src/audio/steps.ts` saying which step plays which sound. Beryl 3D reads
   the same manifest and ports the rule in `steps.ts`.
-- **Playback** uses `rodio` 0.23.0 over `cpal`, on the audio device's own
-  thread, with rodio's default features off and `playback`, a WAV decoder, and
-  Symphonia's MP4 container and AAC decoder on, by the feature names rodio's
-  manifest gives them. On Android, `rodio` is built without `playback`, as
-  described below.
-- **Sounds are decoded at startup** into memory, so playing one is a message to
-  the audio thread and never a file read.
+- **Playback** uses `rodio` 0.23.0 over `cpal`, with rodio's default features
+  off and three on, by the names in rodio's manifest: `wav` (Symphonia's WAV
+  reader and PCM decoder, for the effects), `mp4` (Symphonia's MP4 container and
+  AAC decoder, for the music) and `playback` (the output device, through
+  `cpal`). Android builds `rodio` without `playback`, as described below. The
+  audio thread (`beryl_3d`'s `src/audio`) owns the output device, whose own
+  callback thread mixes; the frame thread only sends it messages: each sound of
+  each frame's `Frame::sounds`, `Request::Music` and `Request::Audio` (the
+  levels and mute).
+- **Effects are decoded at startup** into memory, by a worker, so playing one is
+  a message to the audio thread and never a file read. As in `sound.ts`, each
+  copy plays a variant at random, varied up to 3% in pitch and 1 dB in level, at
+  the cue's `gain` (4 dB less for the opponent's), and a cue already playing at
+  its `voices` copies (4 by default) drops the request.
+- **Music is decoded when it is asked for**, on a worker, since every track
+  decoded whole would take about half a gigabyte. A loop is cut at its exact
+  length in `ui/src/audio/loops.json`, plays twice, and crossfades over 1.5 s
+  into the next variant in its rotation; the win and loss stings play once.
+- **Settings** are saved by the desktop app as `settings.json` in its data
+  folder for each `Request::SaveSettings`, on a thread of their own, and handed
+  to the client as `Input::Settings` at startup. A replayed recording or a game
+  `--agent` plays starts from the defaults and saves nothing.
+- **A run with no window is silent**, so agents' and checks' runs make no noise,
+  and an app with no audio device runs silent and says so once on its standard
+  error.
 - **A sound is triggered by the client core**, which lists it in `Frame::sounds`
   in the first frame whose time is at or after the time its step asks for it
   (`beryl_scene`'s `sound.rs`, a port of `CUES` in `steps.ts`; the list of

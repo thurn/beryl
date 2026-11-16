@@ -3,8 +3,10 @@
 //! after each edit.
 
 mod app;
+mod audio;
 mod drive;
 mod ffi;
 mod fixture;
 mod frame_log;
 mod session;
+mod settings;
