@@ -24,10 +24,10 @@ reference, `[CR 118.12a]`, and define its link at the end of the comment;
 not rules engine code: it cites a rule only where the card relies on something
 no vocabulary entry says, such as a ruling about an unusual interaction.
 
-This file holds the rules that apply to every change. `rust/`, `ui/` and `data/`
-each have their own `AGENTS.md` with the reference material for work in that
-directory, and `docs/checks.md` describes how the checks work. Read the one for
-the area you are changing.
+This file holds the rules that apply to every change. `rust/`, `ui/`, `data/`
+and `tools/` each have their own `AGENTS.md` with the reference material for
+work in that directory, and `docs/checks.md` describes how the checks work. Read
+the one for the area you are changing.
 
 ## Writing for readers
 

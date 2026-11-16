@@ -10,6 +10,10 @@ Its crates depend on the main crates (`beryl_protocol`, `beryl_session`) by
 path. Its `[workspace.lints]` table must equal the main one's, which the
 `lints-match` check enforces.
 
+A program here that spreads work over threads sizes them with
+`beryl_inspect::runner::threads`, which follows the CPU tokens its `by` command
+leased (`tools/AGENTS.md`), never `available_parallelism` alone.
+
 ## Crates
 
 - `beryl_scene`: poses, layout and animation as pure data; no GPU, window, clock
