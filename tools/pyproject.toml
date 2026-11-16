@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]
-by = "beryl_tools.cli:main"
+by = "beryl_tools.cli:entry"
 
 [build-system]
 requires = ["setuptools>=68"]

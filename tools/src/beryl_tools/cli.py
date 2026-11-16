@@ -134,8 +134,6 @@ def main(argv: list[str] | None = None) -> int:
         return rerun
     # Every cargo command `by` starts takes CPU tokens first (cargo_pool.py).
     cargo_pool.install()
-    # So that a rebase merges data/beryl3d/gates.json's limits as numbers (gates_merge.py).
-    gates_merge.install(paths.REPO)
     parser = argparse.ArgumentParser(prog="by", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     for module in MODULES:
@@ -151,5 +149,13 @@ def main(argv: list[str] | None = None) -> int:
         return 130
 
 
+def entry() -> int:
+    """The `by` command: `main`, after the setup every command first makes sure of. Tests call
+    `main`, so that this setup's git commands never meet a test's stand-in for subprocess."""
+    # So that a rebase merges data/beryl3d/gates.json's limits as numbers (gates_merge.py).
+    gates_merge.install(paths.REPO)
+    return main()
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(entry())
