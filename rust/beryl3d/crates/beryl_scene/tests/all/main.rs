@@ -24,6 +24,7 @@ mod piles;
 mod play;
 mod pointer;
 mod scroll;
+mod shadows;
 mod sound;
 mod table;
 mod tokens;

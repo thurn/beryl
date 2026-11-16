@@ -44,7 +44,7 @@ const CLOTH_TINT: [u8; 4] = [38, 66, 58, 255];
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct SceneObject {
     pose: Pose,
-    place: Place,
+    pub(super) place: Place,
     visible: bool,
     tapped: bool,
     /// How many identical permanents it stands for (`Rest::copies`).
@@ -417,14 +417,15 @@ impl Table {
         std::mem::swap(&mut self.objects, objects);
     }
 
-    /// Writes a resolved element and a draw record for every visible card, and one draw record
-    /// for the cloth, which comes last among the opaque records. `view` is the view the table
-    /// shows. While a script plays, `motion` gives the objects that move their poses, and the
-    /// records of the view the script leads to. A permanent wears the marks its record calls for
-    /// (`own`). Each card is drawn from the board-size layer of its face in `faces`, or from
-    /// layer 0 while that face has no layer or the viewer does not know the card's name. Its back is drawn from the card back's layer. How each card
-    /// looks is then changed by `dress`: the effects on it, the marks on it and the pointer, in
-    /// that order.
+    /// Writes a resolved element and a draw record for every visible card, with a contact
+    /// shadow for each card above what lies under it, and one draw record for the cloth, which
+    /// comes last among the opaque records. `view` is the view the table shows. While a script
+    /// plays, `motion` gives the objects that move their poses, and the records of the view the
+    /// script leads to. A permanent wears the marks its record calls for (`own`). Each card is
+    /// drawn from the board-size layer of its face in `faces`, or layer 0 while that face has
+    /// none or the viewer does not know the card's name, and its back from the card back's
+    /// layer. How each card looks is then changed by `dress`: the effects on it, the marks on
+    /// it and the pointer, in that order.
     pub fn write(
         &self,
         view: &PlayerView,
@@ -583,6 +584,7 @@ impl Table {
         } else {
             self.fights.forget(slot);
         }
+        self.write_shadow((Some(slot), object.place), &look.pose, under_way, builder);
         self.write_look(
             name,
             (
@@ -765,6 +767,7 @@ impl Table {
         effects::card::look(dress.effects, on, dress.now, face, &mut look);
         light::marks::look(dress.lit, on, dress.now, &mut look);
         effects::card::write(dress.effects, on, dress.now, &look, builder);
+        self.write_shadow((None, object.place), &look.pose, under_way, builder);
         self.write_look(
             name,
             (ElementId(ABILITY_IDS + id % ABILITY_IDS), Role::Ability),

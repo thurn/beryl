@@ -8,6 +8,7 @@
 
 pub mod badges;
 mod camera;
+mod hands;
 pub(crate) mod lifted;
 mod look;
 mod own;
@@ -16,10 +17,11 @@ mod place;
 mod revealed;
 mod rows;
 mod scene;
+mod shadows;
 mod stack;
 mod tray;
 
-use glam::{Vec2, Vec3};
+use glam::Vec2;
 
 pub use camera::{Camera, CameraData};
 pub use look::{Dress, Look};
@@ -72,19 +74,56 @@ pub struct RowArea {
     pub right: f32,
 }
 
-/// Where a hand stands, relative to the camera.
+/// Where a hand stands, relative to the camera (`hand` and `opponent_hand` in `space.json`).
+/// The middle of the edge of each card nearest the screen's middle (the viewer's cards' top
+/// edges, the opponent's bottom edges) lies on one circle, whatever the hand's size, so a
+/// crowded hand turns and sinks less for each card than a spread one, as Arena's does.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HandData {
-    /// How far in front of the eye, in millimetres.
+    /// How far in front of the eye the first card stands, in millimetres.
     pub depth: f32,
+    /// How much nearer the eye each card stands than the one before it, in millimetres.
+    pub step_depth: f32,
     /// A card's height on screen, as a fraction of the window's height.
     pub height: f32,
-    /// The height of the cards' centres, in normalized device coordinates.
-    pub y: f32,
-    /// The widest the hand may spread, in normalized device coordinates.
-    pub width: f32,
-    /// How far each card turns about the line of sight per place from the middle, in radians.
-    pub fan: f32,
+    /// The height of the middle card's inner edge, in normalized device coordinates.
+    pub edge: f32,
+    /// The radius of the circle, in card widths.
+    pub fan_radius: f32,
+    /// How far apart the cards' centres stand while the hand has room, in card widths.
+    pub spacing: f32,
+    /// The widest the outer cards' centres may stand apart before the cards close up, in card
+    /// widths.
+    pub room: f32,
+    /// How far the whole fan leans clockwise, in degrees.
+    pub bias_degrees: f32,
+}
+
+/// Where the stack's items stand, relative to the camera at the right of the screen (`stack`
+/// in `space.json`). Distances are in normalized device coordinates' vertical unit, half the
+/// window's height, both across and up the screen. The top item stands in front, and each item
+/// beneath peeks out above it and to its left. A stack too tall to fit shrinks, all its items
+/// alike.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StackData {
+    /// How far in front of the eye the bottom item stands, in millimetres.
+    pub depth: f32,
+    /// How much nearer the eye each item stands than the one beneath it, in millimetres.
+    pub step_depth: f32,
+    /// An item's height on screen at full size, as a fraction of the window's height.
+    pub height: f32,
+    /// The distance from the window's right edge to the right edge of the full-size column.
+    pub right: f32,
+    /// The height of the top item's lower edge, in normalized device coordinates.
+    pub foot: f32,
+    /// The highest the stack's top may reach, in normalized device coordinates.
+    pub top: f32,
+    /// How far each item beneath peeks out above the one over it while the stack is short.
+    pub step: f32,
+    /// The most all the items beneath the top one may peek out together.
+    pub reach: f32,
+    /// How far each item beneath lies to the left, for each unit it peeks out above.
+    pub lean: f32,
 }
 
 /// Where one player's parts of the table that are not cards stand on the screen, in normalized
@@ -124,9 +163,7 @@ pub struct Layout {
     pub pile_scale: [f32; 2],
     /// The space the cards a prompt holds up are laid out in.
     pub tray: TraySpace,
-    /// The bottom item of the stack, and how far each item above it moves.
-    pub stack: Vec3,
-    pub stack_step: Vec3,
+    pub stack: StackData,
     pub hand: HandData,
     pub opponent_hand: HandData,
     /// The viewer's anchors, then the opponent's.
@@ -146,22 +183,25 @@ macro_rules! row_area {
     };
 }
 
-/// A `HandData` from the object of the same name in `layout.desktop`.
+/// A `HandData` from the object of the same name in `space.json`.
 macro_rules! hand_data {
     ($name:ident) => {
         HandData {
-            depth: desktop::$name::DEPTH,
-            height: desktop::$name::HEIGHT,
-            y: desktop::$name::Y,
-            width: desktop::$name::WIDTH,
-            fan: desktop::$name::FAN,
+            depth: space::$name::DEPTH,
+            step_depth: space::$name::STEP_DEPTH,
+            height: space::$name::HEIGHT,
+            edge: space::$name::EDGE,
+            fan_radius: space::$name::FAN_RADIUS,
+            spacing: space::$name::SPACING,
+            room: space::$name::ROOM,
+            bias_degrees: space::$name::BIAS_DEGREES,
         }
     };
 }
 
-/// The desktop layout, built from `layout.desktop` in `space.json`. The camera's pitch and
-/// field of view are solved by `just b3d camera-fit` from the cards measured in Arena's
-/// recordings, `data/beryl3d/camera-fit.json`.
+/// The desktop layout, built from `layout.desktop`, `hand`, `opponent_hand` and `stack` in
+/// `space.json`. The camera's pitch and field of view are solved by `just b3d camera-fit` from
+/// the cards measured in Arena's recordings, `data/beryl3d/camera-fit.json`.
 pub const DESKTOP: Layout = Layout {
     camera: CameraData {
         pitch_degrees: desktop::camera::PITCH_DEGREES,
@@ -194,8 +234,17 @@ pub const DESKTOP: Layout = Layout {
     // `ui/src/game/placement.ts`); a creature here is a card at its printed size.
     pile_scale: [desktop::piles::you::SCALE, desktop::piles::opponent::SCALE],
     tray: TraySpace::DESKTOP,
-    stack: desktop::STACK,
-    stack_step: desktop::STACK_STEP,
+    stack: StackData {
+        depth: space::stack::DEPTH,
+        step_depth: space::stack::STEP_DEPTH,
+        height: space::stack::HEIGHT,
+        right: space::stack::RIGHT,
+        foot: space::stack::FOOT,
+        top: space::stack::TOP,
+        step: space::stack::STEP,
+        reach: space::stack::REACH,
+        lean: space::stack::LEAN,
+    },
     hand: hand_data!(hand),
     opponent_hand: hand_data!(opponent_hand),
     // The web interface's anchors (`anchors` in `ui/src/stage/desktop.ts`): `life(side).middle`

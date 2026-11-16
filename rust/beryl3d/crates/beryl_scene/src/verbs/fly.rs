@@ -17,8 +17,8 @@
 //!   does a card no one can read that an effect puts in a hand from a library, farther.
 //! - Any other flight, such as a discard, goes along the straight line.
 //!
-//! Every flight but a land's or a drawn card's also rises `verbs.fly.arc` millimetres toward
-//! the camera at the middle of its time. A card whose face changes turns over top over bottom
+//! Every flight but a land's, a drawn card's or a spell's cast from a hand also rises
+//! `verbs.fly.arc` millimetres toward the camera at the middle of its time. A card whose face changes turns over top over bottom
 //! at moments of its own (`Turning`): a drawn card as it leaves the library, any other a little
 //! before half way. The values are under `verbs.fly` in `data/beryl3d/space.json`.
 //!
@@ -164,10 +164,13 @@ fn path_of(act: &Act, case: Option<&str>) -> Path {
         };
     }
     match (*from, object.zone) {
+        // A spell cast from a hand goes between two places held near the camera, and never
+        // leaves the table to rise above it: a rise along the table's height would carry it up
+        // the screen against its bow.
         (_, ZoneName::Stack) => Path::Bowed {
             bowing: if mine { &CAST } else { &THEIRS },
             toward,
-            rises: true,
+            rises: *from != ZoneName::Hand,
         },
         (ZoneName::Stack, ZoneName::Battlefield) => Path::Thrown,
         (ZoneName::Hand, ZoneName::Battlefield) if mine => Path::Straight { rises: false },

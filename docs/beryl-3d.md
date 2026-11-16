@@ -1034,10 +1034,11 @@ camera, how game objects are placed in it and how verbs move them.
   art tiles of unknown proportions, so `just b3d camera-fit` measures the art
   frame printed on each tile and gives each its own aspect ratio: the sides of
   untapped cards fix the pitch, and the slight turn of tapped cards fixes the
-  field of view. The fitted values are data: the desktop layout's camera, rows,
-  piles, stack and hands are `layout.desktop` in `data/beryl3d/space.json`, and
-  the card's size is `card`. A build script turns the file into constants by one
-  rule that names no key.
+  field of view. The fitted values are data: the desktop layout's camera, rows
+  and piles are `layout.desktop` in `data/beryl3d/space.json`, the hands and the
+  stack, which are placed relative to the camera, are `hand`, `opponent_hand`
+  and `stack`, contact shadows are `shadow`, and the card's size is `card`. A
+  build script turns the file into constants by one rule that names no key.
 
 A window of another shape does not turn the camera. It moves the camera along
 its own line of sight, nearer or farther:
@@ -1097,6 +1098,16 @@ flight start exactly where the card was.
   positions are given relative to the camera, not the table, so they are the
   same size and in the same place at any window shape. They are still 3D
   objects: they tilt, they are lit and they cast shadows on the table below.
+  Each hand is fanned as the web interface's is: the middle of each card's inner
+  edge lies on one circle whatever the hand's size, so a crowded hand turns and
+  sinks less for each card. The viewer's cards close up as the hand grows, but
+  never so far that a card's uncovered strip is narrower than `strip`, unless
+  the hand would then run past the window's sides (60 cards in a window narrower
+  than about 1600 by 900 points). The stack's items stand at the right of the
+  screen, the top item in front and each item beneath peeking out above and to
+  its left, and a tall stack shrinks to fit. A spell that is resolving, which
+  the game has taken off its stack while its card stays in the stack's zone,
+  stays the top item until it leaves.
 - **Cards a prompt holds up lie in the tray.** `table::tray` ports the web
   interface's `laidOut` for one pile (rows about the middle of the space) and
   two (boxes side by side), in the space `desktopTray` gives, placed relative to
@@ -1523,8 +1534,11 @@ as many pixels opaque as it can.
   lying on the table get none. A shadow drawn at one fixed height is hidden
   wherever the cards beneath it stand taller, as they do in a library pile or on
   a stress board whose overlapping rows rise 40 millimetres: the prototype
-  raised its shadows on the stress boards to clear them. The real client should
-  place a shadow at the height of what lies under it, which placement knows.
+  raised its shadows on the stress boards to clear them. The client places each
+  shadow just above the highest card lying at rest under it, in a pile or a row,
+  and casts the card onto that plane along the web interface's light, so the
+  shadow falls toward the viewer and a little right, the farther the higher the
+  card.
 - **No per-pixel lighting.** A face's color is its texture times a tint.
 
 What that buys, measured on 2026-11-15 by `just b3d gate --gpu`'s fragment count

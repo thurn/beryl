@@ -7,8 +7,10 @@ use beryl_protocol::script::Reset;
 use beryl_scene::agent::checks::duplicates;
 use beryl_scene::agent::tree::{TreeOptions, tree};
 use beryl_scene::agent::{Context, Layout};
+use beryl_scene::data::audit;
 use beryl_scene::frame::{Frame, Place, Role};
 use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::pose::Pose;
 use beryl_scene::table::{ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Window, place};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, script};
 use beryl_scene::{Client, Config};
@@ -390,12 +392,18 @@ fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
     // The spell is the stack's bottom item and the abilities its second and third.
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
     let placement = place(&view, &[3, 4], &DESKTOP, &camera, &Default::default());
-    let at = |index: f32| DESKTOP.stack + DESKTOP.stack_step * index;
     let spell = view.objects.iter().find(|o| o.zone == ZoneName::Stack);
     let spell = placement.get(spell.expect("a spell").slot).expect("placed");
-    assert_eq!(spell.pose.position, at(0.0));
-    assert_eq!(placement.ability(3).expect("placed").pose.position, at(1.0));
-    assert_eq!(placement.ability(4).expect("placed").pose.position, at(2.0));
+    let depths = [
+        spell.pose.position,
+        placement.ability(3).expect("placed").pose.position,
+        placement.ability(4).expect("placed").pose.position,
+    ]
+    .map(|position| camera.depth(position));
+    assert!(
+        depths[0] > depths[1] && depths[1] > depths[2],
+        "each item stands nearer the eye than the one beneath it: {depths:?}"
+    );
 
     // `just b3d tree` prints a line for each, and no two elements share an id.
     let printed = tree(&frame, &TreeOptions::default()).expect("a tree");
@@ -413,4 +421,213 @@ fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
         at: 0,
     };
     assert!(duplicates(&frame, &context).is_empty());
+}
+
+/// A view with `count` cards in each player's hand.
+fn hands(count: usize) -> PlayerView {
+    let mut builder = ViewBuilder::new();
+    for index in 0..count {
+        builder.card(ZoneName::Hand, Side::You, &format!("Mine {index}"));
+        builder.card(ZoneName::Hand, Side::Opponent, &format!("Theirs {index}"));
+    }
+    builder.build()
+}
+
+/// The corners on screen of a card resting at `pose`, in points: its face's bottom left, bottom
+/// right, top right and top left.
+fn corners(pose: &Pose, camera: &Camera) -> [Vec2; 4] {
+    let (x, y) = (CARD_WIDTH / 2.0, CARD_HEIGHT / 2.0);
+    let transform = pose.transform();
+    [(-x, -y), (x, -y), (x, y), (-x, y)]
+        .map(|(x, y)| camera.to_screen(transform.transform_point3(Vec3::new(x, y, 0.0))))
+}
+
+/// The poses of `side`'s hand in `view`, in the order the view lists the cards.
+fn hand_poses(view: &PlayerView, side: Side, camera: &Camera) -> Vec<Pose> {
+    let placement = place(view, &[], &DESKTOP, camera, &Default::default());
+    view.objects
+        .iter()
+        .filter(|object| {
+            object.zone == ZoneName::Hand && object.zone_side.unwrap_or(object.owner) == side
+        })
+        .map(|object| placement.get(object.slot).expect("placed").pose)
+        .collect()
+}
+
+/// The middle of the edge of a card nearest the screen's middle, on screen: the top edge of the
+/// viewer's cards, the bottom edge of the opponent's, which stand upside down.
+fn inner_edge(corners: [Vec2; 4], side: Side) -> Vec2 {
+    let [a, b] = inner_corners(corners, side);
+    (a + b) / 2.0
+}
+
+/// The two corners of `inner_edge`, the left one first.
+fn inner_corners(corners: [Vec2; 4], side: Side) -> [Vec2; 2] {
+    let mut sorted = corners;
+    sorted.sort_by(|a, b| a.y.total_cmp(&b.y));
+    let [a, b] = match side {
+        Side::You => [sorted[0], sorted[1]],
+        Side::Opponent => [sorted[2], sorted[3]],
+    };
+    if a.x < b.x { [a, b] } else { [b, a] }
+}
+
+#[test]
+fn hands_of_any_size_lie_inside_the_window_each_card_with_its_strip_uncovered() {
+    for count in [1, 5, 7, 10, 60] {
+        let view = hands(count);
+        for (width, height) in DESKTOP_WINDOWS {
+            let camera = Camera::fit(DESKTOP.camera, window(width, height));
+            for side in [Side::You, Side::Opponent] {
+                let cards: Vec<[Vec2; 4]> = hand_poses(&view, side, &camera)
+                    .iter()
+                    .map(|pose| corners(pose, &camera))
+                    .collect();
+                assert_eq!(cards.len(), count);
+                let label = format!("{count} cards in {side:?}'s hand at {width}x{height}");
+                for corners in &cards {
+                    assert!(
+                        corners.iter().all(|c| (-0.5..=width + 0.5).contains(&c.x)),
+                        "{label}: {corners:?} runs past the window's sides"
+                    );
+                    let edge = inner_edge(*corners, side);
+                    assert!(
+                        (0.0..=height).contains(&edge.y),
+                        "{label}: the card's inner edge, at {edge}, is out of view"
+                    );
+                }
+                // Each of the viewer's cards keeps a strip to press, which the next card leaves
+                // uncovered. The last card lies uncovered.
+                // The opponent's cards are not the viewer's to press.
+                let card = cards[0][0].distance(cards[0][1]);
+                // A hand too large to give every card a whole strip even spread edge to edge
+                // across the window (60 cards in a window under about 1600 by 900 points:
+                // 59 strips of 24 points and a card come to more than its width) closes up
+                // further, and is only held inside the window.
+                #[expect(clippy::cast_precision_loss, reason = "a few cards")]
+                let room = (count.saturating_sub(1) as f32) * audit::TARGET_POINTS + card;
+                if side == Side::Opponent || room > 0.95 * width {
+                    continue;
+                }
+                for pair in cards.windows(2) {
+                    // Measured along the card's inner edge, from its left corner to the next
+                    // card's.
+                    let [a, b] = inner_corners(pair[0], side);
+                    let [next, _] = inner_corners(pair[1], side);
+                    let strip = (next - a).dot((b - a).normalize());
+                    assert!(
+                        strip >= audit::TARGET_POINTS - 0.01,
+                        "{label}: a strip of {strip} points"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_hands_cards_lie_on_one_circle_and_turn_more_the_farther_from_the_middle() {
+    let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
+    for count in [7, 60] {
+        let view = hands(count);
+        for (side, data, down) in [
+            (Side::You, DESKTOP.hand, 1.0),
+            (Side::Opponent, DESKTOP.opponent_hand, -1.0),
+        ] {
+            let poses = hand_poses(&view, side, &camera);
+            let cards: Vec<[Vec2; 4]> = poses.iter().map(|pose| corners(pose, &camera)).collect();
+            let edges: Vec<Vec2> = cards
+                .iter()
+                .map(|corners| inner_edge(*corners, side))
+                .collect();
+            let wide = cards[0][0].distance(cards[0][1]);
+            // One millimetre of the hand's plane, in points.
+            let millimetre = wide / (CARD_WIDTH * poses[0].scale);
+            let radius = data.fan_radius * wide;
+            let middle = (edges[0] + edges[count - 1]) / 2.0;
+            // The circle's centre lies below the middle of the viewer's fan, above the
+            // opponent's, by a radius from the middle card's edge.
+            let top = edges
+                .iter()
+                .map(|edge| edge.y * down)
+                .fold(f32::MAX, f32::min)
+                * down;
+            let centre = Vec2::new(middle.x, top + down * radius);
+            for edge in &edges {
+                let off = (edge.distance(centre) - radius).abs() / millimetre;
+                assert!(
+                    off < 0.5,
+                    "{count} cards in {side:?}'s hand: an edge {off} mm off the circle"
+                );
+            }
+            // The turn of each card on screen, from its inner edge, against the middle's.
+            let turns: Vec<f32> = cards
+                .iter()
+                .map(|corners| {
+                    let [a, b] = inner_corners(*corners, side);
+                    (b.y - a.y).atan2(b.x - a.x)
+                })
+                .collect();
+            let lean = data.bias_degrees.to_radians();
+            let turn = |at: usize| (turns[at] - lean * down).abs();
+            // Outward from the middle on each side, each card turns more than the one before.
+            let half = count / 2;
+            let left = (0..half).rev();
+            let right = count - half..count;
+            for side_of_fan in [left.collect::<Vec<_>>(), right.collect()] {
+                for pair in side_of_fan.windows(2) {
+                    assert!(
+                        turn(pair[1]) > turn(pair[0]),
+                        "{count} cards in {side:?}'s hand: card {} turns no more than {}",
+                        pair[1],
+                        pair[0]
+                    );
+                }
+            }
+            let ends = (turns[0] - lean * down).abs();
+            assert!(
+                ends > 0.01,
+                "{count} cards in {side:?}'s hand: the end card turns"
+            );
+        }
+    }
+}
+
+#[test]
+fn stacks_of_any_size_stay_on_screen_with_the_newest_item_nearest() {
+    for count in [1, 3, 10, 50] {
+        let mut builder = ViewBuilder::new();
+        for index in 0..count {
+            builder.card(ZoneName::Stack, Side::You, &format!("Spell {index}"));
+        }
+        let view = builder.build();
+        for (width, height) in DESKTOP_WINDOWS {
+            let camera = Camera::fit(DESKTOP.camera, window(width, height));
+            let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
+            let poses: Vec<Pose> = view
+                .stack
+                .iter()
+                .map(|item| match item {
+                    StackItem::Spell { slot, .. } => placement.get(*slot).expect("placed").pose,
+                    StackItem::Ability { .. } => unreachable!("only spells"),
+                })
+                .collect();
+            let label = format!("a stack of {count} at {width}x{height}");
+            for pose in &poses {
+                let corners = corners(pose, &camera);
+                assert!(
+                    corners
+                        .iter()
+                        .all(|c| (0.0..=width).contains(&c.x) && (0.0..=height).contains(&c.y)),
+                    "{label}: {corners:?} is off screen"
+                );
+            }
+            for pair in poses.windows(2) {
+                assert!(
+                    camera.depth(pair[1].position) < camera.depth(pair[0].position),
+                    "{label}: each item stands nearer the eye than the one beneath it"
+                );
+            }
+        }
+    }
 }

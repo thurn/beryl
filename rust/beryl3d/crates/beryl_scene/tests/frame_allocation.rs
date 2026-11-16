@@ -1,10 +1,10 @@
-//! `Client::frame` allocates nothing once a prompt bar has been laid out, nor while a life total
-//! falls and the amount it fell by sinks away, nor while the turn banner fades in, stands and
-//! fades out, nor while 255 marks are drawn, nor with 255 attackers wearing their wedges, nor on
-//! a table of 255 permanents that each wear badges, nor while a hand card rises under the mouse,
-//! nor while a scrolled battlefield row slides, and neither does moving a float of the flat
-//! layer and writing it (docs/beryl-3d.md, "The frame": no allocation). This binary counts
-//! every heap allocation, so it holds one test.
+//! `Client::frame` allocates nothing once a prompt bar has been laid out, nor with a 60-card
+//! hand and its shadows, nor while a life total falls and the amount it fell by sinks away, nor
+//! while the turn banner fades in, stands and fades out, nor while 255 marks are drawn, nor with
+//! 255 attackers wearing their wedges, nor on a table of 255 permanents that each wear badges,
+//! nor while a hand card rises under the mouse, nor while a scrolled battlefield row slides, and
+//! neither does moving a float of the flat layer and writing it (docs/beryl-3d.md, "The frame":
+//! no allocation). This binary counts every heap allocation, so it holds one test.
 
 mod common;
 
@@ -115,8 +115,8 @@ fn deciding() -> Input {
     }))
 }
 
-#[test]
-fn a_frame_with_a_prompt_bar_allocates_nothing() {
+/// A client with room for these frames, drawing in a 1440 by 900 window.
+fn client() -> Client {
     let mut client = Client::new(Config {
         elements: 256,
         draws: 1024,
@@ -130,6 +130,39 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
         scale: 2.0,
         safe_area: Insets::default(),
     });
+    client
+}
+
+/// A frame with a 60-card hand, each card with its contact shadow, over a battlefield and a
+/// library.
+fn a_frame_with_a_sixty_card_hand_allocates_nothing() {
+    let mut crowded = ViewBuilder::new();
+    for index in 0..60 {
+        crowded.card(ZoneName::Hand, Side::You, &format!("Card {index}"));
+        crowded.card(ZoneName::Library, Side::You, "Island");
+    }
+    for _ in 0..20 {
+        crowded
+            .card(ZoneName::Battlefield, Side::You, "Plains")
+            .types = vec![CardType::Land];
+    }
+    crowded.script(ScriptBuilder::reset().build());
+    let mut hand = client();
+    hand.handle(Input::Update(Box::new(crowded.update())));
+    hand.frame(0);
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    hand.frame(1);
+    let after = ALLOCATIONS.load(Ordering::Relaxed);
+    assert_eq!(
+        after - before,
+        0,
+        "allocations in a frame with a 60-card hand"
+    );
+}
+
+#[test]
+fn a_frame_with_a_prompt_bar_allocates_nothing() {
+    let mut client = client();
     client.handle(deciding());
     let glyphs: Vec<GlyphCell> = client
         .wanted_glyphs()
@@ -145,6 +178,8 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
     let after = ALLOCATIONS.load(Ordering::Relaxed);
     assert!(records > 3, "the frame holds the bar's records");
     assert_eq!(after - before, 0, "allocations during Client::frame");
+
+    a_frame_with_a_sixty_card_hand_allocates_nothing();
 
     // The frames of a step that takes the viewer's life from 20 to 17: the one that begins it,
     // which shows the new total and the loss, and those that sink and fade the loss.

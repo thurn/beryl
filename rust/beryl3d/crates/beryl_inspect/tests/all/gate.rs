@@ -7,11 +7,17 @@ use beryl_scene::frame::{Frame, Role};
 #[test]
 fn rank_picks_the_frames_with_the_most_work() {
     // Every frame of a flight writes each card and evaluates each card's segment, and the rest
-    // frames before it draw only the cards the rows show, so the first frames of the flight
-    // rank highest, the earliest of equals first.
-    let first: [usize; 8] = std::array::from_fn(|i| REST_FRAMES + i);
-    assert_eq!(rank("stress-255"), Some(first));
-    assert_eq!(rank("stress-1024"), Some(first));
+    // frames before it draw only the cards the rows show, so only frames of the flight rank.
+    // The first, which also places every card, ranks highest; the others are those in which
+    // the most cards have risen high enough to cast a shadow.
+    for name in ["stress-255", "stress-1024"] {
+        let ranked = rank(name).expect("a gated board");
+        assert_eq!(ranked[0], REST_FRAMES, "{name}: {ranked:?}");
+        assert!(
+            ranked.iter().all(|&frame| frame >= REST_FRAMES),
+            "{name}: {ranked:?}"
+        );
+    }
     assert_eq!(rank("no-such-board"), None);
 }
 

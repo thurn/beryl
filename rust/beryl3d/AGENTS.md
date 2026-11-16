@@ -108,10 +108,11 @@ project, and selects the main lanes.
 ## Data files
 
 - `data/beryl3d/space.json`: the table's spatial values, such as `verbs`,
-  `catch_up`, `frame_rate`, `card` and `layout.desktop` (the desktop layout's
-  camera, rows, piles, stack and hands). Its keys under `verbs` name verbs or
-  cases of `data/ui-conventions.json` (`data-names`). `beryl_scene`'s build
-  script reads the whole file by one rule, with no per-key code: an object
+  `catch_up`, `frame_rate`, `card`, `layout.desktop` (the desktop layout's
+  camera, rows and piles), `hand`, `opponent_hand` and `stack` (placed relative
+  to the camera) and `shadow` (contact shadows). Its keys under `verbs` name
+  verbs or cases of `data/ui-conventions.json` (`data-names`). `beryl_scene`'s
+  build script reads the whole file by one rule, with no per-key code: an object
   becomes a `pub mod`, a number an `f32` constant, an array of two or three
   numbers a `glam::Vec2` or `Vec3`, an array of those an array of vectors, and a
   number whose dotted path is listed in the top-level `counts` array a `usize`.

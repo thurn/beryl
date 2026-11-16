@@ -352,7 +352,11 @@ fn a_creature_wears_its_power_and_toughness_inside_its_corners_through_a_flight(
     let mut scratch = empty_frame();
     for t in (100..=1_200).step_by(25) {
         let drawn = frame(&mut show, &mut scratch, t * MS);
-        let glyphs = table_glyphs(&drawn);
+        let mut glyphs = table_glyphs(&drawn);
+        // Records are drawn farthest first, so a turned card's glyphs are read left to right on
+        // the screen.
+        let camera = show.table().camera();
+        glyphs.sort_by(|a, b| camera.to_screen(a.1).x.total_cmp(&camera.to_screen(b.1).x));
         let ids: Vec<u16> = glyphs.iter().map(|(glyph, _)| *glyph).collect();
         assert_eq!(ids, spelled, "the plaque spells 2/3 at {t} ms");
         let card = drawn
@@ -360,7 +364,6 @@ fn a_creature_wears_its_power_and_toughness_inside_its_corners_through_a_flight(
             .iter()
             .find(|element| element.id.0 == u32::from(slot.0))
             .expect("the bear is drawn");
-        let camera = show.table().camera();
         for (_, middle) in glyphs {
             let point = camera.to_screen(middle);
             assert!(

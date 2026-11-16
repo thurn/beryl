@@ -8,14 +8,15 @@ use beryl_protocol::protocol::{
     CardType, ObjectId, ObjectView, PlayerState, PlayerView, RowName, Side, ZoneName,
 };
 use beryl_protocol::script::{Piles, Table as Played};
-use glam::{Quat, Vec2, Vec3};
+use glam::Vec3;
 
 mod indexed;
 
+use super::hands::hand;
 use super::pile::{PileShown, lay_pile, pile_base, pile_scale};
 use super::rows::{Laid, NameIds, RowRules, RowWindow, SameName, face_up, lay_row};
 use super::stack::{OnStack, on_stack, place_stack, spells};
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, Layout, lifted};
+use super::{Camera, Layout, lifted};
 use crate::frame::Place;
 use crate::pose::Pose;
 
@@ -406,7 +407,11 @@ impl<'a> Zones<'a> {
             slots: Cow::Owned(by_slot(end, view.objects.iter())),
             groups: None,
             battlefield: &view.battlefield,
-            stack: on_stack(view.stack.iter().map(|item| (item, None)), abilities),
+            stack: on_stack(
+                view.stack.iter().map(|item| (item, None)),
+                abilities,
+                view.objects.iter(),
+            ),
             piles: [player(&view.players.you), player(&view.players.opponent)],
             handling: None,
         };
@@ -429,7 +434,11 @@ impl<'a> Zones<'a> {
             slots: Cow::Owned(by_slot(end, table.objects.values())),
             groups: None,
             battlefield: &table.battlefield,
-            stack: on_stack(table.stack.iter().map(|entry| (&entry.item, entry.id)), &[]),
+            stack: on_stack(
+                table.stack.iter().map(|entry| (&entry.item, entry.id)),
+                &[],
+                table.objects.values(),
+            ),
             piles: [piles(&table.you), piles(&table.opponent)],
             handling: None,
         }
@@ -566,7 +575,7 @@ fn lay(
                 Side::You => layout.hand,
                 Side::Opponent => layout.opponent_hand,
             };
-            hand(placement, objects, side, data, camera);
+            hand(placement, objects, side, (data, layout.strip), camera);
         }
         Group::Row { side, row } => {
             let offset = scroll[side_index(side)][row_index(row)];
@@ -579,7 +588,7 @@ fn lay(
                 ids,
             );
         }
-        Group::Stack => place_stack(placement, objects, stack, layout),
+        Group::Stack => place_stack(placement, objects, stack, (&layout.stack, camera)),
     }
     lifted::lay(handled, group, objects, (layout, camera), placement);
 }
@@ -597,51 +606,6 @@ fn side_of(object: &ObjectView) -> Side {
 /// The turn of a card that shows its face (0) or its back (1).
 pub(super) fn turn(object: &ObjectView) -> f32 {
     if face_up(object) { 0.0 } else { 1.0 }
-}
-
-/// A hand, fanned along an edge of the screen and placed relative to the camera so that it
-/// keeps its size and place at any window shape. Each card lies in a plane parallel to the
-/// screen, a little nearer the eye than the card before it, so neighbours cover each other
-/// cleanly. The viewer's runs along the bottom edge; the opponent's along the top, mostly out of
-/// view.
-fn hand(
-    placement: &mut Placement,
-    objects: &[&ObjectView],
-    side: Side,
-    data: HandData,
-    camera: &Camera,
-) {
-    let count = objects.len();
-    let aspect = camera.window.size.width / camera.window.size.height;
-    let card = data.height * 2.0 * (CARD_WIDTH / CARD_HEIGHT) / aspect;
-    let spacing = (card * 0.8).min(data.width / count.max(1) as f32);
-    // The opponent's hand faces them: its fan turns the other way, and it recedes as it goes.
-    let (lean, nearer) = match side {
-        Side::You => (-1.0, 1.0),
-        Side::Opponent => (1.0, -1.0),
-    };
-    for (index, object) in objects.iter().enumerate() {
-        let offset = index as f32 - (count as f32 - 1.0) / 2.0;
-        let ndc = Vec2::new(offset * spacing, data.y + lean * offset * offset * 0.003);
-        let rotation = Quat::from_rotation_z(lean * offset * data.fan);
-        let depth = data.depth - nearer * index as f32 * 1.5;
-        let mut pose = camera.screen_pose(ndc, depth, rotation, data.height);
-        pose.turn = turn(object);
-        let place = Place::Card {
-            zone: ZoneName::Hand,
-            side,
-            row: None,
-        };
-        placement.set(
-            object.slot,
-            Rest {
-                pose,
-                place,
-                visible: true,
-                copies: 1,
-            },
-        );
-    }
 }
 
 /// Which row a permanent stands in: where a player pinned it, else the creatures' row for a

@@ -31,7 +31,11 @@ impl<'a> Zones<'a> {
             slots: Cow::Borrowed(slots),
             groups: Some(groups),
             battlefield: &table.battlefield,
-            stack: on_stack(table.stack.iter().map(|entry| (&entry.item, entry.id)), &[]),
+            stack: on_stack(
+                table.stack.iter().map(|entry| (&entry.item, entry.id)),
+                &[],
+                table.objects.values(),
+            ),
             piles: [piles(&table.you), piles(&table.opponent)],
             handling: None,
         }

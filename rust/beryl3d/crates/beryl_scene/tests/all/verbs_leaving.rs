@@ -347,7 +347,13 @@ fn every_case_of_emerge_travels_from_the_source_to_the_stack() {
         assert!(begins.scale < 0.7, "{case}: small at first");
         let landed = at(&moments, to);
         let rests = landed.ability.expect("on the stack");
-        assert!((rests.scale - 1.0).abs() < 1e-6, "{case}: it grows");
+        let table = show.table();
+        let id = *table.abilities().last().expect("an ability on the stack");
+        let placed = table.ability_rest(id).expect("placed on the stack");
+        assert!(
+            (rests.scale - placed.scale).abs() < 1e-6 && rests.scale > begins.scale,
+            "{case}: it grows to its size on the stack"
+        );
         assert!(
             moments
                 .iter()
