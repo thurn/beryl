@@ -1,19 +1,3 @@
 {
-  "recordings": {
-    "combat-attackers/opponent": 24,
-    "combat-attackers/you": 6,
-    "combat-declare/opponent": 2,
-    "combat-declare/you": 2,
-    "late-game/opponent": 1,
-    "late-game/you": 1,
-    "shape-declare/opponent": 2,
-    "shape-declare/you": 2,
-    "stack-bounce/you": 1,
-    "stress-verbs/you": 25,
-    "teferi-time-raveler/combat-damage-removes-teferi-while-the-other-planeswalker-is-attacked/you": 1,
-    "verbs-cast-theirs-stops/opponent": 2,
-    "verbs-cast-theirs-stops/you": 2,
-    "verbs-cast-theirs/opponent": 2,
-    "verbs-cast-theirs/you": 2
-  }
+  "recordings": {}
 }

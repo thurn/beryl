@@ -4126,10 +4126,19 @@ differently on purpose: a beat lasts until the cards that close up after a card
 left are at their new places, but only as long as that close-up is still each
 card's latest motion, and on the web interface a strike waits while its way
 would cross an earlier strike's. Beryl 3D follows the first rule on its own
-table and does not hold strikes back. Milestone 5's exit check needs the list
-empty, so a difference that comes only from this layout rule is accepted by the
-comparison itself, which recognises it from the two timelines alone, rather than
-staying listed.
+table and does not hold strikes back. These differences are accepted by the
+comparison itself (`laid_out_later` in
+`tools/src/beryl_tools/beryl3d/timeline.py`), which recognises them from the two
+timelines alone, rather than listed:
+
+- The first step of a beat, other than a script's first, may begin later on the
+  web, if the web's beat begins no sooner than all of the script's earlier steps
+  on the web have ended and waits at least as long after them as Beryl 3D's.
+- A strike that is not the first step of its beat may begin a whole number of 25
+  ms waits later on the web than the step before it.
+- The steps after either are accepted while the web is later by the same amount,
+  and every accepted step has the same verb, case, effects, sounds and length on
+  both sides.
 
 What the check does not cover is fixed by hand, and found by the parity list: a
 screen's layout, a prompt's wording, and how an effect looks.

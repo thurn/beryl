@@ -5,7 +5,8 @@ It exports the recordings (`just b3d export`), plays them with `ui/scripts/timel
 web interface's timeline), prints Beryl 3D's own (`just b3d timeline`) and compares the two
 recording by recording and seat by seat. Two timelines agree when they hold the same steps
 with the same view, beat, step, verb, case, effects, sounds and `own`, and every start and
-end is within [`TOLERANCE_MS`] of the other's.
+end is within [`TOLERANCE_MS`] of the other's, or the web's step is later only because of
+where the web interface lays cards out ([`laid_out_later`]).
 
 `data/beryl3d/timeline-parity.json` lists the recordings that differ and by how many steps. A
 step counts once however many of its fields differ, and a step that only one side has counts
@@ -77,6 +78,8 @@ UNFOLLOWED = (".tsx", ".json")
 
 # A step as printed on either side, by its keys.
 Step = dict[str, Any]
+# Where a step is: its view, beat, step and whether the client made it itself ([`place`]).
+Place = tuple[int, int, int, bool]
 # The steps of each recording and seat, keyed `<recording>/<seat>`.
 Timelines = dict[str, list[Step]]
 
@@ -96,7 +99,7 @@ def parse(lines: list[str]) -> Timelines:
     return found
 
 
-def place(step: Step) -> tuple[int, int, int, bool]:
+def place(step: Step) -> Place:
     """Where a step is: its view, beat, step and whether the client made it itself."""
     return (step["view"], step["beat"], step["step"], bool(step.get("own", False)))
 
@@ -105,6 +108,107 @@ def agree(a: Step, b: Step) -> bool:
     if any(a.get(k) != b.get(k) for k in EXACT):
         return False
     return all(abs(a[k] - b[k]) <= TOLERANCE_MS for k in ("start", "end"))
+
+
+# How long the web interface holds a strike back at a time while its way would cross an earlier
+# strike's (`LOOK.wait` in ui/src/stage/enter.ts).
+STRIKE_WAIT_MS = 25.0
+
+
+@dataclass
+class _Script:
+    """How far [`laid_out_later`] has got through the steps of one script, on one side of
+    `own`: how much later the web's steps are than Beryl 3D's, the beat it is in, and on each
+    side the latest end of the steps of the beats before that one and of every step so far.
+    """
+
+    shift: float = 0.0
+    beat: int | None = None
+    before: tuple[float, float] | None = None
+    so_far: tuple[float, float] = (float("-inf"), float("-inf"))
+
+
+def _strike_wait(grown: float) -> bool:
+    """Whether `grown` milliseconds is a whole number of the web's strike waits, more than none."""
+    waits = round(grown / STRIKE_WAIT_MS)
+    return waits > 0 and abs(grown - waits * STRIKE_WAIT_MS) <= TOLERANCE_MS
+
+
+def laid_out_later(
+    by_web: dict[Place, Step], by_native: dict[Place, Step]
+) -> set[Place]:
+    """The places of the steps that differ only because the web interface plays them later for
+    a reason of its own layout, which docs/beryl-3d.md ('Timeline parity') says not to copy:
+
+    - **A beat waits for cards closing up.** The web's beat lasts until the cards that close up
+      after a card left are at their new places (`closedBy` in ui/src/stage/tracks.ts), which
+      depends on where its layout puts them. Beryl 3D lays its table out differently, so its
+      close-up can end sooner. Accepted: the first step of a beat (not the first beat of its
+      script) begins later on the web, as long as the web's beat begins no sooner than every
+      earlier step of its script on the web has ended, and waits at least as long after that
+      as Beryl 3D's waits after its own.
+    - **A strike is held back.** The web holds a strike back, 25 ms at a time, while its way
+      across the table would cross an earlier strike's still on its way out or back, and every
+      later step of the beat as long (`awaited` in ui/src/stage/enter.ts). Beryl 3D does not
+      hold strikes back. Accepted: a strike that is not the first step of its beat begins a
+      whole number of those waits later on the web than the step before it in its beat.
+
+    Either way, the steps after it are accepted while they are later on the web by the same
+    amount, and so is the first step of a later beat that both sides begin equally long after
+    their own earlier steps ended, which happens when the later steps the web was held for end
+    the beat. Every accepted step has the same verb, case, effects, sounds and length on both
+    sides. A step that is not accepted leaves the accepted shift as it was, so a real
+    difference that moves every later step still counts each of them.
+
+    This cannot tell a close-up from any other reason the first step of a beat began later
+    on the web, since neither timeline says why a beat ended when it did: a Beryl 3D beat that
+    begins too early after the one before it is accepted too.
+    """
+    accepted: set[Place] = set()
+    scripts: dict[tuple[int, bool], _Script] = {}
+    for at in sorted(by_web.keys() | by_native.keys()):
+        view, beat, _, own = at
+        script = scripts.setdefault((view, own), _Script())
+        first = script.beat != beat
+        if first:
+            if script.beat is not None:
+                script.before = script.so_far
+            script.beat = beat
+        a, b = by_web.get(at), by_native.get(at)
+        if a is not None and b is not None:
+            shift = a["start"] - b["start"]
+            if agree(a, b) or _later(a, b, script, first):
+                if not agree(a, b):
+                    accepted.add(at)
+                script.shift = shift
+        web_end, native_end = script.so_far
+        script.so_far = (
+            web_end if a is None else max(web_end, a["end"]),
+            native_end if b is None else max(native_end, b["end"]),
+        )
+    return accepted
+
+
+def _later(a: Step, b: Step, script: _Script, first: bool) -> bool:
+    """Whether the web's step `a` differs from Beryl 3D's `b` only in being later, for one of
+    the reasons [`laid_out_later`] accepts."""
+    if any(a.get(k) != b.get(k) for k in EXACT):
+        return False
+    if abs((a["end"] - a["start"]) - (b["end"] - b["start"])) > TOLERANCE_MS:
+        return False
+    grown = (a["start"] - b["start"]) - script.shift
+    if abs(grown) <= TOLERANCE_MS:
+        return True
+    if not first:
+        return a["verb"] == "strike" and _strike_wait(grown)
+    before = script.before
+    if before is None:
+        return False
+    web_gap = a["start"] - before[0]
+    native_gap = b["start"] - before[1]
+    if abs(web_gap - native_gap) <= TOLERANCE_MS:
+        return True
+    return web_gap > native_gap and web_gap >= -TOLERANCE_MS
 
 
 @dataclass(frozen=True)
@@ -122,12 +226,13 @@ def compare(web: list[Step], native: list[Step]) -> Difference | None:
     """How the two timelines of one recording and seat differ, or None when they agree."""
     by_web = {place(s): s for s in web}
     by_native = {place(s): s for s in native}
+    later = laid_out_later(by_web, by_native)
     count = 0
     first: tuple[Step | None, Step | None] | None = None
     # In the order the steps begin on either side, the web's first.
     for at in [*by_web, *(p for p in by_native if p not in by_web)]:
         a, b = by_web.get(at), by_native.get(at)
-        if a is not None and b is not None and agree(a, b):
+        if at in later or (a is not None and b is not None and agree(a, b)):
             continue
         count += 1
         first = first or (a, b)
