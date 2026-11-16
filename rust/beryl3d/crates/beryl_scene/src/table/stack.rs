@@ -149,7 +149,8 @@ fn furthest_reach(data: &StackData) -> f32 {
 /// cards keep no uncovered strip the reachable check's square high above or below it ends a
 /// `layout.gap` left of the furthest the stack's items ever reach (`furthest_reach`). That end
 /// does not depend on how tall the stack is, so the row's cards stay where they are as the stack
-/// grows. The other rows keep their whole area.
+/// grows. The other rows keep their whole area, as does a row the stack's reach would leave no
+/// room for a tapped card, because the stack stands over the rows rather than beside them.
 pub(crate) fn row_area(
     (layout, camera): (&Layout, &Camera),
     side: Side,
@@ -189,8 +190,16 @@ pub(crate) fn row_area(
         })
         .into_iter()
         .fold(f32::INFINITY, f32::min);
+    let end = right - layout.gap;
+    // On a narrow window, such as the phone's portrait one, the stack's column stands over the
+    // rows rather than beside them, and its reach lies left of where the row starts. Cutting
+    // the row there would leave it no room, so the row keeps its whole area and the stack is
+    // drawn over it.
+    if end < area.left + CARD_HEIGHT {
+        return (area, y);
+    }
     let area = RowArea {
-        right: area.right.min(right - layout.gap),
+        right: area.right.min(end),
         ..area
     };
     (area, y)
@@ -294,4 +303,62 @@ fn in_rows(beneath: usize, count: usize, pitch: f32, data: &StackData, column: f
         data.foot + tall / 2.0 * scale + row * pitch,
     );
     (centre, data.height * scale)
+}
+
+#[cfg(test)]
+mod tests {
+    use beryl_protocol::protocol::{RowName, Side};
+
+    use super::row_area;
+    use crate::input::Size;
+    use crate::table::{CARD_HEIGHT, Camera, DESKTOP, Window};
+
+    const ROWS: [RowName; 3] = [RowName::Creatures, RowName::Lands, RowName::Others];
+
+    fn camera(width: f32, height: f32) -> Camera {
+        let window = Window {
+            size: Size { width, height },
+            ..Window::default()
+        };
+        Camera::fit(DESKTOP.camera, window)
+    }
+
+    /// On the phone sizes the stack's reach lies left of every row's start. A cut there once
+    /// ended the creatures' row left of its left limit, so its cards collapsed into one pile.
+    #[test]
+    fn phone_rows_keep_room_for_a_tapped_card() {
+        for (width, height) in [(393.0, 759.0), (375.0, 647.0), (430.0, 932.0)] {
+            let camera = camera(width, height);
+            for side in [Side::You, Side::Opponent] {
+                for row in ROWS {
+                    let (area, _) = row_area((&DESKTOP, &camera), side, row);
+                    assert!(
+                        area.right - area.left >= CARD_HEIGHT,
+                        "{width}x{height} {side:?} {row:?}: {} to {}",
+                        area.left,
+                        area.right,
+                    );
+                }
+            }
+        }
+    }
+
+    /// On the desktop the stack stands beside the creatures' row, which still ends left of it.
+    #[test]
+    fn desktop_creatures_end_left_of_the_stack() {
+        for (width, height) in [(1440.0, 900.0), (1600.0, 900.0)] {
+            let camera = camera(width, height);
+            for side in [Side::You, Side::Opponent] {
+                let (area, _) = row_area((&DESKTOP, &camera), side, RowName::Creatures);
+                assert!(
+                    area.right < DESKTOP.creatures.right,
+                    "{width}x{height} {side:?}"
+                );
+                assert!(
+                    area.right - area.left >= CARD_HEIGHT,
+                    "{width}x{height} {side:?}"
+                );
+            }
+        }
+    }
 }

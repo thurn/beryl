@@ -213,9 +213,8 @@ pub(super) fn lay_row<'a>(
         .map(|g| group_width(g, beneath, rules))
         .collect();
     let full: f32 = widths.iter().sum::<f32>() + rules.layout.gap * gaps(groups.len());
-    // An empty row lays out nothing however little room it has. On the phone a row the stack
-    // shortens can end left of its start, and without this the window below would have to
-    // show at least one of no groups.
+    // An empty row lays out nothing however little room it has. Without this, a row with no
+    // room would reach the window below, which has to show at least one of no groups.
     if full <= room || groups.len() == 0 {
         let mut left = if area.centred {
             area.left + (room - full) / 2.0
