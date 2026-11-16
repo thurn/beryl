@@ -173,15 +173,26 @@ pub fn caught<T>(f: impl FnOnce() -> T) -> Result<T, String> {
     })
 }
 
-/// `f` applied to every item, on as many threads as the machine has cores, each thread taking
+/// How many threads a command spreads its work over: the CPU tokens the `by` command that
+/// started it leased from the machine's pool (`BERYL_CPU_TOKENS`, set by
+/// `tools/src/beryl_tools/tokens.py`), or the machine's cores when it runs outside a lease. With
+/// many sessions on one machine, each command taking every core made them all slower at once.
+#[must_use]
+pub fn threads() -> usize {
+    std::env::var("BERYL_CPU_TOKENS")
+        .ok()
+        .and_then(|n| n.parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, std::num::NonZero::get))
+}
+
+/// `f` applied to every item, on as many threads as [`threads`] allows, each thread taking
 /// the next item from a shared index, with the results in the order of `items`. A panic in `f`
 /// is not reported by the default hook while it runs, since `f` reports its own.
 pub fn each<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
     let next = AtomicUsize::new(0);
     let results: Mutex<Vec<Option<R>>> = Mutex::new((0..items.len()).map(|_| None).collect());
-    let threads = std::thread::available_parallelism()
-        .map_or(1, std::num::NonZero::get)
-        .min(items.len().max(1));
+    let threads = threads().min(items.len().max(1));
     let hook = panic::take_hook();
     panic::set_hook(Box::new(|_| {}));
     std::thread::scope(|scope| {

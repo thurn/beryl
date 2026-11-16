@@ -64,9 +64,7 @@ impl Recorder for Cli {
         }
         let recorded = Mutex::new(done);
         let next = AtomicUsize::new(0);
-        let threads = std::thread::available_parallelism()
-            .map_or(1, std::num::NonZero::get)
-            .min(jobs.len().max(1));
+        let threads = beryl_inspect::runner::threads().min(jobs.len().max(1));
         std::thread::scope(|scope| {
             for _ in 0..threads {
                 scope.spawn(|| {

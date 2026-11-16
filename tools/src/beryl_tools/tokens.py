@@ -77,6 +77,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from . import paths, system
 
@@ -425,6 +426,25 @@ def lease(
     """A check step's lease (`acquire`): with `want` zero, an empty one that holds the step to
     nothing, at once."""
     return acquire(klass, want, give_up, command) if want else Lease(0, [])
+
+
+def named_class() -> str:
+    """The class a command takes tokens as when it holds none: that of the check step it runs
+    under, which names its class even when it holds no tokens (`CLASS_ENV`), and otherwise
+    `agent`."""
+    named = os.environ.get(CLASS_ENV, "")
+    return named if named in CLASSES else "agent"
+
+
+def run_program(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+    """Runs `command`, a program that spreads its work over as many threads as its lease has
+    tokens (`LEASE_ENV`), inside a lease of [`named_class`], or inside the lease its parent
+    already holds."""
+    lease = acquire(named_class(), largest(pool_size()), command=Path(command[0]).name)
+    assert lease is not None
+    with lease:
+        env = {**(kwargs.pop("env", None) or os.environ), **lease.env()}
+        return subprocess.run(command, env=env, **kwargs)
 
 
 def script_class(script: str) -> str:

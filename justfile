@@ -19,7 +19,9 @@ search_cpu := if arch() == "aarch64" { "-C target-cpu=apple-m4" } else { "-C tar
 
 # Low priority for long compute: utility QoS, under which macOS gives interactive work and
 # checks the CPU first. `nice` does not: beside nice'd work a check ran as slowly as beside
-# work at full priority. Windows has neither: `by low` starts the work at idle priority.
+# work at full priority. Windows has neither: `by low` starts the work at idle priority. Work at
+# low priority takes no CPU tokens, so `BERYL_CPU_POOL=0` keeps its `cargo run` (the cargo shim,
+# tools/shims/cargo) from holding a lease for the hours it runs (`system.utility` does the same).
 
 by_anywhere := "uv run --quiet --project " + quote(justfile_directory() / "tools") + " by"
 
@@ -27,7 +29,7 @@ by_anywhere := "uv run --quiet --project " + quote(justfile_directory() / "tools
 # it got.
 
 pooled := by_anywhere + " tokens-run --"
-low := if os() == "windows" { by_anywhere + " low --" } else { "taskpolicy -c utility" }
+low := if os() == "windows" { by_anywhere + " low --" } else { "env BERYL_CPU_POOL=0 BERYL_LOW_PRIORITY=1 taskpolicy -c utility" }
 
 # Low priority, kept awake, for a blunder hunt that runs for hours.
 

@@ -11,7 +11,7 @@ none of the work agents start.
 every Claude session (`.claude/settings.json` adds it at session start). It runs the real cargo
 directly when its parent already holds a lease (`tokens.LEASE_ENV`) or the pool is off, and
 otherwise starts this module, which runs cargo inside a lease (`run`): an `agent` lease, or
-one of the check's class when a check step that holds no tokens starts it (`klass`). Commands that
+one of the check's class when a check step that holds no tokens starts it (`tokens.named_class`). Commands that
 compile nothing, such as `cargo fmt` and `cargo metadata`, take no tokens (`NO_LEASE`).
 
 A lease's size is fixed when it starts, and cargo reads `-j` once, so a build that started
@@ -124,14 +124,6 @@ class Jobserver:
         shutil.rmtree(self.dir, ignore_errors=True)
 
 
-def klass() -> str:
-    """The class whose tokens cargo takes: that of the check step it runs under, which names
-    its class even when it holds no tokens (`tokens.CLASS_ENV`), and otherwise `agent`.
-    """
-    named = os.environ.get(tokens.CLASS_ENV, "")
-    return named if named in tokens.CLASSES else "agent"
-
-
 def lease_env(lease: tokens.Lease, jobserver: Jobserver) -> dict[str, str]:
     """Cargo's environment inside the lease: the lease's variables, which also tell a cargo
     started under this one to run inside it, without `CARGO_BUILD_JOBS`, which would make cargo
@@ -147,7 +139,7 @@ def is_shim(path: str) -> bool:
 
 
 def run(argv: list[str], pool: tokens.Pool | None = None) -> int:
-    """Runs the real cargo with `argv` inside a lease (of `klass`) that grows while it runs."""
+    """Runs the real cargo with `argv` inside a lease (of `tokens.named_class`) that grows while it runs."""
     real = os.environ.get(REAL_ENV) or "cargo"
     if is_shim(real):
         # Running another checkout's shim as cargo would start this one again, without end.
@@ -162,7 +154,9 @@ def run(argv: list[str], pool: tokens.Pool | None = None) -> int:
         return subprocess.run(command, check=False).returncode
     pool = pool or tokens.Pool()
     want = tokens.largest(pool.size)
-    lease = pool.acquire(klass(), want, command=f"cargo {subcommand(argv)}")
+    lease = pool.acquire(
+        tokens.named_class(), want, command=f"cargo {subcommand(argv)}"
+    )
     assert lease is not None
     extra: list[tokens.Lease] = []
     jobserver = Jobserver(lease.size)

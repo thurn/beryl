@@ -218,3 +218,20 @@ def test_a_shim_named_as_the_real_cargo_is_refused(
 ) -> None:
     monkeypatch.setenv(cargo_pool.REAL_ENV, "/somewhere/beryl/tools/shims/cargo")
     assert cargo_pool.run(["fmt"]) == 127
+
+
+def test_a_program_runs_inside_a_lease_of_its_class(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tokens, "Pool", lambda: Pool(tmp_path / "pool", 9))
+    monkeypatch.setattr(tokens, "pool_size", lambda: 9)
+    monkeypatch.setenv(tokens.CLASS_ENV, "ci")
+    seen = tokens.run_program(
+        [sys.executable, "-c", "import os; print(os.environ['BERYL_CPU_TOKENS'])"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert seen.stdout.strip() == "6"
+    log = (tmp_path / "pool" / tokens.LEASE_LOG).read_text().splitlines()
+    assert [json.loads(line)["class"] for line in log] == ["ci"]

@@ -27,7 +27,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -35,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import paths as repo_paths
+from .. import tokens
 from . import gpu, paths
 
 GATES: Path = repo_paths.REPO / "data" / "beryl3d" / "gates.json"
@@ -230,10 +230,9 @@ def play(names: list[str]) -> list[Board]:
     command = [str(program("gate"))]
     for name in names:
         command += ["--board", name]
-    done = subprocess.run(
+    done = tokens.run_program(
         command,
         cwd=paths.WORKSPACE,
-        env=os.environ,
         check=False,
         stdout=subprocess.PIPE,
         text=True,

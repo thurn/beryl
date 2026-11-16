@@ -19,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import system, warm
+from .. import system, tokens, warm
 from . import app, camera, gate, lane, paths, phone, sweep, timeline, vm
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
@@ -138,9 +138,7 @@ def record() -> int:
     if built != 0:
         return built
     line = [str(program("record"))]
-    return subprocess.run(
-        line, cwd=paths.WORKSPACE, env=os.environ, check=False
-    ).returncode
+    return tokens.run_program(line, cwd=paths.WORKSPACE, check=False).returncode
 
 
 def run_record(_args: argparse.Namespace) -> int:
@@ -173,16 +171,18 @@ def linked(name: str) -> Path:
 
 
 def run_program(name: str, arguments: list[str]) -> int:
-    """Runs the built program `name` with `arguments`. When it says the recordings pack is
-    missing, builds the pack and runs it again."""
+    """Runs the built program `name` with `arguments`, inside a lease of CPU tokens, since
+    its checks spread over as many threads as the lease allows (`beryl_inspect::runner::
+    threads`). When it says the recordings pack is missing, builds the pack and runs it
+    again."""
     line = [str(linked(name)), *arguments]
-    code = subprocess.run(line, env=os.environ, check=False).returncode
+    code = tokens.run_program(line, check=False).returncode
     if code != MISSING_PACK:
         return code
     recorded = record()
     if recorded != 0:
         return recorded
-    return subprocess.run(line, env=os.environ, check=False).returncode
+    return tokens.run_program(line, check=False).returncode
 
 
 def run_b3d(command: str) -> Callable[[argparse.Namespace], int]:
