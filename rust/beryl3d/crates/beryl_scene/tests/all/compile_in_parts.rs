@@ -80,20 +80,25 @@ fn row_flights() -> (PlayerView, PlayerView) {
         builder.card(ZoneName::Battlefield, Side::You, "Serra Angel");
     }
     let before = builder.build();
-    // Each beat flies the first permanents of the row to its end, one after another, so that
-    // each flight moves every card after it.
+    let after = flights_after(&before);
+    (before, after)
+}
+
+/// The view in which a script of `BEATS` beats of `PER_BEAT` staggered flights each has flown
+/// the first permanents of `before`'s row to its end, one after another.
+fn flights_after(before: &PlayerView) -> PlayerView {
     let moved = BEATS * PER_BEAT;
     let end = u16::try_from(PERMANENTS - 1).expect("a slot fits");
-    let beats: Vec<Vec<Step>> = before.objects[..moved]
+    let beats: Vec<Vec<Step>> = before.battlefield[..moved]
         .chunks(PER_BEAT)
         .map(|chunk| {
             chunk
                 .iter()
-                .map(|object| Step {
+                .map(|&slot| Step {
                     act: Act::Fly {
                         from: ZoneName::Battlefield,
                         why: Why::Effect,
-                        object: object.clone(),
+                        object: before.objects[usize::from(slot.0)].clone(),
                         at: Some(end),
                         item: None,
                         origin: None,
@@ -104,10 +109,10 @@ fn row_flights() -> (PlayerView, PlayerView) {
         })
         .collect();
     let mut after = before.clone();
+    after.script = None;
     after.battlefield.rotate_left(moved);
-    after.objects.rotate_left(moved);
     after.script = Some(script(None, beats, vec![staggered(); moved]));
-    (before, after)
+    after
 }
 
 #[test]
@@ -118,11 +123,13 @@ fn flights_along_a_row_compiled_in_parts_pose_every_card_as_compiled_whole() {
     compiles_in_parts((&before, &after), (BEATS, PER_BEAT), 2 * BEATS);
 }
 
-/// Plays `updates` through a client as a host does, a frame every 60th of a second with
-/// `prepare` before each, giving each update once the one before has played out, and returns
-/// each frame's draw records with the steps the frame compiled, the frames from when the last
-/// update arrives.
-fn played(updates: &[GameUpdate], whole: bool) -> Vec<(Vec<beryl_scene::frame::Draw>, u32)> {
+/// Each frame's draw records with the steps the frame compiled.
+type Frames = Vec<(Vec<beryl_scene::frame::Draw>, u32)>;
+
+/// Plays `ticks` through a client as a host does, a frame every 60th of a second with `prepare`
+/// before each, handing over each tick's updates together once the tick before has played out,
+/// and returns the frames from when the last tick's updates arrive.
+fn played(ticks: &[&[GameUpdate]], whole: bool) -> Frames {
     let mut client = Client::new(Config::LARGEST);
     if whole {
         client.compile_whole();
@@ -137,12 +144,14 @@ fn played(updates: &[GameUpdate], whole: bool) -> Vec<(Vec<beryl_scene::frame::D
     });
     let mut frames = Vec::new();
     let mut now = 0;
-    for (index, update) in updates.iter().enumerate() {
-        client.handle(Input::Update(Box::new(update.clone())));
+    for (index, updates) in ticks.iter().enumerate() {
+        for update in *updates {
+            client.handle(Input::Update(Box::new(update.clone())));
+        }
         loop {
             client.prepare(now);
             let frame = client.frame(now);
-            if index + 1 == updates.len() {
+            if index + 1 == ticks.len() {
                 frames.push((frame.draws.clone(), frame.work.steps));
             }
             now += 50 * MS / 3;
@@ -161,9 +170,9 @@ fn a_client_compiles_a_long_script_over_frames_and_draws_each_as_compiled_whole(
         session: SessionId(1),
         view,
     };
-    let updates = [update(before), update(after)];
-    let parts = played(&updates, false);
-    let whole = played(&updates, true);
+    let ticks: [&[GameUpdate]; 2] = [&[update(before)], &[update(after)]];
+    let parts = played(&ticks, false);
+    let whole = played(&ticks, true);
     assert_eq!(
         parts.len(),
         whole.len(),
@@ -195,6 +204,46 @@ fn a_client_compiles_a_long_script_over_frames_and_draws_each_as_compiled_whole(
     assert!(
         parts.iter().filter(|(_, steps)| *steps > 0).count() >= BEATS,
         "the steps are compiled over {BEATS} frames or more"
+    );
+}
+
+#[test]
+fn a_script_handed_over_behind_another_compiles_as_it_starts_and_draws_as_compiled_whole() {
+    let (before, first) = row_flights();
+    let second = flights_after(&first);
+    let update = |view: PlayerView| GameUpdate {
+        session: SessionId(1),
+        view,
+    };
+    let both = [update(first), update(second)];
+    let ticks: [&[GameUpdate]; 2] = [&[update(before)], &both];
+    let parts = played(&ticks, false);
+    let whole = played(&ticks, true);
+    assert_eq!(
+        parts.len(),
+        whole.len(),
+        "the scripts play as long either way"
+    );
+    for (frame, ((part, _), (whole, _))) in parts.iter().zip(&whole).enumerate() {
+        assert!(
+            part == whole,
+            "frame {frame} after both scripts arrive draws as the scripts compiled whole do"
+        );
+    }
+    let moved = 2 * BEATS * PER_BEAT;
+    assert_eq!(whole[0].1, u32::try_from(moved).expect("fits"));
+    let steps: Vec<u32> = parts.iter().map(|(_, steps)| *steps).collect();
+    assert!(
+        steps
+            .iter()
+            .all(|&steps| steps as usize <= PER_BEAT + STEPS_PER_ADVANCE),
+        "no frame compiles more than a beat and a few steps, not the second script whole as it \
+         arrives: {steps:?}"
+    );
+    assert_eq!(
+        steps.iter().map(|&steps| steps as usize).sum::<usize>(),
+        moved,
+        "every step is compiled once"
     );
 }
 

@@ -581,7 +581,7 @@ fn take<T, K: Ord>(written: &mut Vec<T>, list: &mut Vec<T>, key: impl Fn(&T) -> 
 /// or with a reset, `after`'s table with the abilities the reset numbers
 /// (`beryl_protocol::script::replay`). With no table before it, or a step that table cannot
 /// take, it is `after`'s table, numbered as best it can be.
-fn ended(played: Option<&Played>, after: &PlayerView, script: &Script) -> Played {
+pub(super) fn ended(played: Option<&Played>, after: &PlayerView, script: &Script) -> Played {
     let start = match (&script.reset, played) {
         (Some(_), _) => Played::of(after),
         (None, Some(played)) => played.clone(),

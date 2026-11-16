@@ -2,10 +2,10 @@
 //! (docs/beryl-3d.md, "Verbs", "Timing a script" and "Determinism").
 //!
 //! - A script is compiled with the timings the session sent beside it (`compile`), and starts at
-//!   the `now` of the next frame. One that arrives with nothing playing or waiting is compiled
-//!   over the frames that play it, a few steps ahead of each (`part`, `prepare`); any other is
-//!   compiled whole when its update arrives. Nothing here reads a duration, a delay or a wait
-//!   from anywhere but those timings.
+//!   the `now` of the next frame. It is compiled over the frames that play it, a few steps ahead
+//!   of each (`part`, `prepare`): one that arrives with nothing playing or waiting from the frame
+//!   that receives it, and one that arrives behind another from the frame in which it starts.
+//!   Nothing here reads a duration, a delay or a wait from anywhere but those timings.
 //! - Scripts never overlap. An update that arrives while a script plays waits, and its script
 //!   starts as the one before ends.
 //! - When more than `catch_up.double` updates are waiting as a script starts, it plays twice as
@@ -396,10 +396,6 @@ impl Show {
     }
 
     fn push_timed(&mut self, update: Box<GameUpdate>, timings: Option<Vec<StepTiming>>) {
-        // This script is played from the table the one before it ends with, and the showcases
-        // it reveals below must not change how that one is placed: that one is compiled whole
-        // first.
-        self.complete();
         self.prepared = None;
         let number = self.given;
         self.given += 1;
@@ -414,6 +410,12 @@ impl Show {
         let update: Rc<GameUpdate> = Rc::from(update);
         let timings: Option<Rc<[StepTiming]>> = timings.map(Rc::from);
         let from = self.played.take().map(Rc::new);
+        // A script that arrives behind another is compiled as it starts (`part`).
+        if !self.whole && !self.settled() {
+            let waiting = self.defer(number, update, timings, from);
+            self.waiting.push_back(waiting);
+            return;
+        }
         if let Some(waiting) = self.in_parts(number, &update, timings.as_ref(), from.as_ref()) {
             self.waiting.push_back(waiting);
             return;
@@ -435,6 +437,7 @@ impl Show {
             from,
             compiled,
             part: None,
+            pending: false,
         });
     }
 
@@ -445,44 +448,63 @@ impl Show {
     }
 
     /// Fits the table to a window of a new shape, and compiles every script not yet ended again
-    /// for it.
+    /// for it, whole. A waiting script whose compiling had not begun is played from the table
+    /// the script before it ends with, compiled again.
     pub fn resize(&mut self, window: Window) {
         self.complete();
         let shown = self.shown.as_ref().map(|update| &update.view);
         self.table.resize(window, shown);
         let mut before = shown;
+        let mut ended: Option<Rc<Played>> = None;
         let mut compiled = Vec::new();
         if let Some(playing) = &self.playing
             && let Some(update) = &playing.update
         {
-            let (again, _) = self.compile(
+            let (again, played) = self.compile(
                 playing.number,
                 before,
                 playing.from.as_deref(),
                 update,
                 timings_of(update, playing.timings.as_deref()),
             );
-            compiled.push((playing.number, again));
+            compiled.push((playing.number, again, None));
+            ended = Some(Rc::new(played));
             before = Some(&update.view);
         }
         for waiting in &self.waiting {
-            let (again, _) = self.compile(
+            let from = if waiting.pending {
+                ended.clone().or_else(|| waiting.from.clone())
+            } else {
+                waiting.from.clone()
+            };
+            let (again, played) = self.compile(
                 waiting.number,
                 before,
-                waiting.from.as_deref(),
+                from.as_deref(),
                 &waiting.update,
                 timings_of(&waiting.update, waiting.timings.as_deref()),
             );
-            compiled.push((waiting.number, again));
+            compiled.push((waiting.number, again, from));
+            ended = Some(Rc::new(played));
             before = Some(&waiting.update.view);
         }
-        for (number, again) in compiled {
+        let pending = self.waiting.iter().any(|waiting| waiting.pending);
+        for (number, again, from) in compiled {
             self.write_record(number, &again);
             if let Some(waiting) = self.waiting.iter_mut().find(|w| w.number == number) {
+                if waiting.pending {
+                    waiting.pending = false;
+                    waiting.from = from;
+                    self.unplaced += again.unplaced;
+                }
                 waiting.compiled = again;
             } else {
                 self.recompiled = Some(again);
             }
+        }
+        // The next script to arrive is played from the table the last one ends with.
+        if pending && let Some(ended) = ended {
+            self.played = Some(Rc::unwrap_or_clone(ended));
         }
     }
 
@@ -531,11 +553,14 @@ impl Show {
                 }
                 self.finish();
             }
+            let start = ended.unwrap_or(now);
+            let rate = rate_for(self.waiting.len());
+            // Begun in `prepare` unless it did not foresee this start; this may allocate.
+            self.begin(0, now, (start, rate));
             let Some(mut waiting) = self.waiting.pop_front() else {
                 break;
             };
             self.unbuilt |= waiting.compiled.unbuilt;
-            let rate = rate_for(self.waiting.len() + 1);
             let moves =
                 !waiting.compiled.tracks.is_empty() || !waiting.compiled.ability_tracks.is_empty();
             if waiting.compiled.reset {
@@ -543,25 +568,9 @@ impl Show {
                 self.effects.clear();
                 self.notices.clear();
             }
-            let start = ended.unwrap_or(now);
             self.relay(&mut waiting, start, rate);
             self.record_start(waiting.number, start, rate);
-            self.playing = Some(Playing {
-                number: waiting.number,
-                update: Some(waiting.update),
-                timings: waiting.timings,
-                from: waiting.from,
-                compiled: waiting.compiled,
-                part: waiting.part,
-                start,
-                rate,
-                spans_given: 0,
-                streaks_given: 0,
-                counts_given: 0,
-                sounds_given: 0,
-                effects_given: 0,
-                notices_given: 0,
-            });
+            self.playing = Some(Playing::started(waiting, start, rate));
             self.hand_over(now);
             self.hand_over_tray();
             self.place_let_go(now);

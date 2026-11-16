@@ -2253,13 +2253,16 @@ reason to wait on another thread.
   whole was the costliest frame of most gated boards. `prepare` compiles every
   step that begins by the frame's time, every step that could change a segment
   under way then, and at least `STEPS_PER_ADVANCE` (4) steps, so the later beats
-  of a long script are compiled well before they begin. Only a script that
-  arrives with nothing playing or waiting is compiled so, and anything that
-  needs the whole script compiles the rest of it first: the next update, a new
-  window or a scrolled row, and a start that lays the script out again (`relay`)
-  or hands it a card the pointer or a prompt's tray holds. It holds no lock that
-  another of Beryl's threads can hold, and it does no file or network I/O. The
-  only thing it waits for is the display.
+  of a long script are compiled well before they begin. A script that arrives
+  with nothing playing or waiting begins compiling in the `handle` call that
+  receives it. One that arrives behind another waits uncompiled, and begins in
+  the `prepare` of the frame in which it starts, once every script before it is
+  whole, since it is played from the table the one before it ends with. A script
+  that needs every step as it starts is compiled whole then: one laid out again
+  as it starts (`relay`), or handed a card the pointer or a prompt's tray holds.
+  A new window or a scrolled row compiles every script whole. It holds no lock
+  that another of Beryl's threads can hold, and it does no file or network I/O.
+  The only thing it waits for is the display.
 - **The session thread** runs the game, as today.
 - **Search threads** run the AI, as today, on every core. They run at a lower
   scheduling priority than the frame thread, so the operating system preempts
@@ -3497,6 +3500,14 @@ call. Three runs gave identical counts.
   of 106 steps that all begin together, still compiles whole in its first frame.
   `verbs-zones`' worst frame, 4,838,458, takes eleven updates in one `handle`; a
   script that arrives behind another is still compiled whole.
+- **Compiling a waiting script as it starts cut `verbs-zones`' worst frame from
+  34 steps to 12.** Its frame 980 took eleven updates in one `handle` and
+  compiled every one of their 34 steps. Each script that arrives behind another
+  now waits uncompiled until the frame in which it starts. Each such script
+  places its view once as it arrives, for the frames to read where its cards
+  will rest, so the board places 2,260 objects in all instead of 1,827. A script
+  laid out again as it starts (any `hold` or `alone` timing) is still compiled
+  whole as it starts.
 
 **Time per frame, natively**, by beryl_render's `frame_times` example in a
 release build, paced at 60 frames a second, five runs. Each figure is the median

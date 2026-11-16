@@ -26,6 +26,10 @@ pub(super) struct Waiting {
     pub(super) compiled: Compiled,
     /// The script, while it is compiled over frames rather than whole (`super::part`).
     pub(super) part: Option<Part>,
+    /// Whether its compiling has not begun: a script that arrives behind another is compiled
+    /// as it starts (`Show::begin`), and until then `compiled` holds only its `finals`, and its
+    /// `from` is the table the script before it ends with as `replay` works it out.
+    pub(super) pending: bool,
 }
 
 /// The script under way.
@@ -74,6 +78,27 @@ pub(super) fn timings_of<'a>(
 }
 
 impl Playing {
+    /// `waiting`'s script, started at `start`, in nanoseconds since the client started, its
+    /// clock running `rate` times faster than real time, with nothing given to the table yet.
+    pub(super) fn started(waiting: Waiting, start: u64, rate: u64) -> Self {
+        Self {
+            number: waiting.number,
+            update: Some(waiting.update),
+            timings: waiting.timings,
+            from: waiting.from,
+            compiled: waiting.compiled,
+            part: waiting.part,
+            start,
+            rate,
+            spans_given: 0,
+            streaks_given: 0,
+            counts_given: 0,
+            sounds_given: 0,
+            effects_given: 0,
+            notices_given: 0,
+        }
+    }
+
     /// What moves on the table at `now` while this script plays, once its update is in hand.
     pub(super) fn motion(&self, now: u64) -> Option<Motion<'_>> {
         let update = self.update.as_ref()?;
