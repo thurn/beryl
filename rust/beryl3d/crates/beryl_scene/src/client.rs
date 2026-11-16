@@ -572,6 +572,13 @@ impl Client {
         self.show.rested()
     }
 
+    /// When the first notice shown or to be shown ends, as of the last `frame`, if there is one
+    /// (`Show::notice_end`).
+    #[must_use]
+    pub fn notice_end(&self) -> Option<u64> {
+        self.show.notice_end()
+    }
+
     /// The match's faces, which the host's asset workers prepare: each arrives as an
     /// `AssetReady::Face` naming its index in this list.
     #[must_use]

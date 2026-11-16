@@ -20,6 +20,9 @@ use beryl_scene::{Client, Config};
 
 const SEATS: [Side; 2] = [Side::You, Side::Opponent];
 
+/// A millisecond, in nanoseconds.
+const MS: u64 = 1_000_000;
+
 /// The verbs that have motion of their own; every other verb is drawn as an instant change.
 const BUILT: [Verb; 7] = [
     Verb::Fly,
@@ -386,4 +389,35 @@ fn every_tree_line_locates_its_own_element_at_every_check_time() {
             }
         }
     }
+}
+
+/// The recording drawn at `at` after the clock ran there in steps of `step`, or straight there
+/// when `step` is zero.
+fn trigger_order_tree(step: u64, at: u64) -> String {
+    let size = Size {
+        width: 1440.0,
+        height: 900.0,
+    };
+    let mut page =
+        beryl_inspect::pages::page("choice-trigger-order", Side::You, Layout::Desktop, size)
+            .expect("the recording can be read");
+    if step > 0 {
+        while page.now() + step < at {
+            page.step(Duration(step));
+        }
+    }
+    page.step(Duration(at - page.now()));
+    page.tree()
+}
+
+#[test]
+fn a_moment_is_the_same_however_often_the_clock_stopped_before_it() {
+    // A notice shown from 9.8 s outlasts the script that announced it by about 400 ms, longer
+    // than the reply delay. The next view used to be given at the first frame after the notice
+    // ended, so a clock stopped every 7 ms gave it up to 7 ms later than one run straight
+    // there, and every card the next scripts moved was elsewhere at 14 s.
+    let at = 14_000 * MS;
+    let straight = trigger_order_tree(0, at);
+    let stepped = trigger_order_tree(7 * MS + 333, at);
+    assert_eq!(straight, stepped);
 }

@@ -210,6 +210,14 @@ impl Show {
         self.rested
     }
 
+    /// When the first notice the show holds ends, in nanoseconds since the client started, if it
+    /// holds one. A notice, such as the turn banner, can outlast the script that announced it,
+    /// and `wake` asks for frames until it ends without counting it in `rested`.
+    #[must_use]
+    pub fn notice_end(&self) -> Option<u64> {
+        self.notices.iter().map(|announced| announced.over.to).min()
+    }
+
     /// Whether every script given has played out, as of the last `frame`: the table shows the
     /// latest view at rest, and that view's prompt may open.
     #[must_use]

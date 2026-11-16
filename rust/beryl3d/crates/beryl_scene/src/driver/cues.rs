@@ -62,6 +62,14 @@ impl Page {
             Wake::At(time) => time.max(self.now + 1),
             Wake::Never => u64::MAX,
         };
+        // A frame falls when each notice ends, so that the first frame at rest after a notice
+        // that outlasted its script is at the same time however often the clock was stopped. A
+        // reply due while the notice still showed is given then.
+        let wake = self
+            .client
+            .notice_end()
+            .filter(|&end| end > self.now)
+            .map_or(wake, |end| end.min(wake));
         self.cues
             .moves
             .get(self.cues.next)
