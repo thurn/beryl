@@ -1,5 +1,5 @@
 //! `Client::frame` allocates nothing once a prompt bar has been laid out, nor while a life total
-//! falls and the amount it fell by sinks away, and neither does moving a float of the flat
+//! falls and the amount it fell by sinks away, nor while 255 marks are drawn, and neither does moving a float of the flat
 //! layer and writing it (docs/beryl-3d.md, "The frame": no allocation). This binary counts
 //! every heap allocation, so it holds one test.
 
@@ -11,14 +11,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::prompt::Purpose;
 use beryl_protocol::prompt::{ButtonId, PartName, PromptButton, PromptView, ShapeBody, Words};
+use beryl_protocol::protocol::ObjectId;
 use beryl_protocol::protocol::{DecisionId, DecisionView, Kind, SessionId, Side, Status};
-use beryl_protocol::script::{Act, Tally};
+use beryl_protocol::script::{Act, Mark, Subject, Tally};
 use beryl_scene::element::{floats, text};
 use beryl_scene::frame::{Frame, FrameBuilder};
 use beryl_scene::input::{AssetReady, GlyphCell, Input, Insets, Size};
 use beryl_scene::layout::{FloatLook, Layer};
+use beryl_scene::light::{MarkSpan, Span};
 use beryl_scene::table::Table;
 use beryl_scene::testing::ViewBuilder;
+use beryl_scene::verbs::Interval;
 use beryl_scene::{Client, Config};
 use glam::Vec2;
 
@@ -153,6 +156,38 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
             0,
             "allocations in the frame at {now} during a loss"
         );
+    }
+
+    // A frame with 255 marks: outlines on cards and players, and tap symbols, both coming up
+    // and standing whole.
+    let marks = [
+        Mark::Eligible,
+        Mark::Selected,
+        Mark::Paying,
+        Mark::HostileTarget,
+    ];
+    for index in 0..255_u16 {
+        let on = if index % 8 == 7 {
+            Subject::Player { player: Side::You }
+        } else {
+            Subject::Object {
+                slot: ObjectId(index % 8),
+            }
+        };
+        let mark = marks[usize::from(index) % marks.len()];
+        client.lit_mut().begin(
+            Span::Mark(MarkSpan { mark, on }),
+            Interval {
+                from: to,
+                to: to + 100_000_000,
+            },
+        );
+    }
+    for now in [to + 50_000_000, to + 200_000_000] {
+        let before = ALLOCATIONS.load(Ordering::Relaxed);
+        client.frame(now);
+        let after = ALLOCATIONS.load(Ordering::Relaxed);
+        assert_eq!(after - before, 0, "allocations in a frame with 255 marks");
     }
 
     // A float moved and faded by a new look, then written into a frame.

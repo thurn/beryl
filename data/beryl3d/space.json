@@ -76,6 +76,17 @@
       "ribbon": 1.5
     }
   },
+  "light": {
+    "outline_grow": 2.5,
+    "lift": 0.2,
+    "on_table_below": 30,
+    "tap_size": 17.6,
+    "paying_lift": 1,
+    "player_half_pixels": [
+      47,
+      46
+    ]
+  },
   "pointer": {},
   "catch_up": {
     "double": 10,

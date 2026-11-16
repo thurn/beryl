@@ -56,4 +56,22 @@ pub mod color {
     pub const MANA_COLORLESS: [u8; 4] = [219, 184, 117, 255];
     /// The glow of a streak of damage: `ember` in `TONES`, which `TONE` names for damage.
     pub const DAMAGE: [u8; 4] = [255, 38, 10, 255];
+
+    /// The outline of what may be picked: the `--tone` of `.stage-mark-eligible` in
+    /// `ui/src/stage/stage.css`.
+    pub const MARK_ELIGIBLE: [u8; 4] = [51, 220, 254, 255];
+    /// The outline of what has been picked: the `--tone` of `.stage-mark-selected`.
+    pub const MARK_SELECTED: [u8; 4] = [255, 205, 96, 255];
+    /// The ring round what the offered default would use: the border of `.stage-mark-suggested`,
+    /// the `--ember` token.
+    pub const MARK_SUGGESTED: [u8; 4] = EMBER;
+    /// The tap symbol on a permanent picked to pay a cost: the `color` of
+    /// `.stage-mark-paying::after`.
+    pub const MARK_PAYING: [u8; 4] = [243, 234, 215, 255];
+    /// The outline of a target its chooser controls: the `--tone` of
+    /// `.stage-mark-friendly-target`.
+    pub const MARK_FRIENDLY_TARGET: [u8; 4] = [116, 240, 136, 255];
+    /// The outline of a target its chooser does not control: the `--tone` of
+    /// `.stage-mark-hostile-target`.
+    pub const MARK_HOSTILE_TARGET: [u8; 4] = [255, 92, 74, 255];
 }
