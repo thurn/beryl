@@ -3,8 +3,8 @@
 //! while the turn banner fades in, stands and fades out, nor while 255 marks are drawn, nor with
 //! 255 attackers wearing their wedges, nor on a table of 255 permanents that each wear badges,
 //! nor while a hand card rises under the mouse, nor while a scrolled battlefield row slides, and
-//! neither does moving a float of the flat layer and writing it (docs/beryl-3d.md, "The frame":
-//! no allocation). This binary counts every heap allocation, so it holds one test.
+//! neither does moving a float of the flat layer and writing it, nor an element anchored to a
+//! card following it as it flies (docs/beryl-3d.md, "The frame": no allocation). This binary counts every heap allocation, so it holds one test.
 
 mod common;
 
@@ -19,13 +19,13 @@ use beryl_protocol::protocol::{
     PowerToughness, SessionId, Side, Status, ZoneName,
 };
 use beryl_protocol::script::{Act, Mark, Notice, Subject, Tally};
-use beryl_scene::element::{floats, text};
+use beryl_scene::element::{Anchor, floats, row, text};
 use beryl_scene::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
 use beryl_scene::input::{
     AssetReady, Button, GlyphCell, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase,
     Size,
 };
-use beryl_scene::layout::{FloatLook, Layer};
+use beryl_scene::layout::{FloatLook, Layer, centre_of};
 use beryl_scene::light::{MarkSpan, Span};
 use beryl_scene::table::Table;
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
@@ -239,6 +239,7 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
     tables_allocate_nothing();
 
     a_moved_float_allocates_nothing();
+    an_anchored_element_allocates_nothing();
 }
 
 /// The frames of the turn banner: the one that shows it, those that fade it in and out, and
@@ -482,6 +483,41 @@ fn a_moved_float_allocates_nothing() {
         0,
         "allocations setting a float's look and writing it"
     );
+}
+
+/// The frames while a card flies with an element of the flat layer anchored to it: each one
+/// draws the table, moves the element onto the card and writes the layer.
+fn an_anchored_element_allocates_nothing() {
+    let (start, cards) = common::before();
+    let (flight, timings) = common::three_beats(&start, cards);
+    let mut show = common::show();
+    show.push(Box::new(start), Vec::new());
+    show.push(Box::new(flight), timings);
+    let mut layer = Layer::new();
+    let mut badge = text("Plains");
+    badge.anchor = Some(Anchor::Object(
+        Subject::Object { slot: cards.land },
+        Vec2::new(0.5, 0.5),
+    ));
+    layer.show(Some(row().name("screen").child(badge)));
+    let mut frame = common::empty_frame();
+    for now in (0..30).map(|index| index * 16 * common::MS) {
+        let before = ALLOCATIONS.load(Ordering::Relaxed);
+        let mut builder = FrameBuilder::new(&mut frame);
+        show.frame(now, &mut builder);
+        layer.follow(|subject| centre_of(&builder, show.table(), subject));
+        layer.write(&mut builder, show.table().camera(), true);
+        builder.finish();
+        let after = ALLOCATIONS.load(Ordering::Relaxed);
+        // The first frames take the scripts and lay out the table's cards.
+        if now >= 2 * 16 * common::MS {
+            assert_eq!(
+                after - before,
+                0,
+                "allocations at {now} with an anchored element"
+            );
+        }
+    }
 }
 
 /// The frames while a battlefield row slides after a turn of the wheel scrolls it, and the

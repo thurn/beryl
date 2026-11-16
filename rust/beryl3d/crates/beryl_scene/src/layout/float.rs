@@ -7,9 +7,7 @@
 
 use glam::Vec2;
 
-use taffy::AvailableSpace;
-
-use super::{Layer, Node, compute};
+use super::{CONTENT, Layer, Node, compute, compute_anchored};
 use crate::element::{Element, FloatId};
 
 /// Where a float stands and how it is drawn.
@@ -133,12 +131,8 @@ impl Layer {
         }
         let mut node = self.reconcile(None, element());
         self.layout_nodes += self.dirty(&node);
-        // A float is as large as its content, whatever the window's size.
-        let space = taffy::Size {
-            width: AvailableSpace::MaxContent,
-            height: AvailableSpace::MaxContent,
-        };
-        compute(&mut self.taffy, &mut self.text, node.taffy, space);
+        compute(&mut self.taffy, &mut self.text, node.taffy, CONTENT);
+        compute_anchored(&mut self.taffy, &mut self.text, &node);
         self.place(&mut node, Vec2::ZERO);
         self.text_runs += self.text.take_runs();
         self.prepared.push(Prepared { id, key, node });

@@ -112,8 +112,8 @@ pub struct Element {
     pub enabled: bool,
     /// Whether it takes keys: the widgets track.
     pub focus: bool,
-    /// Where it stands if it is placed at a point of the window rather than in its parent's
-    /// layout: the elements track.
+    /// Where it stands if it is placed at a point of the window or on a scene object rather
+    /// than in its parent's layout. It is laid out at its content's size (`layout::anchor`).
     pub anchor: Option<Anchor>,
     /// A face or a scene object shown in its box: the furniture and cards track.
     pub shows: Option<Shown>,

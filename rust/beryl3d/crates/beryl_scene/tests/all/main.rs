@@ -14,6 +14,7 @@ mod driver;
 mod effects;
 mod effects_card;
 mod effects_light;
+mod elements;
 mod faces;
 mod flat_layer;
 mod light;

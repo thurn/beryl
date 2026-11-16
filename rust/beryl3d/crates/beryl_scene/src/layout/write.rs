@@ -6,7 +6,7 @@
 use glam::Vec2;
 
 use super::{FloatLook, Layer, Node, has_panel};
-use crate::element::TextAlign;
+use crate::element::{Display, TextAlign};
 use crate::frame::{Band, Draw, FrameBuilder, NameRef, Place, Resolved, StateBits};
 use crate::input::Rect;
 use crate::table::Camera;
@@ -18,7 +18,18 @@ impl Layer {
     /// the screen if it is `open`, then every float, whether the screen is open or not.
     pub fn write(&self, builder: &mut FrameBuilder, camera: &Camera, open: bool) {
         if open && let Some(node) = &self.screen {
-            self.write_node(node, u32::MAX, true, FloatLook::default(), builder, camera);
+            // An anchored screen stands at its corner, and is not drawn while that is unknown.
+            let corner = match node.element.anchor {
+                Some(_) => node.corner(),
+                None => Some(Vec2::ZERO),
+            };
+            if let Some(point) = corner {
+                let look = FloatLook {
+                    point,
+                    ..FloatLook::default()
+                };
+                self.write_node(node, u32::MAX, true, look, builder, camera);
+            }
         }
         for float in &self.floats {
             let look = FloatLook {
@@ -31,7 +42,9 @@ impl Layer {
     }
 
     /// Writes `node` and everything under it, moved so that its tree's top left corner stands
-    /// at `look.point`, with `look`'s opacity and text color.
+    /// at `look.point`, with `look`'s opacity and text color. A node shown with `Display::None`
+    /// is not written, and an anchored child is written at its own corner, or not at all while
+    /// the object it is anchored to is not shown.
     fn write_node(
         &self,
         node: &Node,
@@ -41,6 +54,9 @@ impl Layer {
         builder: &mut FrameBuilder,
         camera: &Camera,
     ) {
+        if node.element.style.display == Display::None {
+            return;
+        }
         builder.visit();
         let element = &node.element;
         let offset = look.point;
@@ -67,21 +83,16 @@ impl Layer {
                 face: None,
             },
         );
-        if has_panel(element.role, top) {
-            let tint = if top { color::PANEL } else { color::BUTTON };
+        if let Some(panel) = panel(node, top) {
             builder.draw(
                 Band::Layer,
                 Draw::panel(
                     camera.layer_transform(rect),
-                    fade(tint),
-                    fade(color::METAL),
+                    fade(panel.tint),
+                    fade(panel.edge),
                     Vec2::new(rect.width, rect.height),
-                    if top {
-                        size::PANEL_RADIUS
-                    } else {
-                        rect.height / 2.0
-                    },
-                    size::BORDER,
+                    panel.radius,
+                    panel.border,
                 ),
             );
         }
@@ -89,6 +100,13 @@ impl Layer {
             self.write_text(node, index, look, builder, camera);
         }
         for child in &node.children {
+            let mut look = look;
+            if child.element.anchor.is_some() {
+                let Some(corner) = child.corner() else {
+                    continue;
+                };
+                look.point = corner;
+            }
             self.write_node(child, index, false, look, builder, camera);
         }
     }
@@ -133,7 +151,7 @@ impl Layer {
                 },
             );
         }
-        let tint = fade(match look.tint {
+        let tint = fade(match look.tint.or(element.style.color) {
             Some(tint) => tint,
             None if element.enabled => color::TYPE,
             None => color::TEXT_FAINT,
@@ -147,6 +165,41 @@ impl Layer {
         };
         text::write_block(builder, block, origin, &look);
     }
+}
+
+/// The panel an element is drawn on.
+struct Panel {
+    tint: [u8; 4],
+    edge: [u8; 4],
+    radius: f32,
+    border: f32,
+}
+
+/// The panel `node` is drawn on, if any: the usual one under every button and the top element
+/// of a screen or a float, and one under any element with a `background` or a `border`. Its
+/// style's colors, border width and radius replace the usual ones where it gives them; a radius
+/// of 0 keeps the usual one, a panel's or a button's, and is square on any other element.
+fn panel(node: &Node, top: bool) -> Option<Panel> {
+    let style = &node.element.style;
+    let usual = has_panel(node.element.role, top);
+    if !usual && style.background.is_none() && style.border.is_none() {
+        return None;
+    }
+    let (tint, radius, border) = match (usual, top) {
+        (true, true) => (color::PANEL, size::PANEL_RADIUS, size::BORDER),
+        (true, false) => (color::BUTTON, node.rect.height / 2.0, size::BORDER),
+        (false, _) => ([0; 4], 0.0, 0.0),
+    };
+    Some(Panel {
+        tint: style.background.unwrap_or(tint),
+        edge: style.border.map_or(color::METAL, |(edge, _)| edge),
+        radius: if style.radius > 0.0 {
+            style.radius
+        } else {
+            radius
+        },
+        border: style.border.map_or(border, |(_, width)| width),
+    })
 }
 
 /// `rect` moved by `offset`.

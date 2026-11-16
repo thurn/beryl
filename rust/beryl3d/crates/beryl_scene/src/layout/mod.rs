@@ -1,12 +1,16 @@
 //! The flat layer's retained tree (docs/beryl-3d.md, "Elements", "Sizes" and "Text"). The
 //! client hands it the elements a screen function returns, and it matches them against the
-//! tree it keeps: a node equal to the one before it keeps its layout and its laid-out text.
-//! Layout is flexbox, computed by taffy, and text is shaped and broken by parley through
-//! taffy's measure function. All of that happens in `Client::handle`; writing a frame only
-//! reads the numbers kept here. Beside the screen it keeps floats, small elements placed at a
-//! point of the window (`float`).
+//! tree it keeps by role, name and place (`reconcile`): a node equal to the one before it keeps
+//! its layout and its laid-out text. Layout is flexbox and grid, computed by taffy (`style`),
+//! and text is shaped and broken by parley through taffy's measure function. All of that
+//! happens in `Client::handle`; writing a frame only reads the numbers kept here. An element
+//! with an anchor stands at a point of the window or on a scene object (`anchor`). Beside the
+//! screen it keeps floats, small elements placed at a point of the window (`float`).
 
+mod anchor;
 mod float;
+mod reconcile;
+mod style;
 mod write;
 
 use taffy::{
@@ -14,11 +18,12 @@ use taffy::{
     NodeId, TaffyTree, compute_leaf_layout,
 };
 
+pub use anchor::centre_of;
 pub use float::FloatLook;
 
 use float::{Float, Prepared};
 
-use crate::element::{Align, Direction, Element, Justify, Press, Style};
+use crate::element::{self, Element, Press};
 use crate::frame::{ElementId, Role};
 use crate::input::{Rect, Size};
 use crate::table::Window;
@@ -56,6 +61,9 @@ struct Node {
     content: Rect,
     /// Its text, broken at the content box's width.
     block: Option<Block>,
+    /// For an element anchored to a scene object, the object's centre on the window as the
+    /// last frame drew it, or `None` if the table did not show it (`Layer::follow`).
+    followed: Option<glam::Vec2>,
 }
 
 /// The flat layer.
@@ -136,7 +144,11 @@ impl Layer {
             }
             (None, None) => None,
         };
-        let children: Vec<NodeId> = self.screen.iter().map(|node| node.taffy).collect();
+        // An anchored screen is a taffy tree of its own, outside the root's flow.
+        let children: Vec<NodeId> = (self.screen.iter())
+            .filter(|node| node.element.anchor.is_none())
+            .map(|node| node.taffy)
+            .collect();
         if self
             .taffy
             .children(self.root)
@@ -174,100 +186,39 @@ impl Layer {
     /// last drawn first. The screen is searched only while it is `open`, that is drawn.
     #[must_use]
     pub fn press_at(&self, point: glam::Vec2, open: bool) -> Option<(ElementId, Press, bool)> {
-        fn find(node: &Node, point: glam::Vec2) -> Option<(ElementId, Press, bool)> {
-            if !contains(node.rect, point) {
+        /// The press at `point` in `node`'s tree, whose top left corner stands at `origin`;
+        /// `point` is on the window.
+        fn find(
+            node: &Node,
+            point: glam::Vec2,
+            origin: glam::Vec2,
+        ) -> Option<(ElementId, Press, bool)> {
+            if node.element.style.display == element::Display::None
+                || !contains(node.rect, point - origin)
+            {
                 return None;
             }
             (node.children.iter().rev())
-                .find_map(|child| find(child, point))
+                .find_map(|child| match child.element.anchor {
+                    // An anchored child's tree is laid out from (0, 0), and stands at its corner.
+                    Some(_) => find(child, point, child.corner()?),
+                    None => find(child, point, origin),
+                })
                 .or_else(|| {
                     let element = &node.element;
                     (element.press.clone()).map(|press| (node.id, press, element.enabled))
                 })
         }
         (self.floats.iter().rev())
-            .find_map(|float| find(&float.node, point - float.corner()))
+            .find_map(|float| find(&float.node, point, float.corner()))
             .or_else(|| {
                 (self.screen.as_ref())
                     .filter(|_| open)
-                    .and_then(|node| find(node, point))
+                    .and_then(|node| match node.element.anchor {
+                        Some(_) => find(node, point, node.corner()?),
+                        None => find(node, point, glam::Vec2::ZERO),
+                    })
             })
-    }
-
-    /// Matches `element` against `old`, the node at its place in the tree before: a node of the
-    /// same role and name is kept, and updated where it differs.
-    fn reconcile(&mut self, old: Option<Node>, mut element: Element) -> Node {
-        let children = std::mem::take(&mut element.children);
-        let mut node = match old {
-            Some(old) if old.element.role == element.role && old.element.name == element.name => {
-                old
-            }
-            old => {
-                if let Some(old) = old {
-                    self.remove(old);
-                }
-                let taffy = self
-                    .taffy
-                    .new_leaf(taffy_style(&element.style))
-                    .expect("taffy makes a node");
-                self.next_id += 1;
-                Node {
-                    id: ElementId(self.next_id - 1),
-                    element: Element {
-                        text: None,
-                        ..element.clone()
-                    },
-                    taffy,
-                    children: Vec::new(),
-                    rect: Rect::default(),
-                    content: Rect::default(),
-                    block: None,
-                }
-            }
-        };
-        if node.element.style != element.style {
-            self.taffy
-                .set_style(node.taffy, taffy_style(&element.style))
-                .expect("the node is in the tree");
-        }
-        let text_changed =
-            node.element.text != element.text || node.element.style.text != element.style.text;
-        if text_changed {
-            let leaf = (element.text.clone()).map(|text| TextLeaf {
-                text,
-                style: element.style.text,
-            });
-            self.taffy
-                .set_node_context(node.taffy, leaf)
-                .expect("the node is in the tree");
-            node.block = None;
-        }
-        if !node.element.same_node(&element) {
-            node.element = element;
-        }
-        let mut old_children = std::mem::take(&mut node.children).into_iter();
-        node.children = children
-            .into_iter()
-            .map(|child| {
-                let old = old_children.next();
-                self.reconcile(old, child)
-            })
-            .collect();
-        for old in old_children {
-            self.remove(old);
-        }
-        let ids: Vec<NodeId> = node.children.iter().map(|child| child.taffy).collect();
-        if self
-            .taffy
-            .children(node.taffy)
-            .expect("the node is in the tree")
-            != ids
-        {
-            self.taffy
-                .set_children(node.taffy, &ids)
-                .expect("the children are in the tree");
-        }
-        node
     }
 
     /// Takes `node` and everything under it out of taffy's tree.
@@ -287,39 +238,51 @@ impl Layer {
             .taffy
             .dirty(self.root)
             .expect("the root is in the tree");
+        let anchored_dirty = (self.screen.as_ref()).is_some_and(|node| self.anchored_dirty(node));
         let floats_dirty: u32 = (self.floats.iter())
             .map(|float| self.dirty(&float.node))
             .sum();
-        if !root_dirty && floats_dirty == 0 {
+        if !root_dirty && !anchored_dirty && floats_dirty == 0 {
             return;
         }
-        if root_dirty {
-            self.layout_nodes += 1 + self.screen.as_ref().map_or(0, |node| self.dirty(node));
-            let size = self.window.size;
-            let space = taffy::Size {
-                width: AvailableSpace::Definite(size.width),
-                height: AvailableSpace::Definite(size.height),
-            };
-            compute(&mut self.taffy, &mut self.text, self.root, space);
+        if root_dirty || anchored_dirty {
+            self.layout_nodes +=
+                u32::from(root_dirty) + self.screen.as_ref().map_or(0, |node| self.dirty(node));
+            if root_dirty {
+                let size = self.window.size;
+                let space = taffy::Size {
+                    width: AvailableSpace::Definite(size.width),
+                    height: AvailableSpace::Definite(size.height),
+                };
+                compute(&mut self.taffy, &mut self.text, self.root, space);
+            }
             if let Some(mut node) = self.screen.take() {
+                if node.element.anchor.is_some()
+                    && self
+                        .taffy
+                        .dirty(node.taffy)
+                        .expect("the node is in the tree")
+                {
+                    compute(&mut self.taffy, &mut self.text, node.taffy, CONTENT);
+                }
+                compute_anchored(&mut self.taffy, &mut self.text, &node);
                 self.place(&mut node, glam::Vec2::ZERO);
                 self.screen = Some(node);
             }
         }
         if floats_dirty > 0 {
             self.layout_nodes += floats_dirty;
-            // A float is as large as its content, whatever the window's size.
-            let space = taffy::Size {
-                width: AvailableSpace::MaxContent,
-                height: AvailableSpace::MaxContent,
-            };
             let mut floats = std::mem::take(&mut self.floats);
             for float in &mut floats {
+                if self.dirty(&float.node) == 0 {
+                    continue;
+                }
                 let root = float.node.taffy;
                 if self.taffy.dirty(root).expect("the float is in the tree") {
-                    compute(&mut self.taffy, &mut self.text, root, space);
-                    self.place(&mut float.node, glam::Vec2::ZERO);
+                    compute(&mut self.taffy, &mut self.text, root, CONTENT);
                 }
+                compute_anchored(&mut self.taffy, &mut self.text, &float.node);
+                self.place(&mut float.node, glam::Vec2::ZERO);
             }
             self.floats = floats;
         }
@@ -332,6 +295,17 @@ impl Layer {
             self.text.take_runs()
         };
         self.want_glyphs();
+    }
+
+    /// Whether `node` or any node under it is anchored, and so a taffy tree of its own, and
+    /// has changed since it was laid out.
+    fn anchored_dirty(&self, node: &Node) -> bool {
+        (node.element.anchor.is_some()
+            && self
+                .taffy
+                .dirty(node.taffy)
+                .expect("the node is in the tree"))
+            || node.children.iter().any(|child| self.anchored_dirty(child))
     }
 
     /// How many nodes at and under `node` taffy will recompute.
@@ -386,7 +360,13 @@ impl Layer {
             }
         }
         for child in &mut node.children {
-            self.place(child, corner);
+            // An anchored child's tree is laid out from (0, 0), and stands at its corner.
+            let origin = if child.element.anchor.is_some() {
+                glam::Vec2::ZERO
+            } else {
+                corner
+            };
+            self.place(child, origin);
         }
     }
 
@@ -440,6 +420,24 @@ fn compute(
         .expect("the root is in the tree");
 }
 
+/// The room an anchored element or a float is laid out in: as much as its content takes,
+/// whatever the window's size.
+const CONTENT: taffy::Size<AvailableSpace> = taffy::Size {
+    width: AvailableSpace::MaxContent,
+    height: AvailableSpace::MaxContent,
+};
+
+/// Computes the layout of every anchored tree under `node` that has changed. Each is a taffy
+/// tree of its own, laid out at its content's size.
+fn compute_anchored(taffy: &mut TaffyTree<TextLeaf>, text: &mut Text, node: &Node) {
+    for child in &node.children {
+        if child.element.anchor.is_some() && taffy.dirty(child.taffy).expect("in the tree") {
+            compute(taffy, text, child.taffy, CONTENT);
+        }
+        compute_anchored(taffy, text, child);
+    }
+}
+
 /// The root's style: the whole window, padded by its safe area and by the dock's offsets, with
 /// the screen in its bottom right corner.
 fn root_style(window: Window) -> taffy::Style {
@@ -467,49 +465,6 @@ fn size(size: Size) -> taffy::Size<Dimension> {
     taffy::Size {
         width: Dimension::length(size.width),
         height: Dimension::length(size.height),
-    }
-}
-
-/// An element's style as taffy's.
-fn taffy_style(style: &Style) -> taffy::Style {
-    let [top, right, bottom, left] = style.padding.map(LengthPercentage::length);
-    let dimension = |value: Option<f32>| value.map_or(Dimension::auto(), Dimension::length);
-    taffy::Style {
-        display: Display::Flex,
-        flex_direction: match style.direction {
-            Direction::Row => FlexDirection::Row,
-            Direction::Column => FlexDirection::Column,
-        },
-        gap: taffy::Size {
-            width: LengthPercentage::length(style.gap),
-            height: LengthPercentage::length(style.gap),
-        },
-        padding: taffy::Rect {
-            top,
-            right,
-            bottom,
-            left,
-        },
-        flex_grow: style.grow,
-        align_items: match style.align_items {
-            None => AlignItems::NORMAL,
-            Some(Align::Start) => AlignItems::FLEX_START,
-            Some(Align::Center) => AlignItems::CENTER,
-            Some(Align::End) => AlignItems::FLEX_END,
-            Some(Align::Stretch) => AlignItems::STRETCH,
-        },
-        justify_content: match style.justify_content {
-            None => AlignContent::NORMAL,
-            Some(Justify::Start) => AlignContent::FLEX_START,
-            Some(Justify::Center) => AlignContent::CENTER,
-            Some(Justify::End) => AlignContent::FLEX_END,
-            Some(Justify::SpaceBetween) => AlignContent::SPACE_BETWEEN,
-        },
-        size: taffy::Size {
-            width: dimension(style.width),
-            height: dimension(style.height),
-        },
-        ..taffy::Style::default()
     }
 }
 

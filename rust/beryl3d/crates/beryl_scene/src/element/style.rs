@@ -84,64 +84,57 @@ pub enum Overflow {
 /// An element's layout and look, with CSS's names.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Style {
-    /// Grid and `None`: the elements track.
     pub display: Display,
     pub direction: Direction,
     pub gap: f32,
     /// Top, right, bottom and left.
     pub padding: [f32; 4],
-    /// Top, right, bottom and left: the elements track.
+    /// Top, right, bottom and left.
     pub margin: [f32; 4],
     pub grow: f32,
-    /// The elements track.
     pub shrink: f32,
-    /// The elements track.
+    /// The size along the parent's direction the element starts from before it grows or
+    /// shrinks: CSS `flex-basis`.
     pub basis: Option<f32>,
-    /// Whether children wrap onto more lines: the elements track.
+    /// Whether children wrap onto more lines.
     pub wrap: bool,
     pub align_items: Option<Align>,
-    /// The elements track.
+    /// How the element is placed across its parent's direction, in place of the parent's
+    /// `align_items`.
     pub align_self: Option<Align>,
     pub justify_content: Option<Justify>,
-    /// The elements track.
     pub position: Position,
-    /// Top, right, bottom and left offsets from the parent's box, for `Position::Absolute`:
-    /// the elements track.
+    /// Top, right, bottom and left offsets from the parent's box, for `Position::Absolute`.
     pub inset: [Option<f32>; 4],
     pub width: Option<f32>,
     pub height: Option<f32>,
-    /// The elements track.
     pub min_width: Option<f32>,
-    /// The elements track.
     pub max_width: Option<f32>,
-    /// The elements track.
     pub min_height: Option<f32>,
-    /// The elements track.
     pub max_height: Option<f32>,
-    /// The elements track.
     pub grid_template_columns: Vec<Track>,
-    /// The elements track.
     pub grid_template_rows: Vec<Track>,
-    /// The first and the last grid line the element spans, counting from 1 as CSS does: the
-    /// elements track.
+    /// The first and the last grid line the element spans, counting from 1 as CSS does.
     pub grid_column: Option<(i16, i16)>,
-    /// As `grid_column`, for rows: the elements track.
+    /// As `grid_column`, for rows.
     pub grid_row: Option<(i16, i16)>,
     /// The elements track.
     pub overflow: Overflow,
     /// How opaque the element and its children are, from 0 to 1: the elements track.
     pub opacity: f32,
-    /// The color of the element's panel in place of the usual one: the elements track.
+    /// The color of the element's panel in place of the usual one. An element that is not
+    /// usually drawn on a panel is drawn on one of this color.
     pub background: Option<[u8; 4]>,
-    /// The color and width of the element's border: the elements track.
+    /// The color and width of the element's border, which takes room inside its box as CSS's
+    /// does.
     pub border: Option<([u8; 4], f32)>,
-    /// The radius of the element's corners: the elements track.
+    /// The radius of the element's panel's corners, or 0 for the usual radius: a screen's
+    /// panel's or a button's, and square on any other element.
     pub radius: f32,
     /// How the element's own text looks.
     pub text: TypeStyle,
     pub text_align: TextAlign,
-    /// The color of the element's text in place of the design tokens' type color: the text
-    /// track.
+    /// The color of the element's text in place of the design tokens' type color.
     pub color: Option<[u8; 4]>,
 }
 

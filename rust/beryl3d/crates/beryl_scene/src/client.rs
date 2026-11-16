@@ -20,7 +20,7 @@ use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
 use crate::hud::rows::RowCounts;
 use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerPhase};
-use crate::layout::Layer;
+use crate::layout::{self, Layer};
 use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
 use crate::pointer::rows::RowGesture;
@@ -254,6 +254,10 @@ impl Client {
         self.show.advance_slide(now);
         let mut builder = FrameBuilder::new(&mut self.frame);
         self.show.frame(now, &mut builder);
+        // Elements anchored to a card, an ability or a player stand where the table drew it.
+        let table = self.show.table();
+        self.layer
+            .follow(|subject| layout::centre_of(&builder, table, subject));
         // A total that changes shows the element `prepare` laid out for it.
         self.counts.write(
             &mut self.layer,

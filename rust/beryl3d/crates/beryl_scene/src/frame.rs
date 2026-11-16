@@ -330,6 +330,15 @@ impl Frame {
         }
     }
 
+    /// The centre of the box of the table's element `id` (a card or an ability, not an element
+    /// of the flat layer), on the window in logical points, if the frame holds it.
+    #[must_use]
+    pub fn centre(&self, id: ElementId) -> Option<Vec2> {
+        let element = (self.resolved.iter())
+            .find(|element| element.id == id && element.place != Place::Layer)?;
+        Some(element.corners.iter().copied().sum::<Vec2>() / 4.0)
+    }
+
     /// The name of a resolved element.
     #[must_use]
     pub fn name(&self, name: NameRef) -> &str {
@@ -373,6 +382,12 @@ impl<'a> FrameBuilder<'a> {
         self.frame.names.push_str(name);
         self.frame.resolved.push(element);
         index(self.frame.resolved.len() - 1)
+    }
+
+    /// The centre of the table's element `id` as written so far (`Frame::centre`).
+    #[must_use]
+    pub fn centre(&self, id: ElementId) -> Option<Vec2> {
+        self.frame.centre(id)
     }
 
     /// Counts an element visited: an object slot of the table or a node of the flat layer.
