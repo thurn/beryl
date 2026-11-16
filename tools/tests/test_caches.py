@@ -237,3 +237,33 @@ def test_a_crowded_target_a_build_holds_is_left_alone(
     with system.file_lock(checkout / "rust" / "target" / "debug" / ".cargo-lock"):
         assert not caches.tidy_target(checkout / "rust" / "target")
     assert len(list((checkout / "rust" / "target" / "debug" / "deps").iterdir())) == 6
+
+
+def test_a_target_under_the_threshold_is_pruned_when_its_sweep_is_due(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pruned: list[Path] = []
+    monkeypatch.setattr(warm, "prune", pruned.append)
+    monkeypatch.setattr(caches, "CROWDED_DEPS", 10)
+    target = crowded_checkout(tmp_path, 5) / "rust" / "target"
+    assert caches.tidy_target(target)
+    assert pruned == [target]
+
+
+def test_low_disk_mode_prunes_each_worktree_target_but_a_busy_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pruned: list[Path] = []
+    monkeypatch.setattr(warm, "prune", pruned.append)
+    idle = tmp_path / "slot-01" / "rust" / "beryl3d" / "target"
+    busy = tmp_path / "slot-02" / "rust" / "target"
+    for target in (idle, busy):
+        (target / "debug").mkdir(parents=True)
+    monkeypatch.setattr(
+        paths, "worktree_paths", lambda: [tmp_path / "slot-01", tmp_path / "slot-02"]
+    )
+    out = io.StringIO()
+    with system.file_lock(busy / "debug" / ".cargo-lock"):
+        caches.prune_worktree_targets(out)
+    assert pruned == [idle]
+    assert f"a cargo build holds {busy}" in out.getvalue()

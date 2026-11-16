@@ -56,8 +56,8 @@ def main_checkout() -> Path | None:
     return Path(run.stdout.strip()).parent if run.returncode == 0 else None
 
 
-def worktree_names() -> list[str]:
-    """The names of this repository's worktrees, the main checkout's included; none if git
+def worktree_paths() -> list[Path]:
+    """The paths of this repository's worktrees, the main checkout's included; none if git
     could not list them."""
     listing = subprocess.run(
         ["git", "-C", str(REPO), "worktree", "list", "--porcelain"],
@@ -66,10 +66,16 @@ def worktree_names() -> list[str]:
         check=False,
     ).stdout
     return [
-        Path(line.removeprefix("worktree ")).name
+        Path(line.removeprefix("worktree "))
         for line in listing.splitlines()
         if line.startswith("worktree ")
     ]
+
+
+def worktree_names() -> list[str]:
+    """The names of this repository's worktrees, the main checkout's included; none if git
+    could not list them."""
+    return [path.name for path in worktree_paths()]
 
 
 # The Tauri CLI's builds get their own target directory: it sets environment variables that

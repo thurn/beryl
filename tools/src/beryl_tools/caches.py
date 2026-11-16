@@ -18,7 +18,9 @@ Low-disk mode also prunes each bisection tree's rust/target ([`prune_bisections`
 (bisect.py, `Tree`) are kept between slow-CI runs so their builds stay warm, and are never
 removed, so warm.py's `save` never prunes them: on 2026-11-13 Cygnus's slow CI failed with a
 full disk while its bisection tree held 50.8 GB of rust/target, 18.5 GB of it incremental.
-A tree whose bisection holds its lock is left alone, and its checkout is never touched.
+A tree whose bisection holds its lock is left alone, and its checkout is never touched. It
+prunes every worktree's `rust/target` and `rust/beryl3d/target` to the budget as well
+([`prune_worktree_targets`]), skipping any a cargo build holds.
 
 Then, whatever the disk, the shared target is held to its budget, the builds unused longest
 going first (warm.py, `prune`): Enact's remove hook does so for each slow-CI worktree,
@@ -33,7 +35,8 @@ import shutil
 import subprocess
 import sys
 import time
-from contextlib import ExitStack, suppress
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -99,34 +102,75 @@ def tidy_target(target: Path) -> bool:
 
     Every [`target_sweep.SWEEP_AFTER`], crowded or not, it also deletes the builds that newer
     builds of the same units replaced (`target_sweep.sweep`): a Beryl 3D target with fewer
-    files than the threshold still held 26 GB, most of it replaced builds."""
+    files than the threshold still held 26 GB, most of it replaced builds. Then it prunes the
+    target to the budget too, since a target under the threshold can still be far over it. On
+    2026-11-16 each of Enact's ten slots held 30-50 GB across its two targets, and the 1.8 TB
+    disk filled. Pruning them to the budget freed about 360 GB, mostly stale codegen-unit
+    objects and old incremental sessions."""
     lock = target / "debug" / ".cargo-lock"
     if not lock.parent.is_dir():
         return False
     now = time.time()
     crowd = crowded(target)
-    if not crowd and not target_sweep.sweep_due(target, now):
+    due = target_sweep.sweep_due(target, now)
+    if not crowd and not due:
         return False
     try:
-        with ExitStack() as held:
-            for profile_lock in [
-                lock,
-                *(
-                    other
-                    for profile in warm.PROFILES
-                    for other in target.glob(f"{profile}/.cargo-lock")
-                    if other != lock
-                ),
-            ]:
-                held.enter_context(system.file_lock(profile_lock, timeout=0))
-            if target_sweep.sweep_due(target, now):
+        with holding_builds(target):
+            if due:
                 target_sweep.sweep(target)
-            if crowd:
-                warm.prune(target)
+            warm.prune(target)
     except system.LockHeld:
         warm.log(f"a cargo build holds {target}; left it to the next build")
         return False
     return True
+
+
+@contextmanager
+def holding_builds(target: Path) -> Iterator[None]:
+    """Holds the cargo lock of every profile in `target`, clippy's own target's
+    (`clippy/debug`) among them, so no build writes or links there meanwhile; raises
+    `system.LockHeld` at once when a build holds one."""
+    debug = target / "debug" / ".cargo-lock"
+    others = {
+        lock
+        for profile in warm.PROFILES
+        for lock in target.glob(f"{profile}/.cargo-lock")
+    }
+    with ExitStack() as held:
+        for lock in [debug, *sorted(others - {debug})]:
+            held.enter_context(system.file_lock(lock, timeout=0))
+        yield
+
+
+def worktree_targets() -> list[Path]:
+    """The build directories of every worktree of the repository: each one's `rust/target`
+    and `rust/beryl3d/target`."""
+    return [
+        target
+        for checkout in paths.worktree_paths()
+        for target in (
+            checkout / "rust" / "target",
+            checkout / "rust" / "beryl3d" / "target",
+        )
+        if (target / "debug").is_dir()
+    ]
+
+
+def prune_worktree_targets(out: IO[str], dry_run: bool = False) -> None:
+    """Low-disk mode: prunes every worktree's build directories to the budget (`warm.prune`),
+    leaving any that a cargo build holds. Enact's slots keep their targets for days and only a
+    check or build in that slot tidies them (`tidy_target`), so a slot nobody builds in
+    would otherwise keep 15-50 GB however full the disk gets."""
+    for target in worktree_targets():
+        if dry_run:
+            out.write(f"prune-caches: would prune {target}\n")
+            continue
+        try:
+            with holding_builds(target):
+                warm.prune(target)
+        except system.LockHeld:
+            out.write(f"prune-caches: a cargo build holds {target}; left it\n")
 
 
 @dataclass(frozen=True)
@@ -323,6 +367,7 @@ def run(
         else:
             report(target, out, dry_run, "folders of the shared target")
         prune_bisections(cache, out, dry_run=dry_run)
+        prune_worktree_targets(out, dry_run=dry_run)
     if not dry_run and (cache / "target").is_dir():
         with warm.try_locked() as held:
             if held:

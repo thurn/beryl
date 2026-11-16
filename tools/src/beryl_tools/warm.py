@@ -445,9 +445,11 @@ def ensure_node_modules(checkout: Path) -> bool:
 
 
 def make_room() -> None:
-    """Before a new checkout's first clone, frees what `by prune-caches` can when the disk is
-    nearly full (`caches.py`, low-disk mode), so a burst of worktrees does not wait for the
-    nightly. Best effort, outside the lock, which the prune takes for the shared target only if
+    """Before each check or build, frees what `by prune-caches` can when the disk is nearly
+    full (`caches.py`, low-disk mode), so a burst of worktrees does not wait for the nightly.
+    When the disk is not low it costs one `statvfs`. It used to run only before a new
+    checkout's first clone, but Enact's slots keep their `rust/target`, so after slots arrived
+    it never ran again and the disk filled. Best effort, outside the lock, which the prune takes for the shared target only if
     no clone or save holds it. Imported here: the remove hook, which never gets here, runs this
     file alone."""
     from . import caches
@@ -462,7 +464,7 @@ def ensure(checkout: Path = REPO, tauri: bool = False, target: bool = True) -> b
     """Gives the checkout an up-to-date `ui/node_modules` and, if `target`, a `rust/target` (with
     the Tauri CLI's target directory if `tauri`). Whether either was built cold, with none to clone.
     """
-    if target and not (checkout / "rust" / "target").exists():
+    if target:
         make_room()
     with locked():
         cold_target = target and ensure_target(checkout, tauri)
