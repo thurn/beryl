@@ -1,8 +1,8 @@
 //! The manual table's side of the client (docs/manual-multiplayer.md): the lobby a solo table
 //! opens in (`lobby`), the context menu a right click or a touch held still opens on what the
-//! pointer is on, the table's keys, and leaving the table. Each command reaches the session as
-//! `SessionCommand::TableAct`, and the table's next view comes back as `Input::Update`, as a
-//! game's does.
+//! pointer is on, the table's keys, giving a command, and leaving the table. Each command
+//! reaches the session as `SessionCommand::TableAct`, and the table's next view comes back as
+//! `Input::Update`, as a game's does. What the table shows over itself is `manual_overlays`.
 
 use beryl_protocol::GameUpdate;
 use glam::Vec2;
@@ -11,8 +11,9 @@ use super::{Client, Platform};
 use crate::command::SessionCommand;
 use crate::data::space::pointer::{DRAG_THRESHOLD_POINTS, LONG_PRESS_MS};
 use crate::input::{Button, Pointer, PointerKind, PointerPhase};
+use crate::manual::TableState;
 use crate::manual::lobby::Lobby;
-use crate::manual::menus::{self, Act, OpenMenu};
+use crate::manual::menus::{self, Act};
 use crate::manual::{self, Target, commands};
 use crate::screens::Screen;
 use crate::widgets::BACK;
@@ -20,13 +21,28 @@ use crate::widgets::BACK;
 /// Nanoseconds in a millisecond, the unit of `Client::frame`'s clock.
 const MILLISECOND: u64 = 1_000_000;
 
-/// What the client keeps of the manual table: the open context menu, if any, the touch that
-/// will open one if it stays down and still, and the lobby.
+/// What the client keeps of the manual table: what the table shows over itself
+/// (`TableState`, which `Manual` derefs to), the touch that will open a context menu if it
+/// stays down and still, and the lobby.
 #[derive(Debug, Default)]
 pub(super) struct Manual {
-    pub(super) menu: Option<OpenMenu>,
+    pub(super) state: TableState,
     hold: Option<Hold>,
     pub(super) lobby: Lobby,
+}
+
+impl std::ops::Deref for Manual {
+    type Target = TableState;
+
+    fn deref(&self) -> &TableState {
+        &self.state
+    }
+}
+
+impl std::ops::DerefMut for Manual {
+    fn deref_mut(&mut self) -> &mut TableState {
+        &mut self.state
+    }
 }
 
 /// A touch that went down on the table and has not moved `DRAG_THRESHOLD_POINTS` from where it
@@ -56,14 +72,17 @@ impl Client {
     /// An update arrived: it keeps the session it came from, which stop and concede commands
     /// name. A view of a manual table shows the table screen, from the start screen or a game,
     /// and closes a context menu opened on the view before it, whose rows name that view's
-    /// cards. In the lobby it stays there: a table sends its view while it is still in its
-    /// lobby, and the lobby says when its game has started (`take_lobby`).
+    /// cards. So does a command list, ask prompt, token search or order tray, as the web's
+    /// `TableMenu` closes its overlay when the view changes. In the lobby it stays there: a
+    /// table sends its view while it is still in its lobby, and the lobby says when its game has
+    /// started (`take_lobby`).
     pub(super) fn take_session(&mut self, update: &GameUpdate) {
         self.session = Some(update.session);
         if update.view.table.is_none() {
             return;
         }
         self.manual.menu = None;
+        self.manual.close_overlay();
         if matches!(self.screen, Screen::Start | Screen::Game) {
             self.screen = Screen::Table;
         }
@@ -159,8 +178,9 @@ impl Client {
     }
 
     /// The `row`th row of the open context menu was pressed: it closes, and the row's command
-    /// is given. On the phone's sheet, a row with a submenu instead shows that submenu's rows
-    /// in the sheet, and `BACK` shows the menu's rows again, as the web's menu pages do.
+    /// is given to what the menu was opened on. On the phone's sheet, a row with a submenu
+    /// instead shows that submenu's rows in the sheet, and `BACK` shows the menu's rows again, as
+    /// the web's menu pages do.
     pub(super) fn press_table_menu(&mut self, row: u16) {
         let phone = self.window.phone();
         let Some(menu) = &mut self.manual.menu else {
@@ -177,7 +197,7 @@ impl Client {
         if let Some(menu) = self.manual.menu.take()
             && let Some(act) = menu.acts.into_iter().nth(usize::from(row))
         {
-            self.give(act);
+            self.give(act, menu.target, false);
         }
         self.show_screen();
     }
@@ -204,16 +224,18 @@ impl Client {
         let target =
             (self.owned.mouse).map_or(Target::Table, |at| manual::target_at(&self.frame, at));
         let act = menus::act(command, target, view);
-        self.give(act);
+        self.give(act, target, false);
     }
 
-    /// Does what a command does: sends its table actions, or leaves the table and shows the
-    /// start screen.
-    fn give(&mut self, act: Act) {
+    /// Does what a command does for `target`: sends its table actions; opens the ask prompt,
+    /// the token search (whose token is made face down if `shift`) or the command list; or
+    /// leaves the table and shows the start screen.
+    pub(super) fn give(&mut self, act: Act, target: Target, shift: bool) {
         match act {
-            Act::Actions(actions) => {
-                (self.commands).extend(actions.into_iter().map(SessionCommand::TableAct));
-            }
+            Act::Actions(actions) => self.send_table(actions),
+            Act::Ask(index) => self.open_ask(index, target),
+            Act::Tokens(index) => self.open_tokens(index, shift),
+            Act::Palette => self.open_palette(target),
             Act::Leave => self.leave_table(),
             Act::Nothing => {}
         }
@@ -222,6 +244,7 @@ impl Client {
     /// Leaves the table, from the table or its lobby, and shows the start screen.
     pub(super) fn leave_table(&mut self) {
         self.manual.menu = None;
+        self.manual.close_overlay();
         self.manual.lobby = Lobby::new();
         self.commands.push_back(SessionCommand::TableLeave);
         self.screen = Screen::Start;

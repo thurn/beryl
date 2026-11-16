@@ -31,6 +31,9 @@ impl Client {
             return;
         }
         self.show.pointer_mut().handle(&pointer);
+        if pointer.phase == PointerPhase::Down {
+            self.manual.shift = pointer.modifiers.shift;
+        }
         // The mouse is followed whatever is asked, so that an arrow to the pointer that a
         // prompt opens under it starts there. A touch has no pointer to follow.
         self.owned.mouse = match (pointer.kind, pointer.phase) {
@@ -252,6 +255,9 @@ impl Client {
         if key.phase == KeyPhase::Up || self.bug_key(key) {
             return;
         }
+        if self.table_overlay_key(key) {
+            return;
+        }
         if self.layer.edited_id().is_some() && self.field_key(key) {
             return;
         }
@@ -271,10 +277,13 @@ impl Client {
             // context menu is open it does nothing, and the menu's own keys move through its
             // rows.
             let table_key = matches!(press, Press::Command(_));
-            if !table_key || (first && self.manual.menu.is_none()) {
+            let free = self.manual.menu.is_none() && !self.manual.overlay_open();
+            if !table_key || (first && free) {
                 return Some(press);
             }
-            self.manual.menu.as_ref()?;
+            if free {
+                return None;
+            }
         }
         if key.code == KeyCode::Tab {
             self.layer.move_focus(!key.modifiers.shift);

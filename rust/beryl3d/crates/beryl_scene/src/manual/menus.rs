@@ -8,28 +8,43 @@ use beryl_protocol::protocol::{Side, TableAction, ZoneName};
 use glam::Vec2;
 
 use super::Target;
-use super::commands::{self, Command, Entry};
+use super::commands::{self, Asks, Command, Entry};
 use crate::element::describe;
 use crate::widgets::{MenuGroup, MenuId, MenuRow};
 
 /// The id of the table's context menu, which its rows' presses (`Press::Menu`) carry.
 pub const MENU: MenuId = MenuId(1);
 
-/// What giving a command does: send these table actions, leave the table, or nothing yet
-/// (a command whose prompt, viewer or selection the client has not built, or one that makes
-/// no action for this target).
+/// What giving a command does: send these table actions, leave the table, open the ask prompt
+/// for the command at this index of `COMMANDS` (`super::ask`), open the token search for it
+/// (`super::tokens`), open the command list (`super::palette`), or nothing yet (a command
+/// whose viewer, selection or arrow the client has not built, or one that makes no action for
+/// this target).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Act {
     Actions(Vec<TableAction>),
     Leave,
+    Ask(u16),
+    Tokens(u16),
+    Palette,
     Nothing,
 }
 
 /// What `command` does for `target` at `view`.
 #[must_use]
 pub fn act(command: &Command, target: Target, view: &PlayerView) -> Act {
-    if command.client == Some("leave_table") {
-        return Act::Leave;
+    match command.client {
+        Some("leave_table") => return Act::Leave,
+        Some("open_command_list") => return Act::Palette,
+        _ => {}
+    }
+    match command.asks {
+        Asks::Number | Asks::Text | Asks::TextAndNumber | Asks::Stats => {
+            return Act::Ask(commands::index_of(command));
+        }
+        Asks::Token => return Act::Tokens(commands::index_of(command)),
+        Asks::Target => return Act::Nothing,
+        Asks::None => {}
     }
     let actions = commands::actions(command, target, view);
     if actions.is_empty() {
@@ -160,7 +175,8 @@ fn label(command: &Command, target: Target, view: &PlayerView) -> String {
 
 /// The menu's title: the card's name, the pile's or the player's word for what it is, or
 /// "Table".
-fn title(target: Target, view: &PlayerView) -> String {
+#[must_use]
+pub fn title(target: Target, view: &PlayerView) -> String {
     match target {
         Target::Card(slot) => (view.objects.iter())
             .find(|object| object.slot == slot)

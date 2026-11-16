@@ -819,6 +819,7 @@ pub enum SessionCommand {
     TableSolo(TableSoloRequest),             // start a solo manual table
     TableAct(TableAction),                   // change the manual table
     TableLeave,                              // close the manual table
+    CardSearch(String),                      // the card store's tokens, for the token search
 }
 
 /// The session's answer. `Sessions::click` returns the prompt's next state
@@ -829,6 +830,7 @@ pub enum Reply {
     TableSolo(Result<SessionId, TableRefused>),
     TableAct(TableActReply),
     TableLeave(Result<(), String>),          // the reason the table gave
+    CardSearch(String, Vec<CardSearchHit>),  // the tokens found, with the text asked for
 }
 
 impl Client {

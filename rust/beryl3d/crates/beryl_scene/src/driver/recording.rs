@@ -329,5 +329,9 @@ fn wire(command: &SessionCommand) -> (&'static str, Option<Value>) {
                 change: change.clone(),
             }),
         ),
+        SessionCommand::CardSearch(text) => (
+            ipc::CARD_SEARCH,
+            value(&crate::manual::tokens::request(text.clone())),
+        ),
     }
 }

@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 
+use beryl_protocol::ipc::decks::CardSearchHit;
 use beryl_protocol::ipc::{
     ChooseRequest, LobbyChange, LobbyUpdate, TableActReply, TableRefused, TableSoloRequest,
 };
@@ -38,6 +39,9 @@ pub enum SessionCommand {
     /// Open a solo table's lobby, or change the lobby of the table open now
     /// (`TableConnections::lobby`).
     TableLobby(LobbyChange),
+    /// Find the card store's tokens whose name holds this text, for the manual table's token
+    /// search, as the web's `card_search` does with `tokens` set.
+    CardSearch(String),
 }
 
 /// The session's answer to a `SessionCommand`. `Sessions::click` returns the prompt's next
@@ -56,6 +60,8 @@ pub enum Reply {
     /// refused the change. A change's new lobby comes back as `Input::Lobby`. Boxed because a
     /// lobby is far larger than every other reply.
     TableLobby(Result<Option<Box<LobbyUpdate>>, TableRefused>),
+    /// The tokens a `CardSearch` for this text found, the best match first.
+    CardSearch(String, Vec<CardSearchHit>),
 }
 
 /// What the client asks of the platform.

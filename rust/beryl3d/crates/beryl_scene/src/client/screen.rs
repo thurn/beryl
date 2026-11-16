@@ -37,7 +37,7 @@ impl Client {
             faces: Some(self.faces()),
             viewing: self.viewing.open,
             revealed: &self.viewing.revealed,
-            table_menu: self.manual.menu.as_ref(),
+            table: &self.manual.state,
             carried: self.carried_item.map(|carry| carry.on),
             lobby: &self.manual.lobby,
         };

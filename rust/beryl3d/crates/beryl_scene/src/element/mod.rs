@@ -78,6 +78,9 @@ pub enum Press {
     /// Give the manual table's command at this index of `manual::commands::COMMANDS` to what
     /// the pointer is on, as a key of the table does.
     Command(u16),
+    /// Something the manual table shows over itself: its command list, ask prompt, token
+    /// search, library order tray or log.
+    Table(crate::manual::TablePress),
     /// One of the bug report's controls.
     Bug(BugPress),
     /// One of the manual table's lobby controls.

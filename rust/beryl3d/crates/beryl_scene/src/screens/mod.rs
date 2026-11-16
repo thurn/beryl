@@ -31,8 +31,8 @@ use crate::faces::FaceList;
 use crate::frame::ElementId;
 use crate::inspect::inspector::Inspected;
 use crate::inspect::revealed::RevealedFace;
+use crate::manual::TableState;
 use crate::manual::lobby::Lobby;
-use crate::manual::menus::OpenMenu;
 use crate::settings::Settings;
 use crate::table::Window;
 use crate::widgets::Fields;
@@ -137,8 +137,9 @@ pub struct ScreenIn<'a> {
     pub viewing: Option<Viewed>,
     /// The faces of the Revealed Cards pile, the first revealed first, which its viewer lists.
     pub revealed: &'a [RevealedFace],
-    /// The manual table's open context menu, if any (`manual::menus`).
-    pub table_menu: Option<&'a OpenMenu>,
+    /// What the manual table shows over itself: its context menu, command list, ask prompt,
+    /// token search and library order tray, and whether its log is open.
+    pub table: &'a TableState,
     /// The item of an order prompt's row that the pointer carries along it, which a float draws
     /// in its place (`Client::carry_item`).
     pub carried: Option<Subject>,

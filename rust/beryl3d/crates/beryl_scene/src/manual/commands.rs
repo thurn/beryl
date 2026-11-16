@@ -158,6 +158,15 @@ pub fn command(id: &str) -> Option<(u16, &'static Command)> {
     Some((u16::try_from(index).ok()?, &COMMANDS[index]))
 }
 
+/// The index in `COMMANDS` of `command`, one of its entries.
+#[must_use]
+pub fn index_of(command: &Command) -> u16 {
+    let index = (COMMANDS.iter()).position(|entry| entry.id == command.id);
+    index
+        .and_then(|index| u16::try_from(index).ok())
+        .unwrap_or(u16::MAX)
+}
+
 /// Whether `view`'s table has `assist` on.
 fn assist_on(view: &PlayerView, assist: Assist) -> bool {
     let Some(table) = &view.table else {
@@ -177,10 +186,55 @@ fn assist_on(view: &PlayerView, assist: Assist) -> bool {
 /// conditions on a selection, a viewer, tokens and flows hold once the client has those, and
 /// until then their commands are not offered, as the web offers none whose condition fails.
 fn condition(view: &PlayerView, when: &str) -> bool {
+    let Some(table) = &view.table else {
+        return false;
+    };
     match when {
-        "last_draw" => view.table.as_ref().is_some_and(|t| t.last_draw.is_some()),
-        _ => false,
+        "last_draw" => table.last_draw.is_some(),
+        _ => deck_token(when, "deck_token_").is_some_and(|n| n < table.deck_tokens.len()),
     }
+}
+
+/// The index into the table's deck tokens that `id` names after `prefix`, counting from 1 as
+/// the numbered shortcuts do: `token.deck_3` names the third. `None` for any other id.
+fn deck_token(id: &str, prefix: &str) -> Option<usize> {
+    let number: usize = id.strip_prefix(prefix)?.parse().ok()?;
+    number.checked_sub(1)
+}
+
+/// The action a token command makes: its template with the token filled in, which is the
+/// `card` in `values` (the token search's choice) or, for a numbered deck token's command, that
+/// token of the table's deck tokens. Empty when neither gives one. A token made with Shift
+/// held is made face down (`values["face_down"]`), as the web's `commandActions` makes it.
+fn token_actions(
+    command: &Command,
+    template: &Value,
+    view: &PlayerView,
+    values: &Values,
+) -> Vec<TableAction> {
+    let deck = deck_token(command.id, "token.deck_")
+        .and_then(|index| view.table.as_ref()?.deck_tokens.get(index))
+        .map(|token| {
+            serde_json::json!({ "token": { "name": token.name, "scryfall_id": token.scryfall_id } })
+        });
+    let Some(card) = values.get("card").cloned().or(deck) else {
+        return Vec::new();
+    };
+    let mut args: BTreeMap<&str, Value> = BTreeMap::new();
+    args.insert("card", card);
+    args.insert("text", values.get("text").cloned().unwrap_or(Value::Null));
+    let Some(Value::Object(mut action)) = substitute(template, &args) else {
+        return Vec::new();
+    };
+    if values.get("face_down") == Some(&Value::Bool(true))
+        && let Some(Value::Object(token)) = action.get_mut("token")
+    {
+        token.insert("face_down".to_owned(), Value::Bool(true));
+    }
+    serde_json::from_value(Value::Object(action))
+        .ok()
+        .into_iter()
+        .collect()
 }
 
 /// The seat of `side` at `view`'s table: the viewer's own seat for `Side::You`, and the other
@@ -265,6 +319,25 @@ const STAT_CHANGES: [&str; 8] = [
 /// or the token chosen), or one whose cards have no reference in this view.
 #[must_use]
 pub fn actions(command: &Command, target: Target, view: &PlayerView) -> Vec<TableAction> {
+    actions_with(command, target, view, &Values::new())
+}
+
+/// The values a command's template is filled with beyond those `actions_with` finds itself:
+/// what the player gave the ask prompt (`number`, `text`, `stats`, `count`) or the token
+/// search (`card`), each a JSON value named as the template names it.
+pub type Values = BTreeMap<&'static str, Value>;
+
+/// The table actions `command` makes for `target` at `view`, as `actions` makes them, with
+/// `values` filled in over its own (`commandActions` with its `values` argument). A number
+/// given to a library command is how many cards it takes from the end it names; a `card` given
+/// to a token command is the token it makes.
+#[must_use]
+pub fn actions_with(
+    command: &Command,
+    target: Target,
+    view: &PlayerView,
+    values: &Values,
+) -> Vec<TableAction> {
     if matches!(command.id, "table.untap_all" | "phase.untap_active") {
         return vec![untap(view)];
     }
@@ -274,7 +347,10 @@ pub fn actions(command: &Command, target: Target, view: &PlayerView) -> Vec<Tabl
     let Ok(template) = serde_json::from_str::<Value>(template) else {
         return Vec::new();
     };
-    if template.get("token").is_some() || STAT_CHANGES.contains(&command.id) {
+    if template.get("token").is_some() {
+        return token_actions(command, &template, view, values);
+    }
+    if STAT_CHANGES.contains(&command.id) {
         return Vec::new();
     }
     let Some(table) = &view.table else {
@@ -299,6 +375,9 @@ pub fn actions(command: &Command, target: Target, view: &PlayerView) -> Vec<Tabl
     args.insert("on", on.into());
     let tapped = (cards.iter()).any(|card| card.object.is_some_and(|object| !object.tapped));
     args.insert("tapped", tapped.into());
+    for (name, value) in values {
+        args.insert(name, value.clone());
+    }
     let hand = piles(table, side).hand.len();
     match command.id {
         "hand.mulligan_same_size" => {
@@ -321,7 +400,10 @@ pub fn actions(command: &Command, target: Target, view: &PlayerView) -> Vec<Tabl
         return fill(&template, &args).into_iter().collect();
     }
     if let Some(zone) = pile {
-        let Some(found) = pile_cards(command, zone, side, view, table) else {
+        let count = (values.get("number").and_then(Value::as_u64))
+            .and_then(|count| usize::try_from(count).ok())
+            .unwrap_or(1);
+        let Some(found) = pile_cards(command, zone, side, count, view, table) else {
             return Vec::new();
         };
         cards = found;
@@ -335,13 +417,14 @@ pub fn actions(command: &Command, target: Target, view: &PlayerView) -> Vec<Tabl
 /// The names a template gives the first three kinds of counter a card has.
 const COUNTERS: [&str; 3] = ["first_counter", "second_counter", "third_counter"];
 
-/// The cards a pile command takes from `side`'s pile `zone`: a library command one card from
-/// the end it names, and every other pile command the whole pile, the top card first. `None`
-/// when one of them has no reference in this view.
+/// The cards a pile command takes from `side`'s pile `zone`: a library command `count` cards
+/// from the end it names, and every other pile command the whole pile, the top card first.
+/// `None` when one of them has no reference in this view.
 fn pile_cards<'a>(
     command: &Command,
     zone: ZoneName,
     side: Side,
+    count: usize,
     view: &'a PlayerView,
     table: &'a TableView,
 ) -> Option<Vec<Card<'a>>> {
@@ -354,9 +437,9 @@ fn pile_cards<'a>(
     };
     let selected: Vec<ObjectId> = match zone {
         ZoneName::Library if command.id.contains("bottom") => {
-            order.iter().take(1).copied().collect()
+            order.iter().take(count).copied().collect()
         }
-        ZoneName::Library => order.iter().rev().take(1).copied().collect(),
+        ZoneName::Library => order.iter().rev().take(count).copied().collect(),
         ZoneName::Hand => order.to_vec(),
         _ => order.iter().rev().copied().collect(),
     };

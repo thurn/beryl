@@ -1,8 +1,9 @@
 //! The manual table's screen (docs/manual-multiplayer.md): the table is drawn as in a game,
-//! with the life totals and piles of the hud, and the flat layer holds the table's keys and
-//! the context menu a right click or a long press opens, which on a phone is a bottom sheet.
-//! Only the solo table is built: the web interface's host and join screens, the command list,
-//! the ask prompt and the log come later.
+//! with the life totals and piles of the hud, and the flat layer holds the table's keys, the
+//! log at its left, and whatever the table shows over itself: the context menu a right click or
+//! a long press opens, which on a phone is a bottom sheet, the command list, the ask prompt in
+//! the dock, the token search or the library order tray. Only the solo table is built: the web
+//! interface's host and join screens come later.
 
 use beryl_protocol::protocol::Facing;
 use glam::Vec2;
@@ -15,20 +16,23 @@ use crate::input::{FaceId, FaceSize};
 use crate::manual::Target;
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::menus::{MENU, OpenMenu};
+use crate::manual::{TableState, ask, log, order, palette, tokens};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::widgets::{context_menu, menu, sheet_menu};
 
-/// What the flat layer shows on the table: a region the pointer goes through, so that it
-/// reaches the table's cards, which answers every key of a table command
-/// (`data/table-commands.json`, its aliases too) with `Press::Command`, and the open context
-/// menu, if any.
+/// What the flat layer shows on the table: a region with no box of its own, which answers every key of a table command
+/// (`data/table-commands.json`, its aliases too) with `Press::Command`, the log, and the open
+/// context menu, command list, ask prompt, token search or order tray, if any.
 ///
 /// The keys are written as the Mac's bindings: `Chord::parse` reads `Cmd` as Control and
 /// `Option` as Alt elsewhere, and the file's other bindings differ from the Mac's only in
 /// writing those.
 #[must_use]
 pub fn table(input: &ScreenIn) -> Element {
-    let mut screen = column().name("table").passes(true);
+    // The region has no box of its own, since everything in it stands at a point of the
+    // window, so the pointer reaches the table's cards around what it shows. It does not pass
+    // presses through, which every element in it would inherit.
+    let mut screen = column().name("table");
     for (index, command) in COMMANDS.iter().enumerate() {
         let Ok(index) = u16::try_from(index) else {
             break;
@@ -40,14 +44,39 @@ pub fn table(input: &ScreenIn) -> Element {
             screen = screen.shortcut(key.mac, Press::Command(index));
         }
     }
-    let open = input.table_menu.map(|open| {
+    let state = input.table;
+    let lines = input
+        .view
+        .and_then(|view| view.table.as_ref())
+        .map(|table| &table.log[..]);
+    let log = lines.and_then(|lines| log::log(lines, state.log_open));
+    let open = state.menu.as_ref().map(|open| {
         if input.window.phone() {
             bottom_sheet(open, input)
         } else {
             context_menu(open.at, menu(MENU, &open.title, &open.groups))
         }
     });
-    screen.children(open)
+    screen
+        .children(log)
+        .children(open)
+        .children(over(state, input))
+}
+
+/// The command list, ask prompt, token search or order tray the table shows, if one is open.
+fn over(state: &TableState, input: &ScreenIn) -> Option<Element> {
+    let window = input.window.size;
+    if let Some(open) = &state.palette {
+        return Some(palette::panel(open, input.fields, window));
+    }
+    if let Some(open) = &state.ask {
+        return Some(ask::dock(open, input.fields, window));
+    }
+    let view = input.view?;
+    if let Some(open) = &state.tokens {
+        return Some(tokens::panel(open, view, input.fields, window));
+    }
+    (state.order.as_ref()).map(|open| order::tray(open, view, window))
 }
 
 /// The context menu on a phone, as the web's `[data-presentation="sheet"]` menu stands: along
@@ -91,7 +120,7 @@ fn preview(target: Target, input: &ScreenIn) -> Option<Element> {
 /// size (`Faces::want_full`): that of the face-up card the open menu is for.
 #[must_use]
 pub fn sheet_face(input: &ScreenIn) -> Option<FaceId> {
-    let open = input.table_menu.filter(|_| input.window.phone())?;
+    let open = input.table.menu.as_ref().filter(|_| input.window.phone())?;
     preview_face(open.target, input)
 }
 

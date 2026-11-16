@@ -38,6 +38,7 @@ mod input;
 mod inspect;
 mod lobby;
 mod manual;
+mod manual_overlays;
 mod own;
 mod screen;
 mod stops;
@@ -176,7 +177,7 @@ pub struct Client {
     viewing: Viewing,
     /// The bug report and the table's clock, which it freezes (`bug`).
     bug: bug::Bug,
-    /// The manual table's open context menu (`manual`).
+    /// What the manual table shows over itself and the touch held on it (`manual`).
     manual: manual::Manual,
 }
 
@@ -294,6 +295,7 @@ impl Client {
                 (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
                 self.show_screen();
             }
+            Input::Reply(Reply::CardSearch(text, hits)) => self.take_token_hits(text, hits),
             Input::Reply(Reply::Click(Ok(reply))) => {
                 match reply {
                     ClickReply::Open { prompt } => {
@@ -572,6 +574,7 @@ impl Client {
             }
             Press::Command(index) => self.table_key(index),
             Press::Lobby(press) => self.press_lobby(press),
+            Press::Table(press) => self.table_press(press),
         }
     }
 

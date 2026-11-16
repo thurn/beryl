@@ -18,6 +18,7 @@ use beryl_host::{Class, Inbox};
 use beryl_protocol::ipc::TableLobbyRequest;
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::input::Input;
+use beryl_scene::manual::tokens;
 use beryl_session::ai::AgentMove;
 use beryl_session::{Seat, Sessions, StartGame, StopsSetting};
 use beryl_shell::Dirs;
@@ -297,6 +298,10 @@ impl Session for Live {
             SessionCommand::TableLobby(change) => {
                 let lobby = self.tables.lobby(TableLobbyRequest { change });
                 Reply::TableLobby(lobby.map(|lobby| lobby.map(Box::new)))
+            }
+            SessionCommand::CardSearch(text) => {
+                let hits = beryl_table_session::decks::search(&tokens::request(text.clone()));
+                Reply::CardSearch(text, hits)
             }
         }
     }

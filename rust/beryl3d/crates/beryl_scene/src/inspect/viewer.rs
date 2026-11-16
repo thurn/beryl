@@ -166,7 +166,7 @@ fn card_box(name: &str) -> Element {
 
 /// The box that shows the scene object in `slot`, named for its card and slot, as a locator
 /// names a card ("Island #8").
-fn object_box(view: &PlayerView, slot: ObjectId) -> Element {
+pub(crate) fn object_box(view: &PlayerView, slot: ObjectId) -> Element {
     let object = view.objects.iter().find(|object| object.slot == slot);
     let name = object
         .and_then(|object| object.name.as_deref())

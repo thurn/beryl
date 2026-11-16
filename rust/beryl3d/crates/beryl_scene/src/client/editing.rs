@@ -127,6 +127,7 @@ impl Client {
             placeholder: String::new(),
         };
         self.fields.set(&name, state);
+        self.follow_table_query();
         self.show_screen();
     }
 

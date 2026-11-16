@@ -1,11 +1,18 @@
 //! The manual table (docs/manual-multiplayer.md): a table where the players move cards by
 //! hand, with no engine. Its commands (`commands`), the context menu a right click opens on a
-//! card, a pile, a hand, a life total or the table (`menus`), and what the pointer is on
-//! (`target_at`), which a menu or a key acts on.
+//! card, a pile, a hand, a life total or the table (`menus`), what the pointer is on
+//! (`target_at`), which a menu or a key acts on, and what the table shows over itself: the
+//! command list (`palette`), the ask prompt (`ask`), the token search (`tokens`), the library
+//! order tray (`order`) and the log (`log`).
 
+pub mod ask;
 pub mod commands;
 pub mod lobby;
+pub mod log;
 pub mod menus;
+pub mod order;
+pub mod palette;
+pub mod tokens;
 
 use beryl_protocol::PlayerView;
 use beryl_protocol::ipc::TableSoloRequest;
@@ -15,6 +22,83 @@ use glam::Vec2;
 use crate::agent::hit;
 use crate::frame::{Frame, Place, Role};
 use commands::AppliesTo;
+
+/// A press on something the table shows over itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TablePress {
+    /// The `n`th row the command list shows.
+    Palette(u16),
+    /// The ask prompt's confirm button.
+    AskConfirm,
+    /// The ask prompt's plus, or its minus if `false`.
+    AskStep(bool),
+    /// The `n`th row the token search shows.
+    Token(u16),
+    /// The `n`th card of the library order tray, which moves it to the top.
+    OrderCard(u16),
+    /// The library order tray's Done.
+    OrderDone,
+    /// Undo the log's line `n`.
+    Undo(u32),
+    /// Rewind the table to the moment after the log's line `n`.
+    Rewind(u32),
+    /// Open or fold the log.
+    ToggleLog,
+    /// Close the command list, ask prompt, token search or order tray.
+    Close,
+}
+
+/// What the client keeps of the manual table: the open context menu, command list, ask
+/// prompt, token search and library order tray, each if any (at most one of the last four is
+/// open), whether the log is open, and whether Shift was held at the last press of the
+/// pointer, which runs a command list row's shifted form.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TableState {
+    pub menu: Option<menus::OpenMenu>,
+    pub palette: Option<palette::Palette>,
+    pub ask: Option<ask::Ask>,
+    pub tokens: Option<tokens::TokenSearch>,
+    pub order: Option<order::LibraryOrder>,
+    pub log_open: bool,
+    pub shift: bool,
+}
+
+impl TableState {
+    /// Nothing shown over the table, and the log folded.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            menu: None,
+            palette: None,
+            ask: None,
+            tokens: None,
+            order: None,
+            log_open: false,
+            shift: false,
+        }
+    }
+
+    /// Whether the command list, ask prompt, token search or order tray is open, which takes
+    /// the keys from the table.
+    #[must_use]
+    pub fn overlay_open(&self) -> bool {
+        self.palette.is_some()
+            || self.ask.is_some()
+            || self.tokens.is_some()
+            || self.order.is_some()
+    }
+
+    /// Closes the command list, ask prompt, token search and order tray. Returns whether one
+    /// was open.
+    pub fn close_overlay(&mut self) -> bool {
+        let open = self.overlay_open();
+        self.palette = None;
+        self.ask = None;
+        self.tokens = None;
+        self.order = None;
+        open
+    }
+}
 
 /// What a command acts on: a card, a pile (a library, graveyard or exile), a hand, a life
 /// total, or the table itself.

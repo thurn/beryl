@@ -1,14 +1,17 @@
 //! The manual table, on views built by hand: which commands apply to a permanent, the context
-//! menu a right click or a long press opens on one (a bottom sheet on a phone), and the keys
-//! that change a life total and draw a card.
+//! menu a right click or a long press opens on one (a bottom sheet on a phone), the keys that
+//! change a life total and draw a card, the command list, the ask prompt, the token search, the
+//! library order tray and the log.
 
 use beryl_card_records::{TokenMakers, card_records_among};
-use beryl_protocol::protocol::{Side, TableAction, ZoneName};
+use beryl_protocol::ipc::decks::{CardSearchHit, CardTokenLink};
+use beryl_protocol::protocol::{LogLine, Side, TableAction, ZoneName};
+use beryl_scene::command::Reply;
 use beryl_scene::command::SessionCommand;
 use beryl_scene::frame::{Frame, Role, Wake};
 use beryl_scene::input::{
     Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size,
+    Size, TextChange,
 };
 use beryl_scene::manual::commands::{AppliesTo, commands_for};
 use beryl_scene::manual::{Target, target_at};
@@ -372,4 +375,224 @@ fn a_submenu_row_on_the_phone_sheet_shows_its_rows_with_back() {
     );
     let frame = press(&mut client, &frame, "Back");
     assert_eq!(menu_rows(&frame), first);
+}
+
+/// Cmd held, as the table's keys are written for the Mac.
+fn cmd() -> Modifiers {
+    Modifiers {
+        command: true,
+        ..Modifiers::default()
+    }
+}
+
+/// Types `words` into the focused field.
+fn type_in(client: &mut Client, words: &str) {
+    client.handle(Input::Text(TextChange::Insert(words.to_owned())));
+}
+
+/// The names of the menu items `client` shows now, top to bottom.
+fn rows(client: &mut Client, now: u64) -> Vec<String> {
+    let frame = client.frame(now);
+    (frame.resolved.iter())
+        .filter(|element| element.role == Role::MenuItem)
+        .map(|element| frame.name(element.name).to_owned())
+        .collect()
+}
+
+/// Every command the client has queued, in order.
+fn commands(client: &mut Client) -> Vec<SessionCommand> {
+    std::iter::from_fn(|| client.next_command()).collect()
+}
+
+/// The action `json` names, as a table action.
+fn action(json: serde_json::Value) -> TableAction {
+    serde_json::from_value(json).unwrap()
+}
+
+#[test]
+fn typing_shuf_in_the_command_list_puts_shuffle_first() {
+    let view = table_view();
+    let (mut client, _) = client_at_table(&view);
+    client.handle(key(KeyCode::K, cmd()));
+    assert!(
+        rows(&mut client, 1).len() > 20,
+        "the list offers every command"
+    );
+    type_in(&mut client, "shuf");
+    let shown = rows(&mut client, 2);
+    assert_eq!(
+        shown.first().map(String::as_str),
+        Some("Shuffle"),
+        "{shown:?}"
+    );
+    // Return runs it, on the viewer's library.
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    let expected = action(serde_json::json!({ "shuffle": { "seat": 0, "portion": "all" } }));
+    assert_eq!(acts(&mut client), vec![expected]);
+    assert!(rows(&mut client, 3).is_empty(), "the list closed");
+}
+
+#[test]
+fn a_signed_life_entry_changes_life_and_a_plain_one_sets_it() {
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let life = middle(&frame, Role::Player, "You ");
+    client.handle(pointer(PointerPhase::Move, life, Button::None));
+    for (typed, expected) in [
+        ("+3", serde_json::json!({ "life": { "seat": 0, "add": 3 } })),
+        ("7", serde_json::json!({ "life": { "seat": 0, "set": 7 } })),
+    ] {
+        client.handle(key(KeyCode::L, cmd()));
+        // The field opens on the current total, selected, so typing replaces it.
+        type_in(&mut client, typed);
+        client.handle(key(KeyCode::Enter, Modifiers::default()));
+        assert_eq!(acts(&mut client), vec![action(expected)], "typed {typed:?}");
+    }
+}
+
+#[test]
+fn two_slash_three_sets_power_and_toughness() {
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let angel = middle(&frame, Role::Card, "Serra Angel");
+    client.handle(pointer(PointerPhase::Move, angel, Button::None));
+    client.handle(key(KeyCode::P, cmd()));
+    type_in(&mut client, "2/3");
+    let frame = client.frame(1);
+    assert!(
+        (frame.resolved.iter()).any(|element| element.role == Role::Field
+            && frame.name(element.name) == "Set power and toughness"),
+        "the ask prompt is open in the dock"
+    );
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    let [
+        TableAction::Stats {
+            stats: Some((2, 3)),
+            ..
+        },
+    ] = acts(&mut client)[..]
+    else {
+        panic!("2/3 did not set the card's power and toughness");
+    };
+}
+
+#[test]
+fn the_token_search_lists_the_decks_tokens_before_searching() {
+    let mut view = table_view();
+    let token = |name: &str, id: &str| CardTokenLink {
+        name: name.to_owned(),
+        scryfall_id: id.to_owned(),
+    };
+    let table = view.table.as_mut().unwrap();
+    table.deck_tokens = vec![token("Spirit", "spirit-1"), token("Soldier", "soldier-1")];
+    let (mut client, _) = client_at_table(&view);
+    client.handle(key(KeyCode::T, cmd()));
+    assert_eq!(rows(&mut client, 1), ["Spirit", "Soldier", "Custom token"]);
+    assert_eq!(
+        commands(&mut client),
+        Vec::new(),
+        "nothing was searched yet"
+    );
+
+    type_in(&mut client, "spi");
+    assert_eq!(
+        commands(&mut client),
+        vec![SessionCommand::CardSearch("spi".to_owned())]
+    );
+    let hit = |name: &str, id: &str| CardSearchHit {
+        name: name.to_owned(),
+        scryfall_id: id.to_owned(),
+        type_line: "Token Creature".to_owned(),
+        mana_cost: None,
+        power: Some("1".to_owned()),
+        toughness: Some("1".to_owned()),
+        image: String::new(),
+    };
+    let hits = vec![
+        hit("Spirit", "spirit-1"),
+        hit("Spirit Warrior", "warrior-1"),
+    ];
+    client.handle(Input::Reply(Reply::CardSearch("spi".to_owned(), hits)));
+    // The deck's token stays first, and is listed once.
+    assert_eq!(
+        rows(&mut client, 2),
+        ["Spirit", "Spirit Warrior", "Custom token"]
+    );
+    client.handle(key(KeyCode::ArrowDown, Modifiers::default()));
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    let expected = action(serde_json::json!({ "token": {
+        "card": { "token": { "name": "Spirit Warrior", "scryfall_id": "warrior-1" } },
+        "count": 1,
+        "attached_to": null,
+        "note": null,
+    }}));
+    assert_eq!(acts(&mut client), vec![expected]);
+}
+
+#[test]
+fn undo_on_a_log_line_sends_its_undo() {
+    let mut view = table_view();
+    let line = |n: u32, text: &str, undoable: bool| LogLine {
+        n,
+        by: "You".to_owned(),
+        text: text.to_owned(),
+        struck: false,
+        undoable,
+        blocked_by: Vec::new(),
+    };
+    view.table.as_mut().unwrap().log = vec![
+        line(1, "Shuffled your library.", false),
+        line(2, "Drew a card.", true),
+    ];
+    let (mut client, frame) = client_at_table(&view);
+    // The log starts folded to a button, which opens it.
+    let show = middle(&frame, Role::Button, "Show log");
+    client.handle(pointer(PointerPhase::Down, show, Button::Primary));
+    client.handle(pointer(PointerPhase::Up, show, Button::Primary));
+    let frame = client.frame(1).clone();
+    let undo = middle(&frame, Role::Button, "Undo");
+    client.handle(pointer(PointerPhase::Down, undo, Button::Primary));
+    client.handle(pointer(PointerPhase::Up, undo, Button::Primary));
+    let expected = action(serde_json::json!({ "undo": { "entry": 2 } }));
+    assert_eq!(acts(&mut client), vec![expected]);
+}
+
+#[test]
+fn the_library_order_puts_the_first_card_on_top() {
+    let view = table_view();
+    let (mut client, _) = client_at_table(&view);
+    let hand: Vec<_> = (view.objects.iter())
+        .filter(|object| object.zone == ZoneName::Hand && object.owner == Side::You)
+        .map(|object| object.slot)
+        .take(2)
+        .collect();
+    assert_eq!(hand.len(), 2, "the sample view has two cards in hand");
+    client.order_library(Side::You, hand.clone());
+    let frame = client.frame(1).clone();
+    let second = (frame.resolved.iter())
+        .filter(|element| {
+            frame
+                .name(element.name)
+                .ends_with(&format!("#{}", hand[1].0))
+        })
+        .find(|element| element.role == Role::Region)
+        .expect("the tray shows the second card");
+    let at = second.corners.iter().copied().sum::<Vec2>() / 4.0;
+    client.handle(pointer(PointerPhase::Down, at, Button::Primary));
+    client.handle(pointer(PointerPhase::Up, at, Button::Primary));
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    // The second card was moved to the top, so it is put on the library last.
+    let moved: Vec<u32> = acts(&mut client)
+        .iter()
+        .map(|action| match action {
+            TableAction::Move { selection, .. } => {
+                serde_json::to_value(selection).unwrap()["objects"][0]["handle"]
+                    .as_u64()
+                    .and_then(|handle| u32::try_from(handle).ok())
+                    .unwrap()
+            }
+            other => panic!("not a move: {other:?}"),
+        })
+        .collect();
+    assert_eq!(moved, [u32::from(hand[0].0), u32::from(hand[1].0)]);
 }

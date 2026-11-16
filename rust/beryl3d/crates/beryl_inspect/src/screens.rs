@@ -7,7 +7,7 @@
 
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, LIST_AGENTS, TABLE_LOBBY};
-use beryl_protocol::protocol::PlayerState;
+use beryl_protocol::protocol::{LogLine, PlayerState};
 use beryl_protocol::script::Reset;
 use beryl_protocol::{AgentView, GameUpdate, PlayerView, SessionId};
 use beryl_scene::driver::{OPEN, RECORDINGS};
@@ -73,7 +73,24 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
     };
     let mut view = if opened == "table" {
         let mut view = testing::ViewBuilder::sample().build();
-        view.table = Some(testing::table(&view));
+        let mut table = testing::table(&view);
+        // A few log lines, so that the checks see the log at the table's left with its undo
+        // and rewind buttons.
+        table.log = [
+            (1, "Shuffled your library.", false),
+            (2, "Drew 7 cards.", false),
+            (3, "Drew a card.", true),
+        ]
+        .map(|(n, text, undoable)| LogLine {
+            n,
+            by: "You".to_owned(),
+            text: text.to_owned(),
+            struck: false,
+            undoable,
+            blocked_by: Vec::new(),
+        })
+        .into();
+        view.table = Some(table);
         view
     } else {
         PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20))

@@ -186,6 +186,8 @@ mod milestone_three {
     use beryl_scene::widgets::Fields;
 
     static FIELDS: Fields = Fields::new();
+
+    static TABLE: beryl_scene::manual::TableState = beryl_scene::manual::TableState::new();
     static BUG: BugForm = BugForm::new();
     static LOBBY: beryl_scene::manual::lobby::Lobby = beryl_scene::manual::lobby::Lobby::new();
 
@@ -215,7 +217,7 @@ mod milestone_three {
             faces: None,
             viewing: None,
             revealed: &[],
-            table_menu: None,
+            table: &TABLE,
             carried: None,
             lobby: &LOBBY,
         }

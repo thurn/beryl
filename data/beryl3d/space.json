@@ -645,6 +645,11 @@
       "slot": 120,
       "slot_gap": 12,
       "slots_gap": 26
+    },
+    "table": {
+      "edge": 24,
+      "palette": { "width": 560, "top": 96, "height": 420 },
+      "log": { "width": 320, "top": 96, "height": 460 }
     }
   },
   "notices": {
