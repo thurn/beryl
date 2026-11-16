@@ -1,7 +1,13 @@
-"""`just status install`: a launchd agent that runs `just status publish` every ten minutes, at
-background priority, so the GitHub Pages site stays current while this Mac is awake. The
-pattern is the nightly agent's (tools/src/beryl_tools/nightly.py), copied because nothing here
-imports the tools."""
+"""`just status install`: a launchd agent that runs `just status publish` when the beads
+change, at background priority, so the GitHub Pages site stays current while this Mac is
+awake.
+
+launchd starts the job when one of the beads database's files changes (`WatchPaths`), and
+never sooner than `THROTTLE_SECONDS` after its last start, so a busy hour of bead changes
+publishes once every ten minutes: GitHub Pages builds a branch at most about ten times an
+hour. An hourly start (`StartInterval`) covers a change launchd did not report and keeps the
+changelog fill going while nothing changes. The pattern is the nightly agent's
+(tools/src/beryl_tools/nightly.py), copied because nothing here imports the tools."""
 
 from __future__ import annotations
 
@@ -16,7 +22,8 @@ from . import paths
 
 LABEL = "ca.thurn.beryl.status"
 # GitHub Pages allows about ten builds an hour from a branch.
-INTERVAL_SECONDS = 600
+THROTTLE_SECONDS = 600
+FALLBACK_SECONDS = 3600
 
 
 def plist_path() -> Path:
@@ -57,7 +64,9 @@ def agent_plist(main: Path, uv: str) -> dict[str, object]:
             "publish",
         ],
         "WorkingDirectory": main.as_posix(),
-        "StartInterval": INTERVAL_SECONDS,
+        "WatchPaths": [p.as_posix() for p in paths.store_files(main)],
+        "ThrottleInterval": THROTTLE_SECONDS,
+        "StartInterval": FALLBACK_SECONDS,
         "ProcessType": "Background",
         "LowPriorityIO": True,
         "EnvironmentVariables": environment(),
@@ -92,8 +101,9 @@ def install() -> int:
         print(f"status install: launchctl: {loaded.stderr.strip()}", file=sys.stderr)
         return 1
     print(
-        f"status install: {path} loaded: `just status publish` from {main} every "
-        f"{INTERVAL_SECONDS // 60} minutes; its log is {log_path()}; "
+        f"status install: {path} loaded: `just status publish` from {main} when the "
+        f"beads change, at most every {THROTTLE_SECONDS // 60} minutes; its log is "
+        f"{log_path()}; "
         "`just status uninstall` removes it"
     )
     return 0

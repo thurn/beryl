@@ -8,8 +8,8 @@ an unchanged page costs nothing.
 
 The beads are already public, in the repository's `refs/dolt/data`, so the site publishes
 nothing new. GitHub Pages builds at most about ten times an hour from a branch, which is why
-the launchd agent publishes every ten minutes, and a publish whose tree is unchanged pushes
-nothing."""
+the launchd agent publishes at most every ten minutes, and a publish whose tree is unchanged
+pushes nothing."""
 
 from __future__ import annotations
 

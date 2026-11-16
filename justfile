@@ -190,7 +190,7 @@ speed *args:
 cpu *args:
     {{ by }} cpu "$@"
 
-# The beads as a web page on http://127.0.0.1:8766 (build; publish pushes it to GitHub Pages; install/uninstall the agent that publishes every 10 minutes)
+# The beads as a web page on http://127.0.0.1:8766 (build; publish pushes it to GitHub Pages; install/uninstall the agent that publishes on bead changes, at most every 10 minutes)
 [group('bench')]
 status *args:
     @uv run --quiet --no-dev --project status beryl-status "$@"

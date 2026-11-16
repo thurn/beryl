@@ -3,7 +3,8 @@
 - `serve` (the default): the site on http://127.0.0.1:8766, kept current;
 - `build`: export the beads and build the site once;
 - `publish`: build, fill changelogs for a few minutes, and push the site to GitHub Pages;
-- `install` / `uninstall`: the launchd agent that publishes every ten minutes."""
+- `install` / `uninstall`: the launchd agent that publishes when the beads change, at most
+  every ten minutes."""
 
 from __future__ import annotations
 
@@ -54,6 +55,7 @@ def publish_command(argv: Sequence[str]) -> int:
         if args.fill:
             site.fill(budget=float(args.fill))
         print(publish.publish(main, site.folder), flush=True)
+        paths.prune_sites(site.folder)
     return 0
 
 

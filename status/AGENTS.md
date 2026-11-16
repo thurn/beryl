@@ -115,8 +115,14 @@ Every change here serves two priorities, in this order.
   `by-x` between beads), so the same files work at a server's root and under a
   GitHub Pages project folder. Only the 404 page, which a server answers at any
   address, uses an absolute `<base>`.
-- `build.py`: writes the site into `$BERYL_CACHE/status/site/`, a file only when
-  its bytes changed, so unchanged pages keep their ETags and browser caches.
+- `build.py`: writes the site into `$BERYL_CACHE/status/sites/<code version>/`,
+  a file only when its bytes changed, so unchanged pages keep their ETags and
+  browser caches. Each version of this project's code (`paths.code_version`, a
+  digest of its source) builds into its own folder, so a worktree's server and
+  the agent's publish from the main checkout never overwrite each other's pages.
+  A server starting with new code first copies the newest other folder, so it
+  serves the last pages while it rebuilds. Folders unused for two days are
+  deleted.
 - `site.py`: the shared state. `refresh` exports only when the database's files
   changed, and `fill` fetches changelogs that are not current, open beads first.
 - `serve.py`: the server (GET and HEAD only). It fetches a changelog fragment
@@ -125,9 +131,10 @@ Every change here serves two priorities, in this order.
   (never a checkout) as one parentless commit and force-pushes it to `gh-pages`,
   so the branch never grows a history. It turns GitHub Pages on the first time.
   The beads are already public in `refs/dolt/data`.
-- `agent.py`: `just status install` loads a launchd agent that publishes every
-  ten minutes, because GitHub Pages builds a branch at most about ten times an
-  hour. `just status uninstall` removes it.
+- `agent.py`: `just status install` loads a launchd agent that publishes when
+  the beads database's files change, no sooner than ten minutes after its last
+  run, because GitHub Pages builds a branch at most about ten times an hour, and
+  hourly in case launchd missed a change. `just status uninstall` removes it.
 
 ## Rules
 
@@ -144,4 +151,5 @@ Every change here serves two priorities, in this order.
   `uv run --project ../tools python -m pytest`, and the same with
   `python -m black --check .` and `pyre --noninteractive check`.
 - To look at a change, run `just status --port <free port>` and open it in a
-  browser. Check a phone width (375 px) and both colour schemes.
+  browser. Check a phone width (375 px) and both colour schemes. The
+  `status-dashboard` skill sums up what every change here is held to.

@@ -9,6 +9,7 @@ current. The server and `publish` share it.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -108,6 +109,8 @@ class Site:
         with self.lock:
             started = time.monotonic()
             self.version = build.version_of(self.export_text, Assets.load())
+            self.folder.mkdir(parents=True, exist_ok=True)
+            os.utime(self.folder)  # Marks the folder in use, for `paths.prune_sites`.
             done = build.build(
                 self.folder, self.index, self.version, lookup, self.base, self.pages
             )
