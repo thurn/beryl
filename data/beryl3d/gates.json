@@ -64,14 +64,14 @@
       "worst_frame_segments": 23,
       "total_segments": 16701,
       "worst_frame_records": 91,
-      "total_records": 67879,
+      "total_records": 68070,
       "worst_frame_layout_nodes": 11,
       "total_layout_nodes": 56,
       "worst_frame_text_runs": 20,
       "total_text_runs": 42,
       "worst_frame_draw_calls": 6,
       "worst_frame_upload_bytes": 7280,
-      "worst_frame_blended_area": 0.1692,
+      "worst_frame_blended_area": 0.1813,
       "handle_allocations": 9469,
       "frame_allocations": 0,
       "worst_frame_instructions": 2919075,
@@ -87,7 +87,7 @@
       "worst_frame_segments": 2,
       "total_segments": 92,
       "worst_frame_records": 38,
-      "total_records": 2421,
+      "total_records": 2463,
       "worst_frame_layout_nodes": 10,
       "total_layout_nodes": 18,
       "worst_frame_text_runs": 18,
@@ -223,7 +223,7 @@
   },
   "tests": {
     "median_frames": 132,
-    "most_frames": 5474
+    "most_frames": 5666
   },
   "scaling": {
     "stress-1024": {

@@ -14,13 +14,14 @@
 
 use std::fmt::Write as _;
 
+use beryl_protocol::prompt::Click;
 use beryl_protocol::protocol::{ManaPool, PlayerView, Side};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use crate::data::space::verbs::count::DRIFT;
 use crate::effects::{Effect, EffectRun};
-use crate::element::{Element, FloatId, floats, text};
+use crate::element::{Element, FloatId, Press, floats, text};
 use crate::frame::Role;
 use crate::input::Size;
 use crate::layout::{FloatLook, Layer};
@@ -107,7 +108,8 @@ pub(crate) const fn index(side: Side) -> usize {
 /// What one player's floats show now, so that a float is shown again only when it changes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Shown {
-    life: Option<i32>,
+    /// The total, and whether a press on it picks the player.
+    life: Option<(i32, bool)>,
     pool: Option<ManaPool>,
     change: Option<i32>,
 }
@@ -123,11 +125,15 @@ impl CountFloats {
     /// scripts to come (`Show::coming_counts`) will show, and forgets those laid out before that
     /// none of them will. The client calls it as each update arrives, so that `write` lays
     /// nothing out and allocates nothing.
+    ///
+    /// A player marked in `targets` (the viewer's first) has each total laid out a second time,
+    /// as the target a press on picks them by.
     pub fn prepare<'a>(
         &mut self,
         layer: &mut Layer,
         counts: &Counts,
         coming: impl Iterator<Item = (&'a [CountChange], &'a PlayerView)>,
+        targets: [bool; 2],
     ) {
         // What each player's floats will show, as the scripts play out.
         let mut lives: [Vec<i32>; 2] = Default::default();
@@ -157,12 +163,18 @@ impl CountFloats {
             let at = index(side);
             let id = floats::LIFE[at];
             layer.forget_prepared(id, |key| {
-                lives[at].iter().any(|&life| life_key(life) == key)
+                (lives[at].iter())
+                    .any(|&life| [false, true].map(|t| total_key(life, t)).contains(&key))
             });
             for &life in &lives[at] {
-                layer.prepare(id, life_key(life), || {
-                    life_total(name, Some(life)).expect("a total")
-                });
+                for target in [false, true] {
+                    if target && !targets[at] {
+                        continue;
+                    }
+                    layer.prepare(id, total_key(life, target), || {
+                        life_total((side, name), Some(life), target).expect("a total")
+                    });
+                }
             }
             let id = floats::LIFE_CHANGE[at];
             layer.forget_prepared(id, |key| changes[at].iter().any(|&by| life_key(by) == key));
@@ -184,7 +196,8 @@ impl CountFloats {
     /// and pool in a window of `size`, or shows none of them unless `visible`. A `loss` or `gain`
     /// in `effects` that plays on a player at `now` tints their total and shows by how much it
     /// changed, sinking away for a loss and rising for a gain while it fades, linearly over the
-    /// run. Lays nothing out and allocates nothing for what `prepare` laid out.
+    /// run. A press on the total of a player marked in `targets` picks them. Lays nothing out and
+    /// allocates nothing for what `prepare` laid out.
     #[expect(
         clippy::too_many_arguments,
         reason = "each is a separate input of the frame"
@@ -197,10 +210,11 @@ impl CountFloats {
         now: u64,
         layout: &Layout,
         size: Size,
-        visible: bool,
+        (visible, targets): (bool, [bool; 2]),
     ) {
         for (side, name) in [(Side::You, "You"), (Side::Opponent, "Opponent")] {
             let at = index(side);
+            let target = targets[at];
             let counts = counts.player(side).filter(|_| visible);
             let run = effects.iter().find(|run| {
                 matches!(run.effect, Effect::Loss | Effect::Gain)
@@ -209,7 +223,7 @@ impl CountFloats {
                     && now < run.start + run.duration
             });
             let want = Shown {
-                life: counts.map(|counts| counts.life),
+                life: counts.map(|counts| (counts.life, target)),
                 pool: counts
                     .map(|counts| counts.pool)
                     .filter(|pool| *pool != ManaPool::default()),
@@ -218,9 +232,15 @@ impl CountFloats {
             let shown = &mut self.shown[at];
             if want.life != shown.life {
                 let id = floats::LIFE[at];
-                show(layer, id, want.life.map(life_key), || {
-                    life_total(name, want.life)
-                });
+                show(
+                    layer,
+                    id,
+                    want.life.map(|(life, t)| total_key(life, t)),
+                    || {
+                        want.life
+                            .and_then(|(life, t)| life_total((side, name), Some(life), t))
+                    },
+                );
             }
             if want.pool != shown.pool {
                 let id = floats::POOL[at];
@@ -310,6 +330,11 @@ fn show(
     }
 }
 
+/// The key a life total is prepared under, as a target of a prompt's or not.
+fn total_key(life: i32, target: bool) -> u64 {
+    life_key(life) | u64::from(target) << 32
+}
+
 /// The key a life total or a change of one is prepared under.
 fn life_key(life: i32) -> u64 {
     u64::from(life.cast_unsigned())
@@ -331,12 +356,19 @@ fn pool_key(pool: ManaPool) -> u64 {
 }
 
 /// A player's life total, if any: a player element that shows the number, named for whose it
-/// is and the number, as "You 20", so that the tree's line for it says both.
-fn life_total(name: &str, life: Option<i32>) -> Option<Element> {
+/// is and the number, as "You 20", so that the tree's line for it says both. As a `target`, a
+/// press on it clicks the open prompt on the player, as the web interface's `PlayerTarget`
+/// (`ui/src/stage/PromptBar.tsx`) does.
+fn life_total((side, name): (Side, &str), life: Option<i32>, target: bool) -> Option<Element> {
     let life = life?;
     let mut element = Element::new(Role::Player)
         .name(&format!("{name} {life}"))
         .style(type_style::TITLE);
+    if target {
+        element = element.on_press(Press::Prompt(Click::On {
+            on: Subject::Player { player: side },
+        }));
+    }
     element.text = Some(life.to_string());
     Some(element)
 }

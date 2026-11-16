@@ -83,11 +83,24 @@ pub struct Open {
     pub ends: Option<Interval>,
 }
 
+/// The arrow a choice of targets draws from the spell or ability that asks to the pointer,
+/// until as many targets are picked as it takes (UI Conventions, "An arrow to the pointer"), as
+/// the web interface's `Aim` (`ui/src/stage/Aim.tsx`) draws it. It is the pointer's trace, not
+/// a span: it has no step and no fade.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Aim {
+    pub arrow: Arrow,
+    pub from: Subject,
+    /// Where the pointer is, in logical points of the window.
+    pub to: glam::Vec2,
+}
+
 /// Every span and streak the table shows.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Lit {
     open: Vec<Open>,
     streaks: Vec<StreakRun>,
+    aim: Option<Aim>,
 }
 
 impl Lit {
@@ -98,7 +111,19 @@ impl Lit {
         Self {
             open: Vec::with_capacity(capacity),
             streaks: Vec::with_capacity(capacity),
+            aim: None,
         }
+    }
+
+    /// The arrow to the pointer, if one is drawn.
+    #[must_use]
+    pub fn aim(&self) -> Option<Aim> {
+        self.aim
+    }
+
+    /// Draws the arrow to the pointer, or none.
+    pub fn set_aim(&mut self, aim: Option<Aim>) {
+        self.aim = aim;
     }
 
     /// `span` begins to appear, standing whole once `over` is done. A revealed face joins the

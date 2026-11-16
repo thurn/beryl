@@ -10,12 +10,15 @@
 //! to the camera, so that the tray keeps its size and place on screen at any window shape. The
 //! put-back and pick trays, which a prompt alone makes, are not ported here.
 
-use beryl_protocol::protocol::ObjectId;
+use beryl_protocol::protocol::{ObjectId, PlayerView};
 use glam::{Quat, Vec2};
 
+use super::scene::SceneObject;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Placement, Rest, Table};
 use crate::data::space::layout::desktop::tray as data;
-use crate::pose::Pose;
+use crate::frame::OBJECTS;
+use crate::motion::between;
+use crate::pose::{Curve, Pose};
 
 /// The space a layout gives a tray and the sizes it lays one out at, in stage pixels of a stage
 /// `stage_height` tall and as wide as the window's shape makes it, as the web's `TraySpace`.
@@ -253,6 +256,64 @@ impl Placement {
     }
 }
 
+/// The cards of a tray on their way into it or back out of it: for each slot, where the card
+/// was drawn as the move began, which it goes from to where it now rests over `over` (in
+/// nanoseconds since the client started), eased by `curve`. A move that is waiting for its
+/// first frame has no `over` yet, only its length.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct TrayMotion {
+    /// Where each card held up lies in the tray, and, by slot, where it rests in its zone and
+    /// whether it is drawn there, which scripts are played from (`Table::rests`).
+    poses: Vec<(ObjectId, Pose)>,
+    zone: Vec<Option<(Pose, bool)>>,
+    from: Vec<Option<Pose>>,
+    over: Option<(u64, u64)>,
+    /// How long a move waiting for its first frame takes, in nanoseconds.
+    waiting: Option<u64>,
+    curve: Curve,
+    /// Whether the cards are going back out of the tray.
+    leaving: bool,
+    /// The `now` of the latest frame.
+    now: u64,
+}
+
+impl TrayMotion {
+    /// Room for every slot, so that no move allocates.
+    pub(crate) fn new() -> Self {
+        Self {
+            poses: Vec::new(),
+            zone: vec![None; OBJECTS],
+            from: vec![None; OBJECTS],
+            over: None,
+            waiting: None,
+            curve: Curve::EASE_OUT,
+            leaving: false,
+            now: 0,
+        }
+    }
+
+    /// How far through the move is at `now`, eased, or `None` once it is over.
+    fn share(&self, now: u64) -> Option<f32> {
+        let (from, to) = self.over?;
+        if now >= to {
+            return None;
+        }
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a move lasts well under a second of nanoseconds"
+        )]
+        let elapsed = now.saturating_sub(from) as f32 / (to - from).max(1) as f32;
+        Some(self.curve.ease(elapsed))
+    }
+
+    /// Notes that the card in `slot` moves from `pose`.
+    fn starts(&mut self, slot: usize, pose: Pose) {
+        if let Some(from) = self.from.get_mut(slot) {
+            *from = Some(pose);
+        }
+    }
+}
+
 impl Table {
     /// Holds up the cards `held` names, or none: from the next placement on, they rest in the
     /// tray rather than in their zones.
@@ -260,16 +321,207 @@ impl Table {
         self.held = held;
     }
 
-    /// `placement` with the cards held up in the tray.
-    pub(super) fn with_held(&self, mut placement: Placement) -> Placement {
-        self.hold_in(&mut placement);
+    /// Whether the card in `slot` is held up in the tray.
+    #[must_use]
+    pub fn in_tray(&self, slot: usize) -> bool {
+        self.held.as_ref().is_some_and(|held| {
+            (held.piles.iter().flatten()).any(|card| usize::from(card.0) == slot)
+        })
+    }
+
+    /// Whether a press may reach the card in `slot`, resting at `place`: one where the pointer
+    /// reaches cards, while no tray is up; and while one is, only a card in it, as the shade the
+    /// web interface lays over the table under a tray takes the pointer (`coversTable` in
+    /// `ui/src/stage/prompt.ts`). Scripts are played from where the cards rest in their zones:
+    /// only the table's own resting places put them in the tray.
+    pub(super) fn pressable(&self, slot: usize, place: crate::frame::Place) -> bool {
+        match self.held {
+            Some(_) => self.in_tray(slot),
+            None => crate::pointer::takes_pointer(place),
+        }
+    }
+
+    /// The cards held up in the tray, if any.
+    #[must_use]
+    pub fn held(&self) -> Option<&Held> {
+        self.held.as_ref()
+    }
+
+    /// Where each card of `held` lies in the tray for this window, by slot.
+    #[must_use]
+    pub fn tray_poses(&self, held: &Held) -> Vec<(ObjectId, Pose)> {
+        let piles: Vec<&[ObjectId]> = held.piles.iter().map(Vec::as_slice).collect();
+        let poses = tray(&piles, self.layout().tray, self.camera());
+        held.piles.iter().flatten().copied().zip(poses).collect()
+    }
+
+    /// Holds up the cards of `held`, each going from where it is drawn now to its place in
+    /// `poses` (from `tray_poses`) over `over`, in nanoseconds since the client started, eased
+    /// by `curve`. Allocates nothing.
+    pub fn lift(
+        &mut self,
+        held: Held,
+        poses: Vec<(ObjectId, Pose)>,
+        over: (u64, u64),
+        curve: Curve,
+    ) {
+        for &(slot, pose) in &poses {
+            let slot = usize::from(slot.0);
+            let Some(Some(mut object)) = self.objects.cards.get(slot).copied() else {
+                continue;
+            };
+            let drawn = self.tray_drawn(slot, object);
+            self.tray.starts(slot, drawn);
+            if let Some(zone) = self.tray.zone.get_mut(slot) {
+                *zone = Some((object.pose, object.visible));
+            }
+            object.pose = pose;
+            object.visible = true;
+            self.objects.cards[slot] = Some(object);
+        }
+        self.held = Some(held);
+        self.tray.poses = poses;
+        self.tray.over = Some(over);
+        self.tray.waiting = None;
+        self.tray.curve = curve;
+        self.tray.leaving = false;
+    }
+
+    /// Where each card held up rests in its zone in `view`, the view the table shows, for
+    /// `let_go`: its pose and whether it is drawn there.
+    #[must_use]
+    pub fn zone_rests(&self, view: &PlayerView) -> Vec<(ObjectId, Pose, bool)> {
+        let Some(held) = &self.held else {
+            return Vec::new();
+        };
+        let placement = self.placement(view, &self.objects.numbers);
+        (held.piles.iter().flatten())
+            .filter_map(|&slot| {
+                let rest = placement.get(slot)?;
+                Some((slot, rest.pose, rest.visible))
+            })
+            .collect()
+    }
+
+    /// Lets the cards held up go back to their places in `rests` (from `zone_rests`), over
+    /// `length` nanoseconds from the next frame, eased by `curve`: each rests there from now on
+    /// and is drawn on its way. A card a script moves meanwhile starts from the tray instead
+    /// (`Show::hand_over_tray`). Allocates nothing.
+    pub fn let_go(&mut self, rests: &[(ObjectId, Pose, bool)], length: u64, curve: Curve) {
+        if self.held.take().is_none() {
+            return;
+        }
+        self.tray.poses.clear();
+        for &(slot, pose, visible) in rests {
+            let index = usize::from(slot.0);
+            let Some(Some(mut object)) = self.objects.cards.get(index).copied() else {
+                continue;
+            };
+            let drawn = self.tray_drawn(index, object);
+            self.tray.starts(index, drawn);
+            object.pose = pose;
+            object.visible = visible;
+            self.objects.cards[index] = Some(object);
+        }
+        self.tray.over = None;
+        self.tray.waiting = Some(length);
+        self.tray.curve = curve;
+        self.tray.leaving = true;
+    }
+
+    /// Takes `now`, the time of the frame being drawn, and begins a move of the tray's cards
+    /// that waits for it.
+    pub(crate) fn advance_tray(&mut self, now: u64) {
+        self.tray.now = now;
+        if let Some(length) = self.tray.waiting.take() {
+            self.tray.over = Some((now, now + length));
+        }
+    }
+
+    /// Where the card in `slot`, resting as `object` says, is drawn now: part of the way through
+    /// a move of the tray's, or where it rests.
+    fn tray_drawn(&self, slot: usize, mut object: SceneObject) -> Pose {
+        self.tray_look(slot, &mut object, self.tray.now);
+        object.pose
+    }
+
+    /// Changes `object`, the card in `slot` as it rests, for the move of the tray's cards under
+    /// way at `now`: it is drawn part of the way from where it was as the move began. Returns
+    /// whether it moves.
+    pub(super) fn tray_look(&self, slot: usize, object: &mut SceneObject, now: u64) -> bool {
+        let (Some(share), Some(Some(from))) =
+            (self.tray.share(now), self.tray.from.get(slot).copied())
+        else {
+            return false;
+        };
+        object.pose = between(&from, &object.pose, share);
+        true
+    }
+
+    /// Whether a card of the tray moves at `now`.
+    #[must_use]
+    pub fn tray_moving(&self, now: u64) -> bool {
+        self.tray.share(now).is_some() || self.tray.waiting.is_some()
+    }
+
+    /// Whether the tray has let its cards go and no script has started since: the script that
+    /// starts next moves each card it moves from where the tray let it go
+    /// (`Show::hand_over_tray`).
+    pub(crate) fn tray_leaving(&self) -> bool {
+        self.tray.leaving
+    }
+
+    /// A script has taken over the cards the tray let go.
+    pub(crate) fn handed_over_tray(&mut self) {
+        self.tray.leaving = false;
+    }
+
+    /// Where the card in `slot` was drawn as the tray began to let it go, while no script has
+    /// taken the tray's cards over yet.
+    pub(crate) fn letting_go(&self, slot: usize) -> Option<Pose> {
+        if !self.tray.leaving {
+            return None;
+        }
+        self.tray.from.get(slot).copied().flatten()
+    }
+
+    /// `placement` with the cards held up in the tray, where this window lays it out.
+    pub(super) fn with_held(&mut self, mut placement: Placement) -> Placement {
+        if let Some(held) = &self.held {
+            placement.hold(held, self.layout().tray, self.camera());
+            self.tray.poses = self.tray_poses(held);
+        }
         placement
     }
 
-    /// Gives the cards held up their places in the tray in `placement`.
-    pub(super) fn hold_in(&self, placement: &mut Placement) {
-        if let Some(held) = &self.held {
-            placement.hold(held, self.layout().tray, self.camera());
+    /// Puts each card held up back at its place in the tray, after the scene objects were
+    /// exchanged for a script's, which are played from the cards' zones. Allocates nothing.
+    pub(super) fn rehold(&mut self) {
+        for &(slot, pose) in &self.tray.poses {
+            let index = usize::from(slot.0);
+            if let Some(Some(object)) = self.objects.cards.get_mut(index) {
+                if let Some(zone) = self.tray.zone.get_mut(index) {
+                    *zone = Some((object.pose, object.visible));
+                }
+                object.pose = pose;
+                object.visible = true;
+            }
+        }
+    }
+
+    /// Gives each card held up its place in its zone in `placement`, the table's resting
+    /// places, for the scripts played from them: the tray is the table's to draw, not theirs.
+    pub(super) fn unhold(&self, placement: &mut Placement) {
+        for &(slot, _) in &self.tray.poses {
+            let index = usize::from(slot.0);
+            let (Some(Some(rest)), Some(Some((pose, visible)))) = (
+                placement.rests.get_mut(index),
+                self.tray.zone.get(index).copied(),
+            ) else {
+                continue;
+            };
+            rest.pose = pose;
+            rest.visible = visible;
         }
     }
 }

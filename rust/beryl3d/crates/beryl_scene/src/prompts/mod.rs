@@ -14,22 +14,40 @@ mod pick;
 mod split;
 
 use beryl_protocol::prompt::{ButtonId, Marked, PromptView, ShapeBody};
+use beryl_protocol::protocol::{ObjectId, PlayerView, ZoneName};
 use beryl_protocol::script::{Mark, OwnStep, OwnTimings, StepTiming, Verb};
 
 pub use bar::prompt_bar;
 
 use crate::element::Element;
 use crate::light::{Lit, MarkSpan, Span};
+use crate::pose::Curve;
 use crate::screens::ScreenIn;
 use crate::verbs::Interval;
 
 /// A prompt as the table shows it: its state, and whether the pointer is on the button that
 /// shows what the prompt would tap, such as a payment's Auto Pay (`shows`). The web interface
-/// keeps the second as `usePaying` in `ui/src/stage/PromptBar.tsx`.
+/// keeps the second as `usePaying` in `ui/src/stage/PromptBar.tsx`. `source` is the spell or
+/// ability the decision is for (`DecisionView::source`), which a target's arrow comes from;
+/// `view` the latest view, which says where each object lies; and `carried` the card the
+/// pointer carries out of the hand, whose payment's taps the table outlines.
 #[derive(Clone, Copy, Debug)]
 pub struct Shown<'a> {
     pub prompt: &'a PromptView,
     pub suggesting: bool,
+    pub source: Option<ObjectId>,
+    pub view: Option<&'a PlayerView>,
+    pub carried: Option<ObjectId>,
+}
+
+impl Shown<'_> {
+    /// Where the object in `slot` lies in the latest view, if it shows it.
+    fn zone_of(&self, slot: ObjectId) -> Option<ZoneName> {
+        let view = self.view?;
+        (view.objects.iter())
+            .find(|object| object.slot == slot)
+            .map(|object| object.zone)
+    }
 }
 
 /// What the flat layer shows for `prompt`, if anything.
@@ -150,6 +168,9 @@ pub struct Steps<'a> {
     from: f64,
     played: usize,
     record: Option<(usize, &'a mut Vec<OwnRecord>)>,
+    /// The tray's step, if one of the steps lifts the prompt's cards into its tray or lets them
+    /// go: its shape, when it plays, and its curve. The client moves the cards (`Table::lift`).
+    tray: Option<(OwnStep, Interval, Curve)>,
 }
 
 /// One step a prompt made itself, as the timeline prints it: the number of views the client
@@ -188,7 +209,24 @@ impl<'a> Steps<'a> {
             from: at,
             played: 0,
             record,
+            tray: None,
         }
+    }
+
+    /// The beat's next step lifts the prompt's cards into its tray, or lets them go: `step` is
+    /// `TrayLifts` or `TrayLetGo`.
+    fn tray(&mut self, step: OwnStep) {
+        let over = self.next(step, Verb::Lift, None);
+        let curve = (self.timings.entries.iter())
+            .find(|entry| entry.step == step)
+            .map_or(Curve::EASE_OUT, |entry| Curve::named(entry.timing.curve));
+        self.tray = Some((step, over, curve));
+    }
+
+    /// The tray's step, if the beat has one (`tray`).
+    #[must_use]
+    pub fn tray_step(&self) -> Option<(OwnStep, Interval, Curve)> {
+        self.tray
     }
 
     /// When the next step, of the shape `step`, plays, in nanoseconds since the client started;

@@ -1275,8 +1275,14 @@ flight start exactly where the card was.
 - **Cards a prompt holds up lie in the tray.** `table::tray` ports the web
   interface's `laidOut` for one pile (rows about the middle of the space) and
   two (boxes side by side), in the space `desktopTray` gives, placed relative to
-  the camera. `Table::hold` names the cards held up, and placement then gives
-  them their tray places in place of their zones'.
+  the camera. `Table::lift` holds cards up, each moving from where it was drawn
+  into its tray place, and `Table::let_go` sends them back. Only the table's own
+  resting places put them in the tray: scripts are played from their zones
+  (`Table::rests` gives those), and the first script to start after the tray
+  lets go moves each card it carries elsewhere from where the tray held it
+  (`Show::hand_over_tray`), as the web interface's `Hold.keeps` does. While the
+  tray is up only its cards can be pressed, as the web's shade over the table
+  takes the pointer.
 - **The opponent's scried cards lie beside their library.** They lie face down
   on the table at library size, as in Arena. Choices such as taking cards from
   the top of the library leave its cards in the pile until a script step moves
@@ -1501,6 +1507,13 @@ What the session does and what a client still does:
   short fixed table, because it does not depend on the game: `beryl_protocol`'s
   `own_timings` function returns it (`script/timing/own.rs`). Beryl 3D calls
   that function, and the web interface asks for the table once at startup.
+  `prompts::own` plays each change of prompt as one beat (`prompts::Steps`), as
+  the web's `Prompts.#mark` does: the ends first, then the tray, then the
+  beginnings. A beat with a tray step has the client move the tray's cards from
+  places it worked out as the prompt changed, so that the frame lays nothing
+  out. The steps that end a closed prompt's marks are written under the view
+  that closed it, and the tray letting its cards go first in that view's beat,
+  where the web lets it go as the answer's script begins.
 - **Segments are made from the laid-out beat.** Each step becomes segments, at
   absolute times, on the scene objects it concerns.
 - **Reduced motion** is a client's choice: it plays every step with no duration,

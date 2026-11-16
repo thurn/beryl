@@ -299,6 +299,8 @@ fn timeline_lines(printed: &str) -> Vec<&str> {
     printed.lines().skip(1).collect()
 }
 
+/// The session's steps print one line each, as `info` lists them. A line with `"own":true` is
+/// a step the client made itself for a prompt, which `info` does not list.
 #[test]
 fn timeline_prints_one_line_for_each_step_info_lists() {
     let info = ok(&["info", RECORDING]);
@@ -310,7 +312,10 @@ fn timeline_prints_one_line_for_each_step_info_lists() {
         .and_then(|count| count.parse().ok())
         .unwrap_or_else(|| panic!("{info}"));
     let printed = ok(&["timeline", RECORDING]);
-    assert_eq!(timeline_lines(&printed).len(), steps, "{printed}");
+    let session = timeline_lines(&printed)
+        .into_iter()
+        .filter(|line| !line.ends_with(",\"own\":true}"));
+    assert_eq!(session.count(), steps, "{printed}");
 }
 
 #[test]

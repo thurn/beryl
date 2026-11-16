@@ -91,6 +91,7 @@ impl Table {
 
     /// Takes `now`, the time of the frame being drawn, and begins a slide that waits for it.
     pub(crate) fn advance_slide(&mut self, now: u64) {
+        self.advance_tray(now);
         self.slide.now = now;
         if self.slide.place.is_some() && self.slide.since.is_none() {
             self.slide.since = Some(now);

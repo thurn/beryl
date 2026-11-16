@@ -188,6 +188,18 @@ impl Responses {
             .get_mut(name)
             .filter(|queue| !queue.is_empty())
             .ok_or_else(|| format!("the recording has no response for `{name}` ({command:?})"))?;
+        // A click on a later decision than the recorded clicks at the front of the queue was
+        // made by a test that let the recording play past the decisions those answered, which
+        // the recording's own views answered instead: they are skipped.
+        if let SessionCommand::Click(click) = command {
+            let recording = &self.recording;
+            while queue.len() > 1
+                && seq_of(&recording.0[queue[0]])
+                    .is_some_and(|seq| seq < u64::from(click.decision.seq))
+            {
+                queue.pop_front();
+            }
+        }
         let at = *queue.front().expect("the queue is not empty");
         let FixtureMessage::Response {
             request: recorded,
@@ -220,6 +232,18 @@ impl Responses {
             plays_on: name == ipc::CHOOSE,
         })
     }
+}
+
+/// The sequence number of the decision a recorded click was made on, if `message` is one.
+fn seq_of(message: &FixtureMessage) -> Option<u64> {
+    let FixtureMessage::Response {
+        request: Some(request),
+        ..
+    } = message
+    else {
+        return None;
+    };
+    request.get("decision")?.get("seq")?.as_u64()
 }
 
 /// The command's name as the app's IPC knows it, and its request as the app would receive it.

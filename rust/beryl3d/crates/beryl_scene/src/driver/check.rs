@@ -108,7 +108,7 @@ impl Page {
     /// transitions yet, so it adds no times.
     pub fn check_times(&mut self) -> Vec<u64> {
         let (played, end) = self.played();
-        times(&played.given_at, played.client.history(), end)
+        times(&played.given_at, &played.client, end)
     }
 
     /// Runs every interface check over the whole recording, as it plays with no action taken,
@@ -117,7 +117,7 @@ impl Page {
         let (played, end) = self.played();
         let history = played.client.history().to_vec();
         let checked: Vec<u64> = match mode {
-            Mode::AtCheckTimes => times(&played.given_at, &history, end),
+            Mode::AtCheckTimes => times(&played.given_at, &played.client, end),
             Mode::EveryTick => {
                 let mut ticks: Vec<u64> =
                     (0..=end / self.tick.0).map(|n| n * self.tick.0).collect();
@@ -396,9 +396,11 @@ impl Page {
 
 /// The check times of a recording whose inputs were given at `given_at` and whose scripts are
 /// `history`, up to `end`, in order, each once.
-fn times(given_at: &[u64], history: &[ScriptRecord], end: u64) -> Vec<u64> {
+fn times(given_at: &[u64], client: &crate::Client, end: u64) -> Vec<u64> {
     let mut times: BTreeSet<u64> = given_at.iter().copied().collect();
-    for script in history {
+    // What the prompts draw themselves changes outside every script.
+    times.extend(client.own_times());
+    for script in client.history() {
         let Some(start) = script.start else {
             continue;
         };

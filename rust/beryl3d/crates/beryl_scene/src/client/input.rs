@@ -21,6 +21,14 @@ impl Client {
     /// press under the pointer would reach and which one is held down, which it draws so.
     pub(super) fn point(&mut self, pointer: Pointer) {
         self.show.pointer_mut().handle(&pointer);
+        // The mouse is followed whatever is asked, so that an arrow to the pointer that a
+        // prompt opens under it starts there. A touch has no pointer to follow.
+        self.owned.mouse = match (pointer.kind, pointer.phase) {
+            (PointerKind::Mouse, PointerPhase::Leave | PointerPhase::Cancel) => None,
+            (PointerKind::Mouse, _) => Some(pointer.position),
+            _ => self.owned.mouse,
+        };
+        self.carry(self.show.pointer().held());
         // A press outside an open context menu closes it and means nothing else.
         if pointer.phase == PointerPhase::Down
             && pointer.button == Button::Primary

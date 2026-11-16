@@ -12,6 +12,7 @@ mod gate;
 mod pack;
 mod pointer_held;
 mod prompts;
+mod prompts_pick;
 mod recorded;
 mod replay;
 mod runner;

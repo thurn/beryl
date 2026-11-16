@@ -33,6 +33,7 @@ use crate::widgets::Fields;
 
 mod input;
 mod inspect;
+mod own;
 
 use inspect::Inspector;
 
@@ -107,6 +108,8 @@ pub struct Client {
     was: Option<(DecisionId, PromptView)>,
     own_due: bool,
     suggesting: Suggesting,
+    /// What the prompt's own steps depend on besides the prompt (`own::Owned`).
+    owned: own::Owned,
     /// How many views the client has been given, and, once `record` is called, every step the
     /// prompts have made themselves since.
     views: usize,
@@ -179,6 +182,7 @@ impl Client {
             was: None,
             own_due: false,
             suggesting: Suggesting::default(),
+            owned: own::Owned::default(),
             views: 0,
             own_record: None,
             open: false,
@@ -215,6 +219,7 @@ impl Client {
             Input::Update(update) => {
                 self.views += 1;
                 self.session = Some(update.session);
+                self.set_source(&update.view.status);
                 self.set_prompt(match &update.view.status {
                     Status::Deciding { decision } => {
                         Some((decision.id, (*decision.prompt).clone()))
@@ -238,11 +243,7 @@ impl Client {
                 self.show.push(update, timings);
                 // Every life total and pool the scripts to come will show is laid out now, so
                 // that a frame lays out none of them.
-                (self.counts).prepare(
-                    &mut self.layer,
-                    self.show.counts(),
-                    self.show.coming_counts(),
-                );
+                self.prepare_counts();
                 // And so is every notice they will show.
                 NoticeFloats::prepare(
                     &mut self.layer,
@@ -268,6 +269,7 @@ impl Client {
                     // The views that follow the answer bring the next prompt.
                     ClickReply::Answered => self.set_prompt(None),
                 }
+                self.prepare_counts();
                 self.show_screen();
             }
             Input::Settings(settings) => {
@@ -336,6 +338,8 @@ impl Client {
         self.now = now;
         self.inputs.clear();
         self.own(now);
+        let (aim, targets) = (self.aim(), self.targets(self.open));
+        self.show.lit_mut().set_aim(aim);
         let transitioning = self.layer.tick(now);
         self.show.pointer_mut().advance(now);
         self.show.advance_slide(now);
@@ -354,7 +358,7 @@ impl Client {
             now,
             self.show.table().layout(),
             self.window.size,
-            self.screen == Screen::Game && self.sheet.is_none(),
+            (self.screen == Screen::Game && self.sheet.is_none(), targets),
         );
         let visible = self.screen == Screen::Game && self.sheet.is_none();
         (self.piles).write(&mut self.layer, self.show.table(), visible);
@@ -406,81 +410,6 @@ impl Client {
     /// itself, timed by the session's `own_timings`.
     pub fn lit_mut(&mut self) -> &mut crate::light::Lit {
         self.show.lit_mut()
-    }
-
-    /// Calls `prompts::own` for the change of prompt not yet passed to it, if there is one. The
-    /// marks of a prompt that closed go at once, even while the script of the view that
-    /// answered it plays; the marks of the open prompt come up once its view's script has
-    /// played out, as its bar does.
-    fn own(&mut self, now: u64) {
-        if !self.own_due {
-            return;
-        }
-        let decision = self.prompt.as_ref().map(|(decision, _)| *decision);
-        if let Some((_, closed)) = self.was.take_if(|(was, _)| Some(*was) != decision) {
-            let was = prompts::Shown {
-                prompt: &closed,
-                suggesting: self.suggesting.was,
-            };
-            let record = (self.own_record.as_mut()).map(|record| (self.views, record));
-            let lit = self.show.lit_mut();
-            let mut steps = prompts::Steps::new(lit, &self.own_timings, now, record);
-            prompts::own(None, Some(was), &mut steps);
-        }
-        if self.prompt.is_some() && !self.show.settled() {
-            return;
-        }
-        self.own_due = false;
-        let shown = self.prompt.as_ref().map(|(_, prompt)| prompts::Shown {
-            prompt,
-            suggesting: self.suggesting.now,
-        });
-        let was = self.was.as_ref().map(|(_, prompt)| prompts::Shown {
-            prompt,
-            suggesting: self.suggesting.was,
-        });
-        let record = (self.own_record.as_mut()).map(|record| (self.views, record));
-        let lit = self.show.lit_mut();
-        let mut steps = prompts::Steps::new(lit, &self.own_timings, now, record);
-        prompts::own(shown, was, &mut steps);
-    }
-
-    /// Takes `prompt` as the open prompt. If it differs from the one open before, the next
-    /// `frame` calls `prompts::own` for the change, a prompt closing included. A prompt with no
-    /// button that shows what it would tap stops the pointer's showing it, as the web's
-    /// `usePaying` does: a button that goes while the pointer is on it never says the pointer
-    /// left.
-    fn set_prompt(&mut self, prompt: Option<(DecisionId, PromptView)>) {
-        let changed = self.prompt.as_ref().map(|(_, prompt)| prompt)
-            != prompt.as_ref().map(|(_, prompt)| prompt);
-        let was = std::mem::replace(&mut self.prompt, prompt);
-        if changed {
-            let suggesting = self.suggesting.now
-                && self.prompt.as_ref().is_some_and(|(_, prompt)| {
-                    (prompt.buttons.iter()).any(|button| prompts::shows(prompt, button.id))
-                });
-            self.changed_prompt(was, suggesting);
-        }
-    }
-
-    /// The pointer went onto or off the open prompt's button that shows what it would tap.
-    pub(super) fn suggest(&mut self, suggesting: bool) {
-        if suggesting != self.suggesting.now {
-            let was = self.prompt.clone();
-            self.changed_prompt(was, suggesting);
-        }
-    }
-
-    /// The prompt as the table shows it changed from `was` to the open prompt with `suggesting`.
-    /// A change the next frame has not yet passed to `prompts::own` keeps the state before it,
-    /// which is the last one `prompts::own` saw.
-    fn changed_prompt(&mut self, was: Option<(DecisionId, PromptView)>, suggesting: bool) {
-        if !self.own_due {
-            self.was = was;
-            self.suggesting.was = self.suggesting.now;
-        }
-        self.suggesting.now = suggesting;
-        self.own_due = true;
     }
 
     /// Rebuilds the flat layer's screen, or the sheet open over it, from what the client holds

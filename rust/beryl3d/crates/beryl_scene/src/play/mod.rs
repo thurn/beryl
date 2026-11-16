@@ -33,6 +33,7 @@ mod scene;
 mod scroll;
 mod sounds;
 pub(crate) mod step;
+mod tray;
 mod wake;
 
 pub use scene::{Reach, Scene};
@@ -546,6 +547,7 @@ impl Show {
                 sounds_given: 0,
             });
             self.hand_over(now);
+            self.hand_over_tray();
             if let Some(playing) = &self.playing {
                 playing.affect(&mut self.effects);
                 playing.announce(&mut self.notices);

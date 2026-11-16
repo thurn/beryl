@@ -42,7 +42,11 @@ enum Cut {
     Beam,
 }
 
-/// Writes the records of the arrows and lines in `lit` as they are at `now`.
+/// The element id of the arrow to the pointer (`Lit::aim`): past every open span's arrow.
+pub const AIM_ID: u32 = ARROW_IDS + (1 << 16);
+
+/// Writes the records of the arrows and lines in `lit` as they are at `now`, and the arrow to
+/// the pointer, if one is drawn.
 pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
     for (index, open) in lit.open().iter().enumerate() {
         let Span::Arrow(arrow) = open.span else {
@@ -51,27 +55,77 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         let (Some(from), Some(to)) = (scene.reach(arrow.from), scene.reach(arrow.to)) else {
             continue;
         };
-        let camera = scene.table().camera();
         let ends = [(arrow.from, from), (arrow.to, to)].map(|(subject, reach)| End {
             toward: scene.toward(subject),
             ..on_screen(scene, reach)
         });
-        let sag = light::SAG * camera.window.size.height;
-        let Some(way) = way_of(arrow.arrow, ends[0], ends[1], Some(sag)) else {
-            continue;
-        };
-        let points = cubic(way);
         let moving = scene.moving(arrow.from) || scene.moving(arrow.to);
-        let opacity = fade(open, now);
         #[expect(
             clippy::cast_possible_truncation,
             reason = "far fewer open spans than element ids"
         )]
         let id = ARROW_IDS + index as u32;
+        let drawn = Drawn {
+            arrow: arrow.arrow,
+            ends,
+            reaches: [from, to],
+            opacity: fade(open, now),
+            moving,
+            id,
+        };
+        drawn.write(scene, builder);
+    }
+    if let Some(aim) = lit.aim()
+        && let Some(from) = scene.reach(aim.from)
+    {
+        let start = End {
+            toward: scene.toward(aim.from),
+            ..on_screen(scene, from)
+        };
+        let pointer = End {
+            middle: aim.to,
+            half: Vec2::ZERO,
+            toward: 0.0,
+        };
+        let drawn = Drawn {
+            arrow: aim.arrow,
+            ends: [start, pointer],
+            // The pointer has no size: the arrow is as wide as at what asks.
+            reaches: [from, from],
+            opacity: 1.0,
+            moving: true,
+            id: AIM_ID,
+        };
+        drawn.write(scene, builder);
+    }
+}
+
+/// One arrow as a frame draws it: its kind, its two ends on the screen and the things there,
+/// how clear it is, whether an end moves, and its element id.
+struct Drawn {
+    arrow: Arrow,
+    ends: [End; 2],
+    reaches: [Reach; 2],
+    opacity: f32,
+    moving: bool,
+    id: u32,
+}
+
+impl Drawn {
+    /// Writes its element and its ribbon of light, with a head for a target's arrow.
+    fn write(&self, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
+        let camera = scene.table().camera();
+        let [from, to] = self.reaches;
+        let sag = light::SAG * camera.window.size.height;
+        let Some(way) = way_of(self.arrow, self.ends[0], self.ends[1], Some(sag)) else {
+            return;
+        };
+        let points = cubic(way);
+        let opacity = self.opacity;
         builder.resolved(
-            arrow.arrow.name(),
+            self.arrow.name(),
             Resolved {
-                id: ElementId(id),
+                id: ElementId(self.id),
                 parent: u32::MAX,
                 role: Role::Arrow,
                 name: crate::frame::NameRef::default(),
@@ -81,7 +135,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
                 opacity,
                 clip: None,
                 interactive: false,
-                state: StateBits(if moving { StateBits::MOVING } else { 0 }),
+                state: StateBits(if self.moving { StateBits::MOVING } else { 0 }),
                 face: None,
                 really: crate::frame::NameRef::default(),
             },
@@ -92,7 +146,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
                 .clamp(light::sized::LEAST, light::sized::MOST)
         };
         let k = sized(&from).min(sized(&to));
-        let (cut, wide, tone) = match arrow.arrow {
+        let (cut, wide, tone) = match self.arrow {
             Arrow::FriendlyTarget => (Cut::Arrow, light::wide::TARGET, color::FRIENDLY_TARGET),
             Arrow::HostileTarget => (Cut::Arrow, light::wide::TARGET, color::HOSTILE_TARGET),
             Arrow::Source => (Cut::Swell, light::wide::SOURCE, color::SOURCE_LINE),
@@ -102,7 +156,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         let tint = tinted(tone, opacity);
         // The line to a source grows out of the source, which is where it ends, so it is cut
         // from that end.
-        let ribbon = match arrow.arrow {
+        let ribbon = match self.arrow {
             Arrow::Source => [points[3], points[2], points[1], points[0]],
             _ => points,
         };
@@ -111,11 +165,11 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             per_millimetre: points_per_millimetre,
         };
         write_ribbon(scene, &ribbon, cut, lengths, tint, builder);
-        if matches!(arrow.arrow, Arrow::FriendlyTarget | Arrow::HostileTarget) {
+        if matches!(self.arrow, Arrow::FriendlyTarget | Arrow::HostileTarget) {
             write_head(
                 scene,
                 &points,
-                ends[1].half.x,
+                self.ends[1].half.x,
                 points_per_millimetre,
                 tint,
                 builder,

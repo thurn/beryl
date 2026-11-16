@@ -18,7 +18,7 @@ use super::place::{
 };
 use super::rows::NameIds;
 use super::shadows::Floors;
-use super::tray::Held;
+use super::tray::{Held, TrayMotion};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, place};
 use crate::effects::{self, Effect};
 use crate::faces::{CARD_BACK, Faces};
@@ -47,9 +47,9 @@ const CLOTH_TINT: [u8; 4] = [38, 66, 58, 255];
 /// One game object's presence on the table.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct SceneObject {
-    pose: Pose,
+    pub(super) pose: Pose,
     pub(super) place: Place,
-    visible: bool,
+    pub(super) visible: bool,
     tapped: bool,
     /// How many identical permanents it stands for (`Rest::copies`).
     copies: u16,
@@ -122,8 +122,9 @@ pub struct Table {
     /// Since when each permanent has fought as its record says, by slot, for the marks of its
     /// own record.
     fights: Fights,
-    /// The cards a prompt holds up, which rest in the tray rather than in their zones.
+    /// The cards a prompt holds up in its tray, and how they lie and move (`table::tray`).
     pub(super) held: Option<Held>,
+    pub(super) tray: TrayMotion,
 }
 
 /// How many objects a table has placed since its count was last taken, for `Work::placed`.
@@ -164,6 +165,7 @@ impl Table {
             revealed: Vec::new(),
             fights: Fights::with_capacity(OBJECTS),
             held: None,
+            tray: TrayMotion::new(),
         }
     }
 
@@ -254,7 +256,7 @@ impl Table {
     pub fn placement(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
         let placement = place(view, abilities, &self.layout, &self.camera, &self.scroll);
         self.placed.add(placement.count());
-        self.with_held(placement)
+        placement
     }
 
     /// How many objects the table has placed since the last call, and starts counting again.
@@ -265,7 +267,7 @@ impl Table {
     /// Every object's resting place in the view the table shows, which it holds already: the
     /// same as `placement` of that view, for nothing but a copy.
     pub(crate) fn rests(&self) -> Placement {
-        Placement {
+        let mut placement = Placement {
             piles: self.objects.piles,
             rows: self.objects.rows,
             abilities: self
@@ -295,14 +297,16 @@ impl Table {
                     })
                 })
                 .collect(),
-        }
+        };
+        self.unhold(&mut placement);
+        placement
     }
 
     /// Every object's resting place in `zones`, for this window.
     pub(crate) fn placement_of(&self, zones: &Zones) -> Placement {
         let placement = place_zones(zones, &self.layout, &self.camera, &self.scroll);
         self.placed.add(placement.count());
-        self.with_held(placement)
+        placement
     }
 
     /// Every object's resting place in `zones`, for this window, taking each group's from
@@ -316,7 +320,7 @@ impl Table {
         let (placement, laid) =
             place_reusing(zones, known, &self.layout, &self.camera, &self.scroll);
         self.placed.add(laid);
-        self.with_held(placement)
+        placement
     }
 
     /// Places the objects of `group` in `zones` into `placement` for this window, and leaves the
@@ -331,21 +335,22 @@ impl Table {
         let rules = (&self.layout, &self.camera, &self.scroll, Some(ids));
         place_group(zones, group, rules, placement, placed);
         self.placed.add(placed.len());
-        self.hold_in(placement);
     }
 
     /// Puts every object of `view` at its resting place, and forgets the objects it no longer
-    /// holds, as an update with a reset script must.
+    /// holds, as an update with a reset script must. Cards a prompt holds up rest in its tray.
     pub fn apply(&mut self, view: &PlayerView) {
         let numbers = std::mem::take(&mut self.objects.numbers);
-        let placement = self.placement(view, &numbers);
+        let placement = self.with_held(self.placement(view, &numbers));
         self.objects = Self::objects_for(view, numbers, &placement);
     }
 
     /// Exchanges the scene objects for `objects`, which `objects_for` made for the view the
     /// table now shows. Nothing is allocated, so a script can end inside a frame.
+    /// The cards a prompt holds up stay in its tray.
     pub(crate) fn swap_objects(&mut self, objects: &mut Objects) {
         std::mem::swap(&mut self.objects, objects);
+        self.rehold();
     }
 
     /// Writes a resolved element and a draw record for every visible card, with a contact
@@ -378,8 +383,10 @@ impl Table {
                 self.fights.forget(slot);
                 continue;
             };
-            // A card at rest in a row that scrolled slides to its new place.
+            // A card at rest in a row that scrolled slides to its new place, as one does into
+            // or out of a prompt's tray.
             under_way = under_way || self.slide_look(slot, &mut object, dress.now);
+            under_way = under_way || self.tray_look(slot, &mut object, dress.now);
             if !object.visible {
                 self.fights.forget(slot);
                 continue;
@@ -536,11 +543,11 @@ impl Table {
             face,
             state,
             // A copy beneath a pile's top peeks out too little to be pressed by itself; the
-            // pile is pressed through its top card.
+            // pile is pressed through its top card. Under a tray, only its cards (`pressable`).
             interactive: state & StateBits::FACE_DOWN == 0
                 && object.copies > 0
                 && !name.is_empty()
-                && pointer::takes_pointer(object.place),
+                && self.pressable(slot, object.place),
         };
         let on = Subject::Object {
             slot: ObjectId(u16::try_from(slot).expect("slots are u16")),
