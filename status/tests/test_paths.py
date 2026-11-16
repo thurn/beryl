@@ -1,5 +1,5 @@
-"""Each code version builds into its own site folder; a new folder starts from the newest
-build, and old folders are deleted."""
+"""Each code version builds into its own site folder; a server with new code answers from the
+newest other build until its own is done, and old folders are deleted."""
 
 from __future__ import annotations
 
@@ -23,16 +23,16 @@ def test_the_site_folder_is_named_by_the_code_version() -> None:
     assert len(paths.code_version()) == 12
 
 
-def test_a_new_folder_is_seeded_from_the_newest_build() -> None:
+def test_the_last_site_is_the_newest_other_build() -> None:
     built(paths.sites() / "older", "old", age_days=1)
     built(paths.sites() / "newer", "new")
-    target = paths.sites() / "mine"
-    assert paths.seed_site(target) == paths.sites() / "newer"
-    assert (target / "index.html").read_text() == "new"
+    mine = built(paths.sites() / "mine", "mine", age_days=-1)
+    (paths.sites() / "unbuilt").mkdir()
+    assert paths.last_site(mine) == paths.sites() / "newer"
 
 
-def test_nothing_to_seed_from() -> None:
-    assert paths.seed_site(paths.sites() / "mine") is None
+def test_no_last_site() -> None:
+    assert paths.last_site(paths.sites() / "mine") is None
 
 
 def test_prune_keeps_recent_folders_and_its_own() -> None:

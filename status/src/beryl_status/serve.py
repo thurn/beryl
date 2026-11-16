@@ -4,17 +4,25 @@ The server answers from the files as they are the moment it starts, so a page sh
 with what the last build left, and a thread brings the site up to date behind it. Each file
 carries an ETag, so a browser's revalidation costs a 304; content-hashed assets are cached
 for a year. A changelog fragment that is missing or older than its bead is fetched from `bd`
-when a page asks for it."""
+when a page asks for it.
+
+When this project's code changes on disk (a checkout moves to a new commit), the server
+restarts itself with the new code, which builds into its own site folder. Until that
+build finishes it answers from the last site's folder, so pages keep loading, and open
+pages pick up the new build through `version.json`."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import io
+import os
 import re
+import subprocess
+import sys
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -27,6 +35,8 @@ HOST = "127.0.0.1"
 # changelog is current.
 WATCH_SECONDS = 3.0
 FILL_REST_SECONDS = 30.0
+# How often the server reads its own code to see whether it changed.
+CODE_SECONDS = 2.0
 TYPES: dict[str, str] = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -72,11 +82,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802, the name http.server calls
         relative = unquote(urlsplit(self.path).path).lstrip("/")
+        # Fragments are written into this code's own folder, even while another stands in.
+        folder = self.site.serving
         if (m := FRAGMENT.match(relative)) is not None:
             self.ensure_fragment(m.group(1))
-        found = resolve(self.site.folder, self.path)
+            folder = self.site.folder
+        found = resolve(folder, self.path)
         if found is None:
-            missing = self.site.folder / "404.html"
+            missing = self.site.serving / "404.html"
             body = missing.read_bytes() if missing.is_file() else b"Not found"
             self.reply(404, body, TYPES[".html"], "no-cache")
             return
@@ -164,6 +177,66 @@ def keep_current(site: Site) -> None:
     threading.Thread(target=fill, daemon=True).start()
 
 
+class CodeWatch:
+    """Decides when a server whose code changed on disk should restart. A checkout or a
+    rebase writes files one at a time, so it waits until two readings in a row agree, and
+    it skips a version whose code does not import (`importable`), until the code changes
+    again."""
+
+    def __init__(self, running: str, importable: Callable[[], bool]) -> None:
+        self.running = running
+        self.importable = importable
+        self.last = running
+        self.broken = ""
+
+    def step(self, digest: str) -> str:
+        """Takes one reading of the code's digest: "restart" to restart now, "broken" the
+        first time a settled new version fails to import, and "" otherwise."""
+        settled = digest == self.last
+        self.last = digest
+        if digest in (self.running, self.broken) or not settled:
+            return ""
+        if self.importable():
+            return "restart"
+        self.broken = digest
+        return "broken"
+
+
+def importable() -> bool:
+    """Whether the code on disk imports, in a separate interpreter."""
+    found = subprocess.run(
+        [sys.executable, "-c", "import beryl_status.cli"],
+        capture_output=True,
+        timeout=60,
+    )
+    return found.returncode == 0
+
+
+def restart() -> None:
+    """Replaces this process with a new server on the same arguments, running the code on
+    disk. The listening socket closes on exec, and the new server binds the port again.
+    """
+    print("status: the code changed, restarting", flush=True)
+    os.execv(sys.executable, [sys.executable, "-m", "beryl_status", *sys.argv[1:]])
+
+
+def watch_code(site: Site) -> None:
+    def loop() -> None:
+        watch = CodeWatch(paths.code_version(), importable)
+        while True:
+            time.sleep(CODE_SECONDS)
+            try:
+                found = watch.step(paths.code_digest())
+                if found == "restart":
+                    restart()
+                elif found == "broken":
+                    site.log("status: the new code does not import; still serving")
+            except Exception as error:  # A failed reading must not stop the watcher.
+                site.log(f"status: code watch failed: {error}")
+
+    threading.Thread(target=loop, daemon=True).start()
+
+
 def serve(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="just status", description="serve the bead status site on 127.0.0.1"
@@ -176,14 +249,22 @@ def serve(argv: Sequence[str]) -> int:
     )
     args = parser.parse_args(argv)
     site = Site(paths.main_checkout(), paths.site())
+    # Listening first means a request that arrives while the server starts, as one does when
+    # it restarts under an open page, waits rather than being refused.
+    found = Server(site, int(args.port))
+    if not (site.folder / "index.html").is_file():
+        # New code: answer from the last site's pages while this code builds its own.
+        site.standin = paths.last_site(site.folder)
+        if site.standin is not None:
+            site.log(f"status: serving {site.standin.name}'s pages until the build")
     site.folder.mkdir(parents=True, exist_ok=True)
+    watch_code(site)
     if not args.no_refresh:
-        if not (site.folder / "index.html").is_file():
+        if not (site.serving / "index.html").is_file():
             site.refresh(
                 force=True
             )  # The first run has nothing to show until it builds.
         keep_current(site)
-    found = Server(site, int(args.port))
     print(f"status: http://{HOST}:{found.server_address[1]}/", flush=True)
     try:
         found.serve_forever()

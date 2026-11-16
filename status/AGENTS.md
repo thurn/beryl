@@ -123,13 +123,18 @@ Every change here serves two priorities, in this order.
   browser caches. Each version of this project's code (`paths.code_version`, a
   digest of its source) builds into its own folder, so a worktree's server and
   the agent's publish from the main checkout never overwrite each other's pages.
-  A server starting with new code first copies the newest other folder, so it
-  serves the last pages while it rebuilds. Folders unused for two days are
+  A server starting with new code answers from the newest other folder
+  (`paths.last_site`, in place, since copying it could take 30 seconds on a busy
+  disk) until its own first build finishes. Folders unused for two days are
   deleted.
 - `site.py`: the shared state. `refresh` exports only when the database's files
   changed, and `fill` fetches changelogs that are not current, open beads first.
 - `serve.py`: the server (GET and HEAD only). It fetches a changelog fragment
-  from `bd` when a page asks for one that is missing or out of date.
+  from `bd` when a page asks for one that is missing or out of date. It reads
+  its own code every two seconds and, once a change has settled and imports
+  (`CodeWatch`), restarts itself on the new code, so a server in the main
+  checkout follows `staging`. An open page whose assets changed reloads in
+  place.
 - `publish.py`: `just status publish` commits the site with its own index file
   (never a checkout) as one parentless commit and force-pushes it to `gh-pages`,
   so the branch never grows a history. It turns GitHub Pages on the first time.

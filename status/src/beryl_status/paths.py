@@ -43,10 +43,16 @@ SITE_DAYS = 2
 
 @functools.cache
 def code_version() -> str:
-    """A digest of this project's code (`beryl_status` and `cirrus`, Python and static files).
-    Each version of the code builds into its own site folder, so two builders running
-    different code, such as a worktree's server and the agent's publish from the main
-    checkout, never overwrite each other's pages."""
+    """A digest of this project's code (`beryl_status` and `cirrus`, Python and static files)
+    as it was when this process first asked. Each version of the code builds into its own
+    site folder, so two builders running different code, such as a worktree's server and the
+    agent's publish from the main checkout, never overwrite each other's pages."""
+    return code_digest()
+
+
+def code_digest() -> str:
+    """The digest `code_version` names, read from the files now: the server compares the
+    two to notice that its code changed on disk."""
     digest = hashlib.sha256()
     source = Path(__file__).resolve().parent.parent
     for package in ("beryl_status", "cirrus"):
@@ -67,31 +73,15 @@ def site() -> Path:
     return sites() / code_version()
 
 
-def seed_site(target: Path) -> Path | None:
-    """Copies the most recently built site of another code version into `target`, so a
-    server whose code just changed can serve the last pages at once while it rebuilds; the
-    folder it copied, or None if there is none."""
+def last_site(exclude: Path) -> Path | None:
+    """The most recently built site of another code version, or None. A server whose code
+    just changed answers from it, in place, until its own first build finishes: copying its
+    7,000 files took up to 30 seconds on a busy disk."""
     candidates = [folder() / "site"]
     if sites().is_dir():
-        candidates += [p for p in sites().iterdir() if p != target]
+        candidates += [p for p in sites().iterdir() if p != exclude]
     built = [p for p in candidates if (p / "index.html").is_file()]
-    if not built:
-        return None
-    newest = max(built, key=lambda p: p.stat().st_mtime)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    # On macOS, `cp -c` clones each file on APFS (copy on write), which takes well under a
-    # second for the site's 5,000 files where a byte copy took about five.
-    cloned = sys.platform == "darwin" and not target.exists()
-    if cloned:
-        cloned = (
-            subprocess.run(
-                ["cp", "-c", "-R", str(newest), str(target)], capture_output=True
-            ).returncode
-            == 0
-        )
-    if not cloned:
-        shutil.copytree(newest, target, dirs_exist_ok=True)
-    return newest
+    return max(built, key=lambda p: p.stat().st_mtime) if built else None
 
 
 def prune_sites(keep: Path) -> list[Path]:

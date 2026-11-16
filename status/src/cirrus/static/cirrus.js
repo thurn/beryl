@@ -236,6 +236,17 @@
         try {
             const html = await fetchPage(location.href, true);
             const doc = new DOMParser().parseFromString(html, "text/html");
+            // New code ships new hashed assets, which a swap of the header and
+            // <main> would not load: reload the page and keep the reader's place.
+            const assets = (d) =>
+                [...d.querySelectorAll("link[rel=stylesheet], script[src]")]
+                    .map((e) => e.getAttribute("href") ?? e.getAttribute("src"))
+                    .join(" ");
+            if (assets(doc) !== assets(document)) {
+                history.replaceState({ ...history.state, scroll: scrollY }, "");
+                location.reload();
+                return;
+            }
             const y = scrollY;
             swap(doc, { quiet: true });
             scrollTo(0, y);
@@ -542,7 +553,9 @@
     }
 
     enhance(document);
-    if (location.hash) {
+    if (history.state?.scroll) {
+        scrollTo(0, history.state.scroll); // a reload for new assets, or a return
+    } else if (location.hash) {
         document
             .querySelector(decodeURIComponent(location.hash))
             ?.scrollIntoView();

@@ -90,6 +90,14 @@ class Site:
     lock: threading.Lock = field(default_factory=threading.Lock)
     pages: build.PageCache = field(default_factory=build.PageCache)
     log: Callable[[str], None] = say
+    # Another code version's site that the server answers from until this one's first build
+    # finishes (`paths.last_site`).
+    standin: Path | None = None
+
+    @property
+    def serving(self) -> Path:
+        """The folder the server answers pages from."""
+        return self.standin or self.folder
 
     def refresh(self, force: bool = False) -> bool:
         """Exports and rebuilds if the database changed (or `force`); whether it did."""
@@ -118,6 +126,7 @@ class Site:
                 f"status: built {done.pages} pages, wrote {done.written} files "
                 f"in {time.monotonic() - started:.1f}s"
             )
+            self.standin = None
             return done
 
     def changelog_now(self, bead_id: str) -> Changelog | None:
