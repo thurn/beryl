@@ -6,6 +6,7 @@
 
 use super::{Screen, ScreenIn, Sheet};
 use crate::data::space::flat::phone::GUTTER;
+use crate::data::space::hud::phone::BUTTON_MIN_WIDTH as PHONE_BUTTON;
 use crate::element::{Align, Element, Justify, Overflow, Position, Press, column, row, text};
 use crate::settings::Setting;
 use crate::tokens::{color, size, space, type_style};
@@ -105,6 +106,20 @@ pub fn settings(input: &ScreenIn) -> Element {
                         .child(text("Stop at every priority")),
                 ),
         );
+    // The phone has no room for the desktop's log column or bug button, so its settings, which
+    // its menu button opens, hold both, as the web's phone `Menu` does.
+    if input.window.phone() && input.screen == Screen::Game {
+        panel = panel.child(
+            row()
+                .gap(space::M)
+                .child(button("Log").min_width(PHONE_BUTTON).on_press(Press::Log))
+                .child(
+                    button("Report bug")
+                        .min_width(PHONE_BUTTON)
+                        .on_press(Press::Sheet(Some(Sheet::BugReport))),
+                ),
+        );
+    }
     if in_game(input) {
         // Asked once in place, as the web's `ConcedeButton`: the first press turns the button
         // into the confirmation, which closing the sheet puts back.

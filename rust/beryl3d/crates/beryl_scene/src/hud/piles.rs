@@ -174,7 +174,8 @@ fn exiled(view: &PlayerView, side: Side) -> impl Iterator<Item = &ObjectView> {
 /// number, as "Your library 60", so that the tree's line for it says both.
 fn count_text(index: usize, count: usize) -> Element {
     let (side, zone) = PileShown::of_index(index);
-    let mut element = text(&count.to_string());
+    // It lets the pointer through to the pile and any card over it.
+    let mut element = text(&count.to_string()).passes(true);
     element.name = format!("{} {count}", pile_name(side, zone));
     element
 }

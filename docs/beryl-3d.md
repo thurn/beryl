@@ -1827,6 +1827,26 @@ window.
   interactive element inside.
 - **Minimum sizes.** On the phone layout a check holds every touch target to at
   least 44 by 44 points and every line of text to at least 11 points.
+- **The phone's game screen** (`screens::game::game_phone`) places the desktop's
+  pieces in the table's bands (`table::phone_bands`), with sizes from
+  `hud.phone` in `space.json`:
+  - Each orb is centred in its player's strip, drawn at half the desktop's size.
+  - A menu button at the right end of the opponent's strip opens the settings,
+    which hold the Log and Report bug buttons. The log opens as a sheet below
+    the opponent's strip. The phone shows no gear, log column or step stops.
+  - The phase icon stands on the middle band's line, and full control's mark
+    stands at the band's right end.
+  - The open prompt's primary button and its pass-on button stand in a dock at
+    the right of the viewer's strip. The dock rises above the hand when a hand
+    in two rows reaches into the strip. The prompt's other buttons are stacked
+    over the dock. What the prompt asks is a pill on the middle band's line, or
+    at the nearest height clear of every permanent and stack item
+    (`hud::phone::asked_top`). While the table is shaded, the pill stands over
+    the strip instead. The client measures where cards rest
+    (`hud::phone::Occupied`) when it builds the screen.
+  - Life totals that no prompt can pick, and the count labels, let the pointer
+    through to the cards behind them. On the manual table a life total still
+    takes the pointer, since its commands act on the total under it.
 
 ### Text
 

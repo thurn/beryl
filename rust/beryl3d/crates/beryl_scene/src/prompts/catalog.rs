@@ -10,8 +10,9 @@ use glam::Vec2;
 use super::{Shown, Steps, prompt_bar};
 use crate::element::{Align, Anchor, Element, Justify, Press, column};
 use crate::frame::Role;
+use crate::input::Rect;
 use crate::screens::ScreenIn;
-use crate::table::TraySpace;
+use crate::table::{TraySpace, phone_bands};
 use crate::tokens::{color, size, type_style};
 use crate::widgets::list;
 
@@ -54,9 +55,24 @@ fn shade(input: &ScreenIn) -> Element {
 /// lit.
 fn entries_column(entries: &[String], chosen: Option<u16>, input: &ScreenIn) -> Element {
     let (space, _) = TraySpace::DESKTOP.on_window(input.window.size);
+    // A phone gives the column the opponent's half of the table, down to the middle band, and
+    // keeps every entry as tall as a finger, scrolling the list where they do not fit
+    // (`.phone-board .stage-entries` in `ui/src/mobile/phone.css`).
+    let bands = phone_bands(input.window);
+    let space = bands.map_or(space, |bands| Rect {
+        x: bands.left,
+        y: bands.opponent_back.top,
+        width: bands.right - bands.left,
+        height: bands.middle.bottom() - bands.opponent_back.top,
+    });
     let rows = (entries.iter().enumerate()).map(|(index, words)| {
         let index = u16::try_from(index).unwrap_or(u16::MAX);
-        entry(words, index, chosen == Some(index))
+        let entry = entry(words, index, chosen == Some(index));
+        if bands.is_some() {
+            entry.shrink(0.0)
+        } else {
+            entry
+        }
     });
     let entries = list("entries", rows)
         .gap(size::ENTRY_GAP)

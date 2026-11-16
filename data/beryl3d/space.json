@@ -846,6 +846,19 @@
     "banner_gap": 12,
     "log_left": 18,
     "log_top": 262,
-    "log_button_top": 18
+    "log_button_top": 18,
+    "phone": {
+      "orb_scale": 0.5,
+      "button_height": 44,
+      "button_min_width": 84,
+      "button_text": 18,
+      "button_padding": 12,
+      "dock_gap": 6,
+      "asked_gap": 4,
+      "pill_text": 16,
+      "pill_padding": 10,
+      "revealed_width": 52,
+      "sheet_margin": 8
+    }
   }
 }

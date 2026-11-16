@@ -1,6 +1,7 @@
 //! Showing the flat layer's screen or sheet, and the gear that opens the settings sheet, a float
 //! at the game screen's top right.
 
+use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
 
 use super::Client;
@@ -8,6 +9,8 @@ use super::Client;
 use crate::command::Request;
 use crate::element::floats;
 use crate::faces::{FaceList, Faces};
+use crate::hud::phone::Occupied;
+use crate::input::Rect;
 use crate::input::{AssetReady, FaceSize};
 use crate::layout::FloatLook;
 use crate::screens::{self, Screen, ScreenIn, Sheet};
@@ -26,7 +29,11 @@ impl Client {
         self.inspector.due = true;
         self.log.folded = self.permanent_over_log();
         let view = self.show.latest().map(|update| &update.view);
-        let input = self.screen_in();
+        let occupied = self.occupied();
+        let input = ScreenIn {
+            occupied: &occupied,
+            ..self.screen_in()
+        };
         let mut full = crate::prompts::faces(&input);
         full.extend(screens::sheet_face(&input));
         // Until the sheets are built, the settings sheet takes the screen's place in the flat
@@ -88,7 +95,53 @@ impl Client {
             log_folded: self.log.folded,
             log_open: self.log.open,
             concede: self.concede,
+            occupied: &crate::hud::phone::NOTHING,
         }
+    }
+
+    /// Opens the game log or closes it. The phone's settings sheet holds the log's button, so a
+    /// press there also closes the sheet, which would otherwise take the screen's place.
+    pub(super) fn toggle_log(&mut self) {
+        self.log.open = !self.log.open;
+        if self.sheet.is_some() {
+            self.set_sheet(None);
+        } else {
+            self.show_screen();
+        }
+    }
+
+    /// Where the latest view's cards will rest once every script given so far has played, on
+    /// the phone layout, whose prompt pill and dock keep clear of them; nothing on the desktop.
+    fn occupied(&self) -> Occupied {
+        let Some(update) = self.show.latest().filter(|_| self.window.phone()) else {
+            return Occupied::default();
+        };
+        let camera = self.show.table().camera();
+        let mut occupied = Occupied::default();
+        for object in &update.view.objects {
+            let Some(pose) = self.show.latest_rest(usize::from(object.slot.0)) else {
+                continue;
+            };
+            let corners = camera.card_box(&pose).0;
+            let (mut low, mut high) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
+            for corner in corners {
+                low = low.min(corner);
+                high = high.max(corner);
+            }
+            match object.zone {
+                ZoneName::Battlefield | ZoneName::Stack => occupied.cards.push(Rect {
+                    x: low.x,
+                    y: low.y,
+                    width: high.x - low.x,
+                    height: high.y - low.y,
+                }),
+                ZoneName::Hand if object.owner == Side::You => {
+                    occupied.hand_top = Some(occupied.hand_top.map_or(low.y, |top| top.min(low.y)));
+                }
+                _ => {}
+            }
+        }
+        occupied
     }
 
     /// Whether a permanent of the latest view, where it will rest once every script given so far
@@ -169,7 +222,9 @@ impl Client {
     /// is shown with no sheet over it, or while the bug report takes its picture, and takes it
     /// away otherwise.
     pub(super) fn show_gear(&mut self) {
-        let gear = (self.screen == Screen::Game && self.table_shown()).then(screens::gear);
+        // The phone's menu button, part of its game screen, opens the settings instead.
+        let gear = (self.screen == Screen::Game && self.table_shown() && !self.window.phone())
+            .then(screens::gear);
         let shown = gear.is_some();
         self.layer.float(floats::GEAR, gear);
         if shown {

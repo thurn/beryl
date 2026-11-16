@@ -210,6 +210,9 @@ pub struct Layout {
     /// On the phone layout, where the stack's items stand in the middle band, which replaces
     /// `stack`; none on the desktop.
     pub phone: Option<phone::PhoneStack>,
+    /// On the phone layout, the bands of the window from the opponent's strip to the viewer's
+    /// hand, which the flat layer's furniture stands in; none on the desktop.
+    pub bands: Option<phone::PhoneBands>,
 }
 
 impl Layout {
@@ -332,4 +335,5 @@ pub const DESKTOP: Layout = Layout {
         },
     ],
     phone: None,
+    bands: None,
 };

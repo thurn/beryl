@@ -29,6 +29,7 @@ use beryl_protocol::{AgentView, PlayerView};
 use crate::element::{Element, Viewed};
 use crate::faces::FaceList;
 use crate::hud::log::LogEntry;
+use crate::hud::phone::Occupied;
 use crate::inspect::inspector::Inspected;
 use crate::inspect::revealed::RevealedFace;
 use crate::manual::TableState;
@@ -151,6 +152,9 @@ pub struct ScreenIn<'a> {
     pub log_open: bool,
     /// What the settings sheet's concede button does when pressed.
     pub concede: Concede,
+    /// Where the table's cards rest, on the phone layout, which its prompt and dock keep clear
+    /// of (`hud::phone::Occupied`); nothing on the desktop.
+    pub occupied: &'a Occupied,
 }
 
 /// What the flat layer shows on `screen`.
@@ -158,6 +162,7 @@ pub struct ScreenIn<'a> {
 pub fn screen(screen: Screen, input: &ScreenIn) -> Element {
     match screen {
         Screen::Start => start::start(input),
+        Screen::Game if input.window.phone() => game::game_phone(input),
         Screen::Game => game::game(input),
         Screen::Lobby => lobby::lobby(input),
         Screen::Table => table::table(input),

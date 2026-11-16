@@ -18,8 +18,10 @@ use beryl_protocol::protocol::{Combat, PlayerView, Side, Step};
 use glam::Vec2;
 
 use crate::data::space::hud::INCOMING_GAP;
+use crate::data::space::hud::phone::ORB_SCALE;
 use crate::element::{Align, Anchor, Element, Justify, Position, holder, text};
 use crate::screens::ScreenIn;
+use crate::table::phone::strip;
 use crate::table::{DESKTOP, Window};
 use crate::tokens::{color, size, type_style};
 
@@ -37,9 +39,13 @@ pub fn players(input: &ScreenIn) -> Option<Element> {
 }
 
 /// The middle of `side`'s orb in a window, in logical points: where the table's layout puts
-/// their life total.
+/// their life total, which on the phone layout is the middle of their strip
+/// (`table::phone::strip`).
 #[must_use]
 pub fn orb_centre(side: Side, window: Window) -> Vec2 {
+    if window.phone() {
+        return Vec2::new(window.size.width / 2.0, strip(window, side).middle());
+    }
     points(DESKTOP.players[index(side)].life, window.size)
 }
 
@@ -55,26 +61,33 @@ fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
         Side::You => view.players.you.life,
         Side::Opponent => view.players.opponent.life,
     };
+    // The phone's strips are lower than the desktop's orb, so it draws the orb smaller, as the
+    // web's `.phone-orb .life-orb` scales it.
+    let scale = if window.phone() { ORB_SCALE } else { 1.0 };
+    let (width, height) = (
+        (size::ORB_WIDTH + 2.0 * size::ORB_BEZEL) * scale,
+        (size::ORB_HEIGHT + 2.0 * size::ORB_BEZEL) * scale,
+    );
     let mut element = Element::new(crate::frame::Role::Region)
         .name(match side {
             Side::You => "your orb",
             Side::Opponent => "opponent's orb",
         })
-        .width(size::ORB_WIDTH + 2.0 * size::ORB_BEZEL)
-        .height(size::ORB_HEIGHT + 2.0 * size::ORB_BEZEL)
+        .width(width)
+        .height(height)
         .background(color::ORB_CORE)
-        .border((rim, size::ORB_BEZEL))
-        .radius(size::ORB_HEIGHT / 2.0 + size::ORB_BEZEL)
+        .border((rim, size::ORB_BEZEL * scale))
+        .radius(height / 2.0)
         .selected(active)
         .passes(true)
-        .children(incoming(view, side).map(|damage| incoming_text(damage, life)));
+        .children(incoming(view, side).map(|damage| incoming_text(damage, life, width)));
     element.anchor = Some(Anchor::Point(orb_centre(side, window), Vec2::new(0.5, 0.5)));
     element
 }
 
 /// The combat damage `damage` a player at `life` stands to take, beside their orb as the web's
 /// `Incoming` writes it: "−3", or "0", red when it is lethal.
-fn incoming_text(damage: i32, life: i32) -> Element {
+fn incoming_text(damage: i32, life: i32, orb_width: f32) -> Element {
     let lethal = damage > 0 && damage >= life;
     let words = if damage > 0 {
         format!("\u{2212}{damage}")
@@ -88,12 +101,7 @@ fn incoming_text(damage: i32, life: i32) -> Element {
         ))
         .style(type_style::TITLE)
         .position(Position::Absolute)
-        .inset([
-            Some(0.0),
-            None,
-            Some(0.0),
-            Some(size::ORB_WIDTH + 2.0 * size::ORB_BEZEL + INCOMING_GAP),
-        ])
+        .inset([Some(0.0), None, Some(0.0), Some(orb_width + INCOMING_GAP)])
         .align_items(Align::Center)
         .justify_content(Justify::Center);
     if lethal {

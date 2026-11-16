@@ -18,6 +18,7 @@ use beryl_protocol::prompt::{PromptView, ShapeBody};
 use glam::Vec2;
 
 use super::{Piles, Shown, Steps, prompt_bar, tray};
+use crate::data::audit;
 use crate::element::{Anchor, Element, TextAlign, row, text};
 use crate::screens::ScreenIn;
 use crate::table::{DESKTOP, tray_boxes};
@@ -47,7 +48,14 @@ pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
     let heading = space.heading / per_point;
     let label = TypeStyle {
         weight: 600,
-        size: (space.heading * LABEL_SHARE).max(LABEL_LEAST) / per_point,
+        // On the phone no line of text is smaller than its least size (`agent::checks`).
+        size: ((space.heading * LABEL_SHARE).max(LABEL_LEAST) / per_point).max(
+            if input.window.phone() {
+                audit::PHONE_TEXT_POINTS
+            } else {
+                0.0
+            },
+        ),
         line_height: 1.0,
         ..type_style::BODY
     };

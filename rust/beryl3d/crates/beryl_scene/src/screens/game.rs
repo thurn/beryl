@@ -4,11 +4,14 @@
 //! inspector and the Revealed Cards pill are not among them: the client shows each as a float
 //! (`inspect::inspector`, `inspect::revealed`).
 
+use glam::Vec2;
+
 use super::{ScreenIn, game_over, opening};
-use crate::element::{Element, holder, row};
-use crate::hud::{log, players, steps};
+use crate::element::{Anchor, Element, holder, row};
+use crate::hud::{log, phone, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
+use crate::table::phone_bands;
 use crate::tokens::{color, size};
 
 /// What the flat layer shows over a game. While none of its pieces shows anything, it is the
@@ -42,6 +45,48 @@ pub fn game(input: &ScreenIn) -> Element {
         .name("game")
         .children(prompt.map(on_panel))
         .children(pieces)
+}
+
+/// What the flat layer shows over a game on the phone layout (docs/ui-conventions.md, "The
+/// phone"), as the web interface's `PhoneStageBoard` composes the desktop's pieces for a phone:
+/// both orbs centred in their strips, the menu button at the end of the opponent's strip, the
+/// phase in the middle band, and the open prompt split between a pill with what it asks and a
+/// dock of its buttons in the viewer's strip (`prompts::prompt_bar`). The log is a sheet the
+/// menu opens, and the step stops are not shown. Every piece stands at a point of the window, so
+/// the screen is an empty region at the window's corner that draws nothing and covers no card.
+#[must_use]
+pub fn game_phone(input: &ScreenIn) -> Element {
+    let bands = phone_bands(input.window).unwrap_or_default();
+    let opening = opening::shown(input);
+    let prompt = input
+        .prompt
+        .and_then(|prompt| prompts::screen(prompt, input));
+    let furniture = input.view.filter(|_| !opening).map(|view| {
+        [
+            players::players(input),
+            Some(phone::middle(view, input.settings.full_control, &bands)),
+            // A sheet drawn over the screen, the bug report, has its own controls there.
+            input.sheet.is_none().then(|| phone::menu(&bands)),
+        ]
+    });
+    let mut screen = holder()
+        .name("game")
+        .children(prompt)
+        .children(furniture.into_iter().flatten().flatten())
+        .children(
+            [
+                opening::opening(input),
+                game_over::scrim(input),
+                game_over::game_over(input),
+                game_over::buttons(input),
+                phone::log_sheet(input, &bands),
+                viewer::viewer(input),
+            ]
+            .into_iter()
+            .flatten(),
+        );
+    screen.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
+    screen
 }
 
 /// `element` drawn on the panel of a screen's top element, where its style gives none. The

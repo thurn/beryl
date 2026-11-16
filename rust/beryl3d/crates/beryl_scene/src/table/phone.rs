@@ -28,6 +28,7 @@
 //!   the web's places in points, converted for each window when the layout is made
 //!   (`layout`), never on the frame path.
 
+use beryl_protocol::protocol::Side;
 use glam::{Quat, Vec2, Vec3};
 
 use super::{
@@ -104,6 +105,23 @@ pub fn phone_bands(window: Window) -> Option<PhoneBands> {
             battlefield(window),
         ))
     })
+}
+
+/// `side`'s strip in a phone `window`, the band of its piles and life total, without fitting
+/// the camera: the strips stand at fixed distances from the window's edges, so the client can
+/// place what stands in them on the frame path.
+#[must_use]
+pub fn strip(window: Window, side: Side) -> Band {
+    match side {
+        Side::You => {
+            let bottom = window.size.height - hand_height(window);
+            Band::between(bottom - data::bands::YOU_STRIP, bottom)
+        }
+        Side::Opponent => {
+            let top = window.safe_area.top;
+            Band::between(top, top + data::bands::OPPONENT_STRIP)
+        }
+    }
 }
 
 /// The phone layout's camera, as data.
@@ -394,5 +412,6 @@ pub fn layout(window: Window) -> Layout {
         opponent_hand: opponent_hand(window, &bands),
         players: [anchor(bands.your_strip), anchor(bands.opponent_strip)],
         phone: Some(stack),
+        bands: Some(bands),
     }
 }

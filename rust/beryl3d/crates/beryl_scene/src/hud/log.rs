@@ -157,26 +157,33 @@ pub fn log(input: &ScreenIn) -> Option<Element> {
         button
     });
     let list = (shown && !entries.is_empty()).then(|| {
-        let last = entries.len() - 1;
-        let rows = (entries.iter().enumerate()).map(|(at, entry)| {
-            // A line said before, such as a second trigger of the same ability, is named with
-            // its count, so that no two rows share a name.
-            let before = (entries[..at].iter())
-                .filter(|earlier| earlier.line.text == entry.line.text)
-                .count();
-            row(entry, before, (at == last, at == 0))
-        });
-        let mut panel = list(LIST, rows)
-            .width(size::LOG_WIDTH)
-            .max_height(height)
-            .radius(size::LOG_RADIUS)
-            .background(color::LOG);
-        let (x, y) = (size::LOG_PADDING_X, size::LOG_PADDING_Y);
-        panel.style.padding = [y, x, y, x];
+        let mut panel = panel(entries).width(size::LOG_WIDTH).max_height(height);
         panel.anchor = Some(Anchor::Point(Vec2::new(LOG_LEFT, LOG_TOP), Vec2::ZERO));
         panel
     });
     Some(holder().name("log").children(button).children(list))
+}
+
+/// The log's list of `entries`, oldest first, on its panel, with no size or place of its own:
+/// the column at the table's left sets them on the desktop, and the log's sheet on the phone
+/// (`hud::phone`).
+#[must_use]
+pub fn panel(entries: &[LogEntry]) -> Element {
+    let last = entries.len().saturating_sub(1);
+    let rows = (entries.iter().enumerate()).map(|(at, entry)| {
+        // A line said before, such as a second trigger of the same ability, is named with its
+        // count, so that no two rows share a name.
+        let before = (entries[..at].iter())
+            .filter(|earlier| earlier.line.text == entry.line.text)
+            .count();
+        row(entry, before, (at == last, at == 0))
+    });
+    let mut panel = list(LIST, rows)
+        .radius(size::LOG_RADIUS)
+        .background(color::LOG);
+    let (x, y) = (size::LOG_PADDING_X, size::LOG_PADDING_Y);
+    panel.style.padding = [y, x, y, x];
+    panel
 }
 
 /// One entry's row: a turn's heading in gold capitals, a countered spell in orange, anything

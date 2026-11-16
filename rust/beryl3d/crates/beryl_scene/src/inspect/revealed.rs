@@ -5,14 +5,17 @@
 //! whenever the pile holds a face (`floats::REVEALED`), laid out once ahead of time, and not a
 //! piece of the game screen.
 
-use beryl_protocol::protocol::ObjectId;
+use beryl_protocol::protocol::{ObjectId, Side};
 use glam::Vec2;
 
+use crate::data::space::hud::phone::REVEALED_WIDTH;
+use crate::data::space::layout::phone::bands::OPPONENT_STRIP;
 use crate::data::space::revealed as data;
 use crate::element::{Align, Dismiss, Element, Press, Shown, Viewed, row};
 use crate::frame::Role;
 use crate::input::{FaceId, Size};
-use crate::table::{CARD_HEIGHT, CARD_WIDTH};
+use crate::table::phone::strip;
+use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
 use crate::tokens::{color, size, type_style};
 use crate::widgets::{button, icons};
 
@@ -55,6 +58,31 @@ pub fn revealed() -> Element {
         .align_items(Align::Center)
         .child(pill)
         .child(cross)
+}
+
+/// The pile's button on the phone, which shows no pill (docs/ui-conventions.md, "The phone"):
+/// a clear button as large as a finger over the opponent's strip beside their graveyard, where
+/// the pile's faces lie at a pile's size, which opens the pile's viewer as a press on a pile
+/// does (`.phone-pile-button` in `ui/src/mobile/phone.css`).
+#[must_use]
+pub fn phone_pile() -> Element {
+    Element::new(Role::Button)
+        .name(REVEALED)
+        .on_press(Press::View(Viewed::Revealed))
+        .width(REVEALED_WIDTH)
+        .height(OPPONENT_STRIP)
+        .background([0; 4])
+        .border(([0; 4], 0.0))
+}
+
+/// Where the phone's button over the pile stands in a phone `window`, its top left corner in
+/// logical points: centred on the opponent's third pile place, after their library and
+/// graveyard, which the phone leaves free since it rests exiled cards under the graveyard.
+#[must_use]
+pub fn phone_pile_corner(window: Window) -> Vec2 {
+    let strip = strip(window, Side::Opponent);
+    let x = window.safe_area.left + crate::data::space::layout::phone::piles::opponent::X.z;
+    Vec2::new(x - REVEALED_WIDTH / 2.0, strip.top)
 }
 
 /// Where the pill's top left corner stands in a window of `window`'s size, in logical points:

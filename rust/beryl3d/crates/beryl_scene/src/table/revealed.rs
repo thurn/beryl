@@ -1,14 +1,17 @@
 //! The Revealed Cards pile: the faces of the cards held up for both players to read (`showcase`),
-//! fanned at the top left of the screen, the last revealed on top and each earlier one's left edge
-//! showing, as the web interface's `fan` (`ui/src/stage/revealed.ts`) lays them out. The pile is
-//! placed relative to the camera, so that it keeps its size and place at any window shape. Each
-//! face is a second card element beside the card's own, which lies where the table has it.
+//! fanned at the top left of the screen, or on the phone in the opponent's strip, the last
+//! revealed on top and each earlier one's left edge showing, as the web interface's `fan`
+//! (`ui/src/stage/revealed.ts`) lays them out. The pile is placed relative to the camera, so that
+//! it keeps its size and place at any window shape. Each face is a second card element beside the
+//! card's own, which lies where the table has it.
 
 use beryl_protocol::protocol::{ObjectId, ObjectView};
 use glam::{Quat, Vec2};
 
 use super::look::{Dress, Look};
 use super::scene::{Table, face_of};
+use super::{CARD_HEIGHT, CARD_WIDTH};
+use crate::data::space::layout::phone;
 use crate::data::space::revealed;
 use crate::faces::Faces;
 use crate::frame::{ElementId, FrameBuilder, Place, REVEALED_FACE, Role};
@@ -47,6 +50,16 @@ impl Table {
         }
         #[expect(clippy::cast_precision_loss, reason = "a handful of faces")]
         let step = revealed::STEP.min(revealed::REACH / (count.max(2) - 1) as f32);
+        // On the phone the pile lies in the opponent's strip beside their graveyard, at a
+        // pile's size, where the phone leaves the third pile's place free (docs/ui-conventions.md,
+        // "The phone").
+        let window = self.camera().window;
+        let (at, height) = if self.layout().phone.is_some() {
+            let pile = phone::piles::opponent::WIDTH / CARD_WIDTH * CARD_HEIGHT;
+            (self.layout().piles[1][2], pile / window.size.height)
+        } else {
+            (revealed::AT, revealed::HEIGHT)
+        };
         for (index, (open, slot)) in lying().enumerate() {
             let Some(shown) = self.revealed(slot) else {
                 continue;
@@ -55,10 +68,10 @@ impl Table {
             let index = index as f32;
             // Each later face lies a little nearer the eye, so that it covers the one under it.
             let rest = self.camera().screen_pose(
-                revealed::AT + Vec2::X * step * index,
+                at + Vec2::X * step * index,
                 revealed::DEPTH - index,
                 Quat::IDENTITY,
-                revealed::HEIGHT,
+                height,
             );
             let growing = Segment {
                 shape: Shape::Grown,

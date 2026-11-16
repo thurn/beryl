@@ -22,8 +22,10 @@ use crate::verbs::Interval;
 /// Nanoseconds in a millisecond, as the session's step timings are written in milliseconds.
 const NS_PER_MS: f64 = 1_000_000.0;
 
-/// The key the Revealed Cards pill is laid out under: it never changes.
+/// The keys the Revealed Cards pill is laid out under: the desktop's pill, and the phone's
+/// button over the pile, which never change.
 const PILL: u64 = 0;
+const PHONE_PILE: u64 = 1;
 
 /// The client's record of the viewer and the Revealed Cards pill.
 #[derive(Debug, Default)]
@@ -34,8 +36,8 @@ pub(super) struct Viewing {
     pub(super) revealed: Vec<RevealedFace>,
     /// The boxes the screen shows cards in, kept so that finding them allocates nothing.
     boxes: Vec<(ObjectId, Rect, bool)>,
-    /// Whether the pill is shown.
-    pill: bool,
+    /// Which of the pill's keys is shown, if any.
+    pill: Option<u64>,
 }
 
 impl Client {
@@ -126,6 +128,8 @@ impl Client {
         if reveals {
             self.layer
                 .prepare(floats::REVEALED, PILL, revealed::revealed);
+            self.layer
+                .prepare(floats::REVEALED, PHONE_PILE, revealed::phone_pile);
         }
     }
 
@@ -140,14 +144,19 @@ impl Client {
         if !holds && self.viewing.open == Some(Viewed::Revealed) {
             self.view(None);
         }
-        let shown = visible && holds;
+        let phone = self.window.phone();
+        let key = if phone { PHONE_PILE } else { PILL };
+        let shown = (visible && holds).then_some(key);
         if shown != self.viewing.pill {
             self.viewing.pill = shown;
-            self.layer
-                .show_prepared(floats::REVEALED, shown.then_some(PILL));
+            self.layer.show_prepared(floats::REVEALED, shown);
         }
-        if shown {
-            let point = revealed::pill_corner(self.window.size);
+        if shown.is_some() {
+            let point = if phone {
+                revealed::phone_pile_corner(self.window)
+            } else {
+                revealed::pill_corner(self.window.size)
+            };
             let look = FloatLook {
                 point,
                 ..FloatLook::default()

@@ -5,6 +5,7 @@ pub mod banner;
 pub mod counts;
 pub mod log;
 pub mod notices;
+pub mod phone;
 pub mod piles;
 pub mod players;
 pub mod rows;

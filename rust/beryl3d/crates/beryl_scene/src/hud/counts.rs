@@ -21,12 +21,12 @@ use glam::Vec2;
 
 use crate::data::space::verbs::count::DRIFT;
 use crate::effects::{Effect, EffectRun};
-use crate::element::{Element, FloatId, Press, floats, text};
+use crate::element::{Element, FloatId, Press, TextAlign, floats, text};
 use crate::frame::Role;
 use crate::input::Size;
 use crate::layout::{FloatLook, Layer};
 use crate::table::Layout;
-use crate::tokens::{color, type_style};
+use crate::tokens::{color, size, type_style};
 
 /// A number a `count` step sets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -108,8 +108,9 @@ pub(crate) const fn index(side: Side) -> usize {
 /// What one player's floats show now, so that a float is shown again only when it changes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Shown {
-    /// The total, and whether a press on it picks the player.
-    life: Option<(i32, bool)>,
+    /// The total, whether a press on it picks the player, and whether it lets the pointer
+    /// through (`CountFloats::passes`).
+    life: Option<(i32, bool, bool)>,
     pool: Option<ManaPool>,
     change: Option<i32>,
 }
@@ -118,6 +119,10 @@ struct Shown {
 #[derive(Debug, Default)]
 pub struct CountFloats {
     shown: [Shown; 2],
+    /// Whether a life total no prompt can pick lets the pointer through to what lies under it:
+    /// on the game screen, where the phone's hand stands behind it, but not on the manual
+    /// table, whose commands act on the total under the pointer.
+    pub passes: bool,
 }
 
 impl CountFloats {
@@ -163,16 +168,20 @@ impl CountFloats {
             let at = index(side);
             let id = floats::LIFE[at];
             layer.forget_prepared(id, |key| {
-                (lives[at].iter())
-                    .any(|&life| [false, true].map(|t| total_key(life, t)).contains(&key))
+                (lives[at].iter()).any(|&life| {
+                    [false, true]
+                        .map(|t| total_key(life, t, self.passes))
+                        .contains(&key)
+                })
             });
             for &life in &lives[at] {
                 for target in [false, true] {
                     if target && !targets[at] {
                         continue;
                     }
-                    layer.prepare(id, total_key(life, target), || {
-                        life_total((side, name), Some(life), target).expect("a total")
+                    let passes = self.passes;
+                    layer.prepare(id, total_key(life, target, passes), || {
+                        life_total((side, name), Some(life), (target, passes)).expect("a total")
                     });
                 }
             }
@@ -212,6 +221,7 @@ impl CountFloats {
         size: Size,
         (visible, targets): (bool, [bool; 2]),
     ) {
+        let passes = self.passes;
         for (side, name) in [(Side::You, "You"), (Side::Opponent, "Opponent")] {
             let at = index(side);
             let target = targets[at];
@@ -223,7 +233,7 @@ impl CountFloats {
                     && now < run.start + run.duration
             });
             let want = Shown {
-                life: counts.map(|counts| (counts.life, target)),
+                life: counts.map(|counts| (counts.life, target, passes)),
                 pool: counts
                     .map(|counts| counts.pool)
                     .filter(|pool| *pool != ManaPool::default()),
@@ -235,10 +245,10 @@ impl CountFloats {
                 show(
                     layer,
                     id,
-                    want.life.map(|(life, t)| total_key(life, t)),
+                    want.life.map(|(life, t, p)| total_key(life, t, p)),
                     || {
                         want.life
-                            .and_then(|(life, t)| life_total((side, name), Some(life), t))
+                            .and_then(|(life, t, p)| life_total((side, name), Some(life), (t, p)))
                     },
                 );
             }
@@ -331,8 +341,8 @@ fn show(
 }
 
 /// The key a life total is prepared under, as a target of a prompt's or not.
-fn total_key(life: i32, target: bool) -> u64 {
-    life_key(life) | u64::from(target) << 32
+fn total_key(life: i32, target: bool, passes: bool) -> u64 {
+    life_key(life) | u64::from(target) << 32 | u64::from(passes) << 33
 }
 
 /// The key a life total or a change of one is prepared under.
@@ -359,15 +369,29 @@ fn pool_key(pool: ManaPool) -> u64 {
 /// is and the number, as "You 20", so that the tree's line for it says both. As a `target`, a
 /// press on it clicks the open prompt on the player, as the web interface's `PlayerTarget`
 /// (`ui/src/stage/PromptBar.tsx`) does.
-fn life_total((side, name): (Side, &str), life: Option<i32>, target: bool) -> Option<Element> {
+fn life_total(
+    (side, name): (Side, &str),
+    life: Option<i32>,
+    (target, passes): (bool, bool),
+) -> Option<Element> {
     let life = life?;
     let mut element = Element::new(Role::Player)
         .name(&format!("{name} {life}"))
         .style(type_style::TITLE);
+    // A total the prompt can pick is a touch target as large as an icon button, the phone's
+    // least, centred on the orb as the total is, so the orb around it still takes no press.
+    // Any other total on the game screen lets the pointer through, as the orb does, to a card
+    // of the phone's hand that stands behind it.
     if target {
-        element = element.on_press(Press::Prompt(Click::On {
-            on: Subject::Player { player: side },
-        }));
+        element = element
+            .on_press(Press::Prompt(Click::On {
+                on: Subject::Player { player: side },
+            }))
+            .min_width(size::ICON_BUTTON)
+            .min_height(size::ICON_BUTTON)
+            .text_align(TextAlign::Center);
+    } else {
+        element = element.passes(passes);
     }
     element.text = Some(life.to_string());
     Some(element)
@@ -375,12 +399,14 @@ fn life_total((side, name): (Side, &str), life: Option<i32>, target: bool) -> Op
 
 /// A pool of unspent mana, as text.
 fn pool_text(pool: ManaPool) -> Element {
-    text(&mana(pool))
+    text(&mana(pool)).passes(true)
 }
 
 /// By how much a life total changed, with its sign.
 fn life_change(by: i32) -> Element {
-    text(&format!("{by:+}")).style(type_style::TITLE)
+    text(&format!("{by:+}"))
+        .style(type_style::TITLE)
+        .passes(true)
 }
 
 /// Unspent mana as text, as the web interface's `ManaPool` (`ui/src/components/Player.tsx`)

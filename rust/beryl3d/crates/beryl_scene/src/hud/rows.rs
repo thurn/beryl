@@ -150,7 +150,8 @@ fn count_text(index: usize, count: usize) -> Element {
         RowName::Others => "others",
     };
     let end = if right { "right" } else { "left" };
-    let mut element = text(&format!("+{count}"));
+    // It lets the pointer through to the cards of the row under it.
+    let mut element = text(&format!("+{count}")).passes(true);
     element.name = format!("{whose} {row} {end} {count}");
     element
 }

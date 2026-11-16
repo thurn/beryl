@@ -358,6 +358,7 @@ impl Client {
     /// out none of them, each total of a player the open prompt marks as a target too.
     pub(super) fn prepare_counts(&mut self) {
         let targets = self.targets(true);
+        self.counts.passes = self.screen == crate::screens::Screen::Game;
         (self.counts).prepare(
             &mut self.layer,
             self.show.counts(),

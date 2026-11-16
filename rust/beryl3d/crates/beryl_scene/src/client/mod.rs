@@ -610,10 +610,7 @@ impl Client {
                 self.show_screen();
             }
             Press::Menu(crate::manual::menus::MENU, row) => self.press_table_menu(row),
-            Press::Log => {
-                self.log.open = !self.log.open;
-                self.show_screen();
-            }
+            Press::Log => self.toggle_log(),
             Press::Menu(..) => {}
             Press::Dismiss(Dismiss::Menu) => {
                 if self.gallery.menu.take().is_some() {

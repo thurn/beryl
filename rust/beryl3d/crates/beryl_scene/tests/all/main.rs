@@ -21,6 +21,7 @@ mod faces;
 mod flat_layer;
 mod flat_text;
 mod game_over;
+mod game_phone;
 mod gesture;
 mod hud;
 mod inspect;

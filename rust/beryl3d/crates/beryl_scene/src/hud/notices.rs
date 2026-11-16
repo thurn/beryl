@@ -92,12 +92,30 @@ impl NoticeFloats {
             let Some(announced) = showing else {
                 continue;
             };
-            let (point, anchor) = match place {
-                Place::Banner | Place::Coin => (
+            let (point, anchor) = match (place, layout.bands) {
+                // On the phone the turn's banner crosses the middle band, a coin is tossed just
+                // above it, and a scry's pill stands beside its player's lands, at the end of
+                // their row (docs/ui-conventions.md, "The phone").
+                (Place::Banner, Some(bands)) => (
+                    Vec2::new(size.width / 2.0, bands.middle.middle()),
+                    Vec2::new(0.5, 0.5),
+                ),
+                (Place::Coin, Some(bands)) => (
+                    Vec2::new(size.width / 2.0, bands.middle.top),
+                    Vec2::new(0.5, 1.0),
+                ),
+                (Place::Pill(player), Some(bands)) => {
+                    let back = match player {
+                        Side::You => bands.your_back,
+                        Side::Opponent => bands.opponent_back,
+                    };
+                    (Vec2::new(bands.right, back.middle()), Vec2::new(1.0, 0.5))
+                }
+                (Place::Banner | Place::Coin, None) => (
                     Vec2::new(size.width / 2.0, size.height / 2.0),
                     Vec2::new(0.5, 0.5),
                 ),
-                Place::Pill(player) => {
+                (Place::Pill(player), None) => {
                     let life = points(layout.players[index(player)].life, size);
                     (
                         life - Vec2::new(0.0, HALF_LIFE + space::S),
