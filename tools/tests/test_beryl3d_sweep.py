@@ -302,36 +302,51 @@ def test_a_failed_step_files_one_bead_under_the_epic_and_a_repeat_comments(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     store = FakeBd()
-    failed = {"b3d-cargo-test": ["b3d-cargo-test:cargo-test"]}
+    failed = {
+        "b3d-cargo-test": ["b3d-cargo-test:cargo-test"],
+        "b3d-release-socket": ["b3d-release-socket:release-socket"],
+    }
+    output = {
+        "b3d-cargo-test": "error[E0425]: cargo-test failure",
+        "b3d-release-socket": "error: release-socket failure",
+    }
     found = ["bisect: b3d-cargo-test:cargo-test  culprit 1234567890 feat: session"]
-    # A dry run reads the open beads and prints the one it would file.
+    # A dry run reads the open beads and prints the ones it would file.
     dry = sweep.DryRun(store)
-    sweep.file("bad1", failed, "good", found, "error[E0425]", dry)
+    sweep.file("bad1", failed, "good", found, output, dry)
     printed = capsys.readouterr().out
-    assert printed.count("would file") == 1
+    assert printed.count("would file") == 2
     assert f"would file under {paths.EPIC}" in printed
     assert "culprit 1234567890" in printed
     assert store.issues == []
 
-    lines = sweep.file("bad1", failed, "good", found, "error[E0425]", store)
-    assert lines == ["b3d sweep: by-1: filed b3d-cargo-test:cargo-test"]
-    [issue] = store.issues
+    lines = sweep.file("bad1", failed, "good", found, output, store)
+    assert lines == [
+        "b3d sweep: by-1: filed b3d-cargo-test:cargo-test",
+        "b3d sweep: by-2: filed b3d-release-socket:release-socket",
+    ]
+    issue, socket_issue = store.issues
     assert issue["parent"] == paths.EPIC and issue["priority"] == "1"
     assert sweep.LABEL in issue["labels"]  # pyre-ignore[58]
     text = str(issue["description"])
     assert "just b3d sweep --step cargo-test --commit bad1" in text
+    assert output["b3d-cargo-test"] in text
+    assert output["b3d-release-socket"] not in text
+    assert output["b3d-release-socket"] in str(socket_issue["description"])
     accept = str(issue["acceptance"])
     assert accept.startswith("`just b3d cargo-test` passes in a worktree rebased on")
     assert "just b3d sweep --step cargo-test --commit origin/staging" in accept
     assert "last sweep that passed on this machine was at good" in text
 
     # The same check failing again comments on that bead, in a dry run too.
-    sweep.file("bad2", failed, "good", [], "again", dry)
+    sweep.file("bad2", failed, "good", [], output, dry)
     assert "would add to by-1 the comment" in capsys.readouterr().out
-    sweep.file("bad2", failed, "good", [], "again", store)
-    [only] = store.issues
-    [comment] = only["comments"]  # pyre-ignore[23]
+    sweep.file("bad2", failed, "good", [], output, store)
+    assert len(store.issues) == 2
+    [comment] = issue["comments"]  # pyre-ignore[23]
     assert "bad2" in comment
+    assert output["b3d-cargo-test"] in comment
+    assert output["b3d-release-socket"] not in comment
 
 
 def test_slow_cis_budget_leaves_out_the_sweeps_records() -> None:

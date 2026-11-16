@@ -562,7 +562,7 @@ def file(
     failed: dict[str, list[str]],
     since: str,
     found: list[str],
-    output: str,
+    output_by_lane: dict[str, str],
     store: verdicts.Beads | None = None,
 ) -> list[str]:
     """Files the sweep's failed checks, by step: a comment on each open sweep bead that names
@@ -570,10 +570,10 @@ def file(
     touched."""
     store = store or verdicts.STORE
     known = nightly_failures.open_beads(store, LABEL) if failed else {}
-    tail = nightly_failures.tail(output)
     lines: list[str] = []
     for lane_name, names in sorted(failed.items()):
         step = step_of(lane_name)
+        tail = nightly_failures.tail(output_by_lane[lane_name])
         mine = [line for line in found if any(n in line for n in names)] or found
         for bead, theirs in sorted(known.items()):
             again = [c for c in names if c in theirs]
@@ -720,10 +720,10 @@ def sweep_run(args: argparse.Namespace) -> int:
         )
         for line in found:
             print(line)
-    output = "\n".join(o.log for o in failed)
+    output_by_lane = {o.lane: o.log for o in failed}
     store = DryRun(verdicts.STORE) if args.dry_run else None
     by_step = failed_by_step(commit, began, failed)
-    for line in file(commit, by_step, args.since, found, output, store):
+    for line in file(commit, by_step, args.since, found, output_by_lane, store):
         print(line, file=sys.stderr)
     return report.code
 
