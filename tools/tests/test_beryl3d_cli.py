@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from beryl_tools import cargo_pool, tokens
 from beryl_tools.beryl3d import cli
 
 
@@ -24,12 +25,20 @@ def test_text_commands_hand_every_argument_to_the_b3d_program(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ran: list[list[str]] = []
-    monkeypatch.setattr(cli, "cargo", lambda arguments: ran.append(arguments) or 0)
+    envs: list[dict[str, str]] = []
+
+    def cargo(arguments: list[str], env: dict[str, str] | None = None) -> int:
+        ran.append(arguments)
+        envs.append(env or {})
+        return 0
+
+    monkeypatch.setattr(cli, "cargo", cargo)
 
     def program(
-        command: list[str], **_kwargs: object
+        command: list[str], env: dict[str, str] | None = None, **_kwargs: object
     ) -> subprocess.CompletedProcess[str]:
         ran.append(command)
+        envs.append(env or {})
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(cli.subprocess, "run", program)
@@ -38,6 +47,11 @@ def test_text_commands_hand_every_argument_to_the_b3d_program(
     build, run = ran
     assert build == ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"]
     assert run == ["/linked/b3d", "tree", "verbs-zones", "--at", "1500ms", "--help"]
+    # The build starts without waiting for tokens, and the one-thread program runs at once
+    # inside a lease of one token it never waited for.
+    build_env, run_env = envs
+    assert build_env[cargo_pool.FLOOR_ENV] == str(cli.QUICK_JOBS)
+    assert run_env[tokens.LEASE_ENV] == "1"
 
 
 def test_interface_tests_run_the_shared_builds_b3d(
@@ -47,7 +61,9 @@ def test_interface_tests_run_the_shared_builds_b3d(
     and `timeline-parity` lanes also start with, so it never holds the build lock they wait
     on (`cli.run_shared_b3d`)."""
     ran: list[list[str]] = []
-    monkeypatch.setattr(cli, "cargo", lambda arguments: ran.append(arguments) or 0)
+    monkeypatch.setattr(
+        cli, "cargo", lambda arguments, env=None: ran.append(arguments) or 0
+    )
 
     def program(
         command: list[str], **_kwargs: object
@@ -75,7 +91,9 @@ def test_a_missing_pack_is_recorded_and_the_command_run_again(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ran: list[list[str]] = []
-    monkeypatch.setattr(cli, "cargo", lambda arguments: ran.append(arguments) or 0)
+    monkeypatch.setattr(
+        cli, "cargo", lambda arguments, env=None: ran.append(arguments) or 0
+    )
     codes: Iterator[int] = iter([cli.MISSING_PACK, 0, 0])
 
     def program(
@@ -146,7 +164,9 @@ def test_picture_commands_hand_every_argument_to_the_b3d_render_program(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ran: list[list[str]] = []
-    monkeypatch.setattr(cli, "cargo", lambda arguments: ran.append(arguments) or 0)
+    monkeypatch.setattr(
+        cli, "cargo", lambda arguments, env=None: ran.append(arguments) or 0
+    )
 
     def program(
         command: list[str], **_kwargs: object

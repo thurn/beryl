@@ -188,5 +188,10 @@
     "label": "An agent's cargo build starts at once on the CPU tokens that are free and grows as slow CI and the sweeps give theirs back, instead of waiting up to 10 s for them",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The commands `just b3d tree`, `png` and `film` start their rebuild without waiting for CPU tokens, run their one-thread program outside the pool, and build `dev` without ThinLTO, so a one-line edit to `beryl_scene` shows in about 3 s instead of 4 to 127 s",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

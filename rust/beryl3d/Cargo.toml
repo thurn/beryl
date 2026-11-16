@@ -32,9 +32,15 @@ missing_panics_doc = "allow"
 # Debug builds keep line tables only, and leave them in the object files, so that linking is
 # faster. After a one-line edit to `beryl_scene`, `just b3d tree` took a median of 11.9 s with
 # Cargo's defaults and 8.5 s with these (docs/beryl-3d.md, "Edit-to-output time").
+#
+# No LTO at all. At opt-level 2 rustc otherwise runs ThinLTO across a crate's own codegen units,
+# and after a one-line edit to `beryl_scene` that pass took 1.8 to 2.1 s of the crate's 3.2 to
+# 3.5 s compile, and rebuilding `b3d` took 4.1 to 4.5 s; without it, 1.6 to 2.5 s. The interface
+# tests run 30% slower without it, so the `test` profile below keeps it.
 [profile.dev]
 debug = "line-tables-only"
 split-debuginfo = "unpacked"
+lto = "off"
 
 # The card crates' build scripts read the whole card store, as the main workspace's do.
 [profile.dev.package.beryl_card_build]
@@ -91,5 +97,9 @@ lto = "thin"
 # the step took 44 s after a kernel change, most of the fast check's 60 s budget; at opt-level 1
 # they take 2.6 s and the step 17 s, with no slower build. Debug assertions and overflow checks
 # stay on, as `dev` has them.
+#
+# `lto = false` is Cargo's default, ThinLTO across each crate's own codegen units, which `dev`
+# turns off. Every interface test (`b3d test`) took 148 CPU-seconds with it and 195 without.
 [profile.test]
 opt-level = 1
+lto = false

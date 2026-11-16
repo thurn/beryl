@@ -42,6 +42,16 @@ its 3 s target on 2026-11-16. So a command that compiles only, of a class below 
 lower classes give their elastic tokens back, which the lease then takes through its jobserver.
 A push's and the queue's builds still wait: their check steps run against a time limit and want
 every core they can get from the start.
+
+An agent's lease still waits while a push or the queue waits, or while agents and slow CI hold
+their share of the pool. On 2026-11-16 at load 14 to 22, `just b3d tree` after a one-line edit
+waited up to 24 s for its build's lease, and took 4 to 127 s against a compile of 2 to 5 s that
+used under two cores. So a command that rebuilds only an edit's crates while an agent waits on
+it sets `FLOOR_ENV` to a few job slots. Its build takes the tokens free at that moment without
+waiting, and when there are none it starts on that many job slots and no tokens, then grows as
+any build does when tokens come free. A few jobs for a few seconds are too few to slow the checks
+the pool protects. A build that turns out to be large, as in a fresh worktree, runs on the floor
+until tokens come free and then takes them.
 """
 
 from __future__ import annotations
@@ -96,6 +106,11 @@ SHRINK_SECONDS = 0.25
 # Cargo commands that only compile, whose parallelism the jobserver controls throughout, so they
 # can give tokens back while they run.
 SHRINKS: frozenset[str] = frozenset({"build", "check", "clippy", "rustc", "doc"})
+
+# Set to a number of job slots by a command that rebuilds only an edit's crates while an agent
+# waits on it, such as `just b3d tree` (see the module comment). A build of a class that starts
+# short then never waits for tokens: it starts on the free ones, or on this many slots and none.
+FLOOR_ENV = "BERYL_CARGO_FLOOR"
 
 # The classes whose compile-only commands start on the tokens that are free instead of waiting
 # for lower classes to give theirs back, and grow as they do.
@@ -197,16 +212,24 @@ def run(argv: list[str], pool: tokens.Pool | None = None) -> int:
     shrinks = subcommand(argv) in SHRINKS
     klass = tokens.named_class()
     short = shrinks and klass in STARTS_SHORT
-    lease = pool.acquire(
-        klass,
-        want,
-        command=f"cargo {subcommand(argv)}",
-        elastic_from=1 if shrinks else None,
-        hold_out=not short,
-    )
+    floor = floor_slots() if short else 0
+    if floor:
+        # The tokens free now, every one elastic, and no line in the pool's log, as for a
+        # top-up: possibly none.
+        lease = pool.top_up(klass, 0, want, elastic=True)
+    else:
+        lease = pool.acquire(
+            klass,
+            want,
+            command=f"cargo {subcommand(argv)}",
+            elastic_from=1 if shrinks else None,
+            hold_out=not short,
+        )
     assert lease is not None
     extra: list[tokens.Lease] = []
-    jobserver = Jobserver(lease.size)
+    # The job slots cargo may fill: one for each token held, and at least `floor`.
+    slots = max(lease.size, floor)
+    jobserver = Jobserver(slots)
     waiting = wait_beside(pool, klass) if short and lease.size < want else None
     deadline = time.monotonic() + tokens.RECLAIM_SECONDS
     try:
@@ -231,15 +254,18 @@ def run(argv: list[str], pool: tokens.Pool | None = None) -> int:
                 pass
             if code is not None:
                 break
-            yielding = shrinks and held > 1 and pool.higher_waiting(lease.klass)
+            yielding = shrinks and held > 1 and pool.higher_waiting(klass)
             if yielding:
-                held -= give_back(pool, [lease, *extra], jobserver, held - 1)
+                returned = give_back(pool, [lease, *extra], jobserver, held - 1)
+                held -= returned
+                slots -= returned
             elif held < want:
-                more = pool.top_up(lease.klass, held, want, elastic=shrinks)
+                more = pool.top_up(klass, held, want, elastic=shrinks)
                 if more.size:
                     extra.append(more)
-                    jobserver.grow(more.size)
                     held += more.size
+                    jobserver.grow(max(held, floor) - slots)
+                    slots = max(held, floor)
                     # The pool's log records the most tokens the command held.
                     lease.size = max(lease.size, held)
             if waiting and (held >= want or time.monotonic() > deadline):
@@ -253,6 +279,13 @@ def run(argv: list[str], pool: tokens.Pool | None = None) -> int:
         for more in extra:
             more.release()
         lease.release()
+
+
+def floor_slots() -> int:
+    """The job slots a build starts on with no tokens (`FLOOR_ENV`): 0, the default, waits for
+    a token as before."""
+    value = os.environ.get(FLOOR_ENV, "")
+    return int(value) if value.isdigit() else 0
 
 
 def wait_beside(pool: tokens.Pool, klass: str) -> Path | None:

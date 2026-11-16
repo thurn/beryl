@@ -19,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import caches, deadline, system, tokens, warm
+from .. import caches, cargo_pool, deadline, system, tokens, warm
 from .. import paths as repo_paths
 from . import (
     app,
@@ -115,6 +115,21 @@ def build(arguments: list[str]) -> int:
     no tokens, and then usually finds nothing left to do."""
     with system.file_lock(paths.build_lock()):
         return cargo(arguments)
+
+
+# The job slots a rebuild after an edit starts on when the CPU token pool has no token free
+# (`quick_build`). After a one-line edit to `beryl_scene`, building `b3d` took 2.6 s on one job,
+# 1.6 to 2.5 s on two and 1.8 to 2.3 s on four, at load 19.
+QUICK_JOBS = 2
+
+
+def quick_build(arguments: list[str]) -> int:
+    """Runs `cargo <arguments>` as `build` does, for a program an agent waits on after an edit,
+    without waiting for CPU tokens: cargo starts on the tokens free now, or on `QUICK_JOBS` job
+    slots when none is, and grows as tokens come free (`cargo_pool.FLOOR_ENV` says why).
+    """
+    with system.file_lock(paths.build_lock()):
+        return cargo(arguments, {**os.environ, cargo_pool.FLOOR_ENV: str(QUICK_JOBS)})
 
 
 def run_cargo(args: argparse.Namespace) -> int:
@@ -237,26 +252,37 @@ def run_program(
     the lease allows (`beryl_inspect::runner::threads`). With `grow`, for a command whose work
     goes through `runner::spread`, the lease grows while it runs (`tokens.run_program`). When
     it says the recordings pack is missing, builds the pack and runs it again. `want` caps the
-    lease (`tokens.run_program`)."""
-    line = [str(binary or linked(name)), *arguments]
-    code = tokens.run_program(line, grow=grow, want=want, check=False).returncode
+    lease (`tokens.run_program`), and a `want` of 1 runs the program at once, outside the pool.
+    """
+    line: list[str] = [str(binary or linked(name)), *arguments]
+
+    def launch() -> int:
+        if want == 1:
+            # A program on one thread runs at once, as if inside a lease of one token. A lease
+            # of one token waited up to 8 s while pushes waited, for a command that then ran
+            # for 0.4 s (`cargo_pool.FLOOR_ENV` says why the pool makes an agent wait).
+            env = {**os.environ, tokens.LEASE_ENV: "1"}
+            return subprocess.run(line, env=env, check=False).returncode
+        return tokens.run_program(line, grow=grow, want=want, check=False).returncode
+
+    code = launch()
     if code != MISSING_PACK:
         return code
     recorded = record()
     if recorded != 0:
         return recorded
-    return tokens.run_program(line, grow=grow, want=want, check=False).returncode
+    return launch()
 
 
 def run_b3d(command: str, single: bool = False) -> Callable[[argparse.Namespace], int]:
     """Builds the `b3d` program of `beryl_inspect` and runs its `command` with the arguments.
-    A `single` command runs on one thread and takes one CPU token. Asking for the usual
-    twelve, `just b3d tree`, which works for under a second, waited 10 s for them at load 20
+    A `single` command runs on one thread, as if inside a lease of one CPU token, without
+    waiting on the pool (`run_program`). Asking for the usual twelve, `just b3d tree`, which works for under a second, waited 10 s for them at load 20
     on 2026-11-16 (the pool's `RECLAIM_SECONDS`), so after a one-line edit it took 15 to 24 s
     against its 3 s target."""
 
     def run(args: argparse.Namespace) -> int:
-        built = build(["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"])
+        built = quick_build(["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"])
         if built != 0:
             return built
         return run_program("b3d", [command, *args.arguments], want=1 if single else 0)
@@ -325,10 +351,13 @@ def run_render(command: str) -> Callable[[argparse.Namespace], int]:
     (docs/beryl-3d.md, 'Edit-to-output time')."""
 
     def run(args: argparse.Namespace) -> int:
-        built = build(["build", "-q", "-p", "beryl_pictures", "--bin", "b3d-render"])
+        arguments = ["build", "-q", "-p", "beryl_pictures", "--bin", "b3d-render"]
+        built = quick_build(arguments)
         if built != 0:
             return built
-        return run_program("b3d-render", [command, *args.arguments])
+        # It sizes no threads by its lease: `png` took 0.38 s on one token and on four, and
+        # 0.73 s and 0.77 s with every face drawn, so it runs as a one-thread program does.
+        return run_program("b3d-render", [command, *args.arguments], want=1)
 
     return run
 

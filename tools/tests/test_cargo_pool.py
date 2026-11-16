@@ -29,6 +29,8 @@ seen = {{
     "makeflags": os.environ.get("CARGO_MAKEFLAGS"),
 }}
 release = {release!r}
+if os.environ.get("FAKE_CARGO_STARTED"):
+    open(os.environ["FAKE_CARGO_STARTED"], "w").close()
 if release:
     while not os.path.exists(release):
         time.sleep(0.01)
@@ -139,6 +141,43 @@ def test_a_build_grows_when_tokens_come_free(
     seen = json.loads(out.read_text())
     assert seen["tokens"] == "3"
     # Started with two bytes, then given one for each token that brought it up to six.
+    assert seen["slots"] == 5
+    assert not pool.holders()
+
+
+def test_a_build_with_a_floor_starts_with_no_token_free_and_grows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release: Path = tmp_path / "release"
+    cargo, seen_file = fake_cargo(tmp_path / "bin", release)
+    out: Path = seen_file
+    monkeypatch.setenv(cargo_pool.REAL_ENV, str(cargo))
+    monkeypatch.setenv(cargo_pool.FLOOR_ENV, "2")
+    monkeypatch.setattr(cargo_pool, "GROW_SECONDS", 0.05)
+    pool: Pool = Pool(tmp_path / "pool", 9)
+    # Other agents hold all seven tokens agents may take, and a push waits for more.
+    other: tokens.Lease | None = pool.acquire("agent", 7)
+    assert other is not None and other.size == 7
+    push: Path = pool.waiter("push")
+    push.write_text(f"{os.getpid()} push")
+    held_at_start: list[int] = []
+
+    def finish_other() -> None:
+        while not out.parent.joinpath("started").exists():
+            time.sleep(0.01)
+        held_at_start.append(len(pool.holders()))
+        push.unlink()
+        assert other is not None
+        other.release()
+        release.touch()
+
+    monkeypatch.setenv("FAKE_CARGO_STARTED", str(out.parent / "started"))
+    threading.Thread(target=finish_other).start()
+    assert cargo_pool.run(["build"], pool) == 0
+    seen = json.loads(out.read_text())
+    # It started while the other agents held every token, outside any lease, and then grew
+    # from its two job slots to the six tokens it wants.
+    assert held_at_start == [7] and seen["tokens"] is None
     assert seen["slots"] == 5
     assert not pool.holders()
 

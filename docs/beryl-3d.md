@@ -2476,6 +2476,60 @@ lines to about 48,000 since the first measurement.
 Neither target is met. The first `tree` and the first `png` in the fresh
 worktree each took about 92 s, rebuilding from the cached build directory.
 
+Timing each part of `tree` showed that most of the time went to waiting, not
+compiling. Five runs, at load 14 to 22, with the build's and the program's waits
+for CPU tokens measured inside the commands:
+
+| Run | Total (s) | Build's wait (s) | Build (s) | Program's wait (s) |
+| --: | --------: | ---------------: | --------: | -----------------: |
+|   1 |       5.7 |              0.0 |       4.7 |                0.0 |
+|   2 |      10.7 |              5.2 |       4.0 |                0.6 |
+|   3 |      31.3 |             23.8 |       5.5 |                0.9 |
+|   4 |      23.8 |             17.9 |       4.8 |                0.0 |
+|   5 |      25.7 |              3.6 |       5.2 |                8.0 |
+
+- **The token pool made the command wait.** An agent's lease gets no token while
+  a push or the merge queue waits for tokens, or while agents and slow CI hold
+  their three quarters of the pool. The build waited up to 24 s for its first
+  token, and the program, which wants one token and runs for 0.4 s, up to 8 s.
+  Now `just b3d tree`, `png` and `film` build with the cargo shim's floor: cargo
+  takes the tokens free at that moment without waiting, and when none is free it
+  starts on two job slots and grows as tokens come free
+  (`cargo_pool.FLOOR_ENV`). Their programs, which size no threads by their
+  lease, run at once as if inside a lease of one token. An incremental build
+  uses under two cores for a few seconds, too little to slow the checks.
+- **Half the compile was ThinLTO.** At opt-level 2 rustc runs ThinLTO across a
+  crate's own codegen units, and in `beryl_scene` that pass took 1.8 to 2.1 s of
+  the crate's 3.2 to 3.5 s. The `dev` profile now sets `lto = "off"`, and
+  rebuilding `b3d` after an edit takes 1.6 to 2.5 s instead of 4.1 to 4.5 s.
+  Without that pass every interface test took 195 CPU-seconds instead of 148, so
+  the `test` profile, which `just b3d test` and the fast check use, keeps it.
+- **Some builds stalled on the disk.** In one stretch of about ten minutes,
+  builds with no pool at all took 20 to 33 s for 7 CPU-seconds of work, while
+  the machine's disk served about 27,000 operations a second. Each incremental
+  build of `beryl_scene` writes its dependency graph and query cache again,
+  about 155 MB. No change here addresses that.
+
+Measured again the same day after both changes, by the same method. Each edit
+changes one line inside `beryl_scene::table::place`, a function every `tree`
+runs:
+
+| Command, one-line edit each run | Median | Runs (s)            |  Load |
+| ------------------------------- | -----: | ------------------- | ----: |
+| `just b3d tree`                 |  3.0 s | 3.9 3.2 2.4 3.0 2.9 | 13-15 |
+| `just b3d tree`, again          |  2.4 s | 2.8 2.4 3.0 2.3 2.4 | 12-15 |
+| `just b3d png`                  |  4.5 s | 4.2 3.9 4.6 4.5 4.5 | 10-13 |
+| `just b3d tree`, after `png`    |  3.2 s | 3.1 3.1 3.5 3.4 3.2 | 12-14 |
+| `just b3d tree`, again          |  2.9 s | 2.9 3.2 2.3 2.9 3.1 | 14-15 |
+
+Both targets are met, `tree`'s narrowly: the median of all 20 runs is 3.0 s.
+What remains of `tree` is about 0.6 s of starting `uv` and cargo, 1.3 to 2.1 s
+of `beryl_scene`'s compile, mostly rustc reading its incremental state for a
+48,000-line crate, 0.4 to 0.7 s of `beryl_inspect` and the link, and 0.1 s of
+the program. A faster loop would need `beryl_scene` split into smaller crates.
+`png` builds its own `beryl_scene`, with other features, so the first `tree`
+after a `png` compiles the edit again.
+
 ### Times, moments, locators and actions
 
 These four are written one way everywhere.
