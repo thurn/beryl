@@ -26,7 +26,12 @@ work to fix, never as Steward beads.
 - **Failures.** A failed step is bisected over the commits since the last sweep whose part
   passed, for at most [`SEARCH`] seconds per part (bisect.py, in a tree of its own), and filed
   as one P1 bead per step, labelled [`LABEL`], under the epic (`paths.EPIC`). A check that an
-  open sweep bead already names gets a comment instead. Nothing here holds `master`.
+  open sweep bead already names gets a comment instead. Nothing here holds `master`. A new
+  bead names the machine that ran the step in `enact_host` (and `enact_ci_host`, as the
+  nightly's do), because Enact gives a `role:executor` bead pinned with `enact_host` only to
+  that machine's viziers. A failure such as a broken toolchain may show only on the machine
+  that ran the step, and a worker on another machine could neither reproduce it nor read that
+  machine's lane log.
 - **Cost.** Its steps run at normal priority and take CPU tokens of the `sweep` class, at most a
   quarter of the cores, as the browser sweep's do (tokens.py), and
   are logged under the script [`SCRIPT`]. Slow CI's CPU budget counts only records of the script
@@ -604,7 +609,13 @@ def file(
             "--labels",
             f"role:executor,{LABEL}",
             "--metadata",
-            json.dumps({nightly_failures.CHECKS_KEY: "\n".join(new)}),
+            json.dumps(
+                {
+                    nightly_failures.CHECKS_KEY: "\n".join(new),
+                    "enact_host": nightly_failures.host(),
+                    "enact_ci_host": nightly_failures.host(),
+                }
+            ),
             "--silent",
         )
         lines.append(
@@ -629,7 +640,8 @@ class DryRun(verdicts.Beads):
             flag = lambda name: args[args.index(name) + 1]  # noqa: E731
             print(
                 f"b3d sweep: would file under {flag('--parent')}, labelled "
-                f"{flag('--labels')}, P{flag('--priority')}: {flag('--title')}\n"
+                f"{flag('--labels')}, P{flag('--priority')}, for host "
+                f"{json.loads(flag('--metadata'))['enact_host']}: {flag('--title')}\n"
                 f"{flag('--description')}\nAcceptance: {flag('--acceptance')}"
             )
             return 0, "(dry run)"

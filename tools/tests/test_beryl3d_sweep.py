@@ -299,7 +299,7 @@ class FakeBd(verdicts.Beads):
 
 
 def test_a_failed_step_files_one_bead_under_the_epic_and_a_repeat_comments(
-    capsys: pytest.CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store = FakeBd()
     failed = {
@@ -311,6 +311,8 @@ def test_a_failed_step_files_one_bead_under_the_epic_and_a_repeat_comments(
         "b3d-release-socket": "error: release-socket failure",
     }
     found = ["bisect: b3d-cargo-test:cargo-test  culprit 1234567890 feat: session"]
+    # Each new bead is pinned to the machine that ran the step.
+    monkeypatch.setenv("ENACT_HOST", "cygnus")
     # A dry run reads the open beads and prints the ones it would file.
     dry = sweep.DryRun(store)
     sweep.file("bad1", failed, "good", found, output, dry)
@@ -318,6 +320,7 @@ def test_a_failed_step_files_one_bead_under_the_epic_and_a_repeat_comments(
     assert printed.count("would file") == 2
     assert f"would file under {paths.EPIC}" in printed
     assert "culprit 1234567890" in printed
+    assert "for host cygnus" in printed
     assert store.issues == []
 
     lines = sweep.file("bad1", failed, "good", found, output, store)
@@ -328,6 +331,9 @@ def test_a_failed_step_files_one_bead_under_the_epic_and_a_repeat_comments(
     issue, socket_issue = store.issues
     assert issue["parent"] == paths.EPIC and issue["priority"] == "1"
     assert sweep.LABEL in issue["labels"]  # pyre-ignore[58]
+    metadata = issue["metadata"]
+    assert isinstance(metadata, dict)
+    assert metadata["enact_host"] == metadata["enact_ci_host"] == "cygnus"
     text = str(issue["description"])
     assert "just b3d sweep --step cargo-test --commit bad1" in text
     assert output["b3d-cargo-test"] in text
