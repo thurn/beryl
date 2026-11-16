@@ -105,8 +105,9 @@ HANG_LIMIT_S = 7200
 BUDGET = 6 * 3600
 MAC = "darwin"
 WINDOWS = "win32"
-# The machines that run slow CI, and so start sweeps: this Mac and Cygnus.
-EVERY_MACHINE: tuple[str, ...] = (MAC, WINDOWS)
+# The machines that run the sweep: this Mac only. Beryl 3D is not tested on Windows, so
+# Cygnus neither starts a sweep nor files beads for one.
+EVERY_MACHINE: tuple[str, ...] = (MAC,)
 # The main workspace's crates whose changes can break Beryl 3D, with every crate they depend
 # on by path ([`inputs`]): the session, the fixture recorder, the image cache and the data
 # folders both apps share.
@@ -475,11 +476,14 @@ def start_background(
     head: Callable[[], str] = lambda: git("rev-parse", "HEAD"),
     pattern: Callable[[], re.Pattern[str]] = inputs,
     start: Callable[[list[str], Path], bool] = coverage.detached_sweep,
+    platform: str = sys.platform,
 ) -> str:
     """Starts `just b3d sweep` in the background from the main checkout's tools when one is
     due at slow CI's commit and none is running, and returns a line saying which. Slow CI calls
     this after each run on each machine; the sweep runs in a session of its own, so its outcome
-    never reaches slow CI's."""
+    never reaches slow CI's. A machine outside [`EVERY_MACHINE`] never starts one."""
+    if platform not in EVERY_MACHINE:
+        return f"b3d sweep: not run on {platform}"
     reason = not_due(head(), last_swept(read_log()), pattern())
     if reason is not None:
         return f"b3d sweep: not due: {reason}"

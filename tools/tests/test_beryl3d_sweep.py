@@ -82,11 +82,20 @@ def test_the_real_due_rule_follows_the_sessions_path_dependencies() -> None:
 def test_the_sweep_runs_every_step_of_the_lane_each_as_a_lane_of_its_own() -> None:
     names = [s.name for s in sweep.chosen(None, sweep.MAC)]
     assert names[: len(lane.steps())] == [s.name for s in lane.steps()]
-    made = sweep.lanes(sweep.chosen("clippy", sweep.WINDOWS))
+    made = sweep.lanes(sweep.chosen("clippy", sweep.MAC))
     assert [(m.name, [s.name for s in m.steps]) for m in made] == [
         ("b3d-clippy", ["clippy"])
     ]
     assert sweep.chosen("clippy", "linux") == []
+    assert sweep.chosen(None, sweep.WINDOWS) == []
+
+
+def test_windows_never_starts_a_sweep() -> None:
+    def start(by: list[str], log: Path) -> bool:
+        raise AssertionError("a sweep started on Windows")
+
+    line = sweep.start_background(start=start, platform=sweep.WINDOWS)
+    assert line == "b3d sweep: not run on win32"
 
 
 def test_the_quick_part_holds_the_build_and_the_lane_and_the_slow_part_the_vm() -> None:
