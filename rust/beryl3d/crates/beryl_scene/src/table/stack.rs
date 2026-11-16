@@ -8,6 +8,7 @@ use glam::{Quat, Vec2};
 
 use super::place::{Placement, Rest, turn};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, StackData};
+use crate::data::audit;
 use crate::frame::Place;
 use crate::pose::Pose;
 
@@ -112,10 +113,18 @@ pub(super) fn place_stack(
     placement.abilities.sort_unstable_by_key(|(id, _)| *id);
 }
 
+/// The smallest part of its full size a stack in rows shrinks its items to before it lets its
+/// rows reach further left than the leaning stack would.
+const SMALLEST_IN_ROWS: f32 = 0.5;
+
 /// Where the item at `index`, bottom first, of a stack of `count` stands. The top item's foot
 /// stays put; each item beneath peeks out `data.step` above the one over it, closer together
 /// once they would reach past `data.reach`; and a stack too tall to fit under `data.top`
 /// shrinks, all its items alike, about its column's middle.
+///
+/// An item beneath is reachable through the strip it shows at its left, `lean` times as wide as
+/// it peeks out above. A stack so tall that the strip would be narrower than the reachable
+/// check's square (`audit::TARGET_POINTS`) stands in rows instead (`in_rows`).
 fn stack_pose(index: usize, count: usize, data: &StackData, camera: &Camera) -> Pose {
     let size = camera.window.size;
     let aspect = size.width / size.height;
@@ -123,11 +132,7 @@ fn stack_pose(index: usize, count: usize, data: &StackData, camera: &Camera) -> 
         clippy::cast_precision_loss,
         reason = "a stack holds far fewer than 2^24 items"
     )]
-    let (gaps, beneath, index) = (
-        count.saturating_sub(1) as f32,
-        (count - 1 - index) as f32,
-        index as f32,
-    );
+    let (gaps, beneath) = (count.saturating_sub(1) as f32, (count - 1 - index) as f32);
     let step = if gaps > 0.0 {
         data.step.min(data.reach / gaps)
     } else {
@@ -137,11 +142,60 @@ fn stack_pose(index: usize, count: usize, data: &StackData, camera: &Camera) -> 
     let wide = tall * CARD_WIDTH / CARD_HEIGHT;
     let scale = ((data.top - data.foot) / (tall + gaps * step)).min(1.0);
     let column = aspect - data.right - wide / 2.0;
-    let centre = Vec2::new(
-        column - beneath * step * scale * data.lean,
-        data.foot + (tall / 2.0 + beneath * step) * scale,
-    );
+    // The window is 2 units of normalized device coordinates high.
+    let target = audit::TARGET_POINTS * 2.0 / size.height;
+    let (centre, height) = if gaps == 0.0 || step * scale * data.lean >= target {
+        let centre = Vec2::new(
+            column - beneath * step * scale * data.lean,
+            data.foot + (tall / 2.0 + beneath * step) * scale,
+        );
+        (centre, data.height * scale)
+    } else {
+        in_rows(count - 1 - index, count, target * data.spare, data, column)
+    };
     let ndc = Vec2::new(centre.x / aspect, centre.y);
-    let depth = data.depth - index * data.step_depth;
-    camera.screen_pose(ndc, depth, Quat::IDENTITY, data.height * scale)
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a stack holds far fewer than 2^24 items"
+    )]
+    let depth = data.depth - index as f32 * data.step_depth;
+    camera.screen_pose(ndc, depth, Quat::IDENTITY, height)
+}
+
+/// The middle and the height of the item `beneath` items under the top of a stack of `count`
+/// that stands in rows. Each row stands `pitch` above the one in front of it, and each item of
+/// a row `pitch` to the left of the one in front of it, so every item beneath keeps a corner
+/// `pitch` square uncovered at its top left. The top item stands where it would in the leaning
+/// stack, its row runs left no further than the leaning stack reaches, and the items shrink
+/// alike so that the rows fit under `data.top`. A stack whose rows would shrink its items below
+/// `SMALLEST_IN_ROWS` of their full size makes its rows longer instead.
+fn in_rows(beneath: usize, count: usize, pitch: f32, data: &StackData, column: f32) -> (Vec2, f32) {
+    let tall = data.height * 2.0;
+    let room = data.top - data.foot;
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "both quotients are small and positive"
+    )]
+    let (across, most_rows) = (
+        (data.reach * data.lean / pitch) as usize + 1,
+        ((room - tall * SMALLEST_IN_ROWS) / pitch).max(0.0) as usize + 1,
+    );
+    let per_row = across.max(count.div_ceil(most_rows));
+    let rows = count.div_ceil(per_row);
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a stack holds far fewer than 2^24 items"
+    )]
+    let (row, place, rows) = (
+        (beneath / per_row) as f32,
+        (beneath % per_row) as f32,
+        rows as f32,
+    );
+    let scale = ((room - (rows - 1.0) * pitch) / tall).min(1.0);
+    let centre = Vec2::new(
+        column - place * pitch,
+        data.foot + tall / 2.0 * scale + row * pitch,
+    );
+    (centre, data.height * scale)
 }

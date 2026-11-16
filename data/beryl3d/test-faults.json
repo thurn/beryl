@@ -1322,16 +1322,13 @@
       "reachable": 60
     },
     "b3d:stress-stack/you/1440x900": {
-      "reachable": 27
+      "reachable": 4
     },
     "b3d:stress-stack/you/1600x900": {
-      "reachable": 26
+      "reachable": 3
     },
     "b3d:stress-stack/you/1920x1080": {
-      "reachable": 26
-    },
-    "b3d:stress-stack/you/2560x1080": {
-      "reachable": 25
+      "reachable": 3
     },
     "b3d:stress-verbs/you/1440x900": {
       "crowded": 1,

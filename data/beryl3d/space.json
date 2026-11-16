@@ -546,7 +546,8 @@
     "top": 0.48,
     "step": 0.08889,
     "reach": 0.37778,
-    "lean": 1.2
+    "lean": 1.2,
+    "spare": 1.25
   },
   "shadow": {
     "light": [

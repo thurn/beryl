@@ -140,8 +140,8 @@
     "stress-stack": {
       "worst_frame_elements": 103,
       "total_elements": 17406,
-      "worst_frame_segments": 50,
-      "total_segments": 800,
+      "worst_frame_segments": 43,
+      "total_segments": 688,
       "worst_frame_records": 1028,
       "total_records": 147947,
       "worst_frame_layout_nodes": 5,
@@ -152,7 +152,7 @@
       "total_placed": 1375,
       "worst_frame_draw_calls": 4,
       "worst_frame_upload_bytes": 82240,
-      "worst_frame_blended_area": 0.1019,
+      "worst_frame_blended_area": 0.1017,
       "handle_allocations": 2023,
       "frame_allocations": 0,
       "worst_frame_instructions": 3854216,
@@ -168,7 +168,7 @@
         "pay-default": 1.035885,
         "stress-verbs": 1.456404,
         "stress-hand": 1.00132,
-        "stress-stack": 1.101213
+        "stress-stack": 1.099233
       }
     }
   },

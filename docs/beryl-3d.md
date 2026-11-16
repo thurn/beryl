@@ -1203,9 +1203,17 @@ flight start exactly where the card was.
   the hand would then run past the window's sides (60 cards in a window narrower
   than about 1600 by 900 points). The stack's items stand at the right of the
   screen, the top item in front and each item beneath peeking out above and to
-  its left, and a tall stack shrinks to fit. A spell that is resolving, which
-  the game has taken off its stack while its card stays in the stack's zone,
-  stays the top item until it leaves.
+  its left, and a tall stack shrinks to fit. Each item beneath is pressed
+  through the strip it shows at its left. A stack so tall that this strip would
+  be narrower than the reachable check's square (8 items in a 1440 by 900
+  window) stands in rows instead, which the web interface does not do: each row
+  stands a little above the one in front of it, and each item a little to the
+  left of the one in front of it in its row, so every item keeps an uncovered
+  corner `stack.spare` times the square's side. The rows run left no further
+  than the leaning stack reaches, and the items shrink alike to fit under the
+  stack's top, to no less than half their full size: past that the rows grow
+  longer. A spell that is resolving, which the game has taken off its stack
+  while its card stays in the stack's zone, stays the top item until it leaves.
 - **Cards a prompt holds up lie in the tray.** `table::tray` ports the web
   interface's `laidOut` for one pile (rows about the middle of the space) and
   two (boxes side by side), in the space `desktopTray` gives, placed relative to

@@ -4,7 +4,7 @@ use beryl_protocol::protocol::{
     CardType, ObjectId, PlayerView, RowName, Side, StackItem, ZoneName,
 };
 use beryl_protocol::script::Reset;
-use beryl_scene::agent::checks::duplicates;
+use beryl_scene::agent::checks::{duplicates, reachable};
 use beryl_scene::agent::tree::{TreeOptions, tree};
 use beryl_scene::agent::{Context, Layout};
 use beryl_scene::data::audit;
@@ -628,6 +628,42 @@ fn stacks_of_any_size_stay_on_screen_with_the_newest_item_nearest() {
                     "{label}: each item stands nearer the eye than the one beneath it"
                 );
             }
+        }
+    }
+}
+
+#[test]
+fn every_item_of_a_stack_of_any_size_can_be_pressed() {
+    // A stack too tall to lean with a wide enough strip at each item's left stands in rows.
+    for count in [2, 7, 8, 12, 25, 50] {
+        let mut builder = ViewBuilder::new();
+        for index in 0..count {
+            builder.card(ZoneName::Stack, Side::You, &format!("Spell {index}"));
+        }
+        builder.script(ScriptBuilder::reset().build());
+        for (width, height) in DESKTOP_WINDOWS {
+            let size = Size { width, height };
+            let mut client = client();
+            client.handle(Input::Surface {
+                size,
+                scale: 2.0,
+                safe_area: Insets::default(),
+            });
+            client.handle(Input::Update(Box::new(builder.update())));
+            let context = Context {
+                recording: "stack".to_owned(),
+                seat: Side::You,
+                layout: Layout::Desktop,
+                size,
+                safe_area: Insets::default(),
+                at: 0,
+            };
+            let faults = reachable(client.frame(0), &context);
+            let messages: Vec<&str> = faults.iter().map(|f| f.message.as_str()).collect();
+            assert!(
+                messages.is_empty(),
+                "a stack of {count} at {width}x{height}: {messages:#?}"
+            );
         }
     }
 }

@@ -103,7 +103,7 @@ pub struct HandData {
 /// in `space.json`). Distances are in normalized device coordinates' vertical unit, half the
 /// window's height, both across and up the screen. The top item stands in front, and each item
 /// beneath peeks out above it and to its left. A stack too tall to fit shrinks, all its items
-/// alike.
+/// alike, and one too tall to leave each item beneath a reachable strip stands in rows.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StackData {
     /// How far in front of the eye the bottom item stands, in millimetres.
@@ -124,6 +124,9 @@ pub struct StackData {
     pub reach: f32,
     /// How far each item beneath lies to the left, for each unit it peeks out above.
     pub lean: f32,
+    /// How many times the reachable square's side each item beneath keeps uncovered, across
+    /// and up, once the stack is too tall to lean and stands in rows.
+    pub spare: f32,
 }
 
 /// Where one player's parts of the table that are not cards stand on the screen, in normalized
@@ -249,6 +252,7 @@ pub const DESKTOP: Layout = Layout {
         step: space::stack::STEP,
         reach: space::stack::REACH,
         lean: space::stack::LEAN,
+        spare: space::stack::SPARE,
     },
     hand: hand_data!(hand),
     opponent_hand: hand_data!(opponent_hand),
