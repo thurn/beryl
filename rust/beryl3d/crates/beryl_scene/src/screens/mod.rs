@@ -226,3 +226,62 @@ fn backdrop(input: &ScreenIn) -> Element {
     ));
     backdrop
 }
+
+/// Whether the window takes the phone layout, by the selector the interface checks use
+/// (`Layout::for_size`). Each screen's public function asks this and calls its portrait
+/// alternate.
+fn phone(input: &ScreenIn) -> bool {
+    crate::agent::Layout::for_size(input.window.size) == crate::agent::Layout::Phone
+}
+
+/// A portrait screen named `name`, which shows `content` in one column over the safe area: the
+/// screen is clear and anchored over the whole window, and `content` stands inside its safe
+/// area, the gutter in from its sides and foot, at most `phone::COLUMN` wide in the window's
+/// middle. `content` scrolls when it is taller than that, as it is while the system keyboard
+/// shortens the window, so that every action stays in reach; it is cut at the safe area, so
+/// nothing scrolls under the status bar or the home indicator.
+fn phone_screen(
+    name: &str,
+    input: &ScreenIn,
+    content: crate::element::Element,
+) -> crate::element::Element {
+    use crate::data::space::flat::phone::{COLUMN, GUTTER};
+    let window = input.window;
+    let safe = window.safe_area;
+    let across = window.size.width - safe.left - safe.right - 2.0 * GUTTER;
+    let extra = ((across - COLUMN) / 2.0).max(0.0);
+    let mut content = content
+        .grow(1.0)
+        .shrink(1.0)
+        .min_height(0.0)
+        .align_self(crate::element::Align::Stretch)
+        .overflow(crate::element::Overflow::Scroll);
+    content.style.padding = [0.0, GUTTER + extra, GUTTER, GUTTER + extra];
+    let mut screen = crate::element::column()
+        .name(name)
+        .background([0; 4])
+        .border(([0; 4], 0.0))
+        .width(window.size.width)
+        .height(window.size.height)
+        .child(content);
+    screen.style.padding = [safe.top, safe.right, safe.bottom, safe.left];
+    // The flat layer's root puts a screen in its bottom right corner inside the dock's offsets,
+    // so the screen is anchored at the window's top left instead.
+    screen.anchor = Some(crate::element::Anchor::Point(
+        glam::Vec2::ZERO,
+        glam::Vec2::ZERO,
+    ));
+    screen
+}
+
+/// `button` as a phone's action: as wide as its column, `phone::ACTION_HEIGHT` tall, with
+/// larger type, as the web's phone dock draws its buttons (`.phone-opening .dock .button`).
+fn phone_action(mut button: crate::element::Element) -> crate::element::Element {
+    use crate::data::space::flat::phone::{ACTION_HEIGHT, ACTION_TEXT};
+    button.style.height = Some(ACTION_HEIGHT);
+    button.style.text.size = ACTION_TEXT;
+    button.style.min_width = None;
+    button.style.align_self = Some(crate::element::Align::Stretch);
+    button.style.shrink = 0.0;
+    button
+}

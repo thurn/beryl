@@ -305,7 +305,8 @@
     "frame_rate.lowest_hz",
     "verbs.lift.library.columns",
     "verbs.lift.hand.columns",
-    "layout.desktop.tray.put_back.deck_backs"
+    "layout.desktop.tray.put_back.deck_backs",
+    "flat.phone.opening.per_row"
   ],
   "card": {
     "width": 63,
@@ -726,6 +727,70 @@
     "sheet": {
       "max_width": 430,
       "preview_width": 144
+    },
+    "phone": {
+      "gutter": 16,
+      "column": 430,
+      "action_height": 48,
+      "action_gap": 8,
+      "action_text": 18,
+      "start": {
+        "corner": 56,
+        "gap": 8,
+        "agent_row": 56,
+        "agent_gap": 4,
+        "agent_padding_y": 8,
+        "agent_padding_x": 4,
+        "radio": 24,
+        "label": 13,
+        "agent_name": 16,
+        "about": 13,
+        "agents_least": 56,
+        "field": 44
+      },
+      "opening": {
+        "top": 88,
+        "coin": 64,
+        "coin_narrow": 56,
+        "narrow_below": 393,
+        "coin_line": 13,
+        "coin_gap": 8,
+        "title": 18,
+        "title_gap": 16,
+        "card_most": 90,
+        "card_most_narrow": 86,
+        "per_row": 4,
+        "gap": 8,
+        "slot_scale": 0.8,
+        "slots_gap": 16,
+        "slot_edge": 16,
+        "no_actions": 40
+      },
+      "game_over": {
+        "title": 36,
+        "reason": 16,
+        "reason_gap": 8,
+        "card": 160,
+        "card_narrow": 140,
+        "card_gap": 12,
+        "dock_width": 398
+      },
+      "bug": {
+        "tools_top": 8,
+        "tools_right": 8,
+        "hint_top": 14,
+        "hint_left": 12,
+        "hint": 13,
+        "padding_y": 12,
+        "padding_x": 16,
+        "radius": 12,
+        "gap": 8,
+        "title": 20,
+        "description_least": 76,
+        "description_most": 144,
+        "submit_width": 80
+      },
+      "list_row": 44
     },
     "gallery": {
       "width": 1380,

@@ -34,7 +34,9 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
 /// square `TARGET_POINTS` on a side (`PHONE_TARGET_POINTS` on the phone layout), or as much of it
 /// as a card turned edge-on has, inside it, because a hand is held partly past the bottom edge,
 /// as Arena's and the web interface's are. A card the pointer holds is not at rest, and goes
-/// where the pointer takes it.
+/// where the pointer takes it. An element a scrolling list cuts is judged by the part of it the
+/// list shows, since only that part can be seen or pressed: a row half scrolled past a list
+/// that ends inside the safe area is on screen.
 #[must_use]
 pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
     let side = target_side(context);
@@ -48,7 +50,7 @@ pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
     interactive(frame)
         .filter(|&index| {
             let element = &frame.resolved[index as usize];
-            let rect = bounds(element);
+            let rect = visible_bounds(element).unwrap_or_else(|| bounds(element));
             if element.state.has(StateBits::HELD) {
                 false
             } else if element.role == Role::Card {
@@ -83,8 +85,8 @@ fn target_side(context: &Context) -> f32 {
     }
 }
 
-/// No overlap: no two interactive elements of the flat layer intersect, unless one contains
-/// the other in the tree. Cards are exempt, because rows and hands overlap them on purpose.
+/// No overlap: no two interactive elements of the flat layer intersect where they are seen
+/// (each box cut to its clip), unless one contains the other in the tree. Cards are exempt, because rows and hands overlap them on purpose.
 #[must_use]
 pub fn overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
     let elements: Vec<u32> = interactive(frame)
@@ -99,10 +101,14 @@ pub fn overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
             if is_within(frame, first, second) || is_within(frame, second, first) {
                 continue;
             }
-            let (a, b) = (
-                bounds(&frame.resolved[first as usize]),
-                bounds(&frame.resolved[second as usize]),
-            );
+            // Only the parts a scrolling list shows can overlap: a row scrolled half under the
+            // list's edge is hidden past it.
+            let (Some(a), Some(b)) = (
+                visible_bounds(&frame.resolved[first as usize]),
+                visible_bounds(&frame.resolved[second as usize]),
+            ) else {
+                continue;
+            };
             if intersection(a, b).is_none() {
                 continue;
             }

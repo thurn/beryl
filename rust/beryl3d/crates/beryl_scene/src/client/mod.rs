@@ -530,7 +530,10 @@ impl Client {
             let glyphs = self.layer.glyphs_mut();
             (self.show.badges_mut()).rescale(window.scale, glyphs);
         }
-        if self.screen == Screen::Gallery {
+        // A new size builds a shown screen again, which places its shown objects too: a phone's
+        // screens span the window, which the keyboard shortens. Before anything is shown, as at
+        // the host's first surface, the first update or the agents build it.
+        if self.layer.showing() || self.screen == Screen::Gallery {
             self.show_screen();
         } else {
             self.place_shown();

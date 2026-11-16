@@ -60,8 +60,15 @@ pub fn gallery(input: &ScreenIn) -> Element {
     let inset = input.window.safe_area;
     let width = (input.window.size.width - inset.left - inset.right).max(0.0);
     let height = (input.window.size.height - inset.top - inset.bottom).max(0.0);
+    // On a phone the samples stand in one column the phone's gutter in from the safe area's
+    // sides, as the other portrait screens do; the sample rows wrap to that width.
+    let edge = if super::phone(input) {
+        crate::data::space::flat::phone::GUTTER
+    } else {
+        space::L
+    };
     let content = column()
-        .width((width - 2.0 * space::L).clamp(0.0, metrics::WIDTH))
+        .width((width - 2.0 * edge).clamp(0.0, metrics::WIDTH))
         .shrink(0.0)
         .align_items(Align::Center)
         .gap(space::L)
@@ -99,7 +106,7 @@ pub fn gallery(input: &ScreenIn) -> Element {
         .background(color::TABLE)
         .overflow(Overflow::Scroll)
         .align_items(Align::Center)
-        .padding(space::L)
+        .padding(edge)
         .child(content)
         .shortcut(
             "Escape",

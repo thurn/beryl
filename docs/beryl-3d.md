@@ -1803,7 +1803,20 @@ window.
 - **Two layouts.** The desktop layout and the phone layout are separate screen
   functions sharing their widgets, as the web interface's two layouts share its
   drawing code. The phone layout is used when the window's shorter side is under
-  500 points, and the desktop layout otherwise.
+  500 points, and the desktop layout otherwise. One selector decides it,
+  `agent::Layout::for_size`, which the screens, the table and the interface
+  checks all ask. Each screen's public function calls its portrait alternate
+  itself, so the game screen and the others change apart.
+- **Portrait screens.** The start screen and the testing screen are one column
+  over the safe area, the gutter in from its sides and foot (`flat.phone` in
+  `data/beryl3d/space.json`): the opponents' list takes the room the rest
+  leaves, and the whole column scrolls when even that is too little, as while
+  the system keyboard is up, so every action stays in reach. The opening lays
+  the hand out in rows of four, as large as fit between the coin and the dock.
+  The result's button spans a dock at the safe area's foot. The bug report's
+  description is a sheet along the window's foot. The screens lay a window the
+  keyboard shortens out as any shorter window, and every resize builds the
+  screen again for the new size.
 - **Safe area.** The host reports the insets for notches, rounded corners and
   system bars. The root element pads itself by them, and a check holds every
   interactive element inside.

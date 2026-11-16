@@ -32,7 +32,7 @@ pub enum Layout {
 
 impl Layout {
     /// The shorter side, in logical points, below which a window uses the phone layout.
-    pub const PHONE_BELOW_POINTS: f32 = 500.0;
+    pub const PHONE_BELOW_POINTS: f32 = crate::data::space::flat::PHONE_UNDER;
 
     /// The layout for a window of this logical size: `Phone` when its shorter side is under
     /// `PHONE_BELOW_POINTS`, so a phone held sideways is still a phone, and `Desktop` at or above

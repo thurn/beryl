@@ -14,6 +14,9 @@ use beryl_protocol::protocol::{Culprit, LossReason, OutcomeView, Side, Stall, St
 use glam::Vec2;
 
 use super::{Screen, ScreenIn};
+use crate::data::space::flat::phone::game_over as metrics;
+use crate::data::space::flat::phone::opening::NARROW_BELOW;
+use crate::data::space::flat::phone::{ACTION_GAP, GUTTER};
 use crate::element::{Align, Anchor, Element, Justify, Press, Shown, column, row, text};
 use crate::faces::FaceList;
 use crate::frame::Role;
@@ -82,8 +85,28 @@ fn shown<'a>(input: &ScreenIn<'a>) -> Option<Ended<'a>> {
 #[must_use]
 pub fn game_over(input: &ScreenIn) -> Option<Element> {
     let Ended(outcome) = shown(input)?;
+    let phone = super::phone(input);
+    // The phone's result is smaller (`.phone-game-over`).
+    let (title_style, reason_style, reason_gap) = if phone {
+        (
+            TypeStyle {
+                size: metrics::TITLE,
+                ..TITLE
+            },
+            TypeStyle {
+                size: metrics::REASON,
+                ..REASON
+            },
+            metrics::REASON_GAP,
+        )
+    } else {
+        (TITLE, REASON, size::GAME_OVER_REASON_GAP)
+    };
     let title = result_title(outcome);
-    let mut heading = text(title).style(TITLE).color(color::GOLD).passes(true);
+    let mut heading = text(title)
+        .style(title_style)
+        .color(color::GOLD)
+        .passes(true);
     heading.text = Some(title.to_uppercase());
     let culprit = outcome
         .and_then(|outcome| match outcome {
@@ -91,7 +114,7 @@ pub fn game_over(input: &ScreenIn) -> Option<Element> {
             _ => None,
         })
         .filter(|_| outcome.and_then(reason).is_some())
-        .and_then(|culprit| culprit_card(culprit, input.faces?));
+        .and_then(|culprit| culprit_card(culprit, input.faces?, culprit_size(input)));
     let mut screen = column()
         .name("game over")
         .passes(true)
@@ -99,8 +122,11 @@ pub fn game_over(input: &ScreenIn) -> Option<Element> {
         .justify_content(Justify::Center)
         .child(heading)
         .children(outcome.and_then(reason).map(|why| {
-            let mut line = text(why).style(REASON).color(color::TEXT).passes(true);
-            line.style.margin = [size::GAME_OVER_REASON_GAP, 0.0, 0.0, 0.0];
+            let mut line = text(why)
+                .style(reason_style)
+                .color(color::TEXT)
+                .passes(true);
+            line.style.margin = [reason_gap, 0.0, 0.0, 0.0];
             line
         }))
         .children(culprit);
@@ -115,6 +141,9 @@ pub fn game_over(input: &ScreenIn) -> Option<Element> {
 #[must_use]
 pub fn buttons(input: &ScreenIn) -> Option<Element> {
     shown(input)?;
+    if super::phone(input) {
+        return Some(phone_dock(input));
+    }
     let at = Vec2::new(
         input.window.size.width / 2.0,
         input.window.size.height - BUTTONS_BOTTOM,
@@ -129,9 +158,53 @@ pub fn buttons(input: &ScreenIn) -> Option<Element> {
 /// How far the buttons' bottom edge stands above the window's: the root's dock offset.
 const BUTTONS_BOTTOM: f32 = size::GAME_OVER_BUTTONS_BOTTOM;
 
-/// The middle of the window.
+/// The phone's dock (`.phone-game-over > .dock`): as wide as the window less its gutters, up to
+/// `game_over.dock_width`, standing the gutter above the safe area's foot, with its button as
+/// wide as the dock.
+fn phone_dock(input: &ScreenIn) -> Element {
+    let window = input.window;
+    let safe = window.safe_area;
+    let width =
+        (window.size.width - safe.left - safe.right - 2.0 * GUTTER).min(metrics::DOCK_WIDTH);
+    let at = Vec2::new(
+        safe.left + (window.size.width - safe.left - safe.right) / 2.0,
+        window.size.height - safe.bottom - GUTTER,
+    );
+    let mut dock = column()
+        .name("game over buttons")
+        .width(width)
+        .gap(ACTION_GAP)
+        .child(super::phone_action(
+            primary("New Game").on_press(Press::Open(Screen::Start)),
+        ));
+    dock.anchor = Some(Anchor::Point(at, Vec2::new(0.5, 1.0)));
+    dock
+}
+
+/// The middle of the window or, on the phone, of its safe area.
 fn middle(input: &ScreenIn) -> Vec2 {
-    Vec2::new(input.window.size.width, input.window.size.height) / 2.0
+    let window = input.window;
+    if super::phone(input) {
+        let safe = window.safe_area;
+        Vec2::new(
+            safe.left + (window.size.width - safe.left - safe.right) / 2.0,
+            safe.top + (window.size.height - safe.top - safe.bottom) / 2.0,
+        )
+    } else {
+        Vec2::new(window.size.width, window.size.height) / 2.0
+    }
+}
+
+/// The width of the card that ended the game and the gap above it: the web's 230 on the
+/// desktop, and 160 on a phone (140 on one narrower than 393 points).
+fn culprit_size(input: &ScreenIn) -> (f32, f32) {
+    if !super::phone(input) {
+        (CULPRIT_WIDTH, size::GAME_OVER_CARD_GAP)
+    } else if input.window.size.width < NARROW_BELOW {
+        (metrics::CARD_NARROW, metrics::CARD_GAP)
+    } else {
+        (metrics::CARD, metrics::CARD_GAP)
+    }
 }
 
 /// The backdrop over the table (`screens::backdrop`), which the pointer goes through so that
@@ -144,7 +217,7 @@ pub fn scrim(input: &ScreenIn) -> Option<Element> {
 
 /// The card that ended the game, drawn flat and whole, or as the plate of the ability that did
 /// it when its card's text has one for it. None until the card's face is known.
-fn culprit_card(culprit: &Culprit, faces: &FaceList) -> Option<Element> {
+fn culprit_card(culprit: &Culprit, faces: &FaceList, (width, gap): (f32, f32)) -> Option<Element> {
     let plate = culprit.ability.and_then(|ability| {
         use beryl_protocol::protocol::AbilityClass;
         let triggered = match ability.kind {
@@ -162,8 +235,8 @@ fn culprit_card(culprit: &Culprit, faces: &FaceList) -> Option<Element> {
         }
         .name(&culprit.name)
         .passes(true)
-        .width(CULPRIT_WIDTH)
-        .height(CULPRIT_WIDTH * CARD_HEIGHT / CARD_WIDTH)
-        .margin([size::GAME_OVER_CARD_GAP, 0.0, 0.0, 0.0]),
+        .width(width)
+        .height(width * CARD_HEIGHT / CARD_WIDTH)
+        .margin([gap, 0.0, 0.0, 0.0]),
     )
 }

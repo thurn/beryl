@@ -139,12 +139,16 @@ pub fn in_progress(view: Option<&beryl_protocol::PlayerView>) -> bool {
 /// recordings (`ScreenIn::recordings`), the key T opens the testing screen.
 #[must_use]
 pub fn start(input: &ScreenIn) -> Element {
+    if super::phone(input) {
+        return start_phone(input);
+    }
     let form = input.start;
-    let going_on = in_progress(input.view);
-    let mut seed_state = input.fields.get(SEED);
-    "random".clone_into(&mut seed_state.placeholder);
-    let seed_ok = seed(&seed_state.text).is_ok();
-    let startable = form.agent.is_some() && seed_ok;
+    let Chosen {
+        going_on,
+        seed_state,
+        seed_ok,
+        startable,
+    } = Chosen::of(input);
 
     let heading = [
         text("New Game").style(TITLE).color(color::GOLD),
@@ -155,7 +159,7 @@ pub fn start(input: &ScreenIn) -> Element {
     ];
     let rows = input.agents.iter().enumerate().map(|(at, agent)| {
         let at = u16::try_from(at).unwrap_or(u16::MAX);
-        agent_row(agent, at, form.agent == Some(at))
+        agent_row(agent, at, form.agent == Some(at), false)
     });
     // The host offers a dozen agents, more than a short window has room for, so the rows
     // scroll inside what the rest of the panel leaves.
@@ -203,12 +207,6 @@ pub fn start(input: &ScreenIn) -> Element {
     let mut panel = panel;
     panel.style.padding = PANEL_PADDING;
 
-    // Enter does what the primary button does: back to the game in progress, else a new one.
-    let enter = if going_on {
-        Press::Open(Screen::Game)
-    } else {
-        Press::Start
-    };
     // The layer draws a screen's top element as a panel unless its style says otherwise; this
     // one fills the window and only holds the panel and the corner, so it is clear.
     let screen = column()
@@ -220,16 +218,137 @@ pub fn start(input: &ScreenIn) -> Element {
         .align_items(Align::Center)
         .justify_content(Justify::Center)
         .child(panel)
-        .child(corner())
+        .child(corner());
+    with_keys(screen, input, going_on)
+}
+
+/// What the screen's fields and choices allow, which both layouts read the same way.
+struct Chosen {
+    /// Whether an engine game goes on, which a new game concedes first.
+    going_on: bool,
+    /// The seed field, with its placeholder.
+    seed_state: FieldState,
+    /// Whether the seed field holds a seed or nothing.
+    seed_ok: bool,
+    /// Whether the start button can be pressed: an opponent is chosen and the seed is good.
+    startable: bool,
+}
+
+impl Chosen {
+    fn of(input: &ScreenIn) -> Self {
+        let going_on = in_progress(input.view);
+        let mut seed_state = input.fields.get(SEED);
+        "random".clone_into(&mut seed_state.placeholder);
+        let seed_ok = seed(&seed_state.text).is_ok();
+        let startable = input.start.agent.is_some() && seed_ok;
+        Self {
+            going_on,
+            seed_state,
+            seed_ok,
+            startable,
+        }
+    }
+}
+
+/// `screen` with the start screen's keys: Enter does what the primary button does (back to the
+/// game in progress, else a new one), G opens the gallery and, in a tools build of the app,
+/// which lists the recordings, T opens the testing screen.
+fn with_keys(screen: Element, input: &ScreenIn, going_on: bool) -> Element {
+    let enter = if going_on {
+        Press::Open(Screen::Game)
+    } else {
+        Press::Start
+    };
+    let screen = screen
         .shortcut("Enter", enter)
         .shortcut("G", Press::Open(Screen::Gallery));
-    // In a tools build of the app, which lists the recordings, the key T opens the testing
-    // screen.
     if input.recordings.is_empty() {
         screen
     } else {
         screen.shortcut("T", Press::Open(Screen::Testing))
     }
+}
+
+/// The start screen on a phone, as the web's `.phone-start-screen` lays it out: one column
+/// over the safe area with the sound button at its top, the opponents in a list that scrolls
+/// and takes the room the rest leaves, then the seed, the fair-deal box, the start buttons one
+/// above the other, the solo table and the export of bug reports at its foot. There is no
+/// title, as on the web's phone. When the window is too short for even one opponent's row (the
+/// system keyboard is up), the whole column scrolls instead, so every action stays in reach.
+fn start_phone(input: &ScreenIn) -> Element {
+    use crate::data::space::flat::phone::start as metrics;
+    let form = input.start;
+    let Chosen {
+        going_on,
+        seed_state,
+        seed_ok,
+        startable,
+    } = Chosen::of(input);
+    let target = crate::data::audit::PHONE_TARGET_POINTS;
+    let sound = icon_button(widgets::icons::SPEAKER, "Sound")
+        .width(target)
+        .height(target)
+        .radius(target / 2.0)
+        .on_press(Press::Sheet(Some(Sheet::Settings)));
+    let corner = row()
+        .name("sound corner")
+        .height(metrics::CORNER)
+        .shrink(0.0)
+        .align_items(Align::Center)
+        .justify_content(Justify::End)
+        .child(sound);
+    let legend = text("OPPONENT")
+        .style(TypeStyle {
+            size: metrics::LABEL,
+            ..LABEL
+        })
+        .color(color::TEXT_DIM)
+        .shrink(0.0);
+    let rows = input.agents.iter().enumerate().map(|(at, agent)| {
+        let at = u16::try_from(at).unwrap_or(u16::MAX);
+        agent_row(agent, at, form.agent == Some(at), true)
+    });
+    let agents = list("Opponent", rows)
+        .gap(metrics::AGENT_GAP)
+        .shrink(1.0)
+        .min_height(metrics::AGENTS_LEAST);
+    let mut seed_row = seed_row(&seed_state, seed_ok);
+    seed_row.style.height = Some(metrics::FIELD);
+    seed_row.style.shrink = 0.0;
+    if let Some(field) = seed_row.children.last_mut() {
+        field.style.width = None;
+        field.style.grow = 1.0;
+        field.style.align_self = Some(Align::Stretch);
+    }
+    let fair = fair_box(form.fair).min_height(metrics::FIELD).shrink(0.0);
+    let (start, back) = start_buttons(going_on, form.confirming, startable);
+    let solo = button("Solo table").on_press(Press::Lobby(LobbyPress::Solo));
+    let export = button("Export Bug Reports").on_press(Press::ExportBugs);
+    let content = column()
+        .name("start column")
+        .gap(metrics::GAP)
+        .child(corner)
+        .child(legend)
+        .child(agents)
+        // The rest stands at the foot of the column, as the web's `margin-top: auto` puts it.
+        .child(row().name("space").grow(1.0))
+        .child(seed_row)
+        .child(fair)
+        .child(super::phone_action(start))
+        .children(back.map(super::phone_action))
+        .child(super::phone_action(solo))
+        .children(form.solo_failed.then(|| {
+            text("Could not open the table.")
+                .style(BODY)
+                .color(color::EMBER)
+                .shrink(0.0)
+        }))
+        .child(super::phone_action(export));
+    with_keys(
+        super::phone_screen("start", input, content),
+        input,
+        going_on,
+    )
 }
 
 /// The seed's label and text field, holding `state`, drawn in ember unless `ok`.
@@ -258,6 +377,19 @@ fn seed_row(state: &FieldState, ok: bool) -> Element {
 /// before it (`.start-buttons`). The start button's words say what it will do: start, ask to
 /// confirm a new game, or once `confirming`, concede and start.
 fn buttons(going_on: bool, confirming: bool, startable: bool) -> Element {
+    let (start, back) = start_buttons(going_on, confirming, startable);
+    // With a game in progress, going back to it comes first.
+    row()
+        .name("buttons")
+        .gap(size::START_BUTTONS_GAP)
+        .children(back)
+        .child(start)
+}
+
+/// The start button and, with a game `going_on`, the button back to it. The start button's
+/// words say what it will do: start, ask to confirm a new game, or once `confirming`, concede
+/// and start. Going back to a game in progress is the primary button then.
+fn start_buttons(going_on: bool, confirming: bool, startable: bool) -> (Element, Option<Element>) {
     let label = if !going_on {
         "Start"
     } else if confirming {
@@ -265,17 +397,13 @@ fn buttons(going_on: bool, confirming: bool, startable: bool) -> Element {
     } else {
         "New Game"
     };
-    // With a game in progress, going back to it comes first.
     let start = if going_on {
         button(label)
     } else {
         primary(label)
     };
-    row()
-        .name("buttons")
-        .gap(size::START_BUTTONS_GAP)
-        .children(going_on.then(|| primary("Return to Game").on_press(Press::Open(Screen::Game))))
-        .child(start.enabled(startable).on_press(Press::Start))
+    let back = going_on.then(|| primary("Return to Game").on_press(Press::Open(Screen::Game)));
+    (start.enabled(startable).on_press(Press::Start), back)
 }
 
 /// The sound button in the window's corner (`SoundCorner`), which opens the settings.
@@ -292,23 +420,51 @@ fn corner() -> Element {
 /// The row that offers `agent`, the `at`th the host listed, as one of a group of radio
 /// buttons (`.start-agent`): a dot, the agent's title, a note if it cheats, and what it does
 /// under the title. The chosen row is tinted gold.
-fn agent_row(agent: &AgentView, at: u16, chosen: bool) -> Element {
+fn agent_row(agent: &AgentView, at: u16, chosen: bool, phone: bool) -> Element {
+    use crate::data::space::flat::phone::start as metrics;
+    // The phone's rows are taller, with a larger dot and smaller type (`.phone-start-screen
+    // .start-agent`), so each row is a touch target of its own.
+    let radio = if phone { metrics::RADIO } else { RADIO };
+    let (agent_name, about, cheating_note) = if phone {
+        (
+            TypeStyle {
+                size: metrics::AGENT_NAME,
+                ..AGENT_NAME
+            },
+            TypeStyle {
+                size: metrics::ABOUT,
+                ..ABOUT
+            },
+            TypeStyle {
+                size: metrics::ABOUT,
+                ..CHEATING_NOTE
+            },
+        )
+    } else {
+        (AGENT_NAME, ABOUT, CHEATING_NOTE)
+    };
     let mut dot = row()
         .name("radio")
-        .width(RADIO)
-        .height(RADIO)
-        .radius(RADIO / 2.0)
+        .width(radio)
+        .height(radio)
+        .radius(radio / 2.0)
+        .shrink(0.0)
         .border((color::GOLD, size::BORDER))
         .align_items(Align::Center)
         .justify_content(Justify::Center)
-        .margin([size::START_RADIO_DROP, 0.0, 0.0, 0.0]);
+        .margin([
+            if phone { 0.0 } else { size::START_RADIO_DROP },
+            0.0,
+            0.0,
+            0.0,
+        ]);
     if chosen {
         dot = dot.child(
             row()
                 .name("dot")
-                .width(RADIO / 2.0)
-                .height(RADIO / 2.0)
-                .radius(RADIO * ratio::QUARTER)
+                .width(radio / 2.0)
+                .height(radio / 2.0)
+                .radius(radio * ratio::QUARTER)
                 .background(color::GOLD),
         );
     }
@@ -317,10 +473,10 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool) -> Element {
         .name("title")
         .gap(space::M)
         .align_items(Align::End)
-        .child(text(&agent.title).style(AGENT_NAME).color(color::TYPE))
+        .child(text(&agent.title).style(agent_name).color(color::TYPE))
         .children(cheats.then(|| {
             text("cheating: sees your hand")
-                .style(CHEATING_NOTE)
+                .style(cheating_note)
                 .color(color::EMBER)
         }));
     let words = column()
@@ -328,7 +484,7 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool) -> Element {
         .grow(1.0)
         .shrink(1.0)
         .child(title)
-        .child(text(&agent.description).style(ABOUT).color(color::TEXT_DIM));
+        .child(text(&agent.description).style(about).color(color::TEXT_DIM));
     let mut element = Element::new(Role::Toggle)
         .name(&agent.title)
         .selected(chosen)
@@ -338,12 +494,27 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool) -> Element {
         .on_press(Press::Agent(at))
         .child(dot)
         .child(words);
-    element.style.padding = [
-        size::START_AGENT_PADDING_Y,
-        size::START_AGENT_PADDING_X,
-        size::START_AGENT_PADDING_Y,
-        size::START_AGENT_PADDING_X,
-    ];
+    element.style.padding = if phone {
+        [
+            metrics::AGENT_PADDING_Y,
+            metrics::AGENT_PADDING_X,
+            metrics::AGENT_PADDING_Y,
+            metrics::AGENT_PADDING_X,
+        ]
+    } else {
+        [
+            size::START_AGENT_PADDING_Y,
+            size::START_AGENT_PADDING_X,
+            size::START_AGENT_PADDING_Y,
+            size::START_AGENT_PADDING_X,
+        ]
+    };
+    if phone {
+        element = element
+            .min_height(metrics::AGENT_ROW)
+            .align_items(Align::Center)
+            .shrink(0.0);
+    }
     if chosen {
         element = element
             .background(color::MENU_ACTIVE)

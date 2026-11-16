@@ -194,6 +194,12 @@ impl Layer {
         }
     }
 
+    /// Whether a screen is shown: false until the first `show` of one, and after `show(None)`.
+    #[must_use]
+    pub fn showing(&self) -> bool {
+        self.screen.is_some()
+    }
+
     /// Shows `screen`, or nothing, matching it against the screen shown before.
     pub fn show(&mut self, screen: Option<Element>) {
         self.animating = true;

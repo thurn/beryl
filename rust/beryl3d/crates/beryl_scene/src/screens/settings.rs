@@ -5,6 +5,7 @@
 //! `ui/src/screens/styles/settings.css`).
 
 use super::{Screen, ScreenIn, Sheet};
+use crate::data::space::flat::phone::GUTTER;
 use crate::element::{Align, Element, Justify, Overflow, Position, Press, column, row, text};
 use crate::settings::Setting;
 use crate::tokens::{color, size, space, type_style};
@@ -59,10 +60,21 @@ pub fn settings(input: &ScreenIn) -> Element {
         .child(level("Effects", Setting::Effects(settings.effects)));
     let full_control = toggle(icons::FULL_CONTROL, "Full control", settings.full_control)
         .on_press(Press::Setting(Setting::FullControl(!settings.full_control)));
+    let window = input.window;
+    let safe = window.safe_area;
+    // On a phone the panel keeps inside the safe area, the gutter in from its sides, and is no
+    // wider than the window leaves.
+    let (width, margin) = if super::phone(input) {
+        let across = window.size.width - safe.left - safe.right - 2.0 * GUTTER;
+        (WIDTH.min(across), GUTTER)
+    } else {
+        (WIDTH, MARGIN)
+    };
+    let tall = window.size.height - safe.top - safe.bottom - 2.0 * margin;
     let mut panel = column()
         .name("settings panel")
-        .width(WIDTH)
-        .max_height((input.window.size.height - 2.0 * MARGIN).max(0.0))
+        .width(width)
+        .max_height(tall.max(0.0))
         .overflow(Overflow::Scroll)
         .padding(space::L)
         .gap(space::L)
@@ -104,13 +116,15 @@ pub fn settings(input: &ScreenIn) -> Element {
         panel = panel.child(concede.on_press(Press::Concede));
     }
     panel = panel.child(credits());
-    column()
+    let mut sheet = column()
         .name("settings")
         .position(Position::Absolute)
         .inset([Some(0.0); 4])
         .align_items(Align::Center)
         .justify_content(Justify::Center)
-        .child(panel)
+        .child(panel);
+    sheet.style.padding = [safe.top, safe.right, safe.bottom, safe.left];
+    sheet
 }
 
 /// Whether there is a game to concede: the game screen, until the game is over.
