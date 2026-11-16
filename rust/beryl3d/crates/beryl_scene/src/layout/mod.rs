@@ -269,7 +269,9 @@ impl Layer {
     /// The first value `want` gives for an element at `point`, asking the innermost first:
     /// floats, the last drawn first, then the screen while it is `open`. An element is at
     /// `point` where it is drawn: moved by its own transition and by the scroll of the elements
-    /// it is in, and inside the box of every element it is in.
+    /// it is in, and inside the box of every element it is in that clips or scrolls. As in CSS,
+    /// a child that overflows a box that does neither is drawn outside it, and takes presses
+    /// there; `write` marks the same elements interactive.
     fn hit<T>(
         &self,
         point: glam::Vec2,
@@ -277,9 +279,9 @@ impl Layer {
         want: impl Fn(&Node, glam::Vec2) -> Option<T>,
     ) -> Option<T> {
         /// The value at `point` in `node`'s tree, whose top left corner stands at `origin`.
-        /// `reach` says whether `point` is inside every element `node` is in: an element
-        /// outside one of them is not at `point`, but an anchored element under it, such as a
-        /// submenu beside its menu, stands in a tree of its own and still may be.
+        /// `reach` says whether `point` is inside every clipping element `node` is in: an
+        /// element outside one of them is not at `point`, but an anchored element under it,
+        /// such as a submenu beside its menu, stands in a tree of its own and still may be.
         fn find<T>(
             node: &Node,
             point: glam::Vec2,
@@ -292,11 +294,13 @@ impl Layer {
             }
             let here = reach && contains(node.rect, point - origin - node.offset());
             let inside = origin - node.scroll;
+            let clips = node.element.style.overflow != element::Overflow::Visible;
+            let reach_inside = if clips { here } else { reach };
             (node.children.iter().rev())
                 .find_map(|child| match child.element.anchor {
                     // An anchored child's tree is laid out from (0, 0), and stands at its corner.
                     Some(_) => find(child, point, child.corner()?, true, want),
-                    None => find(child, point, inside, here, want),
+                    None => find(child, point, inside, reach_inside, want),
                 })
                 .or_else(|| here.then(|| want(node, origin)).flatten())
         }
@@ -427,6 +431,9 @@ impl Layer {
             .expect("the node is in the tree");
         let corner = origin + glam::Vec2::new(layout.location.x, layout.location.y);
         node.scroll_room = glam::Vec2::new(layout.scroll_width(), layout.scroll_height());
+        // Content that shrank, or a box that grew, leaves less to scroll: an offset past the new
+        // end would show a gap after the last row.
+        node.scroll = node.scroll.clamp(glam::Vec2::ZERO, node.most_scroll());
         // A kept node of the screen that its layout moves on the window moves there. A node
         // that stays where it was stays still, whatever its parent does, and one whose size
         // changes is drawn at its new place at once, since its size does not transition.

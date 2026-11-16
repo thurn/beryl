@@ -350,6 +350,13 @@
         "size": 12.5,
         "line_height": 1.25,
         "note": "A tooltip's words: `.tip` in `ui/src/design/components/tips.css`, 12.5 points at weight 600, line height 1.25."
+      },
+      "FIELD": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 15,
+        "line_height": 1.45,
+        "note": "A text field's words: `.bug-text` in `ui/src/screens/styles/bug-report.css`, 15 points at line height 1.45."
       }
     },
     "size": {
@@ -472,6 +479,26 @@
       "TIP_PADDING_X": {
         "value": 9,
         "note": "The padding either side of a tooltip's words."
+      },
+      "ICON_BUTTON_RIM": {
+        "value": 1,
+        "note": "The width of an icon button's rim: the 1px inset ring of `.icon-button`'s `box-shadow`."
+      },
+      "FIELD_PADDING_Y": {
+        "value": 10,
+        "note": "A text field's padding above and below its text: `.bug-text`'s `padding: 10px 12px`."
+      },
+      "FIELD_PADDING_X": {
+        "value": 12,
+        "note": "A text field's padding on either side of its text: `.bug-text`'s `padding: 10px 12px`."
+      },
+      "FIELD_BORDER": {
+        "value": 1,
+        "note": "The width of a text field's border: `.bug-text`'s `border: 1px solid var(--metal)`."
+      },
+      "FIELD_RADIUS": {
+        "value": 6,
+        "note": "The radius of a text field's corners: `.bug-text`'s `border-radius`."
       }
     },
     "color": {

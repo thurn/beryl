@@ -22,7 +22,7 @@ pub(super) fn round(role: Role, icon: IconId, name: &str) -> Element {
         .width(size::ICON_BUTTON)
         .height(size::ICON_BUTTON)
         .background(color::ICON_BUTTON)
-        .border((color::ICON_BUTTON_RIM, 1.0))
+        .border((color::ICON_BUTTON_RIM, size::ICON_BUTTON_RIM))
         .radius(size::ICON_BUTTON / 2.0);
     element.shows = Some(Shown::Icon(icon, icon_side()));
     element

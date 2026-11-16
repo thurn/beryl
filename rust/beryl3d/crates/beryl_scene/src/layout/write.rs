@@ -189,7 +189,11 @@ impl Layer {
                 let Some(corner) = child.corner() else {
                     continue;
                 };
+                // An anchored child stands in a tree of its own, outside its parent's box, so
+                // the clip of a list it is in does not cut it off, as `Layer::hit` lets it take
+                // presses there.
                 look.point = corner;
+                look.clip = None;
             }
             self.write_node(child, index, false, look, builder, camera);
         }

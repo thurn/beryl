@@ -409,3 +409,72 @@ fn cmd_b_opens_the_bug_report_and_ctrl_b_does_off_the_mac() {
     );
     assert_eq!(Chord::parse("Hyper+X", true), None);
 }
+
+/// A scrolling column of `count` rows named "Row 0" on, 200 points tall.
+fn rows_box(count: usize) -> Element {
+    let rows = (0..count).map(|index| text(&format!("Row {index}")).on_press(Press::Concede));
+    column()
+        .name("box")
+        .overflow(Overflow::Scroll)
+        .height(200.0)
+        .children(rows)
+}
+
+#[test]
+fn a_list_that_loses_rows_scrolls_back_to_its_new_end() {
+    let mut layer = layer();
+    layer.show(Some(rows_box(30)));
+    let frame = write(&mut layer);
+    let [x, y, ..] = find(&frame, Role::Region, "box").1;
+    let scroller = (layer.scroller_at(Vec2::new(x + 5.0, y + 5.0), true)).expect("the box scrolls");
+    layer.scroll(scroller, Vec2::new(0.0, 10_000.0));
+
+    // Ten rows still pass the box, by less than the thirty did: the last row now ends at the
+    // box's bottom, with no gap after it.
+    layer.show(Some(rows_box(10)));
+    let frame = write(&mut layer);
+    let last = find(&frame, Role::Text, "Row 9").1;
+    assert!(
+        close(last[1] + last[3], y + 200.0),
+        "{last:?} in a box at {y}"
+    );
+    // With every row inside the box, nothing is scrolled off its top.
+    layer.show(Some(rows_box(2)));
+    let frame = write(&mut layer);
+    assert!(close(find(&frame, Role::Text, "Row 0").1[1], y));
+}
+
+#[test]
+fn an_anchored_element_in_a_scrolling_list_is_drawn_and_pressed_outside_it() {
+    let mut layer = layer();
+    let mut beside = text("Beside").on_press(Press::Concede);
+    beside.anchor = Some(Anchor::Point(Vec2::new(900.0, 100.0), Vec2::ZERO));
+    layer.show(Some(rows_box(30).child(beside)));
+    let frame = write(&mut layer);
+    let element = &frame.resolved[find_index(&frame, "Beside")];
+    assert!(element.clip.is_none(), "{:?}", element.clip);
+    assert!(element.interactive);
+    let (id, ..) = layer
+        .press_at(Vec2::new(905.0, 105.0), true)
+        .expect("the anchored element takes the press");
+    assert_eq!(id, element.id);
+}
+
+#[test]
+fn a_child_overflowing_a_box_that_does_not_clip_takes_presses_where_it_is_drawn() {
+    let mut layer = layer();
+    layer.show(Some(
+        region("narrow").width(20.0).height(20.0).child(
+            text("Wide")
+                .on_press(Press::Concede)
+                .margin([0.0, 0.0, 0.0, 60.0])
+                .shrink(0.0),
+        ),
+    ));
+    let frame = write(&mut layer);
+    let (id, [x, y, width, height]) = find(&frame, Role::Text, "Wide");
+    assert!(frame.resolved[find_index(&frame, "Wide")].interactive);
+    let centre = Vec2::new(x + width / 2.0, y + height / 2.0);
+    let (pressed, ..) = layer.press_at(centre, true).expect("the press reaches it");
+    assert_eq!(pressed, id);
+}

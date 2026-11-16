@@ -67,12 +67,13 @@ pub fn field(name: &str, state: &FieldState) -> Element {
     if empty {
         element.style.color = Some(color::TEXT_FAINT);
     }
-    element.style.text = type_style::BODY;
-    element.style.padding = [10.0, 12.0, 10.0, 12.0];
-    element.style.min_height = Some(type_style::BODY.size * type_style::BODY.line_height);
+    element.style.text = type_style::FIELD;
+    let (y, x) = (size::FIELD_PADDING_Y, size::FIELD_PADDING_X);
+    element.style.padding = [y, x, y, x];
+    element.style.min_height = Some(type_style::FIELD.size * type_style::FIELD.line_height);
     element.style.background = Some(color::SURFACE_SUNK);
-    element.style.border = Some((color::METAL, size::BORDER));
-    element.style.radius = 6.0;
+    element.style.border = Some((color::METAL, size::FIELD_BORDER));
+    element.style.radius = size::FIELD_RADIUS;
     element.field = Some(Box::new(state.clone()));
     element
 }
