@@ -1,5 +1,5 @@
-use beryl_session::protocol::{CardHandling, Side, TablePhase, ZoneName};
-use beryl_session::script::{Act, Fact, Notice, Script, Span, Verb};
+use beryl_protocol::protocol::{CardHandling, Side, TablePhase, ZoneName};
+use beryl_protocol::script::{Act, Fact, Notice, Script, Span, Verb};
 use beryl_table::action::{Destination, Portion, Position, SeenObject, Target};
 use beryl_table::state::{ObjectId, Phase, Zone};
 use beryl_table::{Action, Seat, Table};

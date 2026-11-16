@@ -5,7 +5,7 @@ use std::hash::{BuildHasher, RandomState};
 use std::io::{self, BufRead, BufReader, Seek, Write};
 use std::path::{Path, PathBuf};
 
-use beryl_session::ipc::SavedTable;
+use beryl_protocol::ipc::SavedTable;
 use beryl_table::save::{self, SaveError};
 use beryl_table::{Chance, Entry, Log, Table};
 use serde::{Deserialize, Serialize};

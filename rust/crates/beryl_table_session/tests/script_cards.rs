@@ -1,5 +1,5 @@
-use beryl_session::protocol::ZoneName;
-use beryl_session::script::{Act, Fact, Table as Stage, Tally, Verb, replay};
+use beryl_protocol::protocol::ZoneName;
+use beryl_protocol::script::{Act, Fact, Table as Stage, Tally, Verb, replay};
 use beryl_table::action::{Adjustment, Destination, Position, SeenObject, Selection, SortBy};
 use beryl_table::state::{Face, ObjectId, Row, Zone};
 use beryl_table::{Action, Table};

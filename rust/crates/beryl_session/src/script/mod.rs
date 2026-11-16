@@ -4,7 +4,6 @@
 
 mod attack;
 mod build;
-mod check;
 mod follow;
 mod hear;
 mod mana;
@@ -18,6 +17,5 @@ pub use beryl_protocol::script::*;
 #[cfg(test)]
 pub(crate) use build::PLANTED;
 pub use build::Screen;
-pub use check::{Open, carried};
 pub use follow::Follow;
 pub use hear::{Cause, Copied, Heard, Move, Names, Said};

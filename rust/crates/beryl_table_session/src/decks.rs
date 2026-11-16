@@ -4,11 +4,11 @@ use std::io::ErrorKind;
 use std::path::Path;
 
 use beryl_card_store::{STORE, facts};
-use beryl_session::ipc::decks::{
+use beryl_protocol::ipc::decks::{
     CardSearchHit, CardSearchRequest, CardTokenLink, CardTokensRequest, DeckDeleteRequest,
     DeckImportReply, DeckImportRequest, DeckOpenReply, SavedDeck,
 };
-use beryl_session::{SessionError, card_records};
+use beryl_protocol::{SessionError, card_records};
 pub use beryl_table::deck::Decks;
 use beryl_table::deck::{self, Deck, DeckError};
 

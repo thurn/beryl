@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 #[allow(dead_code, reason = "each test uses part of the generator")]
 #[path = "../../beryl_table/src/testing.rs"]
 mod testing;
-use beryl_session::protocol::{Why, ZoneName};
-use beryl_session::script::{Act, Mark, Notice, Script, Span, Verb};
+use beryl_protocol::protocol::{Why, ZoneName};
+use beryl_protocol::script::{Act, Mark, Notice, Script, Span, Verb};
 use beryl_table::action::{Destination, Position};
 use beryl_table::state::{Assist, Face, Line, LineVisibility, ObjectId, Proposal, Zone};
 use beryl_table::{Action, Refusal, Table};

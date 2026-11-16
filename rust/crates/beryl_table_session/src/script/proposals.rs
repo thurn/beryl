@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use beryl_session::protocol::{ObjectId, PlayerView, ZoneName};
+use beryl_protocol::protocol::{ObjectId, PlayerView, ZoneName};
 use beryl_table::Action;
 use beryl_table::state::{ObjectId as HostId, Proposal};
 

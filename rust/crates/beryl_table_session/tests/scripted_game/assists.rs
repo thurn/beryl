@@ -1,5 +1,5 @@
 use super::{GUEST, Game, HOST, reference, replay, start_linked_game};
-use beryl_session::protocol::{Answer, ProposalView, Side, TargetRef, ZoneName};
+use beryl_protocol::protocol::{Answer, ProposalView, Side, TargetRef, ZoneName};
 use beryl_table::action::{Adjustment, SeenObject, Target};
 use beryl_table::state::{Assist, Phase, Zone};
 use beryl_table::{Action, Refusal};

@@ -1,7 +1,7 @@
 //! The guided start is projected from the live log. Prompts hold only
 //! uncommitted choices, such as which cards to put on the bottom.
 
-use beryl_session::ipc::LobbyChange;
+use beryl_protocol::ipc::LobbyChange;
 use beryl_table::action::{Destination, Position, Selection};
 use beryl_table::state::{Phase, Zone};
 
@@ -311,7 +311,7 @@ fn roll_for_first(mut chance: Chance) -> Result<(Seat, Vec<Action>), Refusal> {
 
 #[cfg(test)]
 mod tests {
-    use beryl_session::script::{Act, Notice};
+    use beryl_protocol::script::{Act, Notice};
     use beryl_table::{Log, Table};
 
     use super::*;

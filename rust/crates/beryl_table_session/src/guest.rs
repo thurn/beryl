@@ -9,9 +9,9 @@ use std::thread;
 
 use beryl_link::LinkError;
 use beryl_link::guest::{Event, Guest};
-use beryl_session::ipc::LobbyUpdate;
-use beryl_session::protocol::LinkState;
-use beryl_session::{GameUpdate, SessionId};
+use beryl_protocol::ipc::LobbyUpdate;
+use beryl_protocol::protocol::LinkState;
+use beryl_protocol::{GameUpdate, SessionId};
 use beryl_table::Refusal;
 use serde_json::Value;
 

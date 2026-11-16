@@ -14,6 +14,6 @@ mod script;
 pub mod sessions;
 mod view;
 
-pub use beryl_session::ipc::SavedTable;
+pub use beryl_protocol::ipc::SavedTable;
 pub use saves::HostSettings;
 pub use sessions::{TableEvent, TableSessions};

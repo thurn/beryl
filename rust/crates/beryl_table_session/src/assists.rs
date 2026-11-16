@@ -1,5 +1,5 @@
 //! The host keeps each viewer's pending suggestions and line switches.
-use beryl_session::protocol::{
+use beryl_protocol::protocol::{
     LabelView, ObjectId, PlayerView, ProposalLine, ProposalView, TableView, TargetRef,
 };
 use beryl_table::assist::{

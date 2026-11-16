@@ -1,5 +1,5 @@
-use beryl_session::protocol::{CardHandling, ObjectId, PlayerView, TableArrow};
-use beryl_session::script::{Act, Fact, Mark, Open, Span, Step, Subject};
+use beryl_protocol::protocol::{CardHandling, ObjectId, PlayerView, TableArrow};
+use beryl_protocol::script::{Act, Fact, Mark, Open, Span, Step, Subject};
 
 use super::Builder;
 

@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, btree_map};
 
-use beryl_session::protocol::ObjectId as Slot;
+use beryl_protocol::protocol::ObjectId as Slot;
 use beryl_table::redact::AnimationEvent;
 use beryl_table::state::ObjectId;
 use beryl_table::{Change, Entry, Seat, Table};

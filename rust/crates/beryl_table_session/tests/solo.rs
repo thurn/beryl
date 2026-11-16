@@ -1,9 +1,10 @@
 use std::sync::mpsc::{Receiver, channel};
 
-use beryl_session::ipc::{TableActReply, TableRefusalReason, TableRefused};
-use beryl_session::protocol::{PlayerView, TableObjectRef};
-use beryl_session::script::{Subject, Table as Stage, failure};
-use beryl_session::{GameUpdate, SessionIds, Sessions};
+use beryl_protocol::ipc::{TableActReply, TableRefusalReason, TableRefused};
+use beryl_protocol::protocol::{PlayerView, TableObjectRef};
+use beryl_protocol::script::{Subject, Table as Stage, failure};
+use beryl_protocol::{GameUpdate, SessionIds};
+use beryl_session::Sessions;
 use beryl_table::action::{Adjustment, ComputedDestination, Destination, Position, Selection};
 use beryl_table::deck::parse_text;
 use beryl_table::state::Zone;

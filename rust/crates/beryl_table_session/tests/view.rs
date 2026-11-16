@@ -1,15 +1,15 @@
-use beryl_session::card_records::{CardRecordsRequest, card_records};
+use beryl_card_records::{CardRecordsRequest, TokenMakers, card_records};
 // The table's deterministic action generator, compiled into this test as the table's own tests
 // compile it. A Cargo feature that only this dev-dependency turned on made `cargo test` and the
 // checks' `beryl_cli` build compile the table and everything above it twice.
 #[allow(dead_code, reason = "each test uses part of the generator")]
 #[path = "../../beryl_table/src/testing.rs"]
 mod testing;
-use beryl_session::protocol::{
+use beryl_protocol::protocol::{
     Counter, FaceName, PowerToughness, RowName, Side, StackItem, Status, Step, TablePhase,
     ZoneName, ZoneRef,
 };
-use beryl_session::script::{Arrow, Subject};
+use beryl_protocol::script::{Arrow, Subject};
 use beryl_table::action::{Destination, Portion, Position, Selection};
 use beryl_table::state::{
     Arrow as TableArrow, ArrowKind, ArrowTarget, Assist, Card, Face, Object, ObjectId, Phase, Row,
@@ -571,15 +571,69 @@ fn a_solo_view_uses_the_card_record_of_the_face_up() {
     assert_eq!(card.face, FaceName::Back);
     assert_eq!(card.name.as_deref(), Some("Soporific Springs"));
     assert_eq!(card.pinned, Some(RowName::Lands));
-    let records = card_records(&CardRecordsRequest {
-        names: vec![card.name.clone().unwrap()],
-    });
+    let records = card_records(
+        &CardRecordsRequest {
+            names: vec![card.name.clone().unwrap()],
+        },
+        TokenMakers::NONE,
+    );
     let face = &records.cards["Soporific Springs"].faces[1];
     assert_eq!(face.type_line, "Land");
     assert!(face.oracle_text.as_ref().unwrap().contains("Add"));
     assert!(face.images.normal.contains("/back/"));
     assert!(view.players.opponent.library.is_empty());
     assert!(view.table.as_ref().unwrap().orders.opponent.hand.is_empty());
+}
+
+#[test]
+fn manual_tokens_use_the_selected_printing_or_the_first_store_printing() {
+    let name = "Insect Token";
+    let selected_id = "9af00a97-9938-4ab2-938a-669cdfe4332a";
+    let fallback = beryl_card_store::STORE.tokens(name).remove(0);
+    for (card, id, power, toughness) in [
+        (
+            Card::Named(name.into()),
+            fallback.scryfall_id.as_str(),
+            3,
+            3,
+        ),
+        (
+            Card::Token {
+                name: name.into(),
+                scryfall_id: selected_id.into(),
+            },
+            selected_id,
+            1,
+            1,
+        ),
+    ] {
+        let mut table = Table::new(2);
+        let mut log = Log::new(&table);
+        log.apply(
+            &mut table,
+            HOST,
+            &Action::Token {
+                card,
+                count: 1,
+                attached_to: None,
+                note: None,
+                face_down: false,
+            },
+            &mut Chance::fresh(1),
+        )
+        .unwrap();
+        let publication = SeatPublication::new(&table, &log, GUEST).unwrap();
+        let object = &publication.view().objects[0];
+        assert_eq!(object.pt, Some(PowerToughness { power, toughness }));
+        let key = object.token_printing.as_ref().unwrap();
+        let records = card_records(
+            &CardRecordsRequest {
+                names: vec![key.to_string()],
+            },
+            TokenMakers::NONE,
+        );
+        assert_eq!(records.tokens[key.as_ref()].scryfall_id, id);
+    }
 }
 
 #[test]

@@ -3,12 +3,12 @@ use std::io::BufReader;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, channel};
 
-use beryl_session::ipc::{
+use beryl_protocol::ipc::{
     LobbyChange, Platform, TableActReply, TableHostRequest, TableHostSettings, TableJoinRequest,
     TableLink, TableLobbyRequest, TableResumeRequest,
 };
-use beryl_session::protocol::{Answer, ObjectId, Side, TablePhase, TablePrompt};
-use beryl_session::{GameUpdate, SessionIds};
+use beryl_protocol::protocol::{Answer, ObjectId, Side, TablePhase, TablePrompt};
+use beryl_protocol::{GameUpdate, SessionIds};
 use beryl_table::action::Adjustment;
 use beryl_table::state::LobbySettings;
 use beryl_table::{Action, Change, Log, Seat, Table, save};

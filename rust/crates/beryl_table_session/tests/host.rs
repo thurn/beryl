@@ -6,10 +6,10 @@ use std::sync::mpsc::{Receiver, SyncSender, channel, sync_channel};
 use beryl_link::memory::{self, MemoryLink};
 use beryl_link::wire::{Hello, Message, RefusalReason, TableStatus, decode, encode};
 use beryl_link::{Link, LinkError};
-use beryl_session::ipc::{LobbyUpdate, TableAnswerRequest};
-use beryl_session::protocol::{Answer, LinkState, TableAction, TablePrompt, TableView};
-use beryl_session::script::{Act, Span, Table as Stage, failure};
-use beryl_session::{GameUpdate, SessionIds, WIRE_HASH};
+use beryl_protocol::ipc::{LobbyUpdate, TableAnswerRequest};
+use beryl_protocol::protocol::{Answer, LinkState, TableAction, TablePrompt, TableView};
+use beryl_protocol::script::{Act, Span, Table as Stage, failure};
+use beryl_protocol::{GameUpdate, SessionIds, WIRE_HASH};
 use beryl_table::action::{Adjustment, Destination, Flow, Position, Selection};
 use beryl_table::save;
 use beryl_table::state::Zone;
@@ -291,7 +291,7 @@ fn a_drop_freezes_actions_and_resume_replays_the_save_for_the_same_guest() {
         manual(&guest_before)
             .object_actions
             .iter()
-            .find(|action| action.subject == beryl_session::script::Subject::Object { slot: hand })
+            .find(|action| action.subject == beryl_protocol::script::Subject::Object { slot: hand })
             .unwrap()
             .reference
             .clone()

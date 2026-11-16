@@ -1,6 +1,6 @@
 //! Opens library sorts from authenticated table actions.
 
-use beryl_session::protocol::TableAction;
+use beryl_protocol::protocol::TableAction;
 use beryl_table::action::Flow;
 use beryl_table::assist::{self, Assist, text};
 use beryl_table::{Action, Entry, Refusal, Seat};

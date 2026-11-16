@@ -9,11 +9,11 @@ use beryl_link::guest::{self, Event, Guest};
 use beryl_link::host::Sender;
 use beryl_link::wire::Hello;
 use beryl_link::{Link, LinkError, PING_INTERVAL};
-use beryl_session::ipc::{
+use beryl_protocol::ipc::{
     LobbyUpdate, SavedTable, TABLE_LINK, TABLE_LOBBY, TableAnswerRequest, TableLobbyRequest,
 };
-use beryl_session::protocol::{Answer, LinkState, TableAction};
-use beryl_session::{GameUpdate, SessionId, SessionIds, WIRE_HASH};
+use beryl_protocol::protocol::{Answer, LinkState, TableAction};
+use beryl_protocol::{GameUpdate, SessionId, SessionIds, WIRE_HASH};
 use beryl_table::action::Flow;
 use beryl_table::deck::Deck;
 use beryl_table::save::SaveError;

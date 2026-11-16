@@ -1,6 +1,6 @@
 //! Publishes printed ability rows and applies them using the host's visible source.
 
-use beryl_session::protocol::{TableAbilityOption, TableObjectRef};
+use beryl_protocol::protocol::{TableAbilityOption, TableObjectRef};
 use beryl_table::assist::text::{self, AbilityRow, LoyaltyCost};
 use beryl_table::assist::{self, Assist};
 use beryl_table::state::Zone;

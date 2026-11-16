@@ -4,8 +4,8 @@ mod member;
 mod proposals;
 mod spans;
 
-use beryl_session::protocol::{CardHandling, ObjectId, PlayerView};
-use beryl_session::script::{
+use beryl_protocol::protocol::{CardHandling, ObjectId, PlayerView};
+use beryl_protocol::script::{
     Act, Notice, Open, Reset, Script, Span, Step, Subject, Table as Stage, replay,
 };
 use beryl_table::redact::{AnimationEvent, ResetReason, visit_animation};
@@ -90,7 +90,7 @@ pub(super) fn script_with_proposal_marks(
         .or_else(|| replay::failure(&start, &script, after));
     #[cfg(debug_assertions)]
     let failure = failure.or_else(|| {
-        beryl_session::script::carried(start, &open, &script)
+        beryl_protocol::script::carried(start, &open, &script)
             .and_then(|carried| {
                 if carried.len() == wanted.len() && wanted.iter().all(|span| carried.contains(span))
                 {

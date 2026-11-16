@@ -7,12 +7,12 @@ use std::thread;
 use beryl_link::memory;
 use beryl_link::wire::{Hello, Message, TableStatus, VERSION_MISMATCH, decode, encode};
 use beryl_link::{Link, LinkError, PING_INTERVAL};
-use beryl_session::ipc::LobbyUpdate;
-use beryl_session::protocol::{
+use beryl_protocol::ipc::LobbyUpdate;
+use beryl_protocol::protocol::{
     Answer, LinkState, ProposalView, TableAction, TableObjectRef, TableView, ZoneName,
 };
-use beryl_session::script::{Act, Span, Subject, Table as Stage, failure};
-use beryl_session::{GameUpdate, SessionId, SessionIds};
+use beryl_protocol::script::{Act, Span, Subject, Table as Stage, failure};
+use beryl_protocol::{GameUpdate, SessionId, SessionIds};
 use beryl_table::action::{
     Adjustment, ComputedDestination, Destination, Position, SeenObject, Selection, Target,
 };
@@ -164,7 +164,7 @@ impl Game {
                 );
                 assert_eq!(
                     view.assists,
-                    beryl_session::protocol::AssistsView::default()
+                    beryl_protocol::protocol::AssistsView::default()
                 );
             }
         }

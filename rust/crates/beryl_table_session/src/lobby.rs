@@ -1,8 +1,8 @@
 //! Projects the lobby for one authenticated seat and translates its commands.
 
 use beryl_card_store::STORE;
-pub use beryl_session::ipc::LobbyView;
-use beryl_session::ipc::{LobbyChange, LobbySeat, LobbyUpdate};
+pub use beryl_protocol::ipc::LobbyView;
+use beryl_protocol::ipc::{LobbyChange, LobbySeat, LobbyUpdate};
 use beryl_table::deck::{Deck, unknown};
 use beryl_table::state::MatchSeat;
 use beryl_table::{Action, Refusal, Seat, Table};
@@ -94,7 +94,7 @@ pub(super) fn action(
     table: &Table,
     seat: Seat,
     change: LobbyChange,
-) -> Result<beryl_session::protocol::TableAction, Refusal> {
+) -> Result<beryl_protocol::protocol::TableAction, Refusal> {
     if table.game_match.in_game {
         return Err(Refusal::INVALID);
     }

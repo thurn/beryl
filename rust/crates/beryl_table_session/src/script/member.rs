@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 
-use beryl_session::protocol::{
+use beryl_protocol::protocol::{
     Counter, ObjectId as Slot, ObjectView, Side, StackItem, Why, ZoneName, ZoneRef,
 };
-use beryl_session::script::{Act, Fact, Notice, Step, Subject, Tally};
+use beryl_protocol::script::{Act, Fact, Notice, Step, Subject, Tally};
 use beryl_table::change::{ObjectEdit, TableEdit};
 use beryl_table::redact::AnimationEvent;
 use beryl_table::state::{ObjectId, Zone};
@@ -48,7 +48,7 @@ impl Builder {
         let lift = self.prompt_lift.or_else(|| handling(table, viewer));
         let mut wanted = spans::wanted(lift, &arrows(table, slots, viewer));
         wanted.extend(self.spans.iter().copied().filter(|span| {
-            matches!(span, beryl_session::script::Open::Mark { on: Subject::Object { slot }, .. } if self.stage.objects.contains_key(slot))
+            matches!(span, beryl_protocol::script::Open::Mark { on: Subject::Object { slot }, .. } if self.stage.objects.contains_key(slot))
         }));
         let new_look = events
             .iter()

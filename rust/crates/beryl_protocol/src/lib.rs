@@ -1,15 +1,16 @@
 //! The wire types Beryl's interfaces read: the [`PlayerView`](protocol::PlayerView) protocol,
 //! the scripts that animate one view into the next ([`script`]), prompts ([`prompt`]) and the
-//! app's IPC names and messages ([`ipc`]). `beryl_session` builds these from the engine and
-//! re-exports every one of them at the same path, so the web interface's generated types and
-//! the app do not change. This crate depends on no rules or card crate, so a client that only
-//! reads views (Beryl 3D) does not link the engine.
+//! app's IPC names and messages ([`ipc`]). It also supplies the session ID allocator and
+//! the wire fingerprint used to check link compatibility. Engine sessions, manual tables and
+//! clients such as Beryl 3D all use the same protocol.
 
 pub mod card_records;
 pub mod ipc;
 pub mod prompt;
 pub mod protocol;
 pub mod script;
+mod session_ids;
+mod wire_fingerprint;
 
 use std::fmt;
 use std::path::Path;
@@ -19,6 +20,22 @@ use ts_rs::TS;
 
 pub use beryl_card::Seat;
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
+pub use session_ids::SessionIds;
+
+/// A 64-bit FNV-1a hash of the generated TypeScript protocol and link envelope definitions.
+/// The hash is represented in lowercase hexadecimal.
+pub const WIRE_HASH: &str = env!("BERYL_WIRE_HASH");
+
+/// The wire fingerprint extended with additional definitions in order.
+pub fn wire_hash(extra: &[&str]) -> String {
+    let mut hash = u64::from_str_radix(WIRE_HASH, 16).expect("build.rs emits a hex hash");
+    for definition in extra {
+        // Prefix each definition with its length so the hash input preserves the boundaries.
+        hash = wire_fingerprint::extend(hash, &(definition.len() as u64).to_le_bytes());
+        hash = wire_fingerprint::extend(hash, definition.as_bytes());
+    }
+    format!("{hash:016x}")
+}
 
 /// An agent a human can play against.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

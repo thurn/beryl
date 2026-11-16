@@ -516,9 +516,11 @@ dependencies = [
 name = "beryl_table_session"
 version = "0.1.0"
 dependencies = [
+ "beryl_card_records",
  "beryl_card_store",
  "beryl_link",
  "beryl_link_iroh",
+ "beryl_protocol",
  "beryl_session",
  "beryl_table",
  "serde",

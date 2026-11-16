@@ -10,9 +10,9 @@ use std::time::Duration;
 use beryl_link::host::{self, Host, Hosted, Sender, TableQueue};
 use beryl_link::wire::RefusalReason;
 use beryl_link::{Link, LinkError, PING_INTERVAL, PeerInfo, Route};
-use beryl_session::ipc::LobbyUpdate;
-use beryl_session::protocol::{LinkState, TableAction};
-use beryl_session::{GameUpdate, SessionId, WIRE_HASH};
+use beryl_protocol::ipc::LobbyUpdate;
+use beryl_protocol::protocol::{LinkState, TableAction};
+use beryl_protocol::{GameUpdate, SessionId, WIRE_HASH};
 use beryl_table::{Action, Entry, Refusal, Seat, Table};
 use serde_json::Value;
 

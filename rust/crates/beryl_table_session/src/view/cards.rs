@@ -1,9 +1,9 @@
+use beryl_card_records::{TokenMakers, record, token_printing_key};
 use beryl_card_store::{
     Record, STORE,
     facts::{self, Row3},
 };
-use beryl_session::card_records::{record, token_printing_key};
-use beryl_session::protocol::{
+use beryl_protocol::protocol::{
     CardType, Counter, CounterView, FaceName, Facing, Keyword, MarkerPreview, NamedCounter,
     ObjectId as Slot, ObjectView, PowerToughness, RowName, Side, StackItem, TableCardCommands,
     TableFlowOption, ZoneName,
@@ -22,7 +22,7 @@ pub(crate) struct CardProjection<'a> {
 impl<'a> CardProjection<'a> {
     pub(crate) fn new(card: &'a Object) -> Self {
         let record = match &card.card {
-            Card::Named(name) => record(name, card.token),
+            Card::Named(name) => record(name, card.token, TokenMakers::NONE),
             Card::Token { name, scryfall_id } => STORE.token_printing(name, scryfall_id),
             _ => None,
         };
@@ -140,6 +140,18 @@ impl<'a> CardProjection<'a> {
             Card::Token { name, scryfall_id } => {
                 object.token_printing =
                     Some(token_printing_key(name, scryfall_id).into_boxed_str());
+            }
+            Card::Named(name) if card.token => {
+                // Name-only tokens in older saves use the store's first printing for both
+                // projection and art. A token copy of an ordinary card can use its card art.
+                if let Some(record) = self
+                    .record
+                    .as_ref()
+                    .filter(|record| record.first_set.is_none())
+                {
+                    object.token_printing =
+                        Some(token_printing_key(name, &record.scryfall_id).into_boxed_str());
+                }
             }
             Card::Named(_) | Card::Hidden => {}
         }

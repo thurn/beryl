@@ -1,6 +1,6 @@
 //! The rule invariants: what a script's arrows, lines, marks and lifts must hold
 //! to whatever cards it shows. Replay cannot check them, since a span changes no table; the
-//! session runs these beside the replay check in a debug build, wherever it builds a script.
+//! engine and manual table adapters run these beside the replay check in debug builds.
 //!
 //! - No arrow, line or mark is on a thing that is moving or has left: where it begins, both
 //!   its ends are on the table, and neither moves in that beat. The one exception is a spell
@@ -83,7 +83,7 @@ impl Open {
 
     /// Where it starts, and what it points at or is on. A lift names cards by their pile and
     /// count, not one by one, and has neither.
-    pub(super) fn ends(self) -> (Option<Subject>, Option<Subject>) {
+    fn ends(self) -> (Option<Subject>, Option<Subject>) {
         match self {
             Open::Point { from, to, .. } => (Some(from), Some(to)),
             Open::Mark { on, .. } => (None, Some(on)),
@@ -91,7 +91,8 @@ impl Open {
         }
     }
 
-    pub(super) fn touches(self, subject: Subject) -> bool {
+    /// Whether either endpoint is `subject`.
+    pub fn touches(self, subject: Subject) -> bool {
         let (from, to) = self.ends();
         from == Some(subject) || to == Some(subject)
     }
@@ -105,7 +106,7 @@ impl Display for Open {
 }
 
 /// What `act` takes from its place, if anything.
-pub(super) fn moves(act: &Act) -> Option<Subject> {
+pub fn moves(act: &Act) -> Option<Subject> {
     match act {
         Act::Fly { object, .. } | Act::Appear { object, .. } => {
             Some(Subject::Object { slot: object.slot })
@@ -117,7 +118,7 @@ pub(super) fn moves(act: &Act) -> Option<Subject> {
 }
 
 /// Whether `act` puts its subject on the stack of `table`, where it is not yet.
-pub(super) fn lands(table: &Table, act: &Act) -> bool {
+pub fn lands(table: &Table, act: &Act) -> bool {
     match act {
         Act::Emerge { .. } => true,
         Act::Fly { object, .. } | Act::Appear { object, .. } => {
@@ -185,7 +186,7 @@ struct Beat {
 /// # Errors
 ///
 /// When it carries more or fewer.
-pub(super) fn timed(script: &Script) -> Result<(), String> {
+pub fn timed(script: &Script) -> Result<(), String> {
     let (timings, steps) = (script.timing.len(), script.steps());
     if timings == steps {
         Ok(())

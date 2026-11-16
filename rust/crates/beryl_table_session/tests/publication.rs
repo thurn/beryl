@@ -1,5 +1,5 @@
-use beryl_session::protocol::TableAction;
-use beryl_session::script::{Table as Stage, failure};
+use beryl_protocol::protocol::TableAction;
+use beryl_protocol::script::{Table as Stage, failure};
 use beryl_table::action::{Destination, Position, Selection};
 use beryl_table::state::{Card, Object, ObjectId, Zone};
 use beryl_table::{Action, Chance, Change, Log, Refusal, Seat, Table};

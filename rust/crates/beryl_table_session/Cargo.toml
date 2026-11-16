@@ -13,6 +13,8 @@ workspace = true
 iroh = ["dep:beryl_link_iroh"]
 
 [dependencies]
+# Supplies printed records and exact token printing keys for manual views.
+beryl_card_records = { path = "../beryl_card_records" }
 # Supplies printed characteristics without asking the engine to interpret a card.
 beryl_card_store = { path = "../beryl_card_store" }
 # Transports manual table updates and actions between seats.
@@ -20,7 +22,7 @@ beryl_link = { path = "../beryl_link" }
 # Traverses home routers and uses encrypted relays for internet play.
 beryl_link_iroh = { path = "../beryl_link_iroh", optional = true }
 # Supplies the view protocol shared with engine games.
-beryl_session = { path = "../beryl_session" }
+beryl_protocol = { path = "../beryl_protocol" }
 # Supplies host-side state, action permissions and per-seat redaction.
 beryl_table = { path = "../beryl_table" }
 # Encodes session messages using the same format as the game protocol.
@@ -33,3 +35,5 @@ tempfile = "3"
 url = "2"
 
 [dev-dependencies]
+# Verifies that manual and engine sessions share one ID sequence.
+beryl_session = { path = "../beryl_session" }

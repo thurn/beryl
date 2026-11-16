@@ -1,6 +1,6 @@
 //! Host-only prompt state. The wire view uses viewer slots, never table IDs.
-use beryl_session::ipc::{TableAnswerRequest, TableLobbyRequest};
-use beryl_session::protocol::{
+use beryl_protocol::ipc::{TableAnswerRequest, TableLobbyRequest};
+use beryl_protocol::protocol::{
     Answer, CardHandling, ObjectId as Slot, PileName, Side, TableAction, TablePrompt, ZoneName,
 };
 use beryl_table::action::Flow;

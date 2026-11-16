@@ -1,5 +1,5 @@
-use beryl_session::protocol::ObjectId as Slot;
-use beryl_session::script::{Open, Script, Table as Stage, Verb, carried, replay};
+use beryl_protocol::protocol::ObjectId as Slot;
+use beryl_protocol::script::{Open, Script, Table as Stage, Verb, carried, replay};
 use beryl_table::action::Selection;
 use beryl_table::state::{Card, Object, ObjectId, Zone};
 use beryl_table::{Action, Chance, Change, Log, Seat, Table};

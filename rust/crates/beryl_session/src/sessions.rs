@@ -4,7 +4,6 @@
 //! both drive games through it.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -21,7 +20,9 @@ use crate::prompt::{ClickReply, ClickRequest};
 use crate::protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 use crate::replay::ReplayFile;
 use crate::session::GameSession;
-use crate::{GameUpdate, Prepared, Seat, SessionError, StartGame, StartRequest, bugs, journal};
+use crate::{
+    GameUpdate, Prepared, Seat, SessionError, SessionIds, StartGame, StartRequest, bugs, journal,
+};
 
 /// The game the UI's request starts: the default deck's mirror against the agent it names,
 /// the human in seat 0 under the smart stops.
@@ -37,22 +38,6 @@ fn requested_game(request: &StartRequest) -> StartGame {
 }
 
 type Emit = dyn Fn(GameUpdate) + Send + Sync;
-
-/// The engine and manual table share one sequence when they emit to the same stage.
-#[derive(Clone, Default)]
-pub struct SessionIds(Arc<AtomicU32>);
-
-impl SessionIds {
-    pub fn allocate(&self) -> SessionId {
-        let previous = self
-            .0
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |last| {
-                last.checked_add(1)
-            })
-            .expect("session numbers exhausted");
-        SessionId(previous + 1)
-    }
-}
 
 /// The game in progress, if any, and every view it emits, sent to one callback.
 pub struct Sessions {

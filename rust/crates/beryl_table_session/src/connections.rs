@@ -10,13 +10,13 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
 use beryl_link::{Invite, LinkError, TcpHost, TcpLink};
-use beryl_session::ipc::{
+use beryl_protocol::ipc::{
     LobbyChange, LobbyUpdate, Platform, SavedTable, TableActReply, TableConnectionError,
     TableHostReply, TableHostRequest, TableJoinRequest, TableLink, TableLobbyRequest, TableRefused,
     TableResumeRequest, TableSettings, TableSoloRequest,
 };
-use beryl_session::protocol::{Answer, TableAction};
-use beryl_session::{GameUpdate, SessionId, SessionIds};
+use beryl_protocol::protocol::{Answer, TableAction};
+use beryl_protocol::{GameUpdate, SessionId, SessionIds};
 use serde::{Deserialize, Serialize};
 
 use crate::{HostSettings, TableEvent, TableSessions};
@@ -185,7 +185,7 @@ impl TableConnections {
     }
 
     pub fn join(&self, request: TableJoinRequest) -> Result<SessionId, TableConnectionError> {
-        self.join_with_wire(request, beryl_session::WIRE_HASH)
+        self.join_with_wire(request, beryl_protocol::WIRE_HASH)
     }
 
     #[cfg(debug_assertions)]
@@ -284,7 +284,7 @@ impl TableConnections {
                 .joined()?
                 .ok_or_else(|| error("The joined table was not found."))?;
             let invite = joined.request.invite.clone();
-            self.connect_guest(joined.request, beryl_session::WIRE_HASH)?;
+            self.connect_guest(joined.request, beryl_protocol::WIRE_HASH)?;
             *listener = None;
             return Ok(TableHostReply { invite });
         }
@@ -480,7 +480,7 @@ mod tests {
                 platform,
                 TableHostRequest {
                     link: TableLink::Local,
-                    settings: beryl_session::ipc::TableHostSettings {
+                    settings: beryl_protocol::ipc::TableHostSettings {
                         name: "Host".into(),
                         starting_life: None,
                         starting_hand_size: None,

@@ -1,11 +1,11 @@
 use std::fs::File;
 use std::io::BufReader;
 
-use beryl_session::GameUpdate;
-use beryl_session::protocol::{
+use beryl_protocol::GameUpdate;
+use beryl_protocol::protocol::{
     Answer, CardHandling, PileName, Side, TableAction, TablePrompt, ZoneName,
 };
-use beryl_session::script::{Act, Span, Subject};
+use beryl_protocol::script::{Act, Span, Subject};
 use beryl_table::action::{Flow, SeenObject};
 use beryl_table::state::{Assist, Zone};
 use beryl_table::{Action, Refusal, save};

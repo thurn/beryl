@@ -1,6 +1,8 @@
 //! Commits manual table actions only when every seat can publish the result.
 
-use beryl_session::protocol::{Answer, ObjectId as Slot, PlayerView, TableAction, TableActionRefs};
+use beryl_protocol::protocol::{
+    Answer, ObjectId as Slot, PlayerView, TableAction, TableActionRefs,
+};
 use beryl_table::state::{ObjectId, Proposal};
 use beryl_table::{Action, Chance, Change, Entry, Log, Refusal, Seat, Table};
 

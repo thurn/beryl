@@ -8,13 +8,13 @@ pub(super) use slots::Slots;
 use std::collections::{BTreeMap, HashSet};
 
 use beryl_card_store::{STORE, facts};
-use beryl_session::ipc::decks::CardTokenLink;
-use beryl_session::protocol::{
+use beryl_protocol::ipc::decks::CardTokenLink;
+use beryl_protocol::protocol::{
     AssistsView, CardHandling, LinkState, LogLine, ManualOrders, ManualPiles, NamedCounter,
     ObjectId as Slot, PlayerState, PlayerView, Side, StackItem, Step, TableActionRefs, TableArrow,
     TablePhase, TableView, ZoneName, ZoneRef,
 };
-use beryl_session::script::{Arrow, Subject, Turn};
+use beryl_protocol::script::{Arrow, Subject, Turn};
 use beryl_table::action::Portion;
 use beryl_table::assist;
 use beryl_table::log::UndoControl;

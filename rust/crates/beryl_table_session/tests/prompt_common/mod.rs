@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::mpsc::{Receiver, channel, sync_channel};
 
 use beryl_link::memory;
-use beryl_session::{GameUpdate, SessionIds};
+use beryl_protocol::{GameUpdate, SessionIds};
 use beryl_table::{Action, Seat};
 use beryl_table_session::{HostSettings, TableSessions};
 

@@ -2,11 +2,11 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
-use beryl_session::protocol::{
+use beryl_protocol::protocol::{
     Answer, CardHandling, ObjectId as Slot, PileName, Side, TablePrompt, ZoneName,
 };
-use beryl_session::script::{Act, Span};
-use beryl_session::{GameUpdate, SessionIds};
+use beryl_protocol::script::{Act, Span};
+use beryl_protocol::{GameUpdate, SessionIds};
 use beryl_table::action::{Adjustment, Flow};
 use beryl_table::assist::text::{Flow as Effect, flow_result};
 use beryl_table::deck::Deck;

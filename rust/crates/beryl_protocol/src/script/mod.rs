@@ -53,7 +53,7 @@
 //! a later step ends it ([`Span`]), in the same script or in another; between the two the
 //! stage keeps it drawn. A view's `handling` is the lift the script begins and ends.
 //!
-//! A screen holds the spans its scripts have left open (the session's `Open`) and its next script
+//! A screen holds the spans its scripts have left open ([`Open`]) and its next script
 //! ends them. The arrows and lines are the ones its table calls for (`spans.rs`): from each spell
 //! and ability on the stack to its targets, from each ability to its source on the battlefield,
 //! from each blocker to its attacker, and from each attacker to what it attacks where a
@@ -61,9 +61,8 @@
 //! of its ends, and is not drawn again at a card that changed zones. A script draws no mark: all
 //! six are a prompt's, which the session's prompt state will give
 //!
-//! Spans change no table, so replay cannot hold them. The rule invariants do (the session's
-//! `carried`, `check.rs`), which a debug build runs with the replay check on every script it
-//! builds.
+//! Spans change no table, so replay cannot hold them. In a debug build, each adapter runs
+//! [`carried`] alongside the replay check for every script it builds.
 //!
 //! # Mana
 //!
@@ -128,6 +127,7 @@
 //! table's value, and whose doing it is, by its cause or its record's controller.
 
 mod act;
+pub mod check;
 pub mod replay;
 mod table;
 mod text;
@@ -138,6 +138,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use act::{Act, Fact, Notice, Stream, Tally};
+pub use check::{Open, carried};
 pub use replay::{failure, replay};
 pub use table::{Entry, Piles, Table, Turn};
 pub use text::wire;
