@@ -58,7 +58,7 @@ impl MenuRow {
 /// submenus, in order, after the last of them.
 #[must_use]
 pub fn menu(id: MenuId, title: &str, groups: &[MenuGroup]) -> Element {
-    build(id, title, groups, None)
+    build(id, title, groups, false, None)
 }
 
 /// The press of the Back row of a sheet menu showing a submenu's rows (`sheet_menu`), which
@@ -72,11 +72,11 @@ pub const BACK: u16 = u16::MAX;
 /// them.
 #[must_use]
 pub fn sheet_menu(id: MenuId, title: &str, groups: &[MenuGroup], page: Option<u16>) -> Element {
-    build(id, title, groups, Some(page))
+    build(id, title, groups, true, page)
 }
 
 /// The panel of `menu` and `sheet_menu`, the latter if `sheet` is set.
-fn build(id: MenuId, title: &str, groups: &[MenuGroup], sheet: Option<Option<u16>>) -> Element {
+fn build(id: MenuId, title: &str, groups: &[MenuGroup], sheet: bool, page: Option<u16>) -> Element {
     let rows = groups.iter().map(|group| group.rows.len()).sum::<usize>();
     let mut next = 0;
     let mut next_nested = u16::try_from(rows).unwrap_or(u16::MAX);
@@ -88,12 +88,11 @@ fn build(id: MenuId, title: &str, groups: &[MenuGroup], sheet: Option<Option<u16
         size::MENU_TITLE_PADDING_SIDE,
     ];
     let mut panel = panel(title).child(heading);
-    if let Some(Some(page)) = sheet {
+    if let Some(page) = page.filter(|_| sheet) {
         // The rows of the submenu of row `page` take their numbers after those of the
         // submenus before it.
-        let mut folder = 0;
-        for row in groups.iter().flat_map(|group| &group.rows) {
-            if folder == page {
+        for (folder, row) in groups.iter().flat_map(|group| &group.rows).enumerate() {
+            if folder == usize::from(page) {
                 let mut deeper = u16::MAX;
                 let back = menu_row(id, &MenuRow::new("Back"), &mut 0, &mut deeper, true)
                     .on_press(Press::Menu(id, BACK));
@@ -104,19 +103,12 @@ fn build(id: MenuId, title: &str, groups: &[MenuGroup], sheet: Option<Option<u16
                 return panel;
             }
             next_nested += u16::try_from(row.submenu.len()).unwrap_or(0);
-            folder += 1;
         }
     }
     for (index, group) in groups.iter().enumerate() {
         panel = panel.child(divider(index, &format!("group {index}")));
         for row in &group.rows {
-            panel = panel.child(menu_row(
-                id,
-                row,
-                &mut next,
-                &mut next_nested,
-                sheet.is_some(),
-            ));
+            panel = panel.child(menu_row(id, row, &mut next, &mut next_nested, sheet));
         }
     }
     panel
