@@ -559,7 +559,7 @@
       "opponent_hand": {
         "width": 24,
         "step": 14,
-        "rise": 10,
+        "rise": -2,
         "right": 56,
         "room": 5,
         "depth": 320,

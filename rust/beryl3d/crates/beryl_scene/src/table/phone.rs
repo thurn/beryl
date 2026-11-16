@@ -333,8 +333,12 @@ fn your_hand(window: Window, bands: &PhoneBands) -> HandData {
     }
 }
 
-/// The opponent's hand: card backs peeking 10 points over the top of their strip, at its right,
-/// short of the menu (`backSpot`).
+/// The opponent's hand: card backs along the top of their strip, at its right, short of the menu
+/// (`backSpot`). The web's backs peek 10 points over the strip's top, into the top safe inset,
+/// where a card the viewer may see, such as one revealed from that hand, would stand under the
+/// notch and the status bar, so here they stand 2 points under the strip's top
+/// (`opponent_hand.rise` is -2), which keeps the raised corners of the fan's tilted cards
+/// inside the safe area too.
 fn opponent_hand(window: Window, bands: &PhoneBands) -> HandData {
     let theirs = data::opponent_hand::WIDTH;
     let fan = theirs * (data::opponent_hand::ROOM + 1.0);
