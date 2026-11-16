@@ -2531,9 +2531,9 @@ screen, so they cover every card spec that is ever generated.
 - **Every step shown.** Each step of each script is played, and what it concerns
   is on screen while it plays: inside the window (its centre, or one of the
   points a fifth of the way in from its corners, as the web interface measures
-  it), at least half uncovered and not transparent. A step whose verb gives its subject time to travel moves it
-  at least 4 logical points over at least 150 milliseconds; a subject that jumps
-  instead is a fault.
+  it), at least half uncovered and not transparent. A step whose verb gives its
+  subject time to travel moves it at least 4 logical points over at least 150
+  milliseconds; a subject that jumps instead is a fault.
 - **Not crowded.** No more than 3 different moves begin at once in one beat.
   Taps and the steps of a turn do not count.
 - **No blank card.** Every card drawn face up, whose name the viewer knows, has

@@ -142,8 +142,7 @@ pub(crate) struct Motion<'a> {
     members: Vec<Vec<ObjectId>>,
     /// The group each slot was last placed in, by `Group::index`, indexed by slot.
     groups: Vec<Option<usize>>,
-    /// The order in which the hands and exile piles of `played` list their cards, by slot
-    /// (`table::arrival`).
+    /// The order of the cards of `played`'s hands and exile piles, by slot (`table::arrival`).
     arrival: Vec<u32>,
     /// `played`'s objects and their groups by slot, kept up to date step by step, for a script
     /// with steps enough to repay building it (`index::LEAST_STEPS`).
@@ -312,11 +311,15 @@ impl<'a> Motion<'a> {
         if self.whole {
             return self.table.placement(view, abilities);
         }
-        let played = Zones::of_table(&self.played)
+        let (played, view) = (self.played_zones(), Zones::of_view(view, abilities));
+        self.table.placement_reusing(&view, (&played, &self.rests))
+    }
+
+    /// The zones of the table played over, every group listed from it.
+    fn played_zones(&self) -> Zones<'_> {
+        Zones::of_table(&self.played)
             .handled(self.look.handled())
-            .arrived(&self.arrival);
-        self.table
-            .placement_reusing(&Zones::of_view(view, abilities), (&played, &self.rests))
+            .arrived(&self.arrival)
     }
 
     /// Where the object in `slot` rests after the step, given the groups `dirty` it placed again.
@@ -414,14 +417,7 @@ impl<'a> Motion<'a> {
         // counts in a debug build are a running game's.
         if cfg!(debug_assertions) && self.records {
             assert!(
-                same(
-                    &self.rests,
-                    &self.table.placement_of(
-                        &Zones::of_table(&self.played)
-                            .handled(self.look.handled())
-                            .arrived(&self.arrival)
-                    )
-                ),
+                same(&self.rests, &self.table.placement_of(&self.played_zones())),
                 "placing only the groups a step changed gives what placing every group does"
             );
         }
