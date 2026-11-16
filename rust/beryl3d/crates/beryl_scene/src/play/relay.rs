@@ -19,6 +19,7 @@ use beryl_protocol::script::{self, Act, Script, StepTiming};
 use super::Show;
 use super::compile::{Compiled, nanoseconds};
 use super::playing::{Waiting, timings_of};
+use super::tray::about;
 use crate::beat::{Laid, lay};
 use crate::light::{ArrowSpan, Lit, MarkSpan, Span};
 use crate::motion::Track;
@@ -34,7 +35,7 @@ impl Show {
 
     /// Lays `waiting`'s script out again as it starts at `start`, its clock running `rate` times
     /// faster than real time, if any of its steps waits for a span to stand whole or for the
-    /// table to itself. Allocates nothing unless the show keeps a history, whose record of the
+    /// table to itself, or a closed prompt's tray lets its cards go first in one of its beats. Allocates nothing unless the show keeps a history, whose record of the
     /// script then shows the steps' new times.
     pub(super) fn relay(&mut self, waiting: &mut Waiting, start: u64, rate: u64) {
         let Some(script) = waiting.update.view.script.as_ref() else {
@@ -50,7 +51,13 @@ impl Show {
         let waits = timings
             .iter()
             .any(|timing| timing.hold.is_some() || timing.alone);
-        if waits {
+        // A closed prompt's tray that lets its cards go in this script does so first in one of
+        // its beats, which lasts until they are back (`Show::place_let_go`).
+        let lead = (self.table.let_go_waits_for())
+            .filter(|&(number, _)| number == waiting.number)
+            .zip(self.let_go_timing.as_ref())
+            .map(|((_, letting), timing)| (about(script, letting).unwrap_or(0), timing));
+        if waits || lead.is_some() {
             let passed = self.passed();
             let starting = Starting {
                 lit: &self.lit,
@@ -58,7 +65,15 @@ impl Show {
                 start,
                 rate,
             };
-            let end = again(compiled, script, timings, &starting);
+            let end = again(compiled, script, timings, &starting, lead);
+            // Every step after the let-go's beat plays later by as much as that beat now lasts
+            // longer, so their order and what each moves from are kept.
+            let uniform =
+                lead.map(|(beat, _)| script.beats.iter().take(beat + 1).map(Vec::len).sum());
+            debug_assert!(
+                waiting_steps_move_nothing(compiled, uniform),
+                "a step that waits longer than the steps of its beat before it moves nothing"
+            );
             shift(compiled, end);
             self.relays += 1;
             self.write_record(waiting.number, &waiting.compiled);
@@ -144,17 +159,19 @@ fn later(old: &Laid, new: &Laid, follows: Follows) -> u64 {
 /// table, and returns when the last beat is over, in nanoseconds. The span a step ends has stood
 /// whole since the step of this script that began it ended, or since `Lit` says, for one a
 /// script before began; the announcements that pass over the table are this script's from the
-/// beats before, and the scripts' before it.
+/// beats before, and the scripts' before it. Where `lead` names a beat and a timing, a step so
+/// timed goes first in that beat (`beat::lay`).
 fn again(
     compiled: &mut Compiled,
     script: &Script,
     timings: &[StepTiming],
     starting: &Starting<'_>,
+    lead: Option<(usize, &StepTiming)>,
 ) -> u64 {
     let carried = starting.passed.map_or(0.0, |passed| starting.clock(passed));
     let mut at = 0.0;
     let mut first = 0;
-    for steps in &script.beats {
+    for (beat, steps) in script.beats.iter().enumerate() {
         let (done, rest) = compiled.scratch.split_at_mut(first);
         let done = &*done;
         let before = || script.beats.iter().flatten().take(first);
@@ -182,7 +199,15 @@ fn again(
             passing(script, &timings[..first], done).map_or(carried, |own| own.max(carried));
         let own = first..first + steps.len();
         let laid = &mut rest[..steps.len()];
-        let mut end = lay(steps, &timings[own.clone()], at, whole, passed, laid);
+        let first_step = lead.filter(|&(at, _)| at == beat).map(|(_, timing)| timing);
+        let mut end = lay(
+            steps,
+            &timings[own.clone()],
+            at,
+            whole,
+            (passed, first_step),
+            laid,
+        );
         for (index, new) in own.zip(laid.iter()) {
             if let Some(closed) = compiled.closes[index] {
                 let old = &compiled.laid[index];
@@ -228,10 +253,6 @@ fn shift(compiled: &mut Compiled, end: u64) {
             follows: Follows::Start,
         })
     };
-    debug_assert!(
-        waiting_steps_move_nothing(laid, scratch, tracks, ability_tracks),
-        "a step that waits longer than the steps of its beat before it moves nothing"
-    );
     let segment_later = |segment: &crate::pose::Segment| segment.step.map_or(0, later_of);
     for track in tracks
         .iter_mut()
@@ -312,21 +333,25 @@ fn settle<T>(items: &mut [T], key: impl Fn(&T) -> u64) {
     }
 }
 
-/// Whether no step that now waits longer than the step before it has a segment on `tracks` or
-/// `ability_tracks`: such a step would carry a card from where it was when it was compiled to play, and
-/// no pose is worked out again. The first step of a beat is compared with the last of the beat
-/// before, which it follows through the beat's start. Only checked in debug builds.
-fn waiting_steps_move_nothing(
-    laid: &[Laid],
-    scratch: &[Laid],
-    tracks: &[Track],
-    ability_tracks: &[(u32, Track)],
-) -> bool {
+/// Whether no step that `compiled`'s `scratch` delays more than the step before it, against its
+/// `laid`, has a segment on its tracks: such a step would carry a card from where it was when it
+/// was compiled to play, and no pose is worked out again. The first step of a beat is compared with the last of the beat
+/// before, which it follows through the beat's start. The step numbered `uniform`, from which
+/// every step plays later together, may move something: the steps before it are over before it
+/// begins, as they were, and those after it keep their order. Only checked in debug builds.
+fn waiting_steps_move_nothing(compiled: &Compiled, uniform: Option<usize>) -> bool {
+    let Compiled {
+        laid,
+        scratch,
+        tracks,
+        ability_tracks,
+        ..
+    } = compiled;
     let abilities = ability_tracks.iter().map(|(_, track)| track);
     let mut previous = 0;
     (0..laid.len()).all(|number| {
         let by = later(&laid[number], &scratch[number], Follows::Start);
-        let waits = by > previous;
+        let waits = by > previous && uniform != Some(number);
         previous = by;
         !waits
             || !tracks

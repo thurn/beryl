@@ -185,18 +185,19 @@ pub struct PlacedLetGo {
 /// `letting` (by slot), and when that beat's turn comes, in nanoseconds on the script's clock;
 /// its first beat, at its start, where no beat has one or its steps were not laid out.
 fn first_about(script: Option<&Script>, laid: &[Laid], letting: &[usize]) -> (usize, u64) {
-    let Some(script) = script else {
+    let Some((script, beat)) = script.and_then(|script| Some((script, about(script, letting)?)))
+    else {
         return (0, 0);
     };
-    let mut first = 0;
-    for (beat, steps) in script.beats.iter().enumerate() {
-        let about =
-            (steps.iter()).any(|step| subject_of(step).is_some_and(|slot| letting.contains(&slot)));
-        if about {
-            let turn = laid.get(first).map_or(0, |laid| nanoseconds(laid.turn));
-            return (beat, turn);
-        }
-        first += steps.len();
-    }
-    (0, 0)
+    let first: usize = script.beats[..beat].iter().map(Vec::len).sum();
+    let turn = laid.get(first).map_or(0, |laid| nanoseconds(laid.turn));
+    (beat, turn)
+}
+
+/// The first beat of `script` with a step about one of the cards in `letting` (by slot), as the
+/// web's `lowered` finds the beat a closed prompt's tray lets go in.
+pub(super) fn about(script: &Script, letting: &[usize]) -> Option<usize> {
+    (script.beats.iter()).position(|steps| {
+        (steps.iter()).any(|step| subject_of(step).is_some_and(|slot| letting.contains(&slot)))
+    })
 }

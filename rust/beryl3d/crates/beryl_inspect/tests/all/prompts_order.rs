@@ -10,7 +10,10 @@ use beryl_inspect::pages::page;
 use beryl_protocol::protocol::Side;
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Duration, Moment, Page};
-use beryl_scene::input::{Rect, Size};
+use beryl_scene::frame::StateBits;
+use beryl_scene::input::{
+    Button, Input, KeyCode, Modifiers, Pointer, PointerKind, PointerPhase, Rect, Size,
+};
 use glam::Vec2;
 
 const SIZE: Size = Size {
@@ -55,6 +58,20 @@ fn done_after_the_drop(page: &mut Page) {
         page.try_find("button \"Done\"").is_err(),
         "Done answered the prompt"
     );
+}
+
+/// Gives the mouse's `phase` at `position`, with the primary button for a press or its end.
+fn mouse(page: &mut Page, phase: PointerPhase, position: Vec2) {
+    page.give_input(Input::Pointer(Pointer {
+        id: 0,
+        kind: PointerKind::Mouse,
+        phase,
+        position,
+        button: Button::Primary,
+        wheel: Vec2::ZERO,
+        modifiers: Modifiers::default(),
+    }));
+    page.step(Duration::from_millis(16));
 }
 
 /// The middle of `rect`.
@@ -116,4 +133,54 @@ fn a_trigger_carried_to_the_right_end_is_dropped_at_the_front() {
         "the carried item is back in the row and nothing else is carried: {after:?}"
     );
     done_after_the_drop(&mut page);
+}
+
+#[test]
+fn a_trigger_carried_as_the_prompt_closes_goes_back_and_is_not_dropped() {
+    let mut page = at_prompt();
+    let row = items(&mut page);
+    page.drag_between(middle(row[1]), middle(row[1]));
+    page.step(Duration::from_millis(600));
+    // The first trigger is carried, and Done, pressed from the keyboard, closes the prompt.
+    let first = items(&mut page)[0];
+    mouse(&mut page, PointerPhase::Down, middle(first));
+    mouse(
+        &mut page,
+        PointerPhase::Move,
+        middle(first) - Vec2::new(60.0, 0.0),
+    );
+    assert!(
+        page.try_find("ability \"1. Currency Converter\"").is_ok(),
+        "the carried trigger is drawn under the pointer"
+    );
+    while !page
+        .find("button \"Done\"")
+        .states()
+        .has(StateBits::FOCUSED)
+    {
+        page.key(KeyCode::Tab);
+    }
+    page.key(KeyCode::Enter);
+    page.step(Duration::from_millis(600));
+    assert!(
+        page.try_find("button \"Done\"").is_err(),
+        "Done answered the prompt"
+    );
+    mouse(
+        &mut page,
+        PointerPhase::Move,
+        middle(first) - Vec2::new(120.0, 0.0),
+    );
+    assert!(
+        page.try_find("ability \"1. Currency Converter\"").is_err(),
+        "nothing of the closed prompt follows the pointer"
+    );
+    // The driver fails the test for a click the player did not make, such as a drop sent to
+    // whatever prompt is open now.
+    mouse(
+        &mut page,
+        PointerPhase::Up,
+        middle(first) - Vec2::new(120.0, 0.0),
+    );
+    page.step(Duration::from_millis(600));
 }

@@ -44,7 +44,9 @@ use std::collections::VecDeque;
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::PlayerView;
-use beryl_protocol::script::{Act, StepTiming, Subject, Table as Played, Verb};
+use beryl_protocol::script::{
+    Act, OwnStep, StepTiming, Subject, Table as Played, Verb, own_timings,
+};
 use glam::Vec2;
 
 use self::compile::{Compiled, bit, compile};
@@ -120,6 +122,9 @@ pub struct Show {
     /// Where the let-go of the tray's cards that waited for its script was placed, until the
     /// client takes it (`take_placed_let_go`).
     placed_let_go: Option<PlacedLetGo>,
+    /// How a closed prompt's tray letting its cards go is timed (`OwnStep::TrayLetGo`), for the
+    /// beat of the script it lets go in, which lasts until it is over (`relay`).
+    let_go_timing: Option<StepTiming>,
 }
 
 impl Show {
@@ -152,6 +157,9 @@ impl Show {
             badges: Badges::default(),
             relays: 0,
             placed_let_go: None,
+            let_go_timing: (own_timings().entries.into_iter())
+                .find(|entry| entry.step == OwnStep::TrayLetGo)
+                .map(|entry| entry.timing),
         }
     }
 

@@ -1,17 +1,14 @@
 {
   "recordings": {
     "combat-attackers/opponent": 24,
-    "combat-attackers/you": 18,
+    "combat-attackers/you": 6,
     "combat-declare/opponent": 2,
     "combat-declare/you": 2,
-    "flashback/you": 3,
     "late-game/opponent": 1,
-    "late-game/you": 9,
+    "late-game/you": 1,
     "no-more-lies/declining-to-pay-exiles-the-spell/opponent": 4,
     "shape-declare/opponent": 2,
     "shape-declare/you": 2,
-    "shape-split/you": 2,
-    "shape-yes/you": 2,
     "stack-bounce/you": 1,
     "stress-verbs/you": 25,
     "teferi-time-raveler/combat-damage-removes-teferi-while-the-other-planeswalker-is-attacked/you": 1,
@@ -19,7 +16,6 @@
     "verbs-cast-theirs-stops/you": 2,
     "verbs-cast-theirs/opponent": 2,
     "verbs-cast-theirs/you": 2,
-    "verbs-place-theirs/you": 3,
-    "verbs-scry/you": 2
+    "verbs-place-theirs/you": 3
   }
 }

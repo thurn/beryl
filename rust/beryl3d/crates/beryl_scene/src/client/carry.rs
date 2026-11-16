@@ -31,6 +31,8 @@ impl Client {
     pub(super) fn carry_item(&mut self, pointer: &Pointer) -> bool {
         match pointer.phase {
             PointerPhase::Down if pointer.button == Button::Primary => {
+                // A second finger going down ends the carry under way.
+                self.drop_carry();
                 self.carried_item = self.order_item_at(pointer.position).map(|on| Carry {
                     on,
                     start: pointer.position,
@@ -42,6 +44,10 @@ impl Client {
                 let Some(carry) = self.carried_item else {
                     return false;
                 };
+                if !self.still_ordering(carry) {
+                    self.drop_carry();
+                    return false;
+                }
                 if !carry.lifted && carry.start.distance(pointer.position) < DRAG_THRESHOLD_POINTS {
                     return false;
                 }
@@ -59,6 +65,9 @@ impl Client {
                     return false;
                 }
                 self.put_item_down();
+                if !self.still_ordering(carry) {
+                    return true;
+                }
                 let at = (self.prompt.as_ref())
                     .and_then(|(_, prompt)| {
                         order::slot_at(prompt, self.window.size, pointer.position.x)
@@ -74,12 +83,27 @@ impl Client {
                 true
             }
             PointerPhase::Cancel | PointerPhase::Leave => {
-                if self.carried_item.take().is_some_and(|carry| carry.lifted) {
-                    self.put_item_down();
-                }
+                self.drop_carry();
                 false
             }
             _ => false,
+        }
+    }
+
+    /// Whether the item `carry` names is still in the row of the order prompt open now, which
+    /// takes presses. A reply or a view that arrives while the item is carried may replace the
+    /// prompt; a drop is then not sent, as the web's `OrderRow` takes no carry while a move is
+    /// being sent, and the prompt the session opens next is the one to answer.
+    fn still_ordering(&self, carry: Carry) -> bool {
+        (self.prompt.as_ref())
+            .filter(|_| self.open)
+            .is_some_and(|(_, prompt)| order::cell_of(prompt, self.window.size, carry.on).is_some())
+    }
+
+    /// Ends the carry, putting the item back in the row if it had left it.
+    fn drop_carry(&mut self) {
+        if self.carried_item.take().is_some_and(|carry| carry.lifted) {
+            self.put_item_down();
         }
     }
 

@@ -61,11 +61,15 @@ pub fn beat(
 ) -> f64 {
     steps.clear();
     steps.resize(beat.len(), Laid::default());
-    lay(beat, timings, at, whole, passed, steps)
+    lay(beat, timings, at, whole, (passed, None), steps)
 }
 
 /// `beat`, writing the steps into `steps`, which holds one entry for each step, so that laying
-/// a beat out again allocates nothing.
+/// a beat out again allocates nothing. `lead` is the timing of a step the client puts first in
+/// the beat, before the session's: a closed prompt's tray letting its cards go, which the web
+/// interface puts first in the beat of the answering script it plays in (`lowered` in
+/// `ui/src/stage/prompt.ts`). It moves nothing a later step waits for and ends no span, and is
+/// laid out like any other step, so the beat lasts until it is over.
 ///
 /// # Panics
 ///
@@ -75,14 +79,13 @@ pub fn lay(
     timings: &[StepTiming],
     at: f64,
     whole: impl Fn(&Act) -> Option<f64>,
-    passed: f64,
+    (passed, lead): (f64, Option<&StepTiming>),
     steps: &mut [Laid],
 ) -> f64 {
-    let [mut from, mut turn, mut last, mut end, mut applied] = [at; 5];
-    // When the first of the steps whose acts went ahead, and that have yet to begin, does.
-    let mut open = at;
-    // Whether the step before went ahead (`StepTiming::ahead`).
-    let mut led = false;
+    let mut cursor = Cursor::new(at);
+    if let Some(timing) = lead {
+        cursor.place(timing, at, (f64::NEG_INFINITY, None), passed);
+    }
     for (i, step) in beat.iter().enumerate() {
         let timing = &timings[i];
         // When each thing a step of the beat moves has come to rest: the latest end of the
@@ -95,56 +98,96 @@ pub fn lay(
                 .map(|(_, laid)| laid.to)
                 .reduce(f64::max)
         };
-        let own = if timing.with { last } else { turn };
+        let after = (timing.after.iter())
+            .map(|name| landed(name).unwrap_or(at))
+            .fold(f64::NEG_INFINITY, f64::max);
         // When the span this step ends will have stood whole for its hold.
         let held = timing
             .hold
             .and_then(|hold| whole(&step.act).map(|since| since + hold));
+        steps[i] = cursor.place(timing, at, (after, held), passed);
+    }
+    cursor.end
+}
+
+/// Where the laying out of a beat has got to (`lay`): when the last step began (`from`), when
+/// the next step's turn comes, the turn the last step took, when the beat is over so far, when
+/// the last act was applied, when the first of the steps whose acts went ahead and that have
+/// yet to begin does (`open`), and whether the step before went ahead (`led`).
+struct Cursor {
+    from: f64,
+    turn: f64,
+    last: f64,
+    end: f64,
+    applied: f64,
+    open: f64,
+    led: bool,
+}
+
+impl Cursor {
+    fn new(at: f64) -> Self {
+        Self {
+            from: at,
+            turn: at,
+            last: at,
+            end: at,
+            applied: at,
+            open: at,
+            led: false,
+        }
+    }
+
+    /// Lays out the next step of a beat that starts at `at`, timed by `timing`: `after` is when
+    /// the things it waits for have come to rest, `held` when the span it ends will have stood
+    /// whole for its hold, and `passed` when everything passing over the table is over.
+    fn place(
+        &mut self,
+        timing: &StepTiming,
+        at: f64,
+        (after, held): (f64, Option<f64>),
+        passed: f64,
+    ) -> Laid {
+        let own = if timing.with { self.last } else { self.turn };
         let rested = [
-            if timing.with { from } else { own },
-            timing
-                .after
-                .iter()
-                .map(|name| landed(name).unwrap_or(at))
-                .fold(f64::NEG_INFINITY, f64::max),
+            if timing.with { self.from } else { own },
+            after,
             held.unwrap_or(at),
             if timing.alone { passed } else { at },
         ]
         .into_iter()
         .fold(f64::NEG_INFINITY, f64::max);
-        from = from.max(rested + timing.delay);
+        self.from = self.from.max(rested + timing.delay);
         // Its act goes ahead of it no sooner than the act of the step before it.
         let opens = if timing.opens {
-            applied.max(rested)
-        } else if timing.ahead && led {
-            applied
+            self.applied.max(rested)
+        } else if timing.ahead && self.led {
+            self.applied
         } else {
-            from
+            self.from
         };
-        applied = opens;
-        led = timing.ahead;
-        if open <= opens {
-            open = from;
+        self.applied = opens;
+        self.led = timing.ahead;
+        if self.open <= opens {
+            self.open = self.from;
         }
         if !timing.with {
-            turn = own + timing.stagger;
+            self.turn = own + timing.stagger;
         }
-        last = own;
-        let began = from;
+        self.last = own;
+        let began = self.from;
         let to = began + timing.duration;
-        end = end.max(if timing.passes { began } else { to });
+        self.end = self.end.max(if timing.passes { began } else { to });
         if timing.leads {
-            from = to;
+            self.from = to;
         }
-        steps[i] = Laid {
+        Laid {
             turn: own,
             from: began,
             to,
             opens: (opens < began).then_some(Opens {
                 at: opens,
-                by: open,
+                by: self.open,
             }),
-        };
+        }
     }
-    end
 }

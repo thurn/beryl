@@ -415,3 +415,52 @@ fn what_is_drawn_on_a_card_turns_over_with_it() {
         "always the upper side"
     );
 }
+
+/// A step the client puts first in a beat, a closed prompt's tray letting its cards go, is laid
+/// out as though it were the beat's first step, as the web's `lowered` puts it there: the
+/// session's steps take their turns after it and the beat lasts until it is over.
+#[test]
+fn a_leading_step_is_laid_out_first_in_its_beat() {
+    let timings = [
+        timing(|t| t.duration = 33.0),
+        timing(|t| (t.delay, t.duration) = (20.0, 50.0)),
+    ];
+    for lead in [
+        timing(|_| {}),
+        timing(|t| (t.delay, t.stagger) = (40.0, 100.0)),
+    ] {
+        let steps = [tap(1), tap(2)];
+        let mut led = vec![Laid::default(); steps.len()];
+        let end = beryl_scene::beat::lay(
+            &steps,
+            &timings,
+            500.0,
+            |_| None,
+            (500.0, Some(&lead)),
+            &mut led,
+        );
+        let (whole, whole_end) = lay(
+            &[9, 1, 2],
+            &[lead.clone(), timings[0].clone(), timings[1].clone()],
+            500.0,
+            &[],
+            500.0,
+        );
+        assert_eq!((&led[..], end), (&whole[1..], whole_end), "{lead:?}");
+    }
+    let (_, without) = lay(&[1, 2], &timings, 500.0, &[], 500.0);
+    let mut led = vec![Laid::default(); 2];
+    let with = beryl_scene::beat::lay(
+        &[tap(1), tap(2)],
+        &timings,
+        500.0,
+        |_| None,
+        (500.0, Some(&timing(|_| {}))),
+        &mut led,
+    );
+    assert_eq!(
+        (without, with),
+        (570.0, 800.0),
+        "the beat lasts until the 300 ms let-go is over"
+    );
+}
