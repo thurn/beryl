@@ -2463,6 +2463,19 @@ A faster loop would need fewer crates in that series, or the dependencies that
 never change linked as a dynamic library, so that each edit links and macOS
 checks a small executable. Neither is done.
 
+Both commands were measured again on 2026-11-16, after milestone 2, by the same
+method: five runs each, a different one-line edit to `beryl_scene` in every run,
+in a worktree that had built once. `beryl_scene` had grown from about 11,000
+lines to about 48,000 since the first measurement.
+
+| Command, one-line edit each run | Median | Runs (s)               |  Load |
+| ------------------------------- | -----: | ---------------------- | ----: |
+| `just b3d tree`                 |  6.0 s | 6.0 8.9 5.4 4.0 17.7   | 16-18 |
+| `just b3d png`                  |  7.3 s | 6.2 6.3 7.3 119.2 21.2 | 15-16 |
+
+Neither target is met. The first `tree` and the first `png` in the fresh
+worktree each took about 92 s, rebuilding from the cached build directory.
+
 ### Times, moments, locators and actions
 
 These four are written one way everywhere.
@@ -3433,15 +3446,15 @@ ranked frames, in screens of 2880 by 1800 (Mesa's llvmpipe Vulkan driver in
 
 **What earlier beads measured**, given in full in their own sections:
 
-| Measure                                            | Result                                                        | Budget                    |
-| -------------------------------------------------- | ------------------------------------------------------------- | ------------------------- |
-| `just b3d tree` after a one-line edit              | 2.5 s median, load 43-47                                      | 3 s: met                  |
-| `just b3d png` after a one-line edit               | 6.4 s and 12.4 s medians, an hour apart, load 52-68 and 22-25 | 6 s: met some of the time |
-| 127 board faces cold, ASTC                         | 1.9 s, load 55-57                                             |                           |
-| 127 board faces from the compressed cache          | 8 ms                                                          |                           |
-| 150 board faces, compressed                        | 18.5 MB                                                       | 18 MB, about              |
-| Frame delivery, background window, 16 busy threads | 0 late frames of 1,302                                        |                           |
-| Frame delivery, simple fullscreen, settled         | 1 late frame of 1,287                                         |                           |
+| Measure                                            | Result                                                      | Budget       |
+| -------------------------------------------------- | ----------------------------------------------------------- | ------------ |
+| `just b3d tree` after a one-line edit              | 2.5 s median on 2026-11-15; 6.0 s on 2026-11-16, load 16-18 | 3 s: not met |
+| `just b3d png` after a one-line edit               | 6.4 s and 12.4 s on 2026-11-15; 7.3 s on 2026-11-16         | 6 s: not met |
+| 127 board faces cold, ASTC                         | 1.9 s, load 55-57                                           |              |
+| 127 board faces from the compressed cache          | 8 ms                                                        |              |
+| 150 board faces, compressed                        | 18.5 MB                                                     | 18 MB, about |
+| Frame delivery, background window, 16 busy threads | 0 late frames of 1,302                                      |              |
+| Frame delivery, simple fullscreen, settled         | 1 late frame of 1,287                                       |              |
 
 The edit-to-output times are under [Edit-to-output time](#edit-to-output-time),
 and the card faces and frame delivery below.
