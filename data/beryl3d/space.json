@@ -647,5 +647,11 @@
   },
   "shown": {
     "depth": 280
+  },
+  "hud": {
+    "step_off": 0.6,
+    "step_fixed": 0.32,
+    "incoming_gap": 6,
+    "thinking_gap": 8
   }
 }

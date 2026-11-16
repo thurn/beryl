@@ -584,6 +584,38 @@
       "PILL_GAP": {
         "value": 6,
         "note": "Between a pill and its cross: `.stage-revealed`'s `gap`."
+      },
+      "ORB_WIDTH": {
+        "value": 98,
+        "note": "The width of a life orb's core: twice `CORE.rx` in `ui/src/components/Player.tsx`, at `--orb` 1px."
+      },
+      "ORB_HEIGHT": {
+        "value": 74,
+        "note": "The height of a life orb's core: twice `CORE.ry`."
+      },
+      "ORB_BEZEL": {
+        "value": 5,
+        "note": "The width of a life orb's bezel: `BEZEL` in `Player.tsx`, the stroke of `.life-orb-core` in `ui/src/design/components/life-orbs.css`."
+      },
+      "STEP": {
+        "value": 22,
+        "note": "The side of a step stop's icon: `.step-stops`' `--step-size` in `ui/src/design/components/phase-tracker.css`."
+      },
+      "STEP_GAP": {
+        "value": 9,
+        "note": "The gap between two columns of step stops: `--step-gap`."
+      },
+      "STEP_ROW_GAP": {
+        "value": 6,
+        "note": "The gap between the two rows of step stops: `--step-row-gap`."
+      },
+      "THINKING": {
+        "value": 40,
+        "note": "The side of the ring under the opponent's orb while they think: `.thinking` in `life-orbs.css`."
+      },
+      "THINKING_TRACK": {
+        "value": 2.6,
+        "note": "The width of that ring: `.thinking-track`'s stroke."
       }
     },
     "color": {
@@ -663,6 +695,30 @@
       "BACKDROP": {
         "value": "rgb(14 13 12 / 40%)",
         "note": "What darkens the table under an overlay: `.overlay-backdrop`'s `background`."
+      },
+      "ORB_CORE": {
+        "value": "#2c2926",
+        "note": "A life orb's dark core: the `fill` of `.life-orb-core`."
+      },
+      "ORB_RIM": {
+        "value": "#8e8984",
+        "note": "A life orb's grey bezel: the middle stop of the rim gradient in `LifeOrb`."
+      },
+      "ORB_ACTIVE": {
+        "value": "#ffb444",
+        "note": "The active player's bezel, for the gold ring and flare `LifeOrb` draws while `active`: the stroke of `.life-orb-ring`."
+      },
+      "STEP": {
+        "value": "#f0e2c4",
+        "note": "A step stop's cream icon: the `fill` of `.step-icon`."
+      },
+      "STEP_CURRENT": {
+        "value": "#ffd27a",
+        "note": "The current step's icon, burning gold: `.step-current .step-icon`."
+      },
+      "THINKING": {
+        "value": "#ff9a2a",
+        "note": "The gold of the ring under the opponent's orb while they think: the middle of `Thinking`'s arc."
       }
     },
     "mana": {

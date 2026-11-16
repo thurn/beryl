@@ -1,6 +1,6 @@
 //! Settings and stops: what a change of either asks of the host and the session.
 
-use beryl_protocol::protocol::StepSet;
+use beryl_protocol::protocol::{Step, StepSet};
 
 use super::Client;
 use crate::command::{Request, SessionCommand};
@@ -44,15 +44,22 @@ impl Client {
     }
 }
 
-/// `set` with `step` added if it was not in it, or taken out if it was.
-pub(super) fn toggled(set: StepSet, step: beryl_protocol::protocol::Step) -> StepSet {
-    let mut steps: Vec<_> = set.steps().collect();
-    let step = step.into();
-    match steps.iter().position(|&held| held == step) {
-        Some(at) => {
-            steps.remove(at);
+/// `set` with `step` added if it was not in it, or taken out if it was, together with the other
+/// combat damage step when it is one of the two.
+pub(super) fn toggled(set: StepSet, step: Step) -> StepSet {
+    // Combat's two damage steps share one stop, as the web's `STEP_STOPS` has it.
+    let group: &[Step] = match step {
+        Step::FirstStrikeDamage | Step::CombatDamage => {
+            &[Step::FirstStrikeDamage, Step::CombatDamage]
         }
-        None => steps.push(step),
+        _ => &[step],
+    };
+    let mut steps: Vec<Step> = set.steps().map(Step::from).collect();
+    if group.iter().any(|step| steps.contains(step)) {
+        steps.retain(|held| !group.contains(held));
+    } else {
+        steps.extend_from_slice(group);
     }
+    let steps: Vec<_> = steps.into_iter().map(Into::into).collect();
     StepSet::of(&steps)
 }

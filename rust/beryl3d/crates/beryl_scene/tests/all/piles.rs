@@ -141,7 +141,9 @@ fn each_pile_is_named_with_its_count_and_an_empty_one_has_neither() {
         .collect();
     assert_eq!(piles, ["Your library"], "only a pile with a card has one");
     let counts = (frame.resolved.iter())
-        .filter(|element| frame.name(element.name).starts_with("Opponent's"))
+        .filter(|element| {
+            element.role == Role::Text && frame.name(element.name).starts_with("Opponent's")
+        })
         .count();
     assert_eq!(counts, 0, "an empty pile shows no count");
 }

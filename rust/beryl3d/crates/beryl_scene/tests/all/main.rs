@@ -20,6 +20,7 @@ mod faces;
 mod flat_layer;
 mod flat_text;
 mod game_over;
+mod hud;
 mod inspect;
 mod light;
 mod motion;

@@ -218,15 +218,15 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
     assert!(frame.resolved[auto].interactive && frame.resolved[cancel].interactive);
     assert!(!frame.resolved[title].interactive);
     assert!(text_fits(frame, &context()).is_empty());
-    // A panel for the bar, one for each button, one under each player's life total and one under
-    // the count of each of the six piles, the settings gear and the disc of each of the title's two mana symbols,
-    // all in the flat layer's band.
+    // A panel for the bar, one for each button, one for each player's orb, one under each
+    // player's life total and one under the count of each of the six piles, the settings gear
+    // and the disc of each of the title's two mana symbols, all in the flat layer's band.
     let layer = &frame.draws[frame.layer as usize..];
     let panels = layer
         .iter()
         .filter(|draw| draw.material == Material::Panel as u8)
         .count();
-    assert_eq!(panels, 14);
+    assert_eq!(panels, 16);
 }
 
 #[test]

@@ -4,7 +4,6 @@
 use glam::Vec2;
 
 use super::Client;
-use beryl_protocol::protocol::Status;
 
 use crate::command::Request;
 use crate::element::floats;
@@ -41,19 +40,14 @@ impl Client {
         };
         let full = crate::prompts::faces(&input);
         // Until the sheets are built, the settings sheet takes the screen's place in the flat
-        // layer; the bug report is drawn over the screen. The game screen shows nothing while no
-        // prompt or viewer is open and the game goes on, so that no empty panel is drawn over
-        // the table (and none is built); once the game has ended it shows the result.
-        let ended =
-            view.is_some_and(|view| matches!(view.status, Status::Over { .. } | Status::Stopped));
+        // layer; the bug report is drawn over the screen. Before a game has a view and with no
+        // prompt open, the game screen shows nothing, so that no empty panel is drawn over the
+        // table. Once a game has a view it shows the players' furniture, and once the game has
+        // ended, the result.
         let under = match self.sheet {
             Some(sheet) if sheet != Sheet::BugReport => None,
             _ if self.bug_hides_screen() => None,
-            _ if self.screen == Screen::Game
-                && input.prompt.is_none()
-                && input.viewing.is_none()
-                && !ended =>
-            {
+            _ if self.screen == Screen::Game && input.prompt.is_none() && input.view.is_none() => {
                 None
             }
             _ => Some(screens::screen(self.screen, &input)),

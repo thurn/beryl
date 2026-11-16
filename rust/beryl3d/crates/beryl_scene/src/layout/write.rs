@@ -421,6 +421,11 @@ fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> Option<Panel
         tint = brighter(tint);
         edge = brighter(edge);
     }
+    let border = style.border.map_or(border, |(_, width)| width);
+    // A panel with a clear face and no visible edge draws nothing (`element::holder`).
+    if tint[3] == 0 && (edge[3] == 0 || border == 0.0) {
+        return None;
+    }
     Some(Panel {
         tint,
         edge,
@@ -429,7 +434,7 @@ fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> Option<Panel
         } else {
             radius
         },
-        border: style.border.map_or(border, |(_, width)| width),
+        border,
     })
 }
 

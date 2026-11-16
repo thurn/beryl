@@ -548,6 +548,31 @@ pub(crate) fn pointer_moves(
         })
         .collect();
     assert_eq!(points.len(), 60);
+    // A point, or the nearest point below it where a hit test finds a card of the viewer's
+    // hand: a step stop beside the viewer's life orb covers the top of a few cards of a hand
+    // this large, and the pointer crosses the hand, not the stops.
+    let in_hand = |index: u32| {
+        let element = &frame.resolved[index as usize];
+        element.role == Role::Card
+            && matches!(
+                element.place,
+                Place::Card {
+                    zone: ZoneName::Hand,
+                    side: Side::You,
+                    ..
+                }
+            )
+    };
+    let onto_hand = |point| {
+        let mut below = point;
+        for _ in 0..40 {
+            if beryl_scene::agent::hit(frame, below).is_some_and(in_hand) {
+                return below;
+            }
+            below.y += 2.0;
+        }
+        point
+    };
     let gaps = u16::try_from(points.len() - 1).expect("60 points");
     (1..=2 * HALF)
         .map(|step| {
@@ -561,6 +586,7 @@ pub(crate) fn pointer_moves(
             let position = points.get(index + 1).map_or(points[index], |next| {
                 points[index].lerp(*next, f32::from(along % length) / f32::from(length))
             });
+            let position = onto_hand(position);
             (
                 u64::from(step) * TICK.0,
                 Pointer {

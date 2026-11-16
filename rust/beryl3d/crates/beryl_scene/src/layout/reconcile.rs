@@ -28,11 +28,16 @@ impl Layer {
                 element.children = children;
                 self.update(&mut node, element);
                 // A new node of the screen fades in, and its new children with it rather than
-                // each on its own.
+                // each on its own. A node anchored at a point of the window stands there at
+                // once, as a float does, and so do its children. A node that draws nothing of
+                // its own leaves each child to fade in or not on its own.
                 if self.animating {
-                    node.motion = Some(Motion::fade_in());
-                    for child in &mut node.children {
-                        child.motion = None;
+                    let anchored = matches!(node.element.anchor, Some(Anchor::Point(..)));
+                    if !node.element.draws_nothing() || anchored {
+                        node.motion = (!anchored).then(Motion::fade_in);
+                        for child in &mut node.children {
+                            child.motion = None;
+                        }
                     }
                 }
                 return node;
@@ -117,6 +122,14 @@ impl Layer {
             node.element = element;
         }
         self.reconcile_children(node, children);
+        // The children of a node anchored at a point of the window never transition, as a
+        // float's never do: a step stop that dims or a ring that appears beside an orb changes
+        // at once, and keeps the layer from animating while a script plays.
+        if matches!(node.element.anchor, Some(Anchor::Point(..))) {
+            for child in &mut node.children {
+                child.motion = None;
+            }
+        }
         self.link_children(node);
     }
 

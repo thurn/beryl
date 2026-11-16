@@ -383,8 +383,10 @@ fn life_change(by: i32) -> Element {
     text(&format!("{by:+}")).style(type_style::TITLE)
 }
 
-/// Unspent mana as text: the count and the symbol of each kind there is, in the order W, U, B,
-/// R, G and then colorless, as "2 U 1 G".
+/// Unspent mana as text, as the web interface's `ManaPool` (`ui/src/components/Player.tsx`)
+/// shows it: one mana symbol for each kind there is, after its count when that is more than
+/// one, in the order W, U, B, R, G and then colorless, as "2{U} {G}". The flat layer draws
+/// each `{U}` as an inline mana symbol.
 fn mana(pool: ManaPool) -> String {
     let mut out = String::new();
     for (count, symbol) in [
@@ -399,7 +401,10 @@ fn mana(pool: ManaPool) -> String {
             if !out.is_empty() {
                 out.push(' ');
             }
-            let _ = write!(out, "{count} {symbol}");
+            if count > 1 {
+                let _ = write!(out, "{count}");
+            }
+            let _ = write!(out, "{{{symbol}}}");
         }
     }
     out

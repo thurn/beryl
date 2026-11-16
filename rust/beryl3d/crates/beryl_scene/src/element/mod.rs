@@ -291,6 +291,30 @@ pub fn column() -> Element {
     element
 }
 
+/// A region that only holds its children and draws nothing of its own, not even the panel a
+/// screen's top element is drawn on. When it enters the screen, each of its children fades in
+/// on its own (`layout::reconcile`), so that a child anchored at a point of the window stands
+/// there at once.
+#[must_use]
+pub fn holder() -> Element {
+    row().background([0; 4]).border(([0; 4], 0.0))
+}
+
+impl Element {
+    /// Whether it draws nothing of its own: no words, no icon or face, and a clear panel, as a
+    /// `holder` is.
+    #[must_use]
+    pub fn draws_nothing(&self) -> bool {
+        self.text.is_none()
+            && self.shows.is_none()
+            && self.style.background.is_some_and(|tint| tint[3] == 0)
+            && self
+                .style
+                .border
+                .is_none_or(|(edge, width)| edge[3] == 0 || width == 0.0)
+    }
+}
+
 /// Words, named by themselves.
 #[must_use]
 pub fn text(words: &str) -> Element {
