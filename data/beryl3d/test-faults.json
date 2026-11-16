@@ -49,16 +49,13 @@
       "step-shown": 8
     },
     "b3d:choice-trigger-order/you/1600x900": {
-      "step-shown": 9
+      "step-shown": 8
     },
     "b3d:choice-trigger-order/you/1920x1080": {
-      "step-shown": 9
+      "step-shown": 8
     },
     "b3d:choice-trigger-order/you/2560x1080": {
       "step-shown": 10
-    },
-    "b3d:combat-attackers/opponent/1440x900": {
-      "step-shown": 1
     },
     "b3d:combat-attackers/opponent/1600x900": {
       "step-shown": 3
@@ -76,13 +73,16 @@
       "step-shown": 1
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1600x900": {
-      "step-shown": 3
+      "step-shown": 2
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1920x1080": {
-      "step-shown": 3
+      "step-shown": 2
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/2560x1080": {
-      "step-shown": 6
+      "step-shown": 8
+    },
+    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/1440x900": {
+      "step-shown": 1
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/1600x900": {
       "step-shown": 2
@@ -91,19 +91,19 @@
       "step-shown": 2
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/2560x1080": {
-      "step-shown": 8
+      "step-shown": 6
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1440x900": {
-      "step-shown": 3
+      "step-shown": 2
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1600x900": {
-      "step-shown": 4
+      "step-shown": 3
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1920x1080": {
-      "step-shown": 4
+      "step-shown": 3
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/2560x1080": {
-      "step-shown": 7
+      "step-shown": 5
     },
     "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-and-the-graveyard/you/1440x900": {
       "step-shown": 1
@@ -141,6 +141,12 @@
     "b3d:greedy-turn-9/opponent/2560x1080": {
       "step-shown": 2
     },
+    "b3d:griselbrand/bounced/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:griselbrand/paying-7-life-draws-seven-cards-next-turn/opponent/1440x900": {
+      "step-shown": 1
+    },
     "b3d:jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen-bounced-0/opponent/1600x900": {
       "step-shown": 1
     },
@@ -174,6 +180,12 @@
     "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-next-turn/opponent/1440x900": {
       "step-shown": 1
     },
+    "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-next-turn/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-next-turn/opponent/1920x1080": {
+      "step-shown": 1
+    },
     "b3d:late-game/opponent/1600x900": {
       "step-shown": 1
     },
@@ -184,13 +196,13 @@
       "step-shown": 2
     },
     "b3d:late-game/you/1440x900": {
-      "step-shown": 2
+      "step-shown": 1
     },
     "b3d:late-game/you/1600x900": {
-      "step-shown": 2
+      "step-shown": 1
     },
     "b3d:late-game/you/1920x1080": {
-      "step-shown": 2
+      "step-shown": 1
     },
     "b3d:late-game/you/2560x1080": {
       "step-shown": 2
@@ -327,6 +339,9 @@
     "b3d:spellseeker/finds-an-instant/opponent/2560x1080": {
       "step-shown": 1
     },
+    "b3d:stack-tall/opponent/2560x1080": {
+      "step-shown": 1
+    },
     "b3d:stack-tall/you/1440x900": {
       "step-shown": 1
     },
@@ -388,7 +403,7 @@
     "b3d:stress-verbs/you/1600x900": {
       "crowded": 1,
       "reachable": 1,
-      "step-shown": 31
+      "step-shown": 32
     },
     "b3d:stress-verbs/you/1920x1080": {
       "crowded": 1,
