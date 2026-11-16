@@ -26,7 +26,7 @@ pub static CARD: CardDef = Printed::Trinisphere
         Filter::Any,
         SpellCost::AtLeast(3),
     ))
-    .only_if(&Condition::Is(Objects::This, Filter::Not(&Filter::Tapped)))])
+    .only_if(&Condition::Is(Objects::This, UNTAPPED))])
     .card();
 
 #[cfg(feature = "scenarios")]

@@ -29,10 +29,7 @@ use crate::prelude::*;
 /// [CR 113.7a]: https://yawgatog.com/resources/magic-rules/#R1137a
 pub static CARD: CardDef = Printed::AbhorrentOculus
     .keywords(Keywords::FLYING)
-    .abilities(&[
-        Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::EachOpponent))
-            .effect(&manifest_dread(you())),
-    ])
+    .abilities(&[at_each_opponents_upkeep(&manifest_dread(you()))])
     .additional_cost(&[CostPart::exile(6, Zone::Graveyard, Filter::Any)])
     .card();
 

@@ -20,7 +20,7 @@ pub static CARD: CardDef = Printed::TwistedImage
         .target(&TargetSpec::creature())
         .effect(&sequence(&[
             modify(target(), &[Modification::SwitchPt], Duration::EndOfTurn),
-            draw(you(), 1),
+            DRAW_A_CARD,
         ]))])
     .card();
 

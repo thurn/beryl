@@ -22,7 +22,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::ForceOfWill
     .abilities(&[Ability::spell()
         .target(&TargetSpec::spell())
-        .effect(&counter(target()))])
+        .effect(&COUNTER_TARGET_SPELL)])
     .casting(&[CastingOption::Alternative {
         cost: ManaCost::NONE,
         parts: &[

@@ -56,7 +56,7 @@ pub static CARD: CardDef = Printed::TeferiTimeRaveler
                 ))
                 .optional(),
             )
-            .effect(&sequence(&[return_to_hand(target()), draw(you(), 1)])),
+            .effect(&sequence(&[return_to_hand(target()), DRAW_A_CARD])),
     ])
     .card();
 

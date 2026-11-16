@@ -26,7 +26,7 @@ use crate::prelude::*;
 /// [CR 612.3]: https://yawgatog.com/resources/magic-rules/#R6123
 pub static CARD: CardDef = Printed::MindBend
     .abilities(&[Ability::spell()
-        .target(&TargetSpec::permanent(Filter::Any))
+        .target(&TARGET_PERMANENT)
         .effect(&change_text(target(), Duration::Indefinite))])
     .card();
 

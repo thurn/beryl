@@ -40,12 +40,12 @@ const fn an_opponent_has_more(amount: &'static Amount) -> Condition {
 ///
 /// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
 pub static CARD: CardDef = Printed::BezaTheBoundingSpring
-    .abilities(&[Ability::triggered(&Trigger::ENTERS).effect(&sequence(&[
+    .abilities(&[when_enters(&sequence(&[
         // Lands you control.
         if_then(
             an_opponent_has_more(&Amount::Count(&Objects::All {
                 zone: Zone::Battlefield,
-                filter: Filter::All(&[Filter::Types(Types::LAND), Filter::Whose(&Players::You)]),
+                filter: LANDS_YOU_CONTROL,
             })),
             &create_tokens(you(), &TREASURE, 1),
         ),
@@ -69,7 +69,7 @@ pub static CARD: CardDef = Printed::BezaTheBoundingSpring
                 zone: Zone::Hand,
                 filter: Filter::Whose(&Players::You),
             })),
-            &draw(you(), 1),
+            &DRAW_A_CARD,
         ),
     ]))])
     .card()

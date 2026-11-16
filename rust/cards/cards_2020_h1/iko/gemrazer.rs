@@ -23,7 +23,7 @@ pub static CARD: CardDef = Printed::Gemrazer
         Ability::triggered(&Trigger::MUTATES)
             .target(&TargetSpec::permanent(Filter::All(&[
                 Filter::Types(Types::ARTIFACT.union(Types::ENCHANTMENT)),
-                Filter::Whose(&Players::EachOpponent),
+                OPPONENT_CONTROLS,
             ])))
             .effect(&destroy(target())),
         Ability::spell()

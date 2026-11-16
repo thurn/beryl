@@ -32,6 +32,7 @@ pub mod ids;
 pub mod index;
 pub mod mana;
 pub mod mana_notation;
+pub mod phrases;
 pub mod prompt;
 pub mod render;
 pub mod target;
@@ -76,6 +77,8 @@ pub use words::{
 /// `use beryl_card::prelude::*;`.
 pub mod prelude {
     pub use crate::effect::build::*;
+    pub use crate::phrases;
+    pub use crate::phrases::*;
     pub use crate::{
         Ability, Amount, BasicLandTypes, CardDef, CastTerms, CastingKind, CastingOption, Castings,
         ChosenKind, Colors, Comparison, Condition, CopyChange, CopyException, Cost, CostAction,

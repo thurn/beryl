@@ -17,11 +17,9 @@ use crate::prelude::*;
 ///
 /// [CR 406.2]: https://yawgatog.com/resources/magic-rules/#R4062
 pub static CARD: CardDef = Printed::TormodsCrypt
-    .abilities(&[
-        Ability::activated(Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]))
-            .target(&TargetSpec::player())
-            .effect(&exile(graveyard_of(&target_player()))),
-    ])
+    .abilities(&[Ability::activated(TAP_AND_SACRIFICE)
+        .target(&TargetSpec::player())
+        .effect(&exile(graveyard_of(&target_player())))])
     .card();
 
 #[cfg(feature = "scenarios")]

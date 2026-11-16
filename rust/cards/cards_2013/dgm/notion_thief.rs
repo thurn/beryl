@@ -30,7 +30,7 @@ pub static CARD: CardDef = Printed::NotionThief
         Ability::replacing(&Replacement::draws_except_first_in_draw_step(
             Players::EachOpponent,
         ))
-        .effect(&draw(you(), 1)),
+        .effect(&DRAW_A_CARD),
     ])
     .card();
 

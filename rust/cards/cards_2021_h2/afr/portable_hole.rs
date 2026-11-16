@@ -19,8 +19,8 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::PortableHole
     .abilities(&[Ability::triggered(&Trigger::ENTERS)
         .target(&TargetSpec::permanent(Filter::All(&[
-            Filter::Not(&Filter::Types(Types::LAND)),
-            Filter::Whose(&Players::EachOpponent),
+            NONLAND,
+            OPPONENT_CONTROLS,
             Filter::ManaValueAtMost(2),
         ])))
         .effect(&exile_until_this_leaves(target()))])

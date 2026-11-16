@@ -448,3 +448,13 @@ def test_the_real_vocabulary_reads() -> None:
             vocabulary.VARIANT.match(lines[entry.line - 1])
             or "fn " in lines[entry.line - 1]
         )
+
+
+def test_phrases_are_indexed_by_their_export_and_oracle_wording() -> None:
+    found = {entry.name: entry for entry in vocabulary.entries()}
+    assert found["phrases::NONLAND_PERMANENT"].wording == "target nonland permanent"
+    assert (
+        found["phrases::at_your_upkeep"].wording
+        == "At the beginning of your upkeep, {effect}"
+    )
+    assert found["Effect::Counter"].wording is None

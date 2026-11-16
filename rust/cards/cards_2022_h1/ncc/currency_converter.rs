@@ -43,7 +43,7 @@ pub static CARD: CardDef = Printed::CurrencyConverter
         Ability::triggered(&Trigger::discards(Players::You))
             .effect(&may(you(), &exile_linked(that_card_from_your_graveyard()))),
         Ability::activated(Cost::of(ManaCost::generic(2), &[CostPart::TAP]))
-            .effect(&sequence(&[draw(you(), 1), discard(you(), 1)])),
+            .effect(&sequence(&[DRAW_A_CARD, DISCARD_A_CARD])),
         Ability::activated(Cost::TAP).effect(&sequence(&[
             choose(
                 you(),

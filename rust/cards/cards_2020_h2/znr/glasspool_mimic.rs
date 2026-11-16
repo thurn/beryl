@@ -37,7 +37,7 @@ pub static CARD: CardDef = card(
     &[
         Printed::GlasspoolMimic
             .abilities(&[Ability::replacing(&Replacement::enter_as_copy(
-                &Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
+                &CREATURES_YOU_CONTROL,
                 Some(ExceptIx::new(0)),
             ))])
             .excepts(&[CopyException(&[

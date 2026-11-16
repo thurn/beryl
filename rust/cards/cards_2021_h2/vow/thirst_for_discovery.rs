@@ -20,7 +20,7 @@ use crate::prelude::*;
 /// [CR 205.4c]: https://yawgatog.com/resources/magic-rules/#R2054c
 pub static CARD: CardDef = Printed::ThirstForDiscovery
     .abilities(&[Ability::spell().effect(&sequence(&[
-        draw(you(), 3),
+        DRAW_THREE_CARDS,
         unless(
             &discard(you(), 2),
             you(),

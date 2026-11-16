@@ -27,10 +27,7 @@ pub static CARD: CardDef = Printed::BloodMoon
     .abilities(&[Ability::static_ability(&LayerSpec {
         affected: Objects::All {
             zone: Zone::Battlefield,
-            filter: Filter::All(&[
-                Filter::Types(Types::LAND),
-                Filter::Not(&Filter::Supertypes(Supertypes::BASIC)),
-            ]),
+            filter: NONBASIC_LANDS,
         },
         condition: None,
         modifications: &[Modification::SetLandTypes(BasicLandTypes::MOUNTAIN)],

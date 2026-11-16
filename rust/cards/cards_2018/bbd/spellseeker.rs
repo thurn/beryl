@@ -23,14 +23,11 @@ use crate::prelude::*;
 /// [CR 701.20a]: https://yawgatog.com/resources/magic-rules/#R70120a
 /// [CR 202.3]: https://yawgatog.com/resources/magic-rules/#R2023
 pub static CARD: CardDef = Printed::Spellseeker
-    .abilities(&[Ability::triggered(&Trigger::ENTERS).effect(&may(
+    .abilities(&[when_enters(&may(
         you(),
         &search(
             you(),
-            Filter::All(&[
-                Filter::Types(Types::INSTANT.union(Types::SORCERY)),
-                Filter::ManaValueAtMost(2),
-            ]),
+            Filter::All(&[INSTANT_OR_SORCERY, Filter::ManaValueAtMost(2)]),
             Found::RevealToHand,
         ),
     ))])

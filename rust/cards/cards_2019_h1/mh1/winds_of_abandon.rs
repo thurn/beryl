@@ -11,15 +11,6 @@
 
 use crate::prelude::*;
 
-/// "Creature you don't control". Not "an opponent controls": a teammate's creature is one you don't
-/// control too ([CR 102.3]): "the player's opponents are all players not on their team."
-///
-/// [CR 102.3]: https://yawgatog.com/resources/magic-rules/#R1023
-const CREATURES_YOU_DONT_CONTROL: Filter = Filter::All(&[
-    Filter::Types(Types::CREATURE),
-    Filter::Not(&Filter::Whose(&Players::You)),
-]);
-
 /// "For each creature exiled this way, its controller searches their library for a basic land card.
 /// Those players put those cards onto the battlefield tapped, then shuffle": each player whose
 /// creatures were exiled searches for that many basic land cards ([CR 701.23a]) and puts them onto
@@ -52,18 +43,23 @@ const FETCH: Effect = for_each_player(
 /// Overloaded, "Exile each creature you don't control" ([CR 702.96a]), with no target
 /// ([CR 702.96b]). The creatures are exiled at once.
 ///
+/// Both modes can exile a teammate's creature. The phrase only excludes creatures you
+/// control, and a teammate is outside the set of opponents ([CR 102.3]): "the player's
+/// opponents are all players not on their team."
+///
 /// [CR 701.13a]: https://yawgatog.com/resources/magic-rules/#R70113a
 /// [CR 702.96a]: https://yawgatog.com/resources/magic-rules/#R70296a
 /// [CR 702.96b]: https://yawgatog.com/resources/magic-rules/#R70296b
+/// [CR 102.3]: https://yawgatog.com/resources/magic-rules/#R1023
 pub static CARD: CardDef = Printed::WindsOfAbandon
     .abilities(&[
         Ability::spell()
-            .target(&TargetSpec::permanent(CREATURES_YOU_DONT_CONTROL))
+            .target(&TargetSpec::permanent(CREATURE_YOU_DONT_CONTROL))
             .effect(&sequence(&[exile(target()), FETCH])),
         Ability::spell().effect(&sequence(&[
             exile(Objects::All {
                 zone: Zone::Battlefield,
-                filter: CREATURES_YOU_DONT_CONTROL,
+                filter: CREATURE_YOU_DONT_CONTROL,
             }),
             FETCH,
         ])),

@@ -21,10 +21,7 @@ use crate::prelude::*;
 /// [CR 608.3f]: https://yawgatog.com/resources/magic-rules/#R6083f
 pub static CARD: CardDef = Printed::DoubleMajor
     .abilities(&[Ability::spell()
-        .target(&TargetSpec::one(
-            TargetKind::Spell,
-            Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
-        ))
+        .target(&TargetSpec::one(TargetKind::Spell, CREATURES_YOU_CONTROL))
         .effect(&copy_spell_except_keeping_targets(
             target(),
             ExceptIx::new(0),

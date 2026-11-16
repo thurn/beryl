@@ -22,7 +22,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::ThundertrapTrainer
     .abilities(&[
         Ability::offspring(),
-        Ability::triggered(&Trigger::ENTERS).effect(&dig(
+        when_enters(&dig(
             you(),
             4,
             Taken::MayReveal(Filter::Not(&Filter::Types(

@@ -49,7 +49,7 @@ pub static CARD: CardDef = Printed::TeferisProtection
         ),
         phase_out(Objects::All {
             zone: Zone::Battlefield,
-            filter: Filter::Whose(&Players::You),
+            filter: YOU_CONTROL,
         }),
         exile(this()),
     ]))])

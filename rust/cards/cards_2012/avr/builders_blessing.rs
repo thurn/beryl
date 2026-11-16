@@ -22,11 +22,7 @@ pub static CARD: CardDef = Printed::BuildersBlessing
     .abilities(&[Ability::static_ability(&LayerSpec {
         affected: Objects::All {
             zone: Zone::Battlefield,
-            filter: Filter::All(&[
-                Filter::Types(Types::CREATURE),
-                Filter::Whose(&Players::You),
-                Filter::Not(&Filter::Tapped),
-            ]),
+            filter: Filter::All(&[Filter::Types(Types::CREATURE), YOU_CONTROL, UNTAPPED]),
         },
         condition: None,
         modifications: &[Modification::ModifyPt(0, 2)],

@@ -24,7 +24,7 @@ pub static SPIRIT: CardDef = Token::SpiritToken.keywords(Keywords::FLYING).card(
 /// [CR 111.2]: https://yawgatog.com/resources/magic-rules/#R1112
 pub static CARD: CardDef = Printed::StaffOfTheStoryteller
     .abilities(&[
-        Ability::triggered(&Trigger::ENTERS).effect(&create_tokens(you(), &SPIRIT, 1)),
+        when_enters(&create_tokens(you(), &SPIRIT, 1)),
         Ability::triggered(&Trigger::creates_tokens(
             Players::You,
             Filter::Types(Types::CREATURE),
@@ -34,7 +34,7 @@ pub static CARD: CardDef = Printed::StaffOfTheStoryteller
             mana("{W}"),
             &[CostPart::TAP, CostPart::remove(CounterKind::Story)],
         ))
-        .effect(&draw(you(), 1)),
+        .effect(&DRAW_A_CARD),
     ])
     .card()
     .creating(&[&SPIRIT]);

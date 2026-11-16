@@ -20,10 +20,7 @@ use crate::prelude::*;
 /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 pub static CARD: CardDef = Printed::Fork
     .abilities(&[Ability::spell()
-        .target(&TargetSpec::one(
-            TargetKind::Spell,
-            Filter::Types(Types::INSTANT.union(Types::SORCERY)),
-        ))
+        .target(&TargetSpec::one(TargetKind::Spell, INSTANT_OR_SORCERY))
         .effect(&copy_spell_except(target(), ExceptIx::new(0)))])
     .excepts(&[CopyException::RED])
     .card();

@@ -23,7 +23,7 @@ use crate::prelude::*;
 /// [CR 119.4]: https://yawgatog.com/resources/magic-rules/#R1194
 /// [CR 704.5a]: https://yawgatog.com/resources/magic-rules/#R7045a
 pub static CARD: CardDef = Printed::Griselbrand
-    .abilities(&[Ability::activated(Cost::part(&CostPart::Life(7))).effect(&draw(you(), 7))])
+    .abilities(&[Ability::activated(Cost::part(&CostPart::Life(7))).effect(&DRAW_SEVEN_CARDS)])
     .keywords(Keywords::FLYING.union(Keywords::LIFELINK))
     .card();
 

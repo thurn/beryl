@@ -24,10 +24,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::SnapcasterMage
     .keywords(Keywords::FLASH)
     .abilities(&[Ability::triggered(&Trigger::ENTERS)
-        .target(&TargetSpec::graveyard_card(Filter::All(&[
-            Filter::Types(Types::INSTANT.union(Types::SORCERY)),
-            Filter::Whose(&Players::You),
-        ])))
+        .target(&TARGET_YOUR_INSTANT_OR_SORCERY_CARD)
         .effect(&gain_flashback(target()))])
     .card();
 

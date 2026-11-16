@@ -38,6 +38,8 @@ mod words;
 mod zones;
 
 #[cfg(test)]
+mod phrase_tests;
+#[cfg(test)]
 mod tests;
 
 pub use card::{render, render_ability, render_ability_of, render_face, render_face_read};

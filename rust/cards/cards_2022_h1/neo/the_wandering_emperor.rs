@@ -47,7 +47,7 @@ pub static CARD: CardDef = Printed::TheWanderingEmperor
         })
         .only_if(&Condition::EnteredThisTurn(Objects::This)),
         Ability::loyalty(1)
-            .target(&TargetSpec::creature().optional())
+            .target(&UP_TO_ONE_TARGET_CREATURE)
             .effect(&sequence(&[
                 add_counters(target(), CounterKind::PlusOne, 1),
                 modify(
@@ -58,11 +58,8 @@ pub static CARD: CardDef = Printed::TheWanderingEmperor
             ])),
         Ability::loyalty(-1).effect(&create_tokens(you(), &SAMURAI, 1)),
         Ability::loyalty(-2)
-            .target(&TargetSpec::permanent(Filter::All(&[
-                Filter::Types(Types::CREATURE),
-                Filter::Tapped,
-            ])))
-            .effect(&sequence(&[exile(target()), gain_life(you(), 2)])),
+            .target(&TARGET_TAPPED_CREATURE)
+            .effect(&sequence(&[exile(target()), GAIN_TWO_LIFE])),
     ])
     .card()
     .creating(&[&SAMURAI]);

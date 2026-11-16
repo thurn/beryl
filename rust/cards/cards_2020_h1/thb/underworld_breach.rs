@@ -31,15 +31,14 @@ pub static CARD: CardDef = Printed::UnderworldBreach
     .abilities(&[
         Ability::static_ability(&LayerSpec {
             affected: Objects::Everywhere(Filter::All(&[
-                Filter::Not(&Filter::Types(Types::LAND)),
+                NONLAND,
                 Filter::Whose(&Players::You),
                 Filter::InZone(Zone::Graveyard),
             ])),
             condition: None,
             modifications: &[Modification::GrantEscape],
         }),
-        Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer))
-            .effect(&sacrifice(this())),
+        Ability::triggered(&EACH_END_STEP).effect(&sacrifice(this())),
     ])
     .card();
 

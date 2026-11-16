@@ -18,7 +18,7 @@ use crate::prelude::*;
 /// [CR 120.3a]: https://yawgatog.com/resources/magic-rules/#R1203a
 pub static CARD: CardDef = Printed::ManaCrypt
     .abilities(&[
-        Ability::triggered(&Trigger::step(TurnStep::Upkeep, Players::You)).effect(&sequence(&[
+        at_your_upkeep(&sequence(&[
             flip_coin(you()),
             if_then(if_you_lose_the_flip(), &deal_damage_to(you(), 3)),
         ])),
