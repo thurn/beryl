@@ -337,9 +337,7 @@ impl Client {
                 self.show_screen();
             }
             Input::Lobby(update) => self.take_lobby(*update),
-            Input::Reply(Reply::TableLobby(Err(refused)) | Reply::TableSolo(Err(refused))) => {
-                self.lobby_refused(&refused);
-            }
+            Input::Reply(Reply::TableLobby(Err(refused))) => self.lobby_refused(&refused),
             Input::Reply(Reply::DeckList(saved)) => self.take_saved_decks(saved),
             Input::Reply(Reply::DeckImport(imported)) => self.take_imported_deck(imported),
             Input::Settings(settings) => {
