@@ -14,6 +14,7 @@ use beryl_protocol::script::{
     Act, Arrow, Curve, Fact, Mark, Notice, Reset, Room, Span, Step, StepTiming, Stream, Subject,
     Table, Tally, replay, time_script,
 };
+use beryl_scene::agent::Rule;
 use beryl_scene::testing;
 
 /// How many permanents move in a stress board's second view.
@@ -42,6 +43,16 @@ pub const NAMES: [&str; 5] = [
     "stress-hand",
     "stress-stack",
 ];
+
+/// Whether the interface checks hold `recording` to `rule`. `stress-verbs` starts every verb's
+/// acts on 100 objects in one beat with no stagger, so that the frame gates draw every verb in
+/// the same frames. No game plays a beat like that, and its steps crowd and cover each other on
+/// purpose, so "not crowded" and "every step shown" do not judge it (docs/beryl-3d.md, "What the
+/// checks run over"). Every other check still runs on it.
+#[must_use]
+pub fn audited(recording: &str, rule: Rule) -> bool {
+    recording != "stress-verbs" || !matches!(rule, Rule::Crowded | Rule::StepShown)
+}
 
 /// The synthetic recording called `name`, if there is one.
 #[must_use]

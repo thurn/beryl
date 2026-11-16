@@ -2727,7 +2727,12 @@ and `audit.mjs`), with the same thresholds. The thresholds are in
 
 What the checks run over:
 
-- **Every fixture, every card spec, every stress board**, from both seats.
+- **Every fixture, every card spec, every stress board**, from both seats. The
+  one exception is the `stress-verbs` board, which starts every verb's acts on
+  100 objects together in one beat so that the frame gates draw every verb in
+  the same frames. No game plays a beat like that: its steps crowd and cover
+  each other on purpose. So "not crowded" and "every step shown" do not judge it
+  (`stress::audited` in `beryl_inspect`), and every other check does.
 - **A matrix of windows.** In the desktop layout: 1440 by 900, 1600 by 900, 1920
   by 1080 and 2560 by 1080. In the phone layout: 393 by 759 and 375 by 647, the
   two sizes the web interface's phone checks use, and 430 by 932.

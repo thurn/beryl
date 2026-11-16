@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 
 use super::options::{Options, Usage};
 use super::{Printed, milliseconds, open};
+use crate::stress;
 
 /// How many faults `check` prints before it gives a count of the rest.
 const MOST_FAULTS: usize = 20;
@@ -32,7 +33,11 @@ pub(super) fn check(options: &Options) -> Result<Printed, Usage> {
     let mut page = open(options)?;
     let checked = page.check_all(Mode::EveryTick);
     let mut found: Vec<Found> = Vec::new();
-    for fault in checked.faults {
+    let audited = checked
+        .faults
+        .into_iter()
+        .filter(|fault| stress::audited(options.name(), fault.rule));
+    for fault in audited {
         let same = found.iter_mut().find(|known| {
             known.fault.rule == fault.rule
                 && known

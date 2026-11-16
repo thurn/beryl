@@ -15,13 +15,13 @@ use std::time::Instant;
 
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::{Fault, Judged, Layout};
+use beryl_scene::agent::{Count, Fault, Judged, Layout, Rule};
 use beryl_scene::driver::{Mode, Page};
 use beryl_scene::input::Size;
 
 use crate::cli::options::side_of;
 use crate::pages::{self, DESKTOP_WINDOWS};
-use crate::recordings;
+use crate::{recordings, stress};
 
 /// The prefix of every test's name.
 pub const PREFIX: &str = "b3d:";
@@ -146,7 +146,22 @@ fn play(test: Test, mode: Mode) -> Outcome {
     let started = Instant::now();
     let ran = caught(|| test.page().map(|mut page| page.check_all(mode))).and_then(|ran| ran);
     let (faults, frames, judged, error) = match ran {
-        Ok(checked) => (checked.faults, checked.frames, checked.judged, None),
+        Ok(checked) => {
+            let mut judged = checked.judged;
+            for rule in Rule::ALL {
+                if !stress::audited(&test.recording, rule) {
+                    judged.0[rule.index()] = Count::default();
+                }
+            }
+            (
+                (checked.faults.into_iter())
+                    .filter(|fault| stress::audited(&test.recording, fault.rule))
+                    .collect(),
+                checked.frames,
+                judged,
+                None,
+            )
+        }
         Err(why) => (Vec::new(), 0, Judged::default(), Some(why)),
     };
     Outcome {
