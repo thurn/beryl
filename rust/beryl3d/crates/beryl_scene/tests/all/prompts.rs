@@ -265,3 +265,64 @@ fn the_ways_to_use_a_card_draw_one_face_each_and_a_disabled_way_sends_nothing() 
         })
     );
 }
+
+/// A catalog of the five colors, with the entry `chosen`, if any.
+fn colors(chosen: Option<u16>) -> PromptView {
+    let entries = ["White", "Blue", "Black", "Red", "Green"];
+    prompt(
+        Purpose::Choose,
+        "Choose a color.",
+        Vec::new(),
+        ShapeBody::Catalog {
+            entries: entries.map(str::to_owned).to_vec(),
+            chosen,
+        },
+    )
+}
+
+#[test]
+fn a_catalog_lists_its_entries_in_order_and_lights_the_one_chosen() {
+    let mut builder = ViewBuilder::sample();
+    builder.script(ScriptBuilder::reset().build());
+    let mut client = client();
+    client.handle(deciding(&builder, colors(None), Vec::new()));
+    let frame = client.frame(0);
+    let tops: Vec<f32> = ["White", "Blue", "Black", "Red", "Green"]
+        .map(|name| frame.resolved[find(frame, Role::Button, name)].corners[0].y)
+        .to_vec();
+    assert!(
+        tops.windows(2).all(|pair| pair[0] < pair[1]),
+        "the entries stand top to bottom in the session's order: {tops:?}"
+    );
+    let black = centre(frame, find(frame, Role::Button, "Black"));
+    assert_eq!(press(&mut client, black), Some(Click::Entry { index: 2 }));
+
+    client.handle(deciding(&builder, colors(Some(2)), Vec::new()));
+    let frame = client.frame(MS);
+    let lit = |name| {
+        let index = find(frame, Role::Button, name);
+        frame.resolved[index].state.has(StateBits::SELECTED)
+    };
+    assert!(lit("Black"), "the reply lights the entry chosen");
+    assert!(!lit("Blue"), "and no other");
+}
+
+#[test]
+fn no_card_takes_a_press_under_a_catalogs_shade() {
+    let mut builder = ViewBuilder::sample();
+    builder.script(ScriptBuilder::reset().build());
+    let card = (builder.card(ZoneName::Battlefield, Side::You, "Island")).slot;
+    let mut client = client();
+    client.handle(deciding(&builder, colors(None), Vec::new()));
+    // The table covers itself for a prompt only once it is open: from the frame after the
+    // one in which it settles.
+    client.frame(0);
+    let frame = client.frame(MS);
+    let index = (frame.resolved.iter())
+        .position(|element| element.role == Role::Card && element.id.0 == u32::from(card.0))
+        .expect("the card is drawn");
+    assert!(
+        !frame.resolved[index].interactive,
+        "a card under the shade takes no press"
+    );
+}

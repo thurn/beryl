@@ -378,6 +378,13 @@
         "size": 14,
         "line_height": 1,
         "note": "The label of a small pill button over the table, such as Revealed Cards: `.stage-revealed .button` in `ui/src/stage/stage.css`, 14 points."
+      },
+      "ENTRY": {
+        "font": "OpenSans",
+        "weight": 600,
+        "size": 22,
+        "line_height": 1,
+        "note": "A catalog entry's words: `.stage-entry` in `ui/src/stage/choose.css`, 600 at 22 points."
       }
     },
     "size": {
@@ -628,6 +635,22 @@
       "THINKING_TRACK": {
         "value": 2.6,
         "note": "The width of that ring: `.thinking-track`'s stroke."
+      },
+      "ENTRY_MIN_WIDTH": {
+        "value": 260,
+        "note": "The least width of a catalog entry: `.stage-entry`'s `min-width`."
+      },
+      "ENTRY_HEIGHT": {
+        "value": 52,
+        "note": "The height of a catalog entry: `.stage-entry`'s `height`."
+      },
+      "ENTRY_PADDING": {
+        "value": 24,
+        "note": "A catalog entry's padding either side of its words: `.stage-entry`'s `padding`."
+      },
+      "ENTRY_GAP": {
+        "value": 12,
+        "note": "Between one catalog entry and the next: `.stage-entries ul`'s row `gap`."
       }
     },
     "color": {
@@ -735,6 +758,22 @@
       "TRAY_SHADE": {
         "value": "rgb(6 9 12 / 62%)",
         "note": "The shade over the table under what a prompt holds up or lists, such as waiting triggers to order: `.stage-tray`'s `background` in `ui/src/stage/stage.css`."
+      },
+      "TRAY_SHADE": {
+        "value": "rgb(6 9 12 / 62%)",
+        "note": "What darkens the table while a prompt covers it: `.stage-tray`'s `background` in `ui/src/stage/stage.css`."
+      },
+      "ENTRY": {
+        "value": "rgb(33 31 28 / 88%)",
+        "note": "A catalog entry's face: `.stage-entry`'s `background`."
+      },
+      "ENTRY_RIM": {
+        "value": "rgb(233 173 74 / 55%)",
+        "note": "A catalog entry's rim: `.stage-entry`'s `border`."
+      },
+      "ENTRY_CHOSEN": {
+        "value": "rgb(233 173 74 / 26%)",
+        "note": "The face of the catalog entry chosen: `.stage-entry[aria-pressed=\"true\"]`'s `background`; its rim is `gold`."
       }
     },
     "mana": {
