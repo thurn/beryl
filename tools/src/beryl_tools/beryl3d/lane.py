@@ -34,7 +34,17 @@ RECORD = Step("record", [*CARGO, "record"], paths.REPO)
 # that build nothing in the shared build directory (clippy has a target directory of its own,
 # `cli.CLIPPY_TARGET`); each other lane starts with [`RECORD`].
 GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    (NAME, ("fmt", "clippy", "scene-purity", "lints-match", "data-names", "scene-literals")),
+    (
+        NAME,
+        (
+            "fmt",
+            "clippy",
+            "scene-purity",
+            "lints-match",
+            "data-names",
+            "scene-literals",
+        ),
+    ),
     (f"{NAME}-tests", ("cargo-test", "gate")),
     (f"{NAME}-interface", ("test",)),
     (f"{NAME}-timeline", ("timeline-parity",)),

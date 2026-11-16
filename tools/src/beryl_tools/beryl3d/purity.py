@@ -305,13 +305,22 @@ def data_names(root: Path) -> list[str]:
 # widget, heads-up display, inspector or manual element takes its sizes from the generated
 # `tokens` module (rust/beryl3d/crates/beryl_scene/src/tokens.rs), never from a number of its own
 # (docs/beryl-3d.md, "Elements").
-TOKEN_FOLDERS: tuple[str, ...] = ("screens", "prompts", "widgets", "hud", "inspect", "manual")
+TOKEN_FOLDERS: tuple[str, ...] = (
+    "screens",
+    "prompts",
+    "widgets",
+    "hud",
+    "inspect",
+    "manual",
+)
 TOKEN_FILE = "data/design-tokens.json"
 # The float literals that are not sizes: zero, one, a half to centre and two to halve or double.
 PLAIN_FLOATS: frozenset[float] = frozenset({0.0, 0.5, 1.0, 2.0})
 # A float literal: `12.0`, `1.35`, `1_000.0` or `4f32`, not the `0` of a field `x.0` or a part of
 # a name.
-FLOAT_LITERAL: re.Pattern[str] = re.compile(r"(?<![\w.])(\d[\d_]*\.\d[\d_]*|\d[\d_]*(?=f32))")
+FLOAT_LITERAL: re.Pattern[str] = re.compile(
+    r"(?<![\w.])(\d[\d_]*\.\d[\d_]*|\d[\d_]*(?=f32))"
+)
 STRING_LITERAL: re.Pattern[str] = re.compile(r'"(?:[^"\\]|\\.)*"')
 
 
