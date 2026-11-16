@@ -59,6 +59,9 @@ const HAND: [&str; 7] = [
 fn the_opening_hand_stands_in_the_row_and_keep_answers_the_mulligan() {
     let mut page = at("opening-keep", "prompt:1");
     let tree = page.tree();
+    // The opening's backdrop covers the step stops, as the web's overlay does: none takes a
+    // press beside the hand.
+    assert!(!tree.contains("toggle \"Your draw\""), "{tree}");
     assert!(tree.contains("text \"Opening hand\""), "{tree}");
     assert!(tree.contains("text \"On the draw\""), "{tree}");
     for name in HAND {

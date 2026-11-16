@@ -27,9 +27,6 @@ use crate::widgets::primary;
 /// The width of the card that ended the game, the web's 230 on the desktop.
 const CULPRIT_WIDTH: f32 = 230.0;
 
-/// The scrim over the table, `.overlay-backdrop`: black at about half strength.
-const SCRIM: [u8; 4] = [0, 0, 0, 140];
-
 /// The result's title, `.game-over-title`: 72 points, bold.
 const TITLE: TypeStyle = TypeStyle {
     font: Font::CrimsonPro,
@@ -148,19 +145,12 @@ fn middle(input: &ScreenIn) -> Vec2 {
     Vec2::new(input.window.size.width, input.window.size.height) / 2.0
 }
 
-/// The scrim over the table: the whole window in a dim wash, which the pointer goes through so
-/// that the table stays reachable beneath it.
+/// The backdrop over the table (`screens::backdrop`), which the pointer goes through so that
+/// the table stays reachable beneath it.
 #[must_use]
 pub fn scrim(input: &ScreenIn) -> Option<Element> {
     shown(input)?;
-    let mut scrim = row()
-        .name("scrim")
-        .width(input.window.size.width)
-        .height(input.window.size.height)
-        .background(SCRIM)
-        .passes(true);
-    scrim.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
-    Some(scrim)
+    Some(super::backdrop(input))
 }
 
 /// The card that ended the game, drawn flat and whole, or as the plate of the ability that did

@@ -211,3 +211,16 @@ pub fn music(screen: Screen, view: Option<&PlayerView>) -> Option<Music> {
         },
     })
 }
+
+/// The dimmed table, `.overlay-backdrop`: the whole window in the backdrop's color, which the
+/// pointer goes through. The opening and game over draw it under what they show.
+fn backdrop(input: &ScreenIn) -> Element {
+    let mut backdrop = crate::element::row()
+        .name("scrim")
+        .width(input.window.size.width)
+        .height(input.window.size.height)
+        .background(crate::tokens::color::BACKDROP)
+        .passes(true);
+    backdrop.anchor = Some(crate::element::Anchor::Point(glam::Vec2::ZERO, glam::Vec2::ZERO));
+    backdrop
+}

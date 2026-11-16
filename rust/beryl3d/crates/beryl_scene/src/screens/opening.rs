@@ -143,7 +143,7 @@ pub fn opening(input: &ScreenIn) -> Option<Element> {
         row()
             .name("opening screen")
             .passes(true)
-            .child(scrim(input))
+            .child(super::backdrop(input))
             .child(screen),
     )
 }
@@ -194,17 +194,4 @@ fn empty_slot(at: usize) -> Element {
         .height(metrics::SLOT * CARD_HEIGHT / CARD_WIDTH)
         .background(color::BACKDROP)
         .passes(true)
-}
-
-/// The dimmed table, `.overlay-backdrop`: the whole window in the backdrop's color, which the
-/// pointer goes through.
-fn scrim(input: &ScreenIn) -> Element {
-    let mut scrim = row()
-        .name("scrim")
-        .width(input.window.size.width)
-        .height(input.window.size.height)
-        .background(color::BACKDROP)
-        .passes(true);
-    scrim.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
-    scrim
 }

@@ -25,7 +25,8 @@ pub fn game(input: &ScreenIn) -> Element {
         game_over::game_over(input),
         game_over::buttons(input),
         players::players(input).filter(|_| !opening::shown(input)),
-        steps::steps(input),
+        // The opening's backdrop covers the stops, as the web's overlay does.
+        steps::steps(input).filter(|_| !opening::shown(input)),
         log::log(input),
         viewer::viewer(input),
     ]
