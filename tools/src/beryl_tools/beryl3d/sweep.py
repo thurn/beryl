@@ -741,6 +741,7 @@ def sweep_run(args: argparse.Namespace) -> int:
             repo_paths.REPO,
             "the last passing sweep",
             SCRIPT,
+            lambda name: lane.holding(step_of(name)) or name,
         )
         for line in found:
             print(line)

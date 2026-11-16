@@ -45,10 +45,22 @@ GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "scene-literals",
         ),
     ),
-    (f"{NAME}-tests", ("cargo-test", "gate")),
+    (f"{NAME}-tests", ("cargo-test",)),
+    # The native gate has a lane of its own so that it runs in every fast check of a Beryl 3D
+    # change. Behind `cargo-test` in one lane it gave a result in 100 of 327 fast checks on
+    # 2026-11-16: a lane stops at its first failed step, and the hard limit cut off the rest. A
+    # count that a change moved then reached staging and failed the sweep instead.
+    (f"{NAME}-gate", ("gate",)),
     (f"{NAME}-interface", ("test",)),
     (f"{NAME}-timeline", ("timeline-parity",)),
 )
+
+
+def holding(step: str) -> str | None:
+    """The lane of [`GROUPS`] that runs `step`, or none for a step only the sweep runs. The
+    sweep names its lanes after their steps, so bisect.py uses this to ask whether a culprit's
+    fast check ran the step in the lane that holds it."""
+    return next((name for name, names in GROUPS if step in names), None)
 
 
 def steps() -> list[Step]:

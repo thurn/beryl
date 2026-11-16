@@ -395,6 +395,25 @@ def test_a_culprit_s_fast_check_is_found_only_within_its_own_push(repo: Path) ->
     # A step that failed though none of its checks did is run whenever its lane is.
     assert bisect.unchosen("ui-test:ui-test", "ui-test", records, whole=True) == ""
     assert bisect.unchosen("shots:shots", "shots", records, whole=True) != ""
+    # A run whose lane the fast check names differently is asked about under the fast check's
+    # name for the lane and its step (the Beryl 3D sweep's `b3d-gate` is `beryl3d-gate`).
+    runlog.append(
+        [
+            {
+                **log[0],
+                "lane": "beryl3d-gate",
+                "check": "beryl3d-gate:gate",
+                "outcome": "skip",
+                "chosen": "cut",
+            }
+        ]
+    )
+    cut = [
+        r
+        for r in runlog.read_log(datetime.fromtimestamp(0, timezone.utc))
+        if r.get("lane") == "beryl3d-gate"
+    ]
+    assert bisect.unchosen("b3d-gate:gate", "beryl3d-gate", cut, whole=True) == "cut"
     # A fast check run before the commit was made is matched by its tree.
     tree = git(repo, "rev-parse", f"{commits[0]}^{{tree}}")
     runlog.append([{**log[0], "commit": "", "tree": tree}])

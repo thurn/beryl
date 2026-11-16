@@ -3147,6 +3147,18 @@ them, and after that the rule is the engine count gate's:
 - **No limit waits for anyone.** Neither kind of rise needs the owner's
   approval. The commit that raises a limit states its reason, and that is the
   record.
+- **The change that moves a count moves its limit.** The native gate runs in a
+  lane of its own, `beryl3d-gate`, in every fast check of a Beryl 3D change, so
+  a change that moves a work counter, the load or an allocation count fails its
+  own push until it lowers or raises that limit in the same commit. A change
+  that raises a work counter's limit because it added work to every board (a new
+  element on every screen, a verb a gated board plays) also runs
+  `just b3d gate --counts` and moves the instruction limits in the same commit,
+  since that work moves them too. Otherwise the sweep finds the instruction
+  counts past their limits an hour later and files a bead for another session to
+  re-pin them. On 2026-11-16 nine such beads were filed in one day, most of them
+  because the native gate, behind the workspace's tests in one lane, had given a
+  result in only 100 of 327 fast checks.
 
 #### During the build-out
 
@@ -3217,14 +3229,15 @@ thousands of measurements, so the gate finds its candidates first.
   costs instructions. When it does not, the fix is a counter that sees that
   work.
 - **Only the Beryl 3D sweep runs the count gate.** No change waits for it before
-  pushing. A session checks a change's frame cost on the Mac with the native
-  gate and the `frame_abba` timing, and a sweep that finds a count past its
-  limit files a bead like any other sweep failure.
+  pushing, except one that adds work to every board, which moves the instruction
+  limits itself (see above). A session checks a change's frame cost on the Mac
+  with the native gate and the `frame_abba` timing, and a sweep that finds a
+  count past its limit files a bead like any other sweep failure.
 - **The work counters are also limited natively**, on every tick, in the check
   that runs before each push. That catches most regressions without the virtual
   machine.
 
-The native gate is `just b3d gate`, a step of the `beryl3d-tests` lane
+The native gate is `just b3d gate`, the step of the `beryl3d-gate` lane
 (`tools/src/beryl_tools/beryl3d/gate.py`). The `gate` binary of `beryl_inspect`
 plays each gated board as a host would at 60 frames a second
 (`beryl_inspect::gate::Playback`). The first view is handed over before the

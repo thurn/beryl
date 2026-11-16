@@ -254,10 +254,11 @@ Beryl 3D, the native client in its own Cargo workspace, has checks of its own
 - Slow CI has no `beryl3d` lane, and Beryl 3D's paths reach none of its lanes
   but `repo` and `names`.
 - The lanes run at once (`tools/src/beryl_tools/beryl3d/lane.py`): `beryl3d`
-  (fmt, clippy and the source rules), `beryl3d-tests` (the workspace's tests and
-  the gate), `beryl3d-interface` (`test`, every interface test with the checks
-  applied at the check times) and `beryl3d-timeline` (timeline parity of the
-  fixtures). In one lane, one after another, they ran past the 180 s hard limit.
+  (fmt, clippy and the source rules), `beryl3d-tests` (the workspace's tests),
+  `beryl3d-gate` (the native frame gate), `beryl3d-interface` (`test`, every
+  interface test with the checks applied at the check times) and
+  `beryl3d-timeline` (timeline parity of the fixtures). In one lane, one after
+  another, they ran past the 180 s hard limit.
   - Clippy builds in its own target directory, `rust/beryl3d/target/clippy`, so
     it runs beside the build the other lanes share.
   - Each of the other lanes starts with `record`: the shared build and the

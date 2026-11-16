@@ -362,10 +362,12 @@ def unchosen(
 ) -> str:
     """Why the fast check whose records these are did not run `check`, a check of `lane` or
     with `whole` the lane's step itself (`<lane>:<step>`, logged only when it failed or named
-    no checks); empty when it did."""
+    no checks); empty when it did. `lane` is the fast check's name for the lane."""
     ran = [r for r in records if r.get("lane") == lane and r.get("outcome") != "skip"]
     if whole and ran:
         return ""
+    if whole:
+        check = f"{lane}:{check.split(':', 1)[-1]}"
     mine = [r for r in records if r.get("check") == check]
     if any(r.get("outcome") != "skip" for r in mine):
         return ""
@@ -386,10 +388,13 @@ def misses(
     history: dict[str, list[verdicts.Entry]],
     repo: Path,
     script: str = "ci",
+    fast_lane: Callable[[str], str] | None = None,
 ) -> dict[str, str]:
     """A `miss:` line for each culprit's check that its fast check did not run, recording the
     miss on the check's bead (and in `history`) unless one names the culprit already, and an
-    unknown one for each check whose culprit has no fast check in `log`."""
+    unknown one for each check whose culprit has no fast check in `log`. `fast_lane` names the
+    fast check's lane for a lane of this run whose lanes the fast check names differently
+    (the Beryl 3D sweep's, sweep.py); without it the names are the same."""
     lines: dict[str, str] = {}
     for f in found:
         if f.verdict != "culprit":
@@ -406,7 +411,8 @@ def misses(
                     )
                     continue
                 whole = check == f"{s.lane}:{s.failure.step.name}"
-                why = unchosen(check, s.lane, records, whole)
+                lane = fast_lane(s.lane) if fast_lane else s.lane
+                why = unchosen(check, lane, records, whole)
                 if not why:
                     continue
                 lines[check] = (
@@ -534,10 +540,12 @@ def bisect_since(
     repo: Path,
     origin: str = "master",
     script: str = "ci",
+    fast_lane: Callable[[str], str] | None = None,
 ) -> list[str]:
     """Bisects the failed lanes in `outcomes` over `commits` (oldest first, HEAD last), those
     since `origin`, in `left` wall seconds, printing the search as it goes; returns the answer's
-    lines. A run of `script` other than slow CI's searches in a tree of its own."""
+    lines. A run of `script` other than slow CI's searches in a tree of its own. `fast_lane` is
+    as for [`misses`]."""
     base = out(repo, "rev-parse", f"{commits[0]}^" if commits else "HEAD")
     group = suspects(outcomes)
     unnamed = [o for o in outcomes if o.failure is None]
@@ -564,7 +572,7 @@ def bisect_since(
     )
     log = runlog.read_log(since)
     beads = delivering(found, commits)
-    missed = misses(found, commits, beads, log, history, repo, script)
+    missed = misses(found, commits, beads, log, history, repo, script, fast_lane)
     tallies, _ = runlog.tally(log, history, since)
     blocks = answer(found, commits, base, repo, tallies, beads, missed, origin)
     lines = [

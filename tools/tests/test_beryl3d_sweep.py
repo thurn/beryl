@@ -430,6 +430,13 @@ def test_a_cut_off_lane_step_is_left_to_the_sweep() -> None:
     assert "slow CI" == slow_ci.checks.Lane("rust").deferred_to
 
 
+def test_a_sweep_step_is_looked_up_in_the_fast_check_lane_that_runs_it() -> None:
+    assert lane.holding(sweep.step_of("b3d-gate")) == "beryl3d-gate"
+    assert lane.holding(sweep.step_of("b3d-cargo-test")) == "beryl3d-tests"
+    # A step only the sweep runs is in no fast check's lane.
+    assert lane.holding(sweep.step_of("b3d-frame-counts")) is None
+
+
 def test_saving_the_build_directory_drops_incremental_caches(tmp_path: Path) -> None:
     target = tmp_path / "target"
     (target / "debug" / "incremental" / "x").mkdir(parents=True)
