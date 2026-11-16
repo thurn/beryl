@@ -1,10 +1,14 @@
 //! What a view says of a permanent's state that its card does not: phased out, the cards
-//! merged under it, and the card a copy really is.
+//! merged under it, and the card a copy really is. And what the table reads of its card: that
+//! it has a mana ability.
 
 use beryl_cards::names;
+use beryl_engine::TurnStep;
+use beryl_scenario::{P0, P1, Permanent, Scenario};
 use beryl_session::protocol::{Facing, ObjectView, PlayerView, Side, ZoneName};
 
 use crate::common;
+use crate::play::Play;
 
 /// The objects named `name` in `view`.
 fn named<'a>(view: &'a PlayerView, name: &str) -> Vec<&'a ObjectView> {
@@ -138,4 +142,35 @@ fn phased_out_permanents_stay_on_the_battlefield_marked() {
         (phased(theirs).iter())
             .all(|&(zone, side)| zone == ZoneName::Battlefield && side == Side::Opponent)
     );
+}
+
+/// Mana Crypt and an Island have mana abilities ([CR 605.1a]): "An activated ability is a
+/// mana ability if it meets all of the following criteria". Leonin Scimitar has none.
+///
+/// [CR 605.1a]: https://yawgatog.com/resources/magic-rules/#R6051a
+#[test]
+fn a_view_says_which_permanents_have_a_mana_ability() {
+    const ARTIFACTS: Scenario = Scenario::new("artifacts")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(
+            P0,
+            &[
+                Permanent::new(names::MANA_CRYPT),
+                Permanent::new(names::LEONIN_SCIMITAR),
+            ],
+        )
+        .permanents(P1, &[Permanent::new(names::ISLAND)])
+        .library(P0, &[names::PLAINS; 6])
+        .library(P1, &[names::PLAINS; 6]);
+    let play = Play::against(&ARTIFACTS, None);
+    for (name, side, has) in [
+        (names::MANA_CRYPT, Side::You, true),
+        (names::LEONIN_SCIMITAR, Side::You, false),
+        (names::ISLAND, Side::Opponent, true),
+    ] {
+        let [slot] = play.named(name, ZoneName::Battlefield, side)[..] else {
+            panic!("one {name}");
+        };
+        assert_eq!(play.object(slot).mana_ability, has, "{name}");
+    }
 }

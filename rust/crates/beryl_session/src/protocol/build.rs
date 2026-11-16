@@ -423,6 +423,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
                 .map(|&(_, k)| k)
                 .collect()
         }),
+        mana_ability: on_battlefield && has_mana_ability(t, obs, slot),
         attached_to: some(o.attached_to()),
         exiled_by: some(obs.memos(slot).exiled_until()),
         exiled_with: some(obs.memos(slot).exiled_with()),
@@ -479,6 +480,25 @@ fn really<L: Layout>(
     }
     let card = t.def(obs.really(slot)?).face_name(FaceIx::FRONT);
     (Some(card) != name(t, obs, slot)).then_some(card)
+}
+
+/// Whether the face up of the object in `slot` has a mana ability ([CR 605.1a]): "An activated
+/// ability is a mana ability if it meets all of the following criteria". A face-down permanent
+/// has none, having no text ([CR 708.2a]): "a 2/2 face-down creature with no text, no name, no
+/// subtypes, and no mana cost". False for an object the viewer does not know.
+///
+/// [CR 605.1a]: https://yawgatog.com/resources/magic-rules/#R6051a
+/// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
+fn has_mana_ability<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot) -> bool {
+    let face = obs.object(slot).face();
+    face != FaceIx::DOWN
+        && obs.card(slot).is_some_and(|card| {
+            t.def(card)
+                .face(face)
+                .abilities
+                .iter()
+                .any(|a| a.kind() == AbilityKind::Mana)
+        })
 }
 
 /// A permanent's types, power, toughness and keywords as the view shows them.

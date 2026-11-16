@@ -364,7 +364,17 @@ pt: PowerToughness | null,
  * 6: Ability-adding effects, keyword counters, ability-removing effects, and effects that say an object
  * can't have an ability are applied"), so that one gained until end of turn shows.
  */
-keywords: Array<Keyword>, attachedTo: ObjectId | null, 
+keywords: Array<Keyword>, 
+/**
+ * On the battlefield: its face up has a mana ability ([CR 605.1a]): "An activated ability
+ * is a mana ability if it meets all of the following criteria", one of which is that "it
+ * could add mana to a player’s mana pool when it resolves", as a mana rock's or a
+ * Treasure's "{T}: Add" does. The table stands a noncreature artifact with one among the
+ * lands, as a mana source.
+ *
+ * [CR 605.1a]: https://yawgatog.com/resources/magic-rules/#R6051a
+ */
+manaAbility?: boolean, attachedTo: ObjectId | null, 
 /**
  * The permanent that exiled it until it leaves (CR 610.3).
  */

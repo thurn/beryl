@@ -680,12 +680,14 @@ pub(super) fn turn(object: &ObjectView) -> f32 {
 }
 
 /// Which row a permanent stands in: where a player pinned it, else the creatures' row for a
-/// creature, the lands' part of the back row for a land, and the others' part for the rest.
+/// creature, the lands' part of the back row for a mana source, and the others' part for the
+/// rest. A mana source is a land, or an artifact with a mana ability (a mana rock, a Treasure),
+/// as the web interface's `battlefieldRow` has it.
 fn row_of(object: &ObjectView) -> RowName {
-    let creature = object.types.contains(&CardType::Creature);
-    object.pinned.unwrap_or(if creature {
+    let is = |kind| object.types.contains(&kind);
+    object.pinned.unwrap_or(if is(CardType::Creature) {
         RowName::Creatures
-    } else if object.types.contains(&CardType::Land) {
+    } else if is(CardType::Land) || (is(CardType::Artifact) && object.mana_ability) {
         RowName::Lands
     } else {
         RowName::Others

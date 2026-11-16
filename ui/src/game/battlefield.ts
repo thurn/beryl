@@ -1,7 +1,6 @@
 // Where each side's permanents lie: its land piles, creatures' row and back row.
 import type { ObjectView, RowName, Side } from "../generated/protocol";
 import { CARD_ASPECT } from "../components/Card";
-import { cardEntry } from "../cards";
 import { twins } from "./decisions";
 import {
   BACK_ROW_PULL,
@@ -199,16 +198,10 @@ export const isLand = (o: ObjectView) =>
   o.types.includes("land") && !isCreature(o);
 
 /** Whether a permanent is a mana source on the back row's land side: a land, or a noncreature
- * artifact whose card says "{T}: Add" a mana (a mana rock, a Treasure). */
-const MANA_ABILITY = /^[^\n:]*:\s*Add\b/m;
+ * artifact with a mana ability (a mana rock, a Treasure), which the session says. */
 const isManaSource = (o: ObjectView) =>
   isLand(o) ||
-  (o.types.includes("artifact") &&
-    !isCreature(o) &&
-    o.name !== null &&
-    (cardEntry(o.name)?.faces ?? []).some((f) =>
-      MANA_ABILITY.test(f.oracle_text ?? ""),
-    ));
+  (o.types.includes("artifact") && !isCreature(o) && o.manaAbility === true);
 
 /** A pile's cards, bottom first, so that its lowest slot lies on top: the engine offers the
  * lowest slot of interchangeable objects (architecture §7.2) and its payments tap a class of

@@ -99,6 +99,7 @@ impl ObjectView {
             types: Vec::new(),
             pt: None,
             keywords: Vec::new(),
+            mana_ability: false,
             attached_to: None,
             exiled_by: None,
             exiled_with: None,
