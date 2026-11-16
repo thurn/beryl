@@ -22,7 +22,7 @@ use crate::hud::counts::CountChange;
 use crate::light::{MarkSpan, Span, SpanChange, StreakRun};
 use crate::motion::Track;
 use crate::notice::NoticeRun;
-use crate::pose::{Curve, Pose};
+use crate::pose::{Curve, Pose, Segment};
 use crate::sound::{SoundRun, Sounds};
 use crate::table::{Objects, PileCount, Table, Turn};
 use crate::verbs::{self, Interval};
@@ -147,110 +147,371 @@ impl Compiled {
 /// when the script ends. Of the first view's script, nothing plays, and of a reset's only its
 /// announcements, as on the web stage.
 pub(crate) fn compile<'a>(
-    before: Option<(&'a PlayerView, &Played)>,
+    before: Option<(&'a PlayerView, &'a Played)>,
     after: &'a PlayerView,
-    timings: &[StepTiming],
+    timings: &'a [StepTiming],
     table: &'a Table,
     records: bool,
     shown: bool,
 ) -> (Compiled, Played) {
-    let at_rest = |played: &Played| {
-        let numbers = numbers_of(played);
-        let placement = table.placement(after, &numbers);
-        Table::objects_for(after, numbers, &placement)
-    };
-    let mut compiled = Compiled::default();
-    let Some(script) = after.script.as_ref() else {
-        let played = numbered(Played::of(after));
-        compiled.finals = at_rest(&played);
-        return (compiled, played);
-    };
-    compiled.reset = script.reset.is_some();
-    compiled.verbs = script
-        .beats
-        .iter()
-        .flatten()
-        .fold(0, |verbs, step| verbs | bit(step.act.verb()));
-    if timings.len() != script.beats.iter().map(Vec::len).sum::<usize>() {
-        let played = ended(before.map(|(_, played)| played), after, script);
-        compiled.finals = at_rest(&played);
-        return (compiled, played);
+    let mut compiling = Compiling::new(before, after, timings, table, records, shown);
+    compiling.advance(u64::MAX, 0);
+    compiling.finish()
+}
+
+/// How many steps of a script `Compiling::advance` compiles at least each time it is called,
+/// beyond those it must: enough to reach the later beats of a long script well before they
+/// begin, which leaves the frames that must compile a beat as it begins little to do.
+#[cfg_attr(
+    not(feature = "driver"),
+    expect(dead_code, reason = "only the tests compile a script in parts so far")
+)]
+pub const STEPS_PER_ADVANCE: usize = 4;
+
+/// A script being compiled one step at a time, in order, so that its compiling can be spread
+/// over several frames (docs/beryl-3d.md, "Threads"). Laying a beat out in time is cheap and
+/// is done when its first step is compiled; playing each step over the table (`Motion::step`)
+/// is what costs. Every step is compiled before the frame in which it begins, and before any
+/// segment it could change ends: a step changes a segment an earlier step made only where it
+/// sends a card that is still on its way to a new place (`retarget`), and only a segment that
+/// ends after the step begins. So compiling at most the steps `advance` asks for leaves every
+/// pose up to its time as compiling the whole script would.
+pub(crate) struct Compiling<'a> {
+    script: Option<&'a Script>,
+    after: &'a PlayerView,
+    timings: &'a [StepTiming],
+    table: &'a Table,
+    /// The table the script before it ended with, if there was a view before it.
+    from: Option<&'a Played>,
+    records: bool,
+    /// The table as the script plays over it; none when nothing moves (`immediate`).
+    motion: Option<Motion<'a>>,
+    sounds: Option<Sounds>,
+    compiled: Compiled,
+    /// The table the script ends with, once it is known without playing the script: with no
+    /// script, or timings that do not match its steps.
+    ended: Option<Played>,
+    /// The beat of the next step to compile, the index of that step in its beat, and its number
+    /// in the script.
+    beat: usize,
+    index: usize,
+    number: usize,
+    /// When the beat of the next step begins, in milliseconds on the script's clock.
+    at: f64,
+    /// The steps of the beat of the next step, laid out, once its first step is compiled.
+    laid: Vec<Laid>,
+    /// When the beat of the next step ends, as it was laid out, before anything closes up.
+    end: f64,
+    /// Whether the beat of the next step has been laid out.
+    beat_laid: bool,
+}
+
+impl<'a> Compiling<'a> {
+    /// `after`'s script, ready to compile, as `compile` describes.
+    pub(crate) fn new(
+        before: Option<(&'a PlayerView, &'a Played)>,
+        after: &'a PlayerView,
+        timings: &'a [StepTiming],
+        table: &'a Table,
+        records: bool,
+        shown: bool,
+    ) -> Self {
+        let mut compiling = Self {
+            script: after.script.as_ref(),
+            after,
+            timings,
+            table,
+            from: before.map(|(_, played)| played),
+            records,
+            motion: None,
+            sounds: None,
+            compiled: Compiled::default(),
+            ended: None,
+            beat: 0,
+            index: 0,
+            number: 0,
+            at: 0.0,
+            laid: Vec::new(),
+            end: 0.0,
+            beat_laid: false,
+        };
+        let Some(script) = compiling.script else {
+            compiling.ended = Some(numbered(Played::of(after)));
+            return compiling;
+        };
+        compiling.compiled.reset = script.reset.is_some();
+        compiling.compiled.verbs = script
+            .beats
+            .iter()
+            .flatten()
+            .fold(0, |verbs, step| verbs | bit(step.act.verb()));
+        if timings.len() != script.beats.iter().map(Vec::len).sum::<usize>() {
+            compiling.ended = Some(ended(compiling.from, after, script));
+            return compiling;
+        }
+        compiling.motion = before
+            .filter(|_| script.reset.is_none())
+            .map(|(before, played)| {
+                Motion::new(before, played, (table, after, timings), records, shown)
+            });
+        // The steps sound whether or not they move anything.
+        compiling.sounds = Some(Sounds::new(script, after, compiling.motion.is_some()));
+        // With no table before it, or with a reset, the table takes the script's steps at once,
+        // and only a reset's announcements play, as the web stage's `play` does (`resetSteps` in
+        // `ui/src/stage/table.ts`).
+        compiling.compiled.immediate = compiling.motion.is_none();
+        compiling.compiled.laid.reserve_exact(timings.len());
+        compiling.compiled.closes.reserve_exact(timings.len());
+        compiling
     }
-    let mut motion = before
-        .filter(|_| script.reset.is_none())
-        .map(|(before, played)| {
-            Motion::new(before, played, (table, after, timings), records, shown)
-        });
-    let mut steps = Vec::new();
-    // The steps sound whether or not they move anything.
-    let mut sounds = Sounds::new(script, after, motion.is_some());
-    let effects = &mut compiled.effects;
-    // With no table before it, or with a reset, the table takes the script's steps at once,
-    // and only a reset's announcements play, as the web stage's `play` does (`resetSteps` in
-    // `ui/src/stage/table.ts`).
-    let immediate = motion.is_none();
-    compiled.immediate = immediate;
-    compiled.end = lay_out(
-        script,
-        timings,
-        immediate,
-        (
-            &mut compiled.unbuilt,
-            &mut compiled.laid,
-            &mut compiled.closes,
-        ),
-        |number, (beat, index), step, timing, laid, closes| {
-            let cues = sounds.step(
-                motion.as_ref().map(|motion| &motion.played),
-                (&script.beats[beat], index, number),
-                timing,
-                laid,
-            );
-            if let Some(motion) = motion.as_mut() {
+
+    /// Whether every step has been compiled.
+    #[cfg_attr(
+        not(feature = "driver"),
+        expect(dead_code, reason = "only the tests compile a script in parts so far")
+    )]
+    pub(crate) fn done(&self) -> bool {
+        self.ended.is_some()
+            || self
+                .script
+                .is_none_or(|script| self.beat == script.beats.len())
+    }
+
+    /// The tracks of the objects the steps compiled so far move, by slot.
+    #[cfg_attr(
+        not(feature = "driver"),
+        expect(dead_code, reason = "only the tests compile a script in parts so far")
+    )]
+    pub(crate) fn tracks(&self) -> &[Track] {
+        self.motion.as_ref().map_or(&[], |motion| &motion.tracks)
+    }
+
+    /// Compiles every step that begins by `until`, on the script's clock in nanoseconds, then
+    /// every step that could change a segment under way at `until`, and then more steps in
+    /// order until it has compiled `least` steps, or all of them. Returns how many it compiled.
+    pub(crate) fn advance(&mut self, until: u64, least: usize) -> usize {
+        let mut count = 0;
+        while self.next_begins().is_some_and(|begins| begins <= until) {
+            self.step();
+            count += 1;
+        }
+        // A step that begins later than `until` makes segments that begin later still, so
+        // compiling one does not move this horizon.
+        let horizon = self.horizon(until);
+        while self.next_begins().is_some_and(|begins| begins < horizon) {
+            self.step();
+            count += 1;
+        }
+        while count < least && self.next_begins().is_some() {
+            self.step();
+            count += 1;
+        }
+        count
+    }
+
+    /// When the latest segment under way at `t` ends, in nanoseconds, or `t` when none is.
+    fn horizon(&self, t: u64) -> u64 {
+        let Some(motion) = &self.motion else {
+            return t;
+        };
+        let abilities = motion.ability_tracks.iter().map(|(_, track)| track);
+        motion
+            .tracks
+            .iter()
+            .chain(abilities)
+            .flat_map(Track::segments)
+            .filter(|segment| segment.start <= t)
+            .map(Segment::end)
+            .fold(t, u64::max)
+    }
+
+    /// When the next step to compile, or a step after it in its beat, begins, whichever is
+    /// earliest, in nanoseconds; `None` once every step is compiled. Lays the beat out when
+    /// the next step is its first, and passes over beats with no steps.
+    fn next_begins(&mut self) -> Option<u64> {
+        let script = self.script.filter(|_| self.ended.is_none())?;
+        while !self.beat_laid {
+            if self.beat == script.beats.len() {
+                return None;
+            }
+            self.lay_beat(script);
+            if script.beats[self.beat].is_empty() {
+                self.end_beat(script);
+            }
+        }
+        // The steps of a beat need not begin in the order they are written.
+        self.laid[self.index..].iter().map(begins).min()
+    }
+
+    /// Lays out the beat of the next step, which is the beat's first, from `at`. When the table
+    /// takes the script's steps at once, the steps that play are laid out as a beat of their
+    /// own, and every other step takes no time where the beat begins.
+    fn lay_beat(&mut self, script: &Script) {
+        let steps = &script.beats[self.beat];
+        let timings = &self.timings[self.number..self.number + steps.len()];
+        let at = self.at;
+        self.end = if self.compiled.immediate {
+            let plays = |step: &Step| plays(script, true, step);
+            let (playing, timed): (Vec<Step>, Vec<StepTiming>) = steps
+                .iter()
+                .zip(timings)
+                .filter(|(step, _)| plays(step))
+                .map(|(step, timing)| (step.clone(), timing.clone()))
+                .unzip();
+            let mut own = Vec::new();
+            let end = beat(&playing, &timed, at, |_| None, at, &mut own);
+            let mut own = own.into_iter();
+            self.laid.clear();
+            self.laid.extend(steps.iter().map(|step| {
+                let still = Laid {
+                    turn: at,
+                    from: at,
+                    to: at,
+                    opens: None,
+                };
+                if plays(step) {
+                    own.next().unwrap_or(still)
+                } else {
+                    still
+                }
+            }));
+            end
+        } else {
+            // No span is open and nothing passes over the table yet: the flat layer draws
+            // neither.
+            beat(steps, timings, at, |_| None, at, &mut self.laid)
+        };
+        self.compiled.closes.resize(self.number + steps.len(), None);
+        self.beat_laid = true;
+    }
+
+    /// Ends the beat of the steps just compiled: it lasts until the last of them is over and
+    /// what closed up after them has closed, as the web stage's does (`closedBy` in
+    /// `ui/src/stage/tracks.ts`), and the next beat begins then.
+    fn end_beat(&mut self, script: &Script) {
+        let first = self.number - self.index;
+        self.at = self.compiled.closes[first..]
+            .iter()
+            .flatten()
+            .fold(self.end, |end, &closed| end.max(closed));
+        self.beat += 1;
+        self.index = 0;
+        self.beat_laid = false;
+        if self.beat == script.beats.len() {
+            self.compiled.end = nanoseconds(self.at);
+        }
+    }
+
+    /// Compiles the next step, whose beat is laid out.
+    fn step(&mut self) {
+        let Some(script) = self.script else {
+            return;
+        };
+        let (beat, index, number) = (self.beat, self.index, self.number);
+        let steps = &script.beats[beat];
+        let step = &steps[index];
+        let timing = &self.timings[number];
+        let laid = self.laid[index];
+        let verb = step.act.verb();
+        if !verbs::built(verb) {
+            self.compiled.unbuilt |= bit(verb);
+        }
+        if plays(script, self.compiled.immediate, step) {
+            let cues = self.sounds.as_mut().map(|sounds| {
+                sounds.step(
+                    self.motion.as_ref().map(|motion| &motion.played),
+                    (steps, index, number),
+                    timing,
+                    &laid,
+                )
+            });
+            if let Some(motion) = self.motion.as_mut() {
                 if index == 0 {
                     motion.begin_beat();
                 }
-                motion.step(number, (&script.beats[beat], index), timing, laid);
-                if index + 1 == script.beats[beat].len() {
-                    motion.closings_into(number - index, closes);
+                motion.step(number, (steps, index), timing, &laid);
+                if index + 1 == steps.len() {
+                    let first = number - index;
+                    motion.closings_into(first, &mut self.compiled.closes[first..]);
                 }
             }
-            effects_of(number, step, timing, laid, effects);
-            if !records {
-                return;
+            effects_of(number, step, timing, &laid, &mut self.compiled.effects);
+            if self.records {
+                self.compiled.steps.push(StepRecord {
+                    view: 0,
+                    beat,
+                    index,
+                    verb,
+                    subject: subject_of(step),
+                    from: nanoseconds(laid.from),
+                    to: nanoseconds(laid.to),
+                    timed: nanoseconds(timing.duration),
+                    key: MoveKey::of(&step.act),
+                    cues: cues.unwrap_or_default(),
+                });
             }
-            steps.push(StepRecord {
-                view: 0,
-                beat,
-                index,
-                verb: step.act.verb(),
-                subject: subject_of(step),
-                from: nanoseconds(laid.from),
-                to: nanoseconds(laid.to),
-                timed: nanoseconds(timing.duration),
-                key: MoveKey::of(&step.act),
-                cues,
-            });
-        },
-    );
-    compiled.steps = steps;
-    compiled.sounds = sounds.finish();
-    compiled.scratch.clone_from(&compiled.laid);
-    // The steps of a beat need not begin in the order they are written, nor their effects.
-    compiled.effects.sort_by_key(|run| run.start);
-    let Some(motion) = motion else {
-        let played = ended(before.map(|(_, played)| played), after, script);
-        compiled.finals = at_rest(&played);
-        return (compiled, played);
-    };
-    // After a step the table could not take, it no longer matches the game, and the view's
-    // table is the best guess.
-    let fallback = (motion.unplaced != 0).then(|| numbered(Played::of(after)));
-    let numbers = numbers_of(fallback.as_ref().unwrap_or(&motion.played));
-    let placement = motion.placement_of(after, &numbers);
-    compiled.finals = Table::objects_for(after, numbers, &placement);
-    let played = take_motion(&mut compiled, motion);
-    (compiled, fallback.unwrap_or(played))
+        }
+        self.compiled.laid.push(laid);
+        self.index += 1;
+        self.number += 1;
+        if self.index == steps.len() {
+            self.end_beat(script);
+        }
+    }
+
+    /// The compiled script, once every step is compiled, with the table it ends with.
+    pub(crate) fn finish(mut self) -> (Compiled, Played) {
+        self.advance(u64::MAX, 0);
+        let after = self.after;
+        let table = self.table;
+        let at_rest = |played: &Played| {
+            let numbers = numbers_of(played);
+            let placement = table.placement(after, &numbers);
+            Table::objects_for(after, numbers, &placement)
+        };
+        let mut compiled = self.compiled;
+        if let Some(played) = self.ended {
+            compiled.finals = at_rest(&played);
+            return (compiled, played);
+        }
+        let Some(script) = self.script else {
+            unreachable!("a script with no steps to play has ended");
+        };
+        if let Some(sounds) = self.sounds {
+            compiled.sounds = sounds.finish();
+        }
+        compiled.scratch.clone_from(&compiled.laid);
+        // The steps of a beat need not begin in the order they are written, nor their effects.
+        compiled.effects.sort_by_key(|run| run.start);
+        let Some(motion) = self.motion else {
+            let played = ended(self.from, after, script);
+            compiled.finals = at_rest(&played);
+            return (compiled, played);
+        };
+        // After a step the table could not take, it no longer matches the game, and the view's
+        // table is the best guess.
+        let fallback = (motion.unplaced != 0).then(|| numbered(Played::of(after)));
+        let numbers = numbers_of(fallback.as_ref().unwrap_or(&motion.played));
+        let placement = motion.placement_of(after, &numbers);
+        compiled.finals = Table::objects_for(after, numbers, &placement);
+        let played = take_motion(&mut compiled, motion);
+        (compiled, fallback.unwrap_or(played))
+    }
+}
+
+/// Whether `step` of `script` plays: every step does, unless the table takes the script's
+/// steps at once (`immediate`), when only a reset's announcements do.
+fn plays(script: &Script, immediate: bool, step: &Step) -> bool {
+    !immediate || (script.reset.is_some() && matches!(step.act, Act::Announce { .. }))
+}
+
+/// When anything of a step laid out as `laid` begins, in nanoseconds: the step itself, or
+/// what makes room for it as its act is applied ahead of it (`room_of`).
+fn begins(laid: &Laid) -> u64 {
+    nanoseconds(
+        laid.opens
+            .map_or(laid.from, |opens| opens.at.min(laid.from)),
+    )
 }
 
 /// Transfers a script's compiled tracks and step effects into its playback record.
@@ -290,87 +551,6 @@ fn ended(played: Option<&Played>, after: &PlayerView, script: &Script) -> Played
         (None, None) => return numbered(Played::of(after)),
     };
     replay(start, script).unwrap_or_else(|_| numbered(Played::of(after)))
-}
-
-/// Lays out each beat of `script` after the one before, calling `each` with every step's number
-/// in the script, its beat and index in its beat, the step, its timing and when it plays, and
-/// returns when the last beat is over, in nanoseconds. Each verb drawn as an instant change sets
-/// its bit in `unbuilt`, and each step's times go to `all`. `each` also gets the entries of
-/// `closed_by` for the steps of its beat, and sets each to when what closed up after that step
-/// has closed, in milliseconds, if anything did as the beat's steps so far leave it: a beat is
-/// not over until then, as the web stage's is not (`closedBy` in `ui/src/stage/tracks.ts`).
-///
-/// When `immediate`, the table takes the script's steps at once: only a reset's announcements
-/// play, beat after beat, and `each` is called for them alone. Every other step takes no time
-/// where its beat begins.
-fn lay_out<'s>(
-    script: &'s Script,
-    timings: &[StepTiming],
-    immediate: bool,
-    (unbuilt, all, closed_by): (&mut u32, &mut Vec<Laid>, &mut Vec<Option<f64>>),
-    mut each: impl FnMut(usize, (usize, usize), &'s Step, &StepTiming, &Laid, &mut [Option<f64>]),
-) -> u64 {
-    let mut laid = Vec::new();
-    all.reserve_exact(timings.len());
-    closed_by.reserve_exact(timings.len());
-    let plays = |step: &Step| {
-        !immediate || (script.reset.is_some() && matches!(step.act, Act::Announce { .. }))
-    };
-    let mut at = 0.0;
-    let mut first = 0;
-    for (number, steps) in script.beats.iter().enumerate() {
-        let timings = &timings[first..first + steps.len()];
-        let mut end = if immediate {
-            // The steps that play, laid out as a beat of their own.
-            let (playing, timed): (Vec<Step>, Vec<StepTiming>) = steps
-                .iter()
-                .zip(timings)
-                .filter(|(step, _)| plays(step))
-                .map(|(step, timing)| (step.clone(), timing.clone()))
-                .unzip();
-            let mut own = Vec::new();
-            let end = beat(&playing, &timed, at, |_| None, at, &mut own);
-            let mut own = own.into_iter();
-            laid.clear();
-            laid.extend(steps.iter().map(|step| {
-                let still = Laid {
-                    turn: at,
-                    from: at,
-                    to: at,
-                    opens: None,
-                };
-                if plays(step) {
-                    own.next().unwrap_or(still)
-                } else {
-                    still
-                }
-            }));
-            end
-        } else {
-            // No span is open and nothing passes over the table yet: the flat layer draws
-            // neither.
-            beat(steps, timings, at, |_| None, at, &mut laid)
-        };
-        closed_by.resize(first + steps.len(), None);
-        for (index, ((step, timing), laid)) in steps.iter().zip(timings).zip(&laid).enumerate() {
-            let verb = step.act.verb();
-            if !verbs::built(verb) {
-                *unbuilt |= bit(verb);
-            }
-            if plays(step) {
-                let closes = &mut closed_by[first..];
-                each(first + index, (number, index), step, timing, laid, closes);
-            }
-            all.push(*laid);
-        }
-        end = closed_by[first..]
-            .iter()
-            .flatten()
-            .fold(end, |end, &closed| end.max(closed));
-        at = end;
-        first += steps.len();
-    }
-    nanoseconds(at)
 }
 
 /// Adds to `runs` the effects that `step`, the script's step `number`, begins, on the script's

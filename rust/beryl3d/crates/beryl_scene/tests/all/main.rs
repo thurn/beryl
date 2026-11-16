@@ -10,6 +10,7 @@ mod bug_report;
 mod checks;
 #[path = "../common/mod.rs"]
 mod common;
+mod compile_in_parts;
 mod contract;
 mod driver;
 mod effects;

@@ -26,6 +26,8 @@ mod hold;
 pub(crate) use compile::nanoseconds;
 mod index;
 mod notices;
+#[cfg(feature = "driver")]
+pub mod parts;
 mod playing;
 pub mod record;
 mod relay;
