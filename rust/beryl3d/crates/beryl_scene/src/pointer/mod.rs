@@ -16,6 +16,8 @@
 
 mod held;
 
+pub mod rows;
+
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::{Mat3, Quat, Vec2};
 

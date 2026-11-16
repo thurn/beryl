@@ -20,6 +20,67 @@ pub(super) struct Laid<'a> {
     pub copies: u16,
 }
 
+/// Which of a row's groups are in view: `shown` of its `groups` from `first`, with `before`
+/// cards scrolled off its left end and `after` off its right end. A row that fits shows every
+/// group from the first. Its numbers are kept in `u16`s, which hold any row of a table, because a
+/// window for each row is kept in every script's view at rest: as `usize`s they would make each
+/// waiting script larger than 1024 bytes, past which a growing `Vec` of them reallocates more
+/// often.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RowWindow {
+    groups: u16,
+    first: u16,
+    shown: u16,
+    before: u16,
+    after: u16,
+}
+
+impl RowWindow {
+    /// A window of `shown` of `groups` groups from `first`, with `before` and `after` cards off
+    /// the two ends.
+    fn new(groups: usize, first: usize, shown: usize, (before, after): (usize, usize)) -> Self {
+        let small = |number: usize| u16::try_from(number).unwrap_or(u16::MAX);
+        Self {
+            groups: small(groups),
+            first: small(first),
+            shown: small(shown),
+            before: small(before),
+            after: small(after),
+        }
+    }
+
+    /// The first group in view.
+    #[must_use]
+    pub fn first(&self) -> usize {
+        usize::from(self.first)
+    }
+
+    /// How many cards are off the left end.
+    #[must_use]
+    pub fn before(&self) -> usize {
+        usize::from(self.before)
+    }
+
+    /// How many cards are off the right end.
+    #[must_use]
+    pub fn after(&self) -> usize {
+        usize::from(self.after)
+    }
+
+    /// Whether the row has cards off either end, and so scrolls.
+    #[must_use]
+    pub fn scrolls(&self) -> bool {
+        self.before + self.after > 0
+    }
+
+    /// The first group it may show: from 0 to the last from which every group to the end fits.
+    #[must_use]
+    pub fn clamp(&self, first: isize) -> usize {
+        let last = usize::from(self.groups.saturating_sub(self.shown));
+        usize::try_from(first.max(0)).unwrap_or(0).min(last)
+    }
+}
+
 /// How a row is laid out: the least strip in millimetres, the layout's spacing, and the row's
 /// scroll offset in groups.
 pub(super) struct RowRules<'a> {
@@ -71,7 +132,7 @@ pub(super) fn lay_row<'a>(
     y: f32,
     rules: &RowRules,
     laid: &mut impl FnMut(Laid<'a>),
-) {
+) -> RowWindow {
     let room = area.right - area.left;
     let groups = if fits_overlapped(cards, room, rules) {
         Groups::Single(cards)
@@ -87,7 +148,7 @@ pub(super) fn lay_row<'a>(
             place_group(group, left, y, &mut height, true, rules, laid);
             left += width + rules.layout.gap;
         }
-        return;
+        return RowWindow::new(groups.len(), 0, groups.len(), (0, 0));
     }
     // Every window of `shown` consecutive groups fits at the least strip, however wide its
     // last group is.
@@ -101,13 +162,20 @@ pub(super) fn lay_row<'a>(
         0.0
     };
     let mut height = 0;
+    let (mut before, mut after) = (0, 0);
     for (index, group) in groups.iter().enumerate() {
         let visible = (first..first + shown).contains(&index);
+        if index < first {
+            before += group.len();
+        } else if !visible {
+            after += group.len();
+        }
         // A group scrolled out of view rests at the nearer end of the row, undrawn.
         let place = index.clamp(first, first + shown - 1) - first;
         let left = area.left + step * place as f32;
         place_group(group, left, y, &mut height, visible, rules, laid);
     }
+    RowWindow::new(groups.len(), first, shown, (before, after))
 }
 
 /// Whether every card, alone, fits the row with at least the least strip of each uncovered.

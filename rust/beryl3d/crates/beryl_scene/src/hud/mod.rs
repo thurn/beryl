@@ -6,4 +6,5 @@ pub mod log;
 pub mod notices;
 pub mod piles;
 pub mod players;
+pub mod rows;
 pub mod steps;

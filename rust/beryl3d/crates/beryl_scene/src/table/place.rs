@@ -13,7 +13,7 @@ use glam::{Quat, Vec2, Vec3};
 mod indexed;
 
 use super::pile::{PileShown, lay_pile, pile_base, pile_scale};
-use super::rows::{Laid, NameIds, RowRules, SameName, face_up, lay_row};
+use super::rows::{Laid, NameIds, RowRules, RowWindow, SameName, face_up, lay_row};
 use super::stack::{OnStack, on_stack, place_stack, spells};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, Layout, lifted};
 use crate::frame::Place;
@@ -44,7 +44,13 @@ pub struct Placement {
     pub abilities: Vec<(u32, Rest)>,
     /// Each library, graveyard and exile pile, by `PileShown::index`.
     pub piles: [PileShown; 6],
+    /// Which groups of each battlefield row are in view, as `Scroll` orders the rows.
+    pub rows: Rows,
 }
+
+/// Which groups of each battlefield row are in view: for the viewer and then the opponent, each
+/// in the order of `ROWS`.
+pub type Rows = [[RowWindow; 3]; 2];
 
 impl Placement {
     #[must_use]
@@ -138,6 +144,7 @@ pub(crate) fn place_reusing(
         rests: Vec::with_capacity(known.rests.len()),
         abilities: Vec::new(),
         piles: known.piles,
+        rows: known.rows,
     };
     let mut laid = 0;
     let groups = Group::ALL.into_iter().zip(all_members(zones));
@@ -349,14 +356,14 @@ impl Group {
 }
 
 /// `row`'s place in `ROWS`.
-fn row_index(row: RowName) -> usize {
+pub(super) fn row_index(row: RowName) -> usize {
     ROWS.iter()
         .position(|other| *other == row)
         .expect("every row is in `ROWS`")
 }
 
 /// `side`'s place in `Scroll` and `Zones::piles`: the viewer first.
-fn side_index(side: Side) -> usize {
+pub(super) fn side_index(side: Side) -> usize {
     match side {
         Side::You => 0,
         Side::Opponent => 1,
@@ -705,7 +712,8 @@ fn battlefield_row(
             },
         );
     };
-    lay_row(cards, (names, ids), area, y, &rules, &mut set);
+    placement.rows[side_index(side)][row_index(row)] =
+        lay_row(cards, (names, ids), area, y, &rules, &mut set);
 }
 
 /// A lands row's cards in the order they stand: untapped first, and each name together, in the

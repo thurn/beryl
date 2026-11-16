@@ -9,10 +9,10 @@
 //! - When more than `catch_up.double` updates are waiting as a script starts, it plays twice as
 //!   fast, and past `catch_up.quadruple` four times as fast (`data/beryl3d/space.json`), so that
 //!   the table catches up with a session that runs ahead of it.
-//! - When the window changes shape, every resting place is worked out again and the playing
-//!   script is compiled again for it. A segment under way keeps its start and duration and takes
-//!   the new end pose, and its start pose is changed so that the object's pose at that instant is
-//!   the same: the card does not jump, and arrives at its new place.
+//! - When the window changes shape or a row scrolls, every resting place is worked out again
+//!   and the playing script is compiled again for it. A segment under way keeps its start and
+//!   duration and takes the new end pose, and its start pose is changed so that the object's
+//!   pose at that instant is the same: the card does not jump, and arrives at its new place.
 //! - Each script's spans and streaks reach the table's `Lit` once the script's clock reaches
 //!   them, and a script with a reset drops every span first. Effects, marks, the pointer and
 //!   the shake then change what the table draws.
@@ -28,6 +28,7 @@ mod index;
 mod notices;
 pub mod record;
 mod scene;
+mod scroll;
 pub(crate) mod step;
 mod wake;
 

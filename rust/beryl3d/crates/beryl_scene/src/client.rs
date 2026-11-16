@@ -18,10 +18,12 @@ use crate::frame::{self, ElementId, Frame, FrameBuilder, Place, Role, Wake};
 use crate::hud::counts::CountFloats;
 use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
+use crate::hud::rows::RowCounts;
 use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerPhase};
 use crate::layout::Layer;
 use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
+use crate::pointer::rows::RowGesture;
 use crate::prompts;
 use crate::screens::{self, Music, Screen, ScreenIn, Sheet};
 use crate::settings::{Setting, Settings};
@@ -64,6 +66,10 @@ pub struct Client {
     piles: PileCounts,
     /// The floats that show the notices `announce` steps make.
     notices: NoticeFloats,
+    /// The counts of the cards scrolled off each end of a battlefield row.
+    row_counts: RowCounts,
+    /// What the pointer is doing to scroll a battlefield row.
+    row_gesture: RowGesture,
     /// The screen the flat layer shows. A recording or a game is fed to the client on the game
     /// screen, which it starts on.
     screen: Screen,
@@ -110,6 +116,8 @@ impl Client {
             counts: CountFloats::default(),
             piles: PileCounts::default(),
             notices: NoticeFloats::default(),
+            row_counts: RowCounts::default(),
+            row_gesture: RowGesture::default(),
             screen: Screen::Game,
             sheet: None,
             settings: Settings::default(),
@@ -176,6 +184,7 @@ impl Client {
                 let shown = self.show.shown().map(|update| &update.view);
                 let coming = self.show.coming_counts().map(|(_, view)| view);
                 (self.piles).prepare(&mut self.layer, shown.into_iter().chain(coming));
+                (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
                 self.show_screen();
             }
             Input::Reply(Reply::Click(Ok(reply))) => {
@@ -220,6 +229,7 @@ impl Client {
                 };
                 self.show.resize(self.window);
                 self.layer.resize(self.window);
+                (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
                 if self.show.badges_mut().shaped() {
                     let glyphs = self.layer.glyphs_mut();
                     (self.show.badges_mut()).rescale(scale, glyphs);
@@ -241,6 +251,7 @@ impl Client {
             }
         }
         self.show.pointer_mut().advance(now);
+        self.show.advance_slide(now);
         let mut builder = FrameBuilder::new(&mut self.frame);
         self.show.frame(now, &mut builder);
         // A total that changes shows the element `prepare` laid out for it.
@@ -262,6 +273,7 @@ impl Client {
             (self.show.table().layout(), self.window.size),
             visible,
         );
+        (self.row_counts).write(&mut self.layer, self.show.table(), visible);
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
         builder.placement_work(self.show.table().take_placed());
@@ -341,6 +353,12 @@ impl Client {
     /// next `frame` asks what it meant.
     fn point(&mut self, pointer: Pointer) {
         self.show.pointer_mut().handle(&pointer);
+        let scroll = (self.row_gesture).handle(&pointer, &self.frame, self.show.table());
+        if let Some((row, first)) = scroll
+            && self.show.scroll_row(row, first)
+        {
+            (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
+        }
         let primary = pointer.button == Button::Primary;
         let open = self.open;
         match pointer.phase {

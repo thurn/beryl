@@ -2,8 +2,9 @@
 //! falls and the amount it fell by sinks away, nor while the turn banner fades in, stands and
 //! fades out, nor while 255 marks are drawn, nor with 255 attackers wearing their wedges, nor on
 //! a table of 255 permanents that each wear badges, nor while a hand card rises under the mouse,
-//! and neither does moving a float of the flat layer and writing it (docs/beryl-3d.md, "The
-//! frame": no allocation). This binary counts every heap allocation, so it holds one test.
+//! nor while a scrolled battlefield row slides, and neither does moving a float of the flat
+//! layer and writing it (docs/beryl-3d.md, "The frame": no allocation). This binary counts
+//! every heap allocation, so it holds one test.
 
 mod common;
 
@@ -347,10 +348,11 @@ fn a_badged_table_allocates_nothing() {
     );
 }
 
-/// A badged table and a hand card rising under the mouse.
+/// A badged table, a hand card rising under the mouse and a row sliding as it scrolls.
 fn tables_allocate_nothing() {
     a_badged_table_allocates_nothing();
     a_rising_hand_card_allocates_nothing();
+    a_scrolling_row_allocates_nothing();
 }
 
 /// The frames while a hand card rises under the mouse, and while it falls back as the mouse moves
@@ -445,4 +447,65 @@ fn a_moved_float_allocates_nothing() {
         0,
         "allocations setting a float's look and writing it"
     );
+}
+
+/// The frames while a battlefield row slides after a turn of the wheel scrolls it, and the
+/// counts off its ends change, allocate nothing.
+fn a_scrolling_row_allocates_nothing() {
+    let mut client = Client::new(Config {
+        elements: 512,
+        draws: 2048,
+        name_bytes: 8192,
+    });
+    client.handle(Input::Surface {
+        size: Size {
+            width: 1440.0,
+            height: 900.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    });
+    let mut view = ViewBuilder::new();
+    for index in 0..40 {
+        view.card(ZoneName::Battlefield, Side::You, &format!("Land {index}"))
+            .types = vec![CardType::Land];
+    }
+    view.script(ScriptBuilder::reset().build());
+    client.handle(Input::Update(Box::new(view.update())));
+    let point = client
+        .frame(0)
+        .resolved
+        .iter()
+        .find(|element| element.role == Role::Card)
+        .map(|element| element.corners[3] + (element.corners[1] - element.corners[3]) * 0.1)
+        .expect("a land");
+    client.handle(Input::Pointer(Pointer {
+        id: 0,
+        kind: PointerKind::Mouse,
+        phase: PointerPhase::Wheel,
+        position: point,
+        button: Button::None,
+        wheel: Vec2::new(0.0, -48.0),
+        modifiers: Modifiers::default(),
+    }));
+    let mut now = 0;
+    let mut moving = 0;
+    for _ in 0..12 {
+        now += 16_000_000;
+        let before = ALLOCATIONS.load(Ordering::Relaxed);
+        let frame = client.frame(now);
+        moving += usize::from(
+            frame
+                .resolved
+                .iter()
+                .any(|e| e.state.has(StateBits::MOVING)),
+        );
+        let after = ALLOCATIONS.load(Ordering::Relaxed);
+        assert_eq!(
+            after - before,
+            0,
+            "allocations in a frame at {now} as a row slides"
+        );
+    }
+    assert!(moving > 0, "the row slides");
 }

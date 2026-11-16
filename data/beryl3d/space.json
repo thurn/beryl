@@ -179,7 +179,12 @@
     "drag_per_second": 5,
     "smooth_velocity_ms": 35,
     "smooth_acceleration_ms": 50,
-    "lean_steps_per_second": 240
+    "lean_steps_per_second": 240,
+    "scroll_step_points": 48,
+    "wheel_notch_points": 16
+  },
+  "slide": {
+    "regroup_ms": 170
   },
   "catch_up": {
     "double": 10,
@@ -284,6 +289,7 @@
         "left": 20,
         "right": 320
       },
+      "row_count_gap": 4,
       "gap": 4,
       "pile_step": [
         4,

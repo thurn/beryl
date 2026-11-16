@@ -14,7 +14,7 @@ use super::look::{Dress, Look};
 use super::own::{self, Fights};
 use super::pile::PileShown;
 use super::place::{
-    Group, Placement, Rest, Scroll, Zones, place_group, place_reusing, place_zones,
+    Group, Placement, Rest, Rows, Scroll, Zones, place_group, place_reusing, place_zones,
 };
 use super::rows::NameIds;
 use super::tray::Held;
@@ -30,6 +30,8 @@ use crate::light;
 use crate::motion::Track;
 use crate::pointer;
 use crate::pose::Pose;
+
+mod scroll;
 
 /// How large the table cloth is, in millimetres: past every edge of any window.
 const CLOTH: f32 = 4000.0;
@@ -70,6 +72,8 @@ pub(crate) struct Objects {
     pub numbers: Vec<u32>,
     /// Each library, graveyard and exile pile, by `PileShown::index`.
     pub piles: [PileShown; 6],
+    /// Which groups of each battlefield row are in view.
+    pub rows: Rows,
 }
 
 impl Objects {
@@ -115,6 +119,8 @@ pub struct Table {
     layout: Layout,
     camera: Camera,
     scroll: Scroll,
+    /// The cards of the row scrolled last, sliding to their new places.
+    slide: scroll::Slide,
     pub(super) objects: Objects,
     placed: Placed,
     /// The record of the face each card last showed when it was held up to be read, by slot,
@@ -159,6 +165,7 @@ impl Table {
             layout,
             camera: Camera::fit(layout.camera, window),
             scroll: Scroll::default(),
+            slide: scroll::Slide::default(),
             objects: Objects::default(),
             placed: Placed::default(),
             revealed: Vec::new(),
@@ -267,6 +274,7 @@ impl Table {
     pub(crate) fn rests(&self) -> Placement {
         Placement {
             piles: self.objects.piles,
+            rows: self.objects.rows,
             abilities: self
                 .objects
                 .abilities
@@ -376,6 +384,7 @@ impl Table {
             abilities,
             numbers,
             piles: placement.piles,
+            rows: placement.rows,
         }
     }
 
@@ -431,11 +440,14 @@ impl Table {
             .max(self.objects.cards.len());
         for slot in 0..slots {
             builder.visit();
-            let Some((object, drawn, under_way)) = self.object_at(slot, view, motion, builder)
+            let Some((mut object, drawn, mut under_way)) =
+                self.object_at(slot, view, motion, builder)
             else {
                 self.fights.forget(slot);
                 continue;
             };
+            // A card at rest in a row that scrolled slides to its new place.
+            under_way = under_way || self.slide_look(slot, &mut object, dress.now);
             if !object.visible {
                 self.fights.forget(slot);
                 continue;

@@ -621,6 +621,10 @@ recordings do not show them.
 - **Controlling another player.** While the viewer controls the opponent's turn,
   each decision they make for the opponent says "For opponent" before what it
   asks; a priority says only that.
+- **A battlefield row that scrolls.** A row with more cards than fit with a
+  strip of each uncovered shows as many as fit, scrolls one group for each notch
+  of the wheel or 48 points of a sideways drag, and shows the number of cards
+  off each end, as "+12".
 
 ## Verbs
 

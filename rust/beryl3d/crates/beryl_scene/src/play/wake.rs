@@ -6,13 +6,13 @@ use crate::frame::Wake;
 use crate::motion::Track;
 
 impl Show {
-    /// When the next frame is needed: now while a segment, streak, effect, notice or rising or
-    /// falling hand card is under way or a script waits to start, at the start of the next
-    /// segment, effect or notice or the end of the script while all holds still, and never when
-    /// nothing plays.
+    /// When the next frame is needed: now while a segment, streak, effect, notice, rising or
+    /// falling hand card or row's slide is under way or a script waits to start, at the start of
+    /// the next segment, effect or notice or the end of the script while all holds still, and
+    /// never when nothing plays.
     #[must_use]
     pub fn wake(&self, now: u64) -> Wake {
-        if self.pointer.moving(now) {
+        if self.pointer.moving(now) || self.table.sliding(now) {
             return Wake::Now;
         }
         let mut next = None::<u64>;

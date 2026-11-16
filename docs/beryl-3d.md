@@ -1074,6 +1074,20 @@ flight start exactly where the card was.
   permanents cannot fit any other way. Arena's recordings show no board this
   large, so UI Conventions lists the behavior among those not seen in Arena.
   Cards scrolled out of view are not drawn.
+- **How a row scrolls.** The table keeps a scroll offset, in groups, for each
+  row of each side. The wheel over a card of the row scrolls it one group for
+  each notch (`pointer.wheel_notch_points` of travel), toward the end the wheel
+  turns to. A drag that begins on a card of a row with cards off an end scrolls
+  it one group for each `pointer.scroll_step_points` the pointer travels
+  sideways, the row following the pointer; no battlefield card can be picked up,
+  so any card of the row may start one. The offset stays within the row. A
+  scroll places every object again and compiles every script not yet ended
+  again, as a change of window shape does: each card that stays in view slides
+  to its new place over `slide.regroup_ms`, and a card that comes into view
+  fades in where it rests. A script moves a card that is out of view from the
+  nearer end of the row, where placement rests it. Each end with cards off it
+  shows their number, as "+12", in a float just outside that end
+  (`floats::ROW_COUNT`).
 - **An ability on the stack is a scene object like a spell.** It is drawn as a
   card showing its source's face, at its place among the stack's items, and
   arrows, marks and steps reach it by its number, which the session's scripts

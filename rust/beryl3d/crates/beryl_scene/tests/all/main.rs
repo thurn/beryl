@@ -23,6 +23,7 @@ mod own;
 mod piles;
 mod play;
 mod pointer;
+mod scroll;
 mod table;
 mod tokens;
 mod verbs_count;

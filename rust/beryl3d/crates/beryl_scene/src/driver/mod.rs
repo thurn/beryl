@@ -11,6 +11,7 @@
 
 mod action;
 mod check;
+mod gesture;
 mod glyphs;
 mod moment;
 mod recording;
