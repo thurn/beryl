@@ -5,7 +5,7 @@ use beryl_protocol::script::{Act, Fact, Subject};
 
 use super::Motion;
 use crate::play::index;
-use crate::table::{Group, RowChange};
+use crate::table::{Group, Rest, RowChange, reposed};
 
 impl<'a> Motion<'a> {
     /// Applies `act` to the table and places again every group whose resting places it may
@@ -62,14 +62,28 @@ impl<'a> Motion<'a> {
                 let keep = match change {
                     RowChange::Unchanged => true,
                     RowChange::Layout => false,
-                    RowChange::Piling => !self.members[group.index()].iter().any(|&other| {
-                        other != slot
-                            && zones
-                                .get(other)
-                                .is_some_and(|card| card.name == record.name)
-                    }),
+                    RowChange::Piling | RowChange::Pose => {
+                        !self.members[group.index()].iter().any(|&other| {
+                            other != slot
+                                && zones
+                                    .get(other)
+                                    .is_some_and(|card| card.name == record.name)
+                        })
+                    }
                 };
                 if keep {
+                    // Only the card's own pose changes, so it alone is given a new resting
+                    // place, and its row is not laid out again.
+                    if change == RowChange::Pose
+                        && let Some(rest) = self.rests.get(slot)
+                    {
+                        let rest = Rest {
+                            pose: reposed(record, rest.pose),
+                            ..*rest
+                        };
+                        self.fresh.set(slot, rest);
+                        self.reposed.push(slot);
+                    }
                     continue;
                 }
             }

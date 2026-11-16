@@ -471,6 +471,21 @@ fn permanent(
     let pose = Pose {
         position: Vec3::new(centre, y, LAYER * height as f32),
         rotation,
+        ..Pose::default()
+    };
+    Laid {
+        object,
+        pose: reposed(object, pose),
+        visible,
+        copies,
+    }
+}
+
+/// `pose` with what `object`'s own record decides of a permanent's pose in its row and nothing
+/// else does: whether it shows its face, and how faded it is. A step that changes only those
+/// (`RowChange::Pose`) gives the card its new pose with this, and lays out nothing else.
+pub(crate) fn reposed(object: &ObjectView, pose: Pose) -> Pose {
+    Pose {
         turn: if face_up(object) { 0.0 } else { 1.0 },
         // A phased-out permanent stays where it lay, faded, as the web interface draws it:
         // it is treated as though it does not exist
@@ -480,13 +495,7 @@ fn permanent(
         } else {
             1.0
         },
-        ..Pose::default()
-    };
-    Laid {
-        object,
-        pose,
-        visible,
-        copies,
+        ..pose
     }
 }
 

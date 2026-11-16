@@ -95,6 +95,9 @@ pub(crate) struct Motion<'a> {
     next: [Vec<ObjectId>; Group::ALL.len()],
     /// The slots the step's act named.
     touched: Vec<ObjectId>,
+    /// The slots the step gave a new resting place in `fresh` without placing their group
+    /// again, because only their own pose changed (`RowChange::Pose`).
+    reposed: Vec<ObjectId>,
     piles: PileRules,
     /// The numbers of the names of `played`'s objects.
     names: NameIds<'a>,
@@ -176,6 +179,7 @@ impl<'a> Motion<'a> {
             hands: HandFits::default(),
             next: [const { Vec::new() }; Group::ALL.len()],
             touched: Vec::new(),
+            reposed: Vec::new(),
             piles: PileRules::of_view(before),
             marks: Vec::new(),
             affected: Vec::new(),
@@ -256,7 +260,7 @@ impl<'a> Motion<'a> {
     ) {
         self.affected.clear();
         self.removed.clear();
-        if !dirty.iter().any(|&changed| changed) {
+        if !dirty.iter().any(|&changed| changed) && self.reposed.is_empty() {
             self.affected.extend(subject);
             return;
         }
@@ -311,6 +315,9 @@ impl<'a> Motion<'a> {
                     changed(usize::from(id.0), self.rests.get(id), self.fresh.get(id));
                 }
             }
+            for &id in &self.reposed {
+                changed(usize::from(id.0), self.rests.get(id), self.fresh.get(id));
+            }
         }
         subject.into_iter().for_each(mark);
         for (word, &bits) in self.marks.iter().enumerate() {
@@ -358,6 +365,13 @@ impl<'a> Motion<'a> {
                 self.groups[index] = Some(group);
             }
             std::mem::swap(&mut self.members[group], &mut self.next[group]);
+        }
+        // A slot whose group was placed again after all has had its resting place taken above.
+        for slot in self.reposed.drain(..) {
+            let index = usize::from(slot.0);
+            if let Some(rest) = self.fresh.rests[index].take() {
+                self.rests.rests[index] = Some(rest);
+            }
         }
         self.whole = false;
         self.first = false;

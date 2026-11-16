@@ -7,8 +7,15 @@ use super::{plain, same_pile_face};
 /// What an in-place record update may change about the placement of a permanent in its row.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RowChange {
+    /// The row may lay out differently: the card's width, its place in the row's order or what
+    /// lies under it may have changed.
     Layout,
+    /// Only whether the card can share a pile with its twins changed.
     Piling,
+    /// Whether the card shows its face, or whether it is phased out, changed, and nothing that
+    /// decides where it or any other card of the row stands. Unless it could share a pile with
+    /// another card of its name, only its own pose changes (`rows::reposed`).
+    Pose,
     Unchanged,
 }
 
@@ -21,10 +28,10 @@ impl RowChange {
             || was.types != now.types
             || was.tapped != now.tapped
             || was.name != now.name
-            || was.facing != now.facing
-            || was.phased_out != now.phased_out
         {
             Self::Layout
+        } else if was.facing != now.facing || was.phased_out != now.phased_out {
+            Self::Pose
         } else {
             match (plain(was), plain(now)) {
                 (false, false) => Self::Unchanged,
