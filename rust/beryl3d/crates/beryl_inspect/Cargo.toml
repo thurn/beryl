@@ -43,3 +43,8 @@ harness = false
 # thread's scheduling class through libc on macOS.
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 libc = "0.2.191"
+
+[dev-dependencies]
+# The points on screen the pointer tests press and drag to, the vector type `beryl_scene`'s
+# input already takes, in place of a point type of the tests' own.
+glam = "0.34.3"

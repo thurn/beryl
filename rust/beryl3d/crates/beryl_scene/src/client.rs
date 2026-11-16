@@ -7,13 +7,14 @@ use std::collections::VecDeque;
 
 use beryl_protocol::StartRequest;
 use beryl_protocol::prompt::{Click, ClickReply, ClickRequest, PromptView};
-use beryl_protocol::protocol::{DecisionId, SessionId, Status, StepSet};
-use beryl_protocol::script::{OwnTimings, Verb, own_timings};
+use beryl_protocol::protocol::{DecisionId, ObjectId, SessionId, Side, Status, StepSet, ZoneName};
+use beryl_protocol::script::{OwnTimings, Subject, Verb, own_timings};
 
+use crate::agent::hit;
 use crate::command::{Reply, Request, SessionCommand};
 use crate::element::Press;
 use crate::faces::{FaceList, Faces};
-use crate::frame::{self, ElementId, Frame, FrameBuilder, Wake};
+use crate::frame::{self, ElementId, Frame, FrameBuilder, Place, Role, Wake};
 use crate::hud::counts::CountFloats;
 use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
@@ -239,6 +240,7 @@ impl Client {
                 prompts::own(prompt, self.was.as_ref(), lit, &self.own_timings, now);
             }
         }
+        self.show.pointer_mut().advance(now);
         let mut builder = FrameBuilder::new(&mut self.frame);
         self.show.frame(now, &mut builder);
         // A total that changes shows the element `prepare` laid out for it.
@@ -266,8 +268,17 @@ impl Client {
         self.open = self.show.settled();
         (self.layer).write(&mut builder, self.show.table().camera(), self.open);
         builder.finish();
-        // The element a press under the mouse would reach is drawn `hovered`.
-        self.show.point(&mut self.frame, now);
+        // The element a press under the mouse would reach is drawn `hovered`. A press on a card
+        // that ended since the last frame and means a click on it (a press that picked nothing
+        // up, or a card carried off the hand and let go) clicks the open prompt on that card.
+        if let Some(slot) = self.show.point(&mut self.frame, now)
+            && let Ok(slot) = u16::try_from(slot)
+        {
+            let on = Subject::Object {
+                slot: ObjectId(slot),
+            };
+            self.click(Click::On { on });
+        }
         self.wake = self.show.wake(now);
         &self.frame
     }
@@ -325,7 +336,9 @@ impl Client {
     }
 
     /// A press is the primary button or a touch going down and coming up on the same enabled
-    /// element. It queues the command the element's `Press` means.
+    /// element. It queues the command the element's `Press` means. A press on a card of the
+    /// table that no element of the flat layer covers goes to the table's pointer, which the
+    /// next `frame` asks what it meant.
     fn point(&mut self, pointer: Pointer) {
         self.show.pointer_mut().handle(&pointer);
         let primary = pointer.button == Button::Primary;
@@ -333,6 +346,15 @@ impl Client {
         match pointer.phase {
             PointerPhase::Down if primary => {
                 self.pressed = (self.layer.press_at(pointer.position, open)).map(|(id, ..)| id);
+                if self.pressed.is_none()
+                    && let Some(index) = hit(&self.frame, pointer.position)
+                    && let element = &self.frame.resolved[index as usize]
+                    && element.role == Role::Card
+                {
+                    let slot = element.id.0 as usize;
+                    let holdable = self.holdable(slot, element.place);
+                    (self.show.pointer_mut()).press(slot, pointer.position, holdable);
+                }
             }
             PointerPhase::Up if primary => {
                 let pressed = self.pressed.take();
@@ -345,6 +367,28 @@ impl Client {
             PointerPhase::Cancel | PointerPhase::Leave => self.pressed = None,
             _ => {}
         }
+    }
+
+    /// Whether a press may pick up the card in `slot`, resting at `place`: a card in the
+    /// viewer's hand that the open prompt marks, once the prompt is drawn. This is the web
+    /// interface's `#lifts` in `ui/src/stage/prompt.ts`, except that a card in a pile of a tray
+    /// is not yet holdable: the prompts of a split or an order add those piles.
+    fn holdable(&self, slot: usize, place: Place) -> bool {
+        let Some((_, prompt)) = self.prompt.as_ref().filter(|_| self.open) else {
+            return false;
+        };
+        let in_hand = matches!(
+            place,
+            Place::Card {
+                zone: ZoneName::Hand,
+                side: Side::You,
+                ..
+            }
+        );
+        let on = u16::try_from(slot).map(|slot| Subject::Object {
+            slot: ObjectId(slot),
+        });
+        in_hand && (prompt.marks.iter()).any(|marked| Ok(marked.on) == on)
     }
 
     /// Carries out what a press on an element means: a command for the session, a request of
@@ -475,6 +519,12 @@ impl Client {
     #[must_use]
     pub fn faces(&self) -> &FaceList {
         self.show.faces().list()
+    }
+
+    /// The pointer on the table, for tests that read the held card's lean.
+    #[must_use]
+    pub fn pointer(&self) -> &crate::pointer::Pointer {
+        self.show.pointer()
     }
 
     /// The table, for tests and tools that read the camera.

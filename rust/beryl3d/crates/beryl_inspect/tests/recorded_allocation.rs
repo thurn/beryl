@@ -1,6 +1,6 @@
 //! `Client::frame` allocates nothing while a recorded game plays (docs/beryl-3d.md, "The
-//! frame": no allocation), with every script the session timed. This binary counts the heap
-//! allocations made inside `frame`, so it holds one test.
+//! frame": no allocation), with every script the session timed, and while a card is held. This
+//! binary counts the heap allocations made inside `frame`, on the thread of each test.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
@@ -8,9 +8,12 @@ use std::cell::Cell;
 use beryl_inspect::pages::recording;
 use beryl_protocol::protocol::Side;
 use beryl_scene::driver::{REPLY_DELAY, TICK, plays_on};
+use beryl_scene::frame::Role;
 use beryl_scene::frame::Wake;
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::input::Size;
+use beryl_scene::input::{Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
 use beryl_scene::{Client, Config};
+use glam::Vec2;
 
 /// The system allocator, counting the allocations this thread makes while `COUNTING` is set.
 struct Counting;
@@ -116,4 +119,74 @@ fn play(name: &str) -> (usize, Vec<(u64, usize)>) {
         now += REPLY_DELAY.0;
     }
     (frames, allocated)
+}
+
+/// Counts the allocations `client.frame(now)` makes.
+fn counted(client: &mut Client, now: u64) -> usize {
+    COUNTING.with(|counting| counting.set(true));
+    ALLOCATIONS.with(|n| n.set(0));
+    client.frame(now);
+    COUNTING.with(|counting| counting.set(false));
+    ALLOCATIONS.with(Cell::get)
+}
+
+/// Picks up Trinket Mage at `shape-zone`'s first prompt and carries it across the table, a
+/// frame after each move, then holds it still while its lean settles: no frame allocates.
+#[test]
+fn frames_allocate_nothing_while_a_card_is_held() {
+    let views = recording("shape-zone", Side::You)
+        .and_then(|recording| recording.views())
+        .unwrap_or_else(|why| panic!("{why}"));
+    let mut client = Client::new(Config::LARGEST);
+    client.handle(Input::Surface {
+        size: Size {
+            width: 1600.0,
+            height: 900.0,
+        },
+        scale: 1.0,
+        safe_area: Insets::default(),
+    });
+    client.handle(Input::Update(Box::new(views[0].clone())));
+    let mut now = 0;
+    while {
+        client.frame(now);
+        client.wake() != Wake::Never
+    } {
+        now += TICK.0;
+    }
+    let frame = client.frame(now);
+    let card = (frame.resolved.iter())
+        .find(|element| element.role == Role::Card && frame.name(element.name) == "Trinket Mage")
+        .expect("Trinket Mage is in the hand");
+    let start = card.corners.iter().copied().sum::<Vec2>() / 4.0;
+    let pointer = |phase, position| {
+        Input::Pointer(Pointer {
+            id: 0,
+            kind: PointerKind::Mouse,
+            phase,
+            position,
+            button: Button::Primary,
+            wheel: Vec2::ZERO,
+            modifiers: Modifiers::default(),
+        })
+    };
+    client.handle(pointer(PointerPhase::Down, start));
+    let mut allocated = Vec::new();
+    for step in 1..=60_u16 {
+        let at = start + Vec2::new(4.0, -5.0) * f32::from(step.min(30));
+        if step <= 30 {
+            client.handle(pointer(PointerPhase::Move, at));
+        }
+        now += TICK.0;
+        let made = counted(&mut client, now);
+        if made > 0 {
+            allocated.push((step, made));
+        }
+    }
+    assert!(client.pointer().held().is_some(), "the card is held");
+    assert_eq!(
+        allocated,
+        [],
+        "frames that allocated, as (frame, allocations)"
+    );
 }

@@ -173,7 +173,13 @@
     "max_gap_ms": 50,
     "stiffness_hz": 3.5,
     "damping_ratio": 0.42,
-    "lean_degrees": 20
+    "lean_degrees": 20,
+    "drag_threshold_points": 6,
+    "grip_points_per_second_squared": 60000,
+    "drag_per_second": 5,
+    "smooth_velocity_ms": 35,
+    "smooth_acceleration_ms": 50,
+    "lean_steps_per_second": 240
   },
   "catch_up": {
     "double": 10,

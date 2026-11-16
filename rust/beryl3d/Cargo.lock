@@ -313,6 +313,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_protocol",
  "beryl_scene",
+ "glam",
  "libc",
  "miniz_oxide 0.8.9",
  "postcard",

@@ -10,6 +10,7 @@ mod faults;
 mod frame_allocation;
 mod gate;
 mod pack;
+mod pointer_held;
 mod recorded;
 mod runner;
 mod screens;

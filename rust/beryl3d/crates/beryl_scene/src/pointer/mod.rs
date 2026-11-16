@@ -1,5 +1,5 @@
-//! The pointer on the table: the card it hovers, and the hand card that rises under it
-//! (docs/beryl-3d.md, "Motion the pointer drives").
+//! The pointer on the table: the card it hovers, the hand card that rises under it, and the card
+//! it holds (docs/beryl-3d.md, "Motion the pointer drives").
 //!
 //! Where the pointer is, is state; when it moved is not. `Pointer::handle` stores its latest
 //! position and phase. Each frame, `update` finds the card under it with a hit test on the frame
@@ -8,6 +8,13 @@
 //! as the web interface's `RaisedCopy` (`ui/src/stage/raised.ts`) has them. How far up a card
 //! is, from 0 in the fan to 1 raised, is a function of the time alone, so a frame drawn or
 //! skipped between changes nothing.
+//!
+//! A press on a card the open prompt lets the player pick up holds it once it has travelled
+//! `DRAG_THRESHOLD_POINTS`, and the card then follows the pointer (`held`). Letting it go is
+//! decided at the next frame, which `update` reports to the client as the card clicked, if the
+//! gesture is one.
+
+mod held;
 
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::{Mat3, Quat, Vec2};
@@ -17,8 +24,10 @@ use crate::data::space::pointer as data;
 use crate::frame::{ElementId, Frame, Place, Role, StateBits};
 use crate::input::{self, PointerKind, PointerPhase};
 use crate::motion::between;
-use crate::pose::{Curve, Pose};
+use crate::play::compile::Compiled;
+use crate::pose::{Curve, Pose, Segment};
 use crate::table::{CARD_HEIGHT, Camera, Look};
+use held::{Fall, Grip, Lean};
 
 /// The most hand cards that can be rising, raised or falling at once. One is raised at a time,
 /// and a pointer swept across a hand leaves each card it crossed falling for `FALL_MS`; past
@@ -44,6 +53,15 @@ pub struct Pointer {
     /// in their place for the hit test, by the element's index. Kept here so that a frame
     /// allocates nothing.
     saved: Vec<(usize, [Vec2; 4], f32)>,
+    /// The press on a card, from the button going down until it comes up.
+    grip: Option<Grip>,
+    /// The lean of the card held, since it was picked up.
+    lean: Lean,
+    /// A press on a card that ended since the last frame, which the next `update` decides the
+    /// meaning of: the grip as it was let go, and whether it was cancelled.
+    let_go: Option<(Grip, bool)>,
+    /// The card let go last, falling back to where it rests.
+    fall: Option<Fall>,
 }
 
 /// One hand card easing from `from` to `to` (0 in the fan, 1 raised) since the time `since`.
@@ -91,6 +109,7 @@ impl Default for Pointer {
             hovered: None,
             lifts: Vec::with_capacity(LIFTS),
             saved: Vec::with_capacity(LIFTS),
+            ..Self::EMPTY
         }
     }
 }
@@ -104,11 +123,32 @@ impl Pointer {
         hovered: None,
         lifts: Vec::new(),
         saved: Vec::new(),
+        grip: None,
+        lean: Lean::FLAT,
+        let_go: None,
+        fall: None,
     };
 
     /// Takes a pointer event: where the mouse is, or that it has left the window.
     pub fn handle(&mut self, pointer: &input::Pointer) {
         self.phase = Some(pointer.phase);
+        match pointer.phase {
+            PointerPhase::Move => {
+                if let Some(grip) = &mut self.grip {
+                    grip.moved(pointer.position);
+                }
+            }
+            PointerPhase::Up => {
+                if let Some(mut grip) = self.grip.take() {
+                    grip.moved(pointer.position);
+                    self.let_go = Some((grip, false));
+                }
+            }
+            PointerPhase::Cancel | PointerPhase::Leave => {
+                self.let_go = self.grip.take().map(|grip| (grip, true));
+            }
+            _ => {}
+        }
         if pointer.kind != PointerKind::Mouse {
             return;
         }
@@ -116,6 +156,57 @@ impl Pointer {
             PointerPhase::Cancel | PointerPhase::Leave => None,
             _ => Some(pointer.position),
         };
+    }
+
+    /// Starts a press at `at` on the card in `slot`, which the pointer may pick up if
+    /// `holdable`. The client calls this as the button goes down over a card.
+    pub fn press(&mut self, slot: usize, at: Vec2, holdable: bool) {
+        self.grip = Some(Grip {
+            slot,
+            start: at,
+            at,
+            holdable,
+            held: false,
+        });
+        self.lean = Lean::FLAT;
+    }
+
+    /// The slot of the card the pointer holds, if it holds one.
+    #[must_use]
+    pub fn held(&self) -> Option<usize> {
+        self.grip.filter(|grip| grip.held).map(|grip| grip.slot)
+    }
+
+    /// The held card's lean, in radians: toward +x on the screen and toward +y (down it). It is
+    /// zero while no card is held.
+    #[must_use]
+    pub fn lean(&self) -> Vec2 {
+        if self.held().is_some() {
+            self.lean.tilt()
+        } else {
+            Vec2::ZERO
+        }
+    }
+
+    /// Advances the held card's lean to the frame at `now`. The client calls this before it
+    /// builds each frame.
+    pub fn advance(&mut self, now: u64) {
+        if let Some(grip) = self.grip.filter(|grip| grip.held) {
+            self.lean.advance(grip.at, now);
+        }
+    }
+
+    /// Where the card in `slot` is drawn at `now` by `camera` because of the pointer, if it is
+    /// held or falling back from where it was let go toward `rest`.
+    #[must_use]
+    pub fn carried(&self, slot: usize, rest: &Pose, (now, camera): (u64, &Camera)) -> Option<Pose> {
+        if let Some(grip) = self.grip.filter(|grip| grip.held && grip.slot == slot) {
+            return Some(held::pose(camera, grip.at, self.lean.tilt()));
+        }
+        let fall = self
+            .fall
+            .filter(|fall| fall.slot == slot && !fall.done(now))?;
+        Some(fall.at(rest, now))
     }
 
     /// Where the mouse is, in logical points, while it is over the window.
@@ -145,10 +236,13 @@ impl Pointer {
             .map_or(0.0, |lift| lift.at(now))
     }
 
-    /// Whether a hand card is rising or falling at `now`.
+    /// Whether a hand card is rising or falling at `now`, a card is held, or one let go is
+    /// falling back.
     #[must_use]
     pub fn moving(&self, now: u64) -> bool {
         self.lifts.iter().any(|lift| !lift.done(now))
+            || self.held().is_some()
+            || self.fall.is_some_and(|fall| !fall.done(now))
     }
 
     /// Starts the hand card in `slot` easing toward `to` at `now`, from where it is then.
@@ -194,6 +288,15 @@ impl Pointer {
 /// is marked `HOVERED` by `update`, once the frame's hit test has found it.
 pub fn look(pointer: &Pointer, slot: usize, (now, camera): (u64, &Camera), look: &mut Look) {
     if look.state & StateBits::MOVING != 0 {
+        return;
+    }
+    if let Some(pose) = pointer.carried(slot, &look.pose, (now, camera)) {
+        look.state |= if pointer.held() == Some(slot) {
+            StateBits::HELD
+        } else {
+            StateBits::MOVING
+        };
+        look.pose = pose;
         return;
     }
     let lift = pointer.lift(slot, now);
@@ -243,17 +346,129 @@ pub fn takes_pointer(place: Place) -> bool {
 /// places in the fan, which `rest` gives as each card's corners and depth by its slot, so that a
 /// pointer over the part of the fan a raised card has left still finds that card. An element of
 /// the flat layer under the pointer is marked `HOVERED` instead. A card a script is moving is
-/// not hovered until it arrives.
+/// not hovered until it arrives, and nothing is hovered while a card is held.
+///
+/// A press on a card that ended since the last frame is decided here, and the card it clicked is
+/// returned (`let_go`).
 pub(crate) fn update(
+    pointer: &mut Pointer,
+    frame: &mut Frame,
+    rest: impl Fn(usize) -> Option<Pose>,
+    (now, camera): (u64, &Camera),
+) -> Option<usize> {
+    pointer
+        .lifts
+        .retain(|lift| lift.to > 0.0 || !lift.done(now));
+    let clicked = let_go(pointer, &rest, (now, camera));
+    hover_under(
+        pointer,
+        frame,
+        |slot| rest(slot).map(|pose| camera.card_box(&pose)),
+        now,
+    );
+    clicked
+}
+
+/// Decides what the press on a card that ended since the last frame means, at `now`, and
+/// returns the card it clicked, as the web interface's `Pointer.release` and the prompt's
+/// `#dropped` do. A press that never picked its card up is a click on it. A card held and let go
+/// higher on the screen than the top of where it rests, so over the battlefield or the stack, is
+/// a click on it too, and one let go lower, back over the hand, is not. A held card let go falls
+/// back from where it was to where it rests (`rest`), clicked or not, unless a script moves it
+/// first. A cancelled press clicks nothing.
+fn let_go(
+    pointer: &mut Pointer,
+    rest: impl Fn(usize) -> Option<Pose>,
+    (now, camera): (u64, &Camera),
+) -> Option<usize> {
+    let (grip, cancelled) = pointer.let_go.take()?;
+    if !grip.held {
+        return (!cancelled).then_some(grip.slot);
+    }
+    pointer.fall = Some(Fall {
+        slot: grip.slot,
+        from: held::pose(camera, grip.at, pointer.lean.tilt()),
+        since: now,
+    });
+    let resting = rest(grip.slot)?;
+    let (corners, _) = camera.card_box(&resting);
+    let top = corners
+        .iter()
+        .map(|corner| corner.y)
+        .fold(f32::INFINITY, f32::min);
+    (!cancelled && grip.at.y < top).then_some(grip.slot)
+}
+
+/// Hands the card the pointer holds or let go over to `compiled`, a script that starts at
+/// `now`: if the script moves the card, it starts from where the pointer has the card then,
+/// instead of from where the card rests (`rest`), and the pointer lets the card go. Each of the
+/// card's first segments that starts from its resting place starts from there instead, and one
+/// that holds it there holds it where the pointer had it, so that the card waits where it was
+/// let go until the script carries it on, as the web interface's taken drop does. Returns
+/// whether it did, so that the script's record is written again.
+pub(crate) fn hand_over(
+    pointer: &mut Pointer,
+    compiled: &mut Compiled,
+    rest: impl Fn(usize) -> Option<Pose>,
+    (now, camera): (u64, &Camera),
+) -> bool {
+    let Some(slot) = pointer.held().or(pointer
+        .fall
+        .filter(|fall| !fall.done(now))
+        .map(|fall| fall.slot))
+    else {
+        return false;
+    };
+    let Some(track) = compiled.tracks.get_mut(slot) else {
+        return false;
+    };
+    let Some(resting) = track.segments().first().map(|first| first.from) else {
+        return false;
+    };
+    let Some(from) = rest(slot).and_then(|pose| pointer.carried(slot, &pose, (now, camera))) else {
+        return false;
+    };
+    let moved = |segment: &mut Segment| {
+        if segment.from != resting {
+            return false;
+        }
+        segment.from = from;
+        let holds = segment.to == resting;
+        if holds {
+            segment.to = from;
+        }
+        holds
+    };
+    for segment in track.segments_mut() {
+        if !moved(segment) {
+            break;
+        }
+    }
+    for record in compiled
+        .segments
+        .iter_mut()
+        .filter(|record| record.slot == slot)
+    {
+        if !moved(&mut record.segment) {
+            break;
+        }
+    }
+    pointer.fall = None;
+    if pointer.held() == Some(slot) {
+        pointer.grip = None;
+    }
+    true
+}
+
+/// Finds the card under the pointer in `frame` and marks it `HOVERED`, as `update` says, with
+/// `rest` giving each card's resting corners and depth by its slot.
+fn hover_under(
     pointer: &mut Pointer,
     frame: &mut Frame,
     rest: impl Fn(usize) -> Option<([Vec2; 4], f32)>,
     now: u64,
 ) {
-    pointer
-        .lifts
-        .retain(|lift| lift.to > 0.0 || !lift.done(now));
-    let Some(point) = pointer.at else {
+    let Some(point) = pointer.at.filter(|_| pointer.held().is_none()) else {
         pointer.hover(None, false, now);
         return;
     };

@@ -20,8 +20,9 @@
 //!   interface checks, and a test can plant a fault in a script before it plays (`plant`).
 
 mod affect;
-mod compile;
+pub(crate) mod compile;
 mod counts;
+mod hold;
 pub(crate) use compile::nanoseconds;
 mod index;
 mod notices;
@@ -44,7 +45,7 @@ use self::record::{Plant, ScriptRecord, StepRecord};
 use crate::data::space::catch_up;
 use crate::effects::{self, EffectRun};
 use crate::faces::Faces;
-use crate::frame::{Frame, FrameBuilder};
+use crate::frame::FrameBuilder;
 use crate::hud::counts::Counts;
 use crate::light::{self, Lit, StreakRun};
 use crate::notice::Announced;
@@ -233,15 +234,6 @@ impl Show {
     /// The pointer on the table, which takes the host's pointer events.
     pub fn pointer_mut(&mut self) -> &mut Pointer {
         &mut self.pointer
-    }
-
-    /// Finds and marks what the pointer is over in `frame`, just built at `now` (`pointer::update`).
-    pub fn point(&mut self, frame: &mut Frame, now: u64) {
-        let mut pointer = std::mem::replace(&mut self.pointer, Pointer::EMPTY);
-        let camera = self.table.camera();
-        let rest = |slot| self.pose(slot, now).map(|pose| camera.card_box(&pose));
-        crate::pointer::update(&mut pointer, frame, rest, now);
-        self.pointer = pointer;
     }
 
     /// Where `subject` is at `now` and how large: a card where `pose` has it, an ability on
@@ -579,6 +571,7 @@ impl Show {
                 streaks_given: 0,
                 counts_given: 0,
             });
+            self.hand_over(now);
             if let Some(playing) = &self.playing {
                 playing.affect(&mut self.effects);
                 playing.announce(&mut self.notices);

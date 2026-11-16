@@ -30,7 +30,8 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
 /// On screen: every interactive element lies inside the window's safe area. A card needs only a
 /// square `TARGET_POINTS` on a side (`PHONE_TARGET_POINTS` on the phone layout), or as much of it
 /// as a card turned edge-on has, inside it, because a hand is held partly past the bottom edge,
-/// as Arena's and the web interface's are.
+/// as Arena's and the web interface's are. A card the pointer holds is not at rest, and goes
+/// where the pointer takes it.
 #[must_use]
 pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
     let side = target_side(context);
@@ -45,7 +46,9 @@ pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
         .filter(|&index| {
             let element = &frame.resolved[index as usize];
             let rect = bounds(element);
-            if element.role == Role::Card {
+            if element.state.has(StateBits::HELD) {
+                false
+            } else if element.role == Role::Card {
                 !intersection(safe, rect).is_some_and(|in_safe| {
                     in_safe.width >= side.min(rect.width) && in_safe.height >= side.min(rect.height)
                 })

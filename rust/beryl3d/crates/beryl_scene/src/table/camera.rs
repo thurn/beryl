@@ -193,6 +193,24 @@ impl Camera {
         point.truncate()
     }
 
+    /// The point `height` millimetres above the table that lies under `point`, a point on the
+    /// window in logical points: where the line from the eye through `point` meets that plane.
+    #[must_use]
+    pub fn on_plane(&self, point: Vec2, height: f32) -> Vec3 {
+        let size = self.window.size;
+        let aspect = size.width / size.height;
+        let ndc = Vec2::new(
+            point.x / size.width * 2.0 - 1.0,
+            1.0 - point.y / size.height * 2.0,
+        );
+        let direction = self.inverse_view.transform_vector3(Vec3::new(
+            ndc.x * self.tan_half * aspect,
+            ndc.y * self.tan_half,
+            -1.0,
+        ));
+        self.eye + direction * ((height - self.eye.z) / direction.z)
+    }
+
     /// The camera's right, up and backward directions in the table's space, each of unit
     /// length: across the screen, up the screen, and toward the camera.
     #[must_use]
