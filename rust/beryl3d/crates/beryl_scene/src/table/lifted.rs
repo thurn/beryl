@@ -91,6 +91,24 @@ pub(crate) struct Handled {
 }
 
 impl Handled {
+    /// The look a snapshot places. The session only lifts a counted look at the top of a
+    /// library for a scry (UI Conventions, "Cards a look returns"). During other choices
+    /// the library stays in place until a step moves a card from it.
+    pub(crate) fn of_view(zones: &Zones, handling: Option<CardHandling>) -> Option<Self> {
+        handling
+            .filter(|handling| {
+                !matches!(
+                    handling,
+                    CardHandling::Library {
+                        count: Some(_),
+                        scry: None | Some(false),
+                        ..
+                    }
+                )
+            })
+            .map(|handling| Self::of(zones, handling))
+    }
+
     /// The look `handling` as it begins over `zones`.
     pub(crate) fn of(zones: &Zones, handling: CardHandling) -> Self {
         let slots = group_of(handling).map_or_else(Vec::new, |group| {

@@ -1226,13 +1226,13 @@ flight start exactly where the card was.
   two (boxes side by side), in the space `desktopTray` gives, placed relative to
   the camera. `Table::hold` names the cards held up, and placement then gives
   them their tray places in place of their zones'.
-- **Cards the opponent looks at lie beside their pile.** While a view's
-  `handling` names a look, the cards it holds up are placed apart from their
-  pile: a library's top cards lie face down on the table beside it, at its size
-  and raised off it, as Arena's do; the viewer's hand, which the opponent looks
-  at, is held up in the middle of the screen. Which cards those are is fixed as
-  the look begins. A script that changes the look with no `lift` step takes the
-  look of the view it leads to.
+- **The opponent's scried cards lie beside their library.** They lie face down
+  on the table at library size, as in Arena. Choices such as taking cards from
+  the top of the library leave its cards in the pile until a script step moves
+  them. The viewer's hand, when the opponent looks at it, is held up in the
+  middle of the screen. A look that lifts cards fixes their identities as it
+  begins. For a look that lifts cards without a `lift` step, the script reads
+  the look from the view it leads to.
 - **A card picked in a hidden pick lies apart from its hand.** While a
   resolution such as Show and Tell waits for the other player to pick, a hand
   card whose `hidden_pick` is set is held up where the cards of that player's

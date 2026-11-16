@@ -304,7 +304,7 @@ fn verbs() -> Stress {
     second.handling = Some(CardHandling::Library {
         side: Side::Opponent,
         count: Some(3),
-        scry: None,
+        scry: Some(true),
     });
     recording(vec![first, second])
 }
@@ -438,7 +438,7 @@ fn verb_changes(first: &PlayerView) -> Vec<Act> {
         handling: CardHandling::Library {
             side: Side::Opponent,
             count: Some(3),
-            scry: None,
+            scry: Some(true),
         },
     });
     acts

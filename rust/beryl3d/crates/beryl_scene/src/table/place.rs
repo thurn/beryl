@@ -434,9 +434,7 @@ impl<'a> Zones<'a> {
             piles: [player(&view.players.you), player(&view.players.opponent)],
             handling: None,
         };
-        let handled = view
-            .handling
-            .map(|handling| lifted::Handled::of(&zones, handling));
+        let handled = lifted::Handled::of_view(&zones, view.handling);
         zones.handled(handled)
     }
 

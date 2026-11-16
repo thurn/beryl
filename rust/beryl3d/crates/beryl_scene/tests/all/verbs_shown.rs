@@ -5,7 +5,7 @@
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{CardHandling, Facing, ObjectId, ObjectView, Side, ZoneName};
-use beryl_protocol::script::{Act, Curve, Span, StepTiming, Verb};
+use beryl_protocol::script::{Act, Curve, Fact, Span, StepTiming, Verb};
 use beryl_scene::agent::checks::duplicates;
 use beryl_scene::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use beryl_scene::agent::{Context, Layout};
@@ -297,7 +297,7 @@ fn looked_at() -> (GameUpdate, GameUpdate, GameUpdate, Vec<ObjectId>) {
     let handling = CardHandling::Library {
         side: Side::Opponent,
         count: Some(3),
-        scry: None,
+        scry: Some(true),
     };
     let mut handled = start.view.clone();
     handled.handling = Some(handling);
@@ -372,6 +372,38 @@ fn looked_at_cards_come_off_their_library_and_go_back() {
         }
         checks_pass(&show);
     }
+}
+
+#[test]
+fn a_library_choice_keeps_the_cards_on_the_pile() {
+    let (start, _, _, _) = looked_at();
+    let mut choice = start.view.clone();
+    choice.handling = Some(CardHandling::Library {
+        side: Side::Opponent,
+        count: Some(3),
+        scry: None,
+    });
+    let order = choice.players.opponent.library.clone();
+    let after = scripted(
+        &start,
+        &choice,
+        vec![Act::Set {
+            fact: Fact::Library {
+                player: Side::Opponent,
+                order: order.clone(),
+            },
+        }],
+    );
+    let show = played(&start, &after, vec![timing(0.0)]);
+    let pile = show.table().placement(&start.view, &[]);
+    for slot in order {
+        assert_eq!(
+            show.pose(usize::from(slot.0), 10_000 * MS),
+            pile.get(slot).map(|rest| rest.pose),
+            "{slot:?} stays on the pile"
+        );
+    }
+    checks_pass(&show);
 }
 
 #[test]

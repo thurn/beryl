@@ -15,10 +15,11 @@
 //!   together sweeps past that place without stopping (`swept`).
 //! - The opponent's draw drops toward the middle of the table and rises into their hand, and so
 //!   does a card no one can read that an effect puts in a hand from a library, farther.
-//! - Any other flight, such as a discard, goes along the straight line.
+//! - An opponent's discard drops along the line from hand to graveyard. Other flights also
+//!   follow a straight line across the table.
 //!
-//! Every flight but a land's, a drawn card's or a spell's cast from a hand also rises
-//! `verbs.fly.arc` millimetres toward the camera at the middle of its time. A card whose face changes turns over top over bottom
+//! Flights that rise use `verbs.fly.arc` for their height at the middle of the step. A card
+//! whose face changes turns over top over bottom
 //! at moments of its own (`Turning`): a drawn card as it leaves the library, any other a little
 //! before half way. The values are under `verbs.fly` in `data/beryl3d/space.json`.
 //!
@@ -83,7 +84,9 @@ const DRAWN: Bowing = Bowing {
     back: bows::drawn::BACK,
 };
 
-/// A card no one can read that an effect takes from a library into a hand.
+/// A card no one can read that an effect takes from a library into a hand. It drops far
+/// into the table, with a shallow sideways swing so it stays inside the window on leaving
+/// the pile.
 const TAKEN: Bowing = Bowing {
     share: bows::taken::SHARE,
     peak: bows::taken::PEAK,
@@ -173,6 +176,11 @@ fn path_of(act: &Act, case: Option<&str>) -> Path {
             rises: *from != ZoneName::Hand,
         },
         (ZoneName::Stack, ZoneName::Battlefield) => Path::Thrown,
+        // The opponent's hand lies at the top of the frame. A discard drops from the
+        // hand to the graveyard, so it should not rise farther above the table first.
+        (ZoneName::Hand, ZoneName::Graveyard) if !mine && *why == Why::Discard => {
+            Path::Straight { rises: false }
+        }
         (ZoneName::Hand, ZoneName::Battlefield) if mine => Path::Straight { rises: false },
         // The opponent's land bows toward the middle of the table, away from their own edge.
         (ZoneName::Hand, ZoneName::Battlefield) => Path::Bowed {
