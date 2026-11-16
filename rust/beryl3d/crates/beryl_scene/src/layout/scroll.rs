@@ -14,7 +14,7 @@ impl Layer {
     /// screen is `open`.
     #[must_use]
     pub fn scroller_at(&self, point: Vec2, open: bool) -> Option<ElementId> {
-        self.hit(point, open, |node| {
+        self.hit(point, open, |node, _| {
             (node.most_scroll() != Vec2::ZERO).then_some(node.id)
         })
     }

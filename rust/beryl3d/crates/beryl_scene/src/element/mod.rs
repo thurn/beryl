@@ -20,7 +20,7 @@ use crate::input::{FaceId, FaceSize};
 use crate::screens::{Screen, Sheet};
 use crate::settings::Setting;
 use crate::text::TypeStyle;
-use crate::widgets::MenuId;
+use crate::widgets::{IconId, MenuId};
 
 /// What a press on an element means. A value, not a closure, so that an unchanged element
 /// compares equal and a test can print it. `Client::press` turns it into a `SessionCommand`, a
@@ -85,6 +85,9 @@ pub enum Shown {
     /// The scene object itself, placed in the element's box, so that it looks and moves as it
     /// does on the table.
     Object(Subject),
+    /// An icon `size` logical points on a side, centred in the element's content box and
+    /// tinted with its text color.
+    Icon(IconId, u16),
 }
 
 /// A styled run of an element's text.
@@ -114,6 +117,9 @@ pub struct Element {
     pub enabled: bool,
     /// Whether it takes keys: a press on it gives it the focus (`layout::focus`).
     pub focus: bool,
+    /// Whether it is on or chosen, as a toggle that is on is. It is drawn so, and its resolved
+    /// element has the `SELECTED` state.
+    pub selected: bool,
     /// Where it stands if it is placed at a point of the window or on a scene object rather
     /// than in its parent's layout. It is laid out at its content's size (`layout::anchor`).
     pub anchor: Option<Anchor>,
@@ -137,6 +143,7 @@ impl Element {
             press: None,
             enabled: true,
             focus: false,
+            selected: false,
             anchor: None,
             shows: None,
             shortcuts: Shortcuts::default(),
@@ -155,6 +162,7 @@ impl Element {
             && self.press == other.press
             && self.enabled == other.enabled
             && self.focus == other.focus
+            && self.selected == other.selected
             && self.anchor == other.anchor
             && self.shows == other.shows
             && self.shortcuts == other.shortcuts
@@ -169,6 +177,12 @@ impl Element {
     #[must_use]
     pub fn enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
+        self
+    }
+
+    #[must_use]
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
         self
     }
 

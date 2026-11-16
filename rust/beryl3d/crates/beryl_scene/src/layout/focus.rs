@@ -26,7 +26,7 @@ impl Layer {
     /// `open`.
     #[must_use]
     pub fn focusable_at(&self, point: Vec2, open: bool) -> Option<ElementId> {
-        self.hit(point, open, |node| node.element.focus.then_some(node.id))
+        self.hit(point, open, |node, _| node.element.focus.then_some(node.id))
     }
 
     /// Moves the focus to the next focusable element in tree order, or the one before if not

@@ -6,8 +6,8 @@
 use glam::Vec2;
 
 use super::{Layer, Node, has_panel};
-use crate::element::{Display, Overflow, TextAlign};
-use crate::frame::{Band, Draw, FrameBuilder, NameRef, Place, Resolved, StateBits};
+use crate::element::{Display, Overflow, Shown, TextAlign};
+use crate::frame::{Band, Draw, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
 use crate::input::Rect;
 use crate::table::Camera;
 use crate::text::{self, BlockLook, faded};
@@ -77,17 +77,17 @@ impl Layer {
         builder.visit();
         look.opacity *= node.opacity();
         let element = &node.element;
-        // A transition moves the node alone: each node under it has its own.
-        let rect = moved(node.rect, look.point + node.offset());
+        let state = self.state(node);
+        // A transition moves the node alone: each node under it has its own. A button held down
+        // sinks a point, as the `.button:active` rule moves it.
+        let sink = if state.has(StateBits::HELD) && sinks(node) {
+            Vec2::Y
+        } else {
+            Vec2::ZERO
+        };
+        let rect = moved(node.rect, look.point + node.offset() + sink);
         let fade = |color: [u8; 4]| faded(color, look.opacity);
         let clip = look.clip.map_or(0, |(_, entry)| entry);
-        let mut state = 0;
-        if !element.enabled {
-            state |= StateBits::DISABLED;
-        }
-        if self.focused == Some(node.id) {
-            state |= StateBits::FOCUSED;
-        }
         let index = builder.resolved(
             &element.name,
             Resolved {
@@ -105,12 +105,12 @@ impl Layer {
                 interactive: element.press.is_some()
                     && look.opacity > 0.0
                     && look.clip.is_none_or(|(clip, _)| overlaps(clip, rect)),
-                state: StateBits(state),
+                state,
                 face: None,
                 really: crate::frame::NameRef::default(),
             },
         );
-        if let Some(panel) = panel(node, top) {
+        if let Some(panel) = panel(node, top, state) {
             let mut draw = Draw::panel(
                 camera.layer_transform(rect),
                 fade(panel.tint),
@@ -124,12 +124,30 @@ impl Layer {
             }
             builder.draw(Band::Layer, draw);
         }
+        let shown = Look {
+            point: look.point + node.offset() + sink,
+            ..look
+        };
         if node.block.is_some() {
-            let shown = Look {
-                point: look.point + node.offset(),
-                ..look
+            self.write_text(node, index, state, shown, builder, camera);
+        }
+        if let Some(Shown::Icon(icon, side)) = element.shows
+            && let Some(sprite) = self.icons.get(icon, side)
+        {
+            let side = f32::from(side);
+            let content = moved(node.content, shown.point);
+            let at = Rect {
+                x: content.x + (content.width - side) / 2.0,
+                y: content.y + (content.height - side) / 2.0,
+                width: side,
+                height: side,
             };
-            self.write_text(node, index, shown, builder, camera);
+            let tint = fade(ink(node, state, look.tint));
+            let mut draw = Draw::icon(camera.layer_transform(at), tint, sprite);
+            if clip > 0 {
+                draw = draw.with_clip(clip);
+            }
+            builder.draw(Band::Layer, draw);
         }
         let mut inside = look;
         if element.style.overflow != Overflow::Visible {
@@ -163,6 +181,7 @@ impl Layer {
         &self,
         node: &Node,
         index: u32,
+        state: StateBits,
         look: Look,
         builder: &mut FrameBuilder,
         camera: &Camera,
@@ -193,13 +212,10 @@ impl Layer {
                     y: origin.y + line.y,
                     ..*line
                 },
+                block.base.style.size,
             );
         }
-        let tint = fade(match look.tint.or(element.style.color) {
-            Some(tint) => tint,
-            None if element.enabled => color::TYPE,
-            None => color::TEXT_FAINT,
-        });
+        let tint = fade(ink(node, state, look.tint));
         let block_look = BlockLook {
             tint,
             opacity: look.opacity,
@@ -224,7 +240,12 @@ struct Panel {
 /// of a screen or a float, and one under any element with a `background` or a `border`. Its
 /// style's colors, border width and radius replace the usual ones where it gives them; a radius
 /// of 0 keeps the usual one, a panel's or a button's, and is square on any other element.
-fn panel(node: &Node, top: bool) -> Option<Panel> {
+///
+/// The widgets' states change it as `buttons.css` and `icon-button.css` do: a disabled button
+/// is flat stone under a dim rim whatever its style says; under the pointer a button is 10%
+/// brighter (`filter: brightness(1.1)`), while an icon button's rim brightens instead, and
+/// an icon button held down darkens.
+fn panel(node: &Node, top: bool, state: StateBits) -> Option<Panel> {
     let style = &node.element.style;
     let usual = has_panel(node.element.role, top);
     if !usual && style.background.is_none() && style.border.is_none() {
@@ -235,9 +256,25 @@ fn panel(node: &Node, top: bool) -> Option<Panel> {
         (true, false) => (color::BUTTON, node.rect.height / 2.0, size::BORDER),
         (false, _) => ([0; 4], 0.0, 0.0),
     };
+    let mut tint = style.background.unwrap_or(tint);
+    let mut edge = style.border.map_or(color::METAL, |(edge, _)| edge);
+    let icon = matches!(node.element.shows, Some(Shown::Icon(..)));
+    if state.has(StateBits::DISABLED) && node.element.role == Role::Button && !icon {
+        (tint, edge) = (color::DISABLED, color::DISABLED_RIM);
+    } else if icon {
+        if state.has(StateBits::HELD) {
+            tint = color::ICON_BUTTON_PRESSED;
+        }
+        if state.has(StateBits::HOVERED) || state.has(StateBits::FOCUSED) {
+            edge = color::ICON_BUTTON_RIM_HOVERED;
+        }
+    } else if state.has(StateBits::HOVERED) && pressable(node) {
+        tint = brighter(tint);
+        edge = brighter(edge);
+    }
     Some(Panel {
-        tint: style.background.unwrap_or(tint),
-        edge: style.border.map_or(color::METAL, |(edge, _)| edge),
+        tint,
+        edge,
         radius: if style.radius > 0.0 {
             style.radius
         } else {
@@ -245,6 +282,80 @@ fn panel(node: &Node, top: bool) -> Option<Panel> {
         },
         border: style.border.map_or(border, |(_, width)| width),
     })
+}
+
+/// Whether a press on `node` does something now.
+fn pressable(node: &Node) -> bool {
+    node.element.press.is_some() && node.element.enabled
+}
+
+/// Whether `node` sinks while it is held down: a button with words, as `.button:active` moves
+/// it a point down. An icon button darkens instead.
+fn sinks(node: &Node) -> bool {
+    node.element.role == Role::Button
+        && pressable(node)
+        && !matches!(node.element.shows, Some(Shown::Icon(..)))
+}
+
+/// `color` 10% brighter, as CSS's `brightness(1.1)` makes it.
+fn brighter(color: [u8; 4]) -> [u8; 4] {
+    let lift = |channel: u8| {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let lifted = (f32::from(channel) * 1.1).round().min(255.0) as u8;
+        lifted
+    };
+    [lift(color[0]), lift(color[1]), lift(color[2]), color[3]]
+}
+
+/// The color of `node`'s text and icon: `tint`, a float's, if given; the faint type color
+/// while it is disabled, whatever its style says, as a disabled button's dim type is; its
+/// style's color; or the type color. An icon with no color of its own is drawn in the dim text
+/// color, and in the text color under the pointer or with the focus (`.icon-button`).
+fn ink(node: &Node, state: StateBits, tint: Option<[u8; 4]>) -> [u8; 4] {
+    let element = &node.element;
+    if let Some(tint) = tint {
+        return tint;
+    }
+    if !element.enabled {
+        return color::TEXT_FAINT;
+    }
+    if let Some(color) = element.style.color {
+        return color;
+    }
+    match element.shows {
+        Some(Shown::Icon(..))
+            if !(state.has(StateBits::HOVERED) || state.has(StateBits::FOCUSED)) =>
+        {
+            color::TEXT_DIM
+        }
+        Some(Shown::Icon(..)) => color::TEXT,
+        _ => color::TYPE,
+    }
+}
+
+impl Layer {
+    /// The state `node` is drawn in and its resolved element has: disabled, focused, selected,
+    /// under the pointer and held down by a press.
+    fn state(&self, node: &Node) -> StateBits {
+        let element = &node.element;
+        let mut state = 0;
+        if !element.enabled {
+            state |= StateBits::DISABLED;
+        }
+        if self.focused == Some(node.id) {
+            state |= StateBits::FOCUSED;
+        }
+        if element.selected {
+            state |= StateBits::SELECTED;
+        }
+        if self.hovered == Some(node.id) {
+            state |= StateBits::HOVERED;
+        }
+        if self.pressed == Some(node.id) {
+            state |= StateBits::HELD;
+        }
+        StateBits(state)
+    }
 }
 
 /// The part of the window that both `a` and `b` cover, if any.
@@ -276,7 +387,7 @@ fn scaled(rect: Rect, scale: f32) -> Rect {
 }
 
 /// `rect` moved by `offset`.
-fn moved(rect: Rect, offset: Vec2) -> Rect {
+pub(super) fn moved(rect: Rect, offset: Vec2) -> Rect {
     Rect {
         x: rect.x + offset.x,
         y: rect.y + offset.y,

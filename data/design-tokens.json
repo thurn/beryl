@@ -329,6 +329,10 @@
         "token": "button-height",
         "note": "Every action button on the game screen."
       },
+      "BUTTON_WIDTH": {
+        "token": "button-width",
+        "note": "The width of every button in the action dock."
+      },
       "BUTTON_PADDING": {
         "value": 21.6,
         "note": "A button's padding on either side of its label: the `.button` rule's 0.9em at `--button-font`."
@@ -340,6 +344,30 @@
       "BORDER": {
         "value": 1.5,
         "note": "The width of a panel's or a button's border: the `.button` rule's 1.5px."
+      },
+      "BUTTON_MIN_WIDTH": {
+        "value": 192,
+        "note": "The narrowest a button is: the `.button` rule's `min-width: 8em` at `--button-font`."
+      },
+      "ICON_BUTTON": {
+        "value": 44,
+        "note": "The side of an icon button's round face: `.icon-button`'s width and height."
+      },
+      "ICON": {
+        "value": 22,
+        "note": "The side of the icon an icon button shows: `.icon-button > svg`."
+      },
+      "SLIDER_WIDTH": {
+        "value": 150,
+        "note": "A slider's width: `.sound-level input`."
+      },
+      "SLIDER_TRACK": {
+        "value": 4,
+        "note": "The height of a slider's track."
+      },
+      "SLIDER_THUMB": {
+        "value": 16,
+        "note": "The side of a slider's round thumb."
       }
     },
     "color": {
@@ -351,6 +379,58 @@
       "BUTTON": {
         "color": "surface-raised",
         "note": "`--surface-raised`: a button's face."
+      },
+      "PRIMARY": {
+        "value": "#b45e12",
+        "note": "A primary button's face: the middle of `.button-primary`'s amber gradient in `ui/src/design/components/buttons.css`."
+      },
+      "PRIMARY_RIM": {
+        "value": "#eba043",
+        "note": "A primary button's gold rim: the side of `.button-primary`'s `border-color`."
+      },
+      "PRIMARY_INK": {
+        "value": "#fffaf2",
+        "note": "A primary button's label: the `color` of `.button-primary`."
+      },
+      "SECONDARY": {
+        "value": "#1d1917",
+        "note": "Any other button's near-black face: the middle of `.button-secondary`'s gradient."
+      },
+      "SECONDARY_RIM": {
+        "value": "#b9b2a9",
+        "note": "Any other button's pale rim: the side of `.button-secondary`'s `border-color`."
+      },
+      "SECONDARY_INK": {
+        "value": "#fffdfa",
+        "note": "Any other button's label: the `color` of `.button-secondary`."
+      },
+      "DISABLED": {
+        "value": "#2f2b28",
+        "note": "A disabled button's flat stone face: the `background` of `.button:disabled`."
+      },
+      "DISABLED_RIM": {
+        "value": "#57514c",
+        "note": "A disabled button's rim: the `border-color` of `.button:disabled`."
+      },
+      "ICON_BUTTON": {
+        "value": "rgb(24 21 19 / 62%)",
+        "note": "An icon button's round face of dark glass: the `background` of `.icon-button` in `ui/src/design/components/icon-button.css`."
+      },
+      "ICON_BUTTON_PRESSED": {
+        "value": "rgb(12 10 9 / 88%)",
+        "note": "An icon button's face while it is pressed: `.icon-button:active`."
+      },
+      "ICON_BUTTON_RIM": {
+        "value": "rgb(214 192 150 / 16%)",
+        "note": "An icon button's faint gold rim: the inset ring of `.icon-button`'s `box-shadow`."
+      },
+      "ICON_BUTTON_RIM_HOVERED": {
+        "value": "rgb(214 192 150 / 45%)",
+        "note": "An icon button's rim under the pointer: `.icon-button:hover`."
+      },
+      "SLIDER_TRACK": {
+        "value": "rgb(242 236 225 / 22%)",
+        "note": "The unfilled part of a slider's track, behind the `--gold` fill the web's `accent-color` gives a range input (`.sound-level input` in `ui/src/screens/styles/settings.css`)."
       }
     },
     "mana": {

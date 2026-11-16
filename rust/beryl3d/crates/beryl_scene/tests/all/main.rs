@@ -42,3 +42,4 @@ mod verbs_shown;
 mod verbs_streak;
 mod verbs_strike;
 mod verbs_tap;
+mod widgets;

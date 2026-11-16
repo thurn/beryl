@@ -46,6 +46,27 @@ pub enum Setting {
     FullControl(bool),
 }
 
+impl Setting {
+    /// The level a level setting sets, from 0 to 100, or `None` for a switch.
+    #[must_use]
+    pub fn level(self) -> Option<u8> {
+        match self {
+            Self::Music(level) | Self::Effects(level) => Some(level),
+            Self::Muted(_) | Self::FullControl(_) => None,
+        }
+    }
+
+    /// The same level setting at `level`, or the switch unchanged.
+    #[must_use]
+    pub fn at_level(self, level: u8) -> Self {
+        match self {
+            Self::Music(_) => Self::Music(level),
+            Self::Effects(_) => Self::Effects(level),
+            switch @ (Self::Muted(_) | Self::FullControl(_)) => switch,
+        }
+    }
+}
+
 impl Settings {
     /// Makes the change `setting` says. A level over 100 is taken as 100.
     pub fn apply(&mut self, setting: Setting) {

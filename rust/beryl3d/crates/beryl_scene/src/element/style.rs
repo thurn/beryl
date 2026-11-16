@@ -136,6 +136,10 @@ pub struct Style {
     pub text_align: TextAlign,
     /// The color of the element's text in place of the design tokens' type color.
     pub color: Option<[u8; 4]>,
+    /// Whether its text stays on one line and shrinks until it fits the content box, as the
+    /// web interface's `useTextFit` (`ui/src/components/fit.ts`) shrinks a button's long label,
+    /// rather than breaking onto more lines (`layout::fit`).
+    pub fit: bool,
 }
 
 impl Default for Style {
@@ -173,6 +177,7 @@ impl Default for Style {
             text: type_style::BODY,
             text_align: TextAlign::Start,
             color: None,
+            fit: false,
         }
     }
 }
@@ -206,6 +211,7 @@ setters! {
     overflow: Overflow,
     opacity: f32,
     radius: f32,
+    fit: bool,
 }
 
 /// Builder methods that set one optional field of `Style` each to `Some`, named for the field.

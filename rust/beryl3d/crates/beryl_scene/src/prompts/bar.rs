@@ -10,9 +10,10 @@ use beryl_protocol::protocol::Status;
 use crate::element::{Element, Press, row, text};
 use crate::screens::ScreenIn;
 use crate::tokens::{space, type_style};
-use crate::widgets::button;
+use crate::widgets::{button, primary};
 
-/// The prompt bar for `prompt`: its title, then its buttons in the order the session sent them.
+/// The prompt bar for `prompt`: its title, then its buttons in the order the session sent them,
+/// the one the prompt puts forward drawn as the primary button.
 /// A prompt with no title, such as a priority stop's, shows only its buttons, as the web
 /// interface's prompt bar does (`ui/src/stage/PromptBar.tsx`): an empty text would still take
 /// a gap beside them.
@@ -40,7 +41,8 @@ pub fn prompt_bar(prompt: &PromptView, input: &ScreenIn) -> Element {
         .padding(space::L)
         .children(title)
         .children(prompt.buttons.iter().map(|button_view| {
-            button(&button_view.label)
+            let widget = if button_view.primary { primary } else { button };
+            widget(&button_view.label)
                 .enabled(button_view.enabled)
                 .on_press(Press::Button(button_view.id))
         }))

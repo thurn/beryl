@@ -120,7 +120,7 @@ pub(super) fn deciding(prompt: PromptView) -> Input {
 }
 
 /// Gives every glyph the client wants a made-up place in atlas page 0.
-fn fill_glyphs(client: &mut Client) {
+pub(super) fn fill_glyphs(client: &mut Client) {
     let glyphs: Vec<GlyphCell> = client
         .wanted_glyphs()
         .map(|key| GlyphCell {
@@ -133,21 +133,21 @@ fn fill_glyphs(client: &mut Client) {
 }
 
 /// The index in `frame.resolved` of the element of `role` named `name`.
-fn find(frame: &Frame, role: Role, name: &str) -> usize {
+pub(super) fn find(frame: &Frame, role: Role, name: &str) -> usize {
     (frame.resolved.iter())
         .position(|element| element.role == role && frame.name(element.name) == name)
         .unwrap_or_else(|| panic!("no {role:?} named {name:?} in the frame"))
 }
 
 /// An element's box as (left, top, right, bottom).
-fn edges(frame: &Frame, index: usize) -> (f32, f32, f32, f32) {
+pub(super) fn edges(frame: &Frame, index: usize) -> (f32, f32, f32, f32) {
     let corners = frame.resolved[index].corners;
     let min = corners.into_iter().reduce(Vec2::min).unwrap();
     let max = corners.into_iter().reduce(Vec2::max).unwrap();
     (min.x, min.y, max.x, max.y)
 }
 
-fn centre(frame: &Frame, index: usize) -> Vec2 {
+pub(super) fn centre(frame: &Frame, index: usize) -> Vec2 {
     let (left, top, right, bottom) = edges(frame, index);
     Vec2::new(f32::midpoint(left, right), f32::midpoint(top, bottom))
 }
@@ -166,7 +166,7 @@ pub(super) fn context() -> Context {
     }
 }
 
-fn pointer(phase: PointerPhase, position: Vec2) -> Input {
+pub(super) fn pointer(phase: PointerPhase, position: Vec2) -> Input {
     Input::Pointer(Pointer {
         id: 0,
         kind: PointerKind::Mouse,
@@ -516,7 +516,7 @@ fn centred_at(point: Vec2) -> FloatLook {
 
 /// `layer` written into a new frame, with the prompt bar drawn if `open`, and the layout work
 /// done since the last frame.
-fn write_layer(layer: &mut Layer, open: bool) -> Frame {
+pub(super) fn write_layer(layer: &mut Layer, open: bool) -> Frame {
     let mut frame = Frame::with_capacity(64, 256, 1024);
     let mut builder = FrameBuilder::new(&mut frame);
     let (layout_nodes, text_runs) = layer.take_work();

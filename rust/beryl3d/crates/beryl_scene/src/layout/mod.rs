@@ -8,9 +8,11 @@
 //! screen it keeps floats, small elements placed at a point of the window (`float`).
 
 mod anchor;
+mod fit;
 mod float;
 mod focus;
 mod motion;
+mod pointed;
 mod reconcile;
 mod scroll;
 mod style;
@@ -50,6 +52,8 @@ struct TextLeaf {
     text: String,
     style: TypeStyle,
     spans: Vec<element::Span>,
+    /// Whether the text stays on one line (`Style::fit`), so that it is measured unbroken.
+    fit: bool,
 }
 
 /// One kept element, with its layout.
@@ -77,6 +81,8 @@ struct Node {
     scroll_room: glam::Vec2,
     /// How far its children are scrolled, for an element that scrolls (`scroll`).
     scroll: glam::Vec2,
+    /// For text that shrinks to fit (`fit`), the content box width its block was fitted to.
+    fitted: Option<f32>,
     /// The move or fade it is making, if any (`motion`).
     motion: Option<motion::Motion>,
 }
@@ -101,6 +107,11 @@ pub struct Layer {
     text_runs: u32,
     /// The element that takes the keys (`focus`).
     focused: Option<ElementId>,
+    /// The element a press under the pointer would reach, and the element held down by a
+    /// press that has not ended, which the widgets are drawn hovered and pressed by
+    /// (`Layer::point_at`).
+    hovered: Option<ElementId>,
+    pressed: Option<ElementId>,
     /// Whether the tree being matched and laid out is the screen's, whose changes transition
     /// (`motion`); floats' do not.
     animating: bool,
@@ -137,6 +148,8 @@ impl Layer {
             layout_nodes: 0,
             text_runs: 0,
             focused: None,
+            hovered: None,
+            pressed: None,
             animating: false,
         }
     }
@@ -222,7 +235,7 @@ impl Layer {
     /// last drawn first. The screen is searched only while it is `open`, that is drawn.
     #[must_use]
     pub fn press_at(&self, point: glam::Vec2, open: bool) -> Option<(ElementId, Press, bool)> {
-        self.hit(point, open, |node| {
+        self.hit(point, open, |node, _| {
             let element = &node.element;
             (element.press.clone()).map(|press| (node.id, press, element.enabled))
         })
@@ -236,14 +249,14 @@ impl Layer {
         &self,
         point: glam::Vec2,
         open: bool,
-        want: impl Fn(&Node) -> Option<T>,
+        want: impl Fn(&Node, glam::Vec2) -> Option<T>,
     ) -> Option<T> {
         /// The value at `point` in `node`'s tree, whose top left corner stands at `origin`.
         fn find<T>(
             node: &Node,
             point: glam::Vec2,
             origin: glam::Vec2,
-            want: &impl Fn(&Node) -> Option<T>,
+            want: &impl Fn(&Node, glam::Vec2) -> Option<T>,
         ) -> Option<T> {
             if node.element.style.display == element::Display::None
                 || !contains(node.rect, point - origin - node.offset())
@@ -257,7 +270,7 @@ impl Layer {
                     Some(_) => find(child, point, child.corner()?, want),
                     None => find(child, point, inside, want),
                 })
-                .or_else(|| want(node))
+                .or_else(|| want(node, origin))
         }
         (self.floats.iter().rev())
             .find_map(|float| find(&float.node, point, float.corner(), &want))
@@ -407,7 +420,9 @@ impl Layer {
             width: layout.content_box_width(),
             height: layout.content_box_height(),
         };
-        if let Some(words) = &node.element.text {
+        if node.element.style.fit {
+            self.fit(node);
+        } else if let Some(words) = &node.element.text {
             // A little room past the measured width, so that breaking at exactly that width
             // never wraps the last word for a rounding error.
             let limit = Some(node.content.width + 0.01);
@@ -477,6 +492,7 @@ fn compute(
                         AvailableSpace::MinContent => Some(0.0),
                         AvailableSpace::MaxContent => None,
                     });
+                    let limit = if leaf.fit { None } else { limit };
                     let (width, height) = text.measure(&leaf.text, leaf.style, &leaf.spans, limit);
                     taffy::Size {
                         width: known.width.unwrap_or(width),

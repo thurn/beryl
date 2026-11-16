@@ -74,6 +74,8 @@ pub enum Role {
     Icon,
     Field,
     Toggle,
+    /// A control that sets a level by a drag along it.
+    Slider,
     List,
     MenuItem,
     /// An arrow or line on the table. Its `corners` are not a box but the four control points
@@ -96,6 +98,7 @@ impl Role {
             Self::Icon => "icon",
             Self::Field => "field",
             Self::Toggle => "toggle",
+            Self::Slider => "slider",
             Self::List => "list",
             Self::MenuItem => "menuitem",
             Self::Arrow => "arrow",
@@ -103,7 +106,7 @@ impl Role {
     }
 
     /// Every role, in declaration order.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::Card,
         Self::Ability,
         Self::Pile,
@@ -114,6 +117,7 @@ impl Role {
         Self::Icon,
         Self::Field,
         Self::Toggle,
+        Self::Slider,
         Self::List,
         Self::MenuItem,
         Self::Arrow,
@@ -347,6 +351,9 @@ pub struct TextLine {
     /// The line's box on screen, in logical points: as wide as its glyphs and as tall as the
     /// line.
     pub rect: Rect,
+    /// The type size of its text, in logical points: the text's own size, which a text that
+    /// shrinks to fit has shrunk.
+    pub size: f32,
 }
 
 impl Frame {
@@ -482,9 +489,14 @@ impl<'a> FrameBuilder<'a> {
         self.frame.shake = offset;
     }
 
-    /// Adds a line of the text of the resolved element at `element`.
-    pub fn line(&mut self, element: u32, rect: Rect) {
-        self.frame.lines.push(TextLine { element, rect });
+    /// Adds a line of the text of the resolved element at `element`, whose type is `size`
+    /// points.
+    pub fn line(&mut self, element: u32, rect: Rect, size: f32) {
+        self.frame.lines.push(TextLine {
+            element,
+            rect,
+            size,
+        });
     }
 
     /// Records the layout work `Client::handle` did since the last frame: layout nodes

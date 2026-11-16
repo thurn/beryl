@@ -233,16 +233,19 @@ fn write_colors(tokens: &Tokens) -> String {
         writeln!(out, "/// {doc}\npub const {constant}: [u8; 4] = {rgba:?};").unwrap();
     }
     for (key, entry) in tokens.entries("color") {
-        let base = entry["color"]
-            .as_str()
-            .expect("a flat color names its `color`");
-        let mut rgba = parse_color(find(base)["value"].as_str().unwrap(), &find);
+        // A flat color is a token's, named by `color`, or a CSS color of its own in `value`.
+        let (mut rgba, base) = match (entry["color"].as_str(), entry["value"].as_str()) {
+            (Some(base), _) => (
+                parse_color(find(base)["value"].as_str().unwrap(), &find),
+                format!("`--{base}`."),
+            ),
+            (None, Some(value)) => (parse_color(value, &find), format!("`{value}`.")),
+            (None, None) => panic!("`flat.color.{key}` names its `color` or gives its `value`"),
+        };
         if let Some(alpha) = entry["alpha"].as_u64() {
             rgba[3] = u8::try_from(alpha).expect("`alpha` is from 0 to 255");
         }
-        let doc = entry["note"]
-            .as_str()
-            .map_or(format!("`--{base}`."), str::to_string);
+        let doc = entry["note"].as_str().map_or(base, str::to_string);
         writeln!(out, "/// {doc}\npub const {key}: [u8; 4] = {rgba:?};").unwrap();
     }
     out

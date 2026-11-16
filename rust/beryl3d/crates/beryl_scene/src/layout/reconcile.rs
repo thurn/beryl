@@ -65,6 +65,7 @@ impl Layer {
             location: None,
             scroll_room: glam::Vec2::ZERO,
             scroll: glam::Vec2::ZERO,
+            fitted: None,
             motion: None,
         }
     }
@@ -80,12 +81,14 @@ impl Layer {
         }
         let text_changed = node.element.text != element.text
             || node.element.style.text != element.style.text
-            || node.element.spans != element.spans;
+            || node.element.spans != element.spans
+            || node.element.style.fit != element.style.fit;
         if text_changed {
             let leaf = (element.text.clone()).map(|text| TextLeaf {
                 text,
                 style: element.style.text,
                 spans: element.spans.clone(),
+                fit: element.style.fit,
             });
             self.taffy
                 .set_node_context(node.taffy, leaf)

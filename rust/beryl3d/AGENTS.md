@@ -149,7 +149,9 @@ project, and selects the main lanes.
 
   - `target_points` and `phone_target_points`: the side of the square an
     interactive card at rest must leave uncovered (the "reachable" check), on
-    the desktop and phone layouts.
+    the desktop and phone layouts. On the phone layout every interactive
+    flat-layer element must also be at least `phone_target_points` square, and
+    every line of text at least `phone_text_points` (the "phone sizes" check).
   - `line_end_points` and `line_reshape_points`: how far an arrow's end may move
     and still be at rest, and how far a control point must move to count as a
     change of shape (the "lines hold" check).

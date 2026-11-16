@@ -24,6 +24,7 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults.extend(named(frame, context));
     faults.extend(blank_cards(frame, context));
     faults.extend(clips(frame, context));
+    faults.extend(phone_sizes(frame, context));
     faults
 }
 
@@ -300,6 +301,55 @@ pub fn named(frame: &Frame, context: &Context) -> Vec<Fault> {
             )
         })
         .collect()
+}
+
+/// Phone sizes: on the phone layout, every interactive element of the flat layer is at least
+/// `PHONE_TARGET_POINTS` square, a size a finger can press, and no line of text is smaller than
+/// `PHONE_TEXT_POINTS`, as the web interface's `phoneFaults` (`ui/scripts/phone-faults.mjs`)
+/// holds its phone shots. Cards are left to "reachable", which holds a card's uncovered part to
+/// the same square. The desktop layout has no such limits.
+#[must_use]
+pub fn phone_sizes(frame: &Frame, context: &Context) -> Vec<Fault> {
+    if context.layout != Layout::Phone {
+        return Vec::new();
+    }
+    let side = audit::PHONE_TARGET_POINTS;
+    let small_targets = interactive(frame).filter_map(|index| {
+        let element = &frame.resolved[index as usize];
+        let rect = bounds(element);
+        (element.place == Place::Layer
+            && element.role != Role::Card
+            && (rect.width < side || rect.height < side))
+            .then(|| {
+                let subject = subject(frame, index);
+                fault(
+                    Rule::PhoneSizes,
+                    context,
+                    format!(
+                        "{} is smaller than {side} by {side} points",
+                        subject.describe()
+                    ),
+                    vec![subject],
+                )
+            })
+    });
+    let small_text = (frame.lines.iter())
+        .filter(|line| line.size < audit::PHONE_TEXT_POINTS)
+        .map(|line| {
+            let subject = subject(frame, line.element);
+            fault(
+                Rule::PhoneSizes,
+                context,
+                format!(
+                    "a line of {}'s text is {} points, under {}",
+                    subject.describe(),
+                    line.size,
+                    audit::PHONE_TEXT_POINTS
+                ),
+                vec![subject],
+            )
+        });
+    small_targets.chain(small_text).collect()
 }
 
 /// No blank card: every card drawn face up, whose name the viewer knows, has a face layer of
