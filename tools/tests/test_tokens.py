@@ -284,34 +284,32 @@ def test_a_wait_that_gives_up_logs_a_line_with_no_cores(tmp_path: Path) -> None:
 
 
 # A process that waits for a token of a full pool until it is killed.
-WAITER = """
-import sys
-from pathlib import Path
-from beryl_tools.tokens import Pool
-Pool(Path(sys.argv[1]), 2).acquire("push", 2, command="cargo build")
-"""
-
-
 def test_a_wait_whose_process_dies_is_logged_by_the_next_lister(tmp_path: Path) -> None:
+    """A waiter killed while it waits leaves its `waitinfo-` file behind, and the next process
+    that lists the waiters logs the wait as abandoned, ending when the file was last touched.
+    The test writes the file a dead waiter leaves rather than killing a real one, whose last
+    touch would depend on how soon a loaded machine scheduled it."""
     pool = Pool(tmp_path, 2)
-    blocker = pool.acquire("queue", 2, never)
-    assert blocker is not None
-    waiter = subprocess.Popen([sys.executable, "-c", WAITER, str(tmp_path)])
-    deadline = time.monotonic() + 30
-    while not list(tmp_path.glob(f"{tokens.WAIT_INFO}-*")):
-        assert time.monotonic() < deadline and waiter.poll() is None
-        time.sleep(0.05)
-    time.sleep(0.6)
-    waiter.kill()
-    waiter.wait()
+    dead = subprocess.run(
+        [sys.executable, "-c", "import os; print(os.getpid())"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    pid = int(dead.stdout)
+    info = tmp_path / f"{tokens.WAIT_INFO}-{pid}-1-push"
+    started = time.time() - 30
+    tokens._write_info(info, "push", "cargo build", 2)
+    record = json.loads(info.read_text())
+    info.write_text(json.dumps({**record, "started": started}))
+    os.utime(info, (started + 12, started + 12))
     with tokens.system.file_lock(tmp_path / "lock"):
         assert pool.waiters() == []
     (line,) = [x for x in leases_logged(tmp_path) if x.get("outcome")]
     assert line["outcome"] == "abandoned"
     assert line["command"] == "cargo build" and line["cores"] == 0
-    assert float(str(line["waited_s"])) >= 0.4
-    assert not list(tmp_path.glob(f"{tokens.WAIT_INFO}-*"))
-    blocker.release()
+    assert line["waited_s"] == 12.0
+    assert not info.exists()
 
 
 def test_inherited_and_top_up_leases_log_nothing(
