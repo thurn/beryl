@@ -320,7 +320,9 @@ class Run:
                 for r in records
                 if r.get("flaky")
             }
-            return lines + flaky.report(flakes, self.script, self.commit)
+            return lines + flaky.report(
+                flakes, self.script, self.commit, host=self.host
+            )
         except Exception as e:  # Neither do verdicts.
             warn(e)
             return []

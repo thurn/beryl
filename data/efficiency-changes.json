@@ -158,5 +158,10 @@
     "label": "An agent's cargo build gives its spare CPU tokens back while a push waits, and a push that would start short waits up to 10 s for them, so a push's fast-check steps stop running on one core beside long agent builds",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+  },
+  {
+    "label": "A flaky check files its delete bead only when it flakes again in another run within a week, so one-off problems of a run (load, a shared fixture, code changing between attempts) no longer start an Opus session each",
+    "metric": "bead.dollars",
+    "expect": "down"
   }
 ]

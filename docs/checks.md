@@ -317,9 +317,12 @@ its epic.
 
 - A step that fails is rerun once, narrowed to the checks it says failed. A
   check that passes on the rerun is flaky: its lane passes, it prints a
-  `flaky: <lane> <check>` line, and it files a P1 `flaky-check` bead
-  (`flaky.py`) to delete the check. Each check has at most one open bead; a
-  later flake comments on it.
+  `flaky: <lane> <check>` line, and its `flaky` verdict is recorded. When the
+  same check also flaked in another run (another commit or machine) in the last
+  7 days, it files a P1 `flaky-check` bead (`flaky.py`) to delete the check. A
+  first flake files nothing: most single flakes came from the run, not the check
+  (a loaded sweep, a shared fixture directory, code changing between the
+  attempts). Each check has at most one open bead; a later flake comments on it.
 - The agent working that bead first asks whether a fast, deterministic test (a
   Rust unit test, a Node test with no browser, a check against a recorded
   fixture) could keep most of what the check protects. If so, it writes that

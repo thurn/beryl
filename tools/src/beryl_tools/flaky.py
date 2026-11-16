@@ -5,6 +5,15 @@ checks.py). The flake fails no lane, but tests here must fail deterministically,
 check gets a P1 bead asking for it to be deleted, or replaced by a fast deterministic test of the
 same behaviour. There is no quarantine: a check either can fail CI or is gone.
 
+A check's first flake files nothing. Its bead is filed when it flakes again in another run (on
+another commit or machine) within [`REPEAT_DAYS`]; the verdicts recorded on its `ci-check` bead
+(verdicts.py) hold the earlier flakes. Until this rule, 56 of the 69 checks that flaked between
+2026-11-11 and 2026-11-16 flaked only once, and most of the beads they filed were closed as
+problems of the run rather than the check: a sweep at utility priority, Vite reloading pages,
+concurrent runs sharing a fixture directory, an exporter changing between attempts. Each of
+those beads cost an Opus session. A check that flakes less than once a week costs one rerun a
+week, which is cheaper.
+
 Each check has at most one open bead, labeled [`LABEL`] with the check in its metadata
 ([`CHECK_KEY`]). While it is open, a later flake of the same check adds a comment to it instead
 of filing another. Nothing here fails a run: a bd call that fails is reported and the run goes
@@ -16,12 +25,15 @@ from __future__ import annotations
 import json
 import socket
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 from . import verdicts
 
 LABEL = "flaky-check"
 CHECK_KEY = "beryl_flaky_check"
 PRIORITY = "1"
+# How recent an earlier flake of the same check must be for a flake to file a bead.
+REPEAT_DAYS = 7
 
 
 @dataclass(frozen=True)
@@ -47,9 +59,32 @@ def open_beads(store: verdicts.Beads) -> dict[str, str]:
     return found
 
 
-def seen(script: str, commit: str) -> str:
-    host = socket.gethostname().split(".")[0]
+def seen(script: str, commit: str, host: str | None = None) -> str:
+    host = (host or socket.gethostname()).split(".")[0]
     return f"`by {script}` on {host} at {commit[:10] or 'an unknown commit'}"
+
+
+def earlier(
+    history: list[verdicts.Entry], script: str, commit: str, host: str
+) -> list[verdicts.Entry]:
+    """The check's flakes in the last `REPEAT_DAYS` from other runs than this one. A run is told
+    apart by its script, commit and machine, so the flake this run just recorded, and one in a
+    concurrent run of the same tree, do not count."""
+    since = verdicts.now() - timedelta(days=REPEAT_DAYS)
+    found: list[verdicts.Entry] = []
+    for e in history:
+        if e.get("verdict") != "flaky":
+            continue
+        try:
+            when = datetime.fromisoformat(str(e.get("time")))
+        except ValueError:
+            continue
+        if when < since:
+            continue
+        if (e.get("script"), e.get("commit"), e.get("host")) == (script, commit, host):
+            continue
+        found.append(e)
+    return found
 
 
 def title(check: str, flake: Flake) -> str:
@@ -67,7 +102,7 @@ def acceptance(check: str, flake: Flake) -> str:
     return f"`{check}` no longer runs in CI, {done}"
 
 
-def body(check: str, flake: Flake, where: str) -> str:
+def body(check: str, flake: Flake, where: str, before: list[verdicts.Entry]) -> str:
     what = (
         f"The step `{check}`, which names no checks of its own,"
         if flake.whole
@@ -80,8 +115,9 @@ def body(check: str, flake: Flake, where: str) -> str:
         else ""
     )
     return (
-        f"{what} failed and then passed on its rerun on the same tree in {where}. The flake"
-        " failed no lane, but checks must fail deterministically, so the flaky one is deleted"
+        f"{what} failed and then passed on its rerun on the same tree in {where}. It had"
+        f" flaked the same way {len(before)} time(s) in the {REPEAT_DAYS} days before, in other"
+        f" runs: {', '.join(was(e) for e in before)}. The flake failed no lane, but checks must fail deterministically, so the flaky one is deleted"
         " instead of being rerun until it passes. `just ci-report` lists its runs, failures"
         f" and verdicts; its bead of verdicts is {verdicts.bead_id(check)}.\n\n{find}"
         "Before deleting it, ask: could a fast, deterministic test (a Rust unit test, a Node"
@@ -94,19 +130,31 @@ def body(check: str, flake: Flake, where: str) -> str:
     )
 
 
+def was(e: verdicts.Entry) -> str:
+    commit = str(e.get("commit") or "")
+    return seen(str(e.get("script")), commit, str(e.get("host") or "")) + (
+        f" ({e.get('time')})"
+    )
+
+
 def report(
     flakes: dict[str, Flake],
     script: str,
     commit: str,
     store: verdicts.Beads | None = None,
+    host: str | None = None,
 ) -> list[str]:
-    """Files a bead for each check in `flakes` that has none open, and comments on the open bead
-    of each that has one; returns a line for each."""
+    """Comments on the open bead of each check in `flakes` that has one, and files a bead for
+    each other check that flaked in another run in the last `REPEAT_DAYS` (`earlier`); returns
+    a line for each."""
     if not flakes:
         return []
     store = store or verdicts.STORE
+    host = host or socket.gethostname()
     known = open_beads(store)
-    where = seen(script, commit)
+    where = seen(script, commit, host)
+    # One `bd export` for all of them, and none when every flaky check has its bead open.
+    history = store.history([c for c in flakes if c not in known])
     lines: list[str] = []
     for check, flake in sorted(flakes.items()):
         bead = known.get(check)
@@ -114,12 +162,19 @@ def report(
             store.bd("comments", "add", bead, f"Flaked again in {where}.")
             lines.append(f"flaky: {check}: {bead} is open to delete it")
             continue
+        before = earlier(history.get(check, []), script, commit, host)
+        if not before:
+            lines.append(
+                f"flaky: {check}: its first flake in {REPEAT_DAYS} days;"
+                " a second in another run files a bead to delete it"
+            )
+            continue
         code, out = store.bd(
             "create",
             "--title",
             title(check, flake),
             "--description",
-            body(check, flake, where),
+            body(check, flake, where, before),
             "--acceptance",
             acceptance(check, flake),
             "--priority",

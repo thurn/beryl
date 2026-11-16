@@ -301,9 +301,37 @@ def test_the_items_of_a_rust_file_end_where_their_brackets_close() -> None:
     ]
 
 
-def test_a_flaky_check_files_one_bead_to_delete_it(
+def flaked_elsewhere(bd: FakeBd, check: str, days: float) -> None:
+    """Records a flake of `check` `days` ago in another run: another commit on another machine."""
+    when = datetime.now(timezone.utc) - timedelta(days=days)
+    entry: verdicts.Entry = {
+        "time": when.isoformat(timespec="seconds"),
+        "verdict": "flaky",
+        "script": "check",
+        "commit": "0" * 40,
+        "host": "elsewhere",
+    }
+    bd.record(check, check.split(":")[0], entry)
+
+
+def test_a_check_files_its_delete_bead_when_it_flakes_in_a_second_run(
     tmp_path: Path, bd: FakeBd, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # A first flake files nothing, and neither does a second on the same commit and machine,
+    # which is most often a concurrent run sharing the first one's trouble.
+    for _ in range(2):
+        (tmp_path / "ran").unlink(missing_ok=True)
+        assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
+        assert bd.filed == {}
+        assert "ui-test:scry: its first flake in 7 days" in capsys.readouterr().out
+    # A flake in another run more than a week ago does not count either.
+    flaked_elsewhere(bd, "ui-test:scry", 8)
+    (tmp_path / "ran").unlink()
+    assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
+    assert bd.filed == {}
+    # One in another run within the week does.
+    flaked_elsewhere(bd, "ui-test:scry", 1)
+    (tmp_path / "ran").unlink()
     assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
     [(bead, filed)] = bd.filed.items()
     assert filed["title"] == "Delete flaky check ui-test:scry"
@@ -320,6 +348,7 @@ def test_a_flaky_check_files_one_bead_to_delete_it(
         f"flaky: ui-test:scry: {bead} is open to delete it" in capsys.readouterr().out
     )
     # A step that names no checks of its own asks for the flaky test inside it.
+    flaked_elsewhere(bd, "ui-test:ui-test", 2)
     (tmp_path / "ran").unlink()
     assert (
         checks.run_lanes([flaky("ui-test:drag", tmp_path, whole=True)], "check", 60)
