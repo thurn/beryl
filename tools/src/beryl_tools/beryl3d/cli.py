@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .. import caches, system, tokens, warm
+from .. import paths as repo_paths
 from . import app, camera, gate, lane, paths, phone, sweep, timeline, vm
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
@@ -63,6 +64,14 @@ def warm_target() -> None:
         # target before the first clone landed cloned all 133,575 files again and threw the
         # copy away (five clones for one sweep on 2026-11-15).
         if cached.is_dir() and not target.exists() and warm.clone_into(cached, target):
+            # Cargo rebuilds a workspace crate whose sources are newer than its last build, and
+            # a new worktree's checkout wrote every file afresh, so without these two the first
+            # `just b3d gate` in a new worktree rebuilt every crate of the workspace, and the
+            # engine crates under rust/crates it depends on, for 10 to 30 minutes under load.
+            # Give each file the cached build saw the time it had then, and point the build's
+            # absolute paths into rust/crates at this checkout (warm.py, `restore_sources`).
+            warm.restore_sources(repo_paths.REPO, target)
+            warm.rehome_paths(target, repo_paths.REPO)
             # So that the builds' reads of units they do not rebuild count as uses, and
             # `warm.prune` keeps those units (`warm.mark_unread`).
             warm.mark_unread(target)

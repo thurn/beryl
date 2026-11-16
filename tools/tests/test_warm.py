@@ -305,6 +305,30 @@ def test_a_clone_gives_unchanged_files_the_times_of_the_build_it_cloned(
     assert (second / "rust").stat().st_mtime == pytest.approx(built)
 
 
+def test_restoring_two_builds_times_keeps_the_earlier_so_neither_rebuilds(
+    tmp_path: Path,
+) -> None:
+    # The main workspace's target and Beryl 3D's are cloned from caches saved at different
+    # times, and both builds read rust/crates: whichever restores second must not move a file
+    # to a time newer than the first build saw.
+    tree = tmp_path / "tree"
+    write(tree / "rust" / "crates" / "lib.rs", "same")
+    git(tree, "init", "-q")
+    git(tree, "add", "-A")
+    git(tree, "commit", "-qm", "first")
+    source = tree / "rust" / "crates" / "lib.rs"
+    older, newer = time.time() - 7200, time.time() - 3600
+    targets = {older: tmp_path / "main", newer: tmp_path / "b3d"}
+    for when, target in targets.items():
+        target.mkdir()
+        os.utime(source, (when, when))
+        warm.record_sources(tree, target)
+    os.utime(source, None)
+    warm.restore_sources(tree, targets[older])
+    warm.restore_sources(tree, targets[newer])
+    assert source.stat().st_mtime == pytest.approx(older)
+
+
 def test_a_clone_lets_the_next_build_mark_the_units_it_reads(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

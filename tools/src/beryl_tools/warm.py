@@ -417,7 +417,12 @@ def restore_sources(checkout: Path, target: Path) -> int:
         if not (isinstance(saved, list) and len(saved) == 2 and saved[0] == key):
             return False
         with suppress(OSError, TypeError, ValueError):
-            os.utime(path, ns=(int(saved[1]), int(saved[1])))
+            # Only ever back in time. Beryl 3D's build, cloned from a cache of its own
+            # (beryl3d/cli.py, `warm_target`), reads the same rust/crates files as this one,
+            # recorded at other times; the earlier of the two is older than both builds, so
+            # neither rebuilds, and the content is the same, so neither should.
+            if int(saved[1]) < path.stat().st_mtime_ns:
+                os.utime(path, ns=(int(saved[1]), int(saved[1])))
             return True
         return False
 

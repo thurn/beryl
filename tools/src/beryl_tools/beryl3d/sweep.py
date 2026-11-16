@@ -603,6 +603,9 @@ def save_target(target: Path, cached: Path) -> bool:
         for incremental in caches.incremental_folders(copy):
             shutil.rmtree(incremental, ignore_errors=True)
         warm.prune(copy)
+        # The sources' times as this build saw them, which `cli.warm_target` gives the files
+        # of a new worktree after it clones the cache.
+        warm.record_sources(repo_paths.REPO, copy)
         if cached.exists():
             cached.rename(old)
         copy.rename(cached)
