@@ -511,8 +511,9 @@ fn stack() -> Stress {
 /// Number of frames the full stack rests with all of its arrows open.
 pub(crate) const STACK_REST_FRAMES: usize = 120;
 
-/// A four-second round trip along the inner edge of the fan in its resting frame.
-/// The position follows the curvature of the edge across window shapes.
+/// A four-second round trip along the inner edge of the fan in its resting frame, card by card
+/// in hand order, so through each row of a hand laid in two. The position follows the curvature
+/// of the edge across window shapes.
 pub(crate) fn pointer_moves(
     frame: &beryl_scene::frame::Frame,
 ) -> Vec<(u64, beryl_scene::input::Pointer)> {
@@ -536,7 +537,13 @@ pub(crate) fn pointer_moves(
                 )
         })
         .map(|element| {
-            let [top_left, top_right, _, bottom_left] = element.corners;
+            // The card's top edge on screen is the edge of its two highest corners, and its
+            // strip to press runs down from that edge's left end, in each row of the hand.
+            let mut corners = element.corners;
+            corners.sort_by(|a, b| a.y.total_cmp(&b.y));
+            let [a, b, c, d] = corners;
+            let (top_left, top_right) = if a.x < b.x { (a, b) } else { (b, a) };
+            let bottom_left = if c.x < d.x { c } else { d };
             top_left.lerp(top_right, 0.09) + 0.08 * (bottom_left - top_left)
         })
         .collect();

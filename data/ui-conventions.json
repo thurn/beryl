@@ -1376,6 +1376,11 @@
     },
     {
       "kind": "not-seen",
+      "name": "A hand in two rows",
+      "rule": "In Beryl 3D, a hand with more cards than one fan across the window holds with a strip of each uncovered, such as 60 cards, is laid in two or more fans, one behind and above the other, in hand order from the back fan to the front. Each card keeps a strip to press, and raises under the pointer as in one fan. Arena's recordings show no hand that large."
+    },
+    {
+      "kind": "not-seen",
       "name": "A battlefield row that scrolls",
       "rule": "A row with more cards than fit with a strip of each uncovered shows as many as fit, scrolls one group for each notch of the wheel or 48 points of a sideways drag, and shows the number of cards off each end, as \"+12\"."
     }

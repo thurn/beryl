@@ -119,9 +119,21 @@ pub fn overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
 /// element (or something inside it). Every interactive card at rest has an uncovered area at
 /// least `TARGET_POINTS` square (`PHONE_TARGET_POINTS` on the phone layout) where a hit test
 /// returns it. Cards are judged only on a frame where nothing on the table moves: a card passing
-/// over another covers it for a moment, which leaves no card out of reach.
+/// over another covers it for a moment, which leaves no card out of reach. A hand card the
+/// pointer has up out of the fan is judged where it rests in the fan (`Frame::lifted`), as the
+/// pointer's hit test finds it: a press on a card the raised card covers moves the pointer
+/// there first, which lowers the raised card and raises the one beneath.
 #[must_use]
 pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
+    let resting;
+    let frame = if frame.lifted.is_empty() {
+        frame
+    } else {
+        let mut copy = frame.clone();
+        copy.swap_lifted();
+        resting = copy;
+        &resting
+    };
     let side = target_side(context);
     let mut faults = Vec::new();
     // Built on the first card at rest, so a frame with none builds no index.

@@ -23,7 +23,7 @@ use glam::{Mat3, Quat, Vec2};
 
 use crate::agent::hit;
 use crate::data::space::pointer as data;
-use crate::frame::{ElementId, Frame, Place, Role, StateBits};
+use crate::frame::{ElementId, Frame, Lifted, Place, Role, StateBits};
 use crate::input::{self, PointerKind, PointerPhase};
 use crate::motion::between;
 use crate::play::compile::Compiled;
@@ -31,10 +31,8 @@ use crate::pose::{Curve, Pose, Segment};
 use crate::table::{CARD_HEIGHT, Camera, Look};
 use held::{Fall, Grip, Lean};
 
-/// The most hand cards that can be rising, raised or falling at once. One is raised at a time,
-/// and a pointer swept across a hand leaves each card it crossed falling for `FALL_MS`; past
-/// this many, the card that started falling first lands at once.
-const LIFTS: usize = 32;
+/// The most hand cards that can be rising, raised or falling at once (`frame::LIFTED`).
+const LIFTS: usize = crate::frame::LIFTED;
 
 /// Nanoseconds in a millisecond.
 const MILLISECOND: f32 = 1_000_000.0;
@@ -51,10 +49,6 @@ pub struct Pointer {
     hovered: Option<usize>,
     /// The hand cards out of their place in the fan: rising, raised or falling.
     lifts: Vec<Lift>,
-    /// The corners and depth each raised card's element had before `update` put its resting box
-    /// in their place for the hit test, by the element's index. Kept here so that a frame
-    /// allocates nothing.
-    saved: Vec<(usize, [Vec2; 4], f32)>,
     /// The press on a card, from the button going down until it comes up.
     grip: Option<Grip>,
     /// The lean of the card held, since it was picked up.
@@ -110,7 +104,6 @@ impl Default for Pointer {
             phase: None,
             hovered: None,
             lifts: Vec::with_capacity(LIFTS),
-            saved: Vec::with_capacity(LIFTS),
             ..Self::EMPTY
         }
     }
@@ -124,7 +117,6 @@ impl Pointer {
         phase: None,
         hovered: None,
         lifts: Vec::new(),
-        saved: Vec::new(),
         grip: None,
         lean: Lean::FLAT,
         let_go: None,
@@ -473,26 +465,24 @@ fn hover_under(
     rest: impl Fn(usize) -> Option<([Vec2; 4], f32)>,
     now: u64,
 ) {
-    let Some(point) = pointer.at.filter(|_| pointer.held().is_none()) else {
-        pointer.hover(None, false, now);
-        return;
-    };
-    pointer.saved.clear();
     for lift in &pointer.lifts {
         let (Some(index), Some((corners, depth))) = (card(frame, lift.slot), rest(lift.slot))
         else {
             continue;
         };
-        let element = &mut frame.resolved[index];
-        pointer.saved.push((index, element.corners, element.depth));
-        element.corners = corners;
-        element.depth = depth;
+        frame.lifted.push(Lifted {
+            element: u32::try_from(index).expect("a frame holds far fewer than 2^32 elements"),
+            corners,
+            depth,
+        });
     }
+    let Some(point) = pointer.at.filter(|_| pointer.held().is_none()) else {
+        pointer.hover(None, false, now);
+        return;
+    };
+    frame.swap_lifted();
     let reached = hit(frame, point).map(|index| index as usize);
-    for &(index, corners, depth) in &pointer.saved {
-        frame.resolved[index].corners = corners;
-        frame.resolved[index].depth = depth;
-    }
+    frame.swap_lifted();
     let Some(index) = reached else {
         pointer.hover(None, false, now);
         return;

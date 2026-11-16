@@ -743,7 +743,10 @@ constants in the web interface's `ui/src/stage/raised.ts` and `heft.ts`.
 - **The hit test finds hand cards where they rest in the fan.** While a card is
   up, the hover test puts its resting box in place of its raised one, as the web
   interface's hand does, so that the part of the fan a raised card has left
-  still finds that card and the pointer does not flicker between two cards.
+  still finds that card and the pointer does not flicker between two cards. The
+  frame lists these resting boxes (`Frame::lifted`), and the "reachable" check
+  judges a card the pointer has up at its resting box too, since a press on a
+  card that the raised card covers first moves the pointer there.
 - **A held card follows the pointer exactly.** A card is held from a press on it
   until the release, if the session says it may be picked up. Its position is
   the point under the pointer on a plane above the table, at the held height in
@@ -1210,21 +1213,26 @@ flight start exactly where the card was.
   Each hand is fanned as the web interface's is: the middle of each card's inner
   edge lies on one circle whatever the hand's size, so a crowded hand turns and
   sinks less for each card. The viewer's cards close up as the hand grows, but
-  never so far that a card's uncovered strip is narrower than `strip`, unless
-  the hand would then run past the window's sides (60 cards in a window narrower
-  than about 1600 by 900 points). The stack's items stand at the right of the
-  screen, the top item in front and each item beneath peeking out above and to
-  its left, and a tall stack shrinks to fit. Each item beneath is pressed
-  through the strip it shows at its left. A stack so tall that this strip would
-  be narrower than the reachable check's square (8 items in a 1440 by 900
-  window) stands in rows instead, which the web interface does not do: each row
-  stands a little above the one in front of it, and each item a little to the
-  left of the one in front of it in its row, so every item keeps an uncovered
-  corner `stack.spare` times the square's side. The rows run left no further
-  than the leaning stack reaches, and the items shrink alike to fit under the
-  stack's top, to no less than half their full size: past that the rows grow
-  longer. A spell that is resolving, which the game has taken off its stack
-  while its card stays in the stack's zone, stays the top item until it leaves.
+  never so far that a card's uncovered strip is narrower than `strip` plus 8
+  points, widened for the card's turn, since a slanted strip holds a square only
+  if it is wider than the square. A hand that one row of such strips would carry
+  past the window's sides is laid in two or more rows, each fanned the same way,
+  in hand order from the back row to the front, and each row stands high enough
+  above the one in front of it to leave every card a square of `strip` above it.
+  Sixty cards take two rows in every desktop window. The stack's items stand at
+  the right of the screen, the top item in front and each item beneath peeking
+  out above and to its left, and a tall stack shrinks to fit. Each item beneath
+  is pressed through the strip it shows at its left. A stack so tall that this
+  strip would be narrower than the reachable check's square (8 items in a 1440
+  by 900 window) stands in rows instead, which the web interface does not do:
+  each row stands a little above the one in front of it, and each item a little
+  to the left of the one in front of it in its row, so every item keeps an
+  uncovered corner `stack.spare` times the square's side. The rows run left no
+  further than the leaning stack reaches, and the items shrink alike to fit
+  under the stack's top, to no less than half their full size: past that the
+  rows grow longer. A spell that is resolving, which the game has taken off its
+  stack while its card stays in the stack's zone, stays the top item until it
+  leaves.
 - **Cards a prompt holds up lie in the tray.** `table::tray` ports the web
   interface's `laidOut` for one pile (rows about the middle of the space) and
   two (boxes side by side), in the space `desktopTray` gives, placed relative to

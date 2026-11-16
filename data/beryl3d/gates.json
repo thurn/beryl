@@ -110,7 +110,7 @@
       "total_placed": 2519,
       "worst_frame_draw_calls": 12,
       "worst_frame_upload_bytes": 30480,
-      "worst_frame_blended_area": 0.8877,
+      "worst_frame_blended_area": 0.8876,
       "handle_allocations": 2655,
       "frame_allocations": 0,
       "worst_frame_instructions": 4131479,
@@ -118,11 +118,11 @@
     },
     "stress-hand": {
       "worst_frame_elements": 63,
-      "total_elements": 15561,
+      "total_elements": 15498,
       "worst_frame_segments": 0,
       "total_segments": 0,
       "worst_frame_records": 123,
-      "total_records": 30381,
+      "total_records": 30258,
       "worst_frame_layout_nodes": 5,
       "total_layout_nodes": 5,
       "worst_frame_text_runs": 2,
@@ -166,7 +166,7 @@
         "stress-1024": 1.087257,
         "verbs-zones": 1.014938,
         "pay-default": 1.012555,
-        "stress-verbs": 1.32009,
+        "stress-verbs": 1.320177,
         "stress-hand": 1.00132,
         "stress-stack": 1.099233
       }

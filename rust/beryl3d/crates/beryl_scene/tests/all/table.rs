@@ -7,7 +7,6 @@ use beryl_protocol::script::Reset;
 use beryl_scene::agent::checks::{duplicates, reachable};
 use beryl_scene::agent::tree::{TreeOptions, tree};
 use beryl_scene::agent::{Context, Layout};
-use beryl_scene::data::audit;
 use beryl_scene::frame::{Frame, Place, Role};
 use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::pose::Pose;
@@ -473,7 +472,7 @@ fn inner_corners(corners: [Vec2; 4], side: Side) -> [Vec2; 2] {
 }
 
 #[test]
-fn hands_of_any_size_lie_inside_the_window_each_card_with_its_strip_uncovered() {
+fn hands_of_any_size_lie_inside_the_window() {
     for count in [1, 2, 5, 7, 10, 20, 60] {
         let view = hands(count);
         for (width, height) in DESKTOP_WINDOWS {
@@ -496,31 +495,46 @@ fn hands_of_any_size_lie_inside_the_window_each_card_with_its_strip_uncovered() 
                         "{label}: the card's inner edge, at {edge}, is out of view"
                     );
                 }
-                // Each of the viewer's cards keeps a strip to press, which the next card leaves
-                // uncovered. The last card lies uncovered.
-                // The opponent's cards are not the viewer's to press.
-                let card = cards[0][0].distance(cards[0][1]);
-                // A hand too large to give every card a whole strip even spread edge to edge
-                // across the window (60 cards in a window under about 1600 by 900 points:
-                // 59 strips of 24 points and a card come to more than its width) closes up
-                // further, and is only held inside the window.
-                #[expect(clippy::cast_precision_loss, reason = "a few cards")]
-                let room = (count.saturating_sub(1) as f32) * audit::TARGET_POINTS + card;
-                if side == Side::Opponent || room > 0.95 * width {
-                    continue;
-                }
-                for pair in cards.windows(2) {
-                    // Measured along the card's inner edge, from its left corner to the next
-                    // card's.
-                    let [a, b] = inner_corners(pair[0], side);
-                    let [next, _] = inner_corners(pair[1], side);
-                    let strip = (next - a).dot((b - a).normalize());
-                    assert!(
-                        strip >= audit::TARGET_POINTS - 0.01,
-                        "{label}: a strip of {strip} points"
-                    );
-                }
             }
+        }
+    }
+}
+
+/// Every card of the viewer's hand has a square `TARGET_POINTS` on a side that a press reaches,
+/// however many it holds: a hand too large for one row of strips across the window, such as 60
+/// cards, fills a second row behind the first.
+#[test]
+fn every_card_of_a_hand_of_any_size_can_be_pressed() {
+    for count in [7, 20, 40, 60] {
+        let mut builder = ViewBuilder::new();
+        for index in 0..count {
+            builder.card(ZoneName::Hand, Side::You, &format!("Mine {index}"));
+        }
+        for (width, height) in DESKTOP_WINDOWS {
+            let size = Size { width, height };
+            let mut client = client();
+            client.handle(Input::Surface {
+                size,
+                scale: 2.0,
+                safe_area: Insets::default(),
+            });
+            let mut view = builder.clone();
+            view.script(ScriptBuilder::reset().build());
+            client.handle(Input::Update(Box::new(view.update())));
+            let frame = client.frame(0).clone();
+            let context = Context {
+                recording: format!("{count} cards"),
+                seat: Side::You,
+                layout: Layout::Desktop,
+                size,
+                safe_area: Insets::default(),
+                at: 0,
+            };
+            let faults = reachable(&frame, &context);
+            assert!(
+                faults.is_empty(),
+                "{count} cards at {width}x{height}: {faults:#?}"
+            );
         }
     }
 }
@@ -528,7 +542,8 @@ fn hands_of_any_size_lie_inside_the_window_each_card_with_its_strip_uncovered() 
 #[test]
 fn a_hands_cards_lie_on_one_circle_and_turn_more_the_farther_from_the_middle() {
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    for count in [7, 60] {
+    // Twenty cards, the most of these that one row holds in this window.
+    for count in [7, 20] {
         let view = hands(count);
         for (side, data, down) in [
             (Side::You, DESKTOP.hand, 1.0),

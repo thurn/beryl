@@ -299,11 +299,44 @@ pub struct Frame {
     pub sounds: Vec<Sound>,
     /// Each laid-out line of text, for the "text fits" check.
     pub lines: Vec<TextLine>,
+    /// The hand cards the pointer has up out of their place in the fan (rising, raised or
+    /// falling), each with the box it has resting in the fan. The pointer's hit test and the
+    /// "reachable" check put these boxes in place of the drawn ones, so that a pointer over the
+    /// part of the fan a raised card covers still finds the card that rests there.
+    pub lifted: Vec<Lifted>,
     pub load: Load,
     pub work: Work,
     /// The sort keys and reordered records of `FrameBuilder::finish`, kept so that ordering
     /// allocates nothing.
     scratch: order::Scratch,
+}
+
+/// The most hand cards the pointer can have up out of the fan at once. One is raised at a time,
+/// and a pointer swept across a hand leaves each card it crossed falling for a moment; past this
+/// many, the card that started falling first lands at once.
+pub const LIFTED: usize = 32;
+
+/// A hand card up out of its place in the fan, and the box it has resting there.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Lifted {
+    /// The index of the card's element in `Frame::resolved`.
+    pub element: u32,
+    /// Its corners on screen resting in the fan, in logical points.
+    pub corners: [Vec2; 4],
+    /// Its depth resting in the fan.
+    pub depth: f32,
+}
+
+impl Frame {
+    /// Exchanges each lifted card's drawn box in `resolved` with its resting box in `lifted`.
+    /// Called twice, it leaves the frame as it was.
+    pub fn swap_lifted(&mut self) {
+        for lifted in &mut self.lifted {
+            let element = &mut self.resolved[lifted.element as usize];
+            std::mem::swap(&mut element.corners, &mut lifted.corners);
+            std::mem::swap(&mut element.depth, &mut lifted.depth);
+        }
+    }
 }
 
 /// One laid-out line of an element's text.
@@ -334,6 +367,7 @@ impl Frame {
             shake: Vec2::ZERO,
             sounds: Vec::with_capacity(SOUNDS),
             lines: Vec::with_capacity(elements),
+            lifted: Vec::with_capacity(LIFTED),
             load: Load::default(),
             work: Work::default(),
             scratch: order::Scratch::with_capacity(draws),
@@ -377,6 +411,7 @@ impl<'a> FrameBuilder<'a> {
         frame.shake = Vec2::ZERO;
         frame.sounds.clear();
         frame.lines.clear();
+        frame.lifted.clear();
         frame.load = Load::default();
         frame.work = Work::default();
         frame.scratch.clear();

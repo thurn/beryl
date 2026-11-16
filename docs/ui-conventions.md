@@ -621,6 +621,11 @@ recordings do not show them.
 - **Controlling another player.** While the viewer controls the opponent's turn,
   each decision they make for the opponent says "For opponent" before what it
   asks; a priority says only that.
+- **A hand in two rows.** In Beryl 3D, a hand with more cards than one fan
+  across the window holds with a strip of each uncovered, such as 60 cards, is
+  laid in two or more fans, one behind and above the other, in hand order from
+  the back fan to the front. Each card keeps a strip to press, and raises under
+  the pointer as in one fan. Arena's recordings show no hand that large.
 - **A battlefield row that scrolls.** A row with more cards than fit with a
   strip of each uncovered shows as many as fit, scrolls one group for each notch
   of the wheel or 48 points of a sideways drag, and shows the number of cards

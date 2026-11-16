@@ -719,18 +719,6 @@
       "blank-card": 139,
       "step-shown": 7
     },
-    "b3d:stress-hand/you/1440x900": {
-      "reachable": 60
-    },
-    "b3d:stress-hand/you/1600x900": {
-      "reachable": 60
-    },
-    "b3d:stress-hand/you/1920x1080": {
-      "reachable": 60
-    },
-    "b3d:stress-hand/you/2560x1080": {
-      "reachable": 60
-    },
     "b3d:stress-stack/you/1440x900": {
       "reachable": 4
     },
