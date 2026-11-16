@@ -3,6 +3,7 @@
 //! as C types, so each is turned into its C form here: a string into UTF-8 and the `Surface`
 //! into the `ANativeWindow` behind it.
 
+use std::cell::RefCell;
 use std::ffi::{CStr, c_void};
 use std::path::PathBuf;
 use std::ptr::NonNull;
@@ -11,8 +12,8 @@ use std::sync::Arc;
 use beryl_host::Wakeup;
 use beryl_render::Native;
 use jni_sys::{
-    JNIEnv, JavaVM, jfloat, jfloatArray, jint, jlong, jlongArray, jmethodID, jobject, jsize,
-    jstring,
+    JNI_OK, JNI_VERSION_1_6, JNIEnv, JavaVM, jfloat, jfloatArray, jint, jlong, jlongArray,
+    jmethodID, jobject, jsize, jstring,
 };
 
 use super::{
@@ -141,20 +142,18 @@ impl Waker {
         }
     }
 
-    /// Calls the waker's `wake()` on this thread, attaching it to the JVM as a daemon first.
+    /// Calls the waker's `wake()` on this thread. A thread the JVM does not know yet (the
+    /// session's, a socket connection's) is attached as a daemon once, and detached when it
+    /// exits: Android's runtime aborts the whole app when a thread it attached exits without
+    /// detaching. Later calls on the same thread reuse the attachment, so no call leaks one.
     #[allow(unsafe_code)]
     fn wake(&self) {
         // SAFETY: the JVM, the global reference and the method id stay valid while the app
-        // lives; the thread is attached before the call.
+        // lives, which is the process's life; the thread is attached before the call.
         unsafe {
-            let Some(attach) = (**self.vm).AttachCurrentThreadAsDaemon else {
+            let Some(env) = self.env() else {
                 return;
             };
-            let mut env: *mut c_void = std::ptr::null_mut();
-            if attach(self.vm, &raw mut env, std::ptr::null_mut()) != 0 {
-                return;
-            }
-            let env = env.cast::<JNIEnv>();
             let table = &**env;
             if let Some(call) = table.CallVoidMethodA {
                 call(env, self.object, self.method, std::ptr::null());
@@ -163,6 +162,49 @@ impl Waker {
                 && check(env) != 0
             {
                 clear(env);
+            }
+        }
+    }
+
+    /// This thread's JNI environment, attaching the thread first if the JVM does not know it.
+    #[allow(unsafe_code)]
+    fn env(&self) -> Option<*mut JNIEnv> {
+        // SAFETY: `self.vm` is the process's JVM, valid on every thread.
+        unsafe {
+            let invoke = &**self.vm;
+            let mut env: *mut c_void = std::ptr::null_mut();
+            let get = invoke.GetEnv?;
+            if get(self.vm, &raw mut env, JNI_VERSION_1_6) == JNI_OK {
+                return Some(env.cast());
+            }
+            let attach = invoke.AttachCurrentThreadAsDaemon?;
+            if attach(self.vm, &raw mut env, std::ptr::null_mut()) != 0 {
+                return None;
+            }
+            ATTACHED.with(|attached| *attached.borrow_mut() = Some(Detach(self.vm)));
+            Some(env.cast())
+        }
+    }
+}
+
+thread_local! {
+    /// Set on a thread that `Waker::env` attached to the JVM, so that the thread detaches when
+    /// it exits. Rust's thread-local destructors run before Android's runtime checks, at thread
+    /// exit, that the thread detached.
+    static ATTACHED: RefCell<Option<Detach>> = const { RefCell::new(None) };
+}
+
+/// Detaches the current thread from a JVM when dropped.
+struct Detach(*mut JavaVM);
+
+impl Drop for Detach {
+    #[allow(unsafe_code)]
+    fn drop(&mut self) {
+        // SAFETY: the JVM lives as long as the process, and this thread attached itself to it
+        // in `Waker::env` and is exiting.
+        unsafe {
+            if let Some(detach) = (**self.0).DetachCurrentThread {
+                detach(self.0);
             }
         }
     }

@@ -7,7 +7,7 @@ use std::ffi::{CString, c_char, c_void};
 
 use beryl_scene::command::{Haptic, Request};
 use beryl_scene::input::{
-    Button, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
+    Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
 };
 use glam::Vec2;
 
@@ -165,10 +165,43 @@ fn modifiers(bits: u32) -> Option<Modifiers> {
     })
 }
 
-/// The client's pointer event for `event`, or `None` when its id is over 255 or a value names
-/// nothing.
+/// The scale and safe area of a surface the host passed, as the client takes them. A scale
+/// that is not a positive number becomes 1, since dividing the surface's pixels by it would
+/// give a size in points that is infinite, negative or not a number. An inset that is not a
+/// number or is negative becomes 0, since it would push the layout off the surface.
+#[must_use]
+pub fn surface_from_c(scale: f32, safe: BerylInsets) -> (f32, Insets) {
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
+    let inset = |value: f32| {
+        if value.is_finite() {
+            value.max(0.0)
+        } else {
+            0.0
+        }
+    };
+    let insets = Insets {
+        top: inset(safe.top),
+        right: inset(safe.right),
+        bottom: inset(safe.bottom),
+        left: inset(safe.left),
+    };
+    (scale, insets)
+}
+
+/// The client's pointer event for `event`, or `None` when its id is over 255, a value names
+/// nothing, or its position or wheel is not a finite number (which no hit test can place).
 #[must_use]
 pub fn pointer_from_c(event: BerylPointer) -> Option<Pointer> {
+    if ![event.x, event.y, event.wheel_x, event.wheel_y]
+        .iter()
+        .all(|value| value.is_finite())
+    {
+        return None;
+    }
     let kind = match event.kind {
         BERYL_POINTER_MOUSE => PointerKind::Mouse,
         BERYL_POINTER_TOUCH => PointerKind::Touch,
@@ -381,6 +414,20 @@ mod tests {
         assert!(pointer_from_c(BerylPointer { button: 4, ..touch }).is_none());
         assert!(
             pointer_from_c(BerylPointer {
+                x: f32::NAN,
+                ..touch
+            })
+            .is_none()
+        );
+        assert!(
+            pointer_from_c(BerylPointer {
+                wheel_y: f32::INFINITY,
+                ..touch
+            })
+            .is_none()
+        );
+        assert!(
+            pointer_from_c(BerylPointer {
                 modifiers: 16,
                 ..touch
             })
@@ -399,5 +446,25 @@ mod tests {
         );
         assert!(key_from_c(BerylKey { code: 47, ..back }).is_none());
         assert!(key_from_c(BerylKey { phase: 3, ..back }).is_none());
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)] // The replacements are exact values, not computed ones.
+    fn a_surface_scale_or_inset_that_is_not_a_size_is_replaced() {
+        let safe = BerylInsets {
+            top: 47.0,
+            right: -3.0,
+            bottom: f32::NAN,
+            left: f32::INFINITY,
+        };
+        let (scale, insets) = surface_from_c(3.0, safe);
+        assert_eq!(scale, 3.0);
+        assert_eq!(
+            (insets.top, insets.right, insets.bottom, insets.left),
+            (47.0, 0.0, 0.0, 0.0)
+        );
+        for bad in [0.0, -2.0, f32::NAN, f32::INFINITY] {
+            assert_eq!(surface_from_c(bad, safe).0, 1.0, "scale {bad}");
+        }
     }
 }

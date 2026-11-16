@@ -180,7 +180,7 @@ fn open() -> Result<Device, String> {
     Ok(Device { _sink: sink, mixer })
 }
 
-/// On Android the Kotlin host is to play the sound, since `cpal` links AAudio, which API
+/// On Android the Kotlin host is to play the sound, since `cpal` links `AAudio`, which API
 /// levels 24 and 25 lack; until it does, the app is silent there.
 #[cfg(target_os = "android")]
 fn open() -> Result<Device, String> {

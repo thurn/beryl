@@ -34,8 +34,19 @@ class Waker(private val requestFrame: Runnable) {
     }
 }
 
+/**
+ * The library's app, one for the process: the header's app is never freed, and an activity
+ * Android recreates (after a locale change, say) must keep the game in progress rather than
+ * start a second one beside it. The waker asks whichever activity is current for a frame.
+ */
+private object Library {
+    var app = 0L
+    var activity: MainActivity? = null
+    val waker = Waker { activity?.requestFrame() }
+}
+
 class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCallback {
-    private var app = 0L
+    private val app get() = Library.app
     private var currentSurface: SurfaceHolder? = null
     private var width = 0
     private var height = 0
@@ -58,7 +69,10 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
         traceFrames = BuildConfig.DEBUG && intent.getBooleanExtra("traceFrames", false)
         val modes = windowManager.defaultDisplay.supportedModes
         val displayHz = modes.maxOfOrNull { it.refreshRate } ?: 60f
-        app = Native.create(fixture, filesDir.path, standIn, displayHz, Waker(::requestFrame))
+        Library.activity = this
+        if (Library.app == 0L) {
+            Library.app = Native.create(fixture, filesDir.path, standIn, displayHz, Library.waker)
+        }
 
         if (Build.VERSION.SDK_INT >= 30) {
             window.setDecorFitsSystemWindows(false)
@@ -136,7 +150,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
         frameDelayed = false
     }
 
-    private fun requestFrame() {
+    internal fun requestFrame() {
         if (!resumed || app == 0L || currentSurface == null || (framePending && !frameDelayed)) return
         if (framePending) choreographer.removeFrameCallback(this)
         framePending = true
@@ -237,6 +251,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
 
     override fun onDestroy() {
         requests.unregisterTestReceiver()
+        if (Library.activity === this) Library.activity = null
         super.onDestroy()
     }
 }

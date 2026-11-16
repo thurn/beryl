@@ -30,7 +30,8 @@ typedef struct {
     float display_hz;
     /* Called with context, from any thread, when an input arrives from another
      * thread while the host may have paused its ticks: ask for a frame soon,
-     * hopping to the main thread. May be NULL. */
+     * hopping to the main thread. May be NULL. The app is never freed, so wake
+     * and context must stay valid for the process's life. */
     void (*wake)(void *context);
     void *context;
 } BerylConfig;
@@ -202,14 +203,17 @@ typedef struct {
 Beryl3d *beryl3d_new(const BerylConfig *config);
 
 /* The host has a surface: on iOS a CAMetalLayer, kept until beryl3d_surface_lost.
- * width and height are physical pixels; scale is pixels per point. */
+ * width and height are physical pixels; scale is pixels per point. A scale that is
+ * not a positive number is taken as 1, and an inset that is negative or not a
+ * number as 0. */
 void beryl3d_surface(Beryl3d *app, void *native_surface, uint32_t width,
                      uint32_t height, float scale, BerylInsets safe_area);
 
 /* The host lost its surface, or may no longer draw in it. */
 void beryl3d_surface_lost(Beryl3d *app);
 
-/* A pointer event. Dropped before the first surface. */
+/* A pointer event. Dropped before the first surface, and when its position or
+ * wheel is not a finite number. */
 void beryl3d_pointer(Beryl3d *app, BerylPointer event);
 
 /* A key event. Dropped before the first surface. */

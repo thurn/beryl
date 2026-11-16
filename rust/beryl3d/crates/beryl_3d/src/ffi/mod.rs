@@ -20,7 +20,7 @@ use std::sync::{Arc, OnceLock};
 use beryl_host::{Phone, Wakeup};
 use beryl_render::Native;
 use beryl_scene::frame::Wake;
-use beryl_scene::input::{Insets, Lifecycle};
+use beryl_scene::input::Lifecycle;
 use beryl_scene::{Client, Config};
 
 pub use types::*;
@@ -179,12 +179,7 @@ impl Beryl3d {
     /// The host's surface, which must stay valid until `surface_lost`.
     #[allow(unsafe_code)]
     fn surface(&mut self, native: Native, width: u32, height: u32, scale: f32, safe: BerylInsets) {
-        let safe_area = Insets {
-            top: safe.top,
-            right: safe.right,
-            bottom: safe.bottom,
-            left: safe.left,
-        };
+        let (scale, safe_area) = surface_from_c(scale, safe);
         // SAFETY: each caller passes a surface the host keeps valid until `surface_lost`.
         let attached = unsafe { self.phone.surface(native, width, height, scale, safe_area) };
         if let Err(error) = attached {
