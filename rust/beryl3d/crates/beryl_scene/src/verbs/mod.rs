@@ -24,7 +24,7 @@ mod showcase;
 mod streak;
 mod strike;
 mod tap;
-mod vanish;
+pub(crate) mod vanish;
 
 use beryl_protocol::script::Verb;
 

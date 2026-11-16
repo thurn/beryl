@@ -41,7 +41,12 @@ impl Show {
             return;
         };
         let compiled = &mut waiting.compiled;
-        if compiled.laid.is_empty() || compiled.laid.len() != waiting.timings.len() {
+        // A script the table takes at once has no wait to lay out again, beyond the announcements
+        // of a reset, which wait for nothing a script before them shows.
+        if compiled.immediate
+            || compiled.laid.is_empty()
+            || compiled.laid.len() != waiting.timings.len()
+        {
             return;
         }
         let waits = waiting

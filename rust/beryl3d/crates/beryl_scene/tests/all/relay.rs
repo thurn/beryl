@@ -244,3 +244,43 @@ fn a_script_with_no_step_that_waits_is_not_laid_out_again() {
     let show = play(vec![(0, start, Vec::new()), (10, after, timings)], 1_000);
     assert_eq!(show.relays(), 0);
 }
+
+#[test]
+fn a_reset_plays_only_its_announcements() {
+    let (start, cards) = before();
+    let (banner, banner_timing) = banner();
+    let mut island = start
+        .view
+        .objects
+        .iter()
+        .find(|object| object.slot == cards.island)
+        .expect("the island")
+        .clone();
+    island.tapped = true;
+    // The web stage applies a reset's other steps at once and plays its announcements as a
+    // script of their own (`resetSteps` in ui/src/stage/table.ts).
+    let mut reset = scripted(&start, &[], Some(cards.island));
+    let mut builder = ScriptBuilder::reset();
+    builder.beat([Act::Tap { object: island }]).beat([banner]);
+    reset.view.script = Some(builder.build());
+    let show = play(
+        vec![
+            (0, start, Vec::new()),
+            (10, reset, vec![timing(150.0), banner_timing]),
+        ],
+        2_000,
+    );
+    let played = script(&show, 1);
+    let verbs: Vec<_> = played.steps.iter().map(|step| step.verb).collect();
+    assert_eq!(verbs, [beryl_protocol::script::Verb::Announce]);
+    assert_eq!(starts(played), [0], "the banner does not wait for the tap");
+}
+
+#[test]
+fn the_first_views_script_plays_nothing() {
+    let (start, cards) = before();
+    let (after, timings) = three_beats(&start, cards);
+    let show = play(vec![(0, after, timings)], 1_000);
+    assert!(script(&show, 0).steps.is_empty());
+    assert_eq!(script(&show, 0).end, 0);
+}

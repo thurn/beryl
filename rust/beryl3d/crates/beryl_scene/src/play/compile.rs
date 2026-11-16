@@ -55,6 +55,9 @@ pub(crate) struct Compiled {
     pub unplaced: usize,
     /// Whether it starts over from its view (`Script::reset`), which drops every span shown.
     pub reset: bool,
+    /// Whether the table takes its steps at once, with no table before it or with a reset: only
+    /// a reset's announcements play (`lay_out`).
+    pub immediate: bool,
     /// The spans its verbs begin and end, ordered by when each begins on its clock, and as its steps wrote them
     /// where two begin together.
     pub spans: Vec<SpanChange>,
@@ -138,7 +141,8 @@ impl Compiled {
 /// view the table shows at rest, whose resting places the table holds already. With no `before`
 /// (the first view), with a reset, or
 /// with timings that do not match the steps, nothing moves: the table takes `after` as it stands
-/// when the script ends. A reset's beats still hold the time their timings give.
+/// when the script ends. Of the first view's script, nothing plays, and of a reset's only its
+/// announcements, as on the web stage.
 pub(crate) fn compile<'a>(
     before: Option<(&'a PlayerView, &Played)>,
     after: &'a PlayerView,
@@ -175,19 +179,24 @@ pub(crate) fn compile<'a>(
             Motion::new(before, played, (table, after, timings), records, shown)
         });
     let mut steps = Vec::new();
-    let mut number = 0;
     // The steps sound whether or not they move anything.
     let mut sounds = Sounds::new(script, after, motion.is_some());
     let effects = &mut compiled.effects;
+    // With no table before it, or with a reset, the table takes the script's steps at once,
+    // and only a reset's announcements play, as the web stage's `play` does (`resetSteps` in
+    // `ui/src/stage/table.ts`).
+    let immediate = motion.is_none();
+    compiled.immediate = immediate;
     compiled.end = lay_out(
         script,
         timings,
+        immediate,
         (
             &mut compiled.unbuilt,
             &mut compiled.laid,
             &mut compiled.closes,
         ),
-        |(beat, index), step, timing, laid| {
+        |number, (beat, index), step, timing, laid| {
             sounds.step(
                 motion.as_ref().map(|motion| &motion.played),
                 (&script.beats[beat], index, number),
@@ -199,7 +208,6 @@ pub(crate) fn compile<'a>(
                 motion.take_closed()
             });
             effects_of(number, step, timing, laid, effects);
-            number += 1;
             if !records {
                 return closed;
             }
@@ -264,33 +272,74 @@ fn ended(played: Option<&Played>, after: &PlayerView, script: &Script) -> Played
     replay(start, script).unwrap_or_else(|_| numbered(Played::of(after)))
 }
 
-/// Lays out each beat of `script` after the one before, calling `each` with every step's beat
-/// and index in its beat, the step, its timing and when it plays, and returns when the last beat
-/// is over, in nanoseconds. Each verb drawn as an instant change sets its bit in `unbuilt`, and
-/// each step's times go to `all`. `each` returns when what closed up after its step has closed,
-/// in milliseconds, if anything did, which goes to `closed_by`: a beat is not over until then, as
-/// the web stage's is not (`closedBy` in `ui/src/stage/tracks.ts`).
+/// Lays out each beat of `script` after the one before, calling `each` with every step's number
+/// in the script, its beat and index in its beat, the step, its timing and when it plays, and
+/// returns when the last beat is over, in nanoseconds. Each verb drawn as an instant change sets
+/// its bit in `unbuilt`, and each step's times go to `all`. `each` returns when what closed up
+/// after its step has closed, in milliseconds, if anything did, which goes to `closed_by`: a beat
+/// is not over until then, as the web stage's is not (`closedBy` in `ui/src/stage/tracks.ts`).
+///
+/// When `immediate`, the table takes the script's steps at once: only a reset's announcements
+/// play, beat after beat, and `each` is called for them alone. Every other step takes no time
+/// where its beat begins.
 fn lay_out<'s>(
     script: &'s Script,
     timings: &[StepTiming],
+    immediate: bool,
     (unbuilt, all, closed_by): (&mut u32, &mut Vec<Laid>, &mut Vec<Option<f64>>),
-    mut each: impl FnMut((usize, usize), &'s Step, &StepTiming, &Laid) -> Option<f64>,
+    mut each: impl FnMut(usize, (usize, usize), &'s Step, &StepTiming, &Laid) -> Option<f64>,
 ) -> u64 {
     let mut laid = Vec::new();
     all.reserve_exact(timings.len());
     closed_by.reserve_exact(timings.len());
+    let plays = |step: &Step| {
+        !immediate || (script.reset.is_some() && matches!(step.act, Act::Announce { .. }))
+    };
     let mut at = 0.0;
     let mut first = 0;
     for (number, steps) in script.beats.iter().enumerate() {
         let timings = &timings[first..first + steps.len()];
-        // No span is open and nothing passes over the table yet: the flat layer draws neither.
-        let mut end = beat(steps, timings, at, |_| None, at, &mut laid);
+        let mut end = if immediate {
+            // The steps that play, laid out as a beat of their own.
+            let (playing, timed): (Vec<Step>, Vec<StepTiming>) = steps
+                .iter()
+                .zip(timings)
+                .filter(|(step, _)| plays(step))
+                .map(|(step, timing)| (step.clone(), timing.clone()))
+                .unzip();
+            let mut own = Vec::new();
+            let end = beat(&playing, &timed, at, |_| None, at, &mut own);
+            let mut own = own.into_iter();
+            laid.clear();
+            laid.extend(steps.iter().map(|step| {
+                let still = Laid {
+                    turn: at,
+                    from: at,
+                    to: at,
+                    opens: None,
+                };
+                if plays(step) {
+                    own.next().unwrap_or(still)
+                } else {
+                    still
+                }
+            }));
+            end
+        } else {
+            // No span is open and nothing passes over the table yet: the flat layer draws
+            // neither.
+            beat(steps, timings, at, |_| None, at, &mut laid)
+        };
         for (index, ((step, timing), laid)) in steps.iter().zip(timings).zip(&laid).enumerate() {
             let verb = step.act.verb();
             if !verbs::built(verb) {
                 *unbuilt |= bit(verb);
             }
-            let closed = each((number, index), step, timing, laid);
+            let closed = if plays(step) {
+                each(first + index, (number, index), step, timing, laid)
+            } else {
+                None
+            };
             if let Some(closed) = closed {
                 end = end.max(closed);
             }

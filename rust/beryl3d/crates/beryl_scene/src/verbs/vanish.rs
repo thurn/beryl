@@ -9,6 +9,12 @@ use crate::pose::{Segment, Shape};
 
 pub const BUILT: bool = true;
 
+/// How long what a card that vanishes made room for takes to close up once it has gone, as a
+/// share of the step that took it, where its timing names no time of its own
+/// (`StepTiming::closes`): the row closes up only after the card is gone. The web interface's
+/// `CLOSES` and `roomIn` in `ui/src/stage/tracks.ts`.
+pub const CLOSES: f64 = 0.4;
+
 pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
     let (Some(subject), Some(from), Some(to)) = (step.subject, step.from, step.to) else {
         return;

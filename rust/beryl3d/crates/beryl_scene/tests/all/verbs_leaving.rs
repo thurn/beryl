@@ -385,3 +385,49 @@ fn an_ability_with_no_source_on_the_table_fades_in_at_its_place() {
     assert_eq!(begins.position, rests.position, "it does not travel");
     assert!(begins.opacity < 0.1, "it fades in: {}", begins.opacity);
 }
+
+#[test]
+fn what_a_vanishing_card_leaves_room_for_closes_up_after_it() {
+    use beryl_protocol::protocol::CardType;
+    use beryl_scene::play::record::Cause;
+    // The sample table with a second creature in the Angel's row, which closes up after it.
+    let mut builder = ViewBuilder::sample();
+    builder
+        .card(ZoneName::Battlefield, Side::You, "Savannah Lions")
+        .types = vec![CardType::Creature];
+    builder.script(ScriptBuilder::reset().build());
+    let start = builder.update();
+    let angel = slot(&start.view, ZoneName::Battlefield, Side::You, "Serra Angel");
+    let bounced = leaves(
+        &start,
+        angel,
+        ZoneName::Battlefield,
+        ZoneName::Hand,
+        Why::Return,
+    );
+    // The cards that stay in the hand close up over the step instead, as on the web stage.
+    let in_hand: Vec<usize> = bounced
+        .view
+        .objects
+        .iter()
+        .filter(|object| object.zone == ZoneName::Hand)
+        .map(|object| usize::from(object.slot.0))
+        .collect();
+    let (show, _) = play(&[start, bounced], None);
+    let record = last(&show);
+    let step = &record.steps[0];
+    // The web stage's `roomIn`: 40% of the step, in whole milliseconds, once the card is gone.
+    let closes = ((step.to - step.from) as f64 * 0.4 / MS as f64).round() as u64 * MS;
+    let slides: Vec<Segment> = record
+        .segments
+        .iter()
+        .filter(|record| !in_hand.contains(&record.slot) && record.cause == Cause::Slide(0))
+        .map(|record| record.segment)
+        .collect();
+    assert!(!slides.is_empty(), "what the Angel left room for closes up");
+    for slide in &slides {
+        assert_eq!(slide.start, step.to, "it closes up once the Angel is gone");
+        assert_eq!(slide.end(), step.to + closes, "for 40% of the step");
+    }
+    assert_eq!(record.end, step.to + closes, "the beat lasts until it has");
+}

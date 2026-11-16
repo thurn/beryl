@@ -25,7 +25,7 @@ mod room;
 mod still;
 mod tracks;
 
-use room::room_of;
+use room::{only_height, room_of};
 use tracks::same;
 pub(crate) use tracks::{add, numbers_of};
 
@@ -440,7 +440,7 @@ impl<'a> Motion<'a> {
             from: nanoseconds(laid.from),
             to: nanoseconds(laid.to),
         };
-        let (room, regroup) = room_of(timing, laid, own);
+        let (room, regroup) = room_of(step.act.verb(), timing, laid, own);
         let Some(dirty) = self.place(&step.act, room.duration() > 0 || own.duration() > 0) else {
             return;
         };
@@ -576,13 +576,21 @@ impl<'a> Motion<'a> {
                     Some(regroup) if self.stays_in_hand(slot) => regroup,
                     _ => room,
                 };
+                let from = self.pose(slot, room.from);
                 if self.retarget(slot, room.from, rested.pose, now.pose) {
                     None
-                } else {
+                } else if only_height(from, now.pose) {
+                    // A card that only lies higher or lower among the cards of its row (one
+                    // `LAYER` for each card placed before it, so that two never flicker where
+                    // they overlap) has not moved: it takes its new height at once. The web
+                    // stage gives a card no such height, so nothing closes up after the step
+                    // for it there.
                     Some((
-                        verbs::slide(self.pose(slot, room.from), now.pose, room),
-                        Cause::Slide(number),
+                        verbs::instant(from, now.pose, room.from),
+                        Cause::Change(number),
                     ))
+                } else {
+                    Some((verbs::slide(from, now.pose, room), Cause::Slide(number)))
                 }
             }
             (Some(_), None) => {
