@@ -161,6 +161,20 @@ impl Segment {
         self.from != self.to || self.arc != 0.0
     }
 
+    /// Whether it changes the pose in a way the eye can follow: as `moves`, unless it only
+    /// changes how high the object lies above the table. A card of a row lies one layer above
+    /// the card before it, so when a card leaves the row every card after it drops one layer at
+    /// once, and a card resting undrawn off the row's end would otherwise count as moved by that
+    /// and be drawn there for the rest of the script.
+    #[must_use]
+    pub fn shifts(&self) -> bool {
+        let restacked = Pose {
+            position: self.from.position.with_z(self.to.position.z),
+            ..self.from
+        };
+        self.moves() && (self.arc != 0.0 || restacked != self.to)
+    }
+
     /// The moments besides its start, middle and end, which every check already looks at, when
     /// something can go wrong: when a thrown permanent is first at its greatest height, and when
     /// a card that turns over at a moment of its own begins and ends turning.
@@ -551,27 +565,30 @@ impl Track {
     }
 
     /// Whether a segment that changes the object's pose has begun by `t`. Until one has, the
-    /// object holds the pose it started the track in.
+    /// object holds the pose it started the track in, or one only a layer higher or lower
+    /// (`Segment::shifts`).
     #[must_use]
     pub fn begun(&self, t: u64) -> bool {
-        (self.segments().iter()).any(|segment| segment.start <= t && segment.moves())
+        (self.segments().iter()).any(|segment| segment.start <= t && segment.shifts())
     }
 
     /// Whether every segment that changes the object's pose has ended by `t`. From then on the
     /// object holds the pose it ends the track in.
     #[must_use]
     pub fn settled(&self, t: u64) -> bool {
-        (self.segments().iter()).all(|segment| segment.end() <= t || !segment.moves())
+        (self.segments().iter()).all(|segment| segment.end() <= t || !segment.shifts())
     }
 
     /// Whether a step's own act moves the object at `t`: a segment its verb made, or that
-    /// brought it to the table or took it away, is under way. A segment the object slides along
-    /// because a step changed where it rests does not count.
+    /// brought it to the table or took it away, is under way and moves it more than a layer up
+    /// or down (`Segment::shifts`). A segment the object slides along because a step changed
+    /// where it rests does not count.
     #[must_use]
     pub fn carried(&self, t: u64) -> bool {
         self.segments().iter().any(|segment| {
             segment.start <= t
                 && t < segment.end()
+                && segment.shifts()
                 && segment
                     .step
                     .is_some_and(|step| step.follows == Follows::Start)

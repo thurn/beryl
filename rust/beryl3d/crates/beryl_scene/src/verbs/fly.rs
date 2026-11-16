@@ -416,7 +416,16 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
     };
     let between = Segment::between(from, to, step.own, step.curve);
     let axes = step.places.camera().axes();
-    let arc = |rises: bool| if rises { space::verbs::fly::ARC } else { 0.0 };
+    // A card that flies to the place it already rests rises no more than it travels: one out of
+    // view at a row's end that moves to the end of that row stays there, undrawn.
+    let travels = from.position.truncate() != to.position.truncate();
+    let arc = |rises: bool| {
+        if rises && travels {
+            space::verbs::fly::ARC
+        } else {
+            0.0
+        }
+    };
     let path = path_of(step.act, step.timing.case.as_deref());
     // A card whose face changes turns over at moments of its own: a drawn card as it leaves the
     // library, any other a little before half way (the web's `turningOf`).

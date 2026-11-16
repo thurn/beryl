@@ -411,14 +411,14 @@ impl Table {
             return Some((SceneObject { copies, ..resting }, view, false));
         };
         let last = motion.finals.cards.get(slot).copied().flatten();
-        // A card a row has scrolled out of view rests undrawn at the row's end, above the last
-        // card shown, as does a card under the top two of a pile. One out of view before the
-        // script and after it stays undrawn while it slides, or it would cover that card. A
-        // card that changes place is drawn on its way, wherever it starts or ends, and so is one
-        // a step's own verb moves, such as a flight to the end of its row: it leaves from the
-        // row's nearer end, where it rests undrawn. Before its
-        // track first moves it, a card is drawn as where it rests is; once its track has ended,
-        // as where the script leaves it is.
+        // A card a row has scrolled out of view rests undrawn at the row's nearer end
+        // (`rows::beyond_right` for the right end), as does a card under the top two of a pile.
+        // One out of view before the script and after it stays undrawn while it slides, or only
+        // drops a layer because a card before it left, or it would cover the cards there. A card
+        // that changes place is drawn on its way, wherever it starts or ends, and so is one a
+        // step's own verb moves across the table, such as a flight to the end of its row: it
+        // leaves from where it rests undrawn. Before its track first moves it, a card is drawn as
+        // where it rests is; once its track has ended, as where the script leaves it is.
         let moves = resting.zip(last).is_some_and(|(a, b)| a.place != b.place);
         if !moves
             && !resting.is_some_and(|object| object.visible)

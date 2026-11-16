@@ -20,7 +20,7 @@ mod single;
 pub(crate) use change::RowChange;
 pub(crate) use names::NameIds;
 pub(super) use names::SameName;
-use single::{lay_single_cards, spacing, window_size};
+use single::{beyond_right, lay_single_cards, spacing, window_size};
 
 /// One card of a laid-out row: its pose, and whether it is drawn.
 pub(super) struct Laid<'a> {
@@ -270,17 +270,8 @@ pub(super) fn lay_row<'a>(
     let step = spacing(shown, room, last_width, extra);
     let mut height = 0;
     let (mut before, mut after) = (0, 0);
-    // Where each shown group's left edge is, and where the last shown group's is.
     let mut left = area.left;
-    let mut last_left = area.left;
-    for (index, group) in groups.iter().enumerate().skip(first).take(shown) {
-        last_left = left;
-        if index + 1 < first + shown {
-            left += step + right(group);
-        }
-    }
-    left = area.left;
-    for (index, group) in groups.iter().enumerate() {
+    for (index, (group, width)) in groups.iter().zip(&widths).enumerate() {
         let visible = (first..first + shown).contains(&index);
         if index < first {
             before += group.len();
@@ -293,7 +284,7 @@ pub(super) fn lay_row<'a>(
         } else if visible {
             left
         } else {
-            last_left
+            beyond_right(area, rules, *width)
         };
         place_group((group, beneath), at, y, &mut height, visible, rules, laid);
         if visible {

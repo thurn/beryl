@@ -2,17 +2,18 @@
 //! cards than fit with their least strip shows as many as fit, scrolls under the wheel and a
 //! drag, and shows how many cards are off each end.
 
+use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::FixtureMessage;
-use beryl_protocol::protocol::{CardType, PlayerView, RowName, Side, ZoneName};
-use beryl_protocol::script::{Act, Script};
+use beryl_protocol::protocol::{CardType, PlayerView, RowName, Side, Why, ZoneName};
+use beryl_protocol::script::{Act, Script, Step, StepTiming};
 use beryl_scene::agent::steps::rest_equals_placement;
 use beryl_scene::agent::{Layout, Rule, uncovered};
-use beryl_scene::driver::{Duration, Page, Recording};
+use beryl_scene::driver::{Duration, Mode, Page, Recording};
 use beryl_scene::frame::{Frame, Place, Role};
 use beryl_scene::input::{Button, Size};
 use beryl_scene::input::{Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
-use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
+use beryl_scene::testing::{self, ScriptBuilder, ViewBuilder, timing};
 use beryl_scene::{Client, Config};
 use glam::Vec2;
 
@@ -307,4 +308,79 @@ fn a_script_played_while_a_row_scrolls_ends_where_placement_rests_each_card() {
         let found = rest_equals_placement(script);
         assert!(found.is_empty(), "{found:?}");
     }
+}
+
+/// On the phone layout a crowded lands row shows two cards and ends in the middle of the
+/// screen. When an effect moves the row's first lands to its end, out of view, each is seen for
+/// its whole flight, as "every step shown" asks: it flies past the cards in view toward the
+/// count of the cards off the row's right end. This failed in three ways. The cards off that end
+/// rested under the last card in view, so flights there ended under it. Those cards were also
+/// drawn there for the whole script as soon as a card before them left and they dropped one
+/// layer. And a card already off that end rose in place there as it flew to the row's end.
+#[test]
+fn a_card_flying_to_the_hidden_end_of_a_phone_row_is_seen() {
+    let size = Size {
+        width: 393.0,
+        height: 759.0,
+    };
+    // A third of the lands are tapped, as on a stress board, so that the cards differ in width.
+    let mut before = lands(12).update();
+    for (index, object) in before.view.objects.iter_mut().enumerate() {
+        object.tapped = index % 3 == 0;
+    }
+    let mut page = Page::new(
+        Recording(vec![FixtureMessage::game_update(&before)]).into(),
+        Side::You,
+        Layout::Phone,
+        size,
+    )
+    .expect("the page opens");
+    page.still();
+    let shown = row(page.frame()).len();
+    assert!(shown < 4, "the phone shows {shown} of 12 lands");
+
+    // The first four lands move to the end of the battlefield, as an effect moves them, one
+    // after another: the first from in view and the rest from in view or off the row's right end.
+    let moved_count = 4;
+    let mut after = before.view.clone();
+    let moved: Vec<_> = after.objects[..moved_count].to_vec();
+    after.battlefield.rotate_left(moved_count);
+    after.objects.rotate_left(moved_count);
+    let end = u16::try_from(after.battlefield.len() - 1).expect("a short row");
+    let beat: Vec<Step> = moved
+        .into_iter()
+        .map(|object| Step {
+            act: Act::Fly {
+                from: ZoneName::Battlefield,
+                why: Why::Effect,
+                object,
+                at: Some(end),
+                item: None,
+                origin: None,
+            },
+            cause: None,
+        })
+        .collect();
+    let flight = StepTiming {
+        stagger: 30.0,
+        ..timing(420.0)
+    };
+    after.script = Some(testing::script(None, vec![beat], vec![flight; moved_count]));
+    let after = GameUpdate {
+        session: before.session,
+        view: after,
+    };
+
+    let mut messages = vec![
+        FixtureMessage::game_update(&before),
+        FixtureMessage::game_update(&after),
+    ];
+    messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
+    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Phone, size)
+        .expect("the views can be read");
+    let unseen: Vec<String> = (page.check_all(Mode::EveryTick).faults.into_iter())
+        .filter(|fault| fault.rule == Rule::StepShown)
+        .map(|fault| fault.message)
+        .collect();
+    assert!(unseen.is_empty(), "{unseen:?}");
 }

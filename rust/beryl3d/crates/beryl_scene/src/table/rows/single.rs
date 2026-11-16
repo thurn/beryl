@@ -45,14 +45,12 @@ pub(super) fn lay_single_cards<'a>(
     let first = rules.scroll.min(count - shown);
     let end = first + shown;
     let step = spacing(shown, room, card_width(cards[end - 1]), 0.0);
-    // Add the step at each edge as in the general layout so rounding stays the same.
-    let last_left = (1..shown).fold(area.left, |left, _| left + step);
     let mut left = area.left;
     for (index, &card) in cards.iter().enumerate() {
         let (at, visible) = if index < first {
             (area.left, false)
         } else if index >= end {
-            (last_left, false)
+            (beyond_right(area, rules, card_width(card)), false)
         } else {
             let at = left;
             left += step;
@@ -68,6 +66,24 @@ pub(super) fn lay_single_cards<'a>(
         ));
     }
     RowWindow::new(count, first, shown, (first, count - end))
+}
+
+/// The left edge at which a card or group `width` wide that is scrolled off a row's right end
+/// rests, undrawn: one `gap` past that end, beside the count of the cards off it, but no farther
+/// right than the right end of the layout's rightmost row, inside which the camera keeps the
+/// window. A card that flies to the row's hidden end is drawn while it flies. Resting at the last
+/// card in view, which stands against the row's right end, it would end its flight under that
+/// card and the cards flying after it, and a card flying from that place would hardly move. On
+/// the phone layout, where a crowded lands row shows two cards and ends in the middle of the
+/// screen, that hid most flights into the row. A row that ends at the battlefield's right edge
+/// has no room past its end, and its hidden cards rest against that end.
+pub(super) fn beyond_right(area: RowArea, rules: &RowRules, width: f32) -> f32 {
+    let layout = rules.layout;
+    let limit = [layout.creatures, layout.lands, layout.others]
+        .iter()
+        .map(|row| row.right)
+        .fold(area.right, f32::max);
+    (area.right + layout.gap).min(limit - width)
 }
 
 pub(super) fn window_size(groups: usize, room: f32, widest: f32, strip: f32) -> usize {

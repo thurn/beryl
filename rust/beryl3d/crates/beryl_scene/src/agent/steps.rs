@@ -401,8 +401,12 @@ pub fn step_shown(step: &StepRecord, from: u64, to: u64, samples: &[Sample]) -> 
                 .iter()
                 .filter(|sample| sample.t >= from && sample.t <= to)
                 .collect();
+            let stays = step.key.is_some_and(|key| key.from == key.to);
             let Some(origin) = path.first() else {
-                return Some(format!("was drawn in no frame of {}", step.describe()));
+                // A card that moves within its zone between two places out of view, as one in a
+                // scrolled row's hidden part moves to that row's end, is never drawn: nothing the
+                // viewer can see changes.
+                return (!stays).then(|| format!("was drawn in no frame of {}", step.describe()));
             };
             let visible = path.iter().filter(|sample| sample.seen).count();
             #[expect(clippy::cast_precision_loss, reason = "a count of frames")]
@@ -428,7 +432,6 @@ pub fn step_shown(step: &StepRecord, from: u64, to: u64, samples: &[Sample]) -> 
                 _ => 0,
             };
             if reach < audit::STEP_POINTS {
-                let stays = step.key.is_some_and(|key| key.from == key.to);
                 return (!stays).then(|| format!("did not move in {}", step.describe()));
             }
             if unseen {

@@ -1316,11 +1316,16 @@ flight start exactly where the card was.
   scroll places every object again and compiles every script not yet ended
   again, as a change of window shape does: each card that stays in view slides
   to its new place over `slide.regroup_ms`, and a card that comes into view
-  fades in where it rests. A script moves a card that is out of view from the
-  nearer end of the row, where placement rests it. It is drawn while its own
-  step's verb moves it, such as a flight to the row's end, but not while it only
-  slides because other cards moved. Each end with cards off it shows their
-  number, as "+12", in a float just outside that end (`floats::ROW_COUNT`).
+  fades in where it rests. A card out of view rests undrawn at the nearer end of
+  the row: at its left end, or one gap past its right end, but no farther right
+  than the battlefield's rightmost row ends. A script moves a card that is out
+  of view from there. It is drawn while its own step's verb moves it across the
+  table, such as a flight to the row's end, but not while it only slides because
+  other cards moved, or only drops a layer because a card before it left the
+  row. A card that moves between two places out of view, as one past the right
+  end moves to the row's end, is not drawn at all. Each end with cards off it
+  shows their number, as "+12", in a float just outside that end
+  (`floats::ROW_COUNT`).
 - **An ability on the stack is a scene object like a spell.** It is drawn as a
   card showing its source's face, at its place among the stack's items, and
   arrows, marks and steps reach it by its number, which the session's scripts
@@ -2885,7 +2890,9 @@ screen, so they cover every card spec that is ever generated.
   points a fifth of the way in from its corners, as the web interface measures
   it), at least half uncovered and not transparent. A step whose verb gives its
   subject time to travel moves it at least 4 logical points over at least 150
-  milliseconds; a subject that jumps instead is a fault.
+  milliseconds; a subject that jumps instead is a fault. A card that moves
+  within its zone between two places out of view is drawn in no frame, and is
+  not judged.
 - **Not crowded.** No more than 3 different moves begin at once in one beat.
   Taps and the steps of a turn do not count.
 - **No blank card.** Every card drawn face up, whose name the viewer knows, has
