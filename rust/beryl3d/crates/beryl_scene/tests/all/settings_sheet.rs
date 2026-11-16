@@ -104,7 +104,10 @@ fn concede_asks_to_confirm_and_closing_the_sheet_puts_it_back() {
     click(&mut client, Role::Button, "Concede");
     click(&mut client, Role::Button, "Confirm Concede");
     assert_eq!(concessions(&mut client), 1);
-    assert!(!controls(&mut client).contains(&"Music".to_owned()), "the sheet closed");
+    assert!(
+        !controls(&mut client).contains(&"Music".to_owned()),
+        "the sheet closed"
+    );
 }
 
 #[test]

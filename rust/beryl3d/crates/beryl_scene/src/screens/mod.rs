@@ -223,6 +223,9 @@ fn backdrop(input: &ScreenIn) -> Element {
         .height(input.window.size.height)
         .background(crate::tokens::color::BACKDROP)
         .passes(true);
-    backdrop.anchor = Some(crate::element::Anchor::Point(glam::Vec2::ZERO, glam::Vec2::ZERO));
+    backdrop.anchor = Some(crate::element::Anchor::Point(
+        glam::Vec2::ZERO,
+        glam::Vec2::ZERO,
+    ));
     backdrop
 }

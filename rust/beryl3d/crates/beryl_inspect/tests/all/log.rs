@@ -157,4 +157,3 @@ fn the_log_says_what_the_web_log_says_of_each_view() {
         assert_eq!(lines(name, seat), web, "{name} from {seat:?}");
     }
 }
-

@@ -1,15 +1,15 @@
 {
   "screens": [
-    { "name": "start", "screen": "start", "recording": "screen/start", "built": true },
-    { "name": "opening", "screen": "game", "recording": "opening-keep", "built": true },
-    { "name": "game", "screen": "game", "recording": "pay-default", "built": true },
-    { "name": "game over", "screen": "game", "recording": "game-over", "built": true },
-    { "name": "settings", "screen": "settings", "recording": "screen/settings", "built": true },
-    { "name": "bug report", "screen": "bug-report", "recording": "screen/bug-report", "built": false },
-    { "name": "gallery", "screen": "gallery", "recording": "screen/gallery", "built": true },
-    { "name": "testing", "screen": "testing", "recording": "screen/testing", "built": true },
-    { "name": "lobby", "screen": "lobby", "recording": "screen/lobby", "built": true },
-    { "name": "manual table", "screen": "table", "recording": "screen/table", "built": true }
+    { "name": "start", "screen": "start", "recording": "screen/start", "built": true, "at": "end", "shows": "region \"start\"" },
+    { "name": "opening", "screen": "game", "recording": "opening-keep", "built": true, "at": "prompt:1", "shows": "text \"Opening hand\"" },
+    { "name": "game", "screen": "game", "recording": "pay-default", "built": true, "at": "prompt:1", "shows": "region \"game\"" },
+    { "name": "game over", "screen": "game", "recording": "game-over", "built": true, "at": "end", "shows": "text \"Defeat\"" },
+    { "name": "settings", "screen": "settings", "recording": "screen/settings", "built": true, "at": "end", "shows": "region \"settings\"" },
+    { "name": "bug report", "screen": "bug-report", "recording": "screen/bug-report", "built": true, "at": "end", "shows": "region \"bug report\"" },
+    { "name": "gallery", "screen": "gallery", "recording": "screen/gallery", "built": true, "at": "end", "shows": "region \"gallery\"" },
+    { "name": "testing", "screen": "testing", "recording": "screen/testing", "built": true, "at": "end", "shows": "region \"testing\"" },
+    { "name": "lobby", "screen": "lobby", "recording": "screen/lobby", "built": true, "at": "end", "shows": "region \"lobby\"" },
+    { "name": "manual table", "screen": "table", "recording": "screen/table", "built": true, "at": "end", "shows": "region \"table\"" }
   ],
   "prompt_shapes": {
     "pick": "shape-pick",

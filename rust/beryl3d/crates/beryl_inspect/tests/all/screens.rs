@@ -80,13 +80,53 @@ fn the_screens_file_names_a_fixture_for_every_prompt_shape() {
     }
 }
 
+/// Each screen the screens file marks built shows in its recording: at the moment its `at`
+/// names, the tree printout has the line its `shows` names. A screen marked built that its
+/// recording does not show would count in the parity list without being there.
 #[test]
-fn a_screen_recording_puts_the_client_on_its_screen() {
-    let tree = Page::fixture("screen/start", Side::You, Layout::Desktop).tree();
-    assert!(tree.contains("region \"start\""), "{tree}");
-    let tree = Page::fixture("screen/settings", Side::You, Layout::Desktop).tree();
-    assert!(tree.contains("region \"settings\""), "{tree}");
+fn every_built_screen_shows_in_its_recording() {
+    use std::str::FromStr;
+
+    use beryl_scene::driver::Moment;
+    use beryl_scene::input::Size;
+
+    let path = recordings::root().join("data/beryl3d/screens.json");
+    let text = std::fs::read_to_string(&path).expect("the screens file is readable");
+    let file: serde_json::Value = serde_json::from_str(&text).expect("the screens file is JSON");
+    let size = Size {
+        width: 1600.0,
+        height: 900.0,
+    };
+    for screen in file["screens"]
+        .as_array()
+        .expect("the screens file lists screens")
+    {
+        let name = screen["name"].as_str().expect("each screen has a name");
+        if screen["built"] != serde_json::Value::Bool(true) {
+            continue;
+        }
+        let field = |key: &str| {
+            screen[key]
+                .as_str()
+                .unwrap_or_else(|| panic!("{name}, marked built, names no `{key}`"))
+        };
+        let (recording, at, shows) = (field("recording"), field("at"), field("shows"));
+        let mut page = beryl_inspect::pages::page(recording, Side::You, Layout::Desktop, size)
+            .unwrap_or_else(|why| panic!("{name}: {why}"));
+        let moment = Moment::from_str(at).unwrap_or_else(|why| panic!("{name}: {at}: {why:?}"));
+        page.seek(&moment)
+            .unwrap_or_else(|why| panic!("{name}: {why}"));
+        page.still();
+        let tree = page.tree();
+        assert!(
+            tree.contains(shows),
+            "{name}: {recording} at {at} shows no {shows}:\n{tree}"
+        );
+    }
+}
+
+#[test]
+fn the_lobby_recording_shows_the_loaded_deck() {
     let tree = Page::fixture("screen/lobby", Side::You, Layout::Desktop).tree();
-    assert!(tree.contains("region \"lobby\""), "{tree}");
     assert!(tree.contains("Deck loaded"), "{tree}");
 }

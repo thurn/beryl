@@ -48,7 +48,8 @@ impl Client {
         let stops = self.settings.stops;
         if held != stops {
             self.stops_held = Some(stops);
-            self.commands.push_back(SessionCommand::SetStops(session, stops));
+            self.commands
+                .push_back(SessionCommand::SetStops(session, stops));
         }
     }
 }

@@ -3850,7 +3850,9 @@ launch tests  macOS pass, Windows pass, iOS pass, Android pass
 - **Screens** are listed by hand in one data file, because nothing generates
   them: the start screen, the opening hand and mulligan, the game, game over,
   settings, the bug report, the card gallery, the testing screen and each of the
-  manual table's screens.
+  manual table's screens. Each screen marked built names a moment of its
+  recording (`at`) and a line of the tree printout there (`shows`), and a test
+  fails when the recording does not show it.
 - **New web interface work adds to the list** automatically where it adds a
   fixture or a spec, and by a line in the screens file otherwise.
 
