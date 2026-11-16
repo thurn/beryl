@@ -442,23 +442,39 @@ await check(
             },
             "guest",
         );
-        let theirs = await showBoth(host, guest);
+        const theirs = await showBoth(host, guest);
         const land = theirs.objects.find(
             ({ zone, name }) => zone === "battlefield" && name === "Mountain",
         );
+        await Promise.all([listen(host), listen(guest)]);
         for (const tapped of [true, false]) {
             const after = await clickTable(guest, card(guest, land.slot));
-            assert.equal(object(after, land.slot).tapped, tapped);
-            theirs = await showBoth(host, guest);
-            assert.equal(object(theirs, land.slot).tapped, tapped);
-            const mine = await tableView("host");
-            assert.equal(
-                mine.objects.find(
+            await showBoth(host, guest);
+            for (const page of [host, guest]) {
+                const projected = await page.evaluate(
+                    (length) =>
+                        window.qaUpdates.findLast(
+                            ({ view }) => view.table.log.length === length,
+                        )?.view,
+                    after.table.log.length,
+                );
+                const mountain = projected?.objects.find(
                     ({ zone, name }) =>
                         zone === "battlefield" && name === "Mountain",
-                ).tapped,
-                tapped,
-            );
+                );
+                assert.equal(mountain?.tapped, tapped);
+                assert.ok(
+                    projected.script.beats
+                        .flat()
+                        .some(
+                            ({ act }) =>
+                                act.verb === "tap" &&
+                                act.object.slot === mountain.slot &&
+                                act.object.tapped === tapped,
+                        ),
+                    `expected a ${tapped ? "tap" : "untap"} animation`,
+                );
+            }
         }
     }),
     live,
@@ -488,8 +504,17 @@ await check(
             clickTableResult(host),
             host.keyboard.press("Enter"),
         ]);
-        assert.equal(looked.handling.count, 3);
         await showBoth(host, guest, looked);
+        const library = host.getByRole("dialog", {
+            name: "Library",
+            exact: true,
+        });
+        await library.waitFor();
+        assert.equal(await library.locator("[data-viewer-slot]").count(), 3);
+        assert.equal(
+            await guest.getByRole("dialog", { name: "Library" }).count(),
+            0,
+        );
         const lifts = await guest.evaluate(() =>
             window.qaUpdates
                 .at(-1)

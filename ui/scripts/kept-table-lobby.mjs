@@ -160,7 +160,14 @@ await check(
             await page.getByRole("button", { name: "Open file" }).count(),
             0,
         );
-        await page.getByRole("button", { name: "Paste decklist" }).waitFor();
+        const lobby = page.getByRole("main", { name: "Table lobby" });
+        await lobby.getByRole("button", { name: "Paste decklist" }).tap();
+        await lobby.getByLabel("Deck name").fill("Phone deck");
+        await lobby.getByLabel("Decklist").fill("24 Island");
+        await lobby.getByRole("button", { name: "Import" }).tap();
+        const start = lobby.getByRole("button", { name: "Start", exact: true });
+        await start.tap();
+        await page.locator(".phone-board[data-manual-table]").waitFor();
     },
     {
         route: (page) => tableRoute(page, true, "guest"),

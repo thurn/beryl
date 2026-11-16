@@ -293,10 +293,7 @@
   "Leave game": "table.leave",
   "Reconnect to a game in progress": "gesture:manual table link freezes both seats and resumes the saved game",
   "A card leaving the table loses its counters, tapped state, power and toughness, and \"doesn't untap\" flag": "move.graveyard",
-  "A card's annotation is cleared on leaving the table, except to the stack": [
-    "move.graveyard",
-    "library.move_top_to_stack"
-  ],
+  "A card's annotation is cleared on leaving the table, except to the stack": "gesture:manual table drag through stack, graveyard, exile and viewer",
   "A token leaving the table for anywhere but the stack is destroyed": "move.graveyard",
   "A card moved face down or to another controller gets a new id": [
     "library.shuffle",
@@ -370,7 +367,10 @@
     "library.keep_top_known"
   ],
   "Protocol / RollDie": "table.roll",
-  "Protocol / NextTurn, SetActivePhase": ["phase.next_turn", "phase.next"],
+  "Protocol / NextTurn, SetActivePhase": [
+    "phase.next_turn",
+    "phase.first_main"
+  ],
   "Protocol / DeckSelect, SetSideboardPlan": [
     "lobby.change_deck",
     "lobby.sideboard"

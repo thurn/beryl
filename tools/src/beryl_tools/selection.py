@@ -86,6 +86,7 @@ CHOSEN_ENV = "BERYL_CHECKS"
 # kept file outside any check are too (`body_reasons`).
 COMMON_HARNESS = (
     "ui/scripts/capture.mjs",
+    "ui/scripts/phone-faults.mjs",
     "ui/scripts/audit.mjs",
     "ui/index.html",
     "ui/package.json",

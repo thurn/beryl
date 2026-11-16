@@ -200,19 +200,27 @@ await check(
 await check(
     "manual table drag through stack, graveyard, exile and viewer",
     async (page) => {
-        await startTable(page, "24 Island");
-        const slot = (await tableView()).table.orders.you.hand.at(-1);
+        const note = "Remember this land";
+        const noteFirstLand = (view) => ({
+            note: { ...ref(view, view.battlefield[0]), note },
+        });
+        await startTable(page, "24 Island", [
+            move("battlefield"),
+            noteFirstLand,
+        ]);
+        const [land] = (await tableView()).battlefield;
         const stack = await stagePoint(page, 1390, 400);
         const afterStack = await drag(
             page,
-            await point(card(page, slot), 0.6, 0.12),
+            await point(card(page, land)),
             stack,
         );
-        const stacked = afterStack.objects.find((o) => o.zone === "stack").slot;
+        const stacked = afterStack.objects.find((o) => o.zone === "stack");
+        assert.equal(stacked.note, note);
         const grave = await stagePoint(page, 180, 825);
         const afterGrave = await drag(
             page,
-            await point(card(page, stacked)),
+            await point(card(page, stacked.slot)),
             grave,
         );
         assert.equal(afterGrave.players.you.graveyard.length, 1);
@@ -235,10 +243,22 @@ await check(
         );
         await page.keyboard.up("Shift");
         assert.equal(afterField.table.orders.you.exile.length, 0);
-        assert.equal(
-            afterField.objects.find((o) => o.zone === "battlefield").face,
-            "down",
+        const returned = afterField.objects.find(
+            (o) => o.zone === "battlefield",
         );
+        assert.equal(returned.face, "down");
+        assert.equal(returned.note, note);
+        await page.keyboard.press("Escape");
+        await page
+            .getByRole("dialog", { name: "Your exile" })
+            .waitFor({ state: "hidden" });
+        const left = await drag(
+            page,
+            await point(card(page, returned.slot)),
+            grave,
+        );
+        const discarded = left.objects.find((o) => o.zone === "graveyard");
+        assert.equal(discarded.note ?? null, null);
     },
     live,
 );
