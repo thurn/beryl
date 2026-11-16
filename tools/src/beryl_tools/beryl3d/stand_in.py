@@ -39,6 +39,9 @@ PROMPT_LIMIT_MS = 60_000
 # How long the game may sit with no prompt and nothing changing on screen, on the app's clock,
 # before the run fails: the opponent answers in moments, so this is a stall.
 STALL_LIMIT_MS = 120_000
+# How long, on the app's clock, a card may rest in `nowhere` while a prompt is open before the
+# run fails: longer than any step that moves a card away takes to play.
+NOWHERE_GRACE_MS = 1_000
 # The states a pointer gives an element, which a press changes before its answer is taken.
 POINTER_STATES: frozenset[str] = frozenset({"hovered", "held"})
 # How many prompts are answered before the app is quit and started again.
@@ -163,15 +166,26 @@ def prompt_key(tree: Tree) -> tuple[str, ...]:
 
 
 def nowhere(place: str) -> bool:
-    """Whether `place` is `nowhere`, where a card goes that has left every zone of the game: a
-    resumed client never shows one there, so it is no part of the board."""
+    """Whether `place` is `nowhere`, where a card goes that has left every zone of the game."""
     return place.split(".")[0] == "nowhere"
+
+
+def resting_nowhere(tree: Tree) -> list[Element]:
+    """The cards the tree shows at rest in `nowhere`. A card that has left every zone may be
+    drawn there while a step moves it away, but none should stay: the client drops the object
+    once its script has played."""
+    return [
+        e
+        for e in tree.elements
+        if e.role == "card" and nowhere(e.place) and "moving" not in e.states
+    ]
 
 
 def board(tree: Tree) -> Counter[str]:
     """What must be the same after a resume: the life totals and pile counts (players and
     texts), and each card by its name, or its id when it is face down, and place, leaving out
-    cards `nowhere`. The tree shows no turn number, so the cards in each zone stand for it.
+    the faces in the Revealed Cards pile (place `revealed`), which a resumed client starts
+    without. The tree shows no turn number, so the cards in each zone stand for it.
     """
     seen: Counter[str] = Counter()
     for element in tree.elements:
@@ -181,7 +195,7 @@ def board(tree: Tree) -> Counter[str]:
         )
         if element.role == "player" or counted:
             seen[f"{element.role} {element.name}"] += 1
-        elif element.role == "card" and element.place and not nowhere(element.place):
+        elif element.role == "card" and element.place and element.place != "revealed":
             seen[f"card {element.name or '#' + str(element.id)} {element.place}"] += 1
     return seen
 
@@ -345,6 +359,8 @@ def play(running: Running, played: Played, stop_at: int | None) -> Tree:
         if answer is None:
             time.sleep(POLL_S)
             continue
+        if resting_nowhere(tree):
+            check_nowhere(running)
         if stop_at is not None and played.prompts >= stop_at:
             return tree
         played.log(tree, answer)
@@ -352,6 +368,23 @@ def play(running: Running, played: Played, stop_at: int | None) -> Tree:
         played.prompts += 1
         wait_change(running, key)
     raise StandInError(f"the game did not end within {RUN_LIMIT_S} s")
+
+
+def check_nowhere(running: Running) -> None:
+    """Fails the run when a card still rests in `nowhere` after the table has had
+    `NOWHERE_GRACE_MS` of the app's clock to finish what it was playing."""
+    first = running.tree()
+    tree = first
+    while tree.clock_ms - first.clock_ms < NOWHERE_GRACE_MS:
+        time.sleep(POLL_S)
+        tree = running.tree()
+    left = resting_nowhere(tree)
+    if left:
+        cards = ", ".join(e.locator for e in left)
+        raise StandInError(
+            f"{cards} rested in nowhere with a prompt open, where no card should stay:\n"
+            + tree.text
+        )
 
 
 def wait_change(running: Running, before: tuple[str, ...]) -> None:

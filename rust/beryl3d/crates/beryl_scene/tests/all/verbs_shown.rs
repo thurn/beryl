@@ -8,8 +8,9 @@ use beryl_protocol::protocol::{CardHandling, Facing, ObjectId, ObjectView, Side,
 use beryl_protocol::script::{Act, Arrow, Curve, Fact, Span, Step, StepTiming, Subject, Verb};
 use beryl_scene::agent::checks::duplicates;
 use beryl_scene::agent::steps::{no_jumps, rest_equals_placement, step_times};
+use beryl_scene::agent::tree;
 use beryl_scene::agent::{Context, Layout};
-use beryl_scene::frame::{Frame, REVEALED_FACE, Role, StateBits};
+use beryl_scene::frame::{Frame, Place, REVEALED_FACE, Role, StateBits};
 use beryl_scene::input::{Insets, Size};
 use beryl_scene::play::Show;
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
@@ -267,6 +268,49 @@ fn a_showcased_card_lies_where_it_was_and_its_face_joins_the_pile() {
         depths.windows(2).all(|pair| pair[0] > pair[1]),
         "{depths:?}"
     );
+}
+
+/// After a card is revealed and the table comes to rest, its face in the Revealed Cards pile is
+/// in the place `revealed`, and no card element is in the zone `nowhere`, where a card goes
+/// that has left every zone. `just b3d stand-in` once saw the opponent's searched-for card's
+/// face printed as `nowhere.yours`, which read as an object the client had failed to drop.
+#[test]
+fn a_revealed_face_rests_in_the_revealed_pile_and_no_card_in_nowhere() {
+    let (start, after, slots) = revealed();
+    let showcase = data_timing("showcase", None);
+    let mut show = played(&start, &after, vec![showcase; slots.len()]);
+    let mut buffer = empty_frame();
+    let frame = frame(&mut show, &mut buffer, 20_000 * MS);
+    let face = REVEALED_FACE + u32::from(slots[0].0);
+    let index = (frame.resolved.iter())
+        .position(|element| element.role == Role::Card && element.id.0 == face)
+        .expect("the face is drawn");
+    let line = tree::line(&frame, u32::try_from(index).expect("few elements"));
+    assert!(line.contains(" revealed "), "{line}");
+    let printed = tree::tree(
+        &frame,
+        &tree::TreeOptions {
+            within: Some("revealed".to_owned()),
+            ..tree::TreeOptions::default()
+        },
+    )
+    .expect("`revealed` is a place");
+    assert_eq!(printed.matches("card ").count(), slots.len(), "{printed}");
+    let nowhere: Vec<String> = (0..frame.resolved.len())
+        .filter(|&index| {
+            let element = &frame.resolved[index];
+            element.role == Role::Card
+                && matches!(
+                    element.place,
+                    Place::Card {
+                        zone: ZoneName::Nowhere,
+                        ..
+                    }
+                )
+        })
+        .map(|index| tree::line(&frame, u32::try_from(index).expect("few elements")))
+        .collect();
+    assert!(nowhere.is_empty(), "{nowhere:#?}");
 }
 
 #[test]

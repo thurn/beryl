@@ -88,9 +88,35 @@ def test_the_board_counts_life_piles_and_cards_by_place_not_position() -> None:
     assert stand_in.board(moved) == board
     hurt = stand_in.parse_tree(DISCARD.replace('"You 20"', '"You 17"'))
     assert stand_in.board(hurt) != board
-    gone = stand_in.parse_tree(
+    revealed = stand_in.parse_tree(
         DISCARD.replace(
-            "  layer\n", '    card "Portable Hole" #9 nowhere.yours 1,1 2x2\n  layer\n'
+            "  layer\n", '    card "Portable Hole" #2097161 revealed 1,1 2x2\n  layer\n'
         )
     )
-    assert stand_in.board(gone) == board
+    assert stand_in.board(revealed) == board
+
+
+def test_a_card_at_rest_in_nowhere_is_found_but_not_one_moving_away() -> None:
+    assert stand_in.resting_nowhere(stand_in.parse_tree(DISCARD)) == []
+    left = stand_in.parse_tree(
+        DISCARD.replace(
+            "  layer\n", '    card "Map Token" #512 nowhere.yours 1,1 2x2\n  layer\n'
+        )
+    )
+    assert [e.locator for e in stand_in.resting_nowhere(left)] == [
+        'card "Map Token" #512'
+    ]
+    leaving = stand_in.parse_tree(
+        DISCARD.replace(
+            "  layer\n",
+            '    card "Map Token" #512 nowhere.yours 1,1 2x2 moving(vanish 40%)\n'
+            "  layer\n",
+        )
+    )
+    assert stand_in.resting_nowhere(leaving) == []
+    revealed = stand_in.parse_tree(
+        DISCARD.replace(
+            "  layer\n", '    card "Portable Hole" #2097161 revealed 1,1 2x2\n  layer\n'
+        )
+    )
+    assert stand_in.resting_nowhere(revealed) == []

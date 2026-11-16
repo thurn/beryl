@@ -2491,7 +2491,8 @@ game
 
 - **Every line names its element's id**, so every line, pasted back, locates
   exactly its own element. A card's place is its zone, then `yours` or `theirs`
-  (except on the stack), then its battlefield row. An element of the flat layer
+  (except on the stack), then its battlefield row. A revealed card's face in the
+  Revealed Cards pile is in the place `revealed`. An element of the flat layer
   has no place. A name with a quote or a backslash in it is escaped with a
   backslash.
 - **States** are words from a closed list: `interactive`, `tapped`, `face-down`,
@@ -2663,7 +2664,9 @@ just b3d smoke
   checks that the game resumed with the same board, then plays to the game over
   screen and prints the prompts answered, the outcome and the sounds the frame
   logs counted. It fails when a prompt stays open for 60 seconds of the app's
-  clock, a `live` request fails or the game never ends.
+  clock, a card rests in `nowhere` (where a card goes that has left every zone)
+  for a second of the app's clock with a prompt open, a `live` request fails or
+  the game never ends.
 
 Release builds contain neither the socket nor the options that replay, drive,
 load, slow or play the app for the viewer.

@@ -78,12 +78,13 @@ pub struct Element {
 }
 
 impl Element {
-    /// The zone a card is in; `None` for an element of the flat layer.
+    /// The zone a card is in; `None` for an element of the flat layer or a face in the Revealed
+    /// Cards pile.
     #[must_use]
     pub fn zone(&self) -> Option<ZoneName> {
         match self.place {
             Place::Card { zone, .. } => Some(zone),
-            Place::Layer => None,
+            Place::Layer | Place::Revealed => None,
         }
     }
 

@@ -85,11 +85,14 @@ pub fn locator_of(frame: &Frame, index: u32) -> String {
 }
 
 /// The word the tree uses for a place: the zone, then whose side unless it is the stack, then
-/// the battlefield row, joined by dots (`battlefield.yours.lands`). Empty for the flat layer.
+/// the battlefield row, joined by dots (`battlefield.yours.lands`); `revealed` for a face in the
+/// Revealed Cards pile. Empty for the flat layer.
 #[must_use]
 pub fn place_word(place: Place) -> String {
-    let Place::Card { zone, side, row } = place else {
-        return String::new();
+    let (zone, side, row) = match place {
+        Place::Card { zone, side, row } => (zone, side, row),
+        Place::Revealed => return String::from(REVEALED),
+        Place::Layer => return String::new(),
     };
     let mut out = String::from(zone_word(zone));
     if zone != ZoneName::Stack {
@@ -106,6 +109,9 @@ pub fn place_word(place: Place) -> String {
 /// The place `word` names, as `place_word` writes it.
 #[must_use]
 pub fn place_from_word(word: &str) -> Option<Place> {
+    if word == REVEALED {
+        return Some(Place::Revealed);
+    }
     let mut parts = word.split('.');
     let first = parts.next()?;
     let zone = ZONES.into_iter().find(|&zone| zone_word(zone) == first)?;
@@ -130,6 +136,9 @@ pub fn place_from_word(word: &str) -> Option<Place> {
     }
     Some(Place::Card { zone, side, row })
 }
+
+/// The tree's word for the Revealed Cards pile.
+const REVEALED: &str = "revealed";
 
 const ZONES: [ZoneName; 9] = [
     ZoneName::Library,

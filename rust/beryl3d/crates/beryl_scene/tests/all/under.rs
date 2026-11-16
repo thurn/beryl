@@ -140,7 +140,9 @@ fn an_artifact_with_a_mana_ability_stands_among_the_lands_after_them() {
     let placement = placed(&view);
     let row = |slot| match placement.get(slot).expect("every card has a place").place {
         Place::Card { row, .. } => row,
-        place @ Place::Layer => panic!("a permanent rests in a row, not {place:?}"),
+        place @ (Place::Layer | Place::Revealed) => {
+            panic!("a permanent rests in a row, not {place:?}")
+        }
     };
     assert_eq!(row(rock), Some(RowName::Lands));
     assert_eq!(row(land), Some(RowName::Lands));

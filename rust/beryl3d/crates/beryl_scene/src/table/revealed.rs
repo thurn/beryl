@@ -4,7 +4,7 @@
 //! placed relative to the camera, so that it keeps its size and place at any window shape. Each
 //! face is a second card element beside the card's own, which lies where the table has it.
 
-use beryl_protocol::protocol::{ObjectId, ObjectView, Side, ZoneName};
+use beryl_protocol::protocol::{ObjectId, ObjectView};
 use glam::{Quat, Vec2};
 
 use super::look::{Dress, Look};
@@ -73,11 +73,7 @@ impl Table {
                 state: 0,
                 interactive: false,
             };
-            let place = Place::Card {
-                zone: ZoneName::Nowhere,
-                side: Side::You,
-                row: None,
-            };
+            let place = Place::Revealed;
             let id = ElementId(REVEALED_FACE + u32::from(slot.0));
             let name = shown.name.as_deref().unwrap_or("");
             self.write_look(name, (id, Role::Card, 1), place, &look, back, builder);

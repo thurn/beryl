@@ -132,8 +132,10 @@ impl Role {
     }
 }
 
-/// Where an element is: in the flat layer, or for a card its zone, whose side of the table it
-/// is on, and its battlefield row where it has one.
+/// Where an element is: in the flat layer, for a card its zone, whose side of the table it is
+/// on and its battlefield row where it has one, or the Revealed Cards pile for the second card
+/// element that shows a revealed card's face there (`table::revealed`). The face is no game
+/// object of its own, so it names no zone: the card itself lies where the table has it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Place {
     Layer,
@@ -142,6 +144,7 @@ pub enum Place {
         side: Side,
         row: Option<RowName>,
     },
+    Revealed,
 }
 
 /// An element's states, one bit each.
