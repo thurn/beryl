@@ -237,7 +237,8 @@ pub fn start(input: &ScreenIn) -> Element {
         .justify_content(Justify::Center)
         .child(panel)
         .child(corner())
-        .shortcut("Enter", enter);
+        .shortcut("Enter", enter)
+        .shortcut("G", Press::Open(Screen::Gallery));
     // In a tools build of the app, which lists the recordings, the key T opens the testing
     // screen.
     if input.recordings.is_empty() {

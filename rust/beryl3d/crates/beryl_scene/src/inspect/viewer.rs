@@ -14,11 +14,12 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::revealed::{REVEALED, RevealedFace};
+use crate::data::space::flat::gallery as metrics;
 use crate::element::{
-    Align, Anchor, Dismiss, Element, Overflow, Position, Press, Shown, TextAlign, Track, Viewed,
-    column, row, text,
+    Align, Anchor, Dismiss, Element, Overflow, Press, Shown, TextAlign, Track, Viewed, column, row,
+    text,
 };
-use crate::faces::FaceList;
+use crate::faces::{CARD_BACK, FaceList};
 use crate::frame::Role;
 use crate::hud::piles::pile_cards;
 use crate::input::{FaceId, FaceSize, Size};
@@ -182,58 +183,60 @@ fn face_box(face: &RevealedFace) -> Element {
     element
 }
 
-/// The web gallery's scry sample (`ScryOverlay` in `ui/src/screens/Scry.tsx`): the overlay
-/// shell with two card backs and two faces fanned in its choice column and the spell that scries
-/// beside it, drawn flat from `faces` where they have the cards.
+/// The web gallery's Scry sample, as an embedded preview of the overlay's zones,
+/// source card and action.
 #[must_use]
-pub fn scry_sample(window: Size, faces: Option<&FaceList>) -> Element {
-    let find = |name: &str| faces.and_then(|faces| faces.find(name));
-    // Each card's centre, width and face, from `ScryOverlay`; none for a card back.
-    let cards: [(Vec2, f32, Option<FaceId>, &str); 4] = [
-        (Vec2::new(420.0, 174.0), 220.0, None, "back"),
-        (Vec2::new(482.0, 171.0), 220.0, None, "back"),
-        (
-            Vec2::new(715.0, 229.0),
-            273.0,
-            find("Counterspell"),
-            "Counterspell",
-        ),
-        (Vec2::new(315.0, 269.5), 297.0, find("Island"), "Island"),
-    ];
-    let zone = Element::new(Role::Region)
-        .name("scry zone")
-        .width(size::OVERLAY_MAIN)
-        .height(size::VIEWER_HEIGHT)
-        .children(cards.into_iter().map(|(centre, width, face, name)| {
-            let height = width * CARD_HEIGHT / CARD_WIDTH;
-            let mut card = Element::new(Role::Region)
-                .name(name)
-                .position(Position::Absolute)
-                .inset([
-                    Some(centre.y - height / 2.0),
-                    None,
-                    None,
-                    Some(centre.x - width / 2.0),
-                ])
-                .width(width)
-                .height(height)
-                .background(color::SURFACE_RAISED)
-                .radius(size::PANEL_RADIUS);
-            card.shows = face.map(|face| Shown::Face(face, FaceSize::Board));
-            card
-        }));
-    let mut aside = card_box("Preordain")
-        .width(size::OVERLAY_SIDE)
-        .height(size::OVERLAY_SIDE * CARD_HEIGHT / CARD_WIDTH);
-    aside.shows = find("Preordain").map(|face| Shown::Face(face, FaceSize::Board));
-    overlay(
-        window,
-        (
-            "Scry",
-            Some("Drag cards to put them on the top or bottom of your library."),
-        ),
-        Some(aside),
-        zone,
-        vec![button("Done")],
-    )
+pub fn scry_sample(faces: &FaceList) -> Element {
+    let find = |name| faces.find(name).expect("the gallery lists the scry face");
+    let card = |id: FaceId, name, width| {
+        let mut card = card_box(name)
+            .width(width)
+            .height(width * CARD_HEIGHT / CARD_WIDTH)
+            .background(color::SURFACE);
+        card.shows = Some(Shown::Face(id, FaceSize::Board));
+        card
+    };
+    let zone = |label: &str, cards: Vec<Element>| {
+        column()
+            .align_items(Align::Center)
+            .gap(space::S)
+            .child(row().gap(space::S).children(cards))
+            .child(text(label).style(type_style::OVERLAY_INSTRUCTION))
+    };
+    let bottom = zone(
+        "Bottom",
+        vec![
+            card(CARD_BACK, "First card back", metrics::SCRY_CARD),
+            card(CARD_BACK, "Second card back", metrics::SCRY_CARD),
+        ],
+    );
+    let top = zone(
+        "Top",
+        vec![
+            card(find("Island"), "Island", metrics::SCRY_CARD),
+            card(find("Quell"), "Quell", metrics::SCRY_CARD),
+        ],
+    );
+    let choice = column()
+        .name("choice")
+        .align_items(Align::Center)
+        .gap(space::M)
+        .child(text("Scry").style(type_style::OVERLAY_TITLE))
+        .child(
+            text("Drag cards to put them on the top or bottom of your library.")
+                .style(type_style::OVERLAY_INSTRUCTION)
+                .text_align(TextAlign::Center),
+        )
+        .child(row().gap(space::M).wrap(true).children([bottom, top]))
+        .child(crate::widgets::primary("Done"));
+    row()
+        .name("overlay")
+        .padding(space::L)
+        .gap(space::L)
+        .wrap(true)
+        .align_items(Align::Center)
+        .justify_content(crate::element::Justify::Center)
+        .background(color::BACKDROP)
+        .child(choice)
+        .child(card(find("Foresee"), "Foresee", metrics::SCRY_SOURCE))
 }

@@ -15,8 +15,8 @@ use std::cell::Cell;
 use beryl_scene::input::IconCell;
 use beryl_scene::widgets::IconId;
 use beryl_scene::widgets::icons::{
-    BUG, CLOSE, FULL_CONTROL, GEAR, LOG, MINUS, PASS_ON, PHASES, PLUS, SPEAKER, SPEAKER_OFF, STEPS,
-    STEPS_OUTLINED, UNDO, WHOLE,
+    BUG, CLOSE, FULL_CONTROL, GEAR, LOG, MINUS, PASS_ON, PHASE_SIDE, PHASES, PLUS, SPEAKER,
+    SPEAKER_OFF, STEPS, STEPS_OUTLINED, UNDO, WHOLE,
 };
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, Pixmap, Stroke, Transform};
 
@@ -71,8 +71,6 @@ const BOX_256: [f32; 4] = [0.0, 0.0, 256.0, 256.0];
 /// The size of an icon button's glyph (`.icon-button > svg`, icon-button.css) and of a step
 /// stop (`.step-icon`, phase-tracker.css).
 const BUTTON: u16 = 22;
-/// The size of a phase icon (`.phase-icon`, phase-tracker.css).
-const PHASE: u16 = 32;
 /// The size of full control's mark (`.full-control svg`, controls.css).
 const FULL_CONTROL_SIZE: u16 = 28;
 
@@ -139,7 +137,7 @@ const fn phase_bare(data: &'static str, ink: f32) -> Shape {
 const fn phase(icon: IconId, shapes: &'static [Shape]) -> Artwork {
     Artwork {
         icon,
-        size: PHASE,
+        size: PHASE_SIDE,
         view: BOX_24,
         shapes,
     }

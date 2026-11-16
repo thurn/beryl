@@ -40,6 +40,10 @@ fn page(messages: Vec<FixtureMessage>) -> Page {
         width: 1440.0,
         height: 900.0,
     };
+    page_at(messages, size)
+}
+
+fn page_at(messages: Vec<FixtureMessage>, size: Size) -> Page {
     let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Desktop, size).unwrap();
     page.still();
     page
@@ -168,4 +172,108 @@ fn the_first_view_after_the_agents_shows_the_game() {
 fn the_start_screen_passes_the_checks_at_1440_by_900() {
     let mut page = no_game("random");
     page.check();
+}
+
+fn gallery(width: f32, height: f32) -> Page {
+    page_at(
+        vec![FixtureMessage::Event {
+            event: OPEN.to_owned(),
+            payload: "gallery".into(),
+        }],
+        Size { width, height },
+    )
+}
+
+fn scroll_gallery(page: &mut Page, distance: f32) {
+    use beryl_scene::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
+    use glam::Vec2;
+
+    page.give_input(Input::Pointer(Pointer {
+        kind: PointerKind::Mouse,
+        phase: PointerPhase::Wheel,
+        position: Vec2::new(720.0, 450.0),
+        button: Button::None,
+        wheel: Vec2::new(0.0, -distance),
+        id: 0,
+        modifiers: Modifiers::default(),
+    }));
+    page.still();
+}
+
+#[test]
+fn the_gallery_contains_every_section_and_scrolls_to_the_command_list() {
+    let mut page = gallery(1440.0, 900.0);
+    let visited = agent::tree(
+        page.frame(),
+        &TreeOptions {
+            full: true,
+            ..TreeOptions::default()
+        },
+    )
+    .unwrap();
+    for heading in [
+        "Foundations",
+        "Actions & status",
+        "Player & zones",
+        "Cards & states",
+        "Combat & stack",
+        "Scry overlay",
+        "Manual table prompts",
+        "Context menus",
+        "Command list",
+    ] {
+        assert!(
+            visited.contains(&format!("text \"{heading}\"")),
+            "{heading}"
+        );
+    }
+    let last = "button \"No matches\"";
+    for (width, height) in [
+        (1440.0, 900.0),
+        (1600.0, 900.0),
+        (1920.0, 1080.0),
+        (2560.0, 1080.0),
+    ] {
+        let mut page = gallery(width, height);
+        page.check();
+        assert!(!page.find(last).interactive);
+        scroll_gallery(&mut page, 10_000.0);
+        assert!(page.find(last).interactive);
+        page.check();
+    }
+}
+
+#[test]
+fn opening_the_gallery_from_start_turns_off_music() {
+    let mut page = no_game("random");
+    assert!(
+        std::iter::from_fn(|| page.next_request())
+            .any(|r| r == Request::Music(Some(beryl_scene::screens::Music::Menu)))
+    );
+
+    page.chord("G");
+    page.still();
+
+    page.find("region \"gallery\"");
+    assert!(std::iter::from_fn(|| page.next_request()).any(|r| r == Request::Music(None)));
+}
+
+#[test]
+fn examples_open_their_menu_and_command_preview() {
+    let mut page = gallery(1440.0, 900.0);
+    scroll_gallery(&mut page, 10_000.0);
+    page.press("button \"Bottom-right corner\"");
+    page.still();
+    page.find("menuitem \"Keep top card revealed\"");
+    page.check();
+
+    page.chord("Escape");
+    page.still();
+    assert!(
+        page.try_find("menuitem \"Keep top card revealed\"")
+            .is_err()
+    );
+    page.press("button \"No matches\"");
+    scroll_gallery(&mut page, 10_000.0);
+    page.find("text \"No matching commands\"");
 }

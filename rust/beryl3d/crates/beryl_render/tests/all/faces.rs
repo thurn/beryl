@@ -275,7 +275,9 @@ fn one_full_size_face_is_uploaded_a_frame_even_while_animating() {
                 .upload_waiting(wake)
                 .map(|ready| match ready {
                     AssetReady::Face { size, .. } => size,
-                    AssetReady::Glyphs { .. } | AssetReady::Icons { .. } => {
+                    AssetReady::Glyphs { .. }
+                    | AssetReady::Icons { .. }
+                    | AssetReady::GalleryFace { .. } => {
                         panic!("an atlas page was uploaded")
                     }
                 })

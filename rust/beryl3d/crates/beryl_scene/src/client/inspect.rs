@@ -58,6 +58,7 @@ impl Client {
             sheet: self.sheet,
             agents: &self.agents,
             start: &self.start,
+            gallery: self.gallery,
             recordings: &self.recordings,
             seat: self.seat,
             bug: &self.bug.form,

@@ -21,14 +21,14 @@ use crate::hud::counts::CountFloats;
 use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
 use crate::hud::rows::RowCounts;
-use crate::input::{AssetReady, FaceId, GlyphKey, Input, Lifecycle, Tier};
+use crate::input::{FaceId, GlyphKey, Input, Lifecycle, Tier};
 use crate::layout::{self, Layer};
 use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
 use crate::pointer::LetGo;
 use crate::pointer::rows::RowGesture;
 use crate::prompts;
-use crate::screens::{self, Music, SEED, Screen, Sheet, StartForm};
+use crate::screens::{self, GalleryState, Music, SEED, Screen, Sheet, StartForm};
 use crate::settings::Settings;
 use crate::table::{Table, Window};
 use crate::widgets::Fields;
@@ -97,6 +97,9 @@ pub struct Client {
     /// The screen the flat layer shows. A recording or a game is fed to the client on the game
     /// screen, which it starts on.
     screen: Screen,
+    gallery: GalleryState,
+    /// The static samples have their own face list, loaded only when the gallery opens.
+    gallery_faces: Option<Faces>,
     /// The sheet open over the screen, if any.
     sheet: Option<Sheet>,
     settings: Settings,
@@ -193,6 +196,8 @@ impl Client {
             row_counts: RowCounts::default(),
             row_gesture: RowGesture::default(),
             screen: Screen::Game,
+            gallery: GalleryState::default(),
+            gallery_faces: None,
             sheet: None,
             settings: Settings::default(),
             agents: Vec::new(),
@@ -241,7 +246,6 @@ impl Client {
     /// Takes a session update, a pointer or key event, a new surface or another input. An
     /// input has no time of its own: what it starts begins at the `now` of the next `frame`.
     /// This is where screens are rebuilt and laid out, and where text is shaped.
-    #[expect(clippy::too_many_lines, reason = "one arm for each kind of input")]
     pub fn handle(&mut self, input: Input) {
         match input {
             Input::Update(update) => {
@@ -325,16 +329,7 @@ impl Client {
             Input::Cards(records) => {
                 *self.show.faces_mut() = Faces::new(FaceList::from_records(&records));
             }
-            Input::Assets(AssetReady::Face { face, size, layer }) => {
-                self.show.faces_mut().arrived(face, size, layer);
-            }
-            Input::Assets(AssetReady::Glyphs { page, glyphs }) => {
-                self.layer.glyphs_mut().add(page, &glyphs);
-                self.show.badges_mut().add(page, &glyphs);
-            }
-            Input::Assets(AssetReady::Icons { page, cells }) => {
-                self.layer.icons_mut().add(page, &cells);
-            }
+            Input::Assets(asset) => self.asset_ready(asset),
             Input::Surface {
                 size,
                 scale,
@@ -429,7 +424,11 @@ impl Client {
         builder.placement_work(self.show.table().take_placed(), self.show.take_compiled());
         // The bug report is drawn whether or not the table has settled (`bug`).
         self.open = reporting || self.show.settled();
-        let faces = Some(self.show.faces());
+        let faces = if self.screen == Screen::Gallery {
+            self.gallery_faces.as_ref()
+        } else {
+            Some(self.show.faces())
+        };
         (self.layer).write_with(&mut builder, self.show.table().camera(), self.open, faces);
         builder.finish();
         // The element a press under the mouse would reach is drawn `hovered`. A press on a card
@@ -483,7 +482,11 @@ impl Client {
             let glyphs = self.layer.glyphs_mut();
             (self.show.badges_mut()).rescale(window.scale, glyphs);
         }
-        self.place_shown();
+        if self.screen == Screen::Gallery {
+            self.show_screen();
+        } else {
+            self.place_shown();
+        }
     }
 
     /// Carries out what a press on an element means: a command for the session, a request of
@@ -496,8 +499,12 @@ impl Client {
             Press::Open(screen) => {
                 self.first_view_opens = None;
                 self.screen = screen;
+                self.gallery = GalleryState::default();
+                if screen == Screen::Gallery {
+                    self.gallery_faces
+                        .get_or_insert_with(|| Faces::new(screens::gallery_faces()));
+                }
                 self.set_sheet(None);
-                self.show_screen();
             }
             Press::Sheet(sheet) => self.set_sheet(sheet),
             Press::Setting(setting) => self.set(setting),
@@ -535,9 +542,23 @@ impl Client {
             Press::Dismiss(Dismiss::Viewer) => self.view(None),
             Press::Bug(press) => self.bug_press(press),
             Press::Dismiss(Dismiss::Revealed) => self.dismiss_revealed(),
-            // No screen opens a menu yet, so there is nothing for these to act on: the screen
-            // that opens one gives them their arms.
-            Press::Menu(..) | Press::Dismiss(Dismiss::Menu) => {}
+            Press::GalleryMenu(kind) => {
+                let at = self.owned.mouse.unwrap_or_else(|| {
+                    glam::Vec2::new(self.window.size.width, self.window.size.height) / 2.0
+                });
+                self.gallery.menu = Some((kind, at));
+                self.show_screen();
+            }
+            Press::GalleryQuery(query) => {
+                self.gallery.query = query;
+                self.show_screen();
+            }
+            Press::Menu(..) => {}
+            Press::Dismiss(Dismiss::Menu) => {
+                if self.gallery.menu.take().is_some() {
+                    self.show_screen();
+                }
+            }
         }
     }
 
@@ -630,19 +651,6 @@ impl Client {
     #[must_use]
     pub fn last_frame(&self) -> &Frame {
         &self.frame
-    }
-
-    /// The match's faces, which the host's asset workers prepare: each arrives as an
-    /// `AssetReady::Face` naming its index in this list.
-    #[must_use]
-    pub fn faces(&self) -> &FaceList {
-        self.show.faces().list()
-    }
-
-    /// The layer each face has landed in at each size.
-    #[must_use]
-    pub fn face_layers(&self) -> &Faces {
-        self.show.faces()
     }
 
     /// The pointer on the table, for tests that read the held card's lean.

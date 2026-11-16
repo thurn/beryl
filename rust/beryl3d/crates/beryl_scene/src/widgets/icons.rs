@@ -38,6 +38,9 @@ pub const STEPS_OUTLINED: [IconId; 12] = steps(1);
 /// (`ui/src/components/Controls.tsx`): beginning, first main, combat, second main and end.
 pub const PHASES: [IconId; 5] = [IconId(35), IconId(36), IconId(37), IconId(38), IconId(39)];
 
+/// The atlas size of a phase tracker icon, in logical points.
+pub const PHASE_SIDE: u16 = 32;
+
 /// How many icons there are: every id is below this.
 pub const COUNT: u16 = 41;
 

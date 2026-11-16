@@ -237,6 +237,8 @@ pub enum AssetReady {
         size: FaceSize,
         layer: u16,
     },
+    /// A component gallery sample face is in its board-size texture array.
+    GalleryFace { face: FaceId, layer: u16 },
     /// Glyphs are in a page of the atlas.
     Glyphs { page: u16, glyphs: Vec<GlyphCell> },
     /// Icons are in a page of the atlas.

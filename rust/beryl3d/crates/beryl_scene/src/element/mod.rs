@@ -62,6 +62,10 @@ pub enum Press {
     Seat(Side),
     /// A row of an open menu, counting from 0 over all its groups.
     Menu(MenuId, u16),
+    /// Open one of the gallery's example context menus.
+    GalleryMenu(crate::screens::GalleryMenu),
+    /// Show one of the gallery's example command searches, or close its preview.
+    GalleryQuery(Option<crate::screens::GalleryQuery>),
     /// Give the keys to an element, such as a text field.
     Focus(ElementId),
     /// The text field `ElementId` now holds this text: an edit made in it, which
@@ -135,6 +139,8 @@ pub enum Anchor {
 pub enum Shown {
     /// A card face, drawn flat.
     Face(FaceId, FaceSize),
+    /// A tapped card face, drawn flat with its long side horizontal.
+    TappedFace(FaceId, FaceSize),
     /// The scene object itself, placed in the element's box, so that it looks and moves as it
     /// does on the table.
     Object(Subject),

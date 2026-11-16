@@ -205,6 +205,7 @@ mod milestone_three {
                 fair: false,
                 confirming: false,
             },
+            gallery: screens::GalleryState::default(),
             recordings: &[],
             seat: Side::You,
             bug: &BUG,

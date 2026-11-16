@@ -557,6 +557,14 @@ impl Page {
         for press in self.recording.opens() {
             self.client.press(&press);
         }
+        if self.client.showing_gallery() {
+            let ready: Vec<_> = self.client.faces().all_ready().collect();
+            for asset in ready {
+                if let AssetReady::Face { face, layer, .. } = asset {
+                    self.give(Input::Assets(AssetReady::GalleryFace { face, layer }));
+                }
+            }
+        }
         self.release();
         // After the first views, as the live app sends them once it has resumed a game, so
         // that a recording of a game stays on the game screen and one with no views shows the

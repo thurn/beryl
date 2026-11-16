@@ -8,6 +8,8 @@ use beryl_protocol::protocol::Status;
 
 use crate::command::Request;
 use crate::element::floats;
+use crate::faces::{FaceList, Faces};
+use crate::input::{AssetReady, FaceSize};
 use crate::layout::FloatLook;
 use crate::screens::{self, Screen, ScreenIn, Sheet};
 
@@ -27,12 +29,13 @@ impl Client {
             sheet: self.sheet,
             agents: &self.agents,
             start: &self.start,
+            gallery: self.gallery,
             recordings: &self.recordings,
             seat: self.seat,
             bug: &self.bug.form,
             fields: &self.fields,
             inspected: None,
-            faces: Some(self.show.faces().list()),
+            faces: Some(self.faces()),
             viewing: self.viewing.open,
             revealed: &self.viewing.revealed,
         };
@@ -65,6 +68,51 @@ impl Client {
         if music != self.music {
             self.music = music;
             self.requests.push_back(Request::Music(music));
+        }
+    }
+
+    /// The active screen's faces, which the host's asset workers prepare. A match's
+    /// layers arrive as `AssetReady::Face` and the gallery's as `AssetReady::GalleryFace`.
+    #[must_use]
+    pub fn faces(&self) -> &FaceList {
+        self.face_layers().list()
+    }
+
+    /// The layer each active face has landed in at each size.
+    #[must_use]
+    pub fn face_layers(&self) -> &Faces {
+        if self.screen == Screen::Gallery
+            && let Some(faces) = &self.gallery_faces
+        {
+            return faces;
+        }
+        self.show.faces()
+    }
+
+    /// Whether the active face list belongs to the gallery.
+    #[must_use]
+    pub fn showing_gallery(&self) -> bool {
+        self.screen == Screen::Gallery
+    }
+
+    /// Records where the host uploaded each face, glyph or icon the client can draw.
+    pub(super) fn asset_ready(&mut self, asset: AssetReady) {
+        match asset {
+            AssetReady::Face { face, size, layer } => {
+                self.show.faces_mut().arrived(face, size, layer);
+            }
+            AssetReady::GalleryFace { face, layer } => {
+                if let Some(faces) = &mut self.gallery_faces {
+                    faces.arrived(face, FaceSize::Board, layer);
+                }
+            }
+            AssetReady::Glyphs { page, glyphs } => {
+                self.layer.glyphs_mut().add(page, &glyphs);
+                self.show.badges_mut().add(page, &glyphs);
+            }
+            AssetReady::Icons { page, cells } => {
+                self.layer.icons_mut().add(page, &cells);
+            }
         }
     }
 

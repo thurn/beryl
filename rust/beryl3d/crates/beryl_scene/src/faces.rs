@@ -98,7 +98,7 @@ impl FaceList {
 
     /// Lists a plate face for each paragraph of each face's rules text that says a triggered
     /// or an activated ability.
-    fn add_plates(&mut self) {
+    pub(crate) fn add_plates(&mut self) {
         let sources = self.faces.len();
         for at in 0..sources {
             let source = FaceId(u16::try_from(at).expect("a match has under 2^16 faces"));
@@ -197,6 +197,21 @@ impl FaceList {
             };
             self.add(&face.images.large, names, &face.colors, printed, text);
         }
+    }
+
+    /// Adds a sample for the component gallery. Its image key has no Scryfall scan, so the
+    /// asset worker draws the frame from the supplied text and colors.
+    pub(crate) fn add_preview(&mut self, name: &str, colors: &str, text: PrintedText) {
+        self.add(
+            &format!("gallery/{name}"),
+            vec![name.to_owned()],
+            &colors
+                .chars()
+                .map(|color| color.to_string())
+                .collect::<Vec<_>>(),
+            None,
+            text,
+        );
     }
 
     /// Adds the face showing `image`, or adds `names` to the face already listed with it. A

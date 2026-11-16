@@ -13,6 +13,8 @@ mod table;
 mod testing;
 
 pub use bug_report::{BugForm, BugStage, CLICK, DESCRIPTION, span};
+pub(crate) use gallery::faces as gallery_faces;
+pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
 pub use start::{SEED, StartForm, in_progress, seed};
 
 pub use settings::{GEAR_INSET, gear};
@@ -106,6 +108,8 @@ pub struct ScreenIn<'a> {
     pub agents: &'a [AgentView],
     /// What the person has chosen on the start screen.
     pub start: &'a StartForm,
+    /// Which samples are open in the gallery.
+    pub gallery: GalleryState,
     /// The names of the recordings the testing screen lists, as the host listed them: none
     /// outside a tools build.
     pub recordings: &'a [String],
@@ -117,7 +121,7 @@ pub struct ScreenIn<'a> {
     pub fields: &'a Fields,
     /// The card the pointer is over that the inspector shows, if any (`inspect::inspector`).
     pub inspected: Option<&'a Inspected>,
-    /// The faces of the match, once its card records have arrived.
+    /// The faces of the match or, on the gallery screen, its stand-in cards.
     pub faces: Option<&'a FaceList>,
     /// The pile whose viewer is open, if any (`inspect::viewer`).
     pub viewing: Option<Viewed>,

@@ -620,7 +620,16 @@
     },
     "tooltip_delay": 500,
     "tooltip_gap": 8,
-    "menu_edge": 8
+    "menu_edge": 8,
+    "gallery": {
+      "width": 1380,
+      "chip": 76,
+      "small_card": 86,
+      "hand_card": 128,
+      "prompt_width": 336,
+      "scry_card": 154,
+      "scry_source": 184
+    }
   },
   "notices": {
     "turn": {

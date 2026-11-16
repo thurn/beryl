@@ -227,11 +227,14 @@ impl Layer {
                 let tint = faded(ink(node, state, look.tint), look.opacity);
                 Draw::icon(camera.layer_transform(at), tint, sprite)
             }
-            Some(Shown::Face(face, size)) => {
+            Some(Shown::Face(face, size) | Shown::TappedFace(face, size)) => {
                 let Some(faces) = look.faces else {
                     return;
                 };
-                let transform = camera.layer_transform(content);
+                let mut transform = camera.layer_transform(content);
+                if matches!(node.element.shows, Some(Shown::TappedFace(..))) {
+                    transform *= Affine3A::from_rotation_z(-std::f32::consts::FRAC_PI_2);
+                }
                 let Some(mut draw) = face_draw(faces, face, size, transform) else {
                     return;
                 };
