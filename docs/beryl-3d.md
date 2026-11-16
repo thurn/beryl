@@ -1190,12 +1190,15 @@ camera, how game objects are placed in it and how verbs move them.
 
 - **Units are millimetres.** A card is 63 by 88 and its corners have a 3
   millimetre radius, as printed cards do.
+
 - **The table is the plane `z = 0`.** `x` runs to the viewer's right, `y` away
   from the viewer toward the opponent, and `z` up toward the camera.
+
 - **Cards have real heights.** A card on the battlefield lies at `z = 0`. Each
   card in a pile lies 0.3 above the one below, so a 60-card library is 18
   millimetres tall and visibly shrinks as it is drawn from. A card in flight
   rises along an arc.
+
 - **A pile draws few records however tall it is.** Only its top card and the
   card under it are drawn as cards. The cards beneath keep their scene objects
   and resting poses, undrawn, so a card taken from inside the pile starts where
@@ -1205,23 +1208,41 @@ camera, how game objects are placed in it and how verbs move them.
   `pileName` names it, and its count is a float beside it. The piles stand in
   the corners of the window where the web interface's `PILES` puts them, at the
   web's size against a creature, on the point of the table under each.
+
 - **One camera per layout, with a fixed orientation.** The desktop layout and
   the phone layout each have one perspective camera, defined by its pitch, its
   vertical field of view and the point on the table it looks at. It never turns,
   and it never moves while the window keeps its shape. The one exception is the
   `shake` effect, which slides the picture of the table a few pixels for a sixth
   of a second (see [Effects](#effects)).
-- **The camera is fitted to Arena.** Its pitch and field of view are solved from
-  the corners of cards measured in Arena's recordings, so the table's
-  foreshortening matches the reference. Arena's battlefield cards are cropped
-  art tiles of unknown proportions, so `just b3d camera-fit` measures the art
-  frame printed on each tile and gives each its own aspect ratio: the sides of
-  untapped cards fix the pitch, and the slight turn of tapped cards fixes the
-  field of view. The fitted values are data: the desktop layout's camera, rows
-  and piles are `layout.desktop` in `data/beryl3d/space.json`, the hands and the
-  stack, which are placed relative to the camera, are `hand`, `opponent_hand`
-  and `stack`, contact shadows are `shadow`, and the card's size is `card`. A
-  build script turns the file into constants by one rule that names no key.
+
+- **The desktop camera is fitted to Arena.** Its pitch and field of view are
+  solved from the corners of cards measured in Arena's recordings, so the
+  table's foreshortening matches the reference. Arena's battlefield cards are
+  cropped art tiles of unknown proportions, so `just b3d camera-fit` measures
+  the art frame printed on each tile and gives each its own aspect ratio: the
+  sides of untapped cards fix the pitch, and the slight turn of tapped cards
+  fixes the field of view. The fitted values are data: the desktop layout's
+  camera, rows and piles are `layout.desktop` in `data/beryl3d/space.json`, the
+  hands and the stack, which are placed relative to the camera, are `hand`,
+  `opponent_hand` and `stack`, contact shadows are `shadow`, and the card's size
+  is `card`. A build script turns the file into constants by one rule that names
+  no key.
+
+  The phone camera is not fitted to Arena: `just video list` found no local
+  recordings when it was written. Its source is the web interface's portrait
+  layout instead. The fixed orientation (pitch 10 degrees from straight down,
+  field of view 24.29 degrees, both in `layout.phone` of `space.json`) was
+  chosen so that a tapped card in the far row keeps a 44-point square at 375 by
+  647\. Only the distance is fitted: the required rectangle must match the
+  battlefield rectangle that `phoneLayout` (`ui/src/mobile/layout.ts`) gives at
+  393 by 759, sized as `useViewport` (`ui/src/mobile/chrome.tsx`) sizes the
+  viewport. That is a column inside 8-point gutters, from the top safe inset
+  plus 48 points to the window's height less the hand band and 60 points. With
+  safe insets of 44 and 34 points the projected edges measure (8.01, 92.00,
+  384.99, 577.99) against the target (8, 92, 385, 578), each within 0.01 points.
+  The camera is framed to the safe area and does not turn; a window of another
+  shape moves it along its line of sight.
 
 A window of another shape does not turn the camera. It moves the camera along
 its own line of sight, nearer or farther:
@@ -4073,8 +4094,9 @@ launch tests  macOS pass, Windows pass, iOS pass, Android pass
   (`just ui-perf`).
 - **A UI Conventions entry is done** when its data records that Beryl 3D follows
   it, with the fixture that shows it.
-- **A launch test** starts the app on one platform with no window shown and
-  passes when the app draws a frame.
+- **A launch test** (the iOS and Android ones are not required in this epic)
+  starts the app on one platform with no window shown and passes when the app
+  draws a frame.
 - **Prompt shapes** are counted from the `prompt_shapes` of
   `data/beryl3d/screens.json`, which names one fixture for each shape of
   `ui/shapes.json`.
@@ -4243,6 +4265,13 @@ host and agent tool.
    read the frame log afterwards. It records no late frame in the Baseline tier.
 
 ### Phones
+
+The headless matrix of the exit check (393 by 759, 375 by 647 and 430 by 932,
+`just b3d test --phone-only`) is required. On 2026-11-16 the owner removed
+verification on the iOS Simulator, the Android emulator and phones from this
+epic, so the steps below are a manual checklist for whoever ships the hosts, not
+an exit check, and the headless smoke commands (`just b3d ios-smoke`,
+`android-smoke`, `ios-device`) are not run by it.
 
 1. Install on an iPhone and on an Android phone, and play a full game on each.
 2. Rotate the phone mid-animation, and send the app to the background and bring
