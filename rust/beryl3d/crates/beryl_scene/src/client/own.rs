@@ -12,6 +12,7 @@ use beryl_protocol::script::{Arrow, OwnStep, Subject, Verb};
 use glam::Vec2;
 
 use super::Client;
+use crate::hud::notices::NoticeFloats;
 use crate::light::Aim;
 use crate::play::PlacedLetGo;
 use crate::pose::Pose;
@@ -324,6 +325,33 @@ impl Client {
                 .iter()
                 .any(|marked| marked.on == Subject::Player { player })
         })
+    }
+
+    /// Compiles what the frame at `now`, in nanoseconds since the client started, needs of the
+    /// scripts to come (`Show::prepare`), and lays out the floats of the life totals, pools and
+    /// notices that adds. A host calls it before each `frame`, in the same tick: it may
+    /// allocate, where `frame` allocates nothing. `frame` calls it too, for callers that do
+    /// not, and it then does nothing more for the same `now`.
+    pub fn prepare(&mut self, now: u64) {
+        self.prepare_table(self.bug.table(now));
+    }
+
+    /// From now on, compiles every script whole as it arrives (`Show::compile_whole`): for the
+    /// tests that compare that with compiling over frames.
+    pub fn compile_whole(&mut self) {
+        self.show.compile_whole();
+    }
+
+    /// `prepare` at `table`, the table's own time (`bug`).
+    pub(super) fn prepare_table(&mut self, table: u64) {
+        if self.show.prepare(table) {
+            self.prepare_counts();
+            NoticeFloats::prepare(
+                &mut self.layer,
+                self.show.coming_notices(),
+                self.show.notices(),
+            );
+        }
     }
 
     /// Lays out every life total and pool the scripts to come will show, so that a frame lays

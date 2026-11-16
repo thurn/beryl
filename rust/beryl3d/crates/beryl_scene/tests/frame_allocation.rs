@@ -151,6 +151,7 @@ fn a_frame_with_a_sixty_card_hand_allocates_nothing() {
     let mut hand = client();
     hand.handle(Input::Update(Box::new(crowded.update())));
     hand.frame(0);
+    hand.prepare(1);
     let before = ALLOCATIONS.load(Ordering::Relaxed);
     hand.frame(1);
     let after = ALLOCATIONS.load(Ordering::Relaxed);
@@ -174,6 +175,7 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
         })
         .collect();
     client.handle(Input::Assets(AssetReady::Glyphs { page: 0, glyphs }));
+    client.prepare(0);
     let before = ALLOCATIONS.load(Ordering::Relaxed);
     let records = client.frame(0).draws.len();
     let after = ALLOCATIONS.load(Ordering::Relaxed);
@@ -192,6 +194,7 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
     }]);
     let (from, to) = steps[0];
     for now in [from, from + (to - from) / 2, to - 1, to] {
+        client.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         client.frame(now);
         let after = ALLOCATIONS.load(Ordering::Relaxed);
@@ -228,6 +231,7 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
         );
     }
     for now in [to + 50_000_000, to + 200_000_000] {
+        client.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         client.frame(now);
         let after = ALLOCATIONS.load(Ordering::Relaxed);
@@ -260,6 +264,7 @@ fn the_turn_banner_allocates_nothing() {
         to - 1,
         to,
     ] {
+        client.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         client.frame(now);
         let after = ALLOCATIONS.load(Ordering::Relaxed);
@@ -299,6 +304,7 @@ fn a_frame_of_255_attackers_allocates_nothing() {
     view.script(ScriptBuilder::reset().build());
     client.handle(Input::Update(Box::new(view.update())));
     client.frame(0);
+    client.prepare(20_000_000);
     let before = ALLOCATIONS.load(Ordering::Relaxed);
     let frame = client.frame(20_000_000);
     let after = ALLOCATIONS.load(Ordering::Relaxed);
@@ -364,6 +370,7 @@ fn a_badged_table_allocates_nothing() {
         .collect();
     client.handle(Input::Assets(AssetReady::Glyphs { page: 1, glyphs }));
     client.frame(0);
+    client.prepare(1_000_000);
     let before = ALLOCATIONS.load(Ordering::Relaxed);
     let frame = client.frame(1_000_000);
     let after = ALLOCATIONS.load(Ordering::Relaxed);
@@ -442,6 +449,7 @@ fn a_rising_hand_card_allocates_nothing() {
         }));
         for _ in 0..4 {
             now += 16_000_000;
+            client.prepare(now);
             let before = ALLOCATIONS.load(Ordering::Relaxed);
             let hovered = client
                 .frame(now)
@@ -504,6 +512,7 @@ fn an_anchored_element_allocates_nothing() {
     layer.show(Some(row().name("screen").child(badge)));
     let mut frame = common::empty_frame();
     for now in (0..30).map(|index| index * 16 * common::MS) {
+        show.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let mut builder = FrameBuilder::new(&mut frame);
         show.frame(now, &mut builder);
@@ -593,6 +602,7 @@ fn a_scrolling_row_allocates_nothing() {
     let mut moving = 0;
     for _ in 0..12 {
         now += 16_000_000;
+        client.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let frame = client.frame(now);
         moving += usize::from(

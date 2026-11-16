@@ -440,26 +440,27 @@ impl Sounds {
         asked
     }
 
-    /// The sounds in the order they begin, a sound asked for more than once at one time once,
-    /// as the first of those steps asks.
-    pub(crate) fn finish(mut self) -> Vec<SoundRun> {
-        self.asked.sort_by_key(|(edge, _)| *edge);
+    /// The sounds of the steps so far in the order they begin, a sound asked for more than once
+    /// at one time once, as the first of those steps asks.
+    pub(crate) fn runs(&self) -> Vec<SoundRun> {
+        let mut asked = self.asked.clone();
+        asked.sort_by_key(|(edge, _)| *edge);
         let mut kept = 0;
-        for next in 0..self.asked.len() {
-            let (edge, run) = self.asked[next];
-            let again = self.asked[..kept]
+        for next in 0..asked.len() {
+            let (edge, run) = asked[next];
+            let again = asked[..kept]
                 .iter()
                 .rev()
                 .take_while(|(other, _)| *other == edge)
                 .any(|(_, other)| other.sound.id == run.sound.id);
             if !again {
-                self.asked[kept] = (edge, run);
+                asked[kept] = (edge, run);
                 kept += 1;
             }
         }
-        self.asked.truncate(kept);
+        asked.truncate(kept);
         let mut runs = Vec::with_capacity(kept);
-        runs.extend(self.asked.iter().map(|(_, run)| *run));
+        runs.extend(asked.iter().map(|(_, run)| *run));
         runs.sort_by_key(|run| run.at);
         runs
     }

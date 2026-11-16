@@ -202,6 +202,7 @@ impl Live {
         if self.trees.is_empty() {
             return;
         }
+        client.prepare(clock);
         let printed = tree(client.frame(clock), &TreeOptions::default())
             .map(|printed| format!("t={}ms\n{printed}", clock / 1_000_000))
             .map_err(|error| error.to_string());

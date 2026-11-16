@@ -85,14 +85,10 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
     // The frame at 0 shows the first view and starts the three-beat script; the frame at 500 ms
     // draws it under way, and the frame at 900 ms ends it.
     for now in [0, 500 * MS, 900 * MS] {
-        let before = ALLOCATIONS.load(Ordering::Relaxed);
-        let mut builder = FrameBuilder::new(&mut frame);
-        show.frame(now, &mut builder);
-        let records = builder.finish().draws.len();
-        let after = ALLOCATIONS.load(Ordering::Relaxed);
+        let (records, allocations) = counted_frame(&mut show, &mut frame, now);
         assert!(records > 1, "the frame draws the cards");
         assert_eq!(
-            after - before,
+            allocations,
             0,
             "allocations in the frame at {} ms",
             now / MS
@@ -117,6 +113,7 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
         if now == 1_400 * MS {
             show.push(Box::new(resolved.clone()), resolve_timings.clone());
         }
+        show.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let mut builder = FrameBuilder::new(&mut frame);
         show.frame(now, &mut builder);
@@ -206,6 +203,7 @@ fn laying_a_script_out_again_allocates_nothing() {
     show.push(Box::new(ended), vec![held, timing(150.0)]);
     // The mark's script plays from 0 to 200 ms, and the next starts at the frame at 200 ms.
     for now in [0, 100 * MS, 200 * MS, 300 * MS] {
+        show.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let mut builder = FrameBuilder::new(&mut frame);
         show.frame(now, &mut builder);
@@ -249,6 +247,7 @@ fn twenty_streaks_allocate_nothing() {
     show.push(Box::new(start), Vec::new());
     show.push(Box::new(streaks), timings);
     for now in [0, 150 * MS] {
+        show.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let mut builder = FrameBuilder::new(&mut frame);
         show.frame(now, &mut builder);
@@ -295,6 +294,7 @@ fn forty_effects_allocate_nothing() {
     show.push(Box::new(start), Vec::new());
     show.push(Box::new(after), timings);
     for now in [0, 150 * MS, 300 * MS] {
+        show.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let mut builder = FrameBuilder::new(&mut frame);
         show.frame(now, &mut builder);
@@ -344,6 +344,7 @@ fn fifty_arrows_allocate_nothing(show: &mut Show, cards: Cards) {
         );
     }
     let mut frame = Frame::with_capacity(512, 2048, 16384);
+    show.prepare(1_900 * MS);
     let before = ALLOCATIONS.load(Ordering::Relaxed);
     let mut builder = FrameBuilder::new(&mut frame);
     show.frame(1_900 * MS, &mut builder);
@@ -359,4 +360,15 @@ fn fifty_arrows_allocate_nothing(show: &mut Show, cards: Cards) {
         "allocations in a frame with 50 arrows"
     );
     assert_eq!(arrows, 50);
+}
+
+/// Prepares the frame at `now` and draws it into `frame`, as a host does, and returns how many
+/// records it drew and how many allocations drawing it made.
+fn counted_frame(show: &mut Show, frame: &mut Frame, now: u64) -> (usize, usize) {
+    show.prepare(now);
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    let mut builder = FrameBuilder::new(frame);
+    show.frame(now, &mut builder);
+    let records = builder.finish().draws.len();
+    (records, ALLOCATIONS.load(Ordering::Relaxed) - before)
 }

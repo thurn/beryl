@@ -58,6 +58,7 @@ STD_PATH: re.Pattern[str] = re.compile(r"\bstd\s*::\s*(\{|[a-z_]+)")
 SCENE_DEPENDENCIES: frozenset[str] = frozenset(
     {
         "arrayvec",
+        "self_cell",
         "beryl_protocol",
         "bytemuck",
         "glam",

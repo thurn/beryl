@@ -64,7 +64,6 @@ pub struct StepIn<'a> {
 
 /// The table as a script plays over it, and the tracks its steps have made so far.
 pub(crate) struct Motion<'a> {
-    table: &'a Table,
     pub played: Played,
     /// Every object's resting place as the table now stands.
     rests: Placement,
@@ -134,7 +133,7 @@ impl<'a> Motion<'a> {
     pub(crate) fn new(
         before: &'a PlayerView,
         played: &Played,
-        (table, after, timings): (&'a Table, &PlayerView, &[StepTiming]),
+        (table, after, timings): (&Table, &PlayerView, &[StepTiming]),
         records: bool,
         shown: bool,
     ) -> Self {
@@ -164,7 +163,6 @@ impl<'a> Motion<'a> {
         let steps = timings.len();
         let index = (steps >= index::LEAST_STEPS).then(|| Index::new(before, played));
         Self {
-            table,
             names: NameIds::of(&before.objects),
             played: played.clone(),
             arrival: crate::table::arrival(before, after),
@@ -197,28 +195,6 @@ impl<'a> Motion<'a> {
                 timings.iter().any(|timing| timing.duration > 0.0),
             ),
         }
-    }
-
-    /// Every object's resting place in `view`, the view the script leads to. The table played
-    /// over should end as that view stands, so each group that holds the same objects in both
-    /// keeps the resting places the steps left, and only the others are placed again. After a
-    /// step the table could not take, `rests` may not match the table, so every group is.
-    /// `abilities` numbers the abilities on `view`'s stack.
-    pub(crate) fn placement_of(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
-        if self.whole {
-            return self.table.placement(view, abilities);
-        }
-        let played = self
-            .index
-            .as_ref()
-            .map_or_else(
-                || Zones::of_table(&self.played),
-                |index| index.zones(&self.played),
-            )
-            .handled(self.look.handled())
-            .arrived(&self.arrival);
-        let view = Zones::of_view(view, abilities);
-        self.table.placement_reusing(&view, (&played, &self.rests))
     }
 
     /// The zones of the table played over, every group listed from it.
@@ -332,7 +308,7 @@ impl<'a> Motion<'a> {
 
     /// Makes the resting places the step placed again the table's own, and empties `fresh` for
     /// the next step.
-    fn commit(&mut self, dirty: &[bool]) {
+    fn commit(&mut self, table: &Table, dirty: &[bool]) {
         // A step that placed every group replaces every resting place; otherwise only the dirty
         // groups' old members leave theirs.
         if self.whole {
@@ -379,7 +355,7 @@ impl<'a> Motion<'a> {
         // counts in a debug build are a running game's.
         if cfg!(debug_assertions) && self.records {
             assert!(
-                same(&self.rests, &self.table.placement_of(&self.played_zones())),
+                same(&self.rests, &table.placement_of(&self.played_zones())),
                 "placing only the groups a step changed gives what placing every group does"
             );
         }
@@ -390,6 +366,7 @@ impl<'a> Motion<'a> {
     /// the new place.
     pub(crate) fn step(
         &mut self,
+        table: &Table,
         number: usize,
         (beat, index): (&'a [Step], usize),
         timing: &StepTiming,
@@ -404,7 +381,8 @@ impl<'a> Motion<'a> {
             to: nanoseconds(laid.to),
         };
         let (room, regroup) = room_of(&step.act, timing, laid, own);
-        let Some(dirty) = self.place(&step.act, room.duration() > 0 || own.duration() > 0) else {
+        let Some(dirty) = self.place(table, &step.act, room.duration() > 0 || own.duration() > 0)
+        else {
             return;
         };
         let verb = step.act.verb();
@@ -429,7 +407,15 @@ impl<'a> Motion<'a> {
                 Some(Subject::Ability { id }) => self.ability_poses(id, own.from),
                 _ => (None, None),
             };
-            self.play(number, (beat, index), timing, own, mover, poses, &dirty);
+            self.play(
+                number,
+                (beat, index),
+                timing,
+                own,
+                mover,
+                poses,
+                (table, &dirty),
+            );
         }
         for &slot in &affected {
             if self
@@ -457,7 +443,7 @@ impl<'a> Motion<'a> {
                     own,
                     mover,
                     (Some(from), to),
-                    &dirty,
+                    (table, &dirty),
                 );
                 played = true;
                 continue;
@@ -472,14 +458,14 @@ impl<'a> Motion<'a> {
                 own,
                 mover,
                 (None, None),
-                &dirty,
+                (table, &dirty),
             );
         }
         self.affected = affected;
         if self.follow_abilities(number, (mover, &dirty), own, room) && room.to > own.to {
             self.note_closing(None, room.to, number);
         }
-        self.commit(&dirty);
+        self.commit(table, &dirty);
     }
 
     /// Notes that something the `number`th step does not move itself, the object in `slot` or
@@ -622,12 +608,13 @@ impl<'a> Motion<'a> {
         own: Interval,
         subject: Option<Subject>,
         (from, to): (Option<Pose>, Option<Pose>),
-        dirty: &[bool],
+        (table, dirty): (&Table, &[bool]),
     ) {
         let step = &beat[index];
         let mut written = std::mem::take(&mut self.written);
         let places = Places {
             motion: self,
+            table,
             dirty,
         };
         let input = StepIn {

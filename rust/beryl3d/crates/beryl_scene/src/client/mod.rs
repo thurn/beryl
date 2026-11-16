@@ -421,6 +421,7 @@ impl Client {
         self.now = now;
         // The table plays on its own clock, which the bug report stops (`bug`).
         let table_now = self.bug_frame(now);
+        self.prepare_table(table_now);
         let reporting = self.bug_open();
         self.inputs.clear();
         self.touch_frame(now);

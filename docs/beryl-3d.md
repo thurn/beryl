@@ -328,7 +328,7 @@ their manifests).
   thread or a file. It defines `Input` and `Request`, the types everything above
   it speaks to it in.
 
-The boundary that matters most is around the client core. It has two entry
+The boundary that matters most is around the client core. It has three entry
 points, and everything a frame shows is a function of what has passed through
 them:
 
@@ -336,21 +336,29 @@ them:
 impl Client {
     /// Input: a session update, a pointer or key event, a new window size.
     pub fn handle(&mut self, input: Input);
+    /// Compiles what the frame at `now` needs of the scripts to come.
+    pub fn prepare(&mut self, now: u64);
     /// The frame at time `now`, in nanoseconds since the client started.
     pub fn frame(&mut self, now: u64) -> &Frame;
 }
 ```
 
-`handle` and `frame` never read a clock, start a thread, take a lock or touch a
-file. Given the same sequence of calls, a client executes the same instructions
-and returns the same frames. The [Determinism](#determinism) section below lists
-what keeps that true.
+`handle`, `prepare` and `frame` never read a clock, start a thread, take a lock
+or touch a file. Given the same sequence of calls, a client executes the same
+instructions and returns the same frames. The [Determinism](#determinism)
+section below lists what keeps that true.
 
 The two entry points divide the work by how often it happens.
 
 - **`handle` does what an input changes.** It applies a session update, rebuilds
   a screen whose inputs changed, lays out elements and text, and starts
   animations. This is where `taffy` and `parley` run. It may allocate.
+- **`prepare` does the part of what time changes that allocates.** A host calls
+  it before each `frame`, with the same `now`. It compiles the steps of the
+  playing script that the frame at `now` needs, and a few more (see
+  [Threads](#threads)), and lays out the floats of any life total, pool or
+  notice those steps add. `frame` calls it too, for a caller that does not, and
+  a second call for the same `now` does nothing.
 - **`frame` does what time changes.** It computes where every animated thing is
   at `now` and writes the frame. Only Beryl's code runs here, and it allocates
   nothing.
@@ -1565,7 +1573,7 @@ What the session does and what a client still does:
   screen (a player may have looked at an arrow for five seconds before
   answering), and whether a banner is still passing over the table. The web
   interface's is `laid` in `ui/src/stage/beat.ts`. Beryl 3D's is a port of that
-  one function, in `beryl_scene`'s `beat` module. Beryl 3D compiles a script
+  one function, in `beryl_scene`'s `beat` module. Beryl 3D lays a script out
   when its update arrives, before both are known, so a script with a step that
   holds a span (`hold`) or waits for the table to itself (`alone`) is laid out
   again as it starts (`play::relay`). Every segment and record of the script
@@ -2218,7 +2226,17 @@ frame. The design meets it by giving the drawing thread almost no work and no
 reason to wait on another thread.
 
 - **The frame thread** is the host's main thread. Each frame it drains its input
-  channels, calls `frame`, and submits the draw list. It holds no lock that
+  channels into `handle`, calls `prepare` and `frame`, and submits the draw
+  list. A script is compiled over several frames on this thread rather than in
+  the `handle` call that receives it (`play::part`): compiling a long script
+  whole was the costliest frame of most gated boards. `prepare` compiles every
+  step that begins by the frame's time, every step that could change a segment
+  under way then, and at least `STEPS_PER_ADVANCE` (4) steps, so the later beats
+  of a long script are compiled well before they begin. Only a script that
+  arrives with nothing playing or waiting is compiled so, and anything that
+  needs the whole script compiles the rest of it first: the next update, a new
+  window or a scrolled row, and a start that lays the script out again (`relay`)
+  or hands it a card the pointer or a prompt's tray holds. It holds no lock that
   another of Beryl's threads can hold, and it does no file or network I/O. The
   only thing it waits for is the display.
 - **The session thread** runs the game, as today.
@@ -3449,6 +3467,15 @@ call. Three runs gave identical counts.
   738 objects while compiling it. The worst frames of `verbs-zones`,
   `stress-255`, `stress-1024` and `stress-verbs` are each a script compiled
   whole in the `handle` call that receives it.
+- **Compiling a script over frames halved the stress boards' worst frame.** With
+  `Client::prepare` compiling a script that arrives with nothing playing a few
+  steps ahead of each frame (see [Threads](#threads)), the frame that receives
+  the stress boards' 40-step script compiles 14 of them, and their worst frames
+  fell to 1,966,154 instructions for `stress-255` (now its frame 0, which places
+  the board) and 6,424,479 for `stress-1024`. `stress-verbs`' script, one beat
+  of 106 steps that all begin together, still compiles whole in its first frame.
+  `verbs-zones`' worst frame, 4,838,458, takes eleven updates in one `handle`; a
+  script that arrives behind another is still compiled whole.
 
 **Time per frame, natively**, by beryl_render's `frame_times` example in a
 release build, paced at 60 frames a second, five runs. Each figure is the median

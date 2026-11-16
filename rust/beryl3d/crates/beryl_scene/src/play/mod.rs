@@ -1,9 +1,11 @@
 //! The script clock: the table plays each view's script before it shows the view
 //! (docs/beryl-3d.md, "Verbs", "Timing a script" and "Determinism").
 //!
-//! - A script is compiled whole when its update arrives (`compile`), with the timings the session
-//!   sent beside it, and starts at the `now` of the next frame. Nothing here reads a duration, a
-//!   delay or a wait from anywhere but those timings.
+//! - A script is compiled with the timings the session sent beside it (`compile`), and starts at
+//!   the `now` of the next frame. One that arrives with nothing playing or waiting is compiled
+//!   over the frames that play it, a few steps ahead of each (`part`, `prepare`); any other is
+//!   compiled whole when its update arrives. Nothing here reads a duration, a delay or a wait
+//!   from anywhere but those timings.
 //! - Scripts never overlap. An update that arrives while a script plays waits, and its script
 //!   starts as the one before ends.
 //! - When more than `catch_up.double` updates are waiting as a script starts, it plays twice as
@@ -22,10 +24,12 @@
 mod affect;
 pub(crate) mod compile;
 mod counts;
+mod history;
 mod hold;
 pub(crate) use compile::nanoseconds;
 mod index;
 mod notices;
+mod part;
 #[cfg(feature = "driver")]
 pub mod parts;
 mod playing;
@@ -43,6 +47,7 @@ pub use tray::PlacedLetGo;
 
 use std::cell::Cell;
 use std::collections::VecDeque;
+use std::rc::Rc;
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::PlayerView;
@@ -53,7 +58,7 @@ use glam::Vec2;
 
 use self::compile::{Compiled, bit, compile};
 use self::playing::{Playing, Waiting, timings_of};
-use self::record::{Plant, ScriptRecord, StepRecord};
+use self::record::{Plant, ScriptRecord};
 use crate::data::space::catch_up;
 use crate::effects::{self, EffectRun};
 use crate::faces::Faces;
@@ -75,7 +80,7 @@ pub struct Show {
     /// The match's faces and their layers, which the table draws each card from.
     faces: Faces,
     /// The view the table shows at rest.
-    shown: Option<Box<GameUpdate>>,
+    shown: Option<Rc<GameUpdate>>,
     playing: Option<Playing>,
     waiting: VecDeque<Waiting>,
     /// The table the last script given ends with, which the next is played from. The scripts
@@ -127,6 +132,10 @@ pub struct Show {
     /// How a closed prompt's tray letting its cards go is timed (`OwnStep::TrayLetGo`), for the
     /// beat of the script it lets go in, which lasts until it is over (`relay`).
     let_go_timing: Option<StepTiming>,
+    /// The time `prepare` was last called for, until a script arrives.
+    prepared: Option<u64>,
+    /// Whether every script is compiled whole as it arrives (`compile_whole`).
+    whole: bool,
 }
 
 impl Show {
@@ -162,6 +171,8 @@ impl Show {
             let_go_timing: (own_timings().entries.into_iter())
                 .find(|entry| entry.step == OwnStep::TrayLetGo)
                 .map(|entry| entry.timing),
+            prepared: None,
+            whole: false,
         }
     }
 
@@ -206,25 +217,6 @@ impl Show {
             }),
             Subject::Ability { id } => self.ability_pose(id, now).map(card),
         }
-    }
-
-    /// From now on, keeps a record of every script the show is given (`history`).
-    pub fn record(&mut self) {
-        if self.history.is_none() {
-            self.history = Some(Vec::new());
-            self.recorded_from = self.given;
-        }
-    }
-
-    /// The record of every script given since `record` was called, in order.
-    #[must_use]
-    pub fn history(&self) -> &[ScriptRecord] {
-        self.history.as_deref().unwrap_or_default()
-    }
-
-    /// Plants a fault in a script the show has not been given yet, to test the interface checks.
-    pub fn plant(&mut self, plant: Plant) {
-        self.plants.push(plant);
     }
 
     /// When the last script, or an effect run that outlasted it, ended, in nanoseconds since the
@@ -277,55 +269,6 @@ impl Show {
             compiled.plant(plant);
         }
         (compiled, played)
-    }
-
-    /// Writes `compiled`, the `number`th script, into the history, if the show keeps one.
-    fn write_record(&mut self, number: usize, compiled: &Compiled) {
-        let Some(history) = &mut self.history else {
-            return;
-        };
-        let Some(index) = number.checked_sub(self.recorded_from) else {
-            return;
-        };
-        let mut record = ScriptRecord {
-            start: None,
-            rate: 1,
-            end: compiled.end,
-            // The script at `index` of the history leads to view `index + 1`.
-            steps: compiled
-                .steps
-                .iter()
-                .map(|step| StepRecord {
-                    view: index + 1,
-                    ..step.clone()
-                })
-                .collect(),
-            segments: compiled.segments.clone(),
-            finals: compiled.final_poses(),
-            effects: compiled.effects.clone(),
-        };
-        match history.get_mut(index) {
-            // Compiled again for a window of a new shape: it keeps when it started.
-            Some(kept) => {
-                record.start = kept.start;
-                record.rate = kept.rate;
-                *kept = record;
-            }
-            None => history.push(record),
-        }
-    }
-
-    /// Notes in the history that the `number`th script started at `start`, its clock running
-    /// `rate` times faster than real time.
-    fn record_start(&mut self, number: usize, start: u64, rate: u64) {
-        if let Some(history) = &mut self.history
-            && let Some(record) = number
-                .checked_sub(self.recorded_from)
-                .and_then(|index| history.get_mut(index))
-        {
-            record.start = Some(start);
-            record.rate = rate;
-        }
     }
 
     #[must_use]
@@ -453,6 +396,11 @@ impl Show {
     }
 
     fn push_timed(&mut self, update: Box<GameUpdate>, timings: Option<Vec<StepTiming>>) {
+        // This script is played from the table the one before it ends with, and the showcases
+        // it reveals below must not change how that one is placed: that one is compiled whole
+        // first.
+        self.complete();
+        self.prepared = None;
         let number = self.given;
         self.given += 1;
         // The faces the script holds up to be read, for the Revealed Cards pile to draw once
@@ -463,11 +411,17 @@ impl Show {
                 self.table.reveal(object);
             }
         }
-        let from = self.played.take();
+        let update: Rc<GameUpdate> = Rc::from(update);
+        let timings: Option<Rc<[StepTiming]>> = timings.map(Rc::from);
+        let from = self.played.take().map(Rc::new);
+        if let Some(waiting) = self.in_parts(number, &update, timings.as_ref(), from.as_ref()) {
+            self.waiting.push_back(waiting);
+            return;
+        }
         let (compiled, played) = self.compile(
             number,
             self.before_next(),
-            from.as_ref(),
+            from.as_deref(),
             &update,
             timings_of(&update, timings.as_deref()),
         );
@@ -480,6 +434,7 @@ impl Show {
             timings,
             from,
             compiled,
+            part: None,
         });
     }
 
@@ -492,6 +447,7 @@ impl Show {
     /// Fits the table to a window of a new shape, and compiles every script not yet ended again
     /// for it.
     pub fn resize(&mut self, window: Window) {
+        self.complete();
         let shown = self.shown.as_ref().map(|update| &update.view);
         self.table.resize(window, shown);
         let mut before = shown;
@@ -502,7 +458,7 @@ impl Show {
             let (again, _) = self.compile(
                 playing.number,
                 before,
-                playing.from.as_ref(),
+                playing.from.as_deref(),
                 update,
                 timings_of(update, playing.timings.as_deref()),
             );
@@ -513,7 +469,7 @@ impl Show {
             let (again, _) = self.compile(
                 waiting.number,
                 before,
-                waiting.from.as_ref(),
+                waiting.from.as_deref(),
                 &waiting.update,
                 timings_of(&waiting.update, waiting.timings.as_deref()),
             );
@@ -556,6 +512,7 @@ impl Show {
     /// Advances the clock to `now`, ending each script whose time is up and starting the next,
     /// and writes the table as it is at `now`. Allocates nothing.
     pub fn frame(&mut self, now: u64, builder: &mut FrameBuilder) {
+        self.prepare(now);
         self.take_recompiled(now);
         // When the script before ended, so that the next starts then and not at a later frame.
         let mut ended = None;
@@ -578,11 +535,7 @@ impl Show {
                 break;
             };
             self.unbuilt |= waiting.compiled.unbuilt;
-            let rate = match self.waiting.len() + 1 {
-                n if n > catch_up::QUADRUPLE => 4,
-                n if n > catch_up::DOUBLE => 2,
-                _ => 1,
-            };
+            let rate = rate_for(self.waiting.len() + 1);
             let moves =
                 !waiting.compiled.tracks.is_empty() || !waiting.compiled.ability_tracks.is_empty();
             if waiting.compiled.reset {
@@ -599,17 +552,20 @@ impl Show {
                 timings: waiting.timings,
                 from: waiting.from,
                 compiled: waiting.compiled,
+                part: waiting.part,
                 start,
                 rate,
                 spans_given: 0,
                 streaks_given: 0,
                 counts_given: 0,
                 sounds_given: 0,
+                effects_given: 0,
+                notices_given: 0,
             });
             self.hand_over(now);
             self.hand_over_tray();
             self.place_let_go(now);
-            if let Some(playing) = &self.playing {
+            if let Some(playing) = &mut self.playing {
                 playing.affect(&mut self.effects);
                 playing.announce(&mut self.notices);
             }
@@ -660,8 +616,14 @@ impl Show {
     }
 
     /// Ends the playing script: the table shows its view, at rest, with its life totals and
-    /// pools.
+    /// pools. A script compiled over frames is whole by its end.
     fn finish(&mut self) {
+        debug_assert!(
+            self.playing
+                .as_ref()
+                .is_none_or(|playing| playing.part.is_none()),
+            "a script compiled over frames does not end before it is whole"
+        );
         self.show_playing();
         self.playing = None;
         if let Some(shown) = &self.shown {
@@ -759,5 +721,16 @@ impl Show {
             .find(|verb| self.unbuilt & bit(*verb) != 0 && self.reported & bit(*verb) == 0)?;
         self.reported |= bit(verb);
         Some(verb)
+    }
+}
+
+/// How many times faster than real time a script plays as it starts with `waiting` scripts,
+/// itself among them, waiting to play: twice past `catch_up.double` and four times past
+/// `catch_up.quadruple`, so that the table catches up with a session that runs ahead of it.
+fn rate_for(waiting: usize) -> u64 {
+    match waiting {
+        n if n > catch_up::QUADRUPLE => 4,
+        n if n > catch_up::DOUBLE => 2,
+        _ => 1,
     }
 }

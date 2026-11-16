@@ -98,6 +98,7 @@ fn play(name: &str) -> (usize, Vec<(u64, usize)>) {
             }
         }
         loop {
+            client.prepare(now);
             COUNTING.with(|counting| counting.set(true));
             ALLOCATIONS.with(|n| n.set(0));
             client.frame(now);
@@ -121,8 +122,10 @@ fn play(name: &str) -> (usize, Vec<(u64, usize)>) {
     (frames, allocated)
 }
 
-/// Counts the allocations `client.frame(now)` makes.
+/// Counts the allocations `client.frame(now)` makes, after `client.prepare(now)`, as a host
+/// calls it.
 fn counted(client: &mut Client, now: u64) -> usize {
+    client.prepare(now);
     COUNTING.with(|counting| counting.set(true));
     ALLOCATIONS.with(|n| n.set(0));
     client.frame(now);

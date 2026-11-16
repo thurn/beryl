@@ -5,7 +5,7 @@ use beryl_protocol::protocol::PlayerView;
 use beryl_protocol::script::Table as Played;
 
 pub use super::compile::STEPS_PER_ADVANCE;
-use super::compile::{Compiling, compile};
+use super::compile::{Compiled, Compiling, compile};
 use crate::motion::Track;
 use crate::pose::Pose;
 use crate::table::Table;
@@ -57,12 +57,20 @@ pub fn compile_in_parts(
             .collect()
     };
     let (whole, _) = compile(Some((before, &played)), after, timings, table, false, false);
-    let mut compiling =
-        Compiling::new(Some((before, &played)), after, timings, table, false, false);
+    let mut out = Compiled::default();
+    let mut compiling = Compiling::new(
+        Some((before, &played)),
+        (after, timings),
+        table,
+        (false, false),
+        &mut out,
+    );
     let mut parts = InParts::default();
     for &t in times {
-        parts.steps.push(compiling.advance(t, least));
-        parts.parts.push(poses(compiling.tracks(), t));
+        parts
+            .steps
+            .push(compiling.advance(table, &mut out, (t, least)));
+        parts.parts.push(poses(&out.tracks, t));
         parts.whole.push(poses(&whole.tracks, t));
     }
     assert!(compiling.done(), "the times reach every step");

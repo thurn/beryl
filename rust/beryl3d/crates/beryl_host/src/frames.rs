@@ -298,6 +298,9 @@ impl<T: Ticks> FrameLoop<T> {
         self.play_live(now, clock);
         self.feed.before(&mut self.client, clock);
         draw.assets(&mut self.client, When::BeforeFrame);
+        // What the frame needs of the scripts to come is compiled before it, outside the frame's
+        // own time: the frame allocates nothing, and compiling does.
+        self.client.prepare(clock);
         let started = Instant::now();
         let frame = self.client.frame(clock);
         let client = started.elapsed().as_nanos() as u64;

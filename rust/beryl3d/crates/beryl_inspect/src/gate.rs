@@ -260,6 +260,9 @@ impl Playback {
             self.client.handle(Input::Pointer(pointer));
             self.moves.pop();
         }
+        // As a host does before each frame: the gate counts its work with the frame's
+        // (`frame_counted`) and its allocations with the inputs'.
+        self.client.prepare(self.next as u64 * FRAME_NANOS);
     }
 
     /// Draws the next frame.

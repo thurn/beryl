@@ -336,7 +336,7 @@ pub(super) fn follow(compiled: &mut Compiled, playing: &Compiled) {
 
 /// Sorts `items` by `key`, keeping the order of two with the same key, without allocating: the
 /// items are almost always in order already.
-fn settle<T>(items: &mut [T], key: impl Fn(&T) -> u64) {
+pub(super) fn settle<T, K: Ord>(items: &mut [T], key: impl Fn(&T) -> K) {
     for i in 1..items.len() {
         let mut j = i;
         while j > 0 && key(&items[j - 1]) > key(&items[j]) {

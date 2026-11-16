@@ -1,12 +1,16 @@
 //! A script compiled a few steps at a time over several frames poses every object as the same
 //! script compiled whole does, at every frame (docs/beryl-3d.md, "Threads" and "Determinism").
 
-use beryl_protocol::protocol::PlayerView;
+use beryl_protocol::GameUpdate;
+use beryl_protocol::protocol::{PlayerView, SessionId};
 use beryl_protocol::protocol::{Side, Why, ZoneName};
 use beryl_protocol::script::{Act, Step, StepTiming};
+use beryl_scene::frame::Wake;
+use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::play::parts::{STEPS_PER_ADVANCE, compile_in_parts};
 use beryl_scene::table::{DESKTOP, Table};
 use beryl_scene::testing::{ViewBuilder, object, script, timing};
+use beryl_scene::{Client, Config};
 
 use crate::common::{MS, window};
 
@@ -67,8 +71,10 @@ fn compiles_in_parts(
     );
 }
 
-#[test]
-fn flights_along_a_row_compiled_in_parts_pose_every_card_as_compiled_whole() {
+/// The battlefield of `PERMANENTS` permanents, and the view in which a script of `BEATS` beats
+/// of `PER_BEAT` staggered flights each has flown the first of them to the end of the row, one
+/// after another, so that each flight moves every card after it.
+fn row_flights() -> (PlayerView, PlayerView) {
     let mut builder = ViewBuilder::new();
     for _ in 0..PERMANENTS {
         builder.card(ZoneName::Battlefield, Side::You, "Serra Angel");
@@ -101,9 +107,95 @@ fn flights_along_a_row_compiled_in_parts_pose_every_card_as_compiled_whole() {
     after.battlefield.rotate_left(moved);
     after.objects.rotate_left(moved);
     after.script = Some(script(None, beats, vec![staggered(); moved]));
+    (before, after)
+}
+
+#[test]
+fn flights_along_a_row_compiled_in_parts_pose_every_card_as_compiled_whole() {
+    let (before, after) = row_flights();
     // Each flight lands after the next two have begun, which cannot change where it lands, so a
     // beat is compiled a few steps at a time.
     compiles_in_parts((&before, &after), (BEATS, PER_BEAT), 2 * BEATS);
+}
+
+/// Plays `updates` through a client as a host does, a frame every 60th of a second with
+/// `prepare` before each, giving each update once the one before has played out, and returns
+/// each frame's draw records with the steps the frame compiled, the frames from when the last
+/// update arrives.
+fn played(updates: &[GameUpdate], whole: bool) -> Vec<(Vec<beryl_scene::frame::Draw>, u32)> {
+    let mut client = Client::new(Config::LARGEST);
+    if whole {
+        client.compile_whole();
+    }
+    client.handle(Input::Surface {
+        size: Size {
+            width: 1440.0,
+            height: 900.0,
+        },
+        scale: 1.0,
+        safe_area: Insets::default(),
+    });
+    let mut frames = Vec::new();
+    let mut now = 0;
+    for (index, update) in updates.iter().enumerate() {
+        client.handle(Input::Update(Box::new(update.clone())));
+        loop {
+            client.prepare(now);
+            let frame = client.frame(now);
+            if index + 1 == updates.len() {
+                frames.push((frame.draws.clone(), frame.work.steps));
+            }
+            now += 50 * MS / 3;
+            if client.wake() == Wake::Never {
+                break;
+            }
+        }
+    }
+    frames
+}
+
+#[test]
+fn a_client_compiles_a_long_script_over_frames_and_draws_each_as_compiled_whole() {
+    let (before, after) = row_flights();
+    let update = |view: PlayerView| GameUpdate {
+        session: SessionId(1),
+        view,
+    };
+    let updates = [update(before), update(after)];
+    let parts = played(&updates, false);
+    let whole = played(&updates, true);
+    assert_eq!(
+        parts.len(),
+        whole.len(),
+        "the script plays as long either way"
+    );
+    for (frame, ((part, _), (whole, _))) in parts.iter().zip(&whole).enumerate() {
+        assert!(
+            part == whole,
+            "frame {frame} after the script arrives draws as the script compiled whole does"
+        );
+    }
+    let moved = BEATS * PER_BEAT;
+    assert!(moved >= 30, "the script is long: {moved} steps");
+    assert_eq!(whole[0].1, u32::try_from(moved).expect("fits"));
+    assert!(
+        parts[0].1 <= u32::try_from(PER_BEAT + STEPS_PER_ADVANCE).expect("fits"),
+        "the frame that receives the script compiles its first beat and a few steps more, not \
+         all {moved}: {:?}",
+        parts.iter().map(|(_, steps)| steps).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        parts
+            .iter()
+            .map(|(_, steps)| *steps as usize)
+            .sum::<usize>(),
+        moved,
+        "every step is compiled once"
+    );
+    assert!(
+        parts.iter().filter(|(_, steps)| *steps > 0).count() >= BEATS,
+        "the steps are compiled over {BEATS} frames or more"
+    );
 }
 
 #[test]

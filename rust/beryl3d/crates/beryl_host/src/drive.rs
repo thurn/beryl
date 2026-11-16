@@ -281,6 +281,7 @@ fn mouse(phase: PointerPhase, position: Vec2, button: Button) -> Pointer {
 /// Where an action on `locator`'s element happens in the client's frame at `clock`: the centre
 /// of its largest uncovered rectangle.
 fn point(client: &mut Client, clock: u64, locator: &str) -> Result<Vec2, String> {
+    client.prepare(clock);
     let frame = client.frame(clock);
     let index = locate(frame, locator).map_err(|error| error.to_string())?;
     let rect = uncovered(frame, index)

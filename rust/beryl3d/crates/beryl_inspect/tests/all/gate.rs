@@ -5,12 +5,12 @@ use beryl_scene::frame::{Frame, Role};
 
 #[test]
 fn rank_picks_the_frames_with_the_most_work() {
-    // The first frame of the flight lays out every card's track, so it ranks highest.
-    // Frame zero can rank because it places the initial board. The intervening rest frames
-    // only draw the rows, while the flight also evaluates tracks for the cards in view.
+    // The first frame of the flight compiles the steps under way and lays out their tracks,
+    // and frame zero places the initial board, so those two rank highest. The intervening rest
+    // frames only draw the rows, while the flight also evaluates tracks for the cards in view.
     for name in ["stress-255", "stress-1024"] {
         let ranked = rank(name).expect("a gated board");
-        assert_eq!(ranked[0], REST_FRAMES, "{name}: {ranked:?}");
+        assert!(ranked[..2].contains(&REST_FRAMES), "{name}: {ranked:?}");
         assert!(
             ranked
                 .iter()

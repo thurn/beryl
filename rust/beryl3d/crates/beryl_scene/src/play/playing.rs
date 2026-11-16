@@ -1,9 +1,12 @@
 //! The scripts the show holds: those waiting for the one before to end, and the one under way.
 
+use std::rc::Rc;
+
 use beryl_protocol::GameUpdate;
 use beryl_protocol::script::{self, StepTiming, Table as Played};
 
 use super::compile::Compiled;
+use super::part::Part;
 use crate::hud::counts::Counts;
 use crate::light::{Lit, StreakRun};
 use crate::table::Motion;
@@ -14,12 +17,15 @@ use crate::verbs::Interval;
 pub(super) struct Waiting {
     /// How many scripts the show was given before this one.
     pub(super) number: usize,
-    pub(super) update: Box<GameUpdate>,
+    pub(super) update: Rc<GameUpdate>,
     /// Overrides the timings in the update where a caller supplies its own.
-    pub(super) timings: Option<Vec<StepTiming>>,
+    pub(super) timings: Option<Rc<[StepTiming]>>,
     /// The table the script before it ended with, which it is played from.
-    pub(super) from: Option<Played>,
+    pub(super) from: Option<Rc<Played>>,
+    /// What its steps compiled so far made, or the whole script once `part` is done.
     pub(super) compiled: Compiled,
+    /// The script, while it is compiled over frames rather than whole (`super::part`).
+    pub(super) part: Option<Part>,
 }
 
 /// The script under way.
@@ -28,12 +34,15 @@ pub(super) struct Playing {
     pub(super) number: usize,
     /// Its update, until the table shows it. A script that moves nothing (a reset, the first
     /// view) shows its view as it starts and then only holds the time its beats take.
-    pub(super) update: Option<Box<GameUpdate>>,
+    pub(super) update: Option<Rc<GameUpdate>>,
     /// Overrides the timings in the update where a caller supplies its own.
-    pub(super) timings: Option<Vec<StepTiming>>,
+    pub(super) timings: Option<Rc<[StepTiming]>>,
     /// The table the script before it ended with, which it is played from.
-    pub(super) from: Option<Played>,
+    pub(super) from: Option<Rc<Played>>,
+    /// What its steps compiled so far made, or the whole script once `part` is done.
     pub(super) compiled: Compiled,
+    /// The script, while it is compiled over frames rather than whole (`super::part`).
+    pub(super) part: Option<Part>,
     /// When it started, in nanoseconds since the client started.
     pub(super) start: u64,
     /// How many times faster than real time its clock runs.
@@ -44,6 +53,10 @@ pub(super) struct Playing {
     pub(super) counts_given: usize,
     /// How many of its `compiled.sounds` the frames have listed.
     pub(super) sounds_given: usize,
+    /// How many of its `compiled.effects` and `compiled.notices` the show holds (`affect`,
+    /// `announce`).
+    pub(super) effects_given: usize,
+    pub(super) notices_given: usize,
 }
 
 /// A session update already owns its timings. Other callers may supply their own.

@@ -48,7 +48,9 @@ impl Show {
                 Wake::Now
             };
         };
-        if self.recompiled.is_some() {
+        // A script still compiling over frames has no end yet, and `prepare` compiles more of
+        // it each frame.
+        if self.recompiled.is_some() || playing.part.is_some() {
             return Wake::Now;
         }
         let t = playing.clock(now);

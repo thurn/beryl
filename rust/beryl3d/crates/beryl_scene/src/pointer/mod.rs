@@ -203,6 +203,12 @@ impl Pointer {
         self.grip.filter(|grip| grip.held).map(|grip| grip.slot)
     }
 
+    /// Whether the pointer holds a card, or one it let go is still falling back at `now`: a
+    /// script that starts then may take the card over from where it is (`hand_over`).
+    pub(crate) fn carries(&self, now: u64) -> bool {
+        self.held().is_some() || self.fall.is_some_and(|fall| !fall.done(now))
+    }
+
     /// The held card's lean, in radians: toward +x on the screen and toward +y (down it). It is
     /// zero while no card is held.
     #[must_use]

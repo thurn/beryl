@@ -5,12 +5,14 @@ use beryl_protocol::script::Subject;
 
 use super::Motion;
 use crate::pose::Pose;
-use crate::table::{Camera, Layout};
+use crate::table::{Camera, Layout, Table};
 
 /// Where things are as a script's steps so far have them, for a verb that needs more than its
 /// own subject's poses.
 pub struct Places<'a> {
     pub(super) motion: &'a Motion<'a>,
+    /// The table the script plays over, for its camera, layout and players' anchors.
+    pub(super) table: &'a Table,
     /// The groups the step placed again, by `Group::index`.
     pub(super) dirty: &'a [bool],
 }
@@ -22,7 +24,7 @@ impl Places<'_> {
     pub fn pose(&self, subject: Subject, t: u64) -> Option<Pose> {
         match subject {
             Subject::Object { slot } => self.motion.placed(usize::from(slot.0), t),
-            Subject::Player { player } => Some(self.motion.table.player_pose(player)),
+            Subject::Player { player } => Some(self.table.player_pose(player)),
             Subject::Ability { id } => self.motion.ability_placed(id, t),
         }
     }
@@ -35,7 +37,7 @@ impl Places<'_> {
                 .motion
                 .now(usize::from(slot.0), self.dirty)
                 .map(|rest| rest.pose),
-            Subject::Player { player } => Some(self.motion.table.player_pose(player)),
+            Subject::Player { player } => Some(self.table.player_pose(player)),
             Subject::Ability { id } => self
                 .motion
                 .ability_now(id, self.dirty)
@@ -52,11 +54,11 @@ impl Places<'_> {
 
     #[must_use]
     pub fn layout(&self) -> &Layout {
-        self.motion.table.layout()
+        self.table.layout()
     }
 
     #[must_use]
     pub fn camera(&self) -> &Camera {
-        self.motion.table.camera()
+        self.table.camera()
     }
 }

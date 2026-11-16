@@ -157,8 +157,10 @@ fn after_each_verbs_zones_script_every_object_rests_at_its_placement() {
             show.push(Box::new(update.clone()), timings(&update));
             show.frame(now, &mut FrameBuilder::new(&mut frame));
             let placement = show.table().placement(&update.view, &[]);
-            // Far past the script's end, each moving object is where its track ends.
+            // Far past the script's end, each moving object is where its track ends, once every
+            // step is compiled, as the frames up to then would compile them.
             let ended = u64::MAX / 4;
+            show.prepare(ended);
             // An object that leaves for a hidden zone ends at that zone's pile and then has no
             // placement; the check after the script covers it.
             for object in &update.view.objects {

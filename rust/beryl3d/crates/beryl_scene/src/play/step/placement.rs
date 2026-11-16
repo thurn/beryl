@@ -1,11 +1,11 @@
 //! The groups each script step places again.
 
-use beryl_protocol::protocol::{CardType, ObjectView, ZoneName};
+use beryl_protocol::protocol::{CardType, ObjectView, PlayerView, ZoneName};
 use beryl_protocol::script::{Act, Fact, Subject};
 
 use super::Motion;
 use crate::play::index;
-use crate::table::{Group, Rest, RowChange, reposed};
+use crate::table::{Group, Placement, Rest, RowChange, Table, Zones, reposed};
 
 impl<'a> Motion<'a> {
     /// Applies `act` to the table and places again every group whose resting places it may
@@ -13,7 +13,12 @@ impl<'a> Motion<'a> {
     /// where the act may change it without naming an object on it (`restacks`). Their resting
     /// places go to `fresh` and their slots to `next`; `rests` is left as it was. Returns which
     /// groups it placed, or none if the table could not take the act.
-    pub(super) fn place(&mut self, act: &'a Act, timed: bool) -> Option<[bool; Group::ALL.len()]> {
+    pub(super) fn place(
+        &mut self,
+        table: &Table,
+        act: &'a Act,
+        timed: bool,
+    ) -> Option<[bool; Group::ALL.len()]> {
         let (change, lands_may_change) = self.placement_change(act);
         let touched = &mut self.touched;
         touched.clear();
@@ -120,10 +125,37 @@ impl<'a> Motion<'a> {
             if dirty[index] {
                 let zones = (&zones, &self.names, &self.piles);
                 let output = (&mut self.fresh, &mut self.hands);
-                (self.table).place_group(zones, Group::ALL[index], output, next);
+                table.place_group(zones, Group::ALL[index], output, next);
             }
         }
         Some(dirty)
+    }
+
+    /// Every object's resting place in `view`, the view the script leads to. The table played
+    /// over should end as that view stands, so each group that holds the same objects in both
+    /// keeps the resting places the steps left, and only the others are placed again. After a
+    /// step the table could not take, `rests` may not match the table, so every group is.
+    /// `abilities` numbers the abilities on `view`'s stack.
+    pub(crate) fn placement_of(
+        &self,
+        table: &Table,
+        view: &PlayerView,
+        abilities: &[u32],
+    ) -> Placement {
+        if self.whole {
+            return table.placement(view, abilities);
+        }
+        let played = self
+            .index
+            .as_ref()
+            .map_or_else(
+                || Zones::of_table(&self.played),
+                |index| index.zones(&self.played),
+            )
+            .handled(self.look.handled())
+            .arrived(&self.arrival);
+        let view = Zones::of_view(view, abilities);
+        table.placement_reusing(&view, (&played, &self.rests))
     }
 
     /// Whether the act changes a row in place or can change the land count for either side.

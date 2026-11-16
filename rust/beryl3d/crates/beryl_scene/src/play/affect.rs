@@ -1,13 +1,20 @@
 //! The effect runs a starting script adds to the show (docs/beryl-3d.md, "Effects").
 
+use super::relay::settle;
 use super::{LIGHTS, Playing};
 use crate::effects::EffectRun;
 use crate::verbs::Interval;
 
 impl Playing {
-    /// Adds each of its effect runs to `effects`, in real time, as the script starts.
-    pub(super) fn affect(&self, effects: &mut Vec<EffectRun>) {
-        for run in &self.compiled.effects {
+    /// Adds each of its effect runs not added yet to `effects`, in real time: as the script
+    /// starts, and for a script compiled over frames, those of the steps compiled since
+    /// (`super::part`), in the order they begin.
+    pub(super) fn affect(&mut self, effects: &mut Vec<EffectRun>) {
+        let given = self.effects_given.min(self.compiled.effects.len());
+        let new = &mut self.compiled.effects[given..];
+        settle(new, |run| run.start);
+        self.effects_given = self.compiled.effects.len();
+        for run in &self.compiled.effects[given..] {
             let over = self.real_interval(Interval {
                 from: run.start,
                 to: run.start + run.duration,

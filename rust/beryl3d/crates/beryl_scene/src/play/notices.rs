@@ -10,10 +10,14 @@ use crate::notice::{self, Announced, Fade, NoticeRun, Place};
 pub(super) const NOTICES: usize = 8;
 
 impl Playing {
-    /// Adds each of its notices to `notices`, in real time, as the script starts. When the list
-    /// is full, a notice replaces the one that ends first, so that it allocates nothing.
-    pub(super) fn announce(&self, notices: &mut Vec<Announced>) {
-        for run in &self.compiled.notices {
+    /// Adds each of its notices not added yet to `notices`, in real time: as the script starts,
+    /// and for a script compiled over frames, those of the steps compiled since
+    /// (`super::part`). When the list is full, a notice replaces the one that ends first, so
+    /// that it allocates nothing.
+    pub(super) fn announce(&mut self, notices: &mut Vec<Announced>) {
+        let given = self.notices_given.min(self.compiled.notices.len());
+        self.notices_given = self.compiled.notices.len();
+        for run in &self.compiled.notices[given..] {
             let announced = Announced {
                 place: Place::of(&run.notice),
                 fade: Fade::of(&run.notice),
