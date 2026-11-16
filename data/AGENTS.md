@@ -82,9 +82,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   only CSS can use, which Beryl 3D skips), its CSS `value`, an optional `note`
   written as a comment, and `group: true` for a blank line before it. `root` and
   `rules` are the stylesheet's other declarations and rules. `flat` holds what
-  only Beryl 3D's flat layer uses (spacing, type styles, sizes and the panel
-  color), where a number is a `value` or names the `token` whose length it
-  takes. `tools/src/beryl_tools/design_tokens.py` describes the format.
+  only Beryl 3D's flat layer uses (spacing, type styles, sizes, the panel color
+  and, under `mana`, the disc and ink colors of mana symbols in text), where a
+  number is a `value` or names the `token` whose length it takes.
+  `tools/src/beryl_tools/design_tokens.py` describes the format.
 - `ui-conventions.json`: the UI design rules, which `just conventions` turns
   into `docs/ui-conventions.md`. Edit the JSON, never the generated page.
 

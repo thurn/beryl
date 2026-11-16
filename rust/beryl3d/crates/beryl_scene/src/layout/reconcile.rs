@@ -64,12 +64,14 @@ impl Layer {
                 .set_style(node.taffy, taffy_style(&element.style))
                 .expect("the node is in the tree");
         }
-        let text_changed =
-            node.element.text != element.text || node.element.style.text != element.style.text;
+        let text_changed = node.element.text != element.text
+            || node.element.style.text != element.style.text
+            || node.element.spans != element.spans;
         if text_changed {
             let leaf = (element.text.clone()).map(|text| TextLeaf {
                 text,
                 style: element.style.text,
+                spans: element.spans.clone(),
             });
             self.taffy
                 .set_node_context(node.taffy, leaf)

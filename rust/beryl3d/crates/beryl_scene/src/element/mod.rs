@@ -105,7 +105,7 @@ pub struct Element {
     pub style: Style,
     /// The words it shows, laid out inside its padding.
     pub text: Option<String>,
-    /// Runs of `text` styled apart from the rest: the text track.
+    /// Runs of `text` styled apart from the rest, laid out in one paragraph with it.
     pub spans: Vec<Span>,
     pub press: Option<Press>,
     /// Whether a press does anything now.

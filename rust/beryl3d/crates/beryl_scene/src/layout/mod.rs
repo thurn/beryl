@@ -46,6 +46,7 @@ const FIRST_ID: u32 = 1 << 16;
 struct TextLeaf {
     text: String,
     style: TypeStyle,
+    spans: Vec<element::Span>,
 }
 
 /// One kept element, with its layout.
@@ -367,7 +368,7 @@ impl Layer {
             {
                 node.block = Some(
                     self.text
-                        .block(words, node.element.style.text, limit)
+                        .block(words, node.element.style.text, &node.element.spans, limit)
                         .clone(),
                 );
             }
@@ -383,20 +384,24 @@ impl Layer {
         }
     }
 
-    /// Asks for every glyph the laid-out text needs that no atlas page holds.
+    /// Asks for every glyph the laid-out text needs that no atlas page holds: the screen's, the
+    /// floats' and the elements prepared for floats.
     fn want_glyphs(&mut self) {
-        fn visit(node: &Node, scale: f32, glyphs: &mut Glyphs) {
-            if let Some(block) = &node.block {
-                glyphs.want(block, node.element.style.text, scale);
-            }
-            for child in &node.children {
-                visit(child, scale, glyphs);
-            }
-        }
         let floats = self.floats.iter().map(|float| &float.node);
-        for node in self.screen.iter().chain(floats) {
-            visit(node, self.window.scale, &mut self.glyphs);
+        let prepared = self.prepared.iter().map(|prepared| &prepared.node);
+        for node in self.screen.iter().chain(floats).chain(prepared) {
+            want_node(node, self.window.scale, &mut self.glyphs);
         }
+    }
+}
+
+/// Asks `glyphs` for the glyphs of the text at and under `node` at `scale`.
+fn want_node(node: &Node, scale: f32, glyphs: &mut Glyphs) {
+    if let Some(block) = &node.block {
+        glyphs.want(block, scale);
+    }
+    for child in &node.children {
+        want_node(child, scale, glyphs);
     }
 }
 
@@ -422,7 +427,7 @@ fn compute(
                         AvailableSpace::MinContent => Some(0.0),
                         AvailableSpace::MaxContent => None,
                     });
-                    let (width, height) = text.measure(&leaf.text, leaf.style, limit);
+                    let (width, height) = text.measure(&leaf.text, leaf.style, &leaf.spans, limit);
                     taffy::Size {
                         width: known.width.unwrap_or(width),
                         height: known.height.unwrap_or(height),

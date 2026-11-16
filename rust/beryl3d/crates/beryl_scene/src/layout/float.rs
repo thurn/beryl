@@ -7,7 +7,7 @@
 
 use glam::Vec2;
 
-use super::{CONTENT, Layer, Node, compute, compute_anchored};
+use super::{CONTENT, Layer, Node, compute, compute_anchored, want_node};
 use crate::element::{Element, FloatId};
 
 /// Where a float stands and how it is drawn.
@@ -135,6 +135,7 @@ impl Layer {
         compute_anchored(&mut self.taffy, &mut self.text, &node);
         self.place(&mut node, Vec2::ZERO);
         self.text_runs += self.text.take_runs();
+        want_node(&node, self.window.scale, &mut self.glyphs);
         self.prepared.push(Prepared { id, key, node });
         // Room for every prepared element to be shown, and for every shown one to come back,
         // so that `show_prepared` never grows either list.

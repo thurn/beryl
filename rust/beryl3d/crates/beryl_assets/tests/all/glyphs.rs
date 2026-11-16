@@ -3,7 +3,9 @@
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
-use beryl_assets::glyphs::{FIRST_PAGE, GlyphWorker, prepare_latin};
+use beryl_assets::glyphs::{
+    FIRST_PAGE, GlyphWorker, glyphs_rasterized_on_this_thread, prepare_latin,
+};
 use beryl_assets::packer::PAGE_SIZE;
 use beryl_assets::{Prepared, Upload};
 use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey};
@@ -163,4 +165,41 @@ fn a_flush_returns_once_every_page_asked_for_is_sent() {
     worker.request(prepare_latin(1.0));
     worker.flush();
     assert_eq!(results.try_iter().count(), 0);
+}
+
+#[test]
+fn a_rescale_batch_is_rasterized_off_the_thread_that_asks() {
+    let (out, results) = mpsc::channel();
+    let worker = GlyphWorker::spawn(out, || {}, || {});
+    worker.request(prepare_latin(1.0));
+    // The display's scale changes: every glyph is asked for again at the new size. Asking only
+    // sends the keys to the worker, so the thread that draws frames rasterizes nothing.
+    worker.request(prepare_latin(2.0));
+    assert_eq!(glyphs_rasterized_on_this_thread(), 0);
+    worker.flush();
+    assert_eq!(glyphs_rasterized_on_this_thread(), 0);
+    assert!(results.try_iter().count() > 0);
+}
+
+#[test]
+fn a_mana_symbol_is_inked() {
+    let (out, results) = mpsc::channel();
+    let worker = GlyphWorker::spawn(out, || {}, || {});
+    let font = FontRef::from_index(Font::Mana.file().data, 0).expect("the Mana font parses");
+    let glyph = font.charmap().map('\u{e601}');
+    assert_ne!(glyph, 0, "the Mana font has the blue symbol");
+    let key = GlyphKey {
+        font: Font::Mana as u8,
+        weight: 400,
+        glyph,
+        size: 32,
+    };
+    worker.request([key]);
+    let (_, cells) = next(&results);
+    assert_eq!(cells[0].key, key);
+    assert!(
+        cells[0].rect[2] > 0 && cells[0].rect[3] > 0,
+        "{:?}",
+        cells[0]
+    );
 }

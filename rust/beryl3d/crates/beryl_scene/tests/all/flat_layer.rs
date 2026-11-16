@@ -152,7 +152,7 @@ fn centre(frame: &Frame, index: usize) -> Vec2 {
     Vec2::new(f32::midpoint(left, right), f32::midpoint(top, bottom))
 }
 
-fn context() -> Context {
+pub(super) fn context() -> Context {
     Context {
         recording: "flat-layer".to_owned(),
         seat: Side::You,
@@ -216,13 +216,14 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
     assert!(!frame.resolved[title].interactive);
     assert!(text_fits(frame, &context()).is_empty());
     // A panel for the bar, one for each button, one under each player's life total and one under
-    // the count of each of the six piles, all in the flat layer's band.
+    // the count of each of the six piles, and the disc of each of the title's two mana symbols,
+    // all in the flat layer's band.
     let layer = &frame.draws[frame.layer as usize..];
     let panels = layer
         .iter()
         .filter(|draw| draw.material == Material::Panel as u8)
         .count();
-    assert_eq!(panels, 11);
+    assert_eq!(panels, 13);
     assert!(frame.work.layout_nodes > 0 && frame.work.text_runs > 0);
 }
 
@@ -275,8 +276,8 @@ fn glyphs_are_asked_for_once_and_drawn_when_a_page_holds_them() {
         "each glyph is asked for once"
     );
     let after = client.frame(1);
-    // "Pay {1}{U}" without its spaces, "Auto Pay" and "Cancel".
-    assert!(glyph_count(after) >= 8 + 7 + 6);
+    // "Pay" and a glyph on each of its two mana symbols, "Auto Pay" and "Cancel".
+    assert!(glyph_count(after) >= 3 + 2 + 7 + 6);
     let moved = (after.resolved.iter().enumerate())
         .any(|(index, element)| places[index] != (index, element.corners));
     assert!(!moved, "a glyph arriving moves nothing");
@@ -414,8 +415,8 @@ fn a_variable_font_is_drawn_at_any_weight() {
         weight: 700,
         ..regular
     };
-    let (regular_width, _) = text.measure("Counterspell", regular, None);
-    let (bold_width, _) = text.measure("Counterspell", bold, None);
+    let (regular_width, _) = text.measure("Counterspell", regular, &[], None);
+    let (bold_width, _) = text.measure("Counterspell", bold, &[], None);
     assert!(
         bold_width > regular_width + 1.0,
         "{bold_width} vs {regular_width}"

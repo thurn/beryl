@@ -8,19 +8,23 @@
 
 pub mod fonts;
 pub mod glyphs;
+mod symbols;
 mod write;
 
 use std::collections::BTreeMap;
+use std::ops::Range;
 
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache};
 use parley::{
-    FontContext, FontFamily, FontFamilyName, FontWeight, Layout, LayoutContext, LineHeight,
-    PositionedLayoutItem, StyleProperty,
+    FontContext, FontFamily, FontFamilyName, FontWeight, InlineBox, InlineBoxKind, Layout,
+    LayoutContext, LineHeight, PositionedLayoutItem, StyleProperty, VerticalAlign,
 };
 
+use crate::element::Span;
 use crate::input::Rect;
 use fonts::Font;
 pub use glyphs::{Glyphs, key as glyph_key};
+pub(crate) use write::faded;
 pub use write::{BlockLook, write_block};
 
 /// How a run of text looks: its font, weight, size in logical points and line height as a
@@ -55,6 +59,18 @@ struct StyleKey {
     line_height: u32,
 }
 
+/// A styled span as a key that orders and compares exactly.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct SpanKey {
+    start: u32,
+    end: u32,
+    style: StyleKey,
+    color: Option<[u8; 4]>,
+}
+
+/// What a laid-out text is cached by: its words, its style and its spans.
+type TextKey = (String, StyleKey, Vec<SpanKey>);
+
 /// One text broken into lines at one width, in logical points from the top left corner of the
 /// box it was laid out for.
 #[derive(Clone, Debug, PartialEq)]
@@ -66,21 +82,67 @@ pub struct Block {
     pub height: f32,
     /// Each line's box: as wide as its glyphs and as tall as the line.
     pub lines: Vec<Rect>,
+    /// How the glyphs of run 0 look: the text's own style.
+    pub base: Run,
+    /// How the glyphs of each later run look, from run 1: each styled span's, then one for the
+    /// glyph of each mana symbol. Plain text has none, and allocates nothing for them.
+    pub runs: Vec<Run>,
     pub glyphs: Vec<PlacedGlyph>,
+    /// The disc of each mana symbol, drawn under its glyph.
+    pub symbols: Vec<Symbol>,
 }
 
-/// A glyph of a laid-out text: which glyph of the text's font, and where its pen position on
-/// the baseline lies.
+impl Block {
+    /// The look of the glyphs of run `index`.
+    #[must_use]
+    pub fn run(&self, index: u16) -> &Run {
+        match index {
+            0 => &self.base,
+            later => &self.runs[usize::from(later) - 1],
+        }
+    }
+}
+
+/// The look of some of a block's glyphs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Run {
+    pub style: TypeStyle,
+    /// Their color, or `None` for the color of the element that shows the text.
+    pub color: Option<[u8; 4]>,
+}
+
+/// A glyph of a laid-out text: which glyph of its run's font, the run it belongs to, and where
+/// its pen position on the baseline lies.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlacedGlyph {
     pub glyph: u16,
+    /// Its run, which [`Block::run`] gives the look of.
+    pub run: u16,
     pub x: f32,
     pub y: f32,
 }
 
+/// The disc a mana symbol is drawn on: an inline box the size of its line's em.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Symbol {
+    pub rect: Rect,
+    pub color: [u8; 4],
+}
+
+/// A mana symbol of a shaped text, before the text is broken into lines: its disc's color and
+/// its glyph, laid out in a box `em` wide with its top left corner at the origin.
+struct ShapedSymbol {
+    color: [u8; 4],
+    em: f32,
+    glyphs: Vec<PlacedGlyph>,
+}
+
 /// A text shaped once, with each width it has been broken at.
 struct Shaped {
-    layout: Layout<()>,
+    layout: Layout<u16>,
+    base: Run,
+    runs: Vec<Run>,
+    symbols: Vec<ShapedSymbol>,
     breaks: Vec<Block>,
     /// Whether the current layout pass has used it; a pass drops those it has not.
     used: bool,
@@ -89,10 +151,10 @@ struct Shaped {
 /// The fonts, parley's scratch space and the shaped texts.
 pub struct Text {
     fonts: FontContext,
-    layouts: LayoutContext<()>,
+    layouts: LayoutContext<u16>,
     /// Each bundled font's family name, as parley knows it, in the order of [`Font`].
     families: Vec<String>,
-    shaped: BTreeMap<(String, StyleKey), Shaped>,
+    shaped: BTreeMap<TextKey, Shaped>,
     /// Texts shaped since the counter was last taken.
     runs: u32,
 }
@@ -135,26 +197,44 @@ impl Text {
         }
     }
 
-    /// How large `text` in `style` is when broken at `max_width`, or on one line with `None`.
-    pub fn measure(&mut self, text: &str, style: TypeStyle, max_width: Option<f32>) -> (f32, f32) {
-        let block = self.block(text, style, max_width);
+    /// How large `text` in `style`, with `spans` styled apart, is when broken at `max_width`,
+    /// or on one line with `None`.
+    pub fn measure(
+        &mut self,
+        text: &str,
+        style: TypeStyle,
+        spans: &[Span],
+        max_width: Option<f32>,
+    ) -> (f32, f32) {
+        let block = self.block(text, style, spans, max_width);
         (block.width, block.height)
     }
 
-    /// `text` in `style` broken into lines at `max_width`. It is shaped the first time it is
-    /// asked for, and each width's lines are kept, so asking again does no work.
-    pub fn block(&mut self, text: &str, style: TypeStyle, max_width: Option<f32>) -> &Block {
-        let key = (text.to_owned(), style.key());
+    /// `text` in `style`, with `spans` styled apart, broken into lines at `max_width`. Each
+    /// `{...}` in it is a mana symbol (`symbols`). It is shaped the first time it is asked for,
+    /// and each width's lines are kept, so asking again does no work.
+    pub fn block(
+        &mut self,
+        text: &str,
+        style: TypeStyle,
+        spans: &[Span],
+        max_width: Option<f32>,
+    ) -> &Block {
+        let key = (
+            text.to_owned(),
+            style.key(),
+            (spans.iter())
+                .map(|span| SpanKey {
+                    start: span.range.start,
+                    end: span.range.end,
+                    style: span.style.key(),
+                    color: span.color,
+                })
+                .collect(),
+        );
         if !self.shaped.contains_key(&key) {
-            let layout = self.shape(text, style);
-            self.shaped.insert(
-                key.clone(),
-                Shaped {
-                    layout,
-                    breaks: Vec::new(),
-                    used: false,
-                },
-            );
+            let shaped = self.shape(text, style, spans);
+            self.shaped.insert(key.clone(), shaped);
         }
         let shaped = self.shaped.get_mut(&key).expect("inserted above");
         shaped.used = true;
@@ -164,7 +244,8 @@ impl Text {
             .position(|block| block.max_width == max_width);
         let at = found.unwrap_or_else(|| {
             shaped.layout.break_all_lines(max_width);
-            shaped.breaks.push(block_of(&shaped.layout, max_width));
+            let block = block_of(shaped, max_width);
+            shaped.breaks.push(block);
             shaped.breaks.len() - 1
         });
         &shaped.breaks[at]
@@ -183,15 +264,165 @@ impl Text {
         std::mem::take(&mut self.runs)
     }
 
-    fn shape(&mut self, text: &str, style: TypeStyle) -> Layout<()> {
+    /// Shapes `text` with its spans in one paragraph. Each mana symbol's `{...}` is replaced by
+    /// the object character parley lays an inline box out at, as wide as the em of the style
+    /// in force there, and the symbol's glyph is shaped apart in the Mana font.
+    fn shape(&mut self, text: &str, style: TypeStyle, spans: &[Span]) -> Shaped {
         self.runs += 1;
-        let family = self.families[style.font as usize].as_str();
+        let tokens = symbols::tokens(text);
+        // Where each symbol's object character lands in `words`.
+        let mut objects = Vec::with_capacity(tokens.len());
+        let words = if tokens.is_empty() {
+            std::borrow::Cow::Borrowed(text)
+        } else {
+            let mut words = String::with_capacity(text.len());
+            let mut from = 0;
+            for token in &tokens {
+                words.push_str(&text[from..token.start]);
+                objects.push(words.len());
+                words.push(symbols::OBJECT);
+                from = token.end;
+            }
+            words.push_str(&text[from..]);
+            std::borrow::Cow::Owned(words)
+        };
+        // A byte offset of `text` as one of `words`: one inside a symbol goes to the symbol's
+        // start, or its end for the end of a range.
+        let moved = |offset: usize, end: bool| {
+            let mut shift = 0;
+            for (token, &object) in tokens.iter().zip(&objects) {
+                if offset >= token.end {
+                    shift += token.len() - symbols::OBJECT.len_utf8();
+                } else if offset > token.start {
+                    return object + if end { symbols::OBJECT.len_utf8() } else { 0 };
+                } else {
+                    break;
+                }
+            }
+            offset - shift
+        };
+        // The style in force at a byte of `text`: the last span over it, or the text's own.
+        let style_at = |offset: usize| {
+            (spans.iter().rev())
+                .find(|span| (span.range.start as usize..span.range.end as usize).contains(&offset))
+                .map_or(style, |span| span.style)
+        };
+        let mut runs = Vec::with_capacity(spans.len() + tokens.len());
+        runs.extend(spans.iter().map(|span| Run {
+            style: span.style,
+            color: span.color,
+        }));
+        let mut shaped_symbols = Vec::with_capacity(tokens.len());
+        let mut boxes = Vec::with_capacity(tokens.len());
+        for (index, (token, &object)) in tokens.iter().zip(&objects).enumerate() {
+            let symbol = &text[token.start + 1..token.end - 1];
+            let around = style_at(token.start);
+            let em = around.size;
+            let run = u16::try_from(runs.len() + 1).expect("a text has fewer than 65,536 runs");
+            let (shaped, run) = self.shape_symbol(symbol, around, run);
+            runs.push(run);
+            shaped_symbols.push(shaped);
+            boxes.push(InlineBox {
+                id: index as u64,
+                kind: InlineBoxKind::InFlow,
+                index: object,
+                width: em,
+                height: em,
+                baseline: Some(em * (1.0 - symbols::DROP)),
+                vertical_align: VerticalAlign::BASELINE,
+            });
+        }
+        let ranges: Vec<(Range<usize>, TypeStyle)> = (spans.iter())
+            .map(|span| {
+                let range =
+                    moved(span.range.start as usize, false)..moved(span.range.end as usize, true);
+                (range, span.style)
+            })
+            .collect();
+        let mut builder = self.builder(&words, style, &ranges);
+        for inline in boxes {
+            builder.push_inline_box(inline);
+        }
+        Shaped {
+            layout: builder.build(&*words),
+            base: Run { style, color: None },
+            runs,
+            symbols: shaped_symbols,
+            breaks: Vec::new(),
+            used: false,
+        }
+    }
+
+    /// The disc and glyph of the mana symbol `symbol` (the text between its braces) in a line
+    /// of `around`, whose glyph is run `run`, with that run's look.
+    fn shape_symbol(&mut self, symbol: &str, around: TypeStyle, run: u16) -> (ShapedSymbol, Run) {
+        let em = around.size;
+        let (color, ink) = symbols::colors(symbol);
+        let glyph_style = TypeStyle {
+            font: Font::Mana,
+            weight: 400,
+            size: em * symbols::GLYPH_SIZE,
+            line_height: 1.0 / symbols::GLYPH_SIZE,
+        };
+        // A symbol the Mana font has no glyph for shows its own letters in the font around it,
+        // as `ManaSymbol` does.
+        let (letters, glyph_style) = match symbols::code(symbol) {
+            Some(code) => (code.to_string(), glyph_style),
+            None => (
+                symbol.to_owned(),
+                TypeStyle {
+                    font: around.font,
+                    ..glyph_style
+                },
+            ),
+        };
+        let mut layout = self.builder_layout(&letters, glyph_style, &[]);
+        layout.break_all_lines(None);
+        let left = (em - layout.width()) / 2.0;
+        let top = (em - layout.height()) / 2.0;
+        let mut glyphs = Vec::with_capacity(1);
+        for_each_glyph(&layout, |_, glyph, x, y| {
+            glyphs.push(PlacedGlyph {
+                glyph,
+                run,
+                x: left + x,
+                y: top + y,
+            });
+        });
+        (
+            ShapedSymbol { color, em, glyphs },
+            Run {
+                style: glyph_style,
+                color: Some(ink),
+            },
+        )
+    }
+
+    /// A layout of `text` in `style`, with `ranges` styled apart, and nothing more.
+    fn builder_layout(
+        &mut self,
+        text: &str,
+        style: TypeStyle,
+        ranges: &[(Range<usize>, TypeStyle)],
+    ) -> Layout<u16> {
+        self.builder(text, style, ranges).build(text)
+    }
+
+    /// A builder for `text` in `style`, with each of `ranges` in its own style. The brush of a
+    /// glyph is its run's index: 0 for `style`, and one past a range's index for its range.
+    fn builder<'a>(
+        &'a mut self,
+        text: &'a str,
+        style: TypeStyle,
+        ranges: &[(Range<usize>, TypeStyle)],
+    ) -> parley::RangedBuilder<'a, u16> {
         let mut builder = self
             .layouts
             .ranged_builder(&mut self.fonts, text, 1.0, false);
-        builder.push_default(StyleProperty::FontFamily(FontFamily::Single(
-            FontFamilyName::named(family),
-        )));
+        let family =
+            |font: Font| FontFamily::Single(FontFamilyName::named(&self.families[font as usize]));
+        builder.push_default(StyleProperty::Brush(0));
+        builder.push_default(StyleProperty::FontFamily(family(style.font)));
         builder.push_default(StyleProperty::FontSize(style.size));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(f32::from(
             style.weight,
@@ -199,18 +430,52 @@ impl Text {
         builder.push_default(StyleProperty::LineHeight(LineHeight::FontSizeRelative(
             style.line_height,
         )));
-        builder.build(text)
+        for (index, (range, span)) in ranges.iter().enumerate() {
+            let brush = u16::try_from(index + 1).expect("a text has fewer than 65,536 spans");
+            builder.push(StyleProperty::Brush(brush), range.clone());
+            builder.push(StyleProperty::FontFamily(family(span.font)), range.clone());
+            builder.push(StyleProperty::FontSize(span.size), range.clone());
+            builder.push(
+                StyleProperty::FontWeight(FontWeight::new(f32::from(span.weight))),
+                range.clone(),
+            );
+            builder.push(
+                StyleProperty::LineHeight(LineHeight::FontSizeRelative(span.line_height)),
+                range.clone(),
+            );
+        }
+        builder
     }
 }
 
-/// The lines and glyphs of a layout already broken at `max_width`.
-fn block_of(layout: &Layout<()>, max_width: Option<f32>) -> Block {
+/// Calls `each` with the brush, glyph and pen position of every glyph of `layout`, which has
+/// been broken into lines.
+fn for_each_glyph(layout: &Layout<u16>, mut each: impl FnMut(u16, u16, f32, f32)) {
+    for line in layout.lines() {
+        for item in line.items() {
+            if let PositionedLayoutItem::GlyphRun(run) = item {
+                let brush = run.style().brush;
+                for glyph in run.positioned_glyphs() {
+                    let id = u16::try_from(glyph.id).expect("an OpenType glyph id fits 16 bits");
+                    each(brush, id, glyph.x, glyph.y);
+                }
+            }
+        }
+    }
+}
+
+/// The lines, glyphs and symbols of a shaped text already broken at `max_width`.
+fn block_of(shaped: &Shaped, max_width: Option<f32>) -> Block {
+    let layout = &shaped.layout;
     let mut block = Block {
         max_width,
         width: 0.0,
         height: layout.height(),
         lines: Vec::new(),
+        base: shaped.base,
+        runs: shaped.runs.clone(),
         glyphs: Vec::new(),
+        symbols: Vec::new(),
     };
     for line in layout.lines() {
         let metrics = line.metrics();
@@ -223,17 +488,36 @@ fn block_of(layout: &Layout<()>, max_width: Option<f32>) -> Block {
             height: metrics.block_max_coord - metrics.block_min_coord,
         });
         for item in line.items() {
-            if let PositionedLayoutItem::GlyphRun(run) = item {
-                block
-                    .glyphs
-                    .extend(run.positioned_glyphs().map(|glyph| PlacedGlyph {
-                        glyph: u16::try_from(glyph.id).expect("an OpenType glyph id fits 16 bits"),
-                        x: glyph.x,
-                        y: glyph.y,
-                    }));
-            }
+            let PositionedLayoutItem::InlineBox(inline) = item else {
+                continue;
+            };
+            let Some(symbol) = usize::try_from(inline.id)
+                .ok()
+                .and_then(|id| shaped.symbols.get(id))
+            else {
+                continue;
+            };
+            block.symbols.push(Symbol {
+                rect: Rect {
+                    x: inline.x,
+                    y: inline.y,
+                    width: symbol.em,
+                    height: symbol.em,
+                },
+                color: symbol.color,
+            });
+            block
+                .glyphs
+                .extend(symbol.glyphs.iter().map(|glyph| PlacedGlyph {
+                    x: inline.x + glyph.x,
+                    y: inline.y + glyph.y,
+                    ..*glyph
+                }));
         }
     }
+    for_each_glyph(layout, |run, glyph, x, y| {
+        block.glyphs.push(PlacedGlyph { glyph, run, x, y });
+    });
     block
 }
 

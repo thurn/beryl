@@ -1,8 +1,9 @@
 //! The glyph table (docs/beryl-3d.md, "Text": glyphs are drawn from an atlas). It maps a glyph
 //! of a font at a weight and a size in physical pixels to where the rasterizer put it, and
 //! lists each glyph laid-out text needs that is not there yet, once, for the host to hand to
-//! the rasterizer. A glyph that is not there draws nothing and moves nothing, because layout
-//! never depends on rasterization.
+//! the rasterizer. A glyph that is not there at its size is drawn from the nearest size that is
+//! (`Glyphs::nearest`), and one not there at any size draws nothing. Either way nothing moves
+//! when it arrives, because layout never depends on rasterization.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -46,10 +47,29 @@ impl Glyphs {
         self.table.get(&key).copied()
     }
 
-    /// Asks for each glyph of `block`, in `style` at `scale` physical pixels per point, that no
-    /// page holds and that has not been asked for.
-    pub fn want(&mut self, block: &Block, style: TypeStyle, scale: f32) {
+    /// Where the glyph `key` is, or failing that the same glyph at the nearest size a page
+    /// holds, with how many times larger `key`'s size is than that cell's. A glyph at a new size
+    /// (after the display's scale changed) is drawn from its old cell, scaled, until its own
+    /// page arrives.
+    #[must_use]
+    pub fn nearest(&self, key: GlyphKey) -> Option<(Placed, f32)> {
+        if let Some(placed) = self.get(key) {
+            return Some((placed, 1.0));
+        }
+        let sizes = GlyphKey { size: 0, ..key }..=GlyphKey {
+            size: u16::MAX,
+            ..key
+        };
+        (self.table.range(sizes))
+            .min_by_key(|(cell, _)| cell.size.abs_diff(key.size))
+            .map(|(cell, placed)| (*placed, f32::from(key.size) / f32::from(cell.size.max(1))))
+    }
+
+    /// Asks for each glyph of `block`, in its run's style at `scale` physical pixels per point,
+    /// that no page holds and that has not been asked for.
+    pub fn want(&mut self, block: &Block, scale: f32) {
         for glyph in &block.glyphs {
+            let style = block.run(glyph.run).style;
             let key = key(style, scale, glyph.glyph);
             if !self.table.contains_key(&key) && self.asked.insert(key) {
                 self.wanted.push_back(key);

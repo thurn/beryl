@@ -120,6 +120,13 @@ pub mod color {
     pub const SETTLE_BURST: [u8; 4] = [255, 226, 170, 217];
 }
 
+/// The colors of mana symbols in text (`text::symbols`): each symbol's disc, and the ink of its
+/// glyph, from `flat.mana`.
+#[allow(clippy::doc_markdown)]
+pub mod mana {
+    include!(concat!(env!("OUT_DIR"), "/tokens/mana.rs"));
+}
+
 /// The colors of the badges on a permanent (`table::badges`), from the web interface's CSS
 /// rules for the same marks in `ui/src/design/components`. Each is RGBA, not premultiplied.
 pub mod badge {

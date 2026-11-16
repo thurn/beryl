@@ -1544,10 +1544,13 @@ Text is laid out by `parley` in the client core and rasterized by
 
 - **Layout** covers shaping, line breaking, alignment, styled spans inside one
   paragraph, and inline boxes. Mana symbols and other icons in rules text are
-  inline boxes, so `{1}{U}` flows and wraps with the words around it.
+  inline boxes, so `{1}{U}` flows and wraps with the words around it. A symbol's
+  box is as wide as its line's em. It is drawn as a disc in the symbol's color
+  (`flat.mana` in `data/design-tokens.json`, from the web interface's
+  `mana-symbols.css`) with the symbol's glyph from the Mana font on it.
 
-- **Layout results are cached** by text, style and width. A prompt's text is
-  laid out once, in `handle`, when the prompt arrives.
+- **Layout results are cached** by text, style, spans and width. A prompt's text
+  is laid out once, in `handle`, when the prompt arrives.
 
 - **Glyphs are drawn from an atlas.** Each glyph is rasterized once at the pixel
   size it is shown at, into a single-channel texture page, and each glyph on
@@ -1560,9 +1563,9 @@ Text is laid out by `parley` in the client core and rasterized by
 
 - **A glyph at a new size is not waited for.** When the display's scale changes
   (a window dragged to another monitor), glyphs are rasterized again on a
-  worker. Until a page is uploaded, text is drawn from the old size, scaled.
-  Layout does not depend on rasterization, so nothing moves when the new page
-  arrives.
+  worker. Until a page is uploaded, text is drawn from the old size, scaled: a
+  glyph missing at its size is drawn from the nearest size a page holds. Layout
+  does not depend on rasterization, so nothing moves when the new page arrives.
 
 - **Text on a card is part of the card's face**, baked into its texture. See the
   [Card faces](#card-faces) section below.

@@ -86,7 +86,7 @@ impl Badges {
             ];
             self.pieces = pieces
                 .into_iter()
-                .map(|piece| text.block(piece, STYLE, None).clone())
+                .map(|piece| text.block(piece, STYLE, &[], None).clone())
                 .collect();
             debug_assert_eq!(self.pieces.len(), PIECES);
         }
@@ -107,7 +107,7 @@ impl Badges {
 
     fn want(&self, wanted: &mut Glyphs) {
         for block in &self.pieces {
-            wanted.want(block, STYLE, self.scale);
+            wanted.want(block, self.scale);
         }
     }
 }

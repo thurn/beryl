@@ -97,8 +97,9 @@ fn write_sounds(manifest: &std::path::Path, out_dir: &std::path::Path) {
 /// The modules of `src/tokens.rs` from `design-tokens.json`, each as its name and its
 /// constants. `color` holds a constant for every token of kind `color`, named for the token in
 /// upper case with `_` for `-`, then the colors of `flat.color`. `space`, `type_style` and
-/// `size` hold the entries of `flat` under the same names. A number in `flat` is a `value`, or
-/// the `token` of kind `length` whose pixels it takes; a `note` becomes the doc comment.
+/// `size` hold the entries of `flat` under the same names, and `mana` the colors of
+/// `flat.mana`. A number in `flat` is a `value`, or the `token` of kind `length` whose pixels it
+/// takes; a `note` becomes the doc comment.
 fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
     let tokens = Tokens {
         list: json["tokens"].as_array().expect("`tokens` is an array"),
@@ -117,7 +118,23 @@ fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
         ("type_style", write_type_styles(&tokens)),
         ("size", size),
         ("color", write_colors(&tokens)),
+        ("mana", write_mana(&tokens)),
     ]
+}
+
+/// The module `mana`: each entry of `flat.mana`, a mana symbol's disc or ink as the hex color
+/// in its `value`.
+fn write_mana(tokens: &Tokens) -> String {
+    let mut out = String::new();
+    for (key, entry) in tokens.entries("mana") {
+        let value = entry["value"]
+            .as_str()
+            .unwrap_or_else(|| panic!("`flat.mana.{key}` has a color `value`"));
+        let rgba = parse_color(value, &|name| tokens.find(name));
+        let doc = entry["note"].as_str().unwrap_or("A mana symbol's color.");
+        writeln!(out, "/// {doc}\npub const {key}: [u8; 4] = {rgba:?};").unwrap();
+    }
+    out
 }
 
 /// The tokens of `design-tokens.json` and its `flat` object.

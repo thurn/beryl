@@ -17,6 +17,7 @@ mod effects_light;
 mod elements;
 mod faces;
 mod flat_layer;
+mod flat_text;
 mod light;
 mod motion;
 mod notices;

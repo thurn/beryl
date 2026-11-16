@@ -286,7 +286,7 @@ fn glyphs_of(text: &str) -> Vec<u16> {
     let mut shaper = Text::new();
     text.chars()
         .flat_map(|piece| {
-            let block = shaper.block(&piece.to_string(), STYLE, None);
+            let block = shaper.block(&piece.to_string(), STYLE, &[], None);
             block
                 .glyphs
                 .iter()

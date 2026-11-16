@@ -10,7 +10,7 @@ use crate::element::{Display, TextAlign};
 use crate::frame::{Band, Draw, FrameBuilder, NameRef, Place, Resolved, StateBits};
 use crate::input::Rect;
 use crate::table::Camera;
-use crate::text::{self, BlockLook};
+use crate::text::{self, BlockLook, faded};
 use crate::tokens::{color, size};
 
 impl Layer {
@@ -128,7 +128,6 @@ impl Layer {
         let element = &node.element;
         let offset = look.point;
         let fade = |color: [u8; 4]| faded(color, look.opacity);
-        let style = element.style.text;
         let free = Vec2::new(
             node.content.width - block.width,
             node.content.height - block.height,
@@ -158,8 +157,8 @@ impl Layer {
             None => color::TEXT_FAINT,
         });
         let look = BlockLook {
-            style,
             tint,
+            opacity: look.opacity,
             scale: self.window.scale,
             glyphs: &self.glyphs,
             camera,
@@ -210,20 +209,6 @@ fn moved(rect: Rect, offset: Vec2) -> Rect {
         y: rect.y + offset.y,
         ..rect
     }
-}
-
-/// `color` with its alpha scaled by `opacity`.
-fn faded(color: [u8; 4], opacity: f32) -> [u8; 4] {
-    let [red, green, blue, alpha] = color;
-    // An alpha times a value from 0 to 1 stays in 0 to 255, so the cast loses nothing but the
-    // fraction.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "the product is in 0 to 255"
-    )]
-    let alpha = (f32::from(alpha) * opacity.clamp(0.0, 1.0)).round() as u8;
-    [red, green, blue, alpha]
 }
 
 /// A box's corners as a resolved element holds them: bottom left, bottom right, top right and

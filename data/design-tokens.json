@@ -352,6 +352,44 @@
         "color": "surface-raised",
         "note": "`--surface-raised`: a button's face."
       }
+    },
+    "mana": {
+      "W": {
+        "value": "#f6f2c8",
+        "note": "A white mana symbol's disc: `.mana-w` in `ui/src/design/components/mana-symbols.css`."
+      },
+      "U": {
+        "value": "#c4ecfb",
+        "note": "A blue mana symbol's disc: the middle stop of `.mana-u`'s gradient."
+      },
+      "B": {
+        "value": "#b3a8a3",
+        "note": "A black mana symbol's disc: `.mana-b`."
+      },
+      "R": {
+        "value": "#ef9c7c",
+        "note": "A red mana symbol's disc: `.mana-r`."
+      },
+      "G": {
+        "value": "#9fcca5",
+        "note": "A green mana symbol's disc: `.mana-g`."
+      },
+      "C": {
+        "value": "#d3cbc1",
+        "note": "A colorless mana symbol's disc: `.mana-c`."
+      },
+      "GENERIC": {
+        "value": "#d3cbc1",
+        "note": "The disc of a number or any other symbol: `.mana-generic`."
+      },
+      "INK": {
+        "value": "#161412",
+        "note": "A mana symbol's glyph: the `color` of `.mana-symbol`."
+      },
+      "U_INK": {
+        "value": "#020405",
+        "note": "A blue mana symbol's glyph: the `color` of `.mana-u`."
+      }
     }
   }
 }
