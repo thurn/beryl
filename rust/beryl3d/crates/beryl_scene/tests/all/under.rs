@@ -118,7 +118,7 @@ fn a_lands_row_stands_from_its_left_end() {
 }
 
 #[test]
-fn an_artifact_with_a_mana_ability_stands_among_the_lands() {
+fn an_artifact_with_a_mana_ability_stands_among_the_lands_after_them() {
     let mut builder = ViewBuilder::sample();
     let mut permanent = |name: &str, types: Vec<CardType>, mana_ability: bool| {
         let card = builder.card(ZoneName::Battlefield, Side::Opponent, name);
@@ -127,6 +127,8 @@ fn an_artifact_with_a_mana_ability_stands_among_the_lands() {
         card.slot
     };
     let rock = permanent("Mana Crypt", vec![CardType::Artifact], true);
+    // A land stands before the rock, as on the web, though it entered after.
+    let land = permanent("Island", vec![CardType::Land], true);
     let equipment = permanent("Leonin Scimitar", vec![CardType::Artifact], false);
     // A creature stands with the creatures, whatever it taps for.
     let dork = permanent(
@@ -141,6 +143,9 @@ fn an_artifact_with_a_mana_ability_stands_among_the_lands() {
         place @ Place::Layer => panic!("a permanent rests in a row, not {place:?}"),
     };
     assert_eq!(row(rock), Some(RowName::Lands));
+    assert_eq!(row(land), Some(RowName::Lands));
+    let x = |slot| placement.get(slot).expect("placed").pose.position.x;
+    assert!(x(land) < x(rock), "the land stands left of the rock");
     assert_eq!(row(equipment), Some(RowName::Others));
     assert_eq!(row(dork), Some(RowName::Creatures));
 }

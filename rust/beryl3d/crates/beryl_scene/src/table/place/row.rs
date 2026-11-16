@@ -1,6 +1,6 @@
 //! Battlefield row placement and the geometry shared by all placements in a window.
 
-use beryl_protocol::protocol::{ObjectId, ObjectView, RowName, Side};
+use beryl_protocol::protocol::{CardType, ObjectId, ObjectView, RowName, Side};
 
 use super::{Placement, ROWS, Rest, host_slot, row_index, side_index};
 use crate::agent::hit;
@@ -38,8 +38,8 @@ impl RowFits {
 }
 
 /// One of one side's three battlefield rows, `cards` in the order they entered. They keep that
-/// order, except that lands stand untapped first, so how much mana is open reads at a glance,
-/// and each name together, in the order the names first appear.
+/// order, except that mana sources stand untapped first, so how much mana is open reads at a
+/// glance, lands before artifacts, and each name together, in the order the names first appear.
 pub(super) fn battlefield_row(
     placement: &mut Placement,
     cards: &[&ObjectView],
@@ -106,18 +106,23 @@ pub(super) fn battlefield_row(
     );
 }
 
-/// A lands row's cards in the order they stand: untapped first, and each name together, in the
-/// order the names first appear in `cards`. Otherwise the order of `cards` is kept. Also links
-/// each card, in that order, to the one before it with its name.
+/// A lands row's cards in the order they stand: untapped first, then lands before the mana
+/// artifacts, as the web interface's `sideGroups` has it, and each name together, in the order
+/// the names first appear in `cards`. Otherwise the order of `cards` is kept. Also links each
+/// card, in that order, to the one before it with its name.
 fn lands_in_order<'a>(
     cards: &[&'a ObjectView],
     ids: Option<&NameIds<'_>>,
 ) -> (Vec<&'a ObjectView>, SameName) {
     let names = SameName::of(cards, ids);
+    let land = |object: &ObjectView| object.types.contains(&CardType::Land);
+    let groups = [(false, true), (false, false), (true, true), (true, false)];
     if !names.repeats() {
         let mut order = Vec::with_capacity(cards.len());
-        for tapped in [false, true] {
-            order.extend(cards.iter().copied().filter(|card| card.tapped == tapped));
+        for (tapped, lands) in groups {
+            order.extend(
+                (cards.iter().copied()).filter(|card| card.tapped == tapped && land(card) == lands),
+            );
         }
         return (order, names);
     }
@@ -131,19 +136,20 @@ fn lands_in_order<'a>(
             after[previous] = Some(index);
         }
     }
-    // Each name's cards, untapped and then tapped, from its first card. `latest` holds where
-    // the card last put in order with each name went, by the index of that name's first card.
+    // Each name's cards, untapped and then tapped, lands first, from its first card. `latest`
+    // holds where the card last put in order with each name went, by the index of that name's
+    // first card.
     let mut order = Vec::with_capacity(cards.len());
     let mut previous = Vec::with_capacity(cards.len());
     let mut latest: Vec<Option<usize>> = vec![None; cards.len()];
-    for tapped in [false, true] {
+    for (tapped, lands) in groups {
         for (index, &first) in first.iter().enumerate() {
             if first != index {
                 continue;
             }
             let mut next = Some(index);
             while let Some(card) = next {
-                if cards[card].tapped == tapped {
+                if cards[card].tapped == tapped && land(cards[card]) == lands {
                     previous.push(latest[index]);
                     latest[index] = Some(order.len());
                     order.push(cards[card]);
