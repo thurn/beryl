@@ -60,6 +60,22 @@ fixed in the same session. Newest first.
   covers every counted part of a spell's cost, and the fuzz's shrink test
   (`fuzz_games_keep_the_invariants`) found the case.
 
+- **A prompt's lookahead could misread a paused resolution's answers.** The
+  nightly's session fuzz (`session_games_keep_the_script_checks`) panicked with
+  "an answer among the objects" in `choices::pick_about` while the session
+  played a prompt's answers ahead on a copy of the game, to see which answer
+  leaves more cards castable (`prompt::ahead`). `ahead::forced` switches the
+  copy to forced stops, under which every question is asked, even one with a
+  single answer. A paused resolution resumes by running its body again with the
+  answers so far recorded in order, and under smart stops a question with one
+  answer is answered silently and never recorded. Asked on the copy, such a
+  question took the next question's recorded answer, here an index out of its
+  range. Fixed: `forced` leaves the stops alone while a resolution or a step's
+  actions are paused. A session test
+  (`a_paused_resolution_keeps_its_stops_on_a_forced_copy`) holds it. Prevention:
+  the record's meaning depends on the stops it was made under, and no type ties
+  the two together yet; the session fuzz catches a misreading.
+
 - **A spell's life payment ignored "your life total can't change".** Under
   Teferi's Protection or Platinum Emperion, a player was offered Force of Will
   for its alternative cost, and casting it exiled the blue card and paid no
