@@ -1540,11 +1540,17 @@ What the session does and what a client still does:
   that function, and the web interface asks for the table once at startup.
   `prompts::own` plays each change of prompt as one beat (`prompts::Steps`), as
   the web's `Prompts.#mark` does: the ends first, then the tray, then the
-  beginnings. A beat with a tray step has the client move the tray's cards from
-  places it worked out as the prompt changed, so that the frame lays nothing
-  out. The steps that end a closed prompt's marks are written under the view
-  that closed it, and the tray letting its cards go first in that view's beat,
-  where the web lets it go as the answer's script begins.
+  beginnings. A step is played for each mark as the session sent it, whatever
+  the table draws for it: a payment's `suggested` marks look like `eligible`
+  ones until the pointer is on Auto Pay, and a question's are not drawn until
+  the pointer is on its yes, as the web's styles draw them, and where only that
+  look changes no step plays. A new decision ends the last prompt's marks and
+  begins its own, even where they are the same marks. A beat with a tray step
+  has the client move the tray's cards from places it worked out as the prompt
+  changed, so that the frame lays nothing out. The steps that end a closed
+  prompt's marks are written under the view that closed it, and the tray letting
+  its cards go first in that view's beat, where the web lets it go as the
+  answer's script begins.
 - **Segments are made from the laid-out beat.** Each step becomes segments, at
   absolute times, on the scene objects it concerns.
 - **Reduced motion** is a client's choice: it plays every step with no duration,
@@ -3821,6 +3827,9 @@ launch tests  macOS pass, Windows pass, iOS pass, Android pass
   it, with the fixture that shows it.
 - **A launch test** starts the app on one platform with no window shown and
   passes when the app draws a frame.
+- **Prompt shapes** are counted from the `prompt_shapes` of
+  `data/beryl3d/screens.json`, which names one fixture for each shape of
+  `ui/shapes.json`.
 - **Screens** are listed by hand in one data file, because nothing generates
   them: the start screen, the opening hand and mulligan, the game, game over,
   settings, the bug report, the card gallery, the testing screen and each of the

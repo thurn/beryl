@@ -168,27 +168,67 @@ fn own_shape(shown: Option<Shown>, was: Option<Shown>, steps: &mut Steps) {
 /// Makes the marks on the table those of `shown` where they were those of `was`: the marks
 /// `was` had and `shown` has not end, then the tray lifts the cards `shown` holds up or lets
 /// those of `was` go (`tray::lift`), then the marks new in `shown` begin, one after another in one
-/// beat, as the web interface's `#mark` in `ui/src/stage/prompt.ts` plays them. `look`
-/// gives the mark the table draws for each of a prompt's marks, or none where it draws none.
-/// Allocates nothing.
-fn marks(
-    shown: Option<Shown>,
-    was: Option<Shown>,
+/// beat, as the web interface's `#mark` in `ui/src/stage/prompt.ts` plays them. A step is
+/// played for each mark as the session sent it, so that both clients' timelines hold the same
+/// steps. `look` gives the mark the table draws for each of a prompt's marks, or none where it
+/// draws none, as the web stage's styles draw a mark by the prompt's state (`data-pay` in
+/// `ui/src/stage/stage.css`): what a mark's step begins or ends is the mark as drawn. Where
+/// only the look of a mark changed (the pointer came onto Auto Pay), the web plays no step and
+/// its styles change at once, so the table's spans change at once too. Allocates nothing.
+fn marks<'a>(
+    shown: Option<Shown<'a>>,
+    was: Option<Shown<'a>>,
     look: &impl Fn(Shown, Marked) -> Option<Mark>,
     steps: &mut Steps,
 ) {
-    let drawn = |prompt| drawn(prompt, look);
-    for span in drawn(was).filter(|span| !drawn(shown).any(|now| now == *span)) {
-        let span = Span::Mark(span);
-        let over = steps.next(OwnStep::MarkEnds, Verb::Mark, Some(&span));
-        steps.lit.end(&span, over);
+    let has = |prompt: Option<Shown<'a>>, marked: &Marked| sent(prompt).any(|then| then == marked);
+    let spans = |prompt| drawn(prompt, look);
+    let looked = |prompt: Option<Shown<'a>>, marked: Marked| {
+        let mark = look(prompt?, marked)?;
+        Some(Span::Mark(MarkSpan {
+            mark,
+            on: marked.on,
+        }))
+    };
+    let draws = |prompt, span: &Span| spans(prompt).any(|now| Span::Mark(now) == *span);
+    for &marked in sent(was).filter(|marked| !has(shown, marked)) {
+        let span = looked(was, marked);
+        let over = steps.next(OwnStep::MarkEnds, Verb::Mark, span.as_ref());
+        if let Some(span) = span.filter(|span| !draws(shown, span)) {
+            steps.lit.end(&span, over);
+        }
     }
     tray::lift(shown, was, steps);
-    for span in drawn(shown).filter(|span| !drawn(was).any(|then| then == *span)) {
-        let step = OwnStep::MarkBegins { mark: span.mark };
+    for &marked in sent(shown).filter(|marked| !has(was, marked)) {
+        let step = OwnStep::MarkBegins { mark: marked.mark };
         let over = steps.next(step, Verb::Mark, None);
-        steps.lit.begin(Span::Mark(span), over);
+        if let Some(span) = looked(shown, marked).filter(|span| !draws(was, span)) {
+            steps.lit.begin(span, over);
+        }
     }
+    let at_once = Interval {
+        from: steps.now,
+        to: steps.now,
+    };
+    for &marked in sent(shown).filter(|marked| has(was, marked)) {
+        let (then, now) = (looked(was, marked), looked(shown, marked));
+        if then == now {
+            continue;
+        }
+        if let Some(span) = then.filter(|span| !draws(shown, span)) {
+            steps.lit.end(&span, at_once);
+        }
+        if let Some(span) = now.filter(|span| !draws(was, span)) {
+            steps.lit.begin(span, at_once);
+        }
+    }
+}
+
+/// The marks the session sent with `prompt`.
+fn sent(prompt: Option<Shown<'_>>) -> impl Iterator<Item = &Marked> {
+    prompt
+        .into_iter()
+        .flat_map(|shown| shown.prompt.marks.iter())
 }
 
 /// Ends each span that `spans` gives for `was` and not for `shown`, an arrow by `ArrowEnds` and

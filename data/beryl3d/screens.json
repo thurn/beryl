@@ -10,5 +10,19 @@
     { "name": "testing", "screen": "testing", "recording": "screen/testing", "built": true },
     { "name": "lobby", "screen": "lobby", "recording": "screen/lobby", "built": true },
     { "name": "manual table", "screen": "table", "recording": "screen/table", "built": true }
-  ]
+  ],
+  "prompt_shapes": {
+    "pick": "shape-pick",
+    "pile": "shape-pile",
+    "split": "shape-split",
+    "zone": "shape-zone",
+    "order": "shape-order",
+    "pay": "shape-pay",
+    "declare": "shape-declare",
+    "yesNo": "shape-yes",
+    "number": "shape-number",
+    "mode": "shape-mode",
+    "catalog": "shape-catalog",
+    "divide": "shape-divide"
+  }
 }

@@ -136,13 +136,15 @@ impl Client {
 
     /// Takes `prompt` as the open prompt, which the decision is for `source` (unchanged where
     /// the prompt is the same decision's). If it differs from the one open before, the next
-    /// `frame` calls `prompts::own` for the change, a prompt closing included. A prompt with no
+    /// `frame` calls `prompts::own` for the change, a prompt closing included. A new decision
+    /// whose prompt is the same as the last one's is a change too: the last one's marks end and
+    /// the new one's begin, as the web's `Prompts.play` ends the open prompt's marks for any
+    /// decision but the open one shown again (`ui/src/stage/prompt.ts`). A prompt with no
     /// button that shows what it would tap stops the pointer's showing it, as the web's
     /// `usePaying` does: a button that goes while the pointer is on it never says the pointer
     /// left.
     pub(super) fn set_prompt(&mut self, prompt: Option<(DecisionId, PromptView)>) {
-        let changed = self.prompt.as_ref().map(|(_, prompt)| prompt)
-            != prompt.as_ref().map(|(_, prompt)| prompt);
+        let changed = self.prompt != prompt;
         let was = std::mem::replace(&mut self.prompt, prompt);
         if changed {
             let suggesting = self.suggesting.now
