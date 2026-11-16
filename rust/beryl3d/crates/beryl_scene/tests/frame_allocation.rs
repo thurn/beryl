@@ -4,7 +4,8 @@
 //! 255 attackers wearing their wedges, nor on a table of 255 permanents that each wear badges,
 //! nor while a hand card rises under the mouse, nor while a scrolled battlefield row slides, and
 //! neither does moving a float of the flat layer and writing it, nor an element anchored to a
-//! card following it as it flies (docs/beryl-3d.md, "The frame": no allocation). This binary counts every heap allocation, so it holds one test.
+//! card following it as it flies, nor elements of the screen fading in and moving
+//! (docs/beryl-3d.md, "The frame": no allocation). This binary counts every heap allocation, so it holds one test.
 
 mod common;
 
@@ -240,6 +241,7 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
 
     a_moved_float_allocates_nothing();
     an_anchored_element_allocates_nothing();
+    a_transition_allocates_nothing();
 }
 
 /// The frames of the turn banner: the one that shows it, those that fade it in and out, and
@@ -517,6 +519,34 @@ fn an_anchored_element_allocates_nothing() {
                 "allocations at {now} with an anchored element"
             );
         }
+    }
+}
+
+/// The frames while a new element of the screen fades in and a kept one moves to a new place.
+fn a_transition_allocates_nothing() {
+    let mut layer = Layer::new();
+    let screen = |gap: f32| {
+        row()
+            .name("screen")
+            .gap(gap)
+            .child(text("Keep"))
+            .child(text("Pass"))
+    };
+    layer.show(Some(screen(0.0)));
+    layer.tick(0);
+    layer.tick(common::MS * 1_000);
+    layer.show(Some(screen(40.0).child(text("Mulligan"))));
+    let table = Table::default();
+    let mut frame = Frame::with_capacity(64, 256, 1024);
+    for now in (0..12).map(|index| common::MS * (1_000 + index * 16)) {
+        let before = ALLOCATIONS.load(Ordering::Relaxed);
+        let moving = layer.tick(now);
+        let mut builder = FrameBuilder::new(&mut frame);
+        layer.write(&mut builder, table.camera(), true);
+        builder.finish();
+        let after = ALLOCATIONS.load(Ordering::Relaxed);
+        assert!(moving, "the transitions last past {now}");
+        assert_eq!(after - before, 0, "allocations at {now} in a transition");
     }
 }
 

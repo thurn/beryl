@@ -306,6 +306,10 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
         #[cfg(feature = "drive")]
         let frames = frames.driven(self.drive.take());
         let mut frames = frames;
+        // Whether `Cmd` in a shortcut is the Command key or Control.
+        frames.handle(Input::Platform {
+            mac: cfg!(target_os = "macos"),
+        });
         frames.handle(translator.surface());
         Ok(Running {
             frames,

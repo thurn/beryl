@@ -559,5 +559,10 @@
     "penumbra": 0.18,
     "least_height": 1,
     "above": 0.1
+  },
+  "flat": {
+    "transition": {
+      "ms": 180
+    }
   }
 }

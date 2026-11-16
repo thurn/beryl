@@ -8,7 +8,7 @@ use taffy::{
     LengthPercentageAuto, Line,
 };
 
-use crate::element::{Align, Direction, Display, Justify, Position, Style, Track};
+use crate::element::{Align, Direction, Display, Justify, Overflow, Position, Style, Track};
 
 /// An element's style as taffy's.
 pub(super) fn taffy_style(style: &Style) -> taffy::Style {
@@ -79,9 +79,23 @@ pub(super) fn taffy_style(style: &Style) -> taffy::Style {
             .copied()
             .map(track)
             .collect(),
+        // An element that clips or scrolls is as large as its own style says, whatever its
+        // children need, as in CSS.
+        overflow: taffy::Point {
+            x: overflow(style.overflow),
+            y: overflow(style.overflow),
+        },
         grid_column: placement(style.grid_column),
         grid_row: placement(style.grid_row),
         ..taffy::Style::default()
+    }
+}
+
+fn overflow(overflow: Overflow) -> taffy::Overflow {
+    match overflow {
+        Overflow::Visible => taffy::Overflow::Visible,
+        Overflow::Clip => taffy::Overflow::Clip,
+        Overflow::Scroll => taffy::Overflow::Scroll,
     }
 }
 

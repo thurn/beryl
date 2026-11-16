@@ -6,6 +6,7 @@
 
 use taffy::{NodeId, TraversePartialTree};
 
+use super::motion::Motion;
 use super::style::taffy_style;
 use super::{Layer, Node, TextLeaf};
 use crate::element::{Anchor, Element};
@@ -23,9 +24,18 @@ impl Layer {
                     self.remove(old);
                 }
                 let children = std::mem::take(&mut element.children);
-                let node = self.new_node(&element);
+                let mut node = self.new_node(&element);
                 element.children = children;
-                node
+                self.update(&mut node, element);
+                // A new node of the screen fades in, and its new children with it rather than
+                // each on its own.
+                if self.animating {
+                    node.motion = Some(Motion::fade_in());
+                    for child in &mut node.children {
+                        child.motion = None;
+                    }
+                }
+                return node;
             }
         };
         self.update(&mut node, element);
@@ -52,6 +62,10 @@ impl Layer {
             content: Rect::default(),
             block: None,
             followed: None,
+            location: None,
+            scroll_room: glam::Vec2::ZERO,
+            scroll: glam::Vec2::ZERO,
+            motion: None,
         }
     }
 
@@ -80,6 +94,12 @@ impl Layer {
         }
         if !matches!(element.anchor, Some(Anchor::Object(..))) {
             node.followed = None;
+        }
+        // A kept node of the screen whose opacity changes fades to it from how opaque it is.
+        if self.animating && node.element.style.opacity.to_bits() != element.style.opacity.to_bits()
+        {
+            let opacity = node.opacity();
+            node.transition(glam::Vec2::ZERO, opacity);
         }
         // A node that gains or loses its anchor leaves or joins its parent's flow, so its
         // layout is computed again in its new tree.

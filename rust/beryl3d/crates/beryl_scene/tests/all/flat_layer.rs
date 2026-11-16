@@ -182,7 +182,10 @@ fn pointer(phase: PointerPhase, position: Vec2) -> Input {
 fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
     let mut client = client();
     client.handle(deciding(prompt("Pay {1}{U}")));
-    let frame = client.frame(0);
+    let opened = client.frame(0);
+    assert!(opened.work.layout_nodes > 0 && opened.work.text_runs > 0);
+    // Once the bar has faded in, which takes its buttons out of reach for its first frame.
+    let frame = client.frame(500 * MS);
     let bar = find(frame, Role::Region, "prompt");
     let title = find(frame, Role::Text, "Pay {1}{U}");
     let auto = find(frame, Role::Button, "Auto Pay");
@@ -224,7 +227,6 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
         .filter(|draw| draw.material == Material::Panel as u8)
         .count();
     assert_eq!(panels, 13);
-    assert!(frame.work.layout_nodes > 0 && frame.work.text_runs > 0);
 }
 
 #[test]
@@ -287,14 +289,16 @@ fn glyphs_are_asked_for_once_and_drawn_when_a_page_holds_them() {
 fn an_equal_view_lays_out_and_shapes_nothing() {
     let mut client = client();
     client.handle(deciding(prompt("Pay {1}{U}")));
-    let first = client.frame(0).clone();
-    assert!(first.work.layout_nodes > 0 && first.work.text_runs > 0);
+    let opened = client.frame(0);
+    assert!(opened.work.layout_nodes > 0 && opened.work.text_runs > 0);
+    // Once the bar has faded in.
+    let first = client.frame(500 * MS).clone();
     client.handle(deciding(prompt("Pay {1}{U}")));
-    let second = client.frame(1);
+    let second = client.frame(500 * MS + 1);
     assert_eq!(second.work.layout_nodes, 0);
     assert_eq!(second.work.text_runs, 0);
     assert_eq!(second.resolved, first.resolved);
-    let idle = client.frame(2);
+    let idle = client.frame(500 * MS + 2);
     assert_eq!((idle.work.layout_nodes, idle.work.text_runs), (0, 0));
 }
 

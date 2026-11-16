@@ -118,9 +118,9 @@ pub struct Style {
     pub grid_column: Option<(i16, i16)>,
     /// As `grid_column`, for rows.
     pub grid_row: Option<(i16, i16)>,
-    /// The elements track.
     pub overflow: Overflow,
-    /// How opaque the element and its children are, from 0 to 1: the elements track.
+    /// How opaque the element and its children are, from 0 to 1. A change of it on a kept
+    /// element of the screen fades over a transition (`layout::motion`).
     pub opacity: f32,
     /// The color of the element's panel in place of the usual one. An element that is not
     /// usually drawn on a panel is drawn on one of this color.

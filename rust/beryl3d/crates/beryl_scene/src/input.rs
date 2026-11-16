@@ -35,6 +35,12 @@ pub enum Input {
     Assets(AssetReady),
     /// The app was suspended or resumed, or the system is low on memory.
     Lifecycle(Lifecycle),
+    /// Which platform the host runs on, sent once at startup: whether `Cmd` in a shortcut
+    /// means the Command key, as on the Mac, or Control. Until it arrives the client takes the
+    /// Mac's.
+    Platform {
+        mac: bool,
+    },
     /// The visual tier to draw in.
     Tier(Tier),
     /// The session's answer to a `SessionCommand`.

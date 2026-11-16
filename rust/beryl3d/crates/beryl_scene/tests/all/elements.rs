@@ -1,14 +1,21 @@
 //! The flat layer's elements: matching a new tree to the kept one by role, name and place, grid
 //! and absolute layout, and elements anchored to a card that follow it as it flies.
 
+use beryl_protocol::prompt::{ButtonId, Click, ClickRequest};
 use beryl_protocol::script::Subject;
-use beryl_scene::element::{Anchor, Display, Element, Position, Track, row, text};
-use beryl_scene::frame::{ElementId, Frame, FrameBuilder, Role};
+use beryl_scene::command::SessionCommand;
+use beryl_scene::element::{
+    Anchor, Chord, Display, Element, Overflow, Position, Press, Track, column, row, text,
+};
+use beryl_scene::frame::{ElementId, Frame, FrameBuilder, Role, StateBits};
+use beryl_scene::input::{Input, Key, KeyCode, KeyPhase, Modifiers};
 use beryl_scene::layout::{Layer, centre_of};
+use beryl_scene::pose::Curve;
 use beryl_scene::table::Table;
 use glam::Vec2;
 
-use crate::common::{MS, before, empty_frame, show, three_beats};
+use crate::common::{MS, before, empty_frame, show, three_beats, window};
+use crate::flat_layer::{client, deciding, decision, prompt};
 
 /// The frame `layer` writes on its own, with the layout work done since the last one.
 fn write(layer: &mut Layer) -> Frame {
@@ -205,4 +212,200 @@ fn an_element_that_gains_an_anchor_stands_at_its_point() {
         "the badge's box is {:?}",
         [x, y, width, height]
     );
+}
+
+/// A key pressed with `modifiers`.
+fn key(code: KeyCode, modifiers: Modifiers) -> Input {
+    Input::Key(Key {
+        code,
+        phase: KeyPhase::Down,
+        modifiers,
+    })
+}
+
+/// A layer laid out in a 1440 by 900 window at two pixels to the point.
+fn layer() -> Layer {
+    let mut layer = Layer::new();
+    layer.resize(window(1440.0, 900.0));
+    layer
+}
+
+#[test]
+fn scrolling_moves_the_rows_without_layout_and_only_the_visible_ones_take_presses() {
+    let mut layer = layer();
+    let rows = (0..30).map(|index| text(&format!("Row {index}")).on_press(Press::Concede));
+    layer.show(Some(
+        column()
+            .name("box")
+            .overflow(Overflow::Scroll)
+            .height(200.0)
+            .children(rows),
+    ));
+    let before = write(&mut layer);
+    let [x, y, ..] = find(&before, Role::Region, "box").1;
+    let scroller = (layer.scroller_at(Vec2::new(x + 5.0, y + 5.0), true)).expect("the box scrolls");
+    assert!(layer.scroll(scroller, Vec2::new(0.0, 300.0)));
+    let after = write(&mut layer);
+
+    assert_eq!((after.work.layout_nodes, after.work.text_runs), (0, 0));
+    let top = |frame: &Frame, row: usize| find(frame, Role::Text, &format!("Row {row}")).1[1];
+    for row in [0, 15, 29] {
+        assert!(
+            close(top(&before, row) - top(&after, row), 300.0),
+            "row {row} moved by 300"
+        );
+    }
+    for element in after.resolved.iter().filter(|e| e.role == Role::Text) {
+        let (low, high) = (element.corners[2].y, element.corners[0].y);
+        let shown = high > y && low < y + 200.0;
+        assert_eq!(element.interactive, shown, "{}", after.name(element.name));
+        assert!(element.clip.is_some());
+    }
+    // The wheel cannot scroll past the last row.
+    assert!(layer.scroll(scroller, Vec2::new(0.0, 10_000.0)));
+    assert!(!layer.scroll(scroller, Vec2::new(0.0, 10.0)));
+}
+
+#[test]
+fn nested_clips_clip_to_their_intersection() {
+    let mut layer = layer();
+    layer.show(Some(
+        region("outer")
+            .overflow(Overflow::Clip)
+            .width(200.0)
+            .height(100.0)
+            .child(
+                region("inner")
+                    .overflow(Overflow::Clip)
+                    .margin([50.0, 0.0, 0.0, 150.0])
+                    .width(100.0)
+                    .height(100.0)
+                    .shrink(0.0)
+                    .child(text("Clipped")),
+            ),
+    ));
+    let frame = write(&mut layer);
+    let [ox, oy, ..] = find(&frame, Role::Region, "outer").1;
+    let cut = frame.resolved[find_index(&frame, "Clipped")]
+        .clip
+        .expect("the text is clipped");
+    let want = [ox + 150.0, oy + 50.0, 50.0, 50.0];
+    assert!(
+        [cut.x, cut.y, cut.width, cut.height]
+            .iter()
+            .zip(want)
+            .all(|(&a, b)| close(a, b)),
+        "{cut:?}"
+    );
+    // The frame's clips are in physical pixels.
+    let inner = frame.clips[2];
+    assert!(
+        close(inner.x, 2.0 * want[0]) && close(inner.width, 100.0),
+        "{inner:?}"
+    );
+}
+
+/// The index in `frame.resolved` of the element named `name`.
+fn find_index(frame: &Frame, name: &str) -> usize {
+    (frame.resolved.iter())
+        .position(|element| frame.name(element.name) == name)
+        .unwrap_or_else(|| panic!("no element named {name:?}"))
+}
+
+#[test]
+fn a_fading_node_is_partway_through_its_transition() {
+    let mut layer = layer();
+    let screen = |opacity: f32| region("screen").child(text("Fading").opacity(opacity));
+    layer.show(Some(screen(1.0)));
+    layer.tick(0);
+    assert!(!layer.tick(1_000 * MS), "the fade in has ended");
+    layer.show(Some(screen(0.0)));
+    assert!(
+        layer.tick(2_000 * MS),
+        "the fade out begins at the next frame"
+    );
+    let half = 2_000 * MS + 90 * MS;
+    assert!(layer.tick(half));
+    let frame = write(&mut layer);
+    let opacity = frame.resolved[find_index(&frame, "Fading")].opacity;
+    let want = 1.0 - Curve::EASE_OUT.ease(0.5);
+    assert!(close(opacity, want), "{opacity} halfway, not {want}");
+    assert!(!layer.tick(2_000 * MS + 180 * MS));
+    let frame = write(&mut layer);
+    assert!(close(
+        frame.resolved[find_index(&frame, "Fading")].opacity,
+        0.0
+    ));
+}
+
+#[test]
+fn tab_moves_the_focus_to_the_next_button_and_return_presses_it() {
+    let mut client = client();
+    client.handle(deciding(prompt("Pay {1}{U}")));
+    client.frame(0);
+    client.handle(key(KeyCode::Tab, Modifiers::default()));
+    client.handle(key(KeyCode::Tab, Modifiers::default()));
+    let frame = client.frame(MS);
+    let cancel = &frame.resolved[find_index(frame, "Cancel")];
+    assert!(
+        cancel.state.has(StateBits::FOCUSED),
+        "Tab went to Auto Pay, then Cancel"
+    );
+    assert!(
+        !frame.resolved[find_index(frame, "Auto Pay")]
+            .state
+            .has(StateBits::FOCUSED)
+    );
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    assert_eq!(
+        client.next_command(),
+        Some(SessionCommand::Click(ClickRequest {
+            decision: decision(),
+            revision: 3,
+            click: Click::Button {
+                button: ButtonId::Decline
+            },
+        }))
+    );
+}
+
+#[test]
+fn cmd_b_opens_the_bug_report_and_ctrl_b_does_off_the_mac() {
+    let command = Modifiers {
+        command: true,
+        ..Modifiers::default()
+    };
+    let control = Modifiers {
+        control: true,
+        ..Modifiers::default()
+    };
+    let opens = |platform: Option<bool>, modifiers: Modifiers| {
+        let mut client = client();
+        if let Some(mac) = platform {
+            client.handle(Input::Platform { mac });
+        }
+        client.handle(key(KeyCode::B, modifiers));
+        let frame = client.frame(0);
+        (frame.resolved.iter()).any(|element| frame.name(element.name) == "bug report")
+    };
+    assert!(opens(None, command), "Cmd+B on the Mac");
+    assert!(!opens(None, control), "Ctrl+B is not the Mac's chord");
+    assert!(opens(Some(false), control), "Ctrl+B elsewhere");
+    assert!(!opens(Some(false), command));
+    assert_eq!(
+        Chord::parse("Cmd+Shift+L", true),
+        Some(Chord {
+            key: KeyCode::L,
+            modifiers: Modifiers {
+                shift: true,
+                command: true,
+                ..Modifiers::default()
+            },
+        })
+    );
+    assert_eq!(
+        Chord::parse("Delete", true).map(|c| c.key),
+        Some(KeyCode::Backspace)
+    );
+    assert_eq!(Chord::parse("Hyper+X", true), None);
 }

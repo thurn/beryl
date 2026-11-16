@@ -12,14 +12,17 @@ use beryl_protocol::script::{OwnTimings, Subject, Verb, own_timings};
 
 use crate::agent::hit;
 use crate::command::{Reply, Request, SessionCommand};
-use crate::element::Press;
+use crate::element::{Chord, Press};
 use crate::faces::{FaceList, Faces};
 use crate::frame::{self, ElementId, Frame, FrameBuilder, Place, Role, Sound, Wake};
 use crate::hud::counts::CountFloats;
 use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
 use crate::hud::rows::RowCounts;
-use crate::input::{AssetReady, Button, GlyphKey, Input, Lifecycle, Pointer, PointerPhase, Tier};
+use crate::input::{
+    AssetReady, Button, GlyphKey, Input, Key, KeyCode, KeyPhase, Lifecycle, Pointer, PointerKind,
+    PointerPhase, Tier,
+};
 use crate::layout::{self, Layer};
 use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
@@ -28,6 +31,14 @@ use crate::prompts;
 use crate::screens::{self, Music, Screen, ScreenIn, Sheet};
 use crate::settings::{Setting, Settings};
 use crate::table::{Table, Window};
+
+/// The platform a host runs on, as far as the client cares: where `Cmd` in a shortcut means
+/// the Command key, and where it means Control.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Platform {
+    Mac,
+    Other,
+}
 
 /// The sizes the client sets at startup.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,6 +110,11 @@ pub struct Client {
     open: bool,
     /// The element the primary pointer went down on, which a release on it presses.
     pressed: Option<ElementId>,
+    /// The finger dragging a scrolling element of the flat layer, that element, and where the
+    /// finger was last.
+    scroll_drag: Option<(u8, ElementId, glam::Vec2)>,
+    /// The host's platform, which says what `Cmd` in a shortcut means.
+    platform: Platform,
     wake: Wake,
     requests: VecDeque<Request>,
     commands: VecDeque<SessionCommand>,
@@ -134,6 +150,8 @@ impl Client {
             own_due: false,
             open: false,
             pressed: None,
+            scroll_drag: None,
+            platform: Platform::Mac,
             wake: Wake::Never,
             requests: VecDeque::new(),
             commands: VecDeque::new(),
@@ -222,6 +240,10 @@ impl Client {
             }
             Input::Nudge => {}
             Input::Pointer(pointer) => self.point(pointer),
+            Input::Key(key) => self.key(key),
+            Input::Platform { mac } => {
+                self.platform = if mac { Platform::Mac } else { Platform::Other };
+            }
             Input::Cards(records) => {
                 *self.show.faces_mut() = Faces::new(FaceList::from_records(&records));
             }
@@ -239,20 +261,11 @@ impl Client {
                 size,
                 scale,
                 safe_area,
-            } => {
-                self.window = Window {
-                    size,
-                    scale,
-                    safe_area,
-                };
-                self.show.resize(self.window);
-                self.layer.resize(self.window);
-                (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
-                if self.show.badges_mut().shaped() {
-                    let glyphs = self.layer.glyphs_mut();
-                    (self.show.badges_mut()).rescale(scale, glyphs);
-                }
-            }
+            } => self.resize(Window {
+                size,
+                scale,
+                safe_area,
+            }),
             Input::Tier(tier) => self.set_tier(tier),
             Input::Lifecycle(Lifecycle::LowMemory) => self.low_memory(),
             input => self.inputs.push(input),
@@ -286,6 +299,7 @@ impl Client {
                 prompts::own(prompt, self.was.as_ref(), lit, &self.own_timings, now);
             }
         }
+        let transitioning = self.layer.tick(now);
         self.show.pointer_mut().advance(now);
         self.show.advance_slide(now);
         let mut builder = FrameBuilder::new(&mut self.frame);
@@ -331,7 +345,11 @@ impl Client {
             };
             self.click(Click::On { on });
         }
-        self.wake = self.show.wake(now);
+        self.wake = if transitioning {
+            Wake::Now
+        } else {
+            self.show.wake(now)
+        };
         &self.frame
     }
 
@@ -393,6 +411,9 @@ impl Client {
     /// next `frame` asks what it meant.
     fn point(&mut self, pointer: Pointer) {
         self.show.pointer_mut().handle(&pointer);
+        if self.scroll_layer(&pointer) {
+            return;
+        }
         let scroll = (self.row_gesture).handle(&pointer, &self.frame, self.show.table());
         if let Some((row, first)) = scroll
             && self.show.scroll_row(row, first)
@@ -404,6 +425,9 @@ impl Client {
         match pointer.phase {
             PointerPhase::Down if primary => {
                 self.pressed = (self.layer.press_at(pointer.position, open)).map(|(id, ..)| id);
+                if let Some(id) = self.layer.focusable_at(pointer.position, open) {
+                    self.layer.focus(Some(id));
+                }
                 if self.pressed.is_none()
                     && let Some(index) = hit(&self.frame, pointer.position)
                     && let element = &self.frame.resolved[index as usize]
@@ -424,6 +448,100 @@ impl Client {
             }
             PointerPhase::Cancel | PointerPhase::Leave => self.pressed = None,
             _ => {}
+        }
+    }
+
+    /// Lays the table and the flat layer out in a window of a new size, scale or safe area.
+    fn resize(&mut self, window: Window) {
+        self.window = window;
+        self.show.resize(window);
+        self.layer.resize(window);
+        (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
+        if self.show.badges_mut().shaped() {
+            let glyphs = self.layer.glyphs_mut();
+            (self.show.badges_mut()).rescale(window.scale, glyphs);
+        }
+    }
+
+    /// Scrolls the flat layer's element under `pointer` by the wheel, or by a touch dragged
+    /// over it, which then scrolls it until the finger lifts. Returns whether the pointer
+    /// scrolled the flat layer, and so means nothing else.
+    fn scroll_layer(&mut self, pointer: &Pointer) -> bool {
+        let open = self.open;
+        match pointer.phase {
+            PointerPhase::Wheel => {
+                let Some(id) = self.layer.scroller_at(pointer.position, open) else {
+                    return false;
+                };
+                // A wheel turned down scrolls toward the end, as in a browser.
+                self.layer.scroll(id, -pointer.wheel);
+                true
+            }
+            PointerPhase::Down if pointer.kind == PointerKind::Touch => {
+                self.scroll_drag = (self.layer.scroller_at(pointer.position, open))
+                    .map(|id| (pointer.id, id, pointer.position));
+                false
+            }
+            PointerPhase::Move => match &mut self.scroll_drag {
+                Some((finger, id, last)) if *finger == pointer.id => {
+                    // The content follows the finger.
+                    let delta = *last - pointer.position;
+                    *last = pointer.position;
+                    let id = *id;
+                    self.layer.scroll(id, delta);
+                    self.pressed = None;
+                    true
+                }
+                _ => false,
+            },
+            PointerPhase::Up | PointerPhase::Cancel | PointerPhase::Leave => {
+                if self
+                    .scroll_drag
+                    .is_some_and(|(finger, ..)| finger == pointer.id)
+                {
+                    self.scroll_drag = None;
+                }
+                false
+            }
+            PointerPhase::Down => false,
+        }
+    }
+
+    /// A key goes to the screen's shortcuts first, then moves the focus (Tab), presses the
+    /// focused element (Return) or closes the sheet or menu on top (Escape), and otherwise
+    /// opens the bug report on its chord: Cmd+B, or Cmd+Shift+B while the manual table is
+    /// shown, where Cmd+B is the table's own (`isBugReportShortcut` in
+    /// `ui/src/components/bugReportKeys.ts`). A key that means none of these waits for the next
+    /// frame, as before.
+    fn key(&mut self, key: Key) {
+        if key.phase == KeyPhase::Up {
+            return;
+        }
+        let first = key.phase == KeyPhase::Down;
+        let bug_report = if self.screen == Screen::Table {
+            "Cmd+Shift+B"
+        } else {
+            "Cmd+B"
+        };
+        let press = if let Some(press) = self.layer.shortcut(&key, self.platform == Platform::Mac) {
+            Some(press)
+        } else if key.code == KeyCode::Tab {
+            self.layer.move_focus(!key.modifiers.shift);
+            None
+        } else if first && key.code == KeyCode::Enter {
+            self.layer.focused_press()
+        } else if first && key.code == KeyCode::Escape {
+            self.layer.close_press()
+        } else if first
+            && Chord::parse(bug_report, self.platform == Platform::Mac) == Some(Chord::of(&key))
+        {
+            Some(Press::Sheet(Some(Sheet::BugReport)))
+        } else {
+            self.inputs.push(Input::Key(key));
+            None
+        };
+        if let Some(press) = press {
+            self.press(&press);
         }
     }
 
@@ -493,9 +611,10 @@ impl Client {
                     self.show_screen();
                 }
             }
-            // No menu, text field or viewer is built yet, so there is nothing for these to act
-            // on: the widgets and game screen tracks give them their arms.
-            Press::Menu(..) | Press::Focus(_) | Press::Dismiss(_) => {}
+            Press::Focus(id) => self.layer.focus(Some(id)),
+            // No menu or viewer is built yet, so there is nothing for these to act on: the
+            // widgets and game screen tracks give them their arms.
+            Press::Menu(..) | Press::Dismiss(_) => {}
         }
     }
 

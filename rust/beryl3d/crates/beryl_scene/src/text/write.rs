@@ -26,6 +26,8 @@ pub struct BlockLook<'a> {
     pub glyphs: &'a Glyphs,
     /// The camera whose flat-layer plane the glyphs are drawn on.
     pub camera: &'a Camera,
+    /// The clip rectangle the glyphs are drawn under (`FrameBuilder::clip`), or 0 for none.
+    pub clip: u8,
 }
 
 /// Writes the symbols and glyphs of `block` whose top left corner, in logical points of the
@@ -37,17 +39,18 @@ pub fn write_block(builder: &mut FrameBuilder, block: &Block, origin: Vec2, look
             y: origin.y + symbol.rect.y,
             ..symbol.rect
         };
-        builder.draw(
-            Band::Layer,
-            Draw::panel(
-                look.camera.layer_transform(rect),
-                faded(symbol.color, look.opacity),
-                [0; 4],
-                Vec2::new(rect.width, rect.height),
-                rect.width / 2.0,
-                0.0,
-            ),
+        let mut draw = Draw::panel(
+            look.camera.layer_transform(rect),
+            faded(symbol.color, look.opacity),
+            [0; 4],
+            Vec2::new(rect.width, rect.height),
+            rect.width / 2.0,
+            0.0,
         );
+        if look.clip > 0 {
+            draw = draw.with_clip(look.clip);
+        }
+        builder.draw(Band::Layer, draw);
     }
     let scale = look.scale;
     for glyph in &block.glyphs {
@@ -67,17 +70,18 @@ pub fn write_block(builder: &mut FrameBuilder, block: &Block, origin: Vec2, look
         let tint = run
             .color
             .map_or(look.tint, |color| faded(color, look.opacity));
-        builder.draw(
-            Band::Layer,
-            Draw::glyph(
-                look.camera.layer_transform(rect),
-                tint,
-                Sprite {
-                    page: placed.page,
-                    rect: placed.rect,
-                },
-            ),
+        let mut draw = Draw::glyph(
+            look.camera.layer_transform(rect),
+            tint,
+            Sprite {
+                page: placed.page,
+                rect: placed.rect,
+            },
         );
+        if look.clip > 0 {
+            draw = draw.with_clip(look.clip);
+        }
+        builder.draw(Band::Layer, draw);
     }
 }
 

@@ -9,7 +9,10 @@
 
 mod anchor;
 mod float;
+mod focus;
+mod motion;
 mod reconcile;
+mod scroll;
 mod style;
 mod write;
 
@@ -66,6 +69,16 @@ struct Node {
     /// For an element anchored to a scene object, the object's centre on the window as the
     /// last frame drew it, or `None` if the table did not show it (`Layer::follow`).
     followed: Option<glam::Vec2>,
+    /// Where its layout put its top left corner, relative to its tree's, once it has been
+    /// placed.
+    location: Option<glam::Vec2>,
+    /// How far what it holds reaches past its box on each axis, which is as far as it could
+    /// scroll.
+    scroll_room: glam::Vec2,
+    /// How far its children are scrolled, for an element that scrolls (`scroll`).
+    scroll: glam::Vec2,
+    /// The move or fade it is making, if any (`motion`).
+    motion: Option<motion::Motion>,
 }
 
 /// The flat layer.
@@ -86,6 +99,11 @@ pub struct Layer {
     /// Layout nodes computed and texts shaped since `take_work` was last called.
     layout_nodes: u32,
     text_runs: u32,
+    /// The element that takes the keys (`focus`).
+    focused: Option<ElementId>,
+    /// Whether the tree being matched and laid out is the screen's, whose changes transition
+    /// (`motion`); floats' do not.
+    animating: bool,
 }
 
 impl Default for Layer {
@@ -118,6 +136,8 @@ impl Layer {
             icons: Icons::default(),
             layout_nodes: 0,
             text_runs: 0,
+            focused: None,
+            animating: false,
         }
     }
 
@@ -139,6 +159,7 @@ impl Layer {
 
     /// Shows `screen`, or nothing, matching it against the screen shown before.
     pub fn show(&mut self, screen: Option<Element>) {
+        self.animating = true;
         let old = self.screen.take();
         self.screen = match (old, screen) {
             (old, Some(element)) => Some(self.reconcile(old, element)),
@@ -164,6 +185,7 @@ impl Layer {
                 .expect("the screen's node is in the tree");
         }
         self.relayout();
+        self.animating = false;
     }
 
     /// The layout nodes computed and texts shaped since the last call.
@@ -200,37 +222,51 @@ impl Layer {
     /// last drawn first. The screen is searched only while it is `open`, that is drawn.
     #[must_use]
     pub fn press_at(&self, point: glam::Vec2, open: bool) -> Option<(ElementId, Press, bool)> {
-        /// The press at `point` in `node`'s tree, whose top left corner stands at `origin`;
-        /// `point` is on the window.
-        fn find(
+        self.hit(point, open, |node| {
+            let element = &node.element;
+            (element.press.clone()).map(|press| (node.id, press, element.enabled))
+        })
+    }
+
+    /// The first value `want` gives for an element at `point`, asking the innermost first:
+    /// floats, the last drawn first, then the screen while it is `open`. An element is at
+    /// `point` where it is drawn: moved by its own transition and by the scroll of the elements
+    /// it is in, and inside the box of every element it is in.
+    fn hit<T>(
+        &self,
+        point: glam::Vec2,
+        open: bool,
+        want: impl Fn(&Node) -> Option<T>,
+    ) -> Option<T> {
+        /// The value at `point` in `node`'s tree, whose top left corner stands at `origin`.
+        fn find<T>(
             node: &Node,
             point: glam::Vec2,
             origin: glam::Vec2,
-        ) -> Option<(ElementId, Press, bool)> {
+            want: &impl Fn(&Node) -> Option<T>,
+        ) -> Option<T> {
             if node.element.style.display == element::Display::None
-                || !contains(node.rect, point - origin)
+                || !contains(node.rect, point - origin - node.offset())
             {
                 return None;
             }
+            let inside = origin - node.scroll;
             (node.children.iter().rev())
                 .find_map(|child| match child.element.anchor {
                     // An anchored child's tree is laid out from (0, 0), and stands at its corner.
-                    Some(_) => find(child, point, child.corner()?),
-                    None => find(child, point, origin),
+                    Some(_) => find(child, point, child.corner()?, want),
+                    None => find(child, point, inside, want),
                 })
-                .or_else(|| {
-                    let element = &node.element;
-                    (element.press.clone()).map(|press| (node.id, press, element.enabled))
-                })
+                .or_else(|| want(node))
         }
         (self.floats.iter().rev())
-            .find_map(|float| find(&float.node, point, float.corner()))
+            .find_map(|float| find(&float.node, point, float.corner(), &want))
             .or_else(|| {
                 (self.screen.as_ref())
                     .filter(|_| open)
                     .and_then(|node| match node.element.anchor {
-                        Some(_) => find(node, point, node.corner()?),
-                        None => find(node, point, glam::Vec2::ZERO),
+                        Some(_) => find(node, point, node.corner()?, &want),
+                        None => find(node, point, glam::Vec2::ZERO, &want),
                     })
             })
     }
@@ -344,6 +380,20 @@ impl Layer {
             .layout(node.taffy)
             .expect("the node is in the tree");
         let corner = origin + glam::Vec2::new(layout.location.x, layout.location.y);
+        node.scroll_room = glam::Vec2::new(layout.scroll_width(), layout.scroll_height());
+        // A kept node of the screen that its layout moves on the window moves there. A node
+        // that stays where it was stays still, whatever its parent does, and one whose size
+        // changes is drawn at its new place at once, since its size does not transition.
+        let resized = node.rect.width.to_bits() != layout.size.width.to_bits()
+            || node.rect.height.to_bits() != layout.size.height.to_bits();
+        if self.animating
+            && let Some(was) = node.location
+            && was != corner
+            && !resized
+        {
+            node.transition(was - corner, node.opacity());
+        }
+        node.location = Some(corner);
         node.rect = Rect {
             x: corner.x,
             y: corner.y,

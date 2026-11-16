@@ -2,6 +2,7 @@
 //! style, text, what a press on them means, and children. Screens are plain functions that
 //! return elements; the client keeps the tree they return and lays it out (`layout`).
 
+mod keys;
 mod style;
 
 use std::ops::Range;
@@ -11,6 +12,7 @@ use beryl_protocol::protocol::Step;
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
+pub use keys::{Chord, Shortcuts};
 pub use style::{Align, Direction, Display, Justify, Overflow, Position, Style, TextAlign, Track};
 
 use crate::frame::{ElementId, Role};
@@ -110,13 +112,15 @@ pub struct Element {
     pub press: Option<Press>,
     /// Whether a press does anything now.
     pub enabled: bool,
-    /// Whether it takes keys: the widgets track.
+    /// Whether it takes keys: a press on it gives it the focus (`layout::focus`).
     pub focus: bool,
     /// Where it stands if it is placed at a point of the window or on a scene object rather
     /// than in its parent's layout. It is laid out at its content's size (`layout::anchor`).
     pub anchor: Option<Anchor>,
     /// A face or a scene object shown in its box: the furniture and cards track.
     pub shows: Option<Shown>,
+    /// The keyboard shortcuts the screen answers, given on its top element.
+    pub shortcuts: Shortcuts,
     pub children: Vec<Element>,
 }
 
@@ -135,6 +139,7 @@ impl Element {
             focus: false,
             anchor: None,
             shows: None,
+            shortcuts: Shortcuts::default(),
             children: Vec::new(),
         }
     }
@@ -152,6 +157,7 @@ impl Element {
             && self.focus == other.focus
             && self.anchor == other.anchor
             && self.shows == other.shows
+            && self.shortcuts == other.shortcuts
     }
 
     #[must_use]
@@ -169,6 +175,14 @@ impl Element {
     #[must_use]
     pub fn on_press(mut self, press: Press) -> Self {
         self.press = Some(press);
+        self
+    }
+
+    /// Answers the shortcut `binding`, written as the web interface writes one (`keys`), with
+    /// `press`. Only the screen's top element's shortcuts are answered.
+    #[must_use]
+    pub fn shortcut(mut self, binding: &str, press: Press) -> Self {
+        self.shortcuts.0.push((binding.to_owned(), press));
         self
     }
 

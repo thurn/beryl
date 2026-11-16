@@ -5,13 +5,25 @@
 
 use glam::Vec2;
 
-use super::{FloatLook, Layer, Node, has_panel};
-use crate::element::{Display, TextAlign};
+use super::{Layer, Node, has_panel};
+use crate::element::{Display, Overflow, TextAlign};
 use crate::frame::{Band, Draw, FrameBuilder, NameRef, Place, Resolved, StateBits};
 use crate::input::Rect;
 use crate::table::Camera;
 use crate::text::{self, BlockLook, faded};
 use crate::tokens::{color, size};
+
+/// How a node and everything under it is drawn: where its tree's top left corner stands, how
+/// opaque it is, the color of its text, and the clip it is drawn under.
+#[derive(Clone, Copy)]
+struct Look {
+    point: Vec2,
+    opacity: f32,
+    tint: Option<[u8; 4]>,
+    /// The clip's rectangle on the window, in logical points, and its entry in the frame's
+    /// clips (`FrameBuilder::clip`), 0 when the frame's clips were all taken.
+    clip: Option<(Rect, u8)>,
+}
 
 impl Layer {
     /// Writes the flat layer into `builder`, on the plane `camera` puts in front of the table:
@@ -24,33 +36,38 @@ impl Layer {
                 None => Some(Vec2::ZERO),
             };
             if let Some(point) = corner {
-                let look = FloatLook {
+                let look = Look {
                     point,
-                    ..FloatLook::default()
+                    opacity: 1.0,
+                    tint: None,
+                    clip: None,
                 };
                 self.write_node(node, u32::MAX, true, look, builder, camera);
             }
         }
         for float in &self.floats {
-            let look = FloatLook {
+            let look = Look {
                 point: float.corner(),
-                anchor: Vec2::ZERO,
-                ..float.look
+                opacity: float.look.opacity,
+                tint: float.look.tint,
+                clip: None,
             };
             self.write_node(&float.node, u32::MAX, true, look, builder, camera);
         }
     }
 
     /// Writes `node` and everything under it, moved so that its tree's top left corner stands
-    /// at `look.point`, with `look`'s opacity and text color. A node shown with `Display::None`
-    /// is not written, and an anchored child is written at its own corner, or not at all while
-    /// the object it is anchored to is not shown.
+    /// at `look.point`, with `look`'s opacity, text color and clip. A node shown with
+    /// `Display::None` is not written, and an anchored child is written at its own corner, or
+    /// not at all while the object it is anchored to is not shown. A node that clips or
+    /// scrolls writes its children under a clip of its box, the box of any clip it is under
+    /// cut to it, moved by its scroll offset.
     fn write_node(
         &self,
         node: &Node,
         parent: u32,
         top: bool,
-        look: FloatLook,
+        mut look: Look,
         builder: &mut FrameBuilder,
         camera: &Camera,
     ) {
@@ -58,10 +75,19 @@ impl Layer {
             return;
         }
         builder.visit();
+        look.opacity *= node.opacity();
         let element = &node.element;
-        let offset = look.point;
-        let rect = moved(node.rect, offset);
+        // A transition moves the node alone: each node under it has its own.
+        let rect = moved(node.rect, look.point + node.offset());
         let fade = |color: [u8; 4]| faded(color, look.opacity);
+        let clip = look.clip.map_or(0, |(_, entry)| entry);
+        let mut state = 0;
+        if !element.enabled {
+            state |= StateBits::DISABLED;
+        }
+        if self.focused == Some(node.id) {
+            state |= StateBits::FOCUSED;
+        }
         let index = builder.resolved(
             &element.name,
             Resolved {
@@ -73,35 +99,54 @@ impl Layer {
                 corners: corners(rect),
                 depth: 0.0,
                 opacity: look.opacity,
-                clip: None,
-                interactive: element.press.is_some(),
-                state: StateBits(if element.enabled {
-                    0
-                } else {
-                    StateBits::DISABLED
-                }),
+                clip: look.clip.map(|(rect, _)| rect),
+                // An element scrolled out of its clip cannot be pressed, and one wholly
+                // transparent, as at the first frame it fades in, cannot be seen to be.
+                interactive: element.press.is_some()
+                    && look.opacity > 0.0
+                    && look.clip.is_none_or(|(clip, _)| overlaps(clip, rect)),
+                state: StateBits(state),
                 face: None,
                 really: crate::frame::NameRef::default(),
             },
         );
         if let Some(panel) = panel(node, top) {
-            builder.draw(
-                Band::Layer,
-                Draw::panel(
-                    camera.layer_transform(rect),
-                    fade(panel.tint),
-                    fade(panel.edge),
-                    Vec2::new(rect.width, rect.height),
-                    panel.radius,
-                    panel.border,
-                ),
+            let mut draw = Draw::panel(
+                camera.layer_transform(rect),
+                fade(panel.tint),
+                fade(panel.edge),
+                Vec2::new(rect.width, rect.height),
+                panel.radius,
+                panel.border,
             );
+            if clip > 0 {
+                draw = draw.with_clip(clip);
+            }
+            builder.draw(Band::Layer, draw);
         }
         if node.block.is_some() {
-            self.write_text(node, index, look, builder, camera);
+            let shown = Look {
+                point: look.point + node.offset(),
+                ..look
+            };
+            self.write_text(node, index, shown, builder, camera);
+        }
+        let mut inside = look;
+        if element.style.overflow != Overflow::Visible {
+            let cut = look
+                .clip
+                .map_or(Some(rect), |(clip, _)| intersection(clip, rect));
+            let cut = cut.unwrap_or(Rect {
+                width: 0.0,
+                height: 0.0,
+                ..rect
+            });
+            let entry = builder.clip(scaled(cut, self.window.scale)).unwrap_or(0);
+            inside.clip = Some((cut, entry));
+            inside.point -= node.scroll;
         }
         for child in &node.children {
-            let mut look = look;
+            let mut look = inside;
             if child.element.anchor.is_some() {
                 let Some(corner) = child.corner() else {
                     continue;
@@ -113,12 +158,12 @@ impl Layer {
     }
 
     /// Writes the lines and glyphs of `node`'s text, which the resolved element at `index`
-    /// shows, moved and colored by `look`.
+    /// shows, moved, colored and clipped by `look`.
     fn write_text(
         &self,
         node: &Node,
         index: u32,
-        look: FloatLook,
+        look: Look,
         builder: &mut FrameBuilder,
         camera: &Camera,
     ) {
@@ -126,13 +171,12 @@ impl Layer {
             return;
         };
         let element = &node.element;
-        let offset = look.point;
         let fade = |color: [u8; 4]| faded(color, look.opacity);
         let free = Vec2::new(
             node.content.width - block.width,
             node.content.height - block.height,
         );
-        let origin = offset
+        let origin = look.point
             + Vec2::new(
                 node.content.x
                     + match element.style.text_align {
@@ -156,14 +200,15 @@ impl Layer {
             None if element.enabled => color::TYPE,
             None => color::TEXT_FAINT,
         });
-        let look = BlockLook {
+        let block_look = BlockLook {
             tint,
             opacity: look.opacity,
             scale: self.window.scale,
             glyphs: &self.glyphs,
             camera,
+            clip: look.clip.map_or(0, |(_, entry)| entry),
         };
-        text::write_block(builder, block, origin, &look);
+        text::write_block(builder, block, origin, &block_look);
     }
 }
 
@@ -200,6 +245,34 @@ fn panel(node: &Node, top: bool) -> Option<Panel> {
         },
         border: style.border.map_or(border, |(_, width)| width),
     })
+}
+
+/// The part of the window that both `a` and `b` cover, if any.
+fn intersection(a: Rect, b: Rect) -> Option<Rect> {
+    let (left, top) = (a.x.max(b.x), a.y.max(b.y));
+    let right = (a.x + a.width).min(b.x + b.width);
+    let bottom = (a.y + a.height).min(b.y + b.height);
+    (right > left && bottom > top).then_some(Rect {
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top,
+    })
+}
+
+/// Whether `a` and `b` cover any of the window in common.
+fn overlaps(a: Rect, b: Rect) -> bool {
+    intersection(a, b).is_some()
+}
+
+/// A rectangle in logical points as physical pixels, at `scale` pixels to the point.
+fn scaled(rect: Rect, scale: f32) -> Rect {
+    Rect {
+        x: rect.x * scale,
+        y: rect.y * scale,
+        width: rect.width * scale,
+        height: rect.height * scale,
+    }
 }
 
 /// `rect` moved by `offset`.
