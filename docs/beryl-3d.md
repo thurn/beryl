@@ -1105,6 +1105,12 @@ game:
   instance leaves wgpu's `DEBUG` flag off and keeps validation.
 - **wgpu's Android surface needs a display handle**, even though Android's
   carries nothing: without one, `create_surface_unsafe` refuses the window.
+- **An Android renderer uses one backend.** With every backend enabled, wgpu
+  also made a Vulkan surface on the window, Android's Vulkan loader then tied
+  the window to EGL, and configuring the GL surface failed with "Invalid
+  surface". `native_backend` in `beryl_render/src/surface.rs` picks Vulkan when
+  an instance with only Vulkan finds an adapter, and GL otherwise, before any
+  surface exists.
 
 The phone hosts handle the following platform behaviors.
 
@@ -3212,12 +3218,15 @@ plays each gated board as a host would at 60 frames a second
 first frame, and each later one once 30 frames have passed since the one before
 and the table has nothing left to animate, so every view's script plays out. A
 recorded view that the session follows unasked arrives with the views after it,
-as the test driver hands them over. The gated boards are `stress-255`,
-`stress-1024`, `verbs-zones` and `pay-default`. It prints every frame's work
-counters, its load and the allocations made inside `Client::frame`, which a
-counting global allocator sees, and the allocations made in `Client::handle`
-over the board. The gate holds them to these limits under `frames.<board>` in
-`data/beryl3d/gates.json`:
+as the test driver hands them over. The gated boards are the seven of
+`beryl_inspect::gate::BOARDS`: the five stress boards (`stress-255`,
+`stress-1024`, `stress-verbs`, `stress-hand` and `stress-stack`) and the
+recordings `verbs-zones` and `pay-default`. `stress-hand` is played with the
+pointer moving over the hand, and `stress-stack` waits for the table to rest
+before its last view. It prints every frame's work counters, its load and the
+allocations made inside `Client::frame`, which a counting global allocator sees,
+and the allocations made in `Client::handle` over the board. The gate holds them
+to these limits under `frames.<board>` in `data/beryl3d/gates.json`:
 
 - `worst_frame_<counter>` and `total_<counter>` for each work counter
   (`elements`, `segments`, `records`, `layout_nodes`, `text_runs`, `placed`,
@@ -3310,6 +3319,16 @@ call. Three runs gave identical counts.
 - **The 2 million target** is the one the doc gives `stress-255` and the
   'Threads' section gives every frame. The recorded boards have no limit of
   their own beyond their measured counts.
+- **The limits have risen since.** By 2026-11-16, after milestone 2's verbs and
+  milestone 3's step banner and log, `frames.<board>.worst_frame_instructions`
+  in `data/beryl3d/gates.json` held `verbs-zones` at 4,816,173, `stress-255` at
+  3,267,119, `stress-1024` at 9,283,180, `stress-verbs` at 2,638,123 and
+  `pay-default` at 1,257,448. The 2 million target is met by `pay-default`,
+  `stress-hand` and `stress-stack` only. `verbs-zones`' worst frame is now frame
+  980 of 1,183, whose `handle` takes a view with a script of 34 steps and places
+  738 objects while compiling it. The worst frames of `verbs-zones`,
+  `stress-255`, `stress-1024` and `stress-verbs` are each a script compiled
+  whole in the `handle` call that receives it.
 
 **Time per frame, natively**, by beryl_render's `frame_times` example in a
 release build, paced at 60 frames a second, five runs. Each figure is the median
