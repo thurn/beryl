@@ -7,11 +7,11 @@ mod common;
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Candidates, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay, Scratch, Seat,
-    Slot, State, Step, apply, next, observe, view,
+    Candidates, Choice, Decision, DecisionKind, GameTable, Limits, Observation, Opt, Outcome,
+    Profile, Replay, Scratch, Seat, Slot, StallReason, State, Step, apply, next, observe, view,
 };
 use beryl_search::{Agent, AgentDecision, Budget, GreedyAgent, Mcts, Sight};
-use common::{mirror, play};
+use common::{mirror, play, redeal};
 
 /// A small budget, root-parallel: three trees of two iterations.
 const PARALLEL: Budget = Budget {
@@ -358,4 +358,36 @@ fn an_agent_asked_again_searches_a_decision_as_it_did() {
             "rewound to decision {k}"
         );
     }
+}
+
+/// A state redealt at the turn's last budgeted decision offers that decision again. `next`
+/// counts the decision a second time on the redealt copy, which stalls on the per-turn
+/// decision budget unless it is given search's budgets, as `common::redeal` does. The long
+/// fuzz run's game 2655 stalled this way at its 500th decision of a turn.
+#[test]
+fn a_state_redealt_at_the_last_budgeted_decision_offers_it_again() {
+    let t = mirror();
+    let mut s = State::new(&t, 4, Profile::SMART).unwrap();
+    let Step::Decide(d) = next(&mut s, &t, &mut Scratch::new(), &mut Replay) else {
+        panic!("the game ended before its first decision");
+    };
+    // The game's budget allows no decision after this one.
+    s.set_profile(Profile {
+        limits: Limits {
+            decisions_per_turn: s.budgets().decisions,
+            ..Limits::DEFAULT
+        },
+        ..s.profile()
+    });
+    let mut rng = SplitMix64::new(7);
+    let mut bare = Observation::new(&s, d.decider).determinize(&t, &mut rng);
+    assert_eq!(
+        next(&mut bare, &t, &mut Scratch::new(), &mut Replay),
+        Step::Over(Outcome::Stalled(StallReason::DecisionsPerTurn))
+    );
+    let mut det = redeal(&s, d.decider, &t, &mut rng);
+    assert_eq!(
+        next(&mut det, &t, &mut Scratch::new(), &mut Replay),
+        Step::Decide(d)
+    );
 }

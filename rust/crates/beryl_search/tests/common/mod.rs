@@ -7,9 +7,10 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
+use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Decision, GameTable, Layout, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
-    observe,
+    Decision, GameTable, Layout, Observation, Outcome, Profile, Replay, Scratch, Seat, State, Step,
+    apply, next, observe,
 };
 use beryl_search::{Agent, AgentDecision, RandomAgent};
 
@@ -89,4 +90,24 @@ pub fn fingerprint(s: &State) -> u64 {
 /// `default`.
 pub fn games(default: u64) -> u64 {
     std::env::var("BERYL_FUZZ_GAMES").map_or(default, |n| n.parse().expect("a game count"))
+}
+
+/// The state redealt from what `viewer` knows of `s` ([`Observation::determinize`]), under the
+/// budgets search plays under ([`State::search_limits`]). `next` counts each decision it returns
+/// toward the turn's budget, and `s` has counted its open decision already, as has the redealt
+/// copy, which carries the same count. Asking the copy with `next` counts that decision a
+/// second time, so at the turn's last budgeted decision the copy would stall where `s` offers
+/// the decision. Search gives its copies the same room before it asks them anything.
+pub fn redeal<L: Layout>(
+    s: &State<L>,
+    viewer: Seat,
+    t: &GameTable,
+    rng: &mut SplitMix64,
+) -> State<L> {
+    let mut det = Observation::new(s, viewer).determinize(t, rng);
+    det.set_profile(Profile {
+        limits: det.search_limits(),
+        ..det.profile()
+    });
+    det
 }

@@ -22,7 +22,7 @@ use beryl_engine::{
 };
 use beryl_search::{Agent, AgentDecision, GreedyAgent, RandomAgent};
 use common::widening::play_widening;
-use common::{agents, fingerprint, fixed_game, game, games, mirror, play};
+use common::{agents, fingerprint, fixed_game, game, games, mirror, play, redeal};
 
 /// Every fourth game is played in the [`Large`] layout from its start, so the layout a game
 /// outgrowing [`Small`](beryl_engine::Small) goes on in is fuzzed too. The others start in
@@ -503,7 +503,7 @@ fn agents_decide_the_same_on_a_redeterminized_state() {
             &mut agents(seed),
             |s, d| {
                 let viewer = d.decider;
-                let mut det = Observation::new(s, viewer).determinize(&t, &mut rng);
+                let mut det = redeal(s, viewer, &t, &mut rng);
                 det.check_invariants(&t).unwrap();
                 for slot in Slot::all() {
                     if s.knows(viewer, slot) {
@@ -568,7 +568,7 @@ fn a_hidden_pick_redealt_shows_and_asks_the_same() {
                 let mut x = Scratch::new();
                 let seen = Observer.choose(observe(s, &t, &mut x, viewer), d, AgentDecision(0));
                 for _ in 0..4 {
-                    let mut det = Observation::new(s, viewer).determinize(&t, &mut rng);
+                    let mut det = redeal(s, viewer, &t, &mut rng);
                     det.check_invariants(&t).unwrap();
                     for &slot in &picks {
                         let card = det.card_behind(slot).expect("a card picked");
