@@ -42,7 +42,7 @@ def blocker(blocked: str, by: str) -> dict[str, str]:
 
 
 # A small project: an epic with two children, one of them blocked by a bead outside it, a
-# bead that CI filed, and a closed bead.
+# flaky check inside a fix-run epic, a bug report, a deferred bead and a closed bead.
 EXPORT: list[str] = [
     record("by-epic", title="An epic", issue_type="epic", priority=1),
     record(
@@ -69,7 +69,16 @@ EXPORT: list[str] = [
         dependencies=[parent("by-epic.2", "by-epic"), blocker("by-epic.2", "by-free")],
     ),
     record("by-free", title="A free bead", priority=0, labels=["tier:opus"]),
-    record("by-ci", title="Flaky check", labels=["flaky-check"]),
+    record(
+        "by-ci",
+        title="Flaky check",
+        labels=["flaky-check"],
+        dependencies=[parent("by-ci", "by-epic")],
+    ),
+    record(
+        "by-bug", title="Arrow looks wrong", issue_type="bug", labels=["bug-report"]
+    ),
+    record("by-later", title="Someday", status="deferred"),
     record("by-old", title="Closed long ago", status="closed"),
     "not json",
 ]

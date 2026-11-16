@@ -9,20 +9,25 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# The labels of the beads that CI and the bug button file by themselves, which the home page
-# leaves out. The same list as the `beads` recipe in the justfile, which prints the same beads
-# as text.
-SYSTEM_LABELS: frozenset[str] = frozenset(
-    {
-        "bug-report",
-        "flaky-check",
-        "ci-cut",
-        "check-budget",
-        "sweep-failure",
-        "nightly-failure",
-        "role:steward",
-    }
+# The label the bug button (⌘B in the app) puts on the beads it files.
+BUG_REPORT = "bug-report"
+# The groups of beads that CI, Enact and the other tools file by themselves, by the labels
+# they put on them, in the order the home page shows them. A bead with any of a group's
+# labels is in that group; the first group that matches wins.
+AUTOMATIC: tuple[tuple[str, frozenset[str]], ...] = (
+    ("Slow CI failures", frozenset({"role:steward"})),
+    ("Incidents", frozenset({"role:justiciar"})),
+    ("Flaky checks", frozenset({"flaky-check"})),
+    (
+        "Sweep and nightly failures",
+        frozenset({"sweep-failure", "nightly-failure", "b3d-sweep"}),
+    ),
+    ("CI time budget", frozenset({"ci-cut", "check-budget"})),
+    ("CI structure review", frozenset({"ci-structure", "ci-structure-log"})),
+    ("Count gate", frozenset({"count-creep", "count-lower"})),
+    ("Check verdicts", frozenset({"ci-check"})),
 )
+DEFERRED = "deferred"
 CLOSED = "closed"
 # The order statuses are shown in, most active first; any other status sorts after them.
 STATUS_ORDER: tuple[str, ...] = ("in_progress", "blocked", "open", "deferred", CLOSED)
@@ -170,6 +175,26 @@ def invert(timestamp: str) -> str:
     return "".join(chr(0x10FFFF - ord(c)) for c in timestamp)
 
 
+def automatic_group(bead: Bead) -> str | None:
+    """The name of the automatic group the bead's labels put it in, if any."""
+    labels = set(bead.labels)
+    return next((name for name, marks in AUTOMATIC if labels & marks), None)
+
+
+@dataclass
+class Home:
+    """The home page's categories. Each open bead is in at most one, checked in this order:
+    deferred beads, bug reports and the automatic groups wherever they sit (a fix run often
+    gathers them under an epic), then epics and the remaining beads outside any epic. A bead
+    inside an epic shows on its epic's page instead."""
+
+    epics: list[Bead] = field(default_factory=list)
+    beads: list[Bead] = field(default_factory=list)
+    automatic: list[tuple[str, list[Bead]]] = field(default_factory=list)
+    bug_reports: list[Bead] = field(default_factory=list)
+    deferred: list[Bead] = field(default_factory=list)
+
+
 @dataclass
 class Index:
     """The beads by id, with each one's parent, children, blockers and the beads it blocks."""
@@ -207,19 +232,30 @@ class Index:
         parent = self.parent.get(bead_id)
         return self.beads.get(parent) if parent else None
 
-    def top_level(self) -> list[Bead]:
-        """The beads `just beads` lists: open beads with no parent, without the beads CI and
-        the bug button file."""
-        return sorted(
-            (
-                b
-                for b in self.beads.values()
-                if not b.closed
-                and b.id not in self.parent
-                and not SYSTEM_LABELS.intersection(b.labels)
-            ),
-            key=by_attention,
-        )
+    def home(self) -> Home:
+        """The open beads the home page shows, by category (`Home`)."""
+        found = Home()
+        groups: dict[str, list[Bead]] = {}
+        # Sorting only the open beads (a few hundred of thousands) keeps every rebuild cheap.
+        for bead in sorted(
+            (b for b in self.beads.values() if not b.closed), key=by_attention
+        ):
+            top = bead.id not in self.parent
+            group = automatic_group(bead)
+            if bead.status == DEFERRED:
+                found.deferred.append(bead)
+            elif BUG_REPORT in bead.labels:
+                found.bug_reports.append(bead)
+            elif group is not None:
+                groups.setdefault(group, []).append(bead)
+            elif top and bead.issue_type == "epic":
+                found.epics.append(bead)
+            elif top:
+                found.beads.append(bead)
+        found.automatic = [
+            (name, groups[name]) for name, _ in AUTOMATIC if name in groups
+        ]
+        return found
 
     def descendants(self, bead_id: str) -> list[Bead]:
         """Every bead under this one, children's children included."""

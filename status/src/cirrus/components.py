@@ -164,6 +164,15 @@ def section(
     return f'<section class="c-section"{attrs(id=id_)}>{title_html}{body}</section>'
 
 
+def subsection(heading: str, body: str, count: int | None = None) -> str:
+    """A group inside a section, under a quieter heading, separated by space."""
+    number = f'<span class="c-count">{count}</span>' if count is not None else ""
+    return (
+        f'<div class="c-subsection"><h3 class="c-subsection-title">{esc(heading)}'
+        f"{number}</h3>{body}</div>"
+    )
+
+
 def grid(cards: Iterable[str]) -> str:
     return f'<div class="c-grid">{"".join(cards)}</div>'
 
@@ -279,11 +288,14 @@ def comment(author: str, shown: str, when: str, body: str) -> str:
     )
 
 
-def stats(items: Sequence[tuple[str, str]]) -> str:
-    """A row of large numbers with small labels, for a summary under a page's title."""
+def stats(items: Sequence[tuple[str, str, str | None]]) -> str:
+    """A row of large numbers with small labels, for a summary under a page's title. Each is
+    (label, value, href); a stat with an href links to what it counts, such as a section's
+    anchor."""
     body = "".join(
-        f'<div class="c-stat"><span class="c-stat-value">{esc(value)}</span>'
-        f'<span class="c-stat-label">{esc(label)}</span></div>'
-        for label, value in items
+        f'<{"a" if href else "div"} class="c-stat"{attrs(href=href)}>'
+        f'<span class="c-stat-value">{esc(value)}</span>'
+        f'<span class="c-stat-label">{esc(label)}</span></{"a" if href else "div"}>'
+        for label, value, href in items
     )
     return f'<div class="c-stats">{body}</div>'

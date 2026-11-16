@@ -188,9 +188,15 @@ def mentions(bead: Bead, log: Changelog | None) -> frozenset[str]:
 # ---- The home page --------------------------------------------------------------
 
 
-def home_card(bead: Bead, index: Index) -> str:
-    kind = c.chip("Epic", "violet") if bead.issue_type == "epic" else ""
+def home_card(bead: Bead, index: Index, kind_shown: bool = True) -> str:
+    """A bead's card. `kind_shown` False leaves out the Epic chip, in the Epics section,
+    where every card would carry it."""
+    epic = bead.issue_type == "epic" and kind_shown
+    kind = c.chip("Epic", "violet") if epic else ""
+    # Open is the usual state, so only the other states earn a dot.
+    state = status_dot(bead.status) if bead.status != "open" else ""
     foot = [
+        state,
         kind,
         children_progress(bead, index),
         person(bead.assignee) if bead.assignee else "",
@@ -204,36 +210,48 @@ def home_card(bead: Bead, index: Index) -> str:
     )
 
 
+def cards(beads: list[Bead], index: Index, kind_shown: bool = True) -> str:
+    return c.grid(home_card(b, index, kind_shown) for b in beads)
+
+
 def home(index: Index, assets: Assets) -> str:
-    top = index.top_level()
-    groups: dict[str, list[Bead]] = {}
-    for bead in top:
-        groups.setdefault(bead.status, []).append(bead)
-    working = len(groups.get("in_progress", []))
-    urgent = sum(1 for b in top if b.priority == 0)
-    epics = sum(1 for b in top if b.issue_type == "epic")
-    head = c.title(
-        "Beads",
-        sub="Open epics and beads outside any epic.",
-    ) + c.stats(
+    found = index.home()
+    automatic = sum(len(beads) for _, beads in found.automatic)
+    # (heading, anchor, count, body) for each category, in the page's order.
+    parts: list[tuple[str, str, int, str]] = [
+        ("Epics", "epics", len(found.epics), cards(found.epics, index, False)),
+        ("Beads", "beads", len(found.beads), cards(found.beads, index)),
+        (
+            "Filed automatically",
+            "automatic",
+            automatic,
+            "".join(
+                c.subsection(name, cards(beads, index), count=len(beads))
+                for name, beads in found.automatic
+            ),
+        ),
+        (
+            "Bug reports",
+            "bug-reports",
+            len(found.bug_reports),
+            cards(found.bug_reports, index),
+        ),
+        ("Deferred", "deferred", len(found.deferred), cards(found.deferred, index)),
+    ]
+    shown = [p for p in parts if p[2]]
+    head = c.title("Beads", sub="Everything open, by where it came from.") + c.stats(
         [
-            ("open", str(len(top))),
-            ("in progress", str(working)),
-            ("epics", str(epics)),
-            ("critical", str(urgent)),
+            (heading.lower(), str(count), f"#{anchor}")
+            for heading, anchor, count, _ in shown
         ]
     )
     sections = "".join(
-        c.section(
-            status_label(status),
-            c.grid(home_card(b, index) for b in beads),
-            count=len(beads),
-        )
-        for status, beads in groups.items()
+        c.section(heading, body, count=count, id_=anchor)
+        for heading, anchor, count, body in shown
     ) or c.empty("No open beads.")
     return c.page(
         title="Beads · Beryl",
-        body=f'<div class="c-titleblock-wrap">{head}</div>{sections}',
+        body=f"{head}{sections}",
         root="",
         assets=assets,
         crumbs=[("Beads", None)],

@@ -126,6 +126,17 @@ a.c-crumb:hover,
 .c-stat {
   display: flex;
   flex-direction: column;
+  border-radius: var(--radius-sm);
+  transition: color var(--dur-1) var(--ease-out);
+}
+
+a.c-stat:hover .c-stat-value {
+  color: var(--accent);
+}
+
+/* A section reached by its anchor clears the sticky header. */
+.c-section[id] {
+  scroll-margin-top: 72px;
 }
 
 .c-stat-value {
@@ -158,6 +169,21 @@ a.c-crumb:hover,
   font-weight: 600;
   color: var(--ink-2);
   letter-spacing: 0.01em;
+}
+
+.c-subsection + .c-subsection {
+  margin-top: var(--space-6);
+}
+
+.c-subsection-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 550;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
 }
 
 .c-count {

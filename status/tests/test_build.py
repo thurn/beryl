@@ -33,11 +33,15 @@ def test_writes_every_page(tmp_path: Path) -> None:
     assert '"version": "v1"' in (site / "version.json").read_text()
 
 
-def test_home_page_shows_the_top_level_beads(tmp_path: Path) -> None:
+def test_home_page_shows_each_category(tmp_path: Path) -> None:
     home = (made(tmp_path)[0] / "index.html").read_text()
-    assert 'href="beads/by-free"' in home and 'href="beads/by-epic"' in home
-    assert "by-ci" not in home and "by-epic.1" not in home
-    assert "1/2" in home  # The epic's closed children over all of them.
+    for anchor in ("epics", "beads", "automatic", "bug-reports", "deferred"):
+        assert f'id="{anchor}"' in home and f'href="#{anchor}"' in home
+    for bead in ("by-free", "by-epic", "by-ci", "by-bug", "by-later"):
+        assert f'href="beads/{bead}"' in home
+    assert "Flaky checks" in home
+    assert "by-epic.1" not in home and "by-old" not in home
+    assert "1/3" in home  # The epic's closed children over all of them.
 
 
 def test_bead_page_shows_every_part(tmp_path: Path) -> None:

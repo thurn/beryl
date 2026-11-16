@@ -1,13 +1,14 @@
 # The bead status site
 
 This directory is a standalone Python project, `beryl_status`, that shows the
-beads as a website: a home page of cards for the beads `just beads` lists (open
-epics and open beads outside any epic, without the beads CI files), and a page
-per bead at `beads/<id>` with its status, priority, assignee, epic, labels,
-description, blockers, the beads it blocks, subtasks, comments and changelog. It
-is read only. `just status` serves it on http://127.0.0.1:8766, and
-`just status publish` pushes it to GitHub Pages. The project also holds
-**cirrus**, the design system the site is built from, in `src/cirrus/`.
+beads as a website: a home page of cards for the open beads in five sections
+(epics, beads people filed, beads the tools filed by themselves in groups by
+label, bug reports, and deferred beads), and a page per bead at `beads/<id>`
+with its status, priority, assignee, epic, labels, description, blockers, the
+beads it blocks, subtasks, comments and changelog. It is read only.
+`just status` serves it on http://127.0.0.1:8766, and `just status publish`
+pushes it to GitHub Pages. The project also holds **cirrus**, the design system
+the site is built from, in `src/cirrus/`.
 
 ## Priorities
 
@@ -102,9 +103,10 @@ Every change here serves two priorities, in this order.
 ## Layout of `beryl_status`
 
 - `beads.py`: reads `bd export` into `Bead`s and indexes them (`Index`: parent,
-  children, blockers, the beads each one blocks, related beads, and the home
-  page's `top_level`). Its `SYSTEM_LABELS` must match the `beads` recipe in the
-  justfile.
+  children, blockers, the beads each one blocks and related beads). `Index.home`
+  sorts the open beads into the home page's sections (`Home`). `AUTOMATIC` lists
+  the groups of beads the tools file by themselves, by label: add a group there
+  when a tool starts filing a new kind of bead.
 - `changelog.py`: each bead's audit events from `bd history <id> --events`,
   cached as JSON under `$BERYL_CACHE/status/changelog/` and fetched again only
   when the bead's `updated_at` moves. A bead with no recorded events shows the
