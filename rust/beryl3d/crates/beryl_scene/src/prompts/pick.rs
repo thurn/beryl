@@ -14,12 +14,11 @@
 //! has it: it shows the prompt bar and draws nothing on the table.
 
 use beryl_protocol::prompt::{PromptView, ShapeBody};
-use beryl_protocol::protocol::ZoneName;
-use beryl_protocol::script::{Arrow, Mark, Subject};
+use beryl_protocol::script::{Mark, Subject};
 
-use super::{Shown, Steps, mark_spans, prompt_bar, tray};
+use super::{Shown, Steps, mark_spans, prompt_bar, target_arrows, tray};
 use crate::element::Element;
-use crate::light::{ArrowSpan, MarkSpan, Span};
+use crate::light::{MarkSpan, Span};
 use crate::screens::ScreenIn;
 
 /// What the flat layer shows for `prompt`: the prompt bar. A player the prompt marks is picked
@@ -39,8 +38,7 @@ pub(super) fn own(shown: Option<Shown>, was: Option<Shown>, steps: &mut Steps) {
 }
 
 /// The spans the table draws for `prompt`, as `Prompts.#mark` does: each of its marks; an arrow
-/// from the spell or ability that asks to each target picked that the table shows an arrow to
-/// once it is cast, a permanent or a player; and a suggested mark on each permanent that paying
+/// to each target picked (`target_arrows`); and a suggested mark on each permanent that paying
 /// for the card the pointer carries out of the hand would tap and nothing else of the prompt
 /// marks, as Arena outlines the lands a spell held out of the hand would tap
 /// (`iRr-GeSF0lI 20:34.4`). A prompt the session holds no state for draws none.
@@ -48,25 +46,7 @@ fn spans(prompt: Option<Shown<'_>>) -> impl Iterator<Item = Span> + '_ {
     let shown = prompt.filter(|shown| matches!(shown.prompt.body, ShapeBody::Pick { .. }));
     shown.into_iter().flat_map(|shown| {
         let marks = mark_spans(shown.prompt);
-        let source = shown.source.filter(|&slot| shown.zone_of(slot).is_some());
-        let arrows = shown.prompt.marks.iter().filter_map(move |marked| {
-            let arrow = match marked.mark {
-                Mark::FriendlyTarget => Arrow::FriendlyTarget,
-                Mark::HostileTarget => Arrow::HostileTarget,
-                _ => return None,
-            };
-            let there = match marked.on {
-                Subject::Player { .. } => true,
-                Subject::Object { slot } => shown.zone_of(slot) == Some(ZoneName::Battlefield),
-                Subject::Ability { .. } => false,
-            };
-            let from = Subject::Object { slot: source? };
-            there.then_some(Span::Arrow(ArrowSpan {
-                arrow,
-                from,
-                to: marked.on,
-            }))
-        });
+        let arrows = target_arrows(shown);
         let carried = (shown.prompt.previews.iter())
             .filter(move |preview| Some(preview.card) == shown.carried)
             .flat_map(|preview| preview.taps.iter())

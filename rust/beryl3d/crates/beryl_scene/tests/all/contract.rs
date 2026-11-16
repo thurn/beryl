@@ -284,7 +284,10 @@ mod milestone_three {
     #[test]
     fn every_prompt_shape_shows_the_prompt_bar() {
         let settings = Settings::default();
-        for body in bodies() {
+        // A divide's bar also says how much is left, and its element holds the share over each
+        // recipient: `prompts_divide` in `beryl_inspect` tests what it shows.
+        let built = |body: &ShapeBody| matches!(body, ShapeBody::Divide { .. });
+        for body in bodies().into_iter().filter(|body| !built(body)) {
             let mut shaped = prompt("Choose");
             shaped.body = body;
             let input = input(Some(&shaped), &settings);

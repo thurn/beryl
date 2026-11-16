@@ -16,7 +16,7 @@ mod tray;
 
 use beryl_protocol::prompt::{ButtonId, Marked, PromptButton, PromptView, Purpose, ShapeBody};
 use beryl_protocol::protocol::{ObjectId, PlayerView, ZoneName};
-use beryl_protocol::script::{Mark, OwnStep, OwnTimings, StepTiming, Verb};
+use beryl_protocol::script::{Arrow, Mark, OwnStep, OwnTimings, StepTiming, Subject, Verb};
 
 pub use bar::prompt_bar;
 pub use tray::Piles;
@@ -223,6 +223,32 @@ fn mark_spans(prompt: &PromptView) -> impl Iterator<Item = Span> + '_ {
             mark: marked.mark,
             on: marked.on,
         })
+    })
+}
+
+/// An arrow from the spell or ability that asks to each target the prompt `shown` marks, where
+/// the table shows an arrow to it once the spell is cast: a permanent or a player, as the web
+/// interface's `#mark` in `ui/src/stage/prompt.ts` draws one for each `AIMED` mark. None where
+/// the source is not on the table.
+fn target_arrows(shown: Shown<'_>) -> impl Iterator<Item = Span> + '_ {
+    let source = shown.source.filter(|&slot| shown.zone_of(slot).is_some());
+    shown.prompt.marks.iter().filter_map(move |marked| {
+        let arrow = match marked.mark {
+            Mark::FriendlyTarget => Arrow::FriendlyTarget,
+            Mark::HostileTarget => Arrow::HostileTarget,
+            _ => return None,
+        };
+        let there = match marked.on {
+            Subject::Player { .. } => true,
+            Subject::Object { slot } => shown.zone_of(slot) == Some(ZoneName::Battlefield),
+            Subject::Ability { .. } => false,
+        };
+        let from = Subject::Object { slot: source? };
+        there.then_some(Span::Arrow(ArrowSpan {
+            arrow,
+            from,
+            to: marked.on,
+        }))
     })
 }
 

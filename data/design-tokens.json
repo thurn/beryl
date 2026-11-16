@@ -413,6 +413,10 @@
         "value": 22,
         "note": "The side of the icon an icon button shows: `.icon-button > svg`."
       },
+      "SHARE_STEP": {
+        "value": 28,
+        "note": "The side of the round face of a divide prompt's buttons over each recipient, which give it one more or take one away: narrow enough to leave the card beside them a strip to press, as the web's `.stage-share-step` glyphs do."
+      },
       "SLIDER_WIDTH": {
         "value": 150,
         "note": "A slider's width: `.sound-level input`."
