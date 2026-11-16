@@ -244,7 +244,10 @@ impl<'a> Motion<'a> {
     }
 
     /// Finds the slots the step may move in slot order and records pile count changes.
-    /// A `set` can interrupt a track even if the card's resting pose stays the same.
+    /// A `set` can interrupt a track even if the card's resting pose stays the same, so it
+    /// also marks every slot it placed again that is on a track. One that is on none and rests
+    /// as it did needs no change (`follow`), and a `set` that places a whole row again for one
+    /// card's record would otherwise follow every card of it.
     fn mark_affected(
         &mut self,
         dirty: &[bool],
@@ -266,6 +269,12 @@ impl<'a> Motion<'a> {
         marks.resize(end.div_ceil(64), 0);
         let mut mark = |slot: usize| marks[slot / 64] |= 1 << (slot % 64);
         let lifting = self.look.lifting();
+        let tracks = &self.tracks;
+        let on_track = |slot: usize| {
+            tracks
+                .get(slot)
+                .is_some_and(|track| !track.segments().is_empty())
+        };
         let mut changed = |slot, before: Option<&Rest>, after: Option<&Rest>| {
             let counts = (copies(before), copies(after));
             if counts.0 != counts.1 && !lifting.iter().any(|id| usize::from(id.0) == slot) {
@@ -276,7 +285,9 @@ impl<'a> Motion<'a> {
                     copies: counts.1,
                 });
             }
-            if still || before.map(|rest| &rest.pose) != after.map(|rest| &rest.pose) {
+            if before.map(|rest| &rest.pose) != after.map(|rest| &rest.pose)
+                || (still && on_track(slot))
+            {
                 mark(slot);
             }
         };
