@@ -140,7 +140,7 @@ pub fn lay(
             turn: own,
             from: began,
             to,
-            opens: (opens < from).then_some(Opens {
+            opens: (opens < began).then_some(Opens {
                 at: opens,
                 by: open,
             }),

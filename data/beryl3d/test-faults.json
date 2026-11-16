@@ -543,18 +543,6 @@
     },
     "b3d:verbs-reveal/opponent/2560x1080": {
       "step-shown": 1
-    },
-    "b3d:verbs-tuck-theirs/opponent/1440x900": {
-      "no-jumps": 1
-    },
-    "b3d:verbs-tuck-theirs/opponent/1600x900": {
-      "no-jumps": 1
-    },
-    "b3d:verbs-tuck-theirs/opponent/1920x1080": {
-      "no-jumps": 1
-    },
-    "b3d:verbs-tuck-theirs/opponent/2560x1080": {
-      "no-jumps": 1
     }
   }
 }

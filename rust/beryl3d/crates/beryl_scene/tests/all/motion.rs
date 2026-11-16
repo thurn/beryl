@@ -238,8 +238,8 @@ fn lay(
 // `laid(steps, 0, at, tableOf(view([1, 2, 3, 4, 9])), () => timings[i++], whole, passed)`.
 
 /// Turns and staggers, a step played `with` the one before it, and one that leads. The step
-/// that leads compares where its act goes ahead with the time the step after it may begin,
-/// so it reports an `opens` equal to its own start, as `laid` does.
+/// that leads has its act applied as it begins, so it reports no `opens`, though what follows
+/// it may begin only once it is over.
 #[test]
 fn a_beat_takes_its_steps_in_turn() {
     let (steps, end) = lay(
@@ -260,7 +260,7 @@ fn a_beat_takes_its_steps_in_turn() {
         [
             laid(1000.0, 1050.0, 1350.0, None),
             laid(1000.0, 1080.0, 1380.0, None),
-            laid(1100.0, 1110.0, 1360.0, Some((1110.0, 1110.0))),
+            laid(1100.0, 1110.0, 1360.0, None),
             laid(1180.0, 1360.0, 1560.0, None),
         ]
     );
@@ -378,7 +378,7 @@ fn a_beat_combines_its_rules() {
         steps,
         [
             laid(300.0, 300.0, 800.0, None),
-            laid(300.0, 370.0, 460.0, Some((370.0, 370.0))),
+            laid(300.0, 370.0, 460.0, None),
             laid(420.0, 460.0, 520.0, Some((420.0, 460.0))),
             laid(440.0, 905.0, 915.0, None),
             laid(440.0, 920.0, 920.0, Some((905.0, 920.0))),

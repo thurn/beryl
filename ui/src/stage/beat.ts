@@ -169,7 +169,7 @@ export function laid(
       step,
       ease: timing.ease,
       each: timing.each,
-      opens: opens < from ? { at: opens, by: open } : undefined,
+      opens: opens < began ? { at: opens, by: open } : undefined,
       closes: timing.closes,
       room: timing.room,
       phases: timing.phases,

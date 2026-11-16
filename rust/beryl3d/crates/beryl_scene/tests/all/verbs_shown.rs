@@ -5,7 +5,7 @@
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{CardHandling, Facing, ObjectId, ObjectView, Side, ZoneName};
-use beryl_protocol::script::{Act, Curve, Fact, Span, StepTiming, Verb};
+use beryl_protocol::script::{Act, Arrow, Curve, Fact, Span, Step, StepTiming, Subject, Verb};
 use beryl_scene::agent::checks::duplicates;
 use beryl_scene::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use beryl_scene::agent::{Context, Layout};
@@ -428,4 +428,59 @@ fn a_look_at_several_cards_takes_them_one_after_another() {
     let stagger = (timing.stagger * 1e6) as u64;
     assert_eq!(starts[1] - starts[0], stagger, "{starts:?}");
     assert_eq!(starts[2] - starts[1], stagger, "{starts:?}");
+}
+
+/// A look that ends with no `lift` step, at a script whose first step is the end of an arrow
+/// that leads its beat (`StepTiming::leads`), as the session sends the end of an arrow a card's
+/// text named: the looked-at cards go back to their pile over that step. A step that leads once
+/// had its act counted as going ahead of it into no time, so the cards jumped back.
+#[test]
+fn looked_at_cards_go_back_over_a_leading_arrow_end() {
+    let (start, mut begin, _, top) = looked_at();
+    // A line from the opponent to the top card, begun as the look does.
+    let (arrow, from, to) = (
+        Arrow::Source,
+        Subject::Player {
+            player: Side::Opponent,
+        },
+        Subject::Object { slot: top[0] },
+    );
+    let point = |span| Act::Point {
+        span,
+        arrow,
+        from,
+        to,
+    };
+    begin
+        .view
+        .script
+        .as_mut()
+        .expect("a script")
+        .beats
+        .push(vec![Step {
+            act: point(Span::Begin),
+            cause: None,
+        }]);
+    let mut done = start.view.clone();
+    done.handling = None;
+    let end = scripted(&begin, &done, vec![point(Span::End)]);
+    let leads = StepTiming {
+        hold: Some(290.0),
+        with: true,
+        leads: true,
+        ..timing(33.0)
+    };
+    let mut show = show();
+    let mut buffer = empty_frame();
+    show.push(Box::new(start), Vec::new());
+    frame(&mut show, &mut buffer, 0);
+    show.push(Box::new(begin), vec![library_look(3.0), timing(33.0)]);
+    frame(&mut show, &mut buffer, MS);
+    frame(&mut show, &mut buffer, 5_000 * MS);
+    show.record();
+    show.push(Box::new(end), vec![leads]);
+    for ms in (5_001..=6_000).step_by(16) {
+        frame(&mut show, &mut buffer, ms * MS);
+    }
+    checks_pass(&show);
 }
