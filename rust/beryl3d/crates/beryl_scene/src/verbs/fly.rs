@@ -42,7 +42,7 @@ use glam::{Quat, Vec3};
 
 use super::{Interval, StepIn, StepOut};
 use crate::data::space;
-use crate::data::space::verbs::fly::{bows, held, played, thrown, turn};
+use crate::data::space::verbs::fly::{bows, drawn_front, held, played, thrown, turn};
 use crate::pose::{Bow, Curve, Lift, Pose, Segment, Shape, Turning};
 use crate::table::Camera;
 use beryl_protocol::script::Subject;
@@ -143,6 +143,8 @@ enum Path {
         bowing: &'static Bowing,
         toward: f32,
         rises: bool,
+        /// Drawn in front of what it passes (`Shape::BowedNear`).
+        near: bool,
     },
     Thrown,
     /// The viewer's card drawn alone: held up beside the stack, then dropped into the hand.
@@ -180,7 +182,10 @@ fn path_of(act: &Act, case: Option<&str>) -> Path {
         return Path::Bowed {
             bowing: if *why == Why::Draw { &DRAWN } else { &TAKEN },
             toward: -toward,
+            // An opponent's draw crosses the stack on its way to their hand at the top of the
+            // window, so it is drawn in front of it.
             rises: true,
+            near: !mine,
         };
     }
     match (*from, object.zone) {
@@ -191,6 +196,7 @@ fn path_of(act: &Act, case: Option<&str>) -> Path {
             bowing: if mine { &CAST } else { &THEIRS },
             toward,
             rises: *from != ZoneName::Hand,
+            near: false,
         },
         (ZoneName::Stack, ZoneName::Battlefield) => Path::Thrown,
         // The opponent's hand lies at the top of the frame. A discard drops from the
@@ -204,6 +210,7 @@ fn path_of(act: &Act, case: Option<&str>) -> Path {
             bowing: &PLAYED,
             toward: -toward,
             rises: false,
+            near: false,
         },
         _ => Path::Straight { rises: true },
     }
@@ -441,11 +448,28 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
             bowing,
             toward,
             rises,
-        } => Segment {
-            arc: arc(rises),
-            shape: Shape::Bowed(bow(bowing, toward, (from, to), step.places.camera())),
-            ..between
-        },
+            near,
+        } => {
+            let camera = step.places.camera();
+            let bow = bow(bowing, toward, (from, to), camera);
+            Segment {
+                arc: arc(rises),
+                shape: if near {
+                    Shape::BowedNear {
+                        bow,
+                        lift: Lift {
+                            eye: camera.eye,
+                            forward: -axes[2],
+                            near: space::stack::DEPTH * drawn_front::NEAR,
+                            hold: drawn_front::HOLD,
+                        },
+                    }
+                } else {
+                    Shape::Bowed(bow)
+                },
+                ..between
+            }
+        }
         Path::Thrown => Segment {
             shape: Shape::Thrown {
                 // Up the screen by a share of the spell's width, and no higher than the room

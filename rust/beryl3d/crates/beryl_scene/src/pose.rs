@@ -97,6 +97,10 @@ pub enum Shape {
     /// A line that leaves the straight way between its ends sideways on the screen and leans as
     /// it does, as the web interface's `bowed` (`ui/src/stage/bows.ts`) has it.
     Bowed(Bow),
+    /// `Bowed`, drawn in front of what it passes as `Lifted` is: an opponent's draw crosses the
+    /// stack's cards on its way from their library to their hand, and the web draws a flying
+    /// card above every other.
+    BowedNear { bow: Bow, lift: Lift },
     /// The flight in of a card the viewer draws alone and holds up to be read, when it turns
     /// over on the way, as the web interface's `heldUp` (`ui/src/stage/drawn.ts`) has it: bowed
     /// as `Bowed` is, and also leaning `lean` radians counterclockwise about the bow's axis by

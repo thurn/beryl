@@ -54,15 +54,6 @@
     "b3d:choice-trigger-order/you/2560x1080": {
       "step-shown": 9
     },
-    "b3d:combat-attackers/opponent/1600x900": {
-      "step-shown": 2
-    },
-    "b3d:combat-attackers/opponent/1920x1080": {
-      "step-shown": 2
-    },
-    "b3d:combat-attackers/opponent/2560x1080": {
-      "step-shown": 1
-    },
     "b3d:first-target/you/2560x1080": {
       "step-shown": 1
     },

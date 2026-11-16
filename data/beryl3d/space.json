@@ -44,6 +44,10 @@
         "near": 0.6,
         "hold": 0.5
       },
+      "drawn_front": {
+        "near": 0.5,
+        "hold": 0.5
+      },
       "thrown": {
         "height": 0.95,
         "risen": 0.2,

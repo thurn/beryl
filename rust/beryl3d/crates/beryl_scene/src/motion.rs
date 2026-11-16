@@ -192,7 +192,7 @@ impl Segment {
         let eased = self.curve.ease(elapsed);
         let rise = Vec3::Z * self.arc * (PI * elapsed).sin();
         match self.shape {
-            Shape::Bowed(bow) => {
+            Shape::Bowed(bow) | Shape::BowedNear { bow, .. } => {
                 let arch = bow.arch(eased);
                 Along {
                     u: eased,
@@ -295,7 +295,7 @@ impl Segment {
         // A lifted card is drawn nearer the eye along its line of sight, and smaller by as
         // much, so that on screen it is where the straight way has it.
         let (position, scale) = match self.shape {
-            Shape::Lifted(lift) => {
+            Shape::Lifted(lift) | Shape::BowedNear { lift, .. } => {
                 let nearer = lift.nearer(position, u);
                 (lift.eye + (position - lift.eye) * nearer, scale * nearer)
             }
@@ -327,6 +327,7 @@ impl Segment {
         match self.shape {
             Shape::Line
             | Shape::Bowed(_)
+            | Shape::BowedNear { .. }
             | Shape::Held { .. }
             | Shape::Thrown { .. }
             | Shape::Swept { .. }
