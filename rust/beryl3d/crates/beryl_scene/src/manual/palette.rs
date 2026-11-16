@@ -233,15 +233,13 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
         .max_height(crate::data::space::flat::table::palette::HEIGHT)
         .children(results);
     list.role = Role::List;
-    let hints =
-        row()
-            .name("hints")
-            .gap(space::L)
-            .children(["Enter run", "Shift+Enter shifted", "Esc close"].map(|hint| {
-                text(hint)
-                    .style(type_style::MENU_HINT)
-                    .color(color::TEXT_DIM)
-            }));
+    let hints = row().name("hints").gap(space::L).children(
+        ["Enter run", "Shift+Enter shifted", "Esc close"].map(|hint| {
+            text(hint)
+                .style(type_style::MENU_HINT)
+                .color(color::TEXT_DIM)
+        }),
+    );
     let mut panel = column()
         .name("Command list")
         .width(metrics)
