@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -89,13 +90,15 @@ def test_update_lowers_an_entry_and_refuses_to_raise_one() -> None:
     assert entries["b/you"] == 1 and refused == []
 
 
-def test_parity_reuses_the_binary_built_with_the_pack(
+def test_parity_reuses_the_binary_built_and_leaves_no_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     builds: list[list[str]] = []
     line = json.dumps(step())
     native: Path = tmp_path / "native.jsonl"
     native.write_text(line + "\n")
+    exported: Path = tmp_path / "exported"
+    exported.mkdir()
 
     def build(arguments: list[str]) -> int:
         builds.append(arguments)
@@ -104,8 +107,8 @@ def test_parity_reuses_the_binary_built_with_the_pack(
     def run(command: list[str], **_options: Any) -> subprocess.CompletedProcess[str]:
         if command == [str(tmp_path / "record")]:
             return subprocess.CompletedProcess[str](command, 0, "recordings.bin\n", "")
-        if command == [str(tmp_path / "b3d"), "export", str(tmp_path)]:
-            (tmp_path / "r.you.json").write_text("{}")
+        if command == [str(tmp_path / "b3d"), "export", str(exported)]:
+            (exported / "r.you.json").write_text("{}")
             return subprocess.CompletedProcess[str](command, 0, "", "")
         assert command == [str(tmp_path / "b3d"), "timeline", "--all"]
         return subprocess.CompletedProcess[str](command, 0, f"command\n{native}\n", "")
@@ -114,7 +117,7 @@ def test_parity_reuses_the_binary_built_with_the_pack(
     monkeypatch.setattr(cli, "program", lambda name: tmp_path / name)
     monkeypatch.setattr(cli, "linked", lambda name: tmp_path / name)
     monkeypatch.setattr(timeline, "out", run)
-    monkeypatch.setattr(timeline.tempfile, "mkdtemp", lambda prefix: str(tmp_path))
+    monkeypatch.setattr(timeline.tempfile, "mkdtemp", lambda prefix: str(exported))
     monkeypatch.setattr(timeline, "web_lines", lambda pack, directory: [line])
     monkeypatch.setattr(timeline, "load_allowlist", dict)
 
@@ -123,6 +126,21 @@ def test_parity_reuses_the_binary_built_with_the_pack(
         == 0
     )
     assert builds == [cli.SHARED_BUILD]
+    # Each run's exported recordings and Beryl 3D's timeline file once filled the disk.
+    assert not exported.exists() and not native.exists()
+
+
+def test_pruning_the_web_cache_keeps_only_recent_files(tmp_path: Path) -> None:
+    now = 1_000_000_000.0
+    old = tmp_path / "web-timelines-old.jsonl"
+    recent = tmp_path / "web-timelines-recent.jsonl"
+    other = tmp_path / "other.jsonl"
+    for file in (old, recent, other):
+        file.write_text("")
+        os.utime(file, (now - 3 * 86400, now - 3 * 86400))
+    os.utime(recent, (now - 3600, now - 3600))
+    timeline.prune_web_cache(tmp_path, now)
+    assert not old.exists() and recent.exists() and other.exists()
 
 
 def test_web_hash_moves_with_every_file_the_web_timeline_imports(
@@ -136,7 +154,7 @@ def test_web_hash_moves_with_every_file_the_web_timeline_imports(
     (ui / "src" / "stage").mkdir(parents=True)
     (ui / "src" / "components").mkdir()
     (tmp_path / "data").mkdir()
-    exported = tmp_path / "exported"
+    exported: Path = tmp_path / "exported"
     exported.mkdir()
     files = {
         ui / timeline.WEB_ENTRY: 'const { s } = await import("../src/stage/stage.ts");',

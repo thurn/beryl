@@ -16,7 +16,11 @@ raise or add one unless `--raise` is given as well; a commit that raises one say
 The web side's lines are kept in `$BERYL_CACHE/b3d/web-timelines-<hash>.jsonl`. The hash covers
 the recordings pack, the exported recordings and every file the web timeline imports, followed
 from `ui/scripts/timeline.mjs` through relative imports ([`web_sources`]), so a run that finds
-the file does not start `node`.
+the file does not start `node`. Writing a new one deletes those older than [`WEB_CACHE_DAYS`].
+
+A run leaves nothing else behind: it deletes the exported recordings and Beryl 3D's timeline file
+when it is done. Both used to stay, about 400 MB a run in the temporary folder and 12 MB in
+`$BERYL_CACHE/b3d/out`, and after some 700 runs the disk was full and the sweep failed.
 
 Measured with `--fixtures` (the lane's step) on 2026-11-15 at load averages of 20 to 60, five
 runs each: with the web lines cached, 24.8, 26.5, 27.3, 57.3 and 59.4 s (median 27.3 s); with
@@ -36,9 +40,11 @@ import hashlib
 import json
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -48,6 +54,9 @@ from .. import warm
 from . import paths
 
 ALLOWLIST: Path = paths.DATA / "timeline-parity.json"
+# How long a cached web timeline is kept after it was written. Worktrees on different commits
+# share the cache, so a file another worktree still uses is kept for a while.
+WEB_CACHE_DAYS = 2
 # Two starts or two ends this far apart, in milliseconds, still agree.
 TOLERANCE_MS = 1.0
 # The most differing recordings a run prints before it only counts the rest.
@@ -293,7 +302,17 @@ def web_lines(pack: str, directory: Path) -> list[str]:
         sys.stderr.write(done.stderr)
         raise SystemExit(done.returncode)
     cached.write_text(done.stdout)
+    prune_web_cache(cached.parent)
     return done.stdout.splitlines()
+
+
+def prune_web_cache(directory: Path, now: float | None = None) -> None:
+    """Deletes the cached web timelines not written within [`WEB_CACHE_DAYS`]. Each change to
+    the web timeline's sources writes a new file, so without this they pile up."""
+    oldest = (time.time() if now is None else now) - WEB_CACHE_DAYS * 86400
+    for file in directory.glob("web-timelines-*.jsonl"):
+        if file.stat().st_mtime < oldest:
+            file.unlink(missing_ok=True)
 
 
 def native_lines() -> list[str]:
@@ -301,8 +320,12 @@ def native_lines() -> list[str]:
     faster than a run for each recording, since each start of the program is checked by macOS
     before it runs."""
     printed = b3d(["timeline", "--all"]).splitlines()
-    # The first line is the command that prints it again, the second the file.
-    return Path(printed[1]).read_text().splitlines()
+    # The first line is the command that prints it again, the second the file, which is
+    # deleted once read: every run writes a new one.
+    file = Path(printed[1])
+    lines = file.read_text().splitlines()
+    file.unlink()
+    return lines
 
 
 def fixture(name: str) -> bool:
@@ -330,6 +353,13 @@ def report(found: list[Difference], web_command: str) -> str:
 def run_parity(args: argparse.Namespace) -> int:
     pack = pack_name()
     directory = Path(tempfile.mkdtemp(prefix="b3d-parity-"))
+    try:
+        return parity(args, pack, directory)
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
+def parity(args: argparse.Namespace, pack: str, directory: Path) -> int:
     names = export(directory)
     web_all = web_lines(pack, directory)
     selected = [
@@ -342,7 +372,9 @@ def run_parity(args: argparse.Namespace) -> int:
     native = parse(native_lines())
     found = differences(web, native, scope)
     allowed = load_allowlist()
-    web_command = f"node ui/scripts/timeline.mjs {shlex.quote(str(directory))}"
+    # The exported recordings are deleted when the run ends, so the command exports them again.
+    again = shlex.quote(str(Path(tempfile.gettempdir()) / "b3d-recordings"))
+    web_command = f"just b3d export {again} && node ui/scripts/timeline.mjs {again}"
     if args.update:
         # An entry for a recording that no longer exists (a renamed spec moment) goes.
         exported = {key_of(n, s) for n, s in names}
