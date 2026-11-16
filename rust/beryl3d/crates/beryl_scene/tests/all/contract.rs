@@ -223,6 +223,7 @@ mod milestone_three {
             log: &[],
             log_folded: false,
             log_open: false,
+            concede: beryl_scene::screens::Concede::Asks,
         }
     }
 

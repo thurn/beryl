@@ -18,7 +18,7 @@ pub(crate) use gallery::faces as gallery_faces;
 pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
 pub use start::{SEED, StartForm, in_progress, seed};
 
-pub use settings::{GEAR_INSET, gear};
+pub use settings::{Concede, GEAR_INSET, gear};
 pub use table::sheet_face;
 
 use beryl_protocol::prompt::PromptView;
@@ -152,6 +152,8 @@ pub struct ScreenIn<'a> {
     pub log_folded: bool,
     /// Whether the folded game log is open.
     pub log_open: bool,
+    /// What the settings sheet's concede button does when pressed.
+    pub concede: Concede,
 }
 
 /// What the flat layer shows on `screen`.

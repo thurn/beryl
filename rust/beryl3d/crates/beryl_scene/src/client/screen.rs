@@ -44,6 +44,7 @@ impl Client {
             log: self.log.logged.entries(),
             log_folded: self.log.folded,
             log_open: self.log.open,
+            concede: self.concede,
         };
         let mut full = crate::prompts::faces(&input);
         full.extend(screens::sheet_face(&input));

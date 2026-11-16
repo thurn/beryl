@@ -73,6 +73,7 @@ impl Client {
             log: self.log.logged.entries(),
             log_folded: self.log.folded,
             log_open: self.log.open,
+            concede: self.concede,
         };
         let element = inspector::inspector(&input);
         let place = inspector::place(&input);

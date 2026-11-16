@@ -80,6 +80,34 @@ fn dragging_the_music_slider_saves_the_new_level() {
 }
 
 #[test]
+fn concede_asks_to_confirm_and_closing_the_sheet_puts_it_back() {
+    use beryl_scene::command::SessionCommand;
+    let concessions = |client: &mut Client| {
+        std::iter::from_fn(|| client.next_command())
+            .filter(|command| matches!(command, SessionCommand::Concede(_)))
+            .count()
+    };
+    let mut client = in_game();
+    click(&mut client, Role::Button, "Settings");
+    click(&mut client, Role::Button, "Concede");
+    // A first press, perhaps a slip, only asks.
+    assert_eq!(concessions(&mut client), 0);
+    let names = controls(&mut client);
+    assert!(names.contains(&"Confirm Concede".to_owned()), "{names:?}");
+
+    // Closing the sheet puts the confirmation back.
+    client.press(&Press::Sheet(None));
+    click(&mut client, Role::Button, "Settings");
+    let names = controls(&mut client);
+    assert!(names.contains(&"Concede".to_owned()), "{names:?}");
+
+    click(&mut client, Role::Button, "Concede");
+    click(&mut client, Role::Button, "Confirm Concede");
+    assert_eq!(concessions(&mut client), 1);
+    assert!(!controls(&mut client).contains(&"Music".to_owned()), "the sheet closed");
+}
+
+#[test]
 fn concede_is_absent_on_the_start_screen() {
     let mut client = in_game();
     client.press(&Press::Open(Screen::Start));

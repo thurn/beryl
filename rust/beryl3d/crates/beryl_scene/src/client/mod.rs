@@ -31,7 +31,7 @@ use crate::play::record::{Plant, ScriptRecord};
 use crate::pointer::LetGo;
 use crate::pointer::rows::RowGesture;
 use crate::prompts;
-use crate::screens::{self, GalleryState, Music, SEED, Screen, Sheet, StartForm};
+use crate::screens::{self, Concede, GalleryState, Music, SEED, Screen, Sheet, StartForm};
 use crate::settings::Settings;
 use crate::table::{Table, Window};
 use crate::widgets::Fields;
@@ -103,6 +103,8 @@ pub struct Client {
     banner: Banner,
     /// The game log, as the views have told it so far, and whether it is folded and open.
     log: Log,
+    /// What the settings sheet's concede button does when pressed (`ScreenIn::concede`).
+    concede: Concede,
     /// What the pointer is doing to scroll a battlefield row.
     row_gesture: RowGesture,
     /// The screen the flat layer shows. A recording or a game is fed to the client on the game
@@ -214,6 +216,7 @@ impl Client {
             row_counts: RowCounts::default(),
             banner: Banner::default(),
             log: Log::default(),
+            concede: Concede::Asks,
             row_gesture: RowGesture::default(),
             screen: Screen::Game,
             gallery: GalleryState::default(),
@@ -565,6 +568,11 @@ impl Client {
                 };
                 *set = toggled(*set, step);
                 self.save_stops();
+            }
+            // The first press only asks to confirm, as the web's `ConcedeButton` does.
+            Press::Concede if self.concede == Concede::Asks => {
+                self.concede = Concede::Confirms;
+                self.show_screen();
             }
             Press::Concede => {
                 self.press(&Press::Sheet(None));

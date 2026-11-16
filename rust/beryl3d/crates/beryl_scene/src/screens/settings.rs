@@ -8,9 +8,20 @@ use super::{Screen, ScreenIn, Sheet};
 use crate::element::{Align, Element, Justify, Overflow, Position, Press, column, row, text};
 use crate::settings::Setting;
 use crate::tokens::{color, size, space, type_style};
-use crate::widgets::{button, icon_button, icons, slider, toggle};
+use crate::widgets::{button, icon_button, icons, primary, slider, toggle};
 
 include!(concat!(env!("OUT_DIR"), "/credits.rs"));
+
+/// What the settings sheet's concede button does: asks to confirm on its first press, as the
+/// web's `ConcedeButton` does, then concedes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Concede {
+    /// "Concede": a press only asks to confirm.
+    #[default]
+    Asks,
+    /// "Confirm Concede": a press concedes the game.
+    Confirms,
+}
 
 /// How wide the panel is, in logical points.
 const WIDTH: f32 = 360.0;
@@ -83,7 +94,14 @@ pub fn settings(input: &ScreenIn) -> Element {
                 ),
         );
     if in_game(input) {
-        panel = panel.child(button("Concede").on_press(Press::Concede));
+        // Asked once in place, as the web's `ConcedeButton`: the first press turns the button
+        // into the confirmation, which closing the sheet puts back.
+        let concede = if input.concede == Concede::Confirms {
+            primary("Confirm Concede")
+        } else {
+            button("Concede")
+        };
+        panel = panel.child(concede.on_press(Press::Concede));
     }
     panel = panel.child(credits());
     column()

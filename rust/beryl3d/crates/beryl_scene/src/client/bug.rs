@@ -104,6 +104,8 @@ impl Client {
             self.layer.focus(None);
         }
         self.sheet = sheet;
+        // Closing or changing the sheet puts the confirmation back.
+        self.concede = crate::screens::Concede::Asks;
         if opening {
             self.bug.frozen = Some(self.bug.table(self.now));
             self.bug.screen_open = self.open;
