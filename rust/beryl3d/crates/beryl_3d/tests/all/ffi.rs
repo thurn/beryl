@@ -86,7 +86,11 @@ fn the_header_test_calls_every_function_and_its_valid_inputs_arrive() {
             &InputLine::Surface {
                 width: 800.0,
                 height: 600.0,
-                scale: 1.0
+                scale: 1.0,
+                top: 0.0,
+                right: 0.0,
+                bottom: 0.0,
+                left: 0.0,
             },
             &InputLine::Text { length: 5 },
             &InputLine::Lifecycle {

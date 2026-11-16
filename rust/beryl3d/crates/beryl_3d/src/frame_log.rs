@@ -1,8 +1,8 @@
 //! The frame log (docs/beryl-3d.md, "Driving the running app"): every run of the app writes a
 //! file of its own, `$BERYL_CACHE/b3d/frames/<start time>-<process id>.jsonl`, that an agent
 //! reads with `just b3d frames`. Its first line describes the run, then one line follows for
-//! each late frame and for each pointer, key, text, surface and lifecycle input, and the last
-//! line is the run's summary.
+//! each late frame and for each pointer, key, text, surface and lifecycle input. The log
+//! records when the first frame was shown and summarizes the run at exit or at replay end.
 //!
 //! A frame is late when more than one and a half intervals of the rate the host asked for
 //! passed since the frame before it while the ticks ran (decision C18). When the host asked
@@ -171,6 +171,7 @@ pub struct Searching {
 pub enum Line {
     Run(Run),
     Late(Late),
+    FirstShownMs(f64),
     Summary(Summary),
     Input(InputLine),
 }
@@ -203,11 +204,19 @@ pub enum InputLine {
     Text {
         length: usize,
     },
-    /// The surface's size in logical points, and its pixels per point.
+    /// The surface's size and safe-area insets in logical points, and its pixels per point.
     Surface {
         width: f32,
         height: f32,
         scale: f32,
+        #[serde(default)]
+        top: f32,
+        #[serde(default)]
+        right: f32,
+        #[serde(default)]
+        bottom: f32,
+        #[serde(default)]
+        left: f32,
     },
     Lifecycle {
         event: String,
@@ -239,10 +248,18 @@ impl InputLine {
             Input::Text(TextChange(text)) => Self::Text {
                 length: text.chars().count(),
             },
-            Input::Surface { size, scale, .. } => Self::Surface {
+            Input::Surface {
+                size,
+                scale,
+                safe_area,
+            } => Self::Surface {
                 width: size.width,
                 height: size.height,
                 scale: *scale,
+                top: safe_area.top,
+                right: safe_area.right,
+                bottom: safe_area.bottom,
+                left: safe_area.left,
             },
             Input::Lifecycle(lifecycle) => Self::Lifecycle {
                 event: format!("{lifecycle:?}"),
@@ -379,7 +396,11 @@ impl FrameLog {
             summary.searching.worst_encoded_ms =
                 summary.searching.worst_encoded_ms.max(ms(shown.encoded));
         }
-        summary.first_shown_ms.get_or_insert(ms(ticked.tick));
+        if summary.first_shown_ms.is_none() {
+            let at = ms(ticked.tick);
+            summary.first_shown_ms = Some(at);
+            let _ = self.lines.send(Line::FirstShownMs(at));
+        }
         let waited = ms(shown.waited);
         let bucket = usize::try_from(shown.waited / WAIT_BUCKET).unwrap_or(usize::MAX);
         self.waits[bucket.min(WAIT_BUCKETS - 1)] += 1;
@@ -434,17 +455,26 @@ impl FrameLog {
         self.summary.unplaced = steps;
     }
 
-    /// Writes the summary as the last line and returns it.
-    ///
-    /// # Errors
-    ///
-    /// When a line could not be written.
-    pub fn finish(mut self) -> io::Result<Summary> {
+    /// Writes a summary while keeping the log open for input after the replay ends.
+    pub fn summarize(&mut self) {
+        let summary = self.summary();
+        let _ = self.lines.send(Line::Summary(summary));
+    }
+
+    fn summary(&mut self) -> Summary {
         self.summary.seconds = self.created.elapsed().as_secs_f64();
         let worst = self.summary.worst_wait_ms;
         self.summary.median_wait_ms = percentile(&self.waits[..], 0.5).min(worst);
         self.summary.p95_wait_ms = percentile(&self.waits[..], 0.95).min(worst);
-        let summary = self.summary;
+        self.summary.clone()
+    }
+
+    /// Writes the summary as the last line and returns it.
+    ///
+    /// # Errors
+    /// When a line could not be written.
+    pub fn finish(mut self) -> io::Result<Summary> {
+        let summary = self.summary();
         let _ = self.lines.send(Line::Summary(summary.clone()));
         drop(self.lines);
         self.writer
@@ -508,6 +538,7 @@ pub fn read(path: &Path) -> Result<Log, String> {
     for line in lines {
         match line? {
             Line::Run(_) => return Err(format!("{}: a second run line", path.display())),
+            Line::FirstShownMs(_) => {}
             Line::Late(late) => log.late.push(late),
             Line::Summary(summary) => log.summary = Some(summary),
             Line::Input(input) => log.inputs.push(input),

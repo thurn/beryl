@@ -903,7 +903,13 @@ There are four hosts.
   rate, and calls the Rust library through C functions.
 - **The Android host** is a Kotlin app of a few hundred lines. It owns a
   `SurfaceView` and a `Choreographer` frame callback, and calls the same C
-  functions through JNI.
+  functions through JNI. It sends touch events in logical points, keeping each
+  finger's id until it lifts or Android cancels it. Back goes to the client as a
+  key press. Rotating the device resizes the surface of the running game. The
+  host draws edge to edge and reports the system bars and cutout as insets. On
+  API 30 and up, it passes the requested rate to `Surface.setFrameRate`. It
+  schedules the next callback at the returned wake time and stops callbacks when
+  the client is idle. Input and the Rust waker can request a callback sooner.
 
 **Choosing a frame rate** (decision C18). Every host feeds the time between its
 animating frames to one rule, `RateRule` in `beryl_host::rate`, through the
@@ -1031,10 +1037,10 @@ the graphics paths and the build before milestone 4 builds the real hosts on it:
 - **The hosts** are `ios/` (Swift, an xcodegen spec, iOS 15) and `android/`
   (Kotlin, built with the Tauri app's Gradle wrapper, API 24) beside the crate.
   Their bundle and application ids are `ca.thurn.beryl3d`, so both apps can be
-  installed beside the Tauri app. They hold no logic beyond passing the surface,
-  the lifecycle and the display's time. The display link and the frame callback
-  still call `beryl3d_frame` on every tick, whatever it returns, and do not yet
-  apply its rate: milestone 4's host work does both.
+  installed beside the Tauri app. The Android host passes platform events to the
+  library, applies its requested rate and schedules its callbacks from the
+  returned wake times. The iOS spike still calls `beryl3d_frame` on each display
+  tick while the app is in front.
 - **The library** is built with `cargo rustc --crate-type staticlib` for iOS and
   `cdylib` for Android, so that desktop builds link neither. On Android it loads
   at API 24 and needs the system's libraries and the NDK's `libc++_shared.so`,

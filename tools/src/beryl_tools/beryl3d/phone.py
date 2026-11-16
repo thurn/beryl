@@ -21,12 +21,20 @@ import shutil
 import subprocess
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any
 
 from .. import checks, mobile, paths as repo_paths, system
 from . import app, paths
+from .phone_log import (
+    android_touch_faults,
+    lines,
+    logged_inputs,
+    rotated_and_returned,
+    surface_sizes,
+)
 
 CRATE: Path = paths.WORKSPACE / "crates" / "beryl_3d"
 # Different from the Tauri app's ca.thurn.beryl, so both can be installed.
@@ -120,17 +128,6 @@ def write_fixtures(names: tuple[str, ...], folder: Path) -> list[Path]:
     return written
 
 
-def lines(text: str) -> list[dict[str, Any]]:
-    """A frame log's lines, skipping a torn last line."""
-    parsed = []
-    for line in text.splitlines():
-        try:
-            parsed.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return parsed
-
-
 def wait_for_log(
     read: Callable[[], str | None],
     alive: Callable[[], bool],
@@ -138,11 +135,11 @@ def wait_for_log(
     label: str,
     limit_s: int = REPLAY_LIMIT_S,
     pause: Callable[[float], None] = time.sleep,
+    event: str = "summary",
+    ready: Callable[[list[dict[str, Any]]], bool] | None = None,
 ) -> str | None:
-    """Polls the app's frame log with `read` every second (`pause`) until it holds a summary,
-    which the app writes when the recording's last script has ended, and returns the log's text. Prints the GPU
-    adapter once the log's first line names it. None, after printing why, when the app died or
-    the limit passed."""
+    """Polls until the log contains `event` or meets `ready`. By default a replay's
+    summary marks its end. Returns None if the app stops or the wait times out."""
     deadline = time.monotonic() + limit_s
     named = False
     while time.monotonic() < deadline:
@@ -151,7 +148,8 @@ def wait_for_log(
         if parsed and not named and "run" in parsed[0]:
             named = True
             print(f"{label}: adapter {parsed[0]['run']['adapter']}")
-        if any("summary" in line for line in parsed):
+        reached = ready(parsed) if ready else any(event in line for line in parsed)
+        if reached:
             return text
         # The app writes its error log only for what stops it drawing: a missing recording,
         # no surface, a panic.
@@ -165,7 +163,7 @@ def wait_for_log(
             print(errors() or f"{label}: the app wrote no error")
             return None
         pause(1)
-    print(f"{label}: FAILED: the recording did not end in {limit_s} s")
+    print(f"{label}: FAILED: no {event} in the log after {limit_s} s")
     print(errors() or f"{label}: the app wrote no error")
     return None
 
@@ -450,6 +448,7 @@ def android_apk() -> Path:
             *["--project-cache-dir", str(root / "gradle")],
             f"-Pberyl3d.buildDir={root / 'build'}",
             f"-Pberyl3d.jniLibs={root / 'jniLibs'}",
+            f"-Pkotlin.project.persistent.dir={root / 'kotlin'}",
         ],
         env=mobile.android_env(),
         check=False,
@@ -512,8 +511,147 @@ def start_emulator(gles: bool) -> subprocess.Popen[bytes]:
     return proc
 
 
+def adb_checked(*args: str) -> str:
+    result = adb(*args)
+    if result.returncode:
+        raise SystemExit(f"adb {' '.join(args)}: {result.stderr or result.stdout}")
+    return result.stdout.strip()
+
+
+@contextmanager
+def locked_rotation() -> Iterator[None]:
+    """Start in the emulator's natural orientation and restore its settings on exit."""
+    settings = ("accelerometer_rotation", "user_rotation")
+    previous = {
+        name: adb_checked("shell", "settings", "get", "system", name)
+        for name in settings
+    }
+    try:
+        adb_checked("shell", "settings", "put", "system", "accelerometer_rotation", "0")
+        set_rotation("0")
+        yield
+    finally:
+        for name in reversed(settings):
+            value = previous[name]
+            if value == "null":
+                adb_checked("shell", "settings", "delete", "system", name)
+            else:
+                adb_checked("shell", "settings", "put", "system", name, value)
+
+
+def set_rotation(rotation: str) -> None:
+    adb_checked("shell", "settings", "put", "system", "user_rotation", rotation)
+
+
+def last_frame_callback(pid: str) -> tuple[int, int]:
+    """The debug host logs each callback's serial and wake, even when Rust draws nothing."""
+    trace = adb_checked(
+        "logcat", "-d", "--pid", pid, "-v", "raw", "-s", "Beryl3dFrames:D"
+    )
+    for line in reversed(trace.splitlines()):
+        fields = line.split()
+        if len(fields) == 2:
+            return int(fields[0]), int(fields[1])
+    return 0, 0
+
+
+def android_input_focused() -> bool:
+    # Android can resume and draw the activity before its window receives input focus.
+    state = adb_checked("shell", "dumpsys", "input")
+    focused = state.partition("\n  FocusedWindows:\n")[2].partition(
+        "\n  FocusRequests:"
+    )[0]
+    return f"{BUNDLE}/{BUNDLE}.MainActivity" in focused
+
+
+def android_touch_smoke(
+    read: Callable[[], str | None],
+    errors: Callable[[], str],
+    label: str,
+) -> tuple[str | None, list[str]]:
+    pid: str = adb("shell", "pidof", BUNDLE).stdout.strip()
+    if not pid:
+        return read(), [errors() or "the Android host did not start"]
+
+    def alive() -> bool:
+        return adb("shell", "pidof", BUNDLE).stdout.strip() == pid
+
+    log = wait_for_log(read, alive, errors, label, event="first_shown_ms")
+    if log is None:
+        return None, ["the first frame was never shown"]
+    deadline = time.monotonic() + REPLAY_LIMIT_S
+    while not android_input_focused():
+        if not alive() or errors() or time.monotonic() >= deadline:
+            return read(), [errors() or "the Android window never received input focus"]
+        time.sleep(1)
+
+    surface = logged_inputs(lines(log), "surface")[-1]
+    original = (surface["width"], surface["height"])
+    # The emulator's status bar can extend below y=100.
+    tap_y = max(100, round((surface["top"] + 32) * surface["scale"]))
+    adb_checked("shell", "input", "tap", "100", str(tap_y))
+    adb_checked("shell", "input", "swipe", "100", "300", "200", "300", "500")
+    adb_checked("shell", "input", "keyevent", "KEYCODE_BACK")
+    activities = adb_checked("shell", "dumpsys", "activity", "activities")
+    if not alive() or not any(
+        "topResumedActivity" in line and ACTIVITY in line
+        for line in activities.splitlines()
+    ):
+        return log, ["Back took the activity out of the foreground"]
+
+    set_rotation("1")
+    swapped = (original[1], original[0])
+    if (
+        wait_for_log(
+            read,
+            alive,
+            errors,
+            label,
+            event="rotated surface",
+            ready=lambda parsed: swapped in surface_sizes(parsed),
+        )
+        is None
+    ):
+        return read(), ["the surface did not rotate"]
+
+    set_rotation("0")
+    log = wait_for_log(
+        read,
+        alive,
+        errors,
+        label,
+        event="replay summary and restored surface",
+        ready=lambda parsed: rotated_and_returned(parsed, original)
+        and any("summary" in line for line in parsed),
+    )
+    if log is None:
+        return read(), [
+            "the replay or return to the original orientation did not finish"
+        ]
+
+    deadline = time.monotonic() + REPLAY_LIMIT_S
+    while time.monotonic() < deadline and alive():
+        callback, wake = last_frame_callback(pid)
+        if wake == -1:
+            time.sleep(2)
+            end, _ = last_frame_callback(pid)
+            log = read()
+            faults = android_touch_faults(log or "", original, callback, end)
+            reported = errors()
+            if reported or not alive():
+                faults.append(reported or "the app stopped during the idle check")
+            return log, faults
+        time.sleep(1)
+    return read(), ["the host did not become idle"]
+
+
 def android_smoke_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--fixture", default=FIXTURE, help="the recording to replay")
+    parser.add_argument(
+        "--touch",
+        action="store_true",
+        help="send touch and Back input, rotate the surface, and verify that frames stop when idle",
+    )
     parser.add_argument(
         "--gles",
         action="store_true",
@@ -522,12 +660,16 @@ def android_smoke_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run_android_smoke(args: argparse.Namespace) -> int:
-    apk = android_apk()
-    label = "android-smoke" + (" --gles" if args.gles else "")
+    label = (
+        "android-smoke"
+        + (" --touch" if args.touch else "")
+        + (" --gles" if args.gles else "")
+    )
     run = out_dir("phone") / f"{run_name()}-android{'-gles' if args.gles else ''}"
     run.mkdir()
     (fixture,) = write_fixtures((args.fixture,), run)
     with system.file_lock(paths.cache() / "android-phone.lock"):
+        apk = android_apk()
         if adb("get-state").stdout.strip() == "device":
             # A run that was killed left its emulator behind, booted with options this run
             # may not want.
@@ -544,10 +686,6 @@ def run_android_smoke(args: argparse.Namespace) -> int:
                 f"'mkdir -p files && rm -f files/*.jsonl files/{ERRORS} files/{LIBRARY_LOG}'",
             )
             adb(*shell, f"'cat > files/{fixture.name}'", stdin=fixture)
-            adb(
-                *["shell", "am", "start", "-W", "-S", "-n", ACTIVITY],
-                *["--es", "fixture", args.fixture],
-            )
 
             def read() -> str | None:
                 text = adb(*shell, "'cat files/*.jsonl 2>/dev/null'").stdout
@@ -563,10 +701,21 @@ def run_android_smoke(args: argparse.Namespace) -> int:
                     *shell, f"'test -s files/{ERRORS} && cat {both} 2>/dev/null'"
                 ).stdout
                 crash = adb("logcat", "-d", "-b", "crash").stdout
+                events = adb("logcat", "-d", "-b", "events", "-s", "am_anr:I").stdout
+                anr = "\n".join(line for line in events.splitlines() if BUNDLE in line)
                 # The head of a crash holds the signal, the abort message and the top frames.
-                return "\n".join(part for part in (text, crash[:4000]) if part)
+                return "\n".join(part for part in (text, crash[:4000], anr) if part)
 
-            log = wait_for_log(read, alive, errors, label)
+            with locked_rotation() if args.touch else nullcontext():
+                adb_checked(
+                    *["shell", "am", "start", "-W", "-S", "-n", ACTIVITY],
+                    *["--es", "fixture", args.fixture],
+                    *(["--ez", "traceFrames", "true"] if args.touch else []),
+                )
+                if args.touch:
+                    log, faults = android_touch_smoke(read, errors, label)
+                else:
+                    log, faults = wait_for_log(read, alive, errors, label), []
             png = run / "screen.png"
             png.write_bytes(
                 subprocess.run(
@@ -581,6 +730,13 @@ def run_android_smoke(args: argparse.Namespace) -> int:
         finally:
             adb("emu", "kill")
             emulator.wait(timeout=REPLAY_LIMIT_S)
+    if faults:
+        if log is not None:
+            png.with_suffix(".jsonl").write_text(log, encoding="utf-8")
+        for fault in faults:
+            print(f"{label}: FAILED: {fault}")
+        print(f"{label}: screen {png}")
+        return 1
     return finish(label, log, png)
 
 

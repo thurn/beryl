@@ -546,12 +546,12 @@ COMMANDS: tuple[Command, ...] = (
         "replays a recording in the app's Android host in a headless emulator, on Vulkan or GLES",
         (
             (
-                "just b3d android-smoke",
-                "build, install and replay verbs-zones on Vulkan",
+                "just b3d android-smoke --touch",
+                "replay verbs-zones on Vulkan and check touch, Back, rotation and idle",
             ),
             (
-                "just b3d android-smoke --gles",
-                "the same with Vulkan hidden: OpenGL ES 3.0",
+                "just b3d android-smoke --touch --gles",
+                "check the same inputs on OpenGL ES 3.0",
             ),
         ),
         phone.checked(phone.run_android_smoke),

@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from beryl_tools.beryl3d import phone
+from beryl_tools.beryl3d import phone, phone_log
 
 RUN: str = json.dumps({"run": {"adapter": "a GPU (Vulkan)"}})
 SUMMARY: str = json.dumps({"summary": {"frames": 3, "first_shown_ms": 0.0}})
@@ -37,4 +37,39 @@ def test_an_error_or_an_exit_ends_the_wait_with_no_log(
 
 
 def test_a_torn_last_line_is_skipped() -> None:
-    assert phone.lines(f'{RUN}\n{{"summ') == [json.loads(RUN)]
+    assert phone_log.lines(f'{RUN}\n{{"summ') == [json.loads(RUN)]
+
+
+def touch_log(*, top: float, returned: bool) -> str:
+    return "\n".join(
+        json.dumps({"input": {kind: event}})
+        for kind, event in [
+            ("surface", {"width": 400, "height": 800, "top": top}),
+            *[
+                ("pointer", {"id": 1, "kind": "Touch", "phase": phase})
+                for phase in ("Down", "Up", "Down", "Move", "Up")
+            ],
+            ("key", {"code": "Back", "phase": "Down"}),
+            ("key", {"code": "Back", "phase": "Up"}),
+            ("surface", {"width": 800, "height": 400}),
+            *([("surface", {"width": 400, "height": 800})] if returned else []),
+        ]
+    )
+
+
+def test_android_touch_log_accepts_input_rotation_insets_and_idle() -> None:
+    log = touch_log(top=24, returned=True)
+    assert phone_log.android_touch_faults(log, (400, 800), 42, 42) == []
+
+
+def test_android_touch_log_rejects_missing_input_insets_rotation_or_idle() -> None:
+    log = touch_log(top=0, returned=False).replace('"Up"', '"Cancel"')
+    faults = phone_log.android_touch_faults(log, (400, 800), 42, 43)
+    assert any("touch id 1" in fault for fault in faults)
+    assert any("Back down and up" in fault for fault in faults)
+    assert any("rotate and return" in fault for fault in faults)
+    assert any("top inset" in fault for fault in faults)
+    assert any("got 1" in fault for fault in faults)
+    assert phone_log.android_touch_faults(
+        touch_log(top=24, returned=True), (400, 800), 0, 0
+    )

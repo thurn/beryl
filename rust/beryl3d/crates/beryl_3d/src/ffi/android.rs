@@ -11,7 +11,8 @@ use std::sync::Arc;
 use beryl_host::Wakeup;
 use beryl_render::Native;
 use jni_sys::{
-    JNIEnv, JavaVM, jfloat, jfloatArray, jint, jlong, jmethodID, jobject, jsize, jstring,
+    JNIEnv, JavaVM, jfloat, jfloatArray, jint, jlong, jlongArray, jmethodID, jobject, jsize,
+    jstring,
 };
 
 use super::{
@@ -220,6 +221,10 @@ pub unsafe extern "C" fn Java_ca_thurn_beryl3d_Native_surface(
     width: jint,
     height: jint,
     scale: jfloat,
+    top: jfloat,
+    right: jfloat,
+    bottom: jfloat,
+    left: jfloat,
 ) {
     // SAFETY: `app` came from `create`; `ANativeWindow_fromSurface` takes a reference to the
     // window behind a live `Surface`, which `Window` releases when the surface is lost.
@@ -231,13 +236,19 @@ pub unsafe extern "C" fn Java_ca_thurn_beryl3d_Native_surface(
         };
         // The window stays referenced while the renderer's surface uses it.
         let native = Native::AndroidWindow(window.cast());
-        app.window = Some(Window(window));
+        // Hold the old reference through the resize, in case the renderer still uses it.
+        let _previous = app.window.replace(Window(window));
         app.surface(
             native,
             width.max(1) as u32,
             height.max(1) as u32,
             scale,
-            BerylInsets::default(),
+            BerylInsets {
+                top,
+                right,
+                bottom,
+                left,
+            },
         );
     }
 }
@@ -275,8 +286,8 @@ pub unsafe extern "C" fn Java_ca_thurn_beryl3d_Native_lifecycle(
     unsafe { super::beryl3d_lifecycle(app as *mut Beryl3d, event as u32) };
 }
 
-/// `beryl3d_frame`, with `System.nanoTime()`. Returns when the next frame is wanted: 0 for now,
-/// -1 for never, or that time in nanoseconds.
+/// `beryl3d_frame`, with `System.nanoTime()`. Returns [wake, hz bits], where wake is 0 for now,
+/// -1 for never, or the requested time in nanoseconds.
 ///
 /// # Safety
 ///
@@ -284,17 +295,29 @@ pub unsafe extern "C" fn Java_ca_thurn_beryl3d_Native_lifecycle(
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn Java_ca_thurn_beryl3d_Native_frame(
-    _env: *mut JNIEnv,
+    env: *mut JNIEnv,
     _this: jobject,
     app: jlong,
     now: jlong,
-) -> jlong {
-    // SAFETY: `app` came from `create`.
-    let wake = unsafe { super::beryl3d_frame(app as *mut Beryl3d, now as u64) };
-    match wake.kind {
-        BERYL_WAKE_NOW => 0,
-        BERYL_WAKE_AT => wake.at as jlong,
-        _ => -1,
+) -> jlongArray {
+    // SAFETY: the JVM supplies its environment and `app` came from `create`.
+    unsafe {
+        let wake = super::beryl3d_frame(app as *mut Beryl3d, now as u64);
+        let at = match wake.kind {
+            BERYL_WAKE_NOW => 0,
+            BERYL_WAKE_AT => wake.at as jlong,
+            _ => -1,
+        };
+        let table = &**env;
+        let (Some(new), Some(set)) = (table.NewLongArray, table.SetLongArrayRegion) else {
+            return std::ptr::null_mut();
+        };
+        let result = new(env, 2);
+        if !result.is_null() {
+            let values = [at, jlong::from(wake.hz.to_bits())];
+            set(env, result, 0, 2, values.as_ptr());
+        }
+        result
     }
 }
 

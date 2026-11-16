@@ -21,6 +21,9 @@ android {
         // The folder holding arm64-v8a/libberyl_3d.so, which `just b3d android-smoke` builds.
         getByName("main").jniLibs.srcDirs(findProperty("beryl3d.jniLibs") ?: "jniLibs")
     }
+    buildFeatures {
+        buildConfig = true
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

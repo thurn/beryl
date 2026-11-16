@@ -2,11 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:label="Beryl 3D"
-        android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+        android:theme="@android:style/Theme.NoTitleBar">
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode"
-            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:screenOrientation="fullUser"
+            android:enableOnBackInvokedCallback="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
