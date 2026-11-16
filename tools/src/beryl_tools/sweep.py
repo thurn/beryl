@@ -306,7 +306,7 @@ def file(
             again = [c for c in names if c in theirs]
             if again:
                 text = body(commit, lane, again, since, mine, tail)
-                code, _ = store.bd("comments", "add", bead, text)
+                code, _ = store.add_comment(bead, text)
                 lines.append(
                     f"sweep: {bead}: still failing: {', '.join(again)}"
                     if code == 0
@@ -316,26 +316,16 @@ def file(
         if not new:
             continue
         more = f" and {len(new) - 1} more" if len(new) > 1 else ""
-        code, out = store.bd(
-            "create",
-            "--title",
-            f"Fix sweep {lane} failure: {new[0]}{more}",
-            "--description",
-            body(commit, lane, new, since, mine, tail),
-            "--acceptance",
-            f"`{reproduce(lane, new)}` passes at the staging tip.",
-            "--priority",
-            PRIORITY,
-            "--labels",
-            f"role:steward,{LABEL}",
-            "--metadata",
-            json.dumps(
-                {
-                    nightly_failures.CHECKS_KEY: "\n".join(new),
-                    "enact_ci_host": nightly_failures.host(),
-                }
-            ),
-            "--silent",
+        code, out = store.create_issue(
+            title=f"Fix sweep {lane} failure: {new[0]}{more}",
+            body=body(commit, lane, new, since, mine, tail),
+            acceptance=f"`{reproduce(lane, new)}` passes at the staging tip.",
+            priority=PRIORITY,
+            labels=f"role:steward,{LABEL}",
+            metadata={
+                nightly_failures.CHECKS_KEY: "\n".join(new),
+                "enact_ci_host": nightly_failures.host(),
+            },
         )
         lines.append(
             f"sweep: {out.strip()}: filed {', '.join(new)}"

@@ -33,12 +33,12 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import paths, system
+from . import paths, system, tickets
 
 # Re-exported: the fast check, the pruning rule and their tests read them as verdicts.SLOW_ONLY,
 # and slow CI's tests step as verdicts.FAST_ONLY.
@@ -322,7 +322,10 @@ def entries(comments: Iterable[object]) -> list[Entry]:
                 corrected["verdict"] = entry["verdict"]
                 corrected["corrected"] = True
             continue
-        entry["comment"] = str(c.get("id", ""))
+        # Imported corrections still name the original Beads comment ID.
+        entry["comment"] = str(
+            c.get("legacy_id") or c.get("id") or f"ticket:{c.get('n')}"
+        )
         by_id[str(entry["comment"])] = entry
         found.append(entry)
     return found
@@ -340,8 +343,83 @@ def parse_json(out: str) -> object:
 
 
 class Beads:
-    """The `ci-check` beads, through bd, best effort: off when $BERYL_CI_BEADS is `off` or bd
-    is not installed, and a call that fails is reported and returns nothing."""
+    """Best-effort CI reporting through the active tracker."""
+
+    _check_tickets: dict[str, str] | None = None
+
+    def tracker(self, native: Callable[[str], str], *legacy: str) -> tuple[int, str]:
+        try:
+            executable = "" if os.environ.get(BEADS_ENV) == "off" else tickets.client()
+            if executable:
+                return 0, native(executable)
+            return self.bd(*legacy)
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
+            warn(f"tracker {legacy[0]}: {error}")
+            return -1, ""
+
+    def list_issues(self, *filters: str, include_closed: bool = False) -> object:
+        all_flag = ("--all",) if include_closed else ()
+        _, out = self.tracker(
+            lambda tk: tickets.invoke(tk, "list", *filters, *all_flag),
+            "list",
+            *filters,
+            *all_flag,
+            "-n",
+            "0",
+            "--json",
+        )
+        return parse_json(out)
+
+    def add_comment(self, issue: str, comment: str) -> tuple[int, str]:
+        return self.tracker(
+            lambda tk: tickets.invoke(tk, "comment", issue, "--", comment),
+            "comments",
+            "add",
+            issue,
+            comment,
+        )
+
+    def create_issue(
+        self,
+        *,
+        title: str,
+        body: str,
+        priority: str,
+        labels: str,
+        acceptance: str = "",
+        parent: str = "",
+        metadata: dict[str, str] | None = None,
+    ) -> tuple[int, str]:
+        legacy = [
+            "create",
+            "--title",
+            title,
+            "--description",
+            body,
+            "--priority",
+            priority,
+            "--labels",
+            labels,
+        ]
+        fields: dict[str, object] = {
+            "title": title,
+            "body": body,
+            "priority": int(priority),
+            "labels": labels.split(","),
+        }
+        if acceptance:
+            legacy.extend(("--acceptance", acceptance))
+            fields["acceptance"] = acceptance
+        if parent:
+            legacy.extend(("--parent", parent))
+        if metadata is not None:
+            legacy.extend(("--metadata", json.dumps(metadata)))
+            fields["metadata"] = metadata
+        return self.tracker(
+            lambda tk: tickets.create_issue(tk, fields, parent=parent),
+            *legacy,
+            "--silent",
+        )
 
     def bd(self, *args: str) -> tuple[int, str]:
         if os.environ.get(BEADS_ENV) == "off" or shutil.which("bd") is None:
@@ -361,36 +439,69 @@ class Beads:
         return run.returncode, run.stdout
 
     def history(self, checks: Iterable[str]) -> dict[str, list[Entry]]:
-        """Each check's verdicts, for the checks that have a bead. One `bd export` reads every
-        bead with its comments in about two seconds, however many are asked for; `bd show`
-        reopens the database for each bead it shows, about a second apiece on a quiet machine,
-        so a hundred timed out under load and the caller judged with no verdicts at all.
-        """
-        wanted = {bead_id(c) for c in checks}
+        """Each check's verdicts. A single export avoids one request per check."""
+        wanted = set(checks)
         if not wanted:
             return {}
-        _, out = self.bd("export")
+        wanted_beads = {bead_id(check) for check in wanted}
+        _, out = self.tracker(lambda tk: tickets.invoke(tk, "export"), "export")
         found: dict[str, list[Entry]] = {}
         for line in out.splitlines():
             try:
                 issue = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if isinstance(issue, dict) and issue.get("id") in wanted:
-                found[str(issue.get("title"))] = entries(issue.get("comments") or [])
+            if not isinstance(issue, dict):
+                continue
+            title = str(issue.get("title"))
+            if issue.get("id") not in wanted_beads and not (
+                title in wanted and "ci-check" in (issue.get("labels") or [])
+            ):
+                continue
+            found[title] = entries(issue.get("comments") or [])
         return found
 
     def checks(self) -> list[str]:
-        """Every check that has a bead."""
-        _, out = self.bd("list", "--label", "ci-check", "--all", "-n", "0", "--json")
-        issues = parse_json(out)
+        """Every check that has a ticket or bead."""
+        issues = self.list_issues("--label", "ci-check", include_closed=True)
         return [
             str(i["title"])
             for i in (issues if isinstance(issues, list) else [])
             if isinstance(i, dict) and "title" in i
         ]
 
+    def record_native(self, tk: str, check: str, lane: str, entry: Entry) -> None:
+        known = self._check_tickets
+        if known is None:
+            known = {
+                str(issue["title"]): str(issue["id"])
+                for issue in tickets.list_issues(tk, "--label", "ci-check", "--all")
+            }
+            self._check_tickets = known
+        issue = known.get(check)
+        if issue is None:
+            issue = tickets.create_issue(
+                tk,
+                {
+                    "title": check,
+                    "body": DESCRIPTION,
+                    "status": "closed",
+                    "labels": ["ci-check", f"ci-lane:{lane}"],
+                },
+                request_key=bead_id(check),
+            )
+            known[check] = issue
+        tickets.invoke(tk, "comment", issue, "--", json.dumps(entry))
+
     def record(self, check: str, lane: str, entry: Entry) -> bool:
+        try:
+            tk = "" if os.environ.get(BEADS_ENV) == "off" else tickets.client()
+            if tk:
+                self.record_native(tk, check, lane, entry)
+                return True
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
+            warn(f"{check}: verdict {entry.get('verdict')} not recorded: {error}")
+            return False
         bead = bead_id(check)
         # Fails harmlessly when the bead exists.
         self.bd(
@@ -428,8 +539,7 @@ class Beads:
         """As `delivered`, but with every commit the bead delivered."""
         if not commits:
             return "", []
-        _, out = self.bd("list", *only, "--all", "-n", "0", "--json")
-        beads = parse_json(out)
+        beads = self.list_issues(*only, include_closed=True)
         for b in beads if isinstance(beads, list) else []:
             meta = b.get("metadata") if isinstance(b, dict) else None
             delivered = (

@@ -24,10 +24,13 @@ def tauri(*args: str) -> int:
         env["BERYL_FILE_BUGS"] = str(paths.REPO)
     if args[:2] == ("build", "--bundles"):
         # Launching the packaged app from Finder drops the terminal's environment.
-        uv, bd, dolt = (shutil.which(tool) for tool in ("uv", "bd", "dolt"))
-        if uv and bd:
+        uv = shutil.which("uv")
+        if uv:
+            tools = (
+                shutil.which(tool) for tool in ("uv", "git", "cargo", "bd", "dolt")
+            )
             tool_dirs = dict.fromkeys(
-                str(Path(tool).absolute().parent) for tool in (uv, bd, dolt) if tool
+                str(Path(tool).absolute().parent) for tool in tools if tool
             )
             env.update(
                 BERYL_BUNDLE_BUGS_REPO=str(paths.REPO),

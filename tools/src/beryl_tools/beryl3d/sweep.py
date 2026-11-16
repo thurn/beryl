@@ -590,7 +590,7 @@ def file(
             again = [c for c in names if c in theirs]
             if again:
                 text = body(commit, step, again, since, mine, tail)
-                code, _ = store.bd("comments", "add", bead, text)
+                code, _ = store.add_comment(bead, text)
                 lines.append(
                     f"b3d sweep: {bead}: still failing: {', '.join(again)}"
                     if code == 0
@@ -600,28 +600,17 @@ def file(
         if not new:
             continue
         more = f" and {len(new) - 1} more" if len(new) > 1 else ""
-        code, out = store.bd(
-            "create",
-            "--title",
-            f"Fix the Beryl 3D sweep's {step} step: {new[0]}{more}",
-            "--description",
-            body(commit, step, new, since, mine, tail),
-            "--acceptance",
-            acceptance(step),
-            "--priority",
-            PRIORITY,
-            "--parent",
-            paths.EPIC,
-            "--labels",
-            f"role:executor,{LABEL}",
-            "--metadata",
-            json.dumps(
-                {
-                    nightly_failures.CHECKS_KEY: "\n".join(new),
-                    "enact_ci_host": nightly_failures.host(),
-                }
-            ),
-            "--silent",
+        code, out = store.create_issue(
+            title=f"Fix the Beryl 3D sweep's {step} step: {new[0]}{more}",
+            body=body(commit, step, new, since, mine, tail),
+            acceptance=acceptance(step),
+            priority=PRIORITY,
+            parent=paths.EPIC,
+            labels=f"role:executor,{LABEL}",
+            metadata={
+                nightly_failures.CHECKS_KEY: "\n".join(new),
+                "enact_ci_host": nightly_failures.host(),
+            },
         )
         lines.append(
             f"b3d sweep: {out.strip()}: filed {', '.join(new)}"
@@ -638,9 +627,9 @@ class DryRun(verdicts.Beads):
     def __init__(self, real: verdicts.Beads) -> None:
         self.real = real
 
-    def bd(self, *args: str) -> tuple[int, str]:
+    def tracker(self, native: Callable[[str], str], *args: str) -> tuple[int, str]:
         if args[0] == "list":
-            return self.real.bd(*args)
+            return self.real.tracker(native, *args)
         if args[0] == "create":
             flag = lambda name: args[args.index(name) + 1]  # noqa: E731
             print(

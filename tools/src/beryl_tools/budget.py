@@ -21,7 +21,6 @@ Nothing here fails a run: a bd call that fails is reported and the run goes on (
 
 from __future__ import annotations
 
-import json
 import platform
 import socket
 import subprocess
@@ -36,8 +35,7 @@ PRIORITY = "2"
 
 def open_bead(script: str, store: verdicts.Beads) -> str | None:
     """The open budget bead filed for `script`, if any."""
-    _, out = store.bd("list", "--label", LABEL, "-n", "0", "--json")
-    beads = verdicts.parse_json(out)
+    beads = store.list_issues("--label", LABEL)
     for b in beads if isinstance(beads, list) else []:
         if not isinstance(b, dict) or b.get("status") == "closed":
             continue
@@ -87,21 +85,13 @@ def report(
     known = open_bead(script, store)
     if known:
         return f"{script}: over budget: {known} is open to audit it"
-    code, out = store.bd(
-        "create",
-        "--title",
-        f"Audit slow steps: by {script} over its {budget} s budget",
-        "--description",
-        body(script, budget, took, lanes, load),
-        "--acceptance",
-        f"`by {script}` on every lane fits {budget} s on an idle machine.",
-        "--priority",
-        PRIORITY,
-        "--labels",
-        f"{LABEL},tier:opus",
-        "--metadata",
-        json.dumps({SCRIPT_KEY: script}),
-        "--silent",
+    code, out = store.create_issue(
+        title=f"Audit slow steps: by {script} over its {budget} s budget",
+        body=body(script, budget, took, lanes, load),
+        acceptance=f"`by {script}` on every lane fits {budget} s on an idle machine.",
+        priority=PRIORITY,
+        labels=f"{LABEL},tier:opus",
+        metadata={SCRIPT_KEY: script},
     )
     if code != 0:
         return f"{script}: over budget: bead not filed"
@@ -140,8 +130,7 @@ def kept(check: str) -> bool:
 
 def cut_beads(store: verdicts.Beads) -> tuple[list[str], str]:
     """The open cut beads, and the latest time a closed one closed (`""` when none has)."""
-    _, out = store.bd("list", "--label", CUT_LABEL, "--all", "-n", "0", "--json")
-    beads = verdicts.parse_json(out)
+    beads = store.list_issues("--label", CUT_LABEL, include_closed=True)
     opened: list[str] = []
     closed = ""
     for b in beads if isinstance(beads, list) else []:
@@ -219,23 +208,15 @@ def file_cut(
 ) -> str:
     host = socket.gethostname().split(".")[0]
     count = sum(len(g.checks) for g in groups)
-    code, out = store.bd(
-        "create",
-        "--title",
-        f"Cut {count} checks from slow CI's {lane} lane",
-        "--description",
-        cut_body(lane, groups, whole, budget, host),
-        "--acceptance",
-        "Every check listed no longer runs in slow CI: deleted, replaced by a fast"
+    code, out = store.create_issue(
+        title=f"Cut {count} checks from slow CI's {lane} lane",
+        body=cut_body(lane, groups, whole, budget, host),
+        acceptance="Every check listed no longer runs in slow CI: deleted, replaced by a fast"
         " deterministic test, or moved to the nightly; this bead records which for each and"
         " why.",
-        "--priority",
-        CUT_PRIORITY,
-        "--labels",
-        f"{CUT_LABEL},tier:opus",
-        "--metadata",
-        json.dumps({LANE_KEY: lane}),
-        "--silent",
+        priority=CUT_PRIORITY,
+        labels=f"{CUT_LABEL},tier:opus",
+        metadata={LANE_KEY: lane},
     )
     if code != 0:
         return f"ci budget: {lane}: cut bead not filed"

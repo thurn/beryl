@@ -39,6 +39,10 @@ requires evidence that the player's requested behavior works, including the
 scope of the complaint beyond the pictured card. AI reports retain the
 blunder-catalog completion criteria below.
 
+Run `just ticket-backend` to select the tracker for this session. When it
+reports `server`, use the executable from its `tk` field for the native
+commands below. When it reports `beads`, use the `bd` commands.
+
 ## Where reports are
 
 The app's bug button (top right, or ⌘B / Ctrl+B) freezes the screen, lets the
@@ -87,8 +91,9 @@ Enact, project setup, permission mode), then:
 
 1. **File them.** `just bugs` lists open and filed reports. `just bugs file` files a bead for each open one (type bug, label
    `bug-report`, priority 1) holding the report's path and the player's words,
-   and writes the bead into the report's front matter. `bd list --label bug-report --all --limit 0`
-   includes closed history and work left in progress. Reconcile the local
+   and saves the issue ID in the report's front matter. For closed history and
+   work left in progress, use `tk list --label bug-report --all --json` or
+   `bd list --label bug-report --all --limit 0`. Reconcile the local
    reports with the beads and establish the reports in scope for this run; do
    not silently omit blocked, deferred, or interrupted work. Leave out beads
    labeled `human` (they wait on the reporter, below) and beads another
@@ -101,7 +106,7 @@ Enact, project setup, permission mode), then:
    subagents to interpret reports. Note on each bead only facts you checked:
 
    - related open and closed reports and the commits that fixed them, found by
-     searching `bd list --label bug-report --all --limit 0` and `git log`;
+     searching the same issue list and `git log`;
    - for a repeat report, whether its app build (`commit` in the front matter)
      already contains the earlier fix;
    - the line "Follow the `bugfix` skill's 'Worker: fixing one report'
@@ -118,7 +123,8 @@ Enact, project setup, permission mode), then:
    reported twice), not because two fixes might touch the same files or
    directory: merge conflicts are cheap, and a lane costs parallelism. Do not
    run `/enact-plan`'s "Lane and tier pass" over these beads. Add an edge
-   (`bd dep add <dependent> <prerequisite>`) only where one fix changes how
+   (`tk dep add <dependent> <prerequisite>` or
+   `bd dep add <dependent> <prerequisite>`) only where one fix changes how
    another report must be judged.
 
    Then give every bead a tier, since Beryl assigns models by name
@@ -292,20 +298,24 @@ without it, and so a later `/bugfix` run sees it:
 - **Awaiting the reporter.** A rules report describes behavior the
   Comprehensive Rules require, or an AI report needs the reporter's judgment
   (step 1). Record the evidence and expected behavior with
-  `bd note <bead> "..."`, run `enact release <bead> --reason "awaiting
-  reporter"`, then `bd update <bead> --parent "" --add-label human` and
-  `enact sync`. The bead waits in the `bd human list` queue, and `/bugfix`
-  leaves it out while it does. Once the reporter confirms, whoever handles
-  it records that with `bd human respond <bead> "<confirmation>"`, runs
-  `just bugs done <bead>` and `enact sync`. If the reporter identifies a bug
-  or confirms a blunder, remove the `human` label so the next `/bugfix` run
-  takes it up again.
+  `tk comment <id> "..."` or `bd note <bead> "..."`. Run
+  `enact release <id> --reason "awaiting reporter"`, then detach it with
+  `tk update <id> --parent "" --add-label human` or
+  `bd update <bead> --parent "" --add-label human`. Run `enact sync`.
+  Find these reports with `tk list --label human --label bug-report` or
+  `bd human list`. Once the reporter confirms, record the confirmation with
+  `tk comment <id> "<confirmation>"` and clear the label with
+  `tk update <id> --remove-label human`, or use
+  `bd human respond <bead> "<confirmation>"`. Run `just bugs done <id>` and
+  `enact sync`. If the reporter instead identifies a bug or confirms a
+  blunder, clear the label and leave the report filed for the next `/bugfix`.
 - **Not reproduced or only partly fixed.** A UI report is never working as
   intended merely because Arena does the same: the user's report wins
   (step 2). A rules or UI report you cannot reproduce stays filed. Record
   what you tried, the acceptance criteria still unmet and the next action
-  with `bd note <bead> "..."`, run `enact release <bead> --reason "..."`,
-  then `bd update <bead> --parent ""` and `enact sync`. Push any partial fix
+  with `tk comment <id> "..."` or `bd note <bead> "..."`. Run
+  `enact release <id> --reason "..."`, then `tk update <id> --parent ""` or
+  `bd update <bead> --parent ""`, and `enact sync`. Push any partial fix
   that is correct on its own, but never run `just bugs done` for it, and
   never archive a report merely because a related change landed.
 

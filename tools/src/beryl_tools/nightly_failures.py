@@ -18,7 +18,6 @@ is reported and the run goes on (verdicts.Beads).
 
 from __future__ import annotations
 
-import json
 import os
 import shlex
 import socket
@@ -89,8 +88,7 @@ def host() -> str:
 def open_beads(store: verdicts.Beads, label: str = LABEL) -> dict[str, set[str]]:
     """Each open bead with `label` (the nightly's by default), with the checks it was filed
     for."""
-    _, out = store.bd("list", "--label", label, "-n", "0", "--json")
-    beads = verdicts.parse_json(out)
+    beads = store.list_issues("--label", label)
     found: dict[str, set[str]] = {}
     for b in beads if isinstance(beads, list) else []:
         if not isinstance(b, dict) or b.get("status") == "closed":
@@ -132,8 +130,8 @@ def file(
         for bead, theirs in sorted(known.items()):
             again = [c for c in checks if c in theirs]
             if again:
-                code, _ = store.bd(
-                    "comments", "add", bead, body(commit, lane, again, passed, output)
+                code, _ = store.add_comment(
+                    bead, body(commit, lane, again, passed, output)
                 )
                 lines.append(
                     f"nightly: {bead}: still failing: {', '.join(again)}"
@@ -143,22 +141,14 @@ def file(
         new = [c for c in checks if not any(c in t for t in known.values())]
         if not new:
             continue
-        code, out = store.bd(
-            "create",
-            "--title",
-            f"Fix nightly {lane} failure: {new[0]}"
+        code, out = store.create_issue(
+            title=f"Fix nightly {lane} failure: {new[0]}"
             + (f" and {len(new) - 1} more" if len(new) > 1 else ""),
-            "--description",
-            body(commit, lane, new, passed, output),
-            "--acceptance",
-            f"`{reproduce(lane, new)}` passes at the staging tip.",
-            "--priority",
-            PRIORITY,
-            "--labels",
-            f"role:steward,{LABEL}",
-            "--metadata",
-            json.dumps({CHECKS_KEY: "\n".join(new), "enact_ci_host": host()}),
-            "--silent",
+            body=body(commit, lane, new, passed, output),
+            acceptance=f"`{reproduce(lane, new)}` passes at the staging tip.",
+            priority=PRIORITY,
+            labels=f"role:steward,{LABEL}",
+            metadata={CHECKS_KEY: "\n".join(new), "enact_ci_host": host()},
         )
         lines.append(
             f"nightly: {out.strip()}: filed {', '.join(new)}"

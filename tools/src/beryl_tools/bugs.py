@@ -24,8 +24,9 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
-from . import paths, system
+from . import paths, system, tickets
 
 REPORT = "report.md"
 DONE = "done"
@@ -158,7 +159,9 @@ def find(root: Path, key: str) -> Report | None:
     """The report with id `key` (or a unique prefix of it), or filed as bead `key`."""
     everything = reports(root, done=True)
     for r in everything:
-        if key in (r.id, r.bead):
+        if key in (r.id, r.bead) or (
+            r.bead and key.removeprefix("by-") == r.bead.removeprefix("by-")
+        ):
             return r
     matches = [r for r in everything if r.id.startswith(key)]
     return matches[0] if len(matches) == 1 else None
@@ -234,17 +237,34 @@ def run_bd(args: list[str]) -> str:
 
 def file_bead(report: Report, priority: str) -> str:
     reference = f"bug-report:{report.id}"
-    # A previous attempt may have created the bead before saving its ID to report.md.
-    existing = json.loads(
-        run_bd(["list", "--all", "--external-ref", reference, "--json"])
-    )
-    if existing:
-        return str(existing[0]["id"])
     labels = [LABEL]
     if report.kind == "ai":
         labels.append(AI_LABEL)
     elif report.kind == "spec-viewer":
         labels.append(SPEC_VIEWER_LABEL)
+    tk = tickets.client()
+    # A previous attempt may have created the issue before saving its ID locally.
+    if tk:
+        filed = report_issues(tickets.list_issues(tk, "--all", "--label", LABEL))
+        if report.id in filed:
+            return filed[report.id]
+        return tickets.create_issue(
+            tk,
+            {
+                "type": "bug",
+                "title": report.title or report.id,
+                "body": bead_description(report),
+                "labels": labels,
+                "priority": int(priority),
+                "metadata": {"bug_report_id": report.id},
+            },
+            request_key=reference,
+        )
+    existing = json.loads(
+        run_bd(["list", "--all", "--external-ref", reference, "--json"])
+    )
+    if existing:
+        return str(existing[0]["id"])
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as body:
         body.write(bead_description(report))
     try:
@@ -419,26 +439,39 @@ def adopt_report(staged: Path, root: Path) -> bool:
     return True
 
 
-def filed_beads() -> dict[str, str]:
-    """This tracker's bug-report beads, keyed by their report's ID.
+def report_issues(issues: list[dict[str, Any]]) -> dict[str, str]:
+    found: dict[str, str] = {}
+    prefix = f"{LABEL}:"
+    for issue in issues:
+        metadata = issue.get("metadata") or {}
+        report_id = metadata.get("bug_report_id")
+        if not report_id:
+            legacy = metadata.get("_enact_beads") or {}
+            ref = str(issue.get("external_ref") or legacy.get("external_ref") or "")
+            if ref.startswith(prefix):
+                report_id = ref.removeprefix(prefix)
+        if report_id:
+            found[str(report_id)] = str(issue["id"])
+    return found
 
-    `file_bead` gives each bead the external ref `bug-report:<report id>`, so a report
-    filed on another machine whose beads were synced here (`enact sync`) is found by its
-    ID alone. If `bd` fails, no bead is found and imported reports stay open.
-    """
+
+def filed_beads() -> dict[str, str]:
+    """Issues already filed for a report, including those filed on another machine."""
     try:
-        found = json.loads(
-            run_bd(["list", "--all", "--label", LABEL, "--limit", "0", "--json"])
+        tk = tickets.client()
+        if tk:
+            return report_issues(tickets.list_issues(tk, "--all", "--label", LABEL))
+        return report_issues(
+            json.loads(
+                run_bd(["list", "--all", "--label", LABEL, "--limit", "0", "--json"])
+            )
         )
     except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
-        print(f"bugs: can't list beads, importing as open: {error}", file=sys.stderr)
+        print(
+            f"bugs: can't list filed reports, importing as open: {error}",
+            file=sys.stderr,
+        )
         return {}
-    prefix = f"{LABEL}:"
-    return {
-        str(bead["external_ref"]).removeprefix(prefix): str(bead["id"])
-        for bead in found
-        if str(bead.get("external_ref") or "").startswith(prefix)
-    }
 
 
 def import_cmd(args: argparse.Namespace) -> int:

@@ -282,3 +282,34 @@ def test_import_without_bd_imports_as_open(
     assert cli.main(["bugs", "import", str(bundle)]) == 0
     saved = bugs.load(root / key)
     assert saved is not None and saved.status == "open" and not saved.bead
+
+
+def test_filing_a_migrated_report_reuses_its_ticket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
+    folder = report(tmp_path)
+    old_id = "by-old-ticket"
+    monkeypatch.setattr(bugs.tickets, "client", lambda: "tk")
+    monkeypatch.setattr(
+        bugs.tickets,
+        "list_issues",
+        lambda *_: [
+            {
+                "id": "old-ticket",
+                "metadata": {
+                    "_enact_beads": {"external_ref": f"bug-report:{folder.name}"}
+                },
+            }
+        ],
+    )
+
+    def unexpected_write(*_args: object, **_kwargs: object) -> str:
+        pytest.fail("a migrated report must not create a second issue")
+
+    monkeypatch.setattr(bugs.tickets, "create_issue", unexpected_write)
+    monkeypatch.setattr(bugs, "run_bd", unexpected_write)
+    assert cli.main(["bugs", "file"]) == 0
+    saved = bugs.load(folder)
+    assert saved is not None and saved.bead == "old-ticket"
+    assert cli.main(["bugs", "done", old_id]) == 0

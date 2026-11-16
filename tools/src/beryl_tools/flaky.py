@@ -22,7 +22,6 @@ on (verdicts.Beads).
 
 from __future__ import annotations
 
-import json
 import socket
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -47,8 +46,7 @@ class Flake:
 
 def open_beads(store: verdicts.Beads) -> dict[str, str]:
     """The open flaky-check beads, by the check each was filed for."""
-    _, out = store.bd("list", "--label", LABEL, "-n", "0", "--json")
-    beads = verdicts.parse_json(out)
+    beads = store.list_issues("--label", LABEL)
     found: dict[str, str] = {}
     for b in beads if isinstance(beads, list) else []:
         if not isinstance(b, dict) or b.get("status") == "closed":
@@ -159,7 +157,7 @@ def report(
     for check, flake in sorted(flakes.items()):
         bead = known.get(check)
         if bead:
-            store.bd("comments", "add", bead, f"Flaked again in {where}.")
+            store.add_comment(bead, f"Flaked again in {where}.")
             lines.append(f"flaky: {check}: {bead} is open to delete it")
             continue
         before = earlier(history.get(check, []), script, commit, host)
@@ -169,21 +167,13 @@ def report(
                 " a second in another run files a bead to delete it"
             )
             continue
-        code, out = store.bd(
-            "create",
-            "--title",
-            title(check, flake),
-            "--description",
-            body(check, flake, where, before),
-            "--acceptance",
-            acceptance(check, flake),
-            "--priority",
-            PRIORITY,
-            "--labels",
-            f"{LABEL},tier:opus",
-            "--metadata",
-            json.dumps({CHECK_KEY: check}),
-            "--silent",
+        code, out = store.create_issue(
+            title=title(check, flake),
+            body=body(check, flake, where, before),
+            acceptance=acceptance(check, flake),
+            priority=PRIORITY,
+            labels=f"{LABEL},tier:opus",
+            metadata={CHECK_KEY: check},
         )
         if code != 0:
             lines.append(f"flaky: {check}: delete bead not filed")

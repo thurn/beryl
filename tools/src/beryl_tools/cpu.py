@@ -132,6 +132,7 @@ _TOOLS = (
     "node",
     "git",
     "bd",
+    "tk",
     "enact",
     "bash",
     "zsh",

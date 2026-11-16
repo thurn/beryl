@@ -437,3 +437,18 @@ def test_the_verdict_command_corrects_through_the_cli(
     assert bd.verdicts("rust:a::b") == ["stale"]
     assert cli.main(["verdict", "rust:nothing", "stale"]) == 1
     assert "has no verdict to correct" in capsys.readouterr().err
+
+
+def test_verdict_history_keeps_migrated_and_native_comment_ids() -> None:
+    history = verdicts.entries(
+        [
+            {"n": 1, "legacy_id": "2", "text": '{"verdict": "mixed"}'},
+            {"n": 2, "text": '{"verdict": "mixed"}'},
+            {"n": 3, "text": '{"verdict": "catch", "corrects": "2"}'},
+            {"n": 4, "text": '{"verdict": "stale", "corrects": "ticket:2"}'},
+        ]
+    )
+    assert [(entry["comment"], entry["verdict"]) for entry in history] == [
+        ("2", "catch"),
+        ("ticket:2", "stale"),
+    ]

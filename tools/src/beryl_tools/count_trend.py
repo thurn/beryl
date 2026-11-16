@@ -165,8 +165,7 @@ def rust_commits(old: str, new: str) -> list[str]:
 
 
 def open_bead(label: str, store: verdicts.Beads) -> str | None:
-    _, out = store.bd("list", "--label", label, "-n", "0", "--json")
-    beads = verdicts.parse_json(out)
+    beads = store.list_issues("--label", label)
     for b in beads if isinstance(beads, list) else []:
         if isinstance(b, dict) and b.get("status") != "closed":
             return str(b.get("id"))
@@ -208,19 +207,13 @@ def file_or_comment(
 ) -> str:
     known = open_bead(label, store)
     if known:
-        code, _ = store.bd("comments", "add", known, body)
+        code, _ = store.add_comment(known, body)
         return f"commented on {known}" if code == 0 else f"{known} is open"
-    code, out = store.bd(
-        "create",
-        "--title",
-        title,
-        "--description",
-        body,
-        "--priority",
-        PRIORITY,
-        "--labels",
-        f"{label},{tier}",
-        "--silent",
+    code, out = store.create_issue(
+        title=title,
+        body=body,
+        priority=PRIORITY,
+        labels=f"{label},{tier}",
     )
     return f"filed {out.strip()}" if code == 0 else "bead not filed"
 

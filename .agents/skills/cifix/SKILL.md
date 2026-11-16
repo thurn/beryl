@@ -41,6 +41,10 @@ in the turn the user invoked you, so do all of the planning below in that turn.
 
 Nothing in this workflow waits for the user.
 
+Run `just ticket-backend` to select the tracker for this session. When it
+reports `server`, use the executable from its `tk` field for the native
+commands below. When it reports `beads`, use the `bd` commands.
+
 ## One group in one session
 
 The scheduled routine `beryl-ci-steward-watch` runs every 30 minutes on this
@@ -65,7 +69,7 @@ A session working alone this way:
    action>"`, or releases it as "Closing" below says.
 5. **Leaves notes for the next run.** On each waiting bead outside its group
    whose cause it noticed while grouping, it appends the suspected cause and
-   group (`bd update <bead> --append-notes`), so the next run starts there.
+   group, so the next run starts there. Use the notes commands below.
 
 ## Where the evidence is
 
@@ -94,6 +98,7 @@ This is `/enact-plan`'s pre-flight. Start with its steps 1 to 3 (title, update
 Enact, project setup, permission mode), then:
 
 1. **Choose the beads.** List each label above with
+   `tk list --label <label> --status open --json` or
    `bd list --label <label> --status open -n 0`. Leave out beads another
    session or vizier is working (in progress or assigned), and Steward beads
    whose `enact_ci_host` is another machine, since only that machine can
@@ -126,10 +131,13 @@ Enact, project setup, permission mode), then:
    Read the code only as far as you need to name the suspected cause and where
    it is. Do not edit code, open a worktree or start reproducing.
 
-3. **Write each bead's context packet.** Append to each bead's notes
-   (`bd update <bead> --append-notes`) its group, the suspected cause, the
-   files and tests involved, the run-log records that show it, and the line
-   "Follow the `cifix` skill's 'Worker: one CI bead' section."
+3. **Write each bead's context packet.** Add its group, the suspected cause,
+   the files and tests involved, the run-log records that show it, and the
+   line "Follow the `cifix` skill's 'Worker: one CI bead' section."
+   For tickets, read the existing notes and version with `tk show <id> --json`.
+   Append the packet to those notes and save with
+   `tk update <id> --notes "<combined notes>" --if-version <version>`.
+   For Beads, use `bd update <bead> --append-notes "<packet>"`.
 
 4. **Group, route and lane.** The beads of one group share a `lane:<name>` so
    one session finds the cause once and closes each bead against it. Give
@@ -147,7 +155,8 @@ Enact, project setup, permission mode), then:
    Never use `tier:fable` unless the user asked for it. Then run
    `/enact-plan`'s "Lane and tier pass": two to four beads of one tier on the
    same code share a lane, and a group larger than four becomes two lanes with
-   a dependency between them (`bd dep add <dependent> <prerequisite>`). A
+   a dependency between them (`tk dep add <dependent> <prerequisite>` or
+   `bd dep add <dependent> <prerequisite>`). A
    Steward bead is P0 and blocks `master`: give it no dependency on anything
    else, and put it first in its lane.
 
@@ -236,7 +245,8 @@ same reason and name the commit. Enact's vizier waits for slow CI, so ignore
 `watch_ci`.
 
 A bead you cannot finish goes back to the queue. Record what you tried, the
-cause you suspect and the next step with `bd note <bead> "..."`, run
-`enact release <bead> --reason "..."`, then `bd update <bead> --parent ""` and
+cause you suspect and the next step with `tk comment <id> "..."` or
+`bd note <bead> "..."`. Run `enact release <id> --reason "..."`, then detach it
+with `tk update <id> --parent ""` or `bd update <bead> --parent ""`. Run
 `enact sync`. Retitle ⛔ as Enact's role files say for a release, and end your
 turn with a summary of where the bead stands.
