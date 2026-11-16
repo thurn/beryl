@@ -183,10 +183,11 @@ fn shade_glyph(sprite: vec4<f32>, tint: vec4<f32>) -> vec4<f32> {
 
 @fragment
 fn fs(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
-    // A card seen from behind shows its back, its texture coordinates running right to left.
+    // A card seen from behind shows its back. A card turns over top over bottom, so there its
+    // texture coordinates run bottom to top.
     let back = in.material == CARD && !front;
     let layer = select(in.layers.x, in.layers.y, back);
-    let uv = select(in.uv, vec2<f32>(1.0 - in.uv.x, in.uv.y), back);
+    let uv = select(in.uv, vec2<f32>(in.uv.x, 1.0 - in.uv.y), back);
     // Sampled before branching on the material, which varies per instance: WGSL allows
     // `textureSample` only in uniform control flow.
     let picture = textureSample(pictures, picture_sampler, uv, i32(layer));

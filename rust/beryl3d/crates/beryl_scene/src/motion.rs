@@ -114,6 +114,8 @@ struct Along {
     offset: Vec3,
     /// The turn it leans by, applied after the eased rotation.
     lean: Quat,
+    /// How much its scale is over the straight change from one scale to the other.
+    grow: f32,
 }
 
 /// How high a thrown permanent is `elapsed` of its time through, as a share of its greatest
@@ -142,21 +144,25 @@ impl Segment {
         self.start.saturating_add(self.duration)
     }
 
-    /// When the object is highest above the straight way, besides the middle of its time, which
-    /// every check already looks at: a thrown permanent reaches its greatest height early.
-    #[must_use]
-    pub fn peak(&self) -> Option<u64> {
+    /// The moments besides its start, middle and end, which every check already looks at, when
+    /// something can go wrong: when a thrown permanent is first at its greatest height, and when
+    /// a card that turns over at a moment of its own begins and ends turning.
+    pub fn moments(&self) -> impl Iterator<Item = u64> + use<> {
+        let (start, duration) = (self.start, self.duration);
         #[expect(
             clippy::cast_precision_loss,
             clippy::cast_possible_truncation,
             clippy::cast_sign_loss,
             reason = "a segment lasts seconds, far below f64's exact range"
         )]
-        let at = |share: f32| self.start + (self.duration as f64 * f64::from(share)) as u64;
-        match self.shape {
+        let at =
+            move |share: f32| start + (duration as f64 * f64::from(share.clamp(0.0, 1.0))) as u64;
+        let peak = match self.shape {
             Shape::Thrown { .. } => Some(at(thrown::RISEN)),
             _ => None,
-        }
+        };
+        let turning = self.turning.map(|turning| turning.span().map(at));
+        peak.into_iter().chain(turning.into_iter().flatten())
     }
 
     /// The fraction of its time that has passed at `t`, which must be under way.
@@ -186,17 +192,29 @@ impl Segment {
                     u: eased,
                     offset: rise + bow.offset * arch,
                     lean: Quat::from_axis_angle(bow.axis, bow.lean * arch),
+                    grow: 0.0,
                 }
             }
             Shape::Thrown { rise: up, .. } => Along {
                 u: 1.0 - (1.0 - eased).powf(thrown::LAUNCH),
                 offset: rise + up * thrown_height(elapsed),
                 lean: Quat::IDENTITY,
+                grow: 0.0,
             },
+            Shape::Swept { bulge, grow } => {
+                let curved = 2.0 * eased * (1.0 - eased);
+                Along {
+                    u: eased,
+                    offset: rise + bulge * curved,
+                    lean: Quat::IDENTITY,
+                    grow: grow * curved,
+                }
+            }
             _ => Along {
                 u: eased,
                 offset: rise,
                 lean: Quat::IDENTITY,
+                grow: 0.0,
             },
         }
     }
@@ -214,18 +232,31 @@ impl Segment {
         }
     }
 
-    /// A line, bowed or thrown path's pose `elapsed` of its time through.
+    /// How much of its turn the object has made `elapsed` of its time through: by its
+    /// `turning` if it has one, else as far as the eased progress `u`.
+    fn turned(&self, elapsed: f32, u: f32) -> f32 {
+        self.turning.map_or(u, |turning| turning.turned(elapsed))
+    }
+
+    /// A travelling path's pose `elapsed` of its time through.
     fn travelled(&self, elapsed: f32) -> Pose {
-        let Along { u, offset, lean } = self.along(elapsed);
+        let Along {
+            u,
+            offset,
+            lean,
+            grow,
+        } = self.along(elapsed);
         let pose = between(&self.from, &self.to, u);
         let scale = match self.shape {
             Shape::Thrown { aloft, .. } => self.thrown_scale(aloft, elapsed),
-            _ => pose.scale,
+            _ => pose.scale + grow,
         };
+        let turned = self.turned(elapsed, u);
         Pose {
             position: pose.position + offset,
             rotation: lean * pose.rotation,
             scale,
+            turn: self.from.turn + (self.to.turn - self.from.turn) * turned,
             ..pose
         }
     }
@@ -245,7 +276,9 @@ impl Segment {
         }
         let elapsed = self.elapsed(t);
         match self.shape {
-            Shape::Line | Shape::Bowed(_) | Shape::Thrown { .. } => self.travelled(elapsed),
+            Shape::Line | Shape::Bowed(_) | Shape::Thrown { .. } | Shape::Swept { .. } => {
+                self.travelled(elapsed)
+            }
             Shape::TurnedOver => turned_over(&self.from, &self.to, elapsed),
             Shape::Grown => {
                 let u = self.curve.ease(elapsed);
@@ -328,7 +361,12 @@ impl Segment {
             }
             return;
         }
-        let Along { u, offset, lean } = self.along(elapsed);
+        let Along {
+            u,
+            offset,
+            lean,
+            grow,
+        } = self.along(elapsed);
         let rest = 1.0 - u;
         if rest < 1e-4 {
             return;
@@ -353,14 +391,22 @@ impl Segment {
                 }
                 self.from.scale
             }
-            _ => back(pose.scale, to.scale),
+            _ => back(pose.scale - grow, to.scale),
+        };
+        // The turn goes by its own share where the segment has a `turning`; once that share is
+        // whole the start's turn no longer matters.
+        let turned = self.turned(elapsed, u);
+        let turn = if turned < 1.0 - 1e-4 {
+            (pose.turn - to.turn * turned) / (1.0 - turned)
+        } else {
+            self.from.turn
         };
         self.from = Pose {
             position: (pose.position - offset - to.position * u) / rest,
             rotation: to.rotation * Quat::from_axis_angle(axis, angle / rest),
             scale,
             opacity: back(pose.opacity, to.opacity),
-            turn: back(pose.turn, to.turn),
+            turn,
         };
     }
 }

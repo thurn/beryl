@@ -37,12 +37,13 @@ impl Default for Pose {
 
 impl Pose {
     /// The transform from a card mesh's space into the table's: scaled, turned over by `turn`
-    /// about the card's long axis, rotated, then moved to `position`.
+    /// top over bottom (about the card's short axis, as a card tossed across a table turns),
+    /// rotated, then moved to `position`.
     #[must_use]
     pub fn transform(&self) -> Affine3A {
         Affine3A::from_scale_rotation_translation(
             Vec3::splat(self.scale),
-            self.rotation * Quat::from_rotation_y(PI * self.turn),
+            self.rotation * Quat::from_rotation_x(PI * self.turn),
             self.position,
         )
     }
@@ -91,6 +92,36 @@ pub enum Shape {
     /// quarter of its time. The fractions of its time are `verbs.fly.thrown` in
     /// `data/beryl3d/space.json`.
     Thrown { rise: Vec3, aloft: f32 },
+    /// A curve that passes by a place without stopping there, as the web interface's `swept`
+    /// (`ui/src/stage/drawn.ts`) has it: a curve of the second degree from the start pose to the
+    /// end pose, along the eased progress `u`, whose position is `2 u (1 - u) bulge` off the
+    /// straight way and whose scale is `2 u (1 - u) grow` over the straight change. `fly` makes
+    /// both from the place passed by, so that the curve goes as far as it and no farther.
+    Swept { bulge: Vec3, grow: f32 },
+}
+
+/// When a card turns over on its way, as shares of its segment's time (the web interface's
+/// `Turning` in `ui/src/stage/tracks.ts`): its turn stays at its start value until `at - each`,
+/// is half way at `at`, where the card is edge-on, and is at its end value from `at + each`,
+/// turning evenly in between. Its time is not eased by the segment's curve.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Turning {
+    pub at: f32,
+    pub each: f32,
+}
+
+impl Turning {
+    /// How much of its turn it has made `elapsed` of its time through, from 0 to 1.
+    #[must_use]
+    pub fn turned(self, elapsed: f32) -> f32 {
+        f32::midpoint((elapsed - self.at) / self.each, 1.0).clamp(0.0, 1.0)
+    }
+
+    /// When it begins and ends turning, as shares of its time.
+    #[must_use]
+    pub fn span(self) -> [f32; 2] {
+        [self.at - self.each, self.at + self.each]
+    }
 }
 
 /// How far a `Shape::Bowed` path leaves its straight way, made for the two ends and the camera
@@ -135,6 +166,9 @@ pub struct Segment {
     /// millimetres at its middle.
     pub arc: f32,
     pub shape: Shape,
+    /// When its object turns over, if it does so at a moment of its own rather than evenly
+    /// along the eased progress.
+    pub turning: Option<Turning>,
 }
 
 impl Segment {
@@ -149,6 +183,7 @@ impl Segment {
             to,
             arc: 0.0,
             shape: Shape::Line,
+            turning: None,
         }
     }
 }

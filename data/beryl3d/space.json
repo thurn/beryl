@@ -47,7 +47,34 @@
         "scale": 0.8,
         "shrunk": 0.06,
         "launch": 1.4
-      }
+      },
+      "turn": {
+        "cast": {
+          "at": 0.27,
+          "each": 0.2
+        },
+        "draw": {
+          "at": 0.16,
+          "each": 0.08
+        }
+      },
+      "held": {
+        "ndc": [
+          0.422,
+          0.0
+        ],
+        "size": 1.3,
+        "depth": 280,
+        "in": 0.55,
+        "hold": 0.2,
+        "bow": {
+          "share": 0.12,
+          "peak": 0.6,
+          "lean": 0,
+          "back": 0
+        }
+      },
+      "held_sink": 0.08
     },
     "strike": {
       "wind": 0.08,

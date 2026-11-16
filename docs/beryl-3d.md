@@ -669,7 +669,11 @@ pub struct Segment {
     pub arc: f32,          // how far the path rises above the straight line
     pub shape: Shape,      // the path: `Line`, `Fading`, `TurnedOver` (flip),
                            // `Grown` (showcase), `Bowed` (sideways on the
-                           // screen, leaning) or `Thrown` (up the screen and down)
+                           // screen, leaning), `Thrown` (up the screen and down)
+                           // or `Swept` (past a place without stopping)
+    pub turning: Option<Turning>, // when the card turns over, top over bottom,
+                           // as shares of its time: edge-on at `at`, turning
+                           // from `at - each` to `at + each`
 }
 
 impl Segment {
@@ -1099,6 +1103,19 @@ streaks and notices (`StepOut`).
   in `data/ui-conventions.json`. The session reads them and sends each step's
   numbers with its script. A change to a duration is one edit that both clients
   pick up.
+- **A step may be several segments.** A verb writes one segment for each object
+  it moves, or several back to back that together last the step's time. A card
+  the viewer draws alone flies to a place beside the stack (`verbs.fly.held`, in
+  screen coordinates, placed relative to the camera as the hand is), is held up
+  there sinking a little toward the hand, and drops into the hand: three
+  segments. Each of several drawn together is one `Swept` segment past that
+  place.
+- **Bows are measured on the screen.** A flight that leaves its straight line
+  sideways (`Shape::Bowed`) takes its length across and up the window from its
+  two ends' places on the window, in millimetres at the depth of its middle, as
+  the web interface's bows are measured in stage pixels. Measured along the
+  camera's axes instead, a way from a hand near the eye to a library far off
+  reads as going down when it goes up the window.
 - **Space comes from data too.** Values only a 3D client needs (how high a
   flight arcs, how far a held card lifts off the table, how far a striking
   creature lunges) are in a file of Beryl 3D's own, `data/beryl3d/space.json`,

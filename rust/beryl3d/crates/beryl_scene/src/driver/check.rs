@@ -328,8 +328,8 @@ fn times(given_at: &[u64], history: &[ScriptRecord], end: u64) -> Vec<u64> {
             times.insert(real(segment.start));
             times.insert(real(segment.start + segment.duration / 2));
             times.insert(real(segment.end()));
-            if let Some(peak) = segment.peak() {
-                times.insert(real(peak));
+            for moment in segment.moments() {
+                times.insert(real(moment));
             }
         }
         for step in &script.steps {

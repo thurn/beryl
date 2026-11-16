@@ -157,7 +157,9 @@ pub fn rest_equals_placement(script: &ScriptRecord) -> Vec<Found> {
 }
 
 /// Each step is played for the duration its `StepTiming` gives: it lasts that long, and the
-/// motion its verb gives its object lasts as long as the step.
+/// motion its verb gives each object lasts as long as the step. That motion may be several
+/// segments one after another (a card drawn alone flies in, is held and drops): together they
+/// last as long as the step, each beginning as the one before it ends.
 #[must_use]
 pub fn step_times(script: &ScriptRecord) -> Vec<Found> {
     let mut found = Vec::new();
@@ -183,19 +185,43 @@ pub fn step_times(script: &ScriptRecord) -> Vec<Found> {
         ) {
             continue;
         }
-        for record in script
+        let records: Vec<&SegmentRecord> = script
             .segments
             .iter()
             .filter(|record| record.cause == Cause::Verb(index))
-        {
-            if record.segment.duration != took {
+            .collect();
+        let mut moved: Vec<usize> = records.iter().map(|record| record.slot).collect();
+        moved.sort_unstable();
+        moved.dedup();
+        for slot in moved {
+            let mut parts: Vec<Segment> = records
+                .iter()
+                .filter(|record| record.slot == slot)
+                .map(|record| record.segment)
+                .collect();
+            parts.sort_by_key(|segment| segment.start);
+            let start = parts[0].start;
+            let gap = parts.windows(2).find(|pair| pair[1].start != pair[0].end());
+            let lasted = parts.last().map_or(0, Segment::end) - start;
+            if let Some(pair) = gap {
                 found.push(Found {
                     rule: Rule::StepTime,
-                    slots: vec![record.slot],
-                    at: real(script, record.segment.start),
+                    slots: vec![slot],
+                    at: real(script, pair[0].end()),
+                    message: format!(
+                        "stood still for {} ms between two parts of its motion in {}",
+                        milliseconds(pair[1].start.saturating_sub(pair[0].end())),
+                        step.describe()
+                    ),
+                });
+            } else if lasted != took {
+                found.push(Found {
+                    rule: Rule::StepTime,
+                    slots: vec![slot],
+                    at: real(script, start),
                     message: format!(
                         "moved for {} ms in {}, which lasts {} ms",
-                        milliseconds(record.segment.duration),
+                        milliseconds(lasted),
                         step.describe(),
                         milliseconds(took)
                     ),

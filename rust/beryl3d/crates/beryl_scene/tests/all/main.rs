@@ -22,6 +22,7 @@ mod table;
 mod tokens;
 mod verbs_count;
 mod verbs_fly;
+mod verbs_fly_draw;
 mod verbs_leaving;
 mod verbs_mark;
 mod verbs_shown;

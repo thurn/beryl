@@ -332,19 +332,20 @@ fn a_cast_bows_toward_its_casters_edge() {
         let from = pose(&show, slot, start);
         let to = pose(&show, slot, end);
         let middle = pose(&show, slot, u64::midpoint(start, end));
-        let off = off_line(middle, from, to);
-        // The way runs mostly in depth, from the hand near the camera to the stack: its bow is a
-        // share of how far it goes on the screen.
-        let [right, up, _] = axes(&show);
-        let way = to.position - from.position;
-        let way = way.dot(right).hypot(way.dot(up));
+        // A straight way in the table's space is a straight line on the window, so the bow is
+        // measured there, as the web interface draws it.
+        let camera = show.table().camera();
+        let [a, b, m] = [from, to, middle].map(|pose| camera.to_screen(pose.position));
+        let line = b - a;
+        let off = (m - a) - line * ((m - a).dot(line) / line.length_squared());
+        // The window's y runs down it, and the viewer's edge is its bottom.
         assert!(
-            off.dot(up) * edge > 0.0,
+            off.y * -edge > 0.0,
             "{case}: bows toward its caster's edge: {off:?}"
         );
         assert!(
-            off.length() > 0.03 * way,
-            "{case}: bows by a share of its way on the screen: {off:?} of {way} mm"
+            off.length() > 0.03 * line.length(),
+            "{case}: bows by a share of its way on the screen: {off:?} of {line:?}"
         );
     }
 }
