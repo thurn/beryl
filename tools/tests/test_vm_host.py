@@ -16,7 +16,8 @@ pytestmark: pytest.MarkDecorator = pytest.mark.skipif(
 @pytest.fixture(autouse=True)
 def cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("BERYL_CACHE", str(tmp_path / "cache"))
-    for name in (tokens.LEASE_ENV, tokens.POOL_ENV, tokens.CLASS_ENV):
+    # `join` writes its lease into this process's environment; undo that after each test.
+    for name in (*tokens.HELD_ENV, tokens.POOL_ENV):
         monkeypatch.delenv(name, raising=False)
     return tmp_path / "cache"
 
@@ -93,6 +94,27 @@ def test_joining_takes_tokens_for_the_machines_cpus(
     try:
         assert (vm_host.folder("beryl3d-bench") / "users" / str(os.getpid())).exists()
         assert len(pool.holders()) == 8
+    finally:
+        for lease in vm_host._LEASES:
+            lease.release()
+        vm_host._LEASES.clear()
+
+
+def test_commands_started_after_joining_run_inside_the_machines_lease(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A sweep may hold 2 of these 8 tokens, and the machine's lease takes both. A cargo
+    # command the same process starts afterwards must not wait for a third.
+    monkeypatch.setattr(subprocess, "run", Limactl(set()))
+    pool = tokens.Pool(tmp_path / "pool", 8)
+    monkeypatch.setattr(tokens, "Pool", lambda: pool)
+    monkeypatch.setenv(tokens.CLASS_ENV, "sweep")
+    vm_host.join("beryl3d-bench", 8)
+    try:
+        assert len(pool.holders()) == 2
+        assert os.environ[tokens.LEASE_ENV] == "2"
+        inner = tokens.acquire(tokens.named_class(), 1, give_up=lambda: True)
+        assert inner is not None and inner.inherited
     finally:
         for lease in vm_host._LEASES:
             lease.release()

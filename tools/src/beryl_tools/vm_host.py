@@ -132,6 +132,13 @@ def join(vm: str, cpus: int) -> None:
     if lease is not None and lease.files:
         _LEASES.append(lease)
         atexit.register(lease.release)
+        # Commands this process starts from now on run inside the machine's lease. Without
+        # this, a Beryl 3D sweep step hung for two hours: `just b3d gate --gpu` and
+        # `--counts` start the machine, whose lease takes every token the `sweep` class may
+        # hold, and then build the recordings pack on the Mac, and that cargo command waited
+        # for a token of its own that only this process's exit would free. The machine sits
+        # idle while this process builds, so the two share the cores without contention.
+        os.environ.update(lease.env())
     stop_idle(skip=vm)
 
 
