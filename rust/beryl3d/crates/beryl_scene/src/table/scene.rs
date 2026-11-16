@@ -11,7 +11,7 @@ use super::place::{
     Group, Placement, Rest, Scroll, Zones, place_group, place_reusing, place_zones,
 };
 use super::rows::NameIds;
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, Window, place};
+use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, place};
 use crate::effects::{self, EffectRun};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{Band, Draw, ElementId, FrameBuilder, Place, Resolved, Role, StateBits};
@@ -188,13 +188,30 @@ impl Table {
     /// depth and card height of the viewer's hand.
     #[must_use]
     pub fn player_pose(&self, side: Side) -> Pose {
-        let anchor = &self.layout.players[match side {
+        let anchor = self.anchor(side).life;
+        self.anchor_pose(anchor)
+    }
+
+    /// Where `side`'s unspent mana is drawn, which a streak of mana out of their pool leaves:
+    /// at their pool's anchor on the screen, at the depth and card height of the viewer's hand.
+    #[must_use]
+    pub fn pool_pose(&self, side: Side) -> Pose {
+        let anchor = self.anchor(side).pool;
+        self.anchor_pose(anchor)
+    }
+
+    fn anchor(&self, side: Side) -> &PlayerAnchor {
+        &self.layout.players[match side {
             Side::You => 0,
             Side::Opponent => 1,
-        }];
+        }]
+    }
+
+    /// The pose at `anchor`, a point of the screen in normalized device coordinates.
+    fn anchor_pose(&self, anchor: Vec2) -> Pose {
         let hand = &self.layout.hand;
         self.camera
-            .screen_pose(anchor.life, hand.depth, Quat::IDENTITY, hand.height)
+            .screen_pose(anchor, hand.depth, Quat::IDENTITY, hand.height)
     }
 
     /// Keeps `object`, the record of a card held up to be read, for the Revealed Cards pile to

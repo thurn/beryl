@@ -62,6 +62,18 @@
         ],
         "drop": 0.0067
       }
+    },
+    "streak": {
+      "bow": 0.16,
+      "rise": 1.1,
+      "fan": 0.6,
+      "tail": 0.42,
+      "head": 0.1,
+      "least": 0.79,
+      "most": 3.2,
+      "more": 0.18,
+      "units": 4,
+      "ribbon": 1.5
     }
   },
   "pointer": {},

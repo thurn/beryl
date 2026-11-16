@@ -697,7 +697,7 @@ impl Show {
         }
     }
 
-    /// When the next frame is needed: now while a segment or an effect is under way or a script
+    /// When the next frame is needed: now while a segment, a streak or an effect is under way or a script
     /// is waiting to start, at the start of the next segment or effect or the end of the script
     /// while all holds still, and never when nothing plays.
     #[must_use]
@@ -746,6 +746,15 @@ impl Show {
             }
             if segment.start > t {
                 next = next.min(segment.start);
+            }
+        }
+        // A streak is drawn on every frame while it runs, though it moves no card.
+        for run in &compiled.streaks {
+            if run.over.from <= t && t < run.over.to {
+                return Wake::Now;
+            }
+            if run.over.from > t {
+                next = next.min(run.over.from);
             }
         }
         if next <= t {

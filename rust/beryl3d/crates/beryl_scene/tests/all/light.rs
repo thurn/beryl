@@ -50,6 +50,7 @@ fn every_verb_has_a_play_function_and_says_whether_it_is_built() {
             Verb::Emerge,
             Verb::Flip,
             Verb::Strike,
+            Verb::Streak,
             Verb::Count,
             Verb::Set,
             Verb::Showcase,

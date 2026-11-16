@@ -1,18 +1,20 @@
 //! A frame that ends one script and starts the next allocates nothing (docs/beryl-3d.md, "The
 //! frame": no allocation): scripts are compiled when their updates arrive. This binary counts
 //! every heap allocation, so it holds one test, which also checks that the effects a starting
-//! script begins and `Lit::advance` allocate nothing.
+//! script begins, `Lit::advance` and a frame of twenty streaks allocate nothing.
 
 mod common;
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use beryl_protocol::protocol::ObjectId;
-use beryl_protocol::script::{Curve, Edge, Mark, StepEffect, Subject};
-use beryl_scene::frame::{FrameBuilder, Role};
+use beryl_protocol::protocol::{Mana, ObjectId, Side, ZoneName};
+use beryl_protocol::script::{Act, Curve, Edge, Mark, StepEffect, StepTiming, Stream, Subject};
+use beryl_scene::frame::{Frame, FrameBuilder, Material, Role};
+use beryl_scene::light::streaks::RECORDS;
 use beryl_scene::light::{Lit, MarkSpan, Span};
 use beryl_scene::play::record::{Plant, Planted};
+use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
 use beryl_scene::verbs::Interval;
 use common::{MS, before, emerge, empty_frame, resolve, show, three_beats};
 
@@ -158,4 +160,57 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
         "allocations in `advance`"
     );
     assert_eq!(lit.open().len(), 2);
+
+    twenty_streaks_allocate_nothing();
+}
+
+/// A frame that draws twenty streaks at once allocates nothing.
+fn twenty_streaks_allocate_nothing() {
+    let mut builder = ViewBuilder::new();
+    let island = builder
+        .card(ZoneName::Battlefield, Side::You, "Island")
+        .slot;
+    let spell = builder.card(ZoneName::Stack, Side::You, "Shock").slot;
+    builder.script(ScriptBuilder::reset().build());
+    let start = builder.update();
+    let mut streaks = start.clone();
+    let acts = (0..20).map(|_| Act::Streak {
+        from: Some(Subject::Object { slot: island }),
+        to: Subject::Object { slot: spell },
+        stream: Stream::Mana { color: Mana::Blue },
+        amount: 1,
+        object: None,
+    });
+    streaks.view.script = Some(ScriptBuilder::default().beat(acts).build());
+    let timings = (0..20)
+        .map(|at| StepTiming {
+            with: at > 0,
+            ..timing(300.0)
+        })
+        .collect();
+    let mut show = common::show();
+    let mut frame = Frame::with_capacity(256, 1024, 8192);
+    show.push(Box::new(start), Vec::new());
+    show.push(Box::new(streaks), timings);
+    for now in [0, 150 * MS] {
+        let before = ALLOCATIONS.load(Ordering::Relaxed);
+        let mut builder = FrameBuilder::new(&mut frame);
+        show.frame(now, &mut builder);
+        let drawn = builder
+            .finish()
+            .draws
+            .iter()
+            .filter(|draw| draw.material == Material::Streak as u8)
+            .count();
+        let after = ALLOCATIONS.load(Ordering::Relaxed);
+        assert_eq!(
+            after - before,
+            0,
+            "allocations in the frame at {} ms",
+            now / MS
+        );
+        if now > 0 {
+            assert_eq!(drawn, 20 * RECORDS, "twenty streaks are drawn");
+        }
+    }
 }
