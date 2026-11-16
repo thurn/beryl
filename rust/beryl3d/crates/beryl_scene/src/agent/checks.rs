@@ -27,9 +27,13 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults
 }
 
-/// On screen: every interactive element lies inside the window's safe area.
+/// On screen: every interactive element lies inside the window's safe area. A card needs only a
+/// square `TARGET_POINTS` on a side (`PHONE_TARGET_POINTS` on the phone layout), or as much of it
+/// as a card turned edge-on has, inside it, because a hand is held partly past the bottom edge,
+/// as Arena's and the web interface's are.
 #[must_use]
 pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
+    let side = target_side(context);
     let inset = context.safe_area;
     let safe = Rect {
         x: inset.left,
@@ -38,7 +42,17 @@ pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
         height: context.size.height - inset.top - inset.bottom,
     };
     interactive(frame)
-        .filter(|&index| !contains(safe, bounds(&frame.resolved[index as usize])))
+        .filter(|&index| {
+            let element = &frame.resolved[index as usize];
+            let rect = bounds(element);
+            if element.role == Role::Card {
+                !intersection(safe, rect).is_some_and(|in_safe| {
+                    in_safe.width >= side.min(rect.width) && in_safe.height >= side.min(rect.height)
+                })
+            } else {
+                !contains(safe, rect)
+            }
+        })
         .map(|index| {
             let subject = subject(frame, index);
             fault(
@@ -53,6 +67,14 @@ pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
             )
         })
         .collect()
+}
+
+/// The side of the square of a card that must be on screen and uncovered, in logical points.
+fn target_side(context: &Context) -> f32 {
+    match context.layout {
+        Layout::Desktop => audit::TARGET_POINTS,
+        Layout::Phone => audit::PHONE_TARGET_POINTS,
+    }
 }
 
 /// No overlap: no two interactive elements of the flat layer intersect, unless one contains
@@ -93,20 +115,22 @@ pub fn overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
 /// Reachable: a hit test at the centre of an interactive flat-layer element returns that
 /// element (or something inside it). Every interactive card at rest has an uncovered area at
 /// least `TARGET_POINTS` square (`PHONE_TARGET_POINTS` on the phone layout) where a hit test
-/// returns it.
+/// returns it. Cards are judged only on a frame where nothing on the table moves: a card passing
+/// over another covers it for a moment, which leaves no card out of reach.
 #[must_use]
 pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
-    let side = match context.layout {
-        Layout::Desktop => audit::TARGET_POINTS,
-        Layout::Phone => audit::PHONE_TARGET_POINTS,
-    };
+    let side = target_side(context);
     let mut faults = Vec::new();
     // Built on the first card at rest, so a frame with none builds no index.
     let mut overlaps: Option<Overlaps> = None;
+    let still = !frame
+        .resolved
+        .iter()
+        .any(|element| element.state.has(StateBits::MOVING) || element.state.has(StateBits::HELD));
     for index in interactive(frame) {
         let element = &frame.resolved[index as usize];
         if element.role == Role::Card {
-            if element.state.has(StateBits::MOVING) || element.state.has(StateBits::HELD) {
+            if !still {
                 continue;
             }
             let min = Size {

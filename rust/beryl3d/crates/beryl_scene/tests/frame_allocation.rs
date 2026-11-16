@@ -18,8 +18,11 @@ use beryl_protocol::protocol::{
 };
 use beryl_protocol::script::{Act, Mark, Subject, Tally};
 use beryl_scene::element::{floats, text};
-use beryl_scene::frame::{Frame, FrameBuilder, Material, Role};
-use beryl_scene::input::{AssetReady, GlyphCell, Input, Insets, Size};
+use beryl_scene::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
+use beryl_scene::input::{
+    AssetReady, Button, GlyphCell, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase,
+    Size,
+};
 use beryl_scene::layout::{FloatLook, Layer};
 use beryl_scene::light::{MarkSpan, Span};
 use beryl_scene::table::Table;
@@ -195,7 +198,7 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
 
     a_frame_of_255_attackers_allocates_nothing();
 
-    a_badged_table_allocates_nothing();
+    tables_allocate_nothing();
 
     // A float moved and faded by a new look, then written into a frame.
     let mut layer = Layer::new();
@@ -337,4 +340,76 @@ fn a_badged_table_allocates_nothing() {
         0,
         "allocations during a badged table's frame"
     );
+}
+
+/// A badged table and a hand card rising under the mouse.
+fn tables_allocate_nothing() {
+    a_badged_table_allocates_nothing();
+    a_rising_hand_card_allocates_nothing();
+}
+
+/// The frames while a hand card rises under the mouse, and while it falls back as the mouse moves
+/// onto the next card, allocate nothing.
+fn a_rising_hand_card_allocates_nothing() {
+    let mut client = Client::new(Config {
+        elements: 256,
+        draws: 1024,
+        name_bytes: 4096,
+    });
+    client.handle(Input::Surface {
+        size: Size {
+            width: 1440.0,
+            height: 900.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    });
+    let mut view = ViewBuilder::sample();
+    view.script(ScriptBuilder::reset().build());
+    client.handle(Input::Update(Box::new(view.update())));
+    let hand: Vec<Vec2> = client
+        .frame(0)
+        .resolved
+        .iter()
+        .filter(|element| element.role == Role::Card && element.interactive)
+        .filter(|element| {
+            matches!(
+                element.place,
+                Place::Card {
+                    zone: ZoneName::Hand,
+                    ..
+                }
+            )
+        })
+        .map(|element| element.corners[3] + (element.corners[1] - element.corners[3]) * 0.1)
+        .collect();
+    assert_eq!(hand.len(), 3, "the viewer's hand");
+    let mut now = 0;
+    for point in hand {
+        client.handle(Input::Pointer(Pointer {
+            id: 0,
+            kind: PointerKind::Mouse,
+            phase: PointerPhase::Move,
+            position: point,
+            button: Button::None,
+            wheel: Vec2::ZERO,
+            modifiers: Modifiers::default(),
+        }));
+        for _ in 0..4 {
+            now += 16_000_000;
+            let before = ALLOCATIONS.load(Ordering::Relaxed);
+            let hovered = client
+                .frame(now)
+                .resolved
+                .iter()
+                .any(|element| element.state.has(StateBits::HOVERED));
+            let after = ALLOCATIONS.load(Ordering::Relaxed);
+            assert!(hovered, "a card is hovered at {now}");
+            assert_eq!(
+                after - before,
+                0,
+                "allocations in a frame at {now} as a card rises"
+            );
+        }
+    }
 }

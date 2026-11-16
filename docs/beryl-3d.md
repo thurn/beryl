@@ -714,7 +714,16 @@ constants in the web interface's `ui/src/stage/raised.ts` and `heft.ts`.
   changes, the card it left gets a segment back down to its place in the hand
   (160 milliseconds) and the card it entered gets a segment up (100
   milliseconds). Both ease out, and both start at that frame's `now` from the
-  pose the card has then. These are ordinary segments.
+  pose the card has then; a card part way up or down takes that part of the
+  time. Raised, the card stands upright, `raise_scale` times as large about its
+  foot and `raise_mm` higher, and is moved toward the eye so that it covers the
+  rest of the hand without changing its place on the screen. A card that a
+  script moves is drawn where the script has it, and is hovered again only once
+  it has landed. A touch never hovers.
+- **The hit test finds hand cards where they rest in the fan.** While a card is
+  up, the hover test puts its resting box in place of its raised one, as the web
+  interface's hand does, so that the part of the fan a raised card has left
+  still finds that card and the pointer does not flicker between two cards.
 - **A held card follows the pointer exactly.** A card is held from a press on it
   until the release, if the session says it may be picked up. Its position is
   the point under the pointer on a plane above the table, at the held height in
@@ -2243,7 +2252,10 @@ An **interface check** is a rule about a frame's resolved elements that must
 hold on every frame. The checks are generic: they know nothing about any card or
 screen, so they cover every card spec that is ever generated.
 
-- **On screen.** Every interactive element lies inside the window's safe area.
+- **On screen.** Every interactive element lies inside the window's safe area. A
+  card needs only a square of 24 by 24 points (44 by 44 on the phone layout)
+  inside it, because a hand is held partly past the bottom edge, as Arena's and
+  the web interface's are.
 - **No overlap.** No two interactive elements of the flat layer intersect,
   unless one contains the other in the tree. Cards are exempt, because rows and
   hands overlap them on purpose.

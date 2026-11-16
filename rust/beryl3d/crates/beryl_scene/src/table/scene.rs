@@ -559,7 +559,9 @@ impl Table {
             whiten: 0.0,
             face,
             state,
-            interactive: false,
+            interactive: state & StateBits::FACE_DOWN == 0
+                && !name.is_empty()
+                && pointer::takes_pointer(object.place),
         };
         let on = Subject::Object {
             slot: ObjectId(u16::try_from(slot).expect("slots are u16")),
@@ -576,7 +578,7 @@ impl Table {
         };
         effects::card::look(dress.effects, on, dress.now, earlier_face, &mut look);
         light::marks::look(dress.lit, on, dress.now, &mut look);
-        pointer::look(dress.pointer, slot, &mut look);
+        pointer::look(dress.pointer, slot, (dress.now, &self.camera), &mut look);
         effects::card::write(dress.effects, on, dress.now, &look, builder);
         if shown.zone == ZoneName::Battlefield {
             own::write((slot, shown), &look, &self.fights, dress.now, builder);
@@ -630,7 +632,7 @@ impl Table {
                 role,
                 name: crate::frame::NameRef::default(),
                 place,
-                corners: self.corners(transform),
+                corners: self.camera.card_corners(transform),
                 depth: self.camera.depth(look.pose.position),
                 opacity: look.pose.opacity,
                 clip: None,
@@ -773,16 +775,6 @@ impl Table {
             back,
             builder,
         );
-    }
-
-    /// A card's corners on screen, in logical points: bottom left, bottom right, top right and
-    /// top left of its face.
-    fn corners(&self, transform: Affine3A) -> [Vec2; 4] {
-        let (x, y) = (CARD_WIDTH / 2.0, CARD_HEIGHT / 2.0);
-        [(-x, -y), (x, -y), (x, y), (-x, y)].map(|(x, y)| {
-            self.camera
-                .to_screen(transform.transform_point3(Vec3::new(x, y, 0.0)))
-        })
     }
 }
 

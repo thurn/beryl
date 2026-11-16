@@ -12,6 +12,8 @@ use beryl_scene::input::Size;
 use serde_json::Value;
 
 const RECORDING: &str = "verbs-zones";
+/// A recording with no fault from either seat, for `check`, which exits with 1 on a fault.
+const CLEAN: &str = "pay-default";
 
 fn run(line: &[&str]) -> Ran {
     let args: Vec<String> = line.iter().map(|&arg| arg.to_owned()).collect();
@@ -164,7 +166,7 @@ fn json_output_parses() {
         &["info", RECORDING],
         &["tree", RECORDING, "--at", "1500ms"],
         &["diff", RECORDING, "--from", "800ms", "--to", "1500ms"],
-        &["check", RECORDING],
+        &["check", CLEAN],
     ] {
         let mut line = line.to_vec();
         line.push("--json");
@@ -210,7 +212,7 @@ fn hovering_a_tree_line_changes_that_elements_states() {
 
 #[test]
 fn check_runs_every_tick_and_closes_with_one_line() {
-    let printed = ok(&["check", RECORDING]);
+    let printed = ok(&["check", CLEAN]);
     let last = printed.lines().last().unwrap();
     assert!(
         last.starts_with("1 test, ") && last.contains(" faults in "),

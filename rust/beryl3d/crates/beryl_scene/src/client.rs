@@ -15,7 +15,7 @@ use crate::element::Press;
 use crate::faces::{FaceList, Faces};
 use crate::frame::{self, ElementId, Frame, FrameBuilder, Wake};
 use crate::hud::counts::CountFloats;
-use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerKind, PointerPhase};
+use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerPhase};
 use crate::layout::Layer;
 use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
@@ -86,9 +86,6 @@ pub struct Client {
     open: bool,
     /// The element the primary pointer went down on, which a release on it presses.
     pressed: Option<ElementId>,
-    /// Where the mouse pointer is, in logical points, while it is over the window. The element
-    /// a press there would reach is drawn `hovered`. A touch never hovers.
-    mouse: Option<glam::Vec2>,
     wake: Wake,
     requests: VecDeque<Request>,
     commands: VecDeque<SessionCommand>,
@@ -116,7 +113,6 @@ impl Client {
             own_due: false,
             open: false,
             pressed: None,
-            mouse: None,
             wake: Wake::Never,
             requests: VecDeque::new(),
             commands: VecDeque::new(),
@@ -228,7 +224,6 @@ impl Client {
         }
         let mut builder = FrameBuilder::new(&mut self.frame);
         self.show.frame(now, &mut builder);
-        self.wake = self.show.wake(now);
         // A total that changes shows the element `prepare` laid out for it.
         self.counts.write(
             &mut self.layer,
@@ -245,11 +240,9 @@ impl Client {
         self.open = self.show.settled();
         (self.layer).write(&mut builder, self.show.table().camera(), self.open);
         builder.finish();
-        if let Some(point) = self.mouse
-            && let Some(index) = crate::agent::hit(&self.frame, point)
-        {
-            self.frame.resolved[index as usize].state.0 |= frame::StateBits::HOVERED;
-        }
+        // The element a press under the mouse would reach is drawn `hovered`.
+        self.show.point(&mut self.frame, now);
+        self.wake = self.show.wake(now);
         &self.frame
     }
 
@@ -308,12 +301,7 @@ impl Client {
     /// A press is the primary button or a touch going down and coming up on the same enabled
     /// element. It queues the command the element's `Press` means.
     fn point(&mut self, pointer: Pointer) {
-        if pointer.kind == PointerKind::Mouse {
-            self.mouse = match pointer.phase {
-                PointerPhase::Cancel | PointerPhase::Leave => None,
-                _ => Some(pointer.position),
-            };
-        }
+        self.show.pointer_mut().handle(&pointer);
         let primary = pointer.button == Button::Primary;
         let open = self.open;
         match pointer.phase {

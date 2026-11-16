@@ -20,6 +20,7 @@ mod light;
 mod motion;
 mod own;
 mod play;
+mod pointer;
 mod table;
 mod tokens;
 mod verbs_count;

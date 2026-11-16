@@ -12,6 +12,8 @@ use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Page, Recording, TICK};
 use beryl_scene::input::Size;
 
+use crate::faults::Listed;
+use crate::runner::Test;
 use crate::stress::stress;
 use crate::{recordings, screens};
 
@@ -130,12 +132,13 @@ pub struct Checked {
 
 /// Plays the recording `name` from each seat it is recorded for, in each of
 /// [`DESKTOP_WINDOWS`], from its start to its end on its own clock, and runs every interface
-/// check on the frame of every tick.
+/// check on the frame of every tick. A fault of a rule that `data/beryl3d/test-faults.json`
+/// lists for that seat and window is allowed; `just b3d test` holds those to their counts.
 ///
 /// # Panics
 ///
-/// When a check finds a fault, with the faults, the seat, the window and the clock; or when
-/// the recording is recorded for neither seat.
+/// When a check finds a fault of a rule not listed, with the faults, the seat, the window and
+/// the clock; or when the recording is recorded for neither seat, or the list cannot be read.
 #[must_use]
 pub fn check_recording(name: &str) -> Checked {
     let seats: Vec<Side> = [Side::You, Side::Opponent]
@@ -146,17 +149,30 @@ pub fn check_recording(name: &str) -> Checked {
         let why = recording(name, Side::You).err().unwrap_or_default();
         panic!("{why}");
     }
+    let listed = Listed::read().unwrap_or_else(|why| panic!("{why}"));
     let mut checked = Checked {
         plays: 0,
         frames: 0,
     };
     for &seat in &seats {
         for size in DESKTOP_WINDOWS {
+            let test = Test {
+                recording: name.to_owned(),
+                seat,
+                size,
+            };
+            let allowed = listed.tests.get(&test.name()).cloned().unwrap_or_default();
             let mut page = page(name, seat, Layout::Desktop, size).unwrap_or_else(|why| {
                 panic!("{why}");
             });
             loop {
-                page.check();
+                let faults = page.faults();
+                if faults
+                    .iter()
+                    .any(|fault| !allowed.contains_key(fault.rule.word()))
+                {
+                    page.check();
+                }
                 checked.frames += 1;
                 if page.ended() {
                     break;

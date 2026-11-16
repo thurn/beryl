@@ -42,7 +42,7 @@ use self::record::{Plant, ScriptRecord, StepRecord};
 use crate::data::space::catch_up;
 use crate::effects::{self, EffectRun};
 use crate::faces::Faces;
-use crate::frame::{FrameBuilder, Wake};
+use crate::frame::{Frame, FrameBuilder, Wake};
 use crate::hud::counts::Counts;
 use crate::light::{self, Lit, StreakRun};
 use crate::motion::Track;
@@ -223,6 +223,20 @@ impl Show {
     /// itself.
     pub fn lit_mut(&mut self) -> &mut Lit {
         &mut self.lit
+    }
+
+    /// The pointer on the table, which takes the host's pointer events.
+    pub fn pointer_mut(&mut self) -> &mut Pointer {
+        &mut self.pointer
+    }
+
+    /// Finds and marks what the pointer is over in `frame`, just built at `now` (`pointer::update`).
+    pub fn point(&mut self, frame: &mut Frame, now: u64) {
+        let mut pointer = std::mem::replace(&mut self.pointer, Pointer::EMPTY);
+        let camera = self.table.camera();
+        let rest = |slot| self.pose(slot, now).map(|pose| camera.card_box(&pose));
+        crate::pointer::update(&mut pointer, frame, rest, now);
+        self.pointer = pointer;
     }
 
     /// Where `subject` is at `now` and how large: a card where `pose` has it, an ability on
@@ -694,11 +708,14 @@ impl Show {
         }
     }
 
-    /// When the next frame is needed: now while a segment, a streak or an effect is under way or a script
-    /// is waiting to start, at the start of the next segment or effect or the end of the script
-    /// while all holds still, and never when nothing plays.
+    /// When the next frame is needed: now while a segment, streak, effect or rising or falling
+    /// hand card is under way or a script waits to start, at the start of the next segment or
+    /// effect or the end of the script while all holds still, and never when nothing plays.
     #[must_use]
     pub fn wake(&self, now: u64) -> Wake {
+        if self.pointer.moving(now) {
+            return Wake::Now;
+        }
         let mut next = None::<u64>;
         for run in &self.effects {
             if run.start > now {

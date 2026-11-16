@@ -302,7 +302,7 @@ impl Segment {
 }
 
 /// The pose `u` of the way from `from` to `to`, each part of it alike.
-fn between(from: &Pose, to: &Pose, u: f32) -> Pose {
+pub(crate) fn between(from: &Pose, to: &Pose, u: f32) -> Pose {
     Pose {
         position: from.position.lerp(to.position, u),
         rotation: from.rotation.slerp(to.rotation, u),

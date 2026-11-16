@@ -6,7 +6,7 @@
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
 
-use super::{CARD_HEIGHT, Window};
+use super::{CARD_HEIGHT, CARD_WIDTH, Window};
 use crate::input::Rect;
 use crate::pose::Pose;
 
@@ -163,6 +163,24 @@ impl Camera {
             scale: height * 2.0 * depth * self.tan_half / CARD_HEIGHT,
             ..Pose::default()
         }
+    }
+
+    /// A card's corners on screen, in logical points, when the unit card is laid by `transform`:
+    /// bottom left, bottom right, top right and top left of its face.
+    #[must_use]
+    pub fn card_corners(&self, transform: Affine3A) -> [Vec2; 4] {
+        let (x, y) = (CARD_WIDTH / 2.0, CARD_HEIGHT / 2.0);
+        [(-x, -y), (x, -y), (x, y), (-x, y)]
+            .map(|(x, y)| self.to_screen(transform.transform_point3(Vec3::new(x, y, 0.0))))
+    }
+
+    /// The corners on screen of a card at `pose`, as `card_corners` gives them, and its depth.
+    #[must_use]
+    pub fn card_box(&self, pose: &Pose) -> ([Vec2; 4], f32) {
+        (
+            self.card_corners(pose.transform()),
+            self.depth(pose.position),
+        )
     }
 
     /// The camera's right, up and backward directions in the table's space, each of unit
