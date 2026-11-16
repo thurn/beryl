@@ -26,7 +26,7 @@ use glam::Vec2;
 pub use camera::{Camera, CameraData};
 pub use look::{Dress, Look};
 pub use pile::{PILE_IDS, PileShown, pile_name};
-pub(crate) use place::{Group, NO_GROUP, Zones, arrival};
+pub(crate) use place::{Group, NO_GROUP, Zones, arrival, host_slot};
 pub use place::{Placement, ROWS, Rest, Rows, Scroll, place};
 pub(crate) use rows::NameIds;
 pub use rows::RowWindow;
@@ -73,6 +73,12 @@ pub struct RowArea {
     pub y: f32,
     pub left: f32,
     pub right: f32,
+    /// Whether a row with room to spare is centred in the band, rather than laid from its left
+    /// limit. The web interface centres only the creatures' row; the lands run from the table's
+    /// edge inward and the other permanents from the middle outward (`sideRows` in
+    /// `ui/src/game/battlefield.ts`), so a permanent that leaves one of those rows moves only
+    /// the cards to its right.
+    pub centred: bool,
 }
 
 /// Where a hand stands, relative to the camera (`hand` and `opponent_hand` in `space.json`).
@@ -182,11 +188,12 @@ use space::layout::desktop;
 
 /// A `RowArea` from the object of the same name in `layout.desktop`.
 macro_rules! row_area {
-    ($name:ident) => {
+    ($name:ident, $centred:expr) => {
         RowArea {
             y: desktop::$name::Y,
             left: desktop::$name::LEFT,
             right: desktop::$name::RIGHT,
+            centred: $centred,
         }
     };
 }
@@ -218,9 +225,9 @@ pub const DESKTOP: Layout = Layout {
         required: desktop::camera::REQUIRED,
     },
     strip: desktop::STRIP,
-    creatures: row_area!(creatures),
-    lands: row_area!(lands),
-    others: row_area!(others),
+    creatures: row_area!(creatures, true),
+    lands: row_area!(lands, false),
+    others: row_area!(others, false),
     gap: desktop::GAP,
     pile_step: desktop::PILE_STEP,
     beneath_step: desktop::BENEATH_STEP,

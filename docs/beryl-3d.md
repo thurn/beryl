@@ -1198,6 +1198,18 @@ flight start exactly where the card was.
   identical permanents into piles with a count, as the web interface does. A
   board at the engine's capacity is therefore still a bounded number of quads
   inside a bounded area.
+- **Rows stand as the web interface's do.** The creatures' row is centred; the
+  lands run from the table's edge inward and the other permanents from the
+  middle outward, so a permanent that leaves one of those rows moves only the
+  cards to its right.
+- **Some cards lie under a permanent, in its row**, as the web interface tucks
+  them: the other cards of a merged permanent and the cards a permanent holds in
+  exile peek out to its left, and the Auras and Equipment attached to it,
+  whoever controls them, peek out to its right, unless it is a land or is
+  attached to something itself. Each peeks out by `beneath_step` of a card's
+  width, or by the row's least strip where that is wider, so that it can still
+  be pointed at. A card held in exile is not in its exile pile or that pile's
+  count.
 - **An overlapped card keeps a strip of at least 24 by 24 logical points
   uncovered**, 44 by 44 on the phone layout, so it can always be pointed at.
 - **A row that cannot give every card its strip scrolls.** After piling
@@ -3671,6 +3683,14 @@ script, as one seat sees it. A step a client made itself has `"own": true`.
   in the sweep. It never runs for a change to the web interface (decision C17).
   When the web interface's timeline moves, the sweep lists the recordings that
   now differ, and Beryl 3D follows.
+
+Some beat ends depend on where a client lays cards out, which the two clients do
+differently on purpose: a beat lasts until the cards that close up after a card
+left are at their new places, but only as long as that close-up is still each
+card's latest motion, and on the web interface a strike waits while its way
+would cross an earlier strike's. Beryl 3D follows the first rule on its own
+table and does not hold strikes back. A recording whose timelines differ only
+because of such a layout difference stays listed.
 
 What the check does not cover is fixed by hand, and found by the parity list: a
 screen's layout, a prompt's wording, and how an effect looks.

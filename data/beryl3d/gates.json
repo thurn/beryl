@@ -56,24 +56,24 @@
     },
     "verbs-zones": {
       "worst_frame_elements": 521,
-      "total_elements": 473869,
+      "total_elements": 467782,
       "worst_frame_segments": 23,
-      "total_segments": 16838,
-      "worst_frame_records": 92,
-      "total_records": 68392,
+      "total_segments": 16701,
+      "worst_frame_records": 91,
+      "total_records": 67879,
       "worst_frame_layout_nodes": 11,
-      "total_layout_nodes": 57,
+      "total_layout_nodes": 56,
       "worst_frame_text_runs": 20,
-      "total_text_runs": 43,
+      "total_text_runs": 42,
       "worst_frame_draw_calls": 6,
-      "worst_frame_upload_bytes": 7360,
+      "worst_frame_upload_bytes": 7280,
       "worst_frame_blended_area": 0.1692,
-      "handle_allocations": 9579,
+      "handle_allocations": 9568,
       "frame_allocations": 0,
       "worst_frame_instructions": 2919075,
       "total_instructions": 171319030,
-      "worst_frame_placed": 761,
-      "total_placed": 1814
+      "worst_frame_placed": 751,
+      "total_placed": 1795
     },
     "pay-default": {
       "worst_frame_elements": 273,
@@ -112,7 +112,7 @@
       "worst_frame_draw_calls": 14,
       "worst_frame_upload_bytes": 31840,
       "worst_frame_blended_area": 0.7598,
-      "handle_allocations": 2696,
+      "handle_allocations": 2701,
       "frame_allocations": 0,
       "worst_frame_instructions": 4131479,
       "total_instructions": 89998450
@@ -154,7 +154,7 @@
       "worst_frame_draw_calls": 4,
       "worst_frame_upload_bytes": 82240,
       "worst_frame_blended_area": 0.1099,
-      "handle_allocations": 2130,
+      "handle_allocations": 2134,
       "frame_allocations": 0,
       "worst_frame_instructions": 3908226,
       "total_instructions": 288666351
@@ -209,7 +209,7 @@
   },
   "tests": {
     "median_frames": 132,
-    "most_frames": 5472
+    "most_frames": 5474
   },
   "scaling": {
     "stress-1024": {

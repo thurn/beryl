@@ -198,20 +198,23 @@ pub(crate) fn compile<'a>(
             &mut compiled.laid,
             &mut compiled.closes,
         ),
-        |number, (beat, index), step, timing, laid| {
+        |number, (beat, index), step, timing, laid, closes| {
             sounds.step(
                 motion.as_ref().map(|motion| &motion.played),
                 (&script.beats[beat], index, number),
                 timing,
                 laid,
             );
-            let closed = motion.as_mut().and_then(|motion| {
+            if let Some(motion) = motion.as_mut() {
+                if index == 0 {
+                    motion.begin_beat();
+                }
                 motion.step(number, (&script.beats[beat], index), timing, laid);
-                motion.take_closed()
-            });
+                motion.closings_into(number - index, closes);
+            }
             effects_of(number, step, timing, laid, effects);
             if !records {
-                return closed;
+                return;
             }
             steps.push(StepRecord {
                 view: 0,
@@ -224,7 +227,6 @@ pub(crate) fn compile<'a>(
                 timed: nanoseconds(timing.duration),
                 key: MoveKey::of(&step.act),
             });
-            closed
         },
     );
     compiled.steps = steps;
@@ -279,9 +281,10 @@ fn ended(played: Option<&Played>, after: &PlayerView, script: &Script) -> Played
 /// Lays out each beat of `script` after the one before, calling `each` with every step's number
 /// in the script, its beat and index in its beat, the step, its timing and when it plays, and
 /// returns when the last beat is over, in nanoseconds. Each verb drawn as an instant change sets
-/// its bit in `unbuilt`, and each step's times go to `all`. `each` returns when what closed up
-/// after its step has closed, in milliseconds, if anything did, which goes to `closed_by`: a beat
-/// is not over until then, as the web stage's is not (`closedBy` in `ui/src/stage/tracks.ts`).
+/// its bit in `unbuilt`, and each step's times go to `all`. `each` also gets the entries of
+/// `closed_by` for the steps of its beat, and sets each to when what closed up after that step
+/// has closed, in milliseconds, if anything did as the beat's steps so far leave it: a beat is
+/// not over until then, as the web stage's is not (`closedBy` in `ui/src/stage/tracks.ts`).
 ///
 /// When `immediate`, the table takes the script's steps at once: only a reset's announcements
 /// play, beat after beat, and `each` is called for them alone. Every other step takes no time
@@ -291,7 +294,7 @@ fn lay_out<'s>(
     timings: &[StepTiming],
     immediate: bool,
     (unbuilt, all, closed_by): (&mut u32, &mut Vec<Laid>, &mut Vec<Option<f64>>),
-    mut each: impl FnMut(usize, (usize, usize), &'s Step, &StepTiming, &Laid) -> Option<f64>,
+    mut each: impl FnMut(usize, (usize, usize), &'s Step, &StepTiming, &Laid, &mut [Option<f64>]),
 ) -> u64 {
     let mut laid = Vec::new();
     all.reserve_exact(timings.len());
@@ -334,22 +337,22 @@ fn lay_out<'s>(
             // neither.
             beat(steps, timings, at, |_| None, at, &mut laid)
         };
+        closed_by.resize(first + steps.len(), None);
         for (index, ((step, timing), laid)) in steps.iter().zip(timings).zip(&laid).enumerate() {
             let verb = step.act.verb();
             if !verbs::built(verb) {
                 *unbuilt |= bit(verb);
             }
-            let closed = if plays(step) {
-                each(first + index, (number, index), step, timing, laid)
-            } else {
-                None
-            };
-            if let Some(closed) = closed {
-                end = end.max(closed);
+            if plays(step) {
+                let closes = &mut closed_by[first..];
+                each(first + index, (number, index), step, timing, laid, closes);
             }
             all.push(*laid);
-            closed_by.push(closed);
         }
+        end = closed_by[first..]
+            .iter()
+            .flatten()
+            .fold(end, |end, &closed| end.max(closed));
         at = end;
         first += steps.len();
     }

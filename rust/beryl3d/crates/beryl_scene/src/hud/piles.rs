@@ -9,13 +9,13 @@
 //! a frame only chooses which laid-out element each float shows and sets its look, and
 //! allocates nothing.
 
-use beryl_protocol::protocol::{PlayerView, Side, ZoneName};
+use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, Side, ZoneName};
 use glam::Vec2;
 
 use crate::data::space::layout::desktop::piles::COUNT_GAP;
 use crate::element::{Element, floats, text};
 use crate::layout::{FloatLook, Layer};
-use crate::table::{PileShown, Table, pile_name};
+use crate::table::{PileShown, Table, host_slot, pile_name};
 
 /// The floats that show each pile's count, and the count each shows now.
 #[derive(Debug, Default)]
@@ -122,13 +122,19 @@ fn count_in(view: &PlayerView, index: usize) -> usize {
     match zone {
         ZoneName::Library => player.library.len(),
         ZoneName::Graveyard => player.graveyard.len(),
-        _ => view
-            .objects
-            .iter()
-            .filter(|object| {
-                object.zone == ZoneName::Exile && object.zone_side.unwrap_or(object.owner) == side
-            })
-            .count(),
+        // A card that lies under the permanent holding it in exile is not in the pile.
+        _ => {
+            let find = |slot: ObjectId| view.objects.iter().find(|host| host.slot == slot);
+            let held = |object: &ObjectView| host_slot(object, find).is_some();
+            view.objects
+                .iter()
+                .filter(|object| {
+                    object.zone == ZoneName::Exile
+                        && object.zone_side.unwrap_or(object.owner) == side
+                        && !held(object)
+                })
+                .count()
+        }
     }
 }
 

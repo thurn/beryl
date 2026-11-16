@@ -63,7 +63,8 @@ impl<'a> Zones<'a> {
         }
     }
 
-    /// The permanents of one side's `row`, in the order they entered.
+    /// The permanents of one side's `row`, in the order they entered, but for those that lie
+    /// under another permanent (`host`), which its row lists with the cards under it.
     pub(super) fn in_row(&self, side: Side, row: RowName) -> Vec<&'a ObjectView> {
         let mut found = Vec::with_capacity(self.battlefield.len());
         match self.groups {
@@ -83,6 +84,7 @@ impl<'a> Zones<'a> {
                 );
             }
         }
+        found.retain(|object| object.attached_to.is_none() || self.host(object).is_none());
         found
     }
 }

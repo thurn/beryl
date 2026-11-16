@@ -112,9 +112,10 @@ pub(crate) struct Motion<'a> {
     records: bool,
     /// The spans, streaks and notices the verbs wrote.
     pub written: Written,
-    /// When the latest slide of what closed up after a step's subject left ends, in
-    /// milliseconds on the script's clock, until `take_closed` reads it.
-    closed: Option<f64>,
+    /// What is closing up after a step of the current beat, as the web stage's `closedBy`
+    /// finds it on each entry's track: a later step of the beat that moves the same card
+    /// again takes its place (`Closing::gone`).
+    closing: Vec<Closing>,
     /// The cards the opponent is handling as the steps so far leave the table, which the table
     /// played over does not keep.
     look: Look,
@@ -173,7 +174,7 @@ impl<'a> Motion<'a> {
             segments: Vec::new(),
             records,
             written: Written::default(),
-            closed: None,
+            closing: Vec::new(),
             look: Look::opening(
                 (before, after),
                 timings.iter().any(|timing| timing.duration > 0.0),
@@ -216,11 +217,30 @@ impl<'a> Motion<'a> {
             self.names.note(object);
         }
         for &slot in &self.touched {
-            if let Some(group) = self.groups.get(usize::from(slot.0)).copied().flatten() {
+            let was = self.groups.get(usize::from(slot.0)).copied().flatten();
+            let now = zones.get(slot).and_then(|object| zones.group_of(object));
+            if let Some(group) = was {
                 dirty[group] = true;
             }
-            if let Some(group) = zones.get(slot).and_then(|object| zones.group_of(object)) {
+            if let Some(group) = now {
                 dirty[group.index()] = true;
+            }
+            // A permanent that enters or leaves a row takes the cards that lie under it along
+            // or lets them go to their own groups, though the act names none of them
+            // (`place::under`).
+            let row = |index: usize| matches!(Group::ALL[index], Group::Row { .. });
+            if was != now.map(Group::index)
+                && (was.is_some_and(row) || now.is_some_and(|g| row(g.index())))
+            {
+                for object in zones.naming_as_host(slot) {
+                    let index = usize::from(object.slot.0);
+                    if let Some(group) = self.groups.get(index).copied().flatten() {
+                        dirty[group] = true;
+                    }
+                    if let Some(group) = zones.group_of(object) {
+                        dirty[group.index()] = true;
+                    }
+                }
             }
         }
         for (group, next) in Group::ALL.into_iter().zip(&mut self.next) {
@@ -388,7 +408,8 @@ impl<'a> Motion<'a> {
             subject_of(step)
         };
         // A `set` moves nothing: what it places again, a library it reorders, is at its new
-        // place as the step begins.
+        // place as the step begins. Only the cards that stay in a hand regroup round one it
+        // takes out of the fan or puts back, as on the web stage (`carried` in `tracks.ts`).
         let still = verb == Verb::Set;
         self.mark_affected(&dirty, subject);
         let affected = std::mem::take(&mut self.affected);
@@ -444,16 +465,16 @@ impl<'a> Motion<'a> {
                 played = true;
                 continue;
             }
-            let segment = if still {
+            let segment = if still && !(regroup.is_some() && self.stays_in_hand(slot)) {
                 self.change(slot, (rested, now), number, own)
             } else {
                 self.follow(slot, (rested, now), number, own, (room, regroup))
             };
             if let Some((segment, cause)) = segment {
-                if matches!(cause, Cause::Slide(_)) && segment.end() > own.to {
-                    self.note_closing(segment.end());
-                }
                 self.push(slot, segment, cause);
+                if matches!(cause, Cause::Slide(_)) && segment.end() > own.to {
+                    self.note_closing(Some(slot), segment.end(), number);
+                }
             }
         }
         if !played {
@@ -469,28 +490,50 @@ impl<'a> Motion<'a> {
         }
         self.affected = affected;
         if self.follow_abilities(number, mover, own, room) && room.to > own.to {
-            self.note_closing(room.to);
+            self.note_closing(None, room.to, number);
         }
         self.commit(&dirty);
     }
 
-    /// Notes that something the step does not move itself slides until `end`, in nanoseconds,
-    /// after the step is over: what closes up after a card that left (`StepTiming::closes`), or
-    /// the cards that stay in a hand closing up in the time the step's `room` gives. The beat
-    /// lasts until it has, as the web stage's does (`closedBy` in `ui/src/stage/tracks.ts`).
-    fn note_closing(&mut self, end: u64) {
+    /// Notes that something the `number`th step does not move itself, the object in `slot` or
+    /// else its abilities, slides until `end`, in nanoseconds, after the step is over: what
+    /// closes up after a card that left (`StepTiming::closes`), or the cards that stay in a hand
+    /// closing up in the time the step's `room` gives. The beat lasts until it has, as the web
+    /// stage's does (`closedBy` in `ui/src/stage/tracks.ts`), unless a later step of the beat
+    /// moves the same object again first (`push`).
+    fn note_closing(&mut self, slot: Option<usize>, end: u64, number: usize) {
         #[expect(
             clippy::cast_precision_loss,
             reason = "a script lasts seconds, far below f64's exact range"
         )]
         let end = end as f64 / 1e6;
-        self.closed = Some(self.closed.map_or(end, |closed| closed.max(end)));
+        self.closing.push(Closing {
+            slot,
+            end,
+            number,
+            gone: false,
+        });
     }
 
-    /// When the latest slide of what closed up after a step since the last call ends, in
-    /// milliseconds on the script's clock, if any did.
-    pub(crate) fn take_closed(&mut self) -> Option<f64> {
-        self.closed.take()
+    /// Forgets what closes up after the steps of the last beat, as the next one begins.
+    pub(crate) fn begin_beat(&mut self) {
+        self.closing.clear();
+    }
+
+    /// Sets `closes`, which holds an entry for each step of the current beat from the script's
+    /// `first`th step, to when what closed up after each step closes, in milliseconds on the
+    /// script's clock, as the beat's steps so far leave it.
+    pub(crate) fn closings_into(&mut self, first: usize, closes: &mut [Option<f64>]) {
+        // Each step a close-up is gone from is worked out again from those left, which a step
+        // with none left has none of.
+        for closing in self.closing.iter().filter(|closing| closing.gone) {
+            closes[closing.number - first] = None;
+        }
+        self.closing.retain(|closing| !closing.gone);
+        for closing in &self.closing {
+            let entry = &mut closes[closing.number - first];
+            *entry = Some(entry.map_or(closing.end, |end| end.max(closing.end)));
+        }
     }
 
     /// The segment that carries the object in `slot`, which the `number`th step does not move
@@ -687,6 +730,11 @@ impl<'a> Motion<'a> {
     /// segment comes after one that holds it where it rested before the script, so that it
     /// stands there until it moves.
     fn push(&mut self, slot: usize, segment: Segment, cause: Cause) {
+        // Its new segment takes the place of what it was closing up along, as a new track does
+        // on the web stage, whose beat then waits only for the track the card is on.
+        for closing in &mut self.closing {
+            closing.gone |= closing.slot == Some(slot);
+        }
         let segment = Segment {
             step: cause.step_time(),
             ..segment
@@ -727,4 +775,16 @@ impl<'a> Motion<'a> {
             });
         }
     }
+}
+
+/// Something that closes up after a step of the current beat (`Motion::note_closing`).
+struct Closing {
+    /// The slot of the object that slides; none for the abilities on the stack.
+    slot: Option<usize>,
+    /// When it is where it rests, in milliseconds on the script's clock.
+    end: f64,
+    /// The step it closes up after, by its number in the script.
+    number: usize,
+    /// A later step of the beat moved the object again, so the beat no longer waits for this.
+    gone: bool,
 }

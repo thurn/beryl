@@ -11,7 +11,8 @@ use beryl_protocol::script::{Piles, Table as Played};
 
 mod indexed;
 pub(crate) use indexed::arrival;
-mod merged;
+mod under;
+pub(crate) use under::host_slot;
 
 use super::hands::hand;
 use super::pile::{PileShown, lay_pile, pile_base, pile_scale};
@@ -332,18 +333,22 @@ impl Group {
             return None;
         };
         Some(match (zone, row) {
+            // A card in exile that lies under a permanent rests in that permanent's row.
+            (ZoneName::Battlefield | ZoneName::Merged | ZoneName::Exile, Some(row)) => {
+                Group::Row { side, row }
+            }
             (ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile, _) => {
                 Group::Pile { side, zone }
             }
             (ZoneName::Hand, _) => Group::Hand(side),
-            (ZoneName::Battlefield | ZoneName::Merged, Some(row)) => Group::Row { side, row },
             (ZoneName::Stack, _) => Group::Stack,
             _ => return None,
         })
     }
 
-    /// The group `object` belongs in, by its zone, if the table shows it. A card under a merged
-    /// permanent belongs in its permanent's row, which only `Zones::group_of` can find.
+    /// The group `object` belongs in, by its zone, if the table shows it. A card that lies under
+    /// a permanent (a merged permanent's, or one it holds in exile) belongs in that permanent's
+    /// row, which only `Zones::group_of` can find.
     pub(crate) fn of(object: &ObjectView) -> Option<Group> {
         let side = side_of(object);
         Some(match object.zone {
@@ -496,11 +501,13 @@ impl<'a> Zones<'a> {
         self.slots.get(usize::from(slot.0)).copied().flatten()
     }
 
-    /// The objects in one side's `zone`, in the order the table lists them.
+    /// The objects in one side's `zone`, in the order the table lists them, but for the cards
+    /// in exile that lie under a permanent, in its row (`host`).
     fn in_zone(&self, side: Side, zone: ZoneName) -> Vec<&'a ObjectView> {
         let mut found: Vec<&'a ObjectView> = self
             .objects()
             .filter(|object| object.zone == zone && side_of(object) == side)
+            .filter(|object| zone != ZoneName::Exile || self.host(object).is_none())
             .collect();
         self.in_arrival_order(&mut found);
         found
@@ -539,7 +546,7 @@ pub(crate) fn members<'a>(zones: &Zones<'a>, group: Group) -> Vec<&'a ObjectView
         Group::Hand(side) => zones.in_zone(side, ZoneName::Hand),
         Group::Row { side, row } => {
             let mut cards = zones.in_row(side, row);
-            let under = zones.merged_under(&cards);
+            let under = zones.under(&cards);
             cards.extend(under);
             cards
         }
@@ -560,18 +567,24 @@ fn all_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
             all[Group::Pile { side, zone }.index()] = zones.listed(slots);
         }
     }
-    // The cards under merged permanents, each put after the permanents of its row.
-    let mut merged = Vec::new();
+    // The cards that lie under permanents, each put after the permanents of its row.
+    let mut under = Vec::new();
     for object in zones.objects() {
-        if matches!(object.zone, ZoneName::Hand | ZoneName::Exile)
+        let held = matches!(object.zone, ZoneName::Merged | ZoneName::Exile)
+            && zones.host(object).is_some();
+        if held {
+            under.push(object);
+        } else if matches!(object.zone, ZoneName::Hand | ZoneName::Exile)
             && let Some(group) = Group::of(object)
         {
             all[group.index()].push(object);
-        } else if object.zone == ZoneName::Merged {
-            merged.push(object);
         }
     }
     for object in zones.battlefield.iter().filter_map(|&slot| zones.get(slot)) {
+        if zones.host(object).is_some() {
+            under.push(object);
+            continue;
+        }
         let group = Group::Row {
             side: side_of(object),
             row: row_of(object),
@@ -584,7 +597,7 @@ fn all_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
         }
         row.push(object);
     }
-    for object in merged {
+    for object in under {
         if let Some(group) = zones.group_of(object) {
             all[group.index()].push(object);
         }
@@ -682,16 +695,16 @@ fn battlefield_row(
     ids: Option<&NameIds<'_>>,
 ) {
     let (area, y) = row_area((layout, camera), side, row);
-    // The cards under merged permanents, which `members` lists after the row's permanents. A
+    // The cards that lie under permanents, which `members` lists after the row's permanents. A
     // row with none, as nearly every row is, is laid out with no copy of its list.
-    let (merged, permanents): (Vec<&ObjectView>, Vec<&ObjectView>);
-    let cards = if cards.iter().any(|object| object.zone == ZoneName::Merged) {
-        (merged, permanents) = cards
-            .iter()
-            .partition(|object| object.zone == ZoneName::Merged);
+    let in_row = |slot: ObjectId| cards.iter().copied().find(|object| object.slot == slot);
+    let lies_under = |object: &&ObjectView| host_slot(object, in_row).is_some();
+    let (under, permanents): (Vec<&ObjectView>, Vec<&ObjectView>);
+    let cards = if cards.iter().any(lies_under) {
+        (under, permanents) = cards.iter().copied().partition(lies_under);
         &permanents[..]
     } else {
-        merged = Vec::new();
+        under = Vec::new();
         cards
     };
     let sorted;
@@ -730,7 +743,7 @@ fn battlefield_row(
             },
         );
     };
-    let beneath = Beneath { cards: merged };
+    let beneath = Beneath::new(under, cards);
     placement.rows[side_index(side)][row_index(row)] =
         lay_row((cards, &beneath), (names, ids), area, y, &rules, &mut set);
 }
