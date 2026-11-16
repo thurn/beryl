@@ -380,6 +380,18 @@ impl Show {
         self.table.rest(slot)
     }
 
+    /// Where the object in `slot` will rest once every script given so far has played: at the
+    /// end of the last script waiting or playing, or where the table shows it at rest.
+    #[must_use]
+    pub fn latest_rest(&self, slot: usize) -> Option<Pose> {
+        let last = (self.waiting.back().map(|waiting| &waiting.compiled))
+            .or(self.playing.as_ref().map(|playing| &playing.compiled));
+        match last {
+            Some(compiled) => Some(compiled.finals.cards.get(slot).copied().flatten()?.pose()),
+            None => self.table.rest(slot),
+        }
+    }
+
     /// Where the ability numbered `id` is at `now`, as `pose` gives a card's: on its track while
     /// the playing script moves it, and otherwise where it rests on the stack of the view shown.
     #[must_use]

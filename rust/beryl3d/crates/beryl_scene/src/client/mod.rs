@@ -18,7 +18,9 @@ use crate::command::{Reply, Request, SessionCommand};
 use crate::element::{Dismiss, Press};
 use crate::faces::{FaceList, Faces};
 use crate::frame::{self, ElementId, Frame, FrameBuilder, Sound, Wake};
+use crate::hud::banner::Banner;
 use crate::hud::counts::CountFloats;
+use crate::hud::log::Log;
 use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
 use crate::hud::rows::RowCounts;
@@ -96,6 +98,10 @@ pub struct Client {
     notices: NoticeFloats,
     /// The counts of the cards scrolled off each end of a battlefield row.
     row_counts: RowCounts,
+    /// The step banner and the thinking ring under the opponent's orb.
+    banner: Banner,
+    /// The game log, as the views have told it so far, and whether it is folded and open.
+    log: Log,
     /// What the pointer is doing to scroll a battlefield row.
     row_gesture: RowGesture,
     /// The screen the flat layer shows. A recording or a game is fed to the client on the game
@@ -202,6 +208,8 @@ impl Client {
             piles: PileCounts::default(),
             notices: NoticeFloats::default(),
             row_counts: RowCounts::default(),
+            banner: Banner::default(),
+            log: Log::default(),
             row_gesture: RowGesture::default(),
             screen: Screen::Game,
             gallery: GalleryState::default(),
@@ -274,6 +282,15 @@ impl Client {
                     _ => None,
                 });
                 self.prepare_pill(&update.view);
+                // The same view sent again says nothing new happened.
+                let again = self
+                    .show
+                    .latest()
+                    .is_some_and(|latest| latest.view == update.view);
+                if !again {
+                    self.log.logged.take(&update.view);
+                }
+                Banner::prepare(&mut self.layer, &update.view);
                 self.show.push_update(update);
                 // Every life total and pool the scripts to come will show is laid out now, so
                 // that a frame lays out none of them.
@@ -429,6 +446,8 @@ impl Client {
             visible,
         );
         (self.row_counts).write(&mut self.layer, self.show.table(), visible);
+        let at_rest = self.show.shown().map(|update| &update.view);
+        (self.banner).write(&mut self.layer, at_rest, table_now, self.window, visible);
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
         builder.placement_work(self.show.table().take_placed(), self.show.take_compiled());
@@ -565,6 +584,10 @@ impl Client {
                 self.show_screen();
             }
             Press::Menu(crate::manual::menus::MENU, row) => self.press_table_menu(row),
+            Press::Log => {
+                self.log.open = !self.log.open;
+                self.show_screen();
+            }
             Press::Menu(..) => {}
             Press::Dismiss(Dismiss::Menu) => {
                 if self.gallery.menu.take().is_some() {

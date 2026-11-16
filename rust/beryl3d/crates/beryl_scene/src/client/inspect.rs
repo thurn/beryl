@@ -70,6 +70,9 @@ impl Client {
             table: &self.manual.state,
             carried: None,
             lobby: &self.manual.lobby,
+            log: self.log.logged.entries(),
+            log_folded: self.log.folded,
+            log_open: self.log.open,
         };
         let element = inspector::inspector(&input);
         let place = inspector::place(&input);

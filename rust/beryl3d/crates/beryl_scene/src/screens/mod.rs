@@ -29,6 +29,7 @@ use beryl_protocol::{AgentView, PlayerView};
 use crate::element::{Element, Viewed};
 use crate::faces::FaceList;
 use crate::frame::ElementId;
+use crate::hud::log::LogEntry;
 use crate::inspect::inspector::Inspected;
 use crate::inspect::revealed::RevealedFace;
 use crate::manual::TableState;
@@ -145,6 +146,12 @@ pub struct ScreenIn<'a> {
     pub carried: Option<Subject>,
     /// The manual table's lobby (`manual::lobby`).
     pub lobby: &'a Lobby,
+    /// What has happened in the game so far, oldest first (`hud::log`).
+    pub log: &'a [LogEntry],
+    /// Whether a permanent reaches into the game log's column, which folds the log to a button.
+    pub log_folded: bool,
+    /// Whether the folded game log is open.
+    pub log_open: bool,
 }
 
 /// What the flat layer shows on `screen`.

@@ -1670,8 +1670,9 @@ buttons, icon buttons, toggles and sliders there are:
 A **float** is a small element placed at a point of the window instead of in a
 screen's layout: the turn banner, the pill above a player who is looking at
 cards, a life total and the number that floats off it, the count on a pile, the
-Revealed Cards pill, count of cards scrolled off the end of a row, and the
-inspector. An element whose style `passes` lets the pointer through, as CSS's
+Revealed Cards pill, count of cards scrolled off the end of a row, the
+inspector, the step banner and the ring under the opponent's orb while they
+think. An element whose style `passes` lets the pointer through, as CSS's
 `pointer-events: none` does, so the card under the inspector stays hovered.
 `Layer::float(id, element)` shows or removes one, and its ids are in
 `element::floats`.
@@ -1692,7 +1693,18 @@ inspector. An element whose style `passes` lets the pointer through, as CSS's
   value the scripts still to play will set (`hud::counts`), so a total changes
   as its `count` step begins without the frame laying anything out. The notices
   of `announce` steps are prepared the same way, one for each notice of each
-  script to play, keyed by its script and step (`hud::notices`).
+  script to play, keyed by its script and step (`hud::notices`). The step banner
+  ("Combat" over "Blockers declared") is prepared for each view that calls for
+  one, and shown for `hud.banner` milliseconds of the show's clock from the
+  first frame whose view at rest calls for it; the thinking ring hides while it
+  is up, as the web's does (`hud::banner`).
+
+The game log (`hud::log`) is part of the game screen, not a float: its lines are
+made in `Client::handle` as each view arrives, by a port of the web's
+`logLines`, and it is rebuilt with the screen and scrolled to its foot. While a
+permanent where the latest view will rest reaches into its column, it folds to
+an icon button at the window's top left.
+
 - **Floats are drawn whether a prompt is open or not**, after the screen and in
   order of their ids. The top element of a float is drawn on a panel, as a
   screen's top element is. A float with a press takes presses at any time.

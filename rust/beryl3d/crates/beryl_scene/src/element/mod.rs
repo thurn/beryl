@@ -85,6 +85,8 @@ pub enum Press {
     Bug(BugPress),
     /// One of the manual table's lobby controls.
     Lobby(LobbyPress),
+    /// Open the folded game log, or close it (`hud::log`).
+    Log,
 }
 
 /// What a `Press::Lobby` does (`screens::lobby`).
@@ -405,4 +407,9 @@ pub mod floats {
     pub const REVEALED: FloatId = FloatId(30);
     /// The waiting trigger the pointer carries along an order prompt's row (`Client::carry_item`).
     pub const CARRIED_ITEM: FloatId = FloatId(31);
+    /// The step banner between the opponent's orb and their permanents, such as "Combat" over
+    /// "Blockers declared" (`hud::banner`).
+    pub const STEP_BANNER: FloatId = FloatId(32);
+    /// The ring under the opponent's orb while they decide (`hud::banner`).
+    pub const THINKING: FloatId = FloatId(33);
 }

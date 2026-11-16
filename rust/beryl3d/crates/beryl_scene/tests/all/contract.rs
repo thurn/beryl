@@ -220,6 +220,9 @@ mod milestone_three {
             table: &TABLE,
             carried: None,
             lobby: &LOBBY,
+            log: &[],
+            log_folded: false,
+            log_open: false,
         }
     }
 

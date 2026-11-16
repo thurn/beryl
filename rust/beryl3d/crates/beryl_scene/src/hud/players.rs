@@ -9,14 +9,15 @@
 //!   middle of a script, and a float can show a total laid out ahead without a frame laying
 //!   anything out. The screen is rebuilt only when an update arrives, which would show the
 //!   change late. The mana pool is a float for the same reason.
-//! - While the opponent is deciding, a gold ring stands under their orb.
+//! - While the opponent is deciding, a gold ring stands under their orb: a float of its own,
+//!   hidden while the step banner is up (`hud::banner`).
 //! - From the declaration of attackers until combat damage is dealt, the combat damage a
 //!   player stands to take stands beside their orb, red when it would be lethal.
 
-use beryl_protocol::protocol::{Combat, PlayerView, Side, Status, Step};
+use beryl_protocol::protocol::{Combat, PlayerView, Side, Step};
 use glam::Vec2;
 
-use crate::data::space::hud::{INCOMING_GAP, THINKING_GAP};
+use crate::data::space::hud::INCOMING_GAP;
 use crate::element::{Align, Anchor, Element, Justify, Position, holder, text};
 use crate::screens::ScreenIn;
 use crate::table::{DESKTOP, Window};
@@ -50,7 +51,6 @@ fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
     } else {
         color::ORB_RIM
     };
-    let thinking = side == Side::Opponent && matches!(view.status, Status::Thinking);
     let life = match side {
         Side::You => view.players.you.life,
         Side::Opponent => view.players.opponent.life,
@@ -67,31 +67,9 @@ fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
         .radius(size::ORB_HEIGHT / 2.0 + size::ORB_BEZEL)
         .selected(active)
         .passes(true)
-        .children(thinking.then(thinking_ring))
         .children(incoming(view, side).map(|damage| incoming_text(damage, life)));
     element.anchor = Some(Anchor::Point(orb_centre(side, window), Vec2::new(0.5, 0.5)));
     element
-}
-
-/// The ring under the opponent's orb while they decide, the web's `Thinking` spinner held
-/// still: the flat layer draws no arcs, so the whole ring is gold.
-fn thinking_ring() -> Element {
-    let side = size::THINKING;
-    let width = size::ORB_WIDTH + 2.0 * size::ORB_BEZEL;
-    let height = size::ORB_HEIGHT + 2.0 * size::ORB_BEZEL;
-    Element::new(crate::frame::Role::Region)
-        .name("Opponent thinking")
-        .position(Position::Absolute)
-        .inset([
-            Some(height + THINKING_GAP),
-            None,
-            None,
-            Some((width - side) / 2.0),
-        ])
-        .width(side)
-        .height(side)
-        .border((color::THINKING, size::THINKING_TRACK))
-        .radius(side / 2.0)
 }
 
 /// The combat damage `damage` a player at `life` stands to take, beside their orb as the web's

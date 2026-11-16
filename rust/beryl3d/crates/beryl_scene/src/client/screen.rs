@@ -17,6 +17,7 @@ impl Client {
     /// now, and asks the host for the music it calls for if that has changed.
     pub(super) fn show_screen(&mut self) {
         self.inspector.due = true;
+        self.log.folded = self.permanent_over_log();
         let view = self.show.latest().map(|update| &update.view);
         let input = ScreenIn {
             screen: self.screen,
@@ -40,6 +41,9 @@ impl Client {
             table: &self.manual.state,
             carried: self.carried_item.map(|carry| carry.on),
             lobby: &self.manual.lobby,
+            log: self.log.logged.entries(),
+            log_folded: self.log.folded,
+            log_open: self.log.open,
         };
         let mut full = crate::prompts::faces(&input);
         full.extend(screens::sheet_face(&input));
@@ -62,6 +66,7 @@ impl Client {
         };
         let music = screens::music(self.screen, view);
         self.layer.show(shown);
+        self.layer.scroll_to_end(crate::hud::log::LIST);
         self.place_shown();
         for face in full {
             self.show.faces_mut().want_full(face);
@@ -71,6 +76,20 @@ impl Client {
             self.music = music;
             self.requests.push_back(Request::Music(music));
         }
+    }
+
+    /// Whether a permanent of the latest view, where it will rest once every script given so far
+    /// has played, reaches into the game log's column (`hud::log::reaches_column`).
+    fn permanent_over_log(&self) -> bool {
+        let Some(update) = self.show.latest() else {
+            return false;
+        };
+        let camera = self.show.table().camera();
+        (update.view.battlefield.iter()).any(|slot| {
+            self.show
+                .latest_rest(usize::from(slot.0))
+                .is_some_and(|pose| crate::hud::log::reaches_column(&camera.card_box(&pose).0))
+        })
     }
 
     /// The active screen's faces, which the host's asset workers prepare. A match's

@@ -385,6 +385,34 @@
         "size": 22,
         "line_height": 1,
         "note": "A catalog entry's words: `.stage-entry` in `ui/src/stage/choose.css`, 600 at 22 points."
+      },
+      "LOG": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 14,
+        "line_height": 1.35,
+        "note": "A line of the game log: `.game-log-list`'s 14 points at line height 1.35."
+      },
+      "LOG_TURN": {
+        "font": "OpenSans",
+        "weight": 600,
+        "size": 12,
+        "line_height": 1.35,
+        "note": "A turn's heading in the game log: `.game-log-turn`, 12 points at weight 600, in capitals."
+      },
+      "BANNER_TITLE": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 26,
+        "line_height": 1,
+        "note": "The step banner's title: `.step-banner-title`, bold 26 points, in capitals."
+      },
+      "BANNER_DETAIL": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 20.2,
+        "line_height": 1,
+        "note": "The step banner's detail: `.step-banner-detail`, 20.2 points (upright: the flat layer has no italic face)."
       }
     },
     "size": {
@@ -651,6 +679,42 @@
       "ENTRY_GAP": {
         "value": 12,
         "note": "Between one catalog entry and the next: `.stage-entries ul`'s row `gap`."
+      },
+      "LOG_WIDTH": {
+        "value": 300,
+        "note": "The game log's column: `.game-log`'s `width`."
+      },
+      "LOG_HEIGHT": {
+        "value": 272,
+        "note": "The game log's tallest list: `.game-log-list`'s `max-height`."
+      },
+      "LOG_FOLDED_HEIGHT": {
+        "value": 228,
+        "note": "The folded game log's tallest list when opened: `.game-log-folded .game-log-list`'s `max-height`."
+      },
+      "LOG_RADIUS": {
+        "value": 10,
+        "note": "The game log's corners: `.game-log-list`'s `border-radius`."
+      },
+      "LOG_PADDING_X": {
+        "value": 14,
+        "note": "The game log's padding either side: `.game-log-list`'s `padding`."
+      },
+      "LOG_PADDING_Y": {
+        "value": 10,
+        "note": "The game log's padding above and below: `.game-log-list`'s `padding`."
+      },
+      "LOG_TURN_GAP": {
+        "value": 8,
+        "note": "The room above a turn's heading in the game log: `.game-log-turn`'s `margin-top`."
+      },
+      "BANNER_WIDTH": {
+        "value": 400,
+        "note": "The step banner's shade: `.step-banner`'s `width`."
+      },
+      "BANNER_HEIGHT": {
+        "value": 80,
+        "note": "The step banner's shade: `.step-banner`'s `height`."
       }
     },
     "color": {
@@ -774,6 +838,38 @@
       "ENTRY_CHOSEN": {
         "value": "rgb(233 173 74 / 26%)",
         "note": "The face of the catalog entry chosen: `.stage-entry[aria-pressed=\"true\"]`'s `background`; its rim is `gold`."
+      },
+      "LOG": {
+        "value": "rgb(24 21 19 / 62%)",
+        "note": "The game log's face: the `background` of `.game-log-list` in `ui/src/screens/styles/table.css`."
+      },
+      "LOG_TEXT": {
+        "value": "#a39b91",
+        "note": "A line of the game log: `.game-log-list`'s `color`, `--text-dim`."
+      },
+      "LOG_LAST": {
+        "value": "#f2ece1",
+        "note": "The game log's newest line: `.game-log-entry:last-child`'s `color`, `--text`."
+      },
+      "LOG_TURN": {
+        "value": "#e9ad4a",
+        "note": "A turn's heading in the game log: `.game-log-turn`'s `color`, `--gold`."
+      },
+      "LOG_COUNTER": {
+        "value": "#ffab7c",
+        "note": "A countered spell's line in the game log: `.game-log-counter`'s `color`."
+      },
+      "BANNER": {
+        "value": "rgb(12 10 9 / 70%)",
+        "note": "The smoky shade behind the step banner: the middle stop of `.step-banner`'s gradient in `ui/src/screens/styles/step-banner.css`."
+      },
+      "BANNER_TITLE": {
+        "value": "#e2a75a",
+        "note": "The step banner's gold title: the middle stop of `.step-banner-title`'s gradient."
+      },
+      "BANNER_DETAIL": {
+        "value": "#f3ece0",
+        "note": "The step banner's detail: `.step-banner-detail`'s `color`."
       }
     },
     "mana": {

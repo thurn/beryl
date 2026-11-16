@@ -32,6 +32,22 @@ impl Layer {
     }
 }
 
+impl Layer {
+    /// Scrolls the screen's element named `name` that scrolls to the end of its content, as
+    /// far down and right as it goes. Does nothing if the screen has no such element.
+    pub fn scroll_to_end(&mut self, name: &str) {
+        fn find<'a>(node: &'a mut Node, name: &str) -> Option<&'a mut Node> {
+            if node.element.style.overflow == Overflow::Scroll && node.element.name == name {
+                return Some(node);
+            }
+            node.children.iter_mut().find_map(|child| find(child, name))
+        }
+        if let Some(node) = self.screen.as_mut().and_then(|node| find(node, name)) {
+            node.scroll = node.most_scroll();
+        }
+    }
+}
+
 impl Node {
     /// How far this node can scroll on each axis: as far as its content reaches past its box,
     /// and nowhere unless it scrolls.

@@ -1,11 +1,13 @@
 //! The game screen's furniture: the step stops about each player's orb, and the commands a
-//! press on one sends.
+//! press on one sends; and the game log, which folds to a button when a permanent reaches into
+//! its column.
 
 use beryl_protocol::StopsSetting;
-use beryl_protocol::protocol::{SessionId, Step};
+use beryl_protocol::protocol::{CardType, GameEvent, SessionId, Side, Step, ZoneName};
 use beryl_scene::command::{Request, SessionCommand};
 use beryl_scene::frame::{Frame, Role, StateBits};
-use beryl_scene::input::PointerPhase;
+use beryl_scene::input::{Input, PointerPhase};
+use beryl_scene::testing::ViewBuilder;
 
 use super::flat_layer::{centre, client, deciding, find, pointer, prompt};
 
@@ -82,4 +84,47 @@ fn untap_and_cleanup_show_an_icon_but_no_toggle() {
         .filter(|element| element.role == Role::Toggle)
         .count();
     assert_eq!(toggles, 20);
+}
+
+/// A view of `lands` lands on each side of the table, besides a creature each, whose events say
+/// the viewer gained 2 life.
+fn lands(lands: usize) -> Input {
+    let mut builder = ViewBuilder::new();
+    for side in [Side::You, Side::Opponent] {
+        for _ in 0..lands {
+            builder.card(ZoneName::Battlefield, side, "Plains").types = vec![CardType::Land];
+        }
+        builder
+            .card(ZoneName::Battlefield, side, "Serra Angel")
+            .types = vec![CardType::Creature];
+    }
+    let mut update = builder.update();
+    update.view.events = vec![GameEvent::LifeGain {
+        player: Side::You,
+        amount: 2,
+    }];
+    Input::Update(Box::new(update))
+}
+
+#[test]
+fn the_log_folds_to_a_button_when_a_permanent_enters_its_column() {
+    let mut client = client();
+    client.handle(lands(0));
+    let frame = client.frame(0);
+    assert!(has(frame, Role::Text, "You gained 2 life"));
+    assert!(!has(frame, Role::Button, "Show log"));
+
+    // A long row of lands runs from the table's left edge into the log's column.
+    client.handle(lands(14));
+    let frame = client.frame(10_000_000_000);
+    assert!(
+        !has(frame, Role::List, "Game log"),
+        "the folded log is open"
+    );
+    let at = centre(frame, find(frame, Role::Button, "Show log"));
+    client.handle(pointer(PointerPhase::Down, at));
+    client.handle(pointer(PointerPhase::Up, at));
+    let frame = client.frame(10_100_000_000);
+    assert!(has(frame, Role::Button, "Hide log"));
+    assert!(has(frame, Role::Text, "You gained 2 life"));
 }
