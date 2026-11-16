@@ -51,5 +51,12 @@ objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["
 [target.'cfg(target_vendor = "apple")'.dependencies]
 libc = "0.2.191"
 
+# Each thread's nice value on Android (setpriority and getpriority; src/threads.rs) and the
+# logcat line that reports it (__android_log_write), in place of hand-written declarations of
+# the C functions. The releases beryl_3d already links on Android.
+[target.'cfg(target_os = "android")'.dependencies]
+libc = "0.2.191"
+ndk-sys = "0.6.0"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Threading"] }

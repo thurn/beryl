@@ -5,7 +5,9 @@
 //!
 //! On Apple platforms a class is a quality-of-service class. On Windows it is a thread
 //! priority within the process's priority class, which the same four levels map onto. On
-//! Android and Linux, setting a class does nothing and no thread reports one.
+//! Android it is the thread's nice value, set with `setpriority`, using the values Android's
+//! own `Process.THREAD_PRIORITY_*` constants give (`Class::nice`). On Linux, setting a class
+//! does nothing and no thread reports one.
 
 /// A scheduling class, from the lowest of the four to the highest.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,6 +41,29 @@ impl Class {
     #[must_use]
     pub fn from_word(word: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|class| class.word() == word)
+    }
+
+    /// The nice value Android puts a thread of this class at, from Android's
+    /// `Process.THREAD_PRIORITY_*` constants: lower runs first.
+    ///
+    /// `Interactive` is `THREAD_PRIORITY_DISPLAY` (-4), the value Android gives an app's own
+    /// render thread, rather than `THREAD_PRIORITY_URGENT_DISPLAY` (-8), which Android keeps
+    /// for the system's compositor: at -4 a thread's CFS weight is already about 2.4 times
+    /// that of a search thread at 0, and the scheduler preempts a search thread when the frame
+    /// thread wakes either way.
+    #[must_use]
+    pub fn nice(self) -> i32 {
+        match self {
+            // THREAD_PRIORITY_BACKGROUND
+            Self::Utility => 10,
+            // THREAD_PRIORITY_DEFAULT
+            Self::Default => 0,
+            // Two steps above the default (THREAD_PRIORITY_MORE_FAVORABLE is one), between the
+            // default and display.
+            Self::Initiated => -2,
+            // THREAD_PRIORITY_DISPLAY
+            Self::Interactive => -4,
+        }
     }
 
     const ALL: [Self; 4] = [
@@ -161,7 +186,75 @@ mod platform {
     }
 }
 
-#[cfg(not(any(target_vendor = "apple", windows)))]
+#[cfg(target_os = "android")]
+mod platform {
+    use std::ffi::CString;
+
+    use super::Class;
+
+    #[expect(unsafe_code, reason = "setpriority")]
+    pub(super) fn set(class: Class) {
+        // SAFETY: `gettid` names the calling thread, and `setpriority` changes only its nice
+        // value and takes no pointers. It needs no permission for an app's own thread, since
+        // Android's init raises every process's nice limit to -20, but it is checked and
+        // logged in case a device refuses.
+        let (tid, result) = unsafe {
+            let tid = libc::gettid();
+            #[expect(clippy::cast_sign_loss, reason = "a thread ID is positive")]
+            let result = libc::setpriority(libc::PRIO_PROCESS, tid as libc::id_t, class.nice());
+            (tid, result)
+        };
+        let thread = std::thread::current();
+        let name = thread.name().unwrap_or("unnamed");
+        let line = if result == 0 {
+            format!(
+                "thread {tid} ({name}) is in class {} at nice {}",
+                class.word(),
+                class.nice()
+            )
+        } else {
+            format!(
+                "thread {tid} ({name}) could not be put in class {} at nice {}: {}",
+                class.word(),
+                class.nice(),
+                std::io::Error::last_os_error()
+            )
+        };
+        log(&line);
+    }
+
+    /// `getpriority` returns -1 both for an error and for nice -1, which no class has, so
+    /// neither is mistaken for a class.
+    #[expect(unsafe_code, reason = "getpriority")]
+    pub(super) fn current() -> Option<Class> {
+        // SAFETY: as in `set`; `getpriority` only reads the calling thread's nice value.
+        let nice = unsafe {
+            #[expect(clippy::cast_sign_loss, reason = "a thread ID is positive")]
+            libc::getpriority(libc::PRIO_PROCESS, libc::gettid() as libc::id_t)
+        };
+        Class::ALL.into_iter().find(|class| class.nice() == nice)
+    }
+
+    /// Writes `line` to logcat at debug level under the tag `Beryl3dThreads`, where Android
+    /// sends nothing a thread writes to standard error.
+    #[expect(unsafe_code, reason = "__android_log_write")]
+    fn log(line: &str) {
+        let Ok(text) = CString::new(line) else {
+            return;
+        };
+        // SAFETY: both strings are NUL-terminated and outlive the call, which copies them.
+        // The standard library already links liblog on Android.
+        let _ = unsafe {
+            ndk_sys::__android_log_write(
+                ndk_sys::android_LogPriority::ANDROID_LOG_DEBUG.0.cast_signed(),
+                c"Beryl3dThreads".as_ptr(),
+                text.as_ptr(),
+            )
+        };
+    }
+}
+
+#[cfg(not(any(target_vendor = "apple", windows, target_os = "android")))]
 mod platform {
     use super::Class;
 
