@@ -2,12 +2,13 @@
 //! that does not return until the test lets it, the frame loop draws a frame on every tick and
 //! the commands sent meanwhile queue up. Each reply then reaches the host's inbox, in order.
 //! And what `--agent` reports of the opponent's searches, and that the live session starts a
-//! solo manual table and sends its view back.
+//! solo manual table and sends its view back, or opens one in its lobby and starts it from there.
 
 use std::sync::mpsc::{Receiver, channel};
 
 use beryl_3d::session::{self, Session};
 use beryl_host::{Class, Draw, FrameLoop, Inbox, Shown, Ticks};
+use beryl_protocol::ipc::{LobbyChange, LobbyUpdate};
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::frame::Frame;
 use beryl_scene::input::{Input, Lifecycle};
@@ -145,5 +146,61 @@ fn the_live_session_starts_a_solo_table_and_sends_its_view() {
             _ => {}
         }
     }
+    commands.close();
+}
+
+/// Sends `change` to the session thread and returns the lobby the table sends back, after the
+/// reply that says the table took the change.
+fn lobby_after(
+    commands: &session::Commands,
+    inbox: &Receiver<Input>,
+    change: LobbyChange,
+) -> LobbyUpdate {
+    commands.send(SessionCommand::TableLobby(change));
+    let (mut lobby, mut replied) = (None, false);
+    while lobby.is_none() || !replied {
+        match inbox.recv().expect("the session thread answers") {
+            Input::Lobby(update) => lobby = Some(*update),
+            Input::Reply(Reply::TableLobby(result)) => {
+                result.expect("the table takes the change");
+                replied = true;
+            }
+            _ => {}
+        }
+    }
+    lobby.expect("the table sent its lobby")
+}
+
+#[test]
+fn the_live_session_opens_a_solo_lobby_loads_a_deck_and_starts_the_table() {
+    let (sender, inbox) = channel();
+    let commands = session::spawn(
+        Class::Utility,
+        {
+            let inbox = Inbox::new(sender.clone(), || true);
+            move || session::Live::new(None, inbox)
+        },
+        Inbox::new(sender, || true),
+    );
+    let opened = lobby_after(&commands, &inbox, LobbyChange::Solo);
+    let view = opened.view.expect("a new table is in its lobby");
+    assert!(!view.can_start, "a table with no deck cannot start");
+
+    let deck = beryl_scene::manual::solo_request().deck;
+    let loaded = lobby_after(
+        &commands,
+        &inbox,
+        LobbyChange::LoadDeck {
+            main: deck.main,
+            side: deck.side,
+        },
+    );
+    let view = loaded
+        .view
+        .expect("a table with a deck is still in its lobby");
+    assert!(view.seats[0].loaded && view.can_start);
+
+    let started = lobby_after(&commands, &inbox, LobbyChange::Start);
+    assert_eq!(started.view, None, "a started table has left its lobby");
     commands.close();
 }

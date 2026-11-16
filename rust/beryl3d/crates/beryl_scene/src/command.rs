@@ -3,7 +3,9 @@
 
 use std::path::PathBuf;
 
-use beryl_protocol::ipc::{ChooseRequest, TableActReply, TableRefused, TableSoloRequest};
+use beryl_protocol::ipc::{
+    ChooseRequest, LobbyChange, LobbyUpdate, TableActReply, TableRefused, TableSoloRequest,
+};
 use beryl_protocol::prompt::{ClickReply, ClickRequest};
 use beryl_protocol::protocol::{Side, TableAction};
 use beryl_protocol::{DecisionId, SessionError, SessionId, StartRequest, StopsSetting};
@@ -33,6 +35,9 @@ pub enum SessionCommand {
     TableAct(TableAction),
     /// Close the manual table (`TableConnections::leave`).
     TableLeave,
+    /// Open a solo table's lobby, or change the lobby of the table open now
+    /// (`TableConnections::lobby`).
+    TableLobby(LobbyChange),
 }
 
 /// The session's answer to a `SessionCommand`. `Sessions::click` returns the prompt's next
@@ -47,6 +52,10 @@ pub enum Reply {
     TableAct(TableActReply),
     /// Whether the table closed, or the reason it gave for not closing.
     TableLeave(Result<(), String>),
+    /// The lobby asked for, which only `LobbyChange::View` answers with, or why the table
+    /// refused the change. A change's new lobby comes back as `Input::Lobby`. Boxed because a
+    /// lobby is far larger than every other reply.
+    TableLobby(Result<Option<Box<LobbyUpdate>>, TableRefused>),
 }
 
 /// What the client asks of the platform.

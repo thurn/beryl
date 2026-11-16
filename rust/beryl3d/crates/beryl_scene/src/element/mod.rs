@@ -80,6 +80,29 @@ pub enum Press {
     Command(u16),
     /// One of the bug report's controls.
     Bug(BugPress),
+    /// One of the manual table's lobby controls.
+    Lobby(LobbyPress),
+}
+
+/// What a `Press::Lobby` does (`screens::lobby`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LobbyPress {
+    /// Open a solo table's lobby, from the start screen.
+    Solo,
+    /// Load the sample deck ('Change').
+    Change,
+    /// Unload the loaded deck.
+    Unload,
+    /// Mark the guest ready, or no longer ready.
+    Ready,
+    /// Turn the assist at this index of `manual::lobby::ASSISTS` on or off.
+    Assist(u8),
+    /// Ask for the starting life and hand size the host's fields hold.
+    SaveSettings,
+    /// Start the table's game.
+    Start,
+    /// Leave the table and go back to the start screen.
+    Leave,
 }
 
 /// What a `Press::Bug` does (`screens::bug_report`).

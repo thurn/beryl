@@ -2,10 +2,11 @@
 //! an empty view, as the stress boards are made (`crate::stress`). Each is named
 //! `screen/<name>`, and `data/beryl3d/screens.json` lists them for the parity list. The manual
 //! table's is a view of a solo table built by hand, with a few cards in each zone, which opens
-//! the table screen itself.
+//! the table screen itself. The lobby's is a solo table's lobby built by hand, with the sample
+//! deck loaded.
 
 use beryl_protocol::card_records::CardRecords;
-use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, LIST_AGENTS};
+use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, LIST_AGENTS, TABLE_LOBBY};
 use beryl_protocol::protocol::PlayerState;
 use beryl_protocol::script::Reset;
 use beryl_protocol::{AgentView, GameUpdate, PlayerView, SessionId};
@@ -16,8 +17,9 @@ use beryl_scene::testing;
 pub const PREFIX: &str = "screen/";
 
 /// The name of every screen recording.
-pub const NAMES: [&str; 6] = [
+pub const NAMES: [&str; 7] = [
     "screen/start",
+    "screen/lobby",
     "screen/table",
     "screen/gallery",
     "screen/testing",
@@ -55,7 +57,8 @@ fn agents() -> Vec<AgentView> {
 
 /// The messages of the screen recording `name`, or none for any other name: the records of no
 /// cards, the agents a person may play, the event that opens the screen or sheet (over the
-/// start screen), and one view: empty, or the hand-built table's.
+/// start screen), the lobby's state for the lobby, and one view: empty, or the hand-built
+/// table's.
 #[must_use]
 pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
     if !NAMES.contains(&name) {
@@ -100,6 +103,12 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         event: OPEN.to_owned(),
         payload: opened.into(),
     }));
+    if opened == "lobby" {
+        messages.push(FixtureMessage::Event {
+            event: TABLE_LOBBY.to_owned(),
+            payload: serde_json::to_value(testing::lobby(true)).ok()?,
+        });
+    }
     messages.push(FixtureMessage::game_update(&GameUpdate {
         session: SessionId(1),
         view,

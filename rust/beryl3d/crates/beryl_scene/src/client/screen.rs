@@ -39,6 +39,7 @@ impl Client {
             revealed: &self.viewing.revealed,
             table_menu: self.manual.menu.as_ref(),
             carried: self.carried_item.map(|carry| carry.on),
+            lobby: &self.manual.lobby,
         };
         let mut full = crate::prompts::faces(&input);
         full.extend(screens::sheet_face(&input));

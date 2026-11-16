@@ -3,6 +3,7 @@
 //! (docs/beryl-3d.md, "Hosts" and "Determinism").
 
 use beryl_protocol::card_records::CardRecords;
+use beryl_protocol::ipc::LobbyUpdate;
 use beryl_protocol::{AgentView, GameUpdate};
 use glam::Vec2;
 
@@ -48,6 +49,9 @@ pub enum Input {
     Tier(Tier),
     /// The session's answer to a `SessionCommand`.
     Reply(Reply),
+    /// The manual table's lobby changed (`TableEvent::Lobby`): its new state, or no lobby once
+    /// the table's game has started. Boxed because it is far larger than most inputs.
+    Lobby(Box<LobbyUpdate>),
     /// The player's saved settings, which the host hands over at startup.
     Settings(Settings),
     /// The agents a person may play, in the order they are offered (`beryl_session::agents`).

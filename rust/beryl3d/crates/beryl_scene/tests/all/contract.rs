@@ -187,6 +187,7 @@ mod milestone_three {
 
     static FIELDS: Fields = Fields::new();
     static BUG: BugForm = BugForm::new();
+    static LOBBY: beryl_scene::manual::lobby::Lobby = beryl_scene::manual::lobby::Lobby::new();
 
     use super::super::flat_layer::{client, deciding, decision, prompt};
 
@@ -216,6 +217,7 @@ mod milestone_three {
             revealed: &[],
             table_menu: None,
             carried: None,
+            lobby: &LOBBY,
         }
     }
 

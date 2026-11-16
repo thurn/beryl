@@ -30,7 +30,7 @@ fn every_recording_the_screens_file_names_is_listed() {
         .map(|(name, _)| name)
         .collect();
     let recordings = listed_recordings();
-    assert_eq!(recordings.len(), 9);
+    assert_eq!(recordings.len(), 10);
     for recording in recordings {
         assert!(
             names.contains(&recording),
@@ -45,4 +45,7 @@ fn a_screen_recording_puts_the_client_on_its_screen() {
     assert!(tree.contains("region \"start\""), "{tree}");
     let tree = Page::fixture("screen/settings", Side::You, Layout::Desktop).tree();
     assert!(tree.contains("region \"settings\""), "{tree}");
+    let tree = Page::fixture("screen/lobby", Side::You, Layout::Desktop).tree();
+    assert!(tree.contains("region \"lobby\""), "{tree}");
+    assert!(tree.contains("Deck loaded"), "{tree}");
 }

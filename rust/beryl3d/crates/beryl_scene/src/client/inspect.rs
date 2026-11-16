@@ -69,6 +69,7 @@ impl Client {
             revealed: &self.viewing.revealed,
             table_menu: self.manual.menu.as_ref(),
             carried: None,
+            lobby: &self.manual.lobby,
         };
         let element = inspector::inspector(&input);
         let place = inspector::place(&input);

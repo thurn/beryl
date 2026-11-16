@@ -277,3 +277,28 @@ pub fn table(view: &PlayerView) -> TableView {
         proposal_marks: None,
     }
 }
+
+/// A solo table's lobby built by hand, with the 40-card sample deck loaded if `loaded`, and the
+/// turn upkeep assist on.
+///
+/// # Panics
+///
+/// Never: the lobby is built from values a lobby holds.
+#[must_use]
+pub fn lobby(loaded: bool) -> beryl_protocol::ipc::LobbyUpdate {
+    let (main, side) = if loaded { (40, 8) } else { (0, 0) };
+    serde_json::from_value(serde_json::json!({
+        "view": {
+            "you": 0,
+            "seats": [{
+                "seat": 0, "name": "You", "loaded": loaded, "mainCount": main,
+                "sideCount": side, "ready": false, "wins": 0,
+            }],
+            "main": [], "side": [], "unknown": [],
+            "assists": ["turn_upkeep"],
+            "settings": { "startingLife": 20, "startingHandSize": 7, "first": null },
+            "gameNumber": 1, "lastWinner": null, "invite": null, "canStart": loaded,
+        }
+    }))
+    .expect("a hand-built lobby")
+}

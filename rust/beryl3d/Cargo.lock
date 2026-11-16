@@ -176,6 +176,7 @@ dependencies = [
  "beryl_cards",
  "beryl_host",
  "beryl_inspect",
+ "beryl_protocol",
  "beryl_render",
  "beryl_scene",
  "beryl_session",

@@ -1,8 +1,8 @@
-//! The manual table's side of the client (docs/manual-multiplayer.md): starting a solo table
-//! from the start screen, the context menu a right click or a touch held still opens on what
-//! the pointer is on, the table's keys, and leaving the table. Each command reaches the session
-//! as `SessionCommand::TableAct`, and the table's next view comes back as `Input::Update`, as
-//! a game's does.
+//! The manual table's side of the client (docs/manual-multiplayer.md): the lobby a solo table
+//! opens in (`lobby`), the context menu a right click or a touch held still opens on what the
+//! pointer is on, the table's keys, and leaving the table. Each command reaches the session as
+//! `SessionCommand::TableAct`, and the table's next view comes back as `Input::Update`, as a
+//! game's does.
 
 use beryl_protocol::GameUpdate;
 use glam::Vec2;
@@ -11,6 +11,7 @@ use super::{Client, Platform};
 use crate::command::SessionCommand;
 use crate::data::space::pointer::{DRAG_THRESHOLD_POINTS, LONG_PRESS_MS};
 use crate::input::{Button, Pointer, PointerKind, PointerPhase};
+use crate::manual::lobby::Lobby;
 use crate::manual::menus::{self, Act, OpenMenu};
 use crate::manual::{self, Target, commands};
 use crate::screens::Screen;
@@ -19,12 +20,13 @@ use crate::widgets::BACK;
 /// Nanoseconds in a millisecond, the unit of `Client::frame`'s clock.
 const MILLISECOND: u64 = 1_000_000;
 
-/// What the client keeps of the manual table: the open context menu, if any, and the touch
-/// that will open one if it stays down and still.
+/// What the client keeps of the manual table: the open context menu, if any, the touch that
+/// will open one if it stays down and still, and the lobby.
 #[derive(Debug, Default)]
 pub(super) struct Manual {
     pub(super) menu: Option<OpenMenu>,
     hold: Option<Hold>,
+    pub(super) lobby: Lobby,
 }
 
 /// A touch that went down on the table and has not moved `DRAG_THRESHOLD_POINTS` from where it
@@ -51,17 +53,11 @@ impl Manual {
 }
 
 impl Client {
-    /// The start screen's 'Solo table': starts a solo table with the sample deck and shows the
-    /// table, where its first view arrives.
-    pub(super) fn start_table(&mut self) {
-        (self.commands).push_back(SessionCommand::TableSolo(manual::solo_request()));
-        self.show_table();
-    }
-
     /// An update arrived: it keeps the session it came from, which stop and concede commands
     /// name. A view of a manual table shows the table screen, from the start screen or a game,
     /// and closes a context menu opened on the view before it, whose rows name that view's
-    /// cards.
+    /// cards. In the lobby it stays there: a table sends its view while it is still in its
+    /// lobby, and the lobby says when its game has started (`take_lobby`).
     pub(super) fn take_session(&mut self, update: &GameUpdate) {
         self.session = Some(update.session);
         if update.view.table.is_none() {
@@ -218,21 +214,17 @@ impl Client {
             Act::Actions(actions) => {
                 (self.commands).extend(actions.into_iter().map(SessionCommand::TableAct));
             }
-            Act::Leave => {
-                self.manual.menu = None;
-                self.commands.push_back(SessionCommand::TableLeave);
-                self.screen = Screen::Start;
-                self.sheet = None;
-                self.show_screen();
-            }
+            Act::Leave => self.leave_table(),
             Act::Nothing => {}
         }
     }
 
-    /// Shows the table screen.
-    fn show_table(&mut self) {
-        self.first_view_opens = None;
-        self.screen = Screen::Table;
+    /// Leaves the table, from the table or its lobby, and shows the start screen.
+    pub(super) fn leave_table(&mut self) {
+        self.manual.menu = None;
+        self.manual.lobby = Lobby::new();
+        self.commands.push_back(SessionCommand::TableLeave);
+        self.screen = Screen::Start;
         self.sheet = None;
         self.show_screen();
     }

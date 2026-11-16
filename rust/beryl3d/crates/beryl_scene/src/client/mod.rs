@@ -36,6 +36,7 @@ use crate::widgets::Fields;
 
 mod input;
 mod inspect;
+mod lobby;
 mod manual;
 mod own;
 mod screen;
@@ -305,6 +306,8 @@ impl Client {
                 self.prepare_counts();
                 self.show_screen();
             }
+            Input::Lobby(update) => self.take_lobby(*update),
+            Input::Reply(Reply::TableLobby(Err(refused))) => self.lobby_refused(&refused),
             Input::Settings(settings) => {
                 self.settings = settings;
                 self.show_screen();
@@ -502,7 +505,6 @@ impl Client {
         match *press {
             Press::Button(button) => self.click(Click::Button { button }),
             Press::Prompt(click) => self.click(click),
-            Press::Open(Screen::Table) => self.start_table(),
             Press::Open(screen) => {
                 self.first_view_opens = None;
                 self.screen = screen;
@@ -569,6 +571,7 @@ impl Client {
                 self.close_table_menu();
             }
             Press::Command(index) => self.table_key(index),
+            Press::Lobby(press) => self.press_lobby(press),
         }
     }
 

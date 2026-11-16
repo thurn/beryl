@@ -7,7 +7,7 @@ use beryl_protocol::AgentView;
 use beryl_protocol::protocol::Status;
 
 use super::{Screen, ScreenIn, Sheet};
-use crate::element::{Align, Element, Justify, Position, Press, column, row, text};
+use crate::element::{Align, Element, Justify, LobbyPress, Position, Press, column, row, text};
 use crate::frame::Role;
 use crate::text::TypeStyle;
 use crate::text::fonts::Font;
@@ -26,10 +26,10 @@ const CHEATING: [&str; 2] = ["mcts-omniscient-quick", "pimc18-omniscient-30m-anc
 const DEFAULT_AGENT: &str = "mcts-hidden";
 
 /// The panel's width and padding (`.start-panel`).
-const PANEL_WIDTH: f32 = 620.0;
-const PANEL_PADDING: [f32; 4] = [28.0, 36.0, 32.0, 36.0];
-const PANEL_GAP: f32 = 18.0;
-const PANEL_RADIUS: f32 = 12.0;
+pub(super) const PANEL_WIDTH: f32 = 620.0;
+pub(super) const PANEL_PADDING: [f32; 4] = [28.0, 36.0, 32.0, 36.0];
+pub(super) const PANEL_GAP: f32 = 18.0;
+pub(super) const PANEL_RADIUS: f32 = 12.0;
 
 /// The height of everything in the window but the opponents' rows: the panel's other contents,
 /// its padding and gaps, and a margin above and below it.
@@ -49,7 +49,7 @@ const RADIO: f32 = 16.0;
 const CHECKBOX: f32 = 18.0;
 
 /// `.start-title`: bold 38-point serif.
-const TITLE: TypeStyle = TypeStyle {
+pub(super) const TITLE: TypeStyle = TypeStyle {
     font: Font::CrimsonPro,
     weight: 700,
     size: 38.0,
@@ -65,7 +65,7 @@ const SUBTITLE: TypeStyle = TypeStyle {
 };
 
 /// `.start-agents legend`, `.start-seed` and `.start-fair`: semibold 15-point sans.
-const LABEL: TypeStyle = TypeStyle {
+pub(super) const LABEL: TypeStyle = TypeStyle {
     font: Font::OpenSans,
     weight: 600,
     size: 15.0,
@@ -193,7 +193,7 @@ pub fn start(input: &ScreenIn) -> Element {
         .child(list("Opponent", rows).gap(4.0).max_height(room));
     let seed_row = seed_row(&seed_state, seed_ok);
     let buttons = buttons(going_on, form.confirming, startable);
-    let solo = button("Solo table").on_press(Press::Open(Screen::Table));
+    let solo = button("Solo table").on_press(Press::Lobby(LobbyPress::Solo));
     let export = small(button("Export Bug Reports")).on_press(Press::ExportBugs);
     let export_tip = tooltip(
         "Includes screenshots, replays, and logs",
@@ -360,6 +360,12 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool) -> Element {
 
 /// The "Fair deal" box (`.start-fair`): a checkbox and its label, which a press turns on or off.
 fn fair_box(on: bool) -> Element {
+    checkbox("Fair deal", on, Press::FairDeal)
+}
+
+/// A checkbox labelled `label`, ticked if `on`, which means `press` when pressed: the start
+/// screen's "Fair deal" box and the lobby's assists.
+pub(super) fn checkbox(label: &str, on: bool, press: Press) -> Element {
     let check = row()
         .name("checkbox")
         .width(CHECKBOX)
@@ -368,15 +374,24 @@ fn fair_box(on: bool) -> Element {
         .border((color::GOLD, size::BORDER))
         .align_items(Align::Center)
         .justify_content(Justify::Center)
-        .children(on.then(|| text("✓").style(type_style::MENU).color(color::GOLD)));
+        // No bundled font has a check mark, so a ticked box is filled with a gold square, as the
+        // chosen opponent's radio button is filled with a dot.
+        .children(on.then(|| {
+            row()
+                .name("tick")
+                .width(CHECKBOX / 2.0)
+                .height(CHECKBOX / 2.0)
+                .radius(1.5)
+                .background(color::GOLD)
+        }));
     Element::new(Role::Toggle)
-        .name("Fair deal")
+        .name(label)
         .selected(on)
         .gap(10.0)
         .align_items(Align::Center)
-        .on_press(Press::FairDeal)
+        .on_press(press)
         .child(check)
-        .child(text("Fair deal").style(LABEL).color(color::TEXT_DIM))
+        .child(text(label).style(LABEL).color(color::TEXT_DIM))
 }
 
 /// `button` at the web's small size (`button-small`): shorter, with smaller type.

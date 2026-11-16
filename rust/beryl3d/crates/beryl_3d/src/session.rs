@@ -15,11 +15,13 @@ use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
 
 use beryl_host::{Class, Inbox};
+use beryl_protocol::ipc::TableLobbyRequest;
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::input::Input;
 use beryl_session::ai::AgentMove;
 use beryl_session::{Seat, Sessions, StartGame, StopsSetting};
 use beryl_shell::Dirs;
+use beryl_table_session::TableEvent;
 use beryl_table_session::connections::TableConnections;
 
 use crate::bugs::Job;
@@ -159,14 +161,20 @@ impl Live {
             None => Sessions::new(None, emit),
         };
         let table_views = inbox.clone();
-        // The table's events are its lobby's and its link's, which no screen shows yet.
+        let lobbies = inbox.clone();
+        // Of the table's events only its lobby's reach the client: its link's belong to hosted
+        // and joined tables, which Beryl 3D does not open yet.
         let tables = TableConnections::new(
             sessions.session_ids(),
             data,
             move |update| {
                 table_views.send(Input::Update(Box::new(update)));
             },
-            |_| {},
+            move |event| {
+                if let TableEvent::Lobby(update) = event {
+                    lobbies.send(Input::Lobby(Box::new(update)));
+                }
+            },
         );
         Self {
             sessions,
@@ -285,6 +293,10 @@ impl Session for Live {
             SessionCommand::TableAct(action) => Reply::TableAct(self.tables.act(action)),
             SessionCommand::TableLeave => {
                 Reply::TableLeave(self.tables.leave().map_err(|error| error.reason))
+            }
+            SessionCommand::TableLobby(change) => {
+                let lobby = self.tables.lobby(TableLobbyRequest { change });
+                Reply::TableLobby(lobby.map(|lobby| lobby.map(Box::new)))
             }
         }
     }

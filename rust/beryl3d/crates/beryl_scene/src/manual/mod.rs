@@ -4,6 +4,7 @@
 //! (`target_at`), which a menu or a key acts on.
 
 pub mod commands;
+pub mod lobby;
 pub mod menus;
 
 use beryl_protocol::PlayerView;
@@ -105,9 +106,8 @@ pub fn target_at(frame: &Frame, point: Vec2) -> Target {
     }
 }
 
-/// The request that starts a solo table with the sample WU Control deck, as the web's solo
-/// table first did. (The web now prepares a solo table in a lobby, which Beryl 3D has no
-/// screen for yet.)
+/// The request that starts a solo table with the sample WU Control deck, which is also the
+/// deck the lobby's 'Change' loads.
 ///
 /// # Panics
 ///

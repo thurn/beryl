@@ -557,6 +557,9 @@ impl Page {
         for press in self.recording.opens() {
             self.client.press(&press);
         }
+        for lobby in self.recording.lobbies() {
+            self.give(Input::Lobby(Box::new(lobby)));
+        }
         if self.client.showing_gallery() {
             let ready: Vec<_> = self.client.faces().all_ready().collect();
             for asset in ready {

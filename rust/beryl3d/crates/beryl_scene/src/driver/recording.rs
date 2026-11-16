@@ -12,7 +12,7 @@ use std::sync::Arc;
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::{
-    self, CancelRequest, ChooseRequest, ConcedeRequest, FixtureMessage, PassOnRequest,
+    self, CancelRequest, ChooseRequest, ConcedeRequest, FixtureMessage, LobbyUpdate, PassOnRequest,
     SetStopsRequest, UndoRequest,
 };
 use beryl_protocol::prompt::{Click, ClickReply};
@@ -115,6 +115,20 @@ impl Recording {
             }
             _ => None,
         })
+    }
+
+    /// The lobbies its `table-lobby` events hold, in order: a screen recording's lobby, built
+    /// by hand.
+    #[must_use]
+    pub fn lobbies(&self) -> Vec<LobbyUpdate> {
+        (self.0.iter())
+            .filter_map(|message| match message {
+                FixtureMessage::Event { event, payload } if event == ipc::TABLE_LOBBY => {
+                    LobbyUpdate::deserialize(payload).ok()
+                }
+                _ => None,
+            })
+            .collect()
     }
 
     /// The presses that its `OPEN` events stand for, in order.
@@ -309,5 +323,11 @@ fn wire(command: &SessionCommand) -> (&'static str, Option<Value>) {
             }),
         ),
         SessionCommand::TableLeave => (ipc::TABLE_LEAVE, None),
+        SessionCommand::TableLobby(change) => (
+            ipc::TABLE_LOBBY_COMMAND,
+            value(&ipc::TableLobbyRequest {
+                change: change.clone(),
+            }),
+        ),
     }
 }

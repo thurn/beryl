@@ -1,6 +1,8 @@
 //! Commands for opening and configuring linked manual tables.
 
-use beryl_table::state::{Assist, LobbySettings, Seat};
+use beryl_table::state::Seat;
+// The assists and settings a lobby names, for clients that do not depend on beryl_table.
+pub use beryl_table::state::{Assist, LobbySettings};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -126,7 +128,7 @@ pub struct TableLobbyRequest {
     pub change: LobbyChange,
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(
     tag = "kind",
     rename_all = "snake_case",

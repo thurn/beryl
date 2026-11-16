@@ -8,6 +8,7 @@
     { "name": "bug report", "screen": "bug-report", "recording": "screen/bug-report", "built": false },
     { "name": "gallery", "screen": "gallery", "recording": "screen/gallery", "built": true },
     { "name": "testing", "screen": "testing", "recording": "screen/testing", "built": true },
+    { "name": "lobby", "screen": "lobby", "recording": "screen/lobby", "built": true },
     { "name": "manual table", "screen": "table", "recording": "screen/table", "built": true }
   ]
 }

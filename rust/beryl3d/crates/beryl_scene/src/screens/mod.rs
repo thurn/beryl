@@ -6,6 +6,7 @@ mod bug_report;
 mod gallery;
 mod game;
 mod game_over;
+mod lobby;
 mod opening;
 mod settings;
 mod start;
@@ -30,6 +31,7 @@ use crate::faces::FaceList;
 use crate::frame::ElementId;
 use crate::inspect::inspector::Inspected;
 use crate::inspect::revealed::RevealedFace;
+use crate::manual::lobby::Lobby;
 use crate::manual::menus::OpenMenu;
 use crate::settings::Settings;
 use crate::table::Window;
@@ -42,6 +44,9 @@ pub enum Screen {
     Start,
     /// A game, from its opening hand to its end.
     Game,
+    /// The manual table's lobby, where a table's decks, assists and settings are chosen
+    /// before a game.
+    Lobby,
     /// The manual table, where both players move cards by hand.
     Table,
     /// The card gallery.
@@ -51,9 +56,10 @@ pub enum Screen {
 }
 
 impl Screen {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Start,
         Self::Game,
+        Self::Lobby,
         Self::Table,
         Self::Gallery,
         Self::Testing,
@@ -65,6 +71,7 @@ impl Screen {
         match self {
             Self::Start => "start",
             Self::Game => "game",
+            Self::Lobby => "lobby",
             Self::Table => "table",
             Self::Gallery => "gallery",
             Self::Testing => "testing",
@@ -135,6 +142,8 @@ pub struct ScreenIn<'a> {
     /// The item of an order prompt's row that the pointer carries along it, which a float draws
     /// in its place (`Client::carry_item`).
     pub carried: Option<Subject>,
+    /// The manual table's lobby (`manual::lobby`).
+    pub lobby: &'a Lobby,
 }
 
 /// What the flat layer shows on `screen`.
@@ -143,6 +152,7 @@ pub fn screen(screen: Screen, input: &ScreenIn) -> Element {
     match screen {
         Screen::Start => start::start(input),
         Screen::Game => game::game(input),
+        Screen::Lobby => lobby::lobby(input),
         Screen::Table => table::table(input),
         Screen::Gallery => gallery::gallery(input),
         Screen::Testing => testing::testing(input),
@@ -180,7 +190,7 @@ pub enum Music {
 pub fn music(screen: Screen, view: Option<&PlayerView>) -> Option<Music> {
     Some(match screen {
         Screen::Gallery => return None,
-        Screen::Start | Screen::Table | Screen::Testing => Music::Menu,
+        Screen::Start | Screen::Lobby | Screen::Table | Screen::Testing => Music::Menu,
         Screen::Game => match view.map(|view| &view.status) {
             Some(Status::Over {
                 outcome:

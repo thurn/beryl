@@ -23,6 +23,7 @@ mod game_over;
 mod hud;
 mod inspect;
 mod light;
+mod lobby;
 mod manual;
 mod motion;
 mod notices;
