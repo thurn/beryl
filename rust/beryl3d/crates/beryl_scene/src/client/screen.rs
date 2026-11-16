@@ -117,6 +117,21 @@ impl Client {
         self.screen == Screen::Gallery
     }
 
+    /// How many glyphs the flat layer's text asked for that no atlas page holds yet
+    /// (`Glyphs::missing`).
+    #[must_use]
+    pub fn missing_glyphs(&self) -> usize {
+        self.layer.glyphs().missing()
+    }
+
+    /// The host made its face arrays anew, so that the full-size layers the match's faces were
+    /// given are empty: the match's faces forget them and are asked for again when read, as
+    /// after low memory. Their board-size layers stay, since the host uploads every board-size
+    /// face again into the layer numbered as its `FaceId`.
+    pub fn face_arrays_made(&mut self) {
+        self.show.faces_mut().low_memory();
+    }
+
     /// Records where the host uploaded each face, glyph or icon the client can draw.
     pub(super) fn asset_ready(&mut self, asset: AssetReady) {
         match asset {

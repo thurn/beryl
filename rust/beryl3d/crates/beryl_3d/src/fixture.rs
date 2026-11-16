@@ -4,6 +4,9 @@
 //! it, and a command is answered from the recording's responses. Nothing here calls the
 //! session, so the frame thread can do it all: it is a lookup in memory.
 //!
+//! The recording's card records (its `card_records` answer) are given to the client before its
+//! first views, so that the host's asset workers prepare its faces as in a live game.
+//!
 //! A debug build on the desktop reads the recording from the recordings pack. A phone has no
 //! pack and no engine to build one, so `just b3d ios-smoke` and `android-smoke` write the
 //! recording to a file on the Mac (`beryl3d --fixture <name> --write-fixture <path>`) and copy
@@ -16,6 +19,7 @@ use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::driver::{REPLY_DELAY, Recording, Responses, plays_on};
 use beryl_scene::frame::Wake;
 use beryl_session::GameUpdate;
+use beryl_session::card_records::CardRecords;
 use beryl_session::ipc::FixtureMessage;
 #[cfg(feature = "tools")]
 use {
@@ -26,6 +30,8 @@ use {
 /// A recording being replayed.
 pub struct Fixture {
     views: Vec<GameUpdate>,
+    /// The recording's card records, until they are given (`cards`).
+    cards: Option<CardRecords>,
     responses: Responses,
     /// How many views have been given.
     released: usize,
@@ -61,10 +67,17 @@ impl Fixture {
     fn replaying(recording: &Recording) -> Result<Self, String> {
         Ok(Self {
             views: recording.views()?,
+            cards: recording.card_records()?,
             responses: Responses::new(recording),
             released: 0,
             due: None,
         })
+    }
+
+    /// The recording's card records, the first time this is asked, for the client before the
+    /// first views.
+    pub fn cards(&mut self) -> Option<CardRecords> {
+        self.cards.take()
     }
 
     /// Whether every view has been given and the table rests in the last: the recording's last

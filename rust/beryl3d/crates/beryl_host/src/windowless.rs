@@ -12,8 +12,8 @@ use beryl_scene::Client;
 use beryl_scene::frame::Frame;
 use beryl_scene::input::{Input, Insets, Size};
 
-use crate::assets::Glyphs;
-use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Sleep, Ticks};
+use crate::assets::{Faces, Glyphs, Scans};
+use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Sleep, Ticks, When};
 use crate::inbox::Inbox;
 
 /// How the windowless host draws.
@@ -117,7 +117,14 @@ impl Windowless {
         });
         // The host waits on its own channel, so a nudge down it wakes the loop.
         let wake = Inbox::new(self.sender.clone(), || true);
+        let faces = Faces::start(&Scans::app(), beryl_art::SCRYFALL, {
+            let wake = wake.clone();
+            move || {
+                wake.send(Input::Nudge);
+            }
+        });
         let mut screen = Offscreen {
+            faces,
             renderer,
             target,
             slow_gpu: options.slow_gpu,
@@ -222,6 +229,7 @@ struct Offscreen {
     target: Target,
     slow_gpu: Duration,
     glyphs: Glyphs,
+    faces: Faces,
 }
 
 impl Draw for Offscreen {
@@ -241,7 +249,8 @@ impl Draw for Offscreen {
         Some(self.renderer.read_back(&self.target))
     }
 
-    fn assets(&mut self, client: &mut Client) {
+    fn assets(&mut self, client: &mut Client, when: When) {
         self.glyphs.deliver(client, &mut self.renderer);
+        self.faces.deliver(client, &mut self.renderer, when);
     }
 }

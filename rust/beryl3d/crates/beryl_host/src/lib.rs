@@ -26,15 +26,16 @@ pub mod rate;
 mod threads;
 mod windowless;
 
+pub use assets::{Faces, Scans};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use desktop::{Desktop, Options, WindowMode, is_fullscreen_key};
 #[cfg(feature = "drive")]
 pub use drive::Drive;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use events::{LINE_POINTS, Translator, modifiers_from};
-pub use frames::{Draw, Feed, FrameLoop, NoFeed, Opened, Shown, Sleep, Ticked, Ticks};
+pub use frames::{Draw, Feed, FrameLoop, NoFeed, Opened, Shown, Sleep, Ticked, Ticks, When};
 #[cfg(feature = "headless")]
-pub use headless::{Headless, Scans};
+pub use headless::Headless;
 pub use inbox::Inbox;
 pub use phone::{Phone, Wakeup};
 pub use threads::{

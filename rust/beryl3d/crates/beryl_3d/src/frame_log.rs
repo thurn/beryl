@@ -146,6 +146,15 @@ pub struct Summary {
     /// after it place the whole table, so that cards jumped to their places instead of moving.
     #[serde(default)]
     pub unplaced: usize,
+    /// As of the last frame, how many named face-up cards were drawn blank because their face
+    /// had no layer (`Frame::faceless_cards`), and how many glyphs the text asked for that no
+    /// atlas page held (`Client::missing_glyphs`). A host that delivers its card faces and
+    /// glyphs leaves both at zero soon after a game's opening hand, which `just b3d stand-in`
+    /// checks.
+    #[serde(default)]
+    pub faceless_cards: usize,
+    #[serde(default)]
+    pub missing_glyphs: usize,
     /// The rate the host asked for when the run ended, in frames a second.
     #[serde(default)]
     pub hz: f32,
@@ -509,6 +518,12 @@ impl FrameLog {
         self.summary.unbuilt.push(verb.to_owned());
     }
 
+    /// Notes how many cards the last frame drew blank and how many glyphs its text lacked.
+    pub fn assets(&mut self, faceless_cards: usize, missing_glyphs: usize) {
+        self.summary.faceless_cards = faceless_cards;
+        self.summary.missing_glyphs = missing_glyphs;
+    }
+
     /// Notes how many script steps the client's table has failed to take so far.
     pub fn unplaced(&mut self, steps: usize) {
         self.summary.unplaced = steps;
@@ -699,6 +714,12 @@ impl Summary {
             lines.push(format!(
                 "paused at {pause} ms: {} frames drawn after the pause",
                 self.after_pause
+            ));
+        }
+        if self.faceless_cards > 0 || self.missing_glyphs > 0 {
+            lines.push(format!(
+                "in the last frame: {} cards drawn blank with no face, {} glyphs missing",
+                self.faceless_cards, self.missing_glyphs
             ));
         }
         if !self.unbuilt.is_empty() {

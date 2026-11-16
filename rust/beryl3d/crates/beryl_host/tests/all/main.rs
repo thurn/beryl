@@ -3,6 +3,7 @@
 //! after each edit.
 
 mod events;
+mod faces;
 mod frames;
 mod phone;
 mod threads;

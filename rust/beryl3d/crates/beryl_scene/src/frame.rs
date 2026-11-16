@@ -428,6 +428,20 @@ impl Frame {
         let start = name.start as usize;
         &self.names[start..start + name.len as usize]
     }
+
+    /// How many named face-up cards this frame draws blank, with no face layer of their own: a
+    /// host that prepares faces leaves none once a match's faces have been uploaded.
+    #[must_use]
+    pub fn faceless_cards(&self) -> usize {
+        (self.resolved.iter())
+            .filter(|element| {
+                element.role == Role::Card
+                    && element.face.is_none()
+                    && element.name.len > 0
+                    && element.state.0 & StateBits::FACE_DOWN == 0
+            })
+            .count()
+    }
 }
 
 /// What `Client::frame` writes a frame into. Making one clears the frame, keeping its capacity.

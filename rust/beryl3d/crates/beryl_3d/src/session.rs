@@ -5,12 +5,17 @@
 //! so that it is written after every command sent before it, and its result comes back as an
 //! `Input::BugSaved`.
 //!
+//! When a game starts or resumes, the thread gives the client the card store's records for both
+//! decklists and the tokens their cards make (`Input::Cards`), from which the client lists the
+//! match's faces for the host's asset workers to prepare (docs/beryl-3d.md, "Preparation").
+//!
 //! The thread puts itself in the default scheduling class before it starts or resumes a game.
 //! The game's thread and the search threads are started from it and inherit that class, so the
 //! AI runs below drawing and the asset workers (decision C9) with no hook in the session or the
 //! search, and as fast as the web app's session, which runs in the same class.
 //! `--search-class` puts it in another class, to compare them.
 
+use std::collections::BTreeSet;
 use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
 
@@ -21,6 +26,7 @@ use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::input::Input;
 use beryl_scene::manual::tokens;
 use beryl_session::ai::AgentMove;
+use beryl_session::card_records::{CardRecords, CardRecordsRequest, card_records};
 use beryl_session::{Seat, Sessions, StartGame, StopsSetting};
 use beryl_shell::Dirs;
 use beryl_table_session::TableEvent;
@@ -148,6 +154,8 @@ pub struct Live {
     played_by: Option<(StartGame, String)>,
     /// The agents `--offer` adds after the session's own on the start screen.
     offered: Vec<AgentView>,
+    /// The decklists the client was last given card records for (`give_cards`).
+    cards_for: Option<[Vec<(u8, String)>; 2]>,
 }
 
 impl Live {
@@ -193,6 +201,7 @@ impl Live {
             inbox,
             played_by: None,
             offered: Vec::new(),
+            cards_for: None,
         }
     }
 
@@ -240,6 +249,46 @@ impl Live {
             .map_or(0, |since| since.as_nanos() as u64);
         self.played_by(name, crate::options::OPPONENT, seed)
     }
+}
+
+impl Live {
+    /// Gives the client the card records of the game in progress when its decklists differ
+    /// from those it was last given records for. The game's first views may reach the client
+    /// before the records do; its cards then show their faces once the host has prepared them.
+    fn give_cards(&mut self) {
+        let Some(replay) = self.sessions.current_replay() else {
+            return;
+        };
+        if self.cards_for.as_ref() == Some(&replay.decks) {
+            return;
+        }
+        let records = decklist_records(&replay.decks);
+        self.inbox.send(Input::Cards(Box::new(records)));
+        self.cards_for = Some(replay.decks);
+    }
+}
+
+/// The card store's records for every card of `decks` and every token or emblem those cards
+/// make.
+#[must_use]
+pub fn decklist_records(decks: &[Vec<(u8, String)>]) -> CardRecords {
+    let mut names = BTreeSet::new();
+    for (_, name) in decks.iter().flatten() {
+        names.insert(name.clone());
+        let Some(card) = beryl_cards::CARDS.get(name) else {
+            continue;
+        };
+        for token in card.tokens {
+            names.extend(
+                token
+                    .face_ixs()
+                    .map(|face| token.face_name(face).to_owned()),
+            );
+        }
+    }
+    card_records(&CardRecordsRequest {
+        names: names.into_iter().collect(),
+    })
 }
 
 /// One search of the opponent's: how long its decision took in milliseconds, search and all,
@@ -296,6 +345,7 @@ impl Session for Live {
         } else {
             beryl_shell::resume_latest(&self.sessions);
         }
+        self.give_cards();
         let mut agents = beryl_session::agents();
         agents.extend(self.offered.iter().cloned());
         self.inbox.send(Input::Agents(agents));
@@ -305,9 +355,14 @@ impl Session for Live {
         let sessions = &self.sessions;
         match command {
             SessionCommand::Click(request) => Reply::Click(sessions.click(request)),
-            SessionCommand::Start(request) => Reply::Done(sessions.start(&request).map(|_| ())),
+            SessionCommand::Start(request) => {
+                let started = sessions.start(&request).map(|_| ());
+                self.give_cards();
+                Reply::Done(started)
+            }
             SessionCommand::Resume => {
                 beryl_shell::resume_latest(sessions);
+                self.give_cards();
                 Reply::Done(Ok(()))
             }
             SessionCommand::Choose(request) => Reply::Done(sessions.choose_request(request)),

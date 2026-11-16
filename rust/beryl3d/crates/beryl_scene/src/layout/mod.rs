@@ -235,6 +235,12 @@ impl Layer {
         )
     }
 
+    /// The glyph table.
+    #[must_use]
+    pub fn glyphs(&self) -> &Glyphs {
+        &self.glyphs
+    }
+
     /// The glyph table, which `Input::Assets` fills and the host drains of wanted glyphs.
     pub fn glyphs_mut(&mut self) -> &mut Glyphs {
         &mut self.glyphs

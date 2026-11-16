@@ -12,21 +12,26 @@ workspace = true
 [features]
 # `Headless`, which plays a recording through the test driver and draws its frames offscreen.
 # The app leaves it off, so that the driver is not in its build.
-headless = ["beryl_scene/driver", "dep:beryl_art"]
+headless = ["beryl_scene/driver"]
 # `--drive`, which plays a script of actions through the frame loop. Only a debug build of the
 # app has it.
 drive = ["beryl_scene/driver"]
 
 [dependencies]
-# The scan cache that `Headless`'s asset workers read card pictures from.
-beryl_art = { path = "../../../crates/beryl_art", optional = true }
+# The scan cache and download queue the asset workers read card pictures from. The app links it
+# already, through beryl_assets.
+beryl_art = { path = "../../../crates/beryl_art" }
 # The shapes of light every host uploads as the atlas's page 0 before its first frame, and the
-# asset workers that prepare `Headless`'s card faces. The app links it already, through beryl_3d.
+# asset workers that prepare every host's card faces. The app links it already, through beryl_3d.
 beryl_assets = { path = "../beryl_assets" }
 beryl_render = { path = "../beryl_render" }
 beryl_scene = { path = "../beryl_scene" }
 # Pointer positions as the client's vectors.
 glam = "0.34.3"
+
+[dev-dependencies]
+# The empty card records a test gives the client, so that its match lists only the card back.
+beryl_protocol = { path = "../../../crates/beryl_protocol" }
 
 # The desktop window and its events, in place of hand-written platform windowing. The phones
 # have native Swift and Kotlin hosts instead (decision C7), which call `phone::Phone`.

@@ -371,6 +371,9 @@ pub struct Faces {
     /// By [`FaceId`]: whether the face has been asked for at full size since it last lost its
     /// full-size layer, so that it is asked for once.
     asked: Vec<bool>,
+    /// How many lists came before this one (`replace`), so that a host can tell a new list from
+    /// an equal one given again, whose faces have no layers again either.
+    number: u64,
 }
 
 impl Faces {
@@ -384,7 +387,25 @@ impl Faces {
             full: vec![None; count],
             wanted: Vec::new(),
             asked: vec![false; count],
+            number: 0,
         }
+    }
+
+    /// Replaces the list with a new match's, none of whose faces has a layer yet, and numbers
+    /// it one more than the list it replaces.
+    pub fn replace(&mut self, list: FaceList) {
+        let number = self.number + 1;
+        *self = Self {
+            number,
+            ..Self::new(list)
+        };
+    }
+
+    /// How many lists came before this one. A host makes its face arrays again whenever it
+    /// changes, even for a list equal to the last.
+    #[must_use]
+    pub fn number(&self) -> u64 {
+        self.number
     }
 
     #[must_use]

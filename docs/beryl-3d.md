@@ -2099,9 +2099,18 @@ Before a match's opening hand is shown:
    hit is a file read.
 3. On a miss, the worker decodes the scan, or draws Beryl's frame, scales it to
    both sizes, compresses it and writes the result to the disk cache.
-4. The board-size layers are uploaded during the loading screen
-   (`Renderer::upload_layer`). The headless host behind `just b3d png` does the
-   same before its first picture, but never downloads a scan, so a picture shows
+4. The board-size layers are uploaded as they arrive. The desktop, windowless
+   and phone hosts share one part for this (`beryl_host`'s `Faces`): it makes
+   the renderer's face arrays whenever the client's face list changes, hands
+   every finished face to `Renderer::hold`, and uploads one board-size face in
+   each frame in which nothing animates (`upload_waiting`), waking the host
+   while faces wait. The session thread gives the client the records of both
+   decklists and their tokens when a game starts or resumes, and a replayed
+   recording gives its recorded ones. The component gallery's list is prepared
+   the same way, and its faces arrive as `AssetReady::GalleryFace`, so they
+   never overwrite where the match's faces are. The headless host behind
+   `just b3d png` uploads every face before its first picture
+   (`Renderer::upload_layer`), but never downloads a scan, so a picture shows
    only what the scan cache holds.
 
 Three crates do that work: `tiny-skia` 0.11.4 (a CPU rasterizer for 2D shapes)

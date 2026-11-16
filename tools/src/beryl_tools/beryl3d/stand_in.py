@@ -7,7 +7,9 @@ primary button when it is enabled, else the first enabled button of the prompt, 
 eligible card or element the tree lists. After `RESUME_AFTER` prompts it quits the app, starts
 it again and checks that the game resumed with the same board, then plays on to the game over
 screen. It prints how many prompts it answered, the outcome and the sounds the frame logs
-counted.
+counted. Each run must end with no card drawn blank for want of its face and no glyph missing
+from the text (the frame log's `faceless_cards` and `missing_glyphs`): the tree alone cannot
+show that a host failed to deliver its card faces or glyphs.
 
 The app runs under a profile of its own (`BERYL_PROFILE`), so that it starts on the start
 screen with no game to resume and never touches the player's games. The profile's folder is
@@ -421,6 +423,18 @@ def frame_log(output: list[str]) -> dict[str, object]:
     raise StandInError(f"{line}: no summary")
 
 
+def check_assets(run: str, summary: dict[str, object]) -> None:
+    """Fails when the last frame of a run, well after its opening hand, still drew a card blank
+    for want of its face or lacked a glyph."""
+    faceless = summary.get("faceless_cards", 0)
+    missing = summary.get("missing_glyphs", 0)
+    if faceless or missing:
+        raise StandInError(
+            f"the {run} run ended with {faceless} cards drawn blank with no face and "
+            f"{missing} glyphs missing: the host is not delivering its assets"
+        )
+
+
 def data_folder(running: Running) -> Path | None:
     found = running.line(app.DATA_IN)
     return Path(found.removeprefix(app.DATA_IN)) if found else None
@@ -469,8 +483,10 @@ def run_stand_in(args: argparse.Namespace) -> int:
         play(second, played, None)
         second_output = second.quit()
         sounds: Counter[str] = Counter()
-        for output in (first_output, second_output):
-            counted = frame_log(output).get("sounds")
+        for run, output in (("first", first_output), ("second", second_output)):
+            summary = frame_log(output)
+            check_assets(run, summary)
+            counted = summary.get("sounds")
             if isinstance(counted, dict):
                 for name, times in counted.items():
                     if isinstance(name, str) and isinstance(times, int):

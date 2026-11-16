@@ -24,20 +24,22 @@ pub struct Glyphs {
     /// Every glyph ever asked for, so that each is asked for once.
     asked: BTreeSet<GlyphKey>,
     wanted: VecDeque<GlyphKey>,
+    /// How many glyphs of `asked` no page holds yet.
+    missing: usize,
 }
 
 impl Glyphs {
     /// Records the glyphs of an atlas page that is ready.
     pub fn add(&mut self, page: u16, cells: &[GlyphCell]) {
         for cell in cells {
-            self.table.insert(
-                cell.key,
-                Placed {
-                    page,
-                    rect: cell.rect,
-                    bearing: cell.bearing,
-                },
-            );
+            let placed = Placed {
+                page,
+                rect: cell.rect,
+                bearing: cell.bearing,
+            };
+            if self.table.insert(cell.key, placed).is_none() && self.asked.contains(&cell.key) {
+                self.missing -= 1;
+            }
         }
     }
 
@@ -73,8 +75,17 @@ impl Glyphs {
             let key = key(style, scale, glyph.glyph);
             if !self.table.contains_key(&key) && self.asked.insert(key) {
                 self.wanted.push_back(key);
+                self.missing += 1;
             }
         }
+    }
+
+    /// How many glyphs laid-out text has asked for that no page holds yet: each is drawn from
+    /// another size of itself, or not at all. A host that delivers glyphs brings it back to
+    /// zero soon after the text appears.
+    #[must_use]
+    pub fn missing(&self) -> usize {
+        self.missing
     }
 
     /// The glyphs asked for since the last call, each once.

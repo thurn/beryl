@@ -184,7 +184,7 @@ impl Draw for Asker {
         Some(Shown::default())
     }
 
-    fn assets(&mut self, client: &mut Client) {
+    fn assets(&mut self, client: &mut Client, _when: beryl_host::When) {
         self.wanted += client.wanted_glyphs().count();
     }
 }

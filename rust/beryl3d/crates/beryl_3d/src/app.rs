@@ -190,6 +190,9 @@ impl Feed for AppFeed {
 
     fn before(&mut self, client: &mut Client, clock: u64) {
         if let Some(Source::Fixture(fixture)) = &mut self.source {
+            if let Some(cards) = fixture.cards() {
+                client.handle(Input::Cards(Box::new(cards)));
+            }
             for update in fixture.due(clock) {
                 self.give(client, Input::Update(Box::new(update)));
             }
@@ -242,6 +245,10 @@ impl Feed for AppFeed {
             log.unbuilt(verb.name());
         }
         log.unplaced(client.unplaced());
+        log.assets(
+            client.last_frame().faceless_cards(),
+            client.missing_glyphs(),
+        );
         // Verbs are listed only for a late frame, so a frame on time collects none.
         let late = FrameLog::is_late(ticked);
         let verbs: Vec<&str> = if late {

@@ -47,12 +47,20 @@ pub trait Draw {
         None
     }
 
-    /// Hands what `client` wants of the platform's assets (glyphs, today) to the host's
-    /// workers, and gives `client` what they have finished. Called before each frame, so that
-    /// the frame draws what has arrived, and after it, so that what the frame found missing is
-    /// asked for even when the client then wants no more frames. It never waits; a worker
-    /// that finishes something wakes the host. A host with no workers does nothing.
-    fn assets(&mut self, _client: &mut Client) {}
+    /// Hands what `client` wants of the platform's assets (glyphs and card faces) to the
+    /// host's workers, and gives `client` what they have finished. Called before each frame,
+    /// so that the frame draws what has arrived, and after it, so that what the frame found
+    /// missing is asked for even when the client then wants no more frames. It never waits; a
+    /// worker that finishes something wakes the host. A host with no workers does nothing.
+    fn assets(&mut self, _client: &mut Client, _when: When) {}
+}
+
+/// Which of a frame's two calls to `Draw::assets` this is. Uploads limited to so many a frame
+/// (`Renderer::upload_waiting`) are made only before it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum When {
+    BeforeFrame,
+    AfterFrame,
 }
 
 /// One frame the loop drew.
@@ -289,7 +297,7 @@ impl<T: Ticks> FrameLoop<T> {
         #[cfg(feature = "drive")]
         self.play_live(now, clock);
         self.feed.before(&mut self.client, clock);
-        draw.assets(&mut self.client);
+        draw.assets(&mut self.client, When::BeforeFrame);
         let started = Instant::now();
         let frame = self.client.frame(clock);
         let client = started.elapsed().as_nanos() as u64;
@@ -299,7 +307,7 @@ impl<T: Ticks> FrameLoop<T> {
         {
             self.readbacks.push(readback);
         }
-        draw.assets(&mut self.client);
+        draw.assets(&mut self.client, When::AfterFrame);
         let since_last = self.last.map(|last| now.saturating_sub(last));
         let hz = self.hz;
         let step = self.pace(since_last, client, shown);

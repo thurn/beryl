@@ -344,6 +344,7 @@ dependencies = [
  "arboard",
  "beryl_art",
  "beryl_assets",
+ "beryl_protocol",
  "beryl_render",
  "beryl_scene",
  "glam",

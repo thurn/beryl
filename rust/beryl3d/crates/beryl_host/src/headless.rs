@@ -13,7 +13,7 @@
 //! picture whatever else the client's text asks for. The host waits for the worker to finish
 //! before it draws, so a picture never lacks a glyph that a later one would have.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 
@@ -22,50 +22,11 @@ use beryl_assets::glyphs::{GlyphWorker, prepare_latin};
 use beryl_assets::light;
 use beryl_assets::{Config, Format, Prepared, Preparer, default_workers};
 use beryl_render::{Limits, Renderer, Target};
+
+use crate::assets::Scans;
 use beryl_scene::driver::{DriverError, Moment, Page};
 use beryl_scene::faces::FaceList;
 use beryl_scene::frame::Frame;
-
-/// The app's identifier, which names its cache directory.
-const APP: &str = "ca.thurn.beryl";
-
-/// Where card pictures are read from: the scan cache that `beryl_art` keeps, and the cache of
-/// compressed faces beside it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Scans {
-    pub art: PathBuf,
-    pub faces: PathBuf,
-}
-
-impl Scans {
-    /// The app's own caches, in the directory Tauri gives the app: `~/Library/Caches/<app>` on
-    /// macOS, `%LOCALAPPDATA%\<app>` on Windows and `$XDG_CACHE_HOME/<app>` (or `~/.cache`)
-    /// elsewhere. `BERYL3D_SCANS` names another directory to use in their place, such as an
-    /// empty one, to see every face drawn as Beryl's frame.
-    #[must_use]
-    pub fn app() -> Self {
-        let var = |name: &str| std::env::var_os(name).map(PathBuf::from);
-        if let Some(dir) = var("BERYL3D_SCANS") {
-            return Self {
-                art: dir.join("art"),
-                faces: dir.join("faces"),
-            };
-        }
-        let home = || var("HOME").unwrap_or_default();
-        let base = if cfg!(windows) {
-            var("LOCALAPPDATA").unwrap_or_default()
-        } else if cfg!(target_os = "macos") {
-            home().join("Library/Caches")
-        } else {
-            var("XDG_CACHE_HOME").unwrap_or_else(|| home().join(".cache"))
-        };
-        let dir = base.join(APP);
-        Self {
-            art: dir.join("art"),
-            faces: dir.join("faces"),
-        }
-    }
-}
 
 /// An address where nothing listens, so that a scan the cache lacks fails to download at once.
 const NOWHERE: Origins<'static> = Origins {

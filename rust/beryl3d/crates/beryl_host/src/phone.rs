@@ -18,7 +18,8 @@ use beryl_scene::command::Request;
 use beryl_scene::frame::{Frame, Wake};
 use beryl_scene::input::{Input, Insets, Key, Lifecycle, Pointer, Size, TextChange};
 
-use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Ticks};
+use crate::assets::{Faces, Glyphs, Scans};
+use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Ticks, When};
 use crate::inbox::Inbox;
 
 /// What the platform does when an input arrives from another thread: it asks for a frame
@@ -30,6 +31,8 @@ pub type Wakeup = Arc<dyn Fn() + Send + Sync>;
 pub struct Phone {
     state: State,
     receiver: Receiver<Input>,
+    /// Where the glyph and face workers wake the host when they finish something.
+    inbox: Inbox,
     /// The display's highest refresh rate, as the platform reads it.
     display_hz: f32,
     /// The platform's time of the last tick that drew a frame, in nanoseconds since
@@ -74,8 +77,9 @@ impl Phone {
             60.0
         };
         Self {
-            state: State::Waiting(Box::new((client, feed(inbox)))),
+            state: State::Waiting(Box::new((client, feed(inbox.clone())))),
             receiver,
+            inbox,
             display_hz,
             last_drawn: None,
             started: None,
@@ -130,6 +134,7 @@ impl Phone {
             }
             State::Running(mut running) => {
                 let Running { frames, screen } = &mut *running;
+                screen.glyphs.rescale(scale);
                 let attached = match &mut screen.output {
                     Output::Surface(Some(surface)) => {
                         screen.renderer.resize(surface, width, height);
@@ -195,6 +200,18 @@ impl Phone {
         size: Input,
     ) {
         renderer.upload_page(&light::prepared());
+        let scale = match size {
+            Input::Surface { scale, .. } => scale,
+            _ => 1.0,
+        };
+        let wake = |inbox: &Inbox| {
+            let inbox = inbox.clone();
+            move || {
+                inbox.send(Input::Nudge);
+            }
+        };
+        let glyphs = Glyphs::start(scale, wake(&self.inbox));
+        let faces = Faces::start(&Scans::app(), beryl_art::SCRYFALL, wake(&self.inbox));
         feed.opened(&Opened {
             display_hz: self.display_hz,
             adapter: renderer.adapter().to_owned(),
@@ -208,7 +225,12 @@ impl Phone {
         frames.handle(size);
         self.state = State::Running(Box::new(Running {
             frames,
-            screen: Screen { renderer, output },
+            screen: Screen {
+                renderer,
+                output,
+                glyphs,
+                faces,
+            },
         }));
     }
 
@@ -367,6 +389,8 @@ impl Ticks for Platform {
 struct Screen {
     renderer: Renderer,
     output: Output,
+    glyphs: Glyphs,
+    faces: Faces,
 }
 
 /// What frames are drawn in.
@@ -404,5 +428,10 @@ impl Draw for Screen {
                 })
             }
         }
+    }
+
+    fn assets(&mut self, client: &mut Client, when: When) {
+        self.glyphs.deliver(client, &mut self.renderer);
+        self.faces.deliver(client, &mut self.renderer, when);
     }
 }

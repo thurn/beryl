@@ -22,10 +22,10 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
-use crate::assets::Glyphs;
+use crate::assets::{Faces, Glyphs, Scans};
 use crate::clipboard::Clipboard;
 use crate::events::Translator;
-use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Sleep, Ticks};
+use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Sleep, Ticks, When};
 use crate::inbox::Inbox;
 
 /// What the window is (decision C15: the faster choice is the default).
@@ -199,6 +199,7 @@ struct Screen {
     /// How long each finished frame is held back before it is shown (`Options::slow_gpu`).
     slow_gpu: Duration,
     glyphs: Glyphs,
+    faces: Faces,
 }
 
 impl Draw for Screen {
@@ -229,9 +230,10 @@ impl Draw for Screen {
         Some(self.renderer.read_back_frame(frame, &self.surface))
     }
 
-    fn assets(&mut self, client: &mut Client) {
+    fn assets(&mut self, client: &mut Client, when: When) {
         self.glyphs.rescale(self.window.scale_factor() as f32);
         self.glyphs.deliver(client, &mut self.renderer);
+        self.faces.deliver(client, &mut self.renderer, when);
     }
 }
 
@@ -332,6 +334,12 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
                 window: Arc::clone(&window),
                 slow_gpu: self.options.slow_gpu,
                 glyphs: Glyphs::start(window.scale_factor() as f32, {
+                    let wake = self.wake.clone();
+                    move || {
+                        wake.send(Input::Nudge);
+                    }
+                }),
+                faces: Faces::start(&Scans::app(), beryl_art::SCRYFALL, {
                     let wake = self.wake.clone();
                     move || {
                         wake.send(Input::Nudge);

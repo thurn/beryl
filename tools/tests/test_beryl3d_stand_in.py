@@ -120,3 +120,12 @@ def test_a_card_at_rest_in_nowhere_is_found_but_not_one_moving_away() -> None:
         )
     )
     assert stand_in.resting_nowhere(revealed) == []
+
+
+def test_a_run_that_ends_with_a_blank_card_or_a_missing_glyph_fails() -> None:
+    stand_in.check_assets("first", {"faceless_cards": 0, "missing_glyphs": 0})
+    stand_in.check_assets("first", {})
+    with pytest.raises(stand_in.StandInError, match="3 cards drawn blank"):
+        stand_in.check_assets("second", {"faceless_cards": 3, "missing_glyphs": 0})
+    with pytest.raises(stand_in.StandInError, match="2 glyphs missing"):
+        stand_in.check_assets("second", {"faceless_cards": 0, "missing_glyphs": 2})

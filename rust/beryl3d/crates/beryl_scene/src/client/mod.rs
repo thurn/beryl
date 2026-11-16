@@ -355,7 +355,8 @@ impl Client {
                 self.platform = if mac { Platform::Mac } else { Platform::Other };
             }
             Input::Cards(records) => {
-                *self.show.faces_mut() = Faces::new(FaceList::from_records(&records));
+                let list = FaceList::from_records(&records);
+                self.show.faces_mut().replace(list);
             }
             Input::Assets(asset) => self.asset_ready(asset),
             Input::Surface {
