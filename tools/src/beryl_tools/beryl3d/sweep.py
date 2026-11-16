@@ -36,6 +36,10 @@ work to fix, never as Steward beads.
   quarter of the cores, as the browser sweep's do (tokens.py), and
   are logged under the script [`SCRIPT`]. Slow CI's CPU budget counts only records of the script
   `ci` (check_value.slow_ci), so the sweep spends none of it.
+- **Fixed on the tip.** A sweep runs for tens of minutes, so when origin/staging has moved
+  past the swept commit by the time a step has failed and been bisected, the step is replayed
+  once at the new tip ([`still_failing`]) in a tree of its own, as a worker's replay is. A
+  step that passes there is logged as fixed on the tip and files no bead.
 - **Replays.** `just b3d sweep --step <step>` replays one step for whoever fixes it, in a tree
   of its own: it takes neither part's lock, so it never waits for a running sweep, it bisects
   and files nothing, and its steps take CPU tokens as a session's own ([`REPLAY_SCRIPT`]). A
@@ -701,6 +705,44 @@ def failed_by_step(
     return found
 
 
+def replay_at(tip: str, step: str) -> int:
+    """The exit code of one step replayed at `tip` in a tree of its own, as a worker's replay
+    runs it (`Request.replay`): the replay part's folder and tokens, no part's lock."""
+    request = Request(commit=tip, step=step)
+    command = run_command(request, REPLAY, "")
+    output = folder() / f"last-fixed-check-{step}-output.txt"
+    return run_in_tree(tip, command, output, REPLAY)
+
+
+def still_failing(
+    commit: str,
+    failed: dict[str, list[str]],
+    tip: Callable[[], str | None] = nightly.fetch_tip,
+    replay: Callable[[str, str], int] = replay_at,
+) -> dict[str, list[str]]:
+    """The steps of `failed` that also fail at origin/staging's tip when it has moved past
+    `commit`. A sweep runs for tens of minutes, and in that time another session often lands
+    the fix, so a bead filed for the step would start a session that rebuilt and replayed it
+    only to close the bead as already fixed. A step that passes at the tip is logged as fixed
+    there, and a step whose replay cannot say stays in the result. When the tip is `commit`,
+    cannot be fetched or does not descend from it, nothing is replayed."""
+    newer = tip()
+    if (
+        not newer
+        or newer == commit
+        or run_git("merge-base", "--is-ancestor", commit, newer) is None
+    ):
+        return failed
+    kept: dict[str, list[str]] = {}
+    for lane_name, names in failed.items():
+        step = step_of(lane_name)
+        if replay(newer, step) == 0:
+            print(f"b3d sweep: {step}: fixed on the tip {newer[:12]}, no bead filed")
+        else:
+            kept[lane_name] = names
+    return kept
+
+
 def sweep_run(args: argparse.Namespace) -> int:
     """Runs the steps of one part of the sweep at HEAD, or all of them when no `--part` is
     given; on a failure, bisects it over the commits since `--since` and files it, or with
@@ -738,6 +780,8 @@ def sweep_run(args: argparse.Namespace) -> int:
     output_by_lane = {o.lane: o.log for o in failed}
     store = DryRun(verdicts.STORE) if args.dry_run else None
     by_step = failed_by_step(commit, began, failed)
+    if not args.dry_run:
+        by_step = still_failing(commit, by_step)
     for line in file(commit, by_step, args.since, found, output_by_lane, store):
         print(line, file=sys.stderr)
     return report.code

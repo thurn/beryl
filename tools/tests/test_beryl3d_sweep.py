@@ -458,3 +458,37 @@ def test_saving_the_build_directory_drops_artifacts_no_build_uses(
     cached = paths.cache() / "target"
     assert sweep.save_target(target, cached)
     assert [p.name for p in (cached / "debug" / "deps").iterdir()] == [current.name]
+
+
+def test_a_step_that_passes_at_a_newer_tip_files_no_bead(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Every commit descends from the swept one, so only the tip's replays decide.
+    monkeypatch.setattr(sweep, "run_git", lambda *args: "")
+    failed = {
+        "b3d-cargo-test": ["b3d-cargo-test:cargo-test"],
+        "b3d-release-socket": ["b3d-release-socket:release-socket"],
+    }
+    replayed: list[tuple[str, str]] = []
+
+    def replay(tip: str, step: str) -> int:
+        replayed.append((tip, step))
+        return 0 if step == "cargo-test" else 1
+
+    kept = sweep.still_failing("bad1", failed, lambda: "newer", replay)
+    assert replayed == [("newer", "cargo-test"), ("newer", "release-socket")]
+    assert kept == {"b3d-release-socket": ["b3d-release-socket:release-socket"]}
+    assert "cargo-test: fixed on the tip newer" in capsys.readouterr().out
+
+    # Only what still fails reaches the filing.
+    store = FakeBd()
+    output = {name: "failure" for name in failed}
+    sweep.file("bad1", kept, "good", [], output, store)
+    [issue] = store.issues
+    assert "release-socket" in str(issue["title"])
+
+    # A tip that is the swept commit, or cannot be fetched, replays nothing.
+    replayed.clear()
+    assert sweep.still_failing("bad1", failed, lambda: "bad1", replay) == failed
+    assert sweep.still_failing("bad1", failed, lambda: None, replay) == failed
+    assert replayed == []
