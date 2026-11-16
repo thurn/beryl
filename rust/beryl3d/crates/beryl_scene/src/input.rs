@@ -44,6 +44,9 @@ pub enum Input {
     /// The names of the agents a person may play, in the order they are offered
     /// (`beryl_session::agents`).
     Agents(Vec<String>),
+    /// Nothing changes. A thread other than the host's sends it to wake a host that sleeps until
+    /// an event, so that the host looks at what the thread left for it (`Feed::wake`).
+    Nudge,
 }
 
 /// A rectangle with its top left corner at (`x`, `y`). It is in logical points unless the field

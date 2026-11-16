@@ -229,4 +229,8 @@ impl Draw for Offscreen {
             encoded: started.elapsed().as_nanos() as u64,
         })
     }
+
+    fn capture(&mut self, _frame: &Frame) -> Option<beryl_render::Readback> {
+        Some(self.renderer.read_back(&self.target))
+    }
 }

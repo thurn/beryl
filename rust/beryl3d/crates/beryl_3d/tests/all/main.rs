@@ -8,5 +8,6 @@ mod drive;
 mod ffi;
 mod fixture;
 mod frame_log;
+mod live;
 mod session;
 mod settings;

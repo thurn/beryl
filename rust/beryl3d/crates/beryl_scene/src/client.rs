@@ -220,6 +220,7 @@ impl Client {
                 self.agents = agents;
                 self.show_screen();
             }
+            Input::Nudge => {}
             Input::Pointer(pointer) => self.point(pointer),
             Input::Cards(records) => {
                 *self.show.faces_mut() = Faces::new(FaceList::from_records(&records));

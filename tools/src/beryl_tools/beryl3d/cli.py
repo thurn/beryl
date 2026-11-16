@@ -21,7 +21,7 @@ from pathlib import Path
 
 from .. import caches, system, tokens, warm
 from .. import paths as repo_paths
-from . import app, camera, gate, lane, paths, phone, sweep, timeline, vm
+from . import app, camera, gate, lane, live, paths, phone, sweep, timeline, vm
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
 USAGE = 2
@@ -476,6 +476,34 @@ COMMANDS: tuple[Command, ...] = (
         ),
         app.run_app,
         app.app_arguments,
+    ),
+    Command(
+        "live",
+        "asks the running debug app for its tree or a picture, or gives it an action",
+        (
+            (
+                "just b3d live tree",
+                "the elements on screen now, as `just b3d tree` prints them",
+            ),
+            (
+                "just b3d live do 'press button \"Auto Pay\"'",
+                "press that button; `live png` draws the result",
+            ),
+        ),
+        live.run_live,
+        live.live_arguments,
+    ),
+    Command(
+        "release-socket",
+        "builds the release app and fails if its binary names a live socket",
+        (
+            (
+                "just b3d release-socket",
+                "build release and look for the socket's file name",
+            ),
+            ("just b3d release-socket --help", "this text"),
+        ),
+        live.run_release_socket,
     ),
     Command(
         "smoke",

@@ -216,6 +216,10 @@ impl Draw for Screen {
             Presented::Skipped => None,
         }
     }
+
+    fn capture(&mut self, frame: &Frame) -> Option<beryl_render::Readback> {
+        Some(self.renderer.read_back_frame(frame, &self.surface))
+    }
 }
 
 /// Where ticks come from.

@@ -17,5 +17,5 @@ pub use atlas::ATLAS_PAGES;
 pub use mesh::CARD_RADIUS;
 pub use renderer::{Drawn, Limits, Renderer};
 pub use surface::{Native, Presented, Surface};
-pub use target::{Target, write_rgba_png};
+pub use target::{Picture, Readback, Target, write_rgba_png};
 pub use textures::BACK_LAYER;

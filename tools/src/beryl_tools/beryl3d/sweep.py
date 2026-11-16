@@ -130,6 +130,9 @@ class SweepStep:
 OWN: tuple[SweepStep, ...] = (
     # The app starts with no window and shows its first frame.
     SweepStep("smoke", (*BY, "b3d", "smoke")),
+    # A release build has no live socket: it builds release, so the sweep runs it and the lane
+    # does not.
+    SweepStep("release-socket", (*BY, "b3d", "release-socket")),
     # Every interface test with the checks applied on every tick: the exhaustive form of the
     # lane's `test` step.
     SweepStep("every-tick", (*BY, "b3d", "test", "--every-tick")),

@@ -5,6 +5,7 @@
 
 use std::time::Instant;
 
+use beryl_render::{Picture, Readback};
 use beryl_scene::Client;
 use beryl_scene::command::Request;
 use beryl_scene::frame::{Frame, Wake};
@@ -39,6 +40,12 @@ pub trait Draw {
     /// Draws `frame`, and says what it cost, or `None` when no drawable was available and
     /// nothing was shown.
     fn draw(&mut self, frame: &Frame) -> Option<Shown>;
+
+    /// Starts reading back what drawing `frame` showed, for a feed that asked for a picture
+    /// (`Feed::capture_wanted`). A host that cannot returns `None`.
+    fn capture(&mut self, _frame: &Frame) -> Option<Readback> {
+        None
+    }
 }
 
 /// One frame the loop drew.
@@ -96,6 +103,26 @@ pub trait Feed {
         Wake::Never
     }
 
+    /// Whether the feed wants a picture of the frame just drawn. Asked after every frame.
+    fn capture_wanted(&mut self) -> bool {
+        false
+    }
+
+    /// A picture the feed asked for, once the GPU has finished it: some frames after the one it
+    /// shows.
+    fn captured(&mut self, _picture: Picture) {}
+
+    /// Scripts of actions to play now, each with an id, on the display's clock from this tick.
+    /// Unlike the run's own script, a finished one does not end the run.
+    #[cfg(feature = "drive")]
+    fn scripts(&mut self) -> Vec<(u64, crate::drive::Drive)> {
+        Vec::new()
+    }
+
+    /// The script with this id has been played, or stopped with an error.
+    #[cfg(feature = "drive")]
+    fn script_done(&mut self, _id: u64, _result: Result<(), String>) {}
+
     /// Whether the feed has nothing more to show, as when the game it plays is over: the host
     /// then ends the run.
     fn ended(&self) -> bool {
@@ -139,6 +166,11 @@ pub struct FrameLoop<T> {
     /// The drive script being played, if any (`--drive`).
     #[cfg(feature = "drive")]
     drive: Option<crate::drive::Drive>,
+    /// Scripts the feed handed over while the run was going, each with its id.
+    #[cfg(feature = "drive")]
+    live: Vec<(u64, crate::drive::Drive)>,
+    /// Pictures the GPU has not finished yet.
+    readbacks: Vec<Readback>,
 }
 
 impl<T: Ticks> FrameLoop<T> {
@@ -155,6 +187,9 @@ impl<T: Ticks> FrameLoop<T> {
             hz: 60.0,
             #[cfg(feature = "drive")]
             drive: None,
+            #[cfg(feature = "drive")]
+            live: Vec::new(),
+            readbacks: Vec::new(),
         }
     }
 
@@ -235,6 +270,7 @@ impl<T: Ticks> FrameLoop<T> {
             return None;
         }
         let clock = self.clock(now);
+        self.deliver_pictures();
         #[cfg(feature = "drive")]
         if let Some(drive) = &mut self.drive {
             let mut inputs = Vec::new();
@@ -243,11 +279,18 @@ impl<T: Ticks> FrameLoop<T> {
                 self.handle(input);
             }
         }
+        #[cfg(feature = "drive")]
+        self.play_live(now, clock);
         self.feed.before(&mut self.client, clock);
         let started = Instant::now();
         let frame = self.client.frame(clock);
         let client = started.elapsed().as_nanos() as u64;
         let shown = draw.draw(frame);
+        if self.feed.capture_wanted()
+            && let Some(readback) = draw.capture(frame)
+        {
+            self.readbacks.push(readback);
+        }
         let since_last = self.last.map(|last| now.saturating_sub(last));
         let hz = self.hz;
         let step = self.pace(since_last, client, shown);
@@ -332,6 +375,45 @@ impl<T: Ticks> FrameLoop<T> {
         Some(step)
     }
 
+    /// Gives the feed the pictures the GPU has finished.
+    fn deliver_pictures(&mut self) {
+        let mut waiting = Vec::new();
+        for readback in std::mem::take(&mut self.readbacks) {
+            match readback.poll() {
+                Some(picture) => self.feed.captured(picture),
+                None => waiting.push(readback),
+            }
+        }
+        self.readbacks = waiting;
+    }
+
+    /// Takes the scripts the feed has for the run, plays what is due of every one, and tells the
+    /// feed which have ended.
+    #[cfg(feature = "drive")]
+    fn play_live(&mut self, now: u64, clock: u64) {
+        for (id, mut script) in self.feed.scripts() {
+            script.start_at(now);
+            self.live.push((id, script));
+        }
+        let mut inputs = Vec::new();
+        for (_, script) in &mut self.live {
+            script.due(now, clock, &mut self.client, &mut inputs);
+        }
+        for input in inputs {
+            self.handle(input);
+        }
+        let mut playing = Vec::new();
+        for (id, script) in std::mem::take(&mut self.live) {
+            if script.finished() {
+                let result = script.error().map_or(Ok(()), |error| Err(error.to_owned()));
+                self.feed.script_done(id, result);
+            } else {
+                playing.push((id, script));
+            }
+        }
+        self.live = playing;
+    }
+
     /// The client's clock at `now`: `now`, or the pause once it has passed.
     fn clock(&self, now: u64) -> u64 {
         self.pause.map_or(now, |pause| now.min(pause))
@@ -361,10 +443,22 @@ impl<T: Ticks> FrameLoop<T> {
         };
         // A drive script plays on the display's clock, which runs on through a pause.
         #[cfg(feature = "drive")]
-        if let Some(drive) = &self.drive {
-            return earlier(wake, drive.wake(self.client.wake()));
+        let wake = {
+            let mut wake = wake;
+            if let Some(drive) = &self.drive {
+                wake = earlier(wake, drive.wake(self.client.wake()));
+            }
+            for (_, script) in &self.live {
+                wake = earlier(wake, script.wake(self.client.wake()));
+            }
+            wake
+        };
+        // A picture the GPU has not finished is polled on the next tick.
+        if self.readbacks.is_empty() {
+            wake
+        } else {
+            Wake::Now
         }
-        wake
     }
 
     /// Whether a frame is wanted at `now`.

@@ -7,6 +7,8 @@ pub mod audio;
 pub mod ffi;
 pub mod fixture;
 pub mod frame_log;
+#[cfg(all(feature = "tools", unix))]
+pub mod live;
 pub mod load;
 pub mod options;
 pub mod session;

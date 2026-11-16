@@ -93,6 +93,7 @@ def test_the_quick_part_holds_the_build_and_the_lane_and_the_slow_part_the_vm() 
     quick = [s.name for s in sweep.chosen(None, sweep.MAC, sweep.QUICK)]
     assert quick == [s.name for s in lane.steps()] + [
         "smoke",
+        "release-socket",
         "every-tick",
         "timeline-parity-all",
     ]

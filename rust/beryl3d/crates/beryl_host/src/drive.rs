@@ -109,6 +109,12 @@ impl Drive {
         })
     }
 
+    /// Starts the script at `now`, in nanoseconds since the host started, instead of at the
+    /// host's start: for a script handed over while the run is going.
+    pub fn start_at(&mut self, now: u64) {
+        self.cursor = now;
+    }
+
     /// Whether every action has been given, or the script stopped on an error.
     #[must_use]
     pub fn finished(&self) -> bool {

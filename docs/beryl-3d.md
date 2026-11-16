@@ -2409,9 +2409,18 @@ just b3d smoke
   of its own. `just b3d frames [path]` prints a log's summary and its worst
   frames. With no path it reads the newest log of a run started from the same
   checkout.
-- **`live`** speaks to a running debug build over a local socket named for that
-  process: `live tree`, `live png` and `live do '<action>'`. When several apps
-  are running it takes `--app <process id>`.
+- **`live`** speaks to a running debug build over a local socket,
+  `$TMPDIR/beryl3d-<process id>.sock`, which the app announces on its first
+  lines: `live tree`, `live png` and `live do '<action>'`. When several apps are
+  running it takes `--app <process id>`, and with none it says how to start one.
+  Each request has 10 seconds. The frame loop answers on the frame thread:
+  `tree` prints the frame as `just b3d tree` does, `png` prints the path of a
+  picture of the frame under `$BERYL_CACHE/b3d/out/live-<pid>-<n>.png`, drawn
+  again offscreen at the window's size and read back without waiting on the
+  frame thread, and `do` gives the action's inputs on the next display ticks, as
+  a drive script's line is given, and answers when they are done or a locator
+  found nothing. `just b3d release-socket`, a step of the sweep, builds release
+  and fails if its binary names a socket.
 - **`smoke`** starts the app with no window, waits for its first presented frame
   and exits.
 

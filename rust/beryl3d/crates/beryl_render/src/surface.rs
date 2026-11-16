@@ -177,6 +177,16 @@ impl Renderer {
         Presented::Shown { drawn, waited }
     }
 
+    /// Draws `frame` again, as `present` just did, into a texture the size of `surface` and
+    /// starts reading it back. The window's own drawable is gone by then, so a picture of what
+    /// the window shows is a second drawing of the same frame.
+    pub fn read_back_frame(&mut self, frame: &Frame, surface: &Surface) -> crate::Readback {
+        let mut target =
+            crate::Target::offscreen(self, surface.config.width, surface.config.height);
+        self.render(frame, &mut target);
+        self.read_back(&target)
+    }
+
     /// Changes the surface's size to `width` by `height` physical pixels.
     pub fn resize(&self, surface: &mut Surface, width: u32, height: u32) {
         let (width, height) = (width.max(1), height.max(1));

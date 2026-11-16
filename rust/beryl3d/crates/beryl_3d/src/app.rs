@@ -38,6 +38,8 @@ pub const FIRST_SHOWN: &str = "beryl3d: first frame shown";
 pub const FIXTURE_ENDED: &str = "beryl3d: fixture ended";
 /// The line the app prints when a view first says the game is over.
 pub const GAME_OVER: &str = "beryl3d: game over";
+/// The line the app prints, followed by the path, when its live socket is listening.
+pub const LIVE_SOCKET: &str = "beryl3d: live socket";
 
 /// What a finished run left.
 pub struct Finished {
@@ -75,6 +77,9 @@ struct AppFeed {
     audio: Option<Audio>,
     /// Writes the settings the client asks to save, in a live game.
     saver: Option<Saver>,
+    /// The socket `just b3d live` speaks to, in a build that has one.
+    #[cfg(all(feature = "tools", unix))]
+    live: Option<crate::live::Live>,
 }
 
 /// When the frame log is finished and its summary written.
@@ -93,6 +98,17 @@ enum Finish {
 type Logged = Result<FrameLog, String>;
 
 impl AppFeed {
+    /// Connects the feed to the host's inbox: starts the session thread or the replay, and the
+    /// live socket in a build that has one.
+    fn attach(&mut self, options: &Options, inbox: Inbox) -> Result<(), String> {
+        #[cfg(all(feature = "tools", unix))]
+        {
+            self.live = start_live(inbox.clone());
+        }
+        self.source = Some(source(options, inbox)?);
+        Ok(())
+    }
+
     /// Gives the client an input from the feed itself, noting what the view says first.
     fn give(&mut self, client: &mut Client, input: Input) {
         self.input(&input);
@@ -182,6 +198,10 @@ impl Feed for AppFeed {
                 audio.play(*sound);
             }
         }
+        #[cfg(all(feature = "tools", unix))]
+        if let Some(live) = &mut self.live {
+            live.trees(client, ticked.clock);
+        }
         while let Some(command) = client.next_command() {
             match &mut self.source {
                 Some(Source::Live(commands)) => commands.send(command),
@@ -256,9 +276,42 @@ impl Feed for AppFeed {
     }
 
     fn wake(&self) -> Wake {
+        #[cfg(all(feature = "tools", unix))]
+        if self.live.as_ref().is_some_and(crate::live::Live::has_work) {
+            return Wake::Now;
+        }
         match &self.source {
             Some(Source::Fixture(fixture)) => fixture.wake(),
             _ => Wake::Never,
+        }
+    }
+
+    #[cfg(all(feature = "tools", unix))]
+    fn capture_wanted(&mut self) -> bool {
+        self.live
+            .as_mut()
+            .is_some_and(crate::live::Live::picture_wanted)
+    }
+
+    #[cfg(all(feature = "tools", unix))]
+    fn captured(&mut self, picture: beryl_render::Picture) {
+        if let Some(live) = &mut self.live {
+            live.picture(&picture);
+        }
+    }
+
+    #[cfg(all(feature = "tools", unix))]
+    fn scripts(&mut self) -> Vec<(u64, beryl_host::Drive)> {
+        self.live
+            .as_mut()
+            .map(crate::live::Live::scripts)
+            .unwrap_or_default()
+    }
+
+    #[cfg(all(feature = "tools", unix))]
+    fn script_done(&mut self, id: u64, result: Result<(), String>) {
+        if let Some(live) = &mut self.live {
+            live.script_done(id, result);
         }
     }
 
@@ -359,6 +412,8 @@ fn phone_app(
         shown_first: false,
         audio: None,
         saver: None,
+        #[cfg(all(feature = "tools", unix))]
+        live: None,
     })
 }
 
@@ -396,6 +451,8 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         shown_first: false,
         audio: Some(audio),
         saver,
+        #[cfg(all(feature = "tools", unix))]
+        live: None,
     };
     let mut client = Client::new(Config::LARGEST);
     if let Some(settings) = settings {
@@ -413,7 +470,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
             });
             #[cfg(feature = "tools")]
             let host = host.driven(drive);
-            feed.source = Some(source(options, host.inbox())?);
+            feed.attach(options, host.inbox())?;
             host.run(client, Box::new(feed), |_| {})
         }
         // A phone's app is its Swift or Kotlin host, which calls `crate::ffi`.
@@ -436,7 +493,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
             })?;
             #[cfg(feature = "tools")]
             let host = host.driven(drive);
-            feed.source = Some(source(options, host.inbox())?);
+            feed.attach(options, host.inbox())?;
             host.run(client, Box::new(feed), |_| {})
         }
     };
@@ -626,10 +683,43 @@ fn checkout() -> String {
         .to_string()
 }
 
-/// `$BERYL_CACHE/b3d/frames`, where frame logs go. The cache is `~/Library/Caches/beryl`, or
-/// on Windows `%LOCALAPPDATA%\beryl`, unless `$BERYL_CACHE` names another.
+/// Opens the live socket for this process, and says where it is. A socket that cannot be made
+/// leaves the app running without one.
+#[cfg(all(feature = "tools", unix))]
+fn start_live(inbox: Inbox) -> Option<crate::live::Live> {
+    let pid = std::process::id();
+    let dir = crate::live::socket_dir();
+    match crate::live::Live::start(&dir, pid, out_dir(), inbox) {
+        Ok(live) => {
+            println!(
+                "{LIVE_SOCKET} {}",
+                crate::live::socket_path(&dir, pid).display()
+            );
+            Some(live)
+        }
+        Err(error) => {
+            eprintln!("beryl3d: {error}");
+            None
+        }
+    }
+}
+
+/// `$BERYL_CACHE/b3d/frames`, where frame logs go.
 fn frames_dir() -> PathBuf {
-    let cache = std::env::var_os("BERYL_CACHE").map_or_else(
+    cache_dir().join("b3d").join("frames")
+}
+
+/// `$BERYL_CACHE/b3d/out`, where the pictures of `just b3d live png` go, as those of
+/// `just b3d png` do.
+#[cfg(all(feature = "tools", unix))]
+fn out_dir() -> PathBuf {
+    cache_dir().join("b3d").join("out")
+}
+
+/// The cache folder: `~/Library/Caches/beryl`, or on Windows `%LOCALAPPDATA%\beryl`, unless
+/// `$BERYL_CACHE` names another.
+fn cache_dir() -> PathBuf {
+    std::env::var_os("BERYL_CACHE").map_or_else(
         || {
             if cfg!(windows) {
                 PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap_or_default()).join("beryl")
@@ -638,8 +728,7 @@ fn frames_dir() -> PathBuf {
             }
         },
         PathBuf::from,
-    );
-    cache.join("b3d").join("frames")
+    )
 }
 
 fn home() -> PathBuf {
