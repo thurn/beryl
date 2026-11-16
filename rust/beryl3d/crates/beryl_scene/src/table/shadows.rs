@@ -31,7 +31,12 @@ impl Table {
         under_way: bool,
         builder: &mut FrameBuilder,
     ) {
-        if pose.position.z <= shadow::LEAST_HEIGHT || (!under_way && self.lies(place, pose)) {
+        // A card a box of the flat layer shows casts no shadow on the table under the box.
+        let boxed = slot.is_some_and(|slot| self.in_box(slot));
+        if boxed
+            || pose.position.z <= shadow::LEAST_HEIGHT
+            || (!under_way && self.lies(place, pose))
+        {
             return;
         }
         let centre = pose.position;

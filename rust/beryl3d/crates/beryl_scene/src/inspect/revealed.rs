@@ -1,11 +1,85 @@
-//! The cards an effect revealed, shown until they are dismissed. Nothing until the game screen's
-//! track builds it.
+//! The chrome of the Revealed Cards pile (`table::revealed`), as the web interface's
+//! `RevealedCards` (`ui/src/stage/Revealed.tsx`) draws it: a pill over the pile that says
+//! "Revealed Cards", which opens a viewer of the pile's faces, beside a cross that dismisses the
+//! pile. The pile's faces appear while a script plays, so the pill is a float the client shows
+//! whenever the pile holds a face (`floats::REVEALED`), laid out once ahead of time, and not a
+//! piece of the game screen.
 
-use crate::element::Element;
-use crate::screens::ScreenIn;
+use beryl_protocol::protocol::ObjectId;
+use glam::Vec2;
 
-/// What the game screen shows for it, if anything.
+use crate::data::space::revealed as data;
+use crate::element::{Align, Dismiss, Element, Press, Shown, Viewed, row};
+use crate::frame::Role;
+use crate::input::{FaceId, Size};
+use crate::table::{CARD_HEIGHT, CARD_WIDTH};
+use crate::tokens::{color, size, type_style};
+use crate::widgets::{button, icons};
+
+/// What the pile and its viewer are called: Arena's words, as the web's `REVEALED`.
+pub const REVEALED: &str = "Revealed Cards";
+
+/// A face in the Revealed Cards pile, the first revealed first, as the viewer of the pile lists
+/// it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RevealedFace {
+    /// The slot of the card it is the face of.
+    pub slot: ObjectId,
+    /// The card's name.
+    pub name: String,
+    /// Its face, once the match's card records have arrived.
+    pub face: Option<FaceId>,
+}
+
+/// The pill and its cross: a small secondary button that opens the pile's viewer, and an icon
+/// that dismisses the pile.
 #[must_use]
-pub fn revealed(_input: &ScreenIn) -> Option<Element> {
-    None
+pub fn revealed() -> Element {
+    let mut pill = button(REVEALED)
+        .on_press(Press::View(Viewed::Revealed))
+        .height(size::PILL_HEIGHT)
+        .min_width(0.0)
+        .style(type_style::PILL);
+    pill.style.padding = [0.0, size::PILL_PADDING, 0.0, size::PILL_PADDING];
+    let mut cross = Element::new(Role::Button)
+        .name("Dismiss")
+        .on_press(Press::Dismiss(Dismiss::Revealed))
+        .width(size::PILL_CROSS)
+        .height(size::PILL_CROSS)
+        .background(color::ICON_BUTTON)
+        .radius(size::PILL_CROSS / 2.0);
+    cross.shows = Some(Shown::Icon(icons::CLOSE, cross_icon()));
+    row()
+        .name(REVEALED)
+        .gap(size::PILL_GAP)
+        .align_items(Align::Center)
+        .child(pill)
+        .child(cross)
+}
+
+/// Where the pill's top left corner stands in a window of `window`'s size, in logical points:
+/// a little left of and above the pile's first face, as `RevealedCards` sets the pill's `left`
+/// and `top` from the pile's space.
+#[must_use]
+pub fn pill_corner(window: Size) -> Vec2 {
+    // The first face's centre, from normalized device coordinates, and its half size.
+    let centre = Vec2::new(
+        f32::midpoint(data::AT[0], 1.0) * window.width,
+        (1.0 - data::AT[1]) / 2.0 * window.height,
+    );
+    let height = data::HEIGHT * window.height;
+    let half = Vec2::new(height * CARD_WIDTH / CARD_HEIGHT, height) / 2.0;
+    centre - half + Vec2::new(data::PILL_X, data::PILL_Y)
+}
+
+/// The side of the cross's glyph, in whole points: the size the icon atlas holds the cross at,
+/// an icon button's.
+fn cross_icon() -> u16 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a few points"
+    )]
+    let side = size::ICON as u16;
+    side
 }

@@ -4,7 +4,7 @@
 //! placed relative to the camera, so that it keeps its size and place at any window shape. Each
 //! face is a second card element beside the card's own, which lies where the table has it.
 
-use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
+use beryl_protocol::protocol::{ObjectId, ObjectView, Side, ZoneName};
 use glam::{Quat, Vec2};
 
 use super::look::{Dress, Look};
@@ -16,6 +16,21 @@ use crate::light::{Open, Span};
 use crate::pose::{Curve, Segment, Shape};
 
 impl Table {
+    /// Keeps `object`, the record of a card held up to be read, for the Revealed Cards pile to
+    /// draw its face from once the step that holds it up plays.
+    pub fn reveal(&mut self, object: &ObjectView) {
+        let slot = usize::from(object.slot.0);
+        if self.revealed.len() <= slot {
+            self.revealed.resize(slot + 1, None);
+        }
+        self.revealed[slot] = Some(object.clone());
+    }
+
+    /// The record of the face the card in `slot` last showed when it was held up to be read.
+    pub(crate) fn revealed(&self, slot: ObjectId) -> Option<&ObjectView> {
+        self.revealed.get(usize::from(slot.0))?.as_ref()
+    }
+
     /// Writes the faces of the Revealed Cards pile that `dress.lit` shows, each growing into its
     /// place over the step that held it up. A face that is leaving the pile is no longer drawn.
     /// Faces come from `faces`, and backs from layer `back`.

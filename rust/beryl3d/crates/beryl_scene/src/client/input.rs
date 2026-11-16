@@ -125,14 +125,25 @@ impl Client {
                         self.press_field(pointer);
                     }
                 }
+                self.viewing.down = None;
                 if self.pressed.is_none()
                     && let Some(index) = hit(&self.frame, pointer.position)
                     && let element = &self.frame.resolved[index as usize]
-                    && element.role == Role::Card
+                    && matches!(element.role, Role::Card | Role::Pile)
                 {
-                    let slot = element.id.0 as usize;
-                    let holdable = self.holdable(slot, element.place);
-                    (self.show.pointer_mut()).press(slot, pointer.position, holdable);
+                    // A press on a pile opens it, and is no press on the card on top. A card of a
+                    // pile that takes presses itself, as one held up in a prompt's tray does,
+                    // is pressed as a card.
+                    let opens = element.role == Role::Pile || !element.interactive;
+                    if let Some(pile) = self.pile_at(element.place).filter(|_| opens) {
+                        self.viewing.down = Some(pile);
+                        return;
+                    }
+                    if element.role == Role::Card {
+                        let slot = element.id.0 as usize;
+                        let holdable = self.holdable(slot, element.place);
+                        (self.show.pointer_mut()).press(slot, pointer.position, holdable);
+                    }
                 }
             }
             PointerPhase::Move if self.layer.edited_id().is_some() => {
@@ -141,6 +152,12 @@ impl Client {
             PointerPhase::Up if primary => {
                 if self.layer.edited_id().is_some() {
                     self.edit(Edit::Up);
+                }
+                if let Some(pile) = self.viewing.down.take()
+                    && let Some(index) = hit(&self.frame, pointer.position)
+                    && self.pile_at(self.frame.resolved[index as usize].place) == Some(pile)
+                {
+                    self.press(&crate::element::Press::View(pile));
                 }
                 let pressed = self.pressed.take();
                 if let Some((id, press, true)) = self.layer.press_at(pointer.position, open)
@@ -165,7 +182,9 @@ impl Client {
                     return false;
                 };
                 // A wheel turned down scrolls toward the end, as in a browser.
-                self.layer.scroll(id, -pointer.wheel);
+                if self.layer.scroll(id, -pointer.wheel) {
+                    self.place_shown();
+                }
                 true
             }
             PointerPhase::Down if pointer.kind == PointerKind::Touch => {
@@ -179,7 +198,9 @@ impl Client {
                     let delta = *last - pointer.position;
                     *last = pointer.position;
                     let id = *id;
-                    self.layer.scroll(id, delta);
+                    if self.layer.scroll(id, delta) {
+                        self.place_shown();
+                    }
                     self.pressed = None;
                     true
                 }

@@ -20,10 +20,11 @@ use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};
 use beryl_protocol::{AgentView, PlayerView};
 
-use crate::element::Element;
+use crate::element::{Element, Viewed};
 use crate::faces::FaceList;
 use crate::frame::ElementId;
 use crate::inspect::inspector::Inspected;
+use crate::inspect::revealed::RevealedFace;
 use crate::settings::Settings;
 use crate::table::Window;
 use crate::widgets::Fields;
@@ -115,6 +116,10 @@ pub struct ScreenIn<'a> {
     pub inspected: Option<&'a Inspected>,
     /// The faces of the match, once its card records have arrived.
     pub faces: Option<&'a FaceList>,
+    /// The pile whose viewer is open, if any (`inspect::viewer`).
+    pub viewing: Option<Viewed>,
+    /// The faces of the Revealed Cards pile, the first revealed first, which its viewer lists.
+    pub revealed: &'a [RevealedFace],
 }
 
 /// What the flat layer shows on `screen`.

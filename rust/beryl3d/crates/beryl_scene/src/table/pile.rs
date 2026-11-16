@@ -152,7 +152,11 @@ impl Table {
     #[must_use]
     pub fn pile(&self, side: Side, zone: ZoneName) -> Option<(usize, [Vec2; 4])> {
         let pile = self.objects.piles[PileShown::index(side, zone)];
-        let top = self.rest(usize::from(pile.top?.0))?;
+        let top = usize::from(pile.top?.0);
+        if self.in_box(top) {
+            return None;
+        }
+        let top = self.rest(top)?;
         Some((pile.count, self.camera().card_corners(top.transform())))
     }
 
@@ -160,10 +164,25 @@ impl Table {
     /// beneath its top two, which `write` does not draw.
     pub(super) fn write_piles(&self, builder: &mut FrameBuilder) {
         for (index, pile) in self.objects.piles.iter().enumerate() {
-            let Some(top) = pile.top.and_then(|top| self.rest(usize::from(top.0))) else {
+            // A pile whose top card a box of the flat layer shows, as the viewer shows a pile's
+            // cards, is drawn as though it had left.
+            let (side, zone) = PileShown::of_index(index);
+            let Some((slot, top)) = (pile.top)
+                .map(|top| usize::from(top.0))
+                .filter(|&top| !self.in_box(top))
+                .and_then(|top| Some((top, self.rest(top)?)))
+            else {
                 continue;
             };
-            let (side, zone) = PileShown::of_index(index);
+            if let Some(draw) = side_record(pile) {
+                builder.draw(Band::Opaque, draw);
+            }
+            // A pile writes no element over its top card while a prompt holds that card up in
+            // its tray, or once it has left the pile: a press, and the checks that ask what a
+            // press reaches, must reach the card there.
+            if self.in_tray(slot) || !self.lies_in(slot, side, zone) {
+                continue;
+            }
             builder.resolved(
                 pile_name(side, zone),
                 Resolved {
@@ -187,10 +206,17 @@ impl Table {
                     really: crate::frame::NameRef::default(),
                 },
             );
-            if let Some(draw) = side_record(pile) {
-                builder.draw(Band::Opaque, draw);
-            }
         }
+    }
+}
+
+impl Table {
+    /// Whether the card in `slot` rests in `side`'s pile of `zone`.
+    fn lies_in(&self, slot: usize, side: Side, zone: ZoneName) -> bool {
+        let object = self.objects.cards.get(slot).copied().flatten();
+        object.is_some_and(|object| {
+            matches!(object.place, Place::Card { zone: z, side: s, .. } if z == zone && s == side)
+        })
     }
 }
 

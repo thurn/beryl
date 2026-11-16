@@ -357,6 +357,27 @@
         "size": 15,
         "line_height": 1.45,
         "note": "A text field's words: `.bug-text` in `ui/src/screens/styles/bug-report.css`, 15 points at line height 1.45."
+      },
+      "OVERLAY_TITLE": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 64.5,
+        "line_height": 1.08,
+        "note": "An overlay's title: `.overlay-title` in `ui/src/design/components/overlay.css`, bold 64.5 points at line height 1.08."
+      },
+      "OVERLAY_INSTRUCTION": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 22.8,
+        "line_height": 1.2,
+        "note": "An overlay's instruction under its title: `.overlay-instruction`, 22.8 points at line height 1.2."
+      },
+      "PILL": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 14,
+        "line_height": 1,
+        "note": "The label of a small pill button over the table, such as Revealed Cards: `.stage-revealed .button` in `ui/src/stage/stage.css`, 14 points."
       }
     },
     "size": {
@@ -507,6 +528,62 @@
       "TRAY_PILE_RADIUS": {
         "value": 10,
         "note": "The radius of a pile's box in a tray: `.stage-tray-pile`'s `border-radius`."
+      },
+      "OVERLAY_TOP": {
+        "value": 48,
+        "note": "How far below the window's top an overlay's columns begin: `.overlay`'s top padding."
+      },
+      "OVERLAY_LEFT": {
+        "value": 136,
+        "note": "How far from the window's left edge an overlay's choice column begins: `.overlay`'s left padding."
+      },
+      "OVERLAY_MAIN": {
+        "value": 1000,
+        "note": "The width of an overlay's choice column: the first of `.overlay`'s grid columns."
+      },
+      "OVERLAY_SIDE": {
+        "value": 338,
+        "note": "The width of an overlay's side column, which holds the source card: the second of `.overlay`'s grid columns."
+      },
+      "OVERLAY_GAP": {
+        "value": 72,
+        "note": "Between an overlay's two columns: the most of `.overlay`'s `column-gap`."
+      },
+      "OVERLAY_HEADER": {
+        "value": 159,
+        "note": "The height of an overlay's header, its title over its instruction: `.overlay-header`."
+      },
+      "VIEWER_CARD": {
+        "value": 150,
+        "note": "The width of a card in the viewer's grid: `VIEWER_CARD` in `ui/src/game/Piles.tsx`."
+      },
+      "VIEWER_COLUMNS": {
+        "value": 5,
+        "note": "The most cards in a row of the viewer's grid: `VIEWER_COLUMNS` in `ui/src/game/Piles.tsx`."
+      },
+      "VIEWER_GAP": {
+        "value": 14,
+        "note": "Between the cards of the viewer's grid: `.zone-viewer-cards`'s `gap`."
+      },
+      "VIEWER_HEIGHT": {
+        "value": 456,
+        "note": "The most the viewer's grid shows before it scrolls, two rows of cards: `.zone-viewer-cards`'s `max-height`."
+      },
+      "PILL_HEIGHT": {
+        "value": 28,
+        "note": "The height of a small pill button over the table: `.stage-revealed .button`."
+      },
+      "PILL_PADDING": {
+        "value": 12,
+        "note": "A pill button's padding either side of its label."
+      },
+      "PILL_CROSS": {
+        "value": 24,
+        "note": "The side of the cross beside a pill that dismisses what it names: `.stage-revealed-dismiss`."
+      },
+      "PILL_GAP": {
+        "value": 6,
+        "note": "Between a pill and its cross: `.stage-revealed`'s `gap`."
       }
     },
     "color": {
@@ -582,6 +659,10 @@
       "TRAY_PILE_RIM": {
         "value": "rgb(233 173 74 / 45%)",
         "note": "The rim of a pile's box under the cards a split holds up: `.stage-tray-pile`'s `border` in `ui/src/stage/stage.css`."
+      },
+      "BACKDROP": {
+        "value": "rgb(14 13 12 / 40%)",
+        "note": "What darkens the table under an overlay: `.overlay-backdrop`'s `background`."
       }
     },
     "mana": {

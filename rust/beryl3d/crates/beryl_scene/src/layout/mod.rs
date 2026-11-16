@@ -14,6 +14,7 @@ mod float;
 mod focus;
 mod menu;
 mod motion;
+mod objects;
 mod pointed;
 mod reconcile;
 mod scroll;

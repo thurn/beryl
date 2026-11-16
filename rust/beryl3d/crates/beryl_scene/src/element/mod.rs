@@ -8,7 +8,7 @@ mod style;
 use std::ops::Range;
 
 use beryl_protocol::prompt::{ButtonId, Click};
-use beryl_protocol::protocol::{Side, Step};
+use beryl_protocol::protocol::{Side, Step, ZoneName};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
@@ -69,6 +69,17 @@ pub enum Press {
     Field(ElementId, String),
     /// Close something shown over the screen.
     Dismiss(Dismiss),
+    /// Open the viewer of a pile's cards, as a press on a pile does.
+    View(Viewed),
+}
+
+/// What the viewer shows the cards of (`inspect::viewer`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Viewed {
+    /// `side`'s library, graveyard or exile.
+    Pile(Side, ZoneName),
+    /// The faces of the Revealed Cards pile.
+    Revealed,
 }
 
 /// What a `Press::Dismiss` closes.
@@ -317,4 +328,7 @@ pub mod floats {
     pub const INSPECTOR: FloatId = FloatId(28);
     /// The gear at the window's top right that opens the settings sheet.
     pub const GEAR: FloatId = FloatId(29);
+    /// The "Revealed Cards" pill over the Revealed Cards pile, with the cross that dismisses
+    /// the pile (`inspect::revealed`).
+    pub const REVEALED: FloatId = FloatId(30);
 }

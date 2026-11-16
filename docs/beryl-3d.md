@@ -1328,7 +1328,16 @@ flight start exactly where the card was.
   the top left of the screen, placed relative to the camera. The face's element
   id is the card's slot plus `REVEALED_FACE` (2^21), which the "no duplicates"
   check counts apart from cards. The pile keeps its faces until a script with a
-  reset, or until another cause reveals cards.
+  reset, or until another cause reveals cards, or until the player dismisses it.
+  While it holds a face, a "Revealed Cards" pill stands over it with a cross
+  (`floats::REVEALED`, laid out once ahead, the first time a script reveals).
+  The pill opens a viewer of the pile's faces, drawn flat, and the cross ends
+  the pile's spans at once.
+- **A press on a pile opens its viewer.** A pile's element catches presses, as
+  the web interface's button over each pile does, and opens the viewer of that
+  pile's cards (`Press::View`). It writes no element while a prompt holds its
+  top card up in the tray or once that card has left the pile, and a card in
+  flight passes over it in the hit test.
 - **Marks are separate quads.** What a card's own record says (tapped, a power
   and toughness plaque, counters, summoning sickness) and what a prompt marks on
   it are drawn as a few quads placed on the card's face, so they change without
@@ -1592,7 +1601,20 @@ fn prompt_bar(prompt: &PromptView) -> Element {
   the two clients cannot drift apart in color or type.
 - **An element can show a scene object.** The card browser and the mulligan
   screen lay out boxes with `taffy` and place real 3D cards in them, so a card
-  looks and animates the same wherever it appears.
+  looks and animates the same wherever it appears. After each layout or scroll
+  the client hands the table every such box (`Layer::shown_objects`,
+  `Table::show_in`). The table draws the card in its box over the flat layer
+  (`Band::LayerCards`) without changing where it rests, so scripts still play
+  from the card's zone. A card new to a box moves there from where it was drawn,
+  and one no box shows any more moves back, with the tray's own-step timings
+  (`TrayLifts` and `TrayLetGo`). A box scrolled partly out of the element that
+  clips it shows nothing, since a 3D card cannot be cut to a clip. While a box
+  shows a pile's top card, the pile draws no side and no element.
+- **The viewer** (`inspect::viewer`) lists a pile's cards, the top one first, in
+  the overlay shell every choice screen uses (`overlay`): a title and an
+  instruction over a grid of up to five columns that scrolls past two rows, and
+  a Close button that Escape also presses. While it is open no card of the table
+  takes a press.
 - **An element can show a face flat** (`Shown::Face`): the inspector draws the
   card under the pointer this way, at full size, beside the table. It is no
   scene object, so a game object still has exactly one. Until the full-size face
@@ -1630,10 +1652,11 @@ buttons, icon buttons, toggles and sliders there are:
 A **float** is a small element placed at a point of the window instead of in a
 screen's layout: the turn banner, the pill above a player who is looking at
 cards, a life total and the number that floats off it, the count on a pile, the
-count of cards scrolled off the end of a row, and the inspector. An element
-whose style `passes` lets the pointer through, as CSS's `pointer-events: none`
-does, so the card under the inspector stays hovered. `Layer::float(id, element)`
-shows or removes one, and its ids are in `element::floats`.
+Revealed Cards pill, count of cards scrolled off the end of a row, and the
+inspector. An element whose style `passes` lets the pointer through, as CSS's
+`pointer-events: none` does, so the card under the inspector stays hovered.
+`Layer::float(id, element)` shows or removes one, and its ids are in
+`element::floats`.
 
 - **Each float is a taffy tree of its own**, laid out at its content's size and
   matched against the element it had, as a screen is. It is outside the root's

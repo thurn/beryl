@@ -13,7 +13,7 @@ use beryl_protocol::script::{OwnTimings, Subject, Verb, own_timings};
 use beryl_protocol::{AgentView, StartRequest};
 
 use crate::command::{Reply, Request, SessionCommand};
-use crate::element::Press;
+use crate::element::{Dismiss, Press};
 use crate::faces::{FaceList, Faces};
 use crate::frame::{self, ElementId, Frame, FrameBuilder, Sound, Wake};
 use crate::hud::counts::CountFloats;
@@ -37,8 +37,10 @@ mod inspect;
 mod own;
 mod screen;
 mod testing;
+mod viewing;
 
 use inspect::Inspector;
+use viewing::Viewing;
 
 /// The platform a host runs on, as far as the client cares: where `Cmd` in a shortcut means
 /// the Command key, and where it means Control.
@@ -159,6 +161,8 @@ pub struct Client {
     low_memory: bool,
     /// What the inspector shows and when to lay it out again (`inspect`).
     inspector: Inspector,
+    /// The viewer of a pile's cards and the Revealed Cards pill (`viewing`).
+    viewing: Viewing,
 }
 
 /// Whether the pointer is on the open prompt's button that shows what it would tap
@@ -216,6 +220,7 @@ impl Client {
             tier: Tier::Baseline,
             low_memory: false,
             inspector: Inspector::default(),
+            viewing: Viewing::default(),
         }
     }
 
@@ -261,6 +266,7 @@ impl Client {
                         script.timing.clone()
                     })
                     .unwrap_or_default();
+                self.prepare_pill(&update.view);
                 self.show.push(update, timings);
                 // Every life total and pool the scripts to come will show is laid out now, so
                 // that a frame lays out none of them.
@@ -379,6 +385,7 @@ impl Client {
         self.show.pointer_mut().advance(now);
         self.show.advance_slide(now);
         self.inspect();
+        self.write_pill(self.screen == Screen::Game && self.sheet.is_none());
         let mut builder = FrameBuilder::new(&mut self.frame);
         self.show.frame(now, &mut builder);
         // Elements anchored to a card, an ability or a player stand where the table drew it.
@@ -463,6 +470,7 @@ impl Client {
             let glyphs = self.layer.glyphs_mut();
             (self.show.badges_mut()).rescale(window.scale, glyphs);
         }
+        self.place_shown();
     }
 
     /// Carries out what a press on an element means: a command for the session, a request of
@@ -513,9 +521,12 @@ impl Client {
             Press::Seat(seat) => self.set_seat(seat),
             Press::Focus(id) => self.layer.focus(Some(id)),
             Press::Field(id, ref text) => self.keep_field(id, text),
-            // No screen opens a menu or a viewer yet, so there is nothing for these to act on:
-            // the screens that open them give them their arms.
-            Press::Menu(..) | Press::Dismiss(_) => {}
+            Press::View(viewed) => self.view(Some(viewed)),
+            Press::Dismiss(Dismiss::Viewer) => self.view(None),
+            Press::Dismiss(Dismiss::Revealed) => self.dismiss_revealed(),
+            // No screen opens a menu yet, so there is nothing for these to act on: the screen
+            // that opens one gives them their arms.
+            Press::Menu(..) | Press::Dismiss(Dismiss::Menu) => {}
         }
     }
 

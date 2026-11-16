@@ -4,9 +4,9 @@
 //! An element's area is the quadrilateral of its four corners, cut to its clip. The flat layer
 //! is drawn over the table without a depth test, so any element of the flat layer covers every
 //! card. Within the flat layer a later element of the tree is drawn over an earlier one; on the
-//! table a nearer element (smaller `depth`) covers a farther one. An arrow never catches a
-//! press, and neither does a pile's element, which names the pile but is not drawn over its top
-//! card, nor an element with no opacity.
+//! table a nearer element (smaller `depth`) covers a farther one. A pile's element lies at its
+//! top card's depth and is written after the cards, so a press on a pile reaches the pile, which
+//! opens its viewer. An arrow never catches a press, nor does an element with no opacity.
 
 use glam::Vec2;
 
@@ -255,9 +255,9 @@ fn catches_anywhere(element: &Resolved) -> bool {
     !never_catches(element.role) && element.opacity > 0.0 && !element.state.has(StateBits::PASSES)
 }
 
-/// Whether an element of `role` never catches a press: an arrow, or a pile's element.
+/// Whether an element of `role` never catches a press: an arrow.
 fn never_catches(role: Role) -> bool {
-    matches!(role, Role::Arrow | Role::Pile)
+    role == Role::Arrow
 }
 
 /// Whether `point` is inside the element's quadrilateral and its clip.
@@ -301,8 +301,17 @@ fn covers(frame: &Frame, a: u32, b: u32) -> bool {
         (false, true) => false,
         // The flat layer is drawn in the order of its tree.
         (true, true) => a > b,
+        // A card in flight passes over a pile's element, which names the pile's top card at
+        // rest: a card landing on the pile is drawn, and pressed, above it.
+        (false, false) if flying(first) && second.role == Role::Pile => true,
+        (false, false) if first.role == Role::Pile && flying(second) => false,
         (false, false) => first.depth.total_cmp(&second.depth).then(b.cmp(&a)).is_lt(),
     }
+}
+
+/// Whether `element` is a card a script or the pointer is moving.
+fn flying(element: &Resolved) -> bool {
+    element.role == Role::Card && element.state.has(StateBits::MOVING)
 }
 
 /// Every element of `frame` other than those that never catch a press, in index order.

@@ -443,6 +443,7 @@ impl Table {
     /// only the table's own resting places put them in the tray.
     pub(super) fn pressable(&self, slot: usize, place: crate::frame::Place) -> bool {
         match self.held {
+            _ if self.covered() => false,
             Some(_) => self.in_tray(slot),
             None => crate::pointer::takes_pointer(place),
         }

@@ -15,6 +15,7 @@ use super::own::{self, Fights};
 use super::pile::PileShown;
 use super::place::{Placement, Rest, RowFits, Rows, Scroll};
 use super::shadows::Floors;
+use super::shown::Shown;
 use super::tray::{Held, TrayMotion};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window};
 use crate::effects::{self, Effect};
@@ -118,13 +119,15 @@ pub struct Table {
     placed: Placed,
     /// The record of the face each card last showed when it was held up to be read, by slot,
     /// which the Revealed Cards pile draws (`Span::Revealed`).
-    revealed: Vec<Option<ObjectView>>,
+    pub(super) revealed: Vec<Option<ObjectView>>,
     /// Since when each permanent has fought as its record says, by slot, for the marks of its
     /// own record.
     fights: Fights,
     /// The cards a prompt holds up in its tray, and how they lie and move (`table::tray`).
     pub(super) held: Option<Held>,
     pub(super) tray: TrayMotion,
+    /// The cards shown in the flat layer's boxes, and their moves (`table::shown`).
+    pub(super) shown: Shown,
 }
 
 /// How many objects a table has placed since its count was last taken, for `Work::placed`.
@@ -168,6 +171,7 @@ impl Table {
             fights: Fights::with_capacity(OBJECTS),
             held: None,
             tray: TrayMotion::new(),
+            shown: Shown::default(),
         }
     }
 
@@ -209,21 +213,6 @@ impl Table {
         let hand = &self.layout.hand;
         self.camera
             .screen_pose(anchor, hand.depth, Quat::IDENTITY, hand.height)
-    }
-
-    /// Keeps `object`, the record of a card held up to be read, for the Revealed Cards pile to
-    /// draw its face from once the step that holds it up plays.
-    pub fn reveal(&mut self, object: &ObjectView) {
-        let slot = usize::from(object.slot.0);
-        if self.revealed.len() <= slot {
-            self.revealed.resize(slot + 1, None);
-        }
-        self.revealed[slot] = Some(object.clone());
-    }
-
-    /// The record of the face the card in `slot` last showed when it was held up to be read.
-    pub(crate) fn revealed(&self, slot: ObjectId) -> Option<&ObjectView> {
-        self.revealed.get(usize::from(slot.0))?.as_ref()
     }
 
     /// Fits the camera to a window of a new shape and recomputes every resting place.
@@ -346,6 +335,7 @@ impl Table {
             // or out of a prompt's tray.
             under_way = under_way || self.slide_look(slot, &mut object, dress.now);
             under_way = under_way || self.tray_look(slot, &mut object, dress.now);
+            under_way = self.shown_look(slot, &mut object, dress.now) || under_way;
             if !object.visible {
                 self.fights.forget(slot);
                 continue;
@@ -605,7 +595,10 @@ impl Table {
         // drawn there would darken toward black and hide the cards beneath it. It takes the
         // band its own marks take (`light::marks::band`), or a mark drawn before it would lie
         // under it.
-        let band = if opacity == 255 && look.dissolve <= 0.0 && look.whiten <= 0.0 {
+        // A card a box of the flat layer shows is drawn over the flat layer (`table::shown`).
+        let band = if role == Role::Card && self.shown.holds(id.0 as usize) {
+            Band::LayerCards
+        } else if opacity == 255 && look.dissolve <= 0.0 && look.whiten <= 0.0 {
             Band::Opaque
         } else if look.pose.position.z < crate::data::space::light::ON_TABLE_BELOW {
             Band::TableMarks

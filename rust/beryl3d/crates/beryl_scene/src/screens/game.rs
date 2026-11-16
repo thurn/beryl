@@ -1,12 +1,13 @@
 //! The game screen: the flat layer over the table while a game goes on, from its opening hand
 //! to its end. Each piece of it is built in a file of its own (`hud`, `inspect`, `prompts`
 //! and this module's `opening` and `game_over`), and this function puts them together. The
-//! inspector is not one of them: the client shows it as a float (`inspect::inspector`).
+//! inspector and the Revealed Cards pill are not among them: the client shows each as a float
+//! (`inspect::inspector`, `inspect::revealed`).
 
 use super::{ScreenIn, game_over, opening};
 use crate::element::{Element, row};
 use crate::hud::{log, players, steps};
-use crate::inspect::{revealed, viewer};
+use crate::inspect::viewer;
 use crate::prompts;
 
 /// What the flat layer shows over a game. While none of its pieces shows anything, it is the
@@ -26,7 +27,6 @@ pub fn game(input: &ScreenIn) -> Element {
         steps::steps(input),
         log::log(input),
         viewer::viewer(input),
-        revealed::revealed(input),
     ]
     .into_iter()
     .flatten()

@@ -63,6 +63,8 @@ impl Client {
             fields: &self.fields,
             inspected: self.inspector.shown.as_ref(),
             faces: Some(self.show.faces().list()),
+            viewing: self.viewing.open,
+            revealed: &self.viewing.revealed,
         };
         let element = inspector::inspector(&input);
         let place = inspector::place(&input);

@@ -6,9 +6,10 @@
 use beryl_protocol::protocol::{ObjectId, PlayerView};
 
 use super::Show;
+use crate::input::Rect;
 use crate::light::Lit;
 use crate::pose::{Curve, Pose};
-use crate::table::{CARD_WIDTH, Held};
+use crate::table::{CARD_WIDTH, Held, Moves};
 
 impl Show {
     /// The latest view, which says where each object lies, and the spans the table shows, for
@@ -34,6 +35,12 @@ impl Show {
         curve: Curve,
     ) {
         self.table.lift(held, poses, over, curve);
+    }
+
+    /// Shows each card `boxes` names in its box of the flat layer, and no other
+    /// (`Table::show_in`).
+    pub fn show_in(&mut self, boxes: &[(ObjectId, Rect, bool)], moves: Moves, covered: bool) {
+        self.table.show_in(boxes, moves, covered);
     }
 
     /// Where each card held up rests in its zone in the view the table shows (`Table::zone_rests`).

@@ -209,6 +209,8 @@ mod milestone_three {
             fields: &FIELDS,
             inspected: None,
             faces: None,
+            viewing: None,
+            revealed: &[],
         }
     }
 

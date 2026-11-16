@@ -18,6 +18,7 @@ mod revealed;
 mod rows;
 mod scene;
 mod shadows;
+mod shown;
 mod stack;
 mod tray;
 
@@ -33,6 +34,7 @@ pub use rows::RowWindow;
 pub(crate) use rows::{NameIds, RowChange};
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub(crate) use scene::{Objects, PileCount, ability_track};
+pub use shown::Moves;
 pub(crate) use stack::{OnStack, on_stack, row_area};
 pub use tray::{Held, TraySpace, landing, tray, tray_boxes, tray_with_rooms};
 

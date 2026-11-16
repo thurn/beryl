@@ -9,7 +9,7 @@
 //! a frame only chooses which laid-out element each float shows and sets its look, and
 //! allocates nothing.
 
-use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, Side, ZoneName};
+use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerState, PlayerView, Side, ZoneName};
 use glam::Vec2;
 
 use crate::data::space::layout::desktop::piles::COUNT_GAP;
@@ -115,27 +115,41 @@ fn count_of(key: u64) -> usize {
 /// How many cards `view` has in the pile at `index`.
 fn count_in(view: &PlayerView, index: usize) -> usize {
     let (side, zone) = PileShown::of_index(index);
-    let player = match side {
-        Side::You => &view.players.you,
-        Side::Opponent => &view.players.opponent,
-    };
+    let player = player(view, side);
     match zone {
         ZoneName::Library => player.library.len(),
         ZoneName::Graveyard => player.graveyard.len(),
-        // A card that lies under the permanent holding it in exile is not in the pile.
-        _ => {
-            let find = |slot: ObjectId| view.objects.iter().find(|host| host.slot == slot);
-            let held = |object: &ObjectView| host_slot(object, find).is_some();
-            view.objects
-                .iter()
-                .filter(|object| {
-                    object.zone == ZoneName::Exile
-                        && object.zone_side.unwrap_or(object.owner) == side
-                        && !held(object)
-                })
-                .count()
-        }
+        _ => exiled(view, side).count(),
     }
+}
+
+/// The slots of the cards in `side`'s pile of `zone` in `view`, the bottom one first.
+#[must_use]
+pub fn pile_cards(view: &PlayerView, side: Side, zone: ZoneName) -> Vec<ObjectId> {
+    let player = player(view, side);
+    match zone {
+        ZoneName::Library => player.library.clone(),
+        ZoneName::Graveyard => player.graveyard.clone(),
+        _ => exiled(view, side).map(|object| object.slot).collect(),
+    }
+}
+
+fn player(view: &PlayerView, side: Side) -> &PlayerState {
+    match side {
+        Side::You => &view.players.you,
+        Side::Opponent => &view.players.opponent,
+    }
+}
+
+/// The cards in `side`'s exile pile in `view`. A card that lies under the permanent holding it
+/// in exile is not in the pile.
+fn exiled(view: &PlayerView, side: Side) -> impl Iterator<Item = &ObjectView> {
+    let find = |slot: ObjectId| view.objects.iter().find(|host| host.slot == slot);
+    view.objects.iter().filter(move |object| {
+        object.zone == ZoneName::Exile
+            && object.zone_side.unwrap_or(object.owner) == side
+            && host_slot(object, find).is_none()
+    })
 }
 
 /// The count of the pile at `index`: text that shows the number, named for the pile and the

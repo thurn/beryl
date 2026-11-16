@@ -205,3 +205,168 @@ fn it_asks_for_one_full_size_face_at_a_time_and_draws_it_once_it_lands() {
     page.step(Duration::from_millis(16));
     assert!(full(&mut page), "drawn from its full-size face");
 }
+
+/// The table with `count` cards in the viewer's graveyard, of three names in turn.
+fn graveyard(count: usize) -> ViewBuilder {
+    let mut view = table();
+    for index in 0..count {
+        let name = ["Memory Lapse", "Counterspell", "Plains"][index % 3];
+        view.card(ZoneName::Graveyard, Side::You, name);
+    }
+    view
+}
+
+/// The faults of `rules` the checks find in the page's frame now.
+fn faults(page: &mut Page, rules: &[Rule]) -> Vec<beryl_scene::agent::Fault> {
+    page.check();
+    (page.faults().into_iter())
+        .filter(|fault| rules.contains(&fault.rule))
+        .collect()
+}
+
+/// The cards of the viewer's graveyard the frame draws, by slot.
+fn graveyard_cards(page: &mut Page) -> Vec<(u32, Rect)> {
+    let frame = page.frame();
+    (frame.resolved.iter())
+        .filter(|element| {
+            element.role == Role::Card
+                && element.place
+                    == beryl_scene::frame::Place::Card {
+                        zone: ZoneName::Graveyard,
+                        side: Side::You,
+                        row: None,
+                    }
+        })
+        .map(|element| (element.id.0, beryl_scene::agent::hit::bounds(element)))
+        .collect()
+}
+
+const PILE: &str = "pile \"Your graveyard\"";
+
+#[test]
+fn a_graveyard_of_thirty_opens_in_the_viewer_scrolls_and_flies_back_when_closed() {
+    let mut page = page(&graveyard(30));
+    let top = graveyard_cards(&mut page);
+    assert!(!top.is_empty(), "the pile's top cards are drawn");
+    page.press(PILE);
+    page.step(Duration::from_millis(1000));
+    assert!(
+        page.try_find(PILE).is_err(),
+        "no card is left at the pile while the viewer shows them"
+    );
+    let grid = page.find("list \"cards\"").rect();
+    let shown = graveyard_cards(&mut page);
+    // Two rows of five fit before the grid scrolls; every card drawn lies in the grid.
+    assert!(shown.len() >= 10, "{shown:?}");
+    for (slot, rect) in &shown {
+        assert!(
+            rect.y >= grid.y - 1.0 && rect.y + rect.height <= grid.y + grid.height + 1.0,
+            "card {slot} at {rect:?} lies in the grid {grid:?}"
+        );
+    }
+    assert!(
+        faults(&mut page, &[Rule::Duplicate, Rule::Reachable]).is_empty(),
+        "{:?}",
+        faults(&mut page, &[Rule::Duplicate, Rule::Reachable])
+    );
+    // The bottom card of the pile is listed last, out of view until the grid scrolls.
+    let bottom = shown.iter().map(|(slot, _)| *slot).min().expect("cards");
+    let centre = Vec2::new(grid.x + grid.width / 2.0, grid.y + grid.height / 2.0);
+    page.wheel(centre, Vec2::new(0.0, -2000.0));
+    page.step(Duration::from_millis(16));
+    let scrolled = graveyard_cards(&mut page);
+    assert!(
+        scrolled.iter().all(|(slot, _)| *slot != bottom),
+        "the first card listed scrolled out of view"
+    );
+    let least = scrolled.iter().map(|(slot, _)| *slot).min().expect("cards");
+    assert!(least < bottom, "the last cards listed scrolled into view");
+    assert!(faults(&mut page, &[Rule::Duplicate, Rule::Reachable]).is_empty());
+
+    page.press("button \"close\"");
+    page.step(Duration::from_millis(1000));
+    assert!(
+        page.try_find("list \"cards\"").is_err(),
+        "the viewer closed"
+    );
+    page.find(PILE);
+    let back = graveyard_cards(&mut page);
+    assert_eq!(back.len(), top.len(), "the pile draws its top cards again");
+    for ((slot, before), (again, after)) in top.iter().zip(&back) {
+        assert_eq!(slot, again);
+        assert!(
+            (before.x - after.x).abs() < 0.5 && (before.y - after.y).abs() < 0.5,
+            "card {slot} rests where it lay: {before:?}, now {after:?}"
+        );
+    }
+}
+
+#[test]
+fn escape_closes_the_viewer() {
+    let mut page = page(&graveyard(3));
+    page.press(PILE);
+    page.step(Duration::from_millis(16));
+    page.find("text \"3 cards · top first\"");
+    page.run("key Escape");
+    page.step(Duration::from_millis(1000));
+    assert!(page.try_find("list \"cards\"").is_err(), "Escape closed it");
+}
+
+#[test]
+fn the_revealed_pill_stands_over_the_revealed_pile_and_its_cross_puts_it_away() {
+    use beryl_protocol::script::Act;
+    use beryl_scene::frame::REVEALED_FACE;
+    use beryl_scene::testing::timing;
+
+    let mut view = table();
+    let shown = view
+        .card(ZoneName::Hand, Side::You, "Lightning Bolt")
+        .clone();
+    let start = view.update();
+    let mut script = ScriptBuilder::default();
+    script.beat([Act::Showcase {
+        object: shown.clone(),
+    }]);
+    let mut after = start.clone();
+    after.view.script = Some(beryl_scene::testing::script(
+        None,
+        script.build().beats,
+        vec![timing(300.0)],
+    ));
+    let messages = vec![
+        FixtureMessage::game_update(&start),
+        FixtureMessage::game_update(&after),
+    ];
+    let mut messages = messages;
+    messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
+    let mut page = Page::new(
+        Recording(messages).into(),
+        Side::You,
+        Layout::Desktop,
+        WINDOW,
+    )
+    .expect("the view can be read");
+    page.still();
+    page.step(Duration::from_millis(1000));
+    let face = REVEALED_FACE + u32::from(shown.slot.0);
+    let faces = (page.frame().resolved.iter())
+        .find(|element| element.id.0 == face)
+        .map(beryl_scene::agent::hit::bounds)
+        .expect("the face lies in the Revealed Cards pile");
+    let pill = page.find("button \"Revealed Cards\"").rect();
+    assert!(
+        pill.y + pill.height <= faces.y && (pill.x - faces.x).abs() < 20.0,
+        "the pill {pill:?} stands over the pile {faces:?}"
+    );
+    page.press("button \"Revealed Cards\"");
+    page.step(Duration::from_millis(16));
+    page.find(&format!("region \"Lightning Bolt #{}\"", shown.slot.0));
+    page.press("button \"close\"");
+    page.press("button \"Dismiss\"");
+    page.step(Duration::from_millis(16));
+    assert!(page.try_find("button \"Revealed Cards\"").is_err());
+    assert!(
+        !(page.frame().resolved.iter()).any(|element| element.id.0 == face),
+        "the pile is put away"
+    );
+}

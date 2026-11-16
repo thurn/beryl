@@ -12,7 +12,11 @@ impl Show {
     /// never when nothing plays.
     #[must_use]
     pub fn wake(&self, now: u64) -> Wake {
-        if self.pointer.moving(now) || self.table.sliding(now) || self.table.tray_moving(now) {
+        if self.pointer.moving(now)
+            || self.table.sliding(now)
+            || self.table.tray_moving(now)
+            || self.table.shown_moving(now)
+        {
             return Wake::Now;
         }
         let mut next = None::<u64>;

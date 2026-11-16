@@ -456,7 +456,9 @@
     "height": 0.143,
     "step": 0.02,
     "reach": 0.08,
-    "depth": 290
+    "depth": 290,
+    "pill_x": -6,
+    "pill_y": -34
   },
   "badges": {
     "em": 0.1,
@@ -615,5 +617,8 @@
       "in": 0.06,
       "out": 0.08
     }
+  },
+  "shown": {
+    "depth": 280
   }
 }
