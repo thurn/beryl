@@ -8,8 +8,11 @@ description: Work on the bead status site (`just status`, status/) or its cirrus
 Read `status/AGENTS.md` first, then hold every change to three things.
 **Validate it for real**: add or update a test in `status/tests/`, run the
 `status` lane's black, pyre and pytest, then serve it with
-`just status --port <free port>` and look at the page you changed in a browser,
-at desktop and 375 px widths and in both colour schemes, before you push.
+`just status --port <free port>` and look at the page you changed in a browser
+(Playwright), at desktop and 375 px widths and in both colour schemes, before
+you push. Always pick a port other than the default, 8766, which belongs to the
+user's own `just status`; a different port and your worktree's code keep your
+server and its site folder apart from theirs.
 **Measure performance before and after**: time the cold and warm rebuilds and
 the render of the page you touched, keep navigation to a prefetched page at a
 few milliseconds, never put a call to `bd` on a page's path, and give the
