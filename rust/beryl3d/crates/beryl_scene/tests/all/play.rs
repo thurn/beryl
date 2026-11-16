@@ -65,14 +65,15 @@ fn a_script_of_three_beats_plays_to_its_end() {
         flying.position != held.position && flying.position != landed.position,
         "halfway through its flight the Plains is between the hand and the battlefield"
     );
-    // Halfway through its time the path is `verbs.fly.arc` (55 mm) above the straight line. The
-    // Plains flies to its place in the row as the first beat leaves it, which the token's
-    // arrival later shifts by a little, so the line to its final place is a close stand-in.
+    // The viewer's land glides straight to its place: halfway through its time it is on the
+    // straight line. The Plains flies to its place in the row as the first beat leaves it, which
+    // the token's arrival later shifts by a little, so the line to its final place is a close
+    // stand-in.
     let along = Curve::EASE_OUT.ease(0.5);
     let straight = held.position.lerp(landed.position, along);
     assert!(
-        (flying.position.z - straight.z - 55.0).abs() < 1.0,
-        "the flight arcs 55 mm above the straight line: {} against {}",
+        (flying.position.z - straight.z).abs() < 1.0,
+        "the land glides on the straight line: {} against {}",
         flying.position.z,
         straight.z
     );

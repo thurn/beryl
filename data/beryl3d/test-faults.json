@@ -279,27 +279,26 @@
     },
     "b3d:choice-trigger-order/opponent/2560x1080": {
       "no-jumps": 80,
-      "rest-placement": 1,
-      "step-shown": 39
+      "step-shown": 38
     },
     "b3d:choice-trigger-order/you/1440x900": {
       "no-jumps": 80,
-      "rest-placement": 5,
+      "rest-placement": 1,
       "step-shown": 7
     },
     "b3d:choice-trigger-order/you/1600x900": {
       "no-jumps": 80,
-      "rest-placement": 8,
+      "rest-placement": 1,
       "step-shown": 7
     },
     "b3d:choice-trigger-order/you/1920x1080": {
       "no-jumps": 80,
-      "rest-placement": 8,
+      "rest-placement": 1,
       "step-shown": 7
     },
     "b3d:choice-trigger-order/you/2560x1080": {
       "no-jumps": 80,
-      "rest-placement": 8,
+      "rest-placement": 1,
       "step-shown": 29
     },
     "b3d:choice-untap/opponent/1440x900": {
@@ -348,42 +347,38 @@
     },
     "b3d:combat-attackers/opponent/1440x900": {
       "no-jumps": 217,
-      "rest-placement": 1,
       "step-shown": 7
     },
     "b3d:combat-attackers/opponent/1600x900": {
       "no-jumps": 217,
-      "rest-placement": 1,
       "step-shown": 9
     },
     "b3d:combat-attackers/opponent/1920x1080": {
       "no-jumps": 217,
-      "rest-placement": 1,
       "step-shown": 9
     },
     "b3d:combat-attackers/opponent/2560x1080": {
       "no-jumps": 217,
-      "rest-placement": 4,
-      "step-shown": 21
+      "step-shown": 20
     },
     "b3d:combat-attackers/you/1440x900": {
       "no-jumps": 215,
-      "rest-placement": 9,
+      "rest-placement": 5,
       "step-shown": 7
     },
     "b3d:combat-attackers/you/1600x900": {
       "no-jumps": 215,
-      "rest-placement": 9,
-      "step-shown": 9
+      "rest-placement": 5,
+      "step-shown": 10
     },
     "b3d:combat-attackers/you/1920x1080": {
       "no-jumps": 215,
-      "rest-placement": 9,
-      "step-shown": 9
+      "rest-placement": 5,
+      "step-shown": 10
     },
     "b3d:combat-attackers/you/2560x1080": {
       "no-jumps": 215,
-      "rest-placement": 9,
+      "rest-placement": 5,
       "step-shown": 19
     },
     "b3d:combat-blockers/you/2560x1080": {
@@ -401,80 +396,50 @@
     "b3d:containment-priest/returning-is-not-exiled-by-itself/you/2560x1080": {
       "step-shown": 1
     },
-    "b3d:converter-choose/opponent/1440x900": {
-      "rest-placement": 2
-    },
-    "b3d:converter-choose/opponent/1600x900": {
-      "rest-placement": 2
-    },
-    "b3d:converter-choose/opponent/1920x1080": {
-      "rest-placement": 2
-    },
     "b3d:converter-choose/opponent/2560x1080": {
-      "rest-placement": 2,
       "step-shown": 3
     },
     "b3d:converter-choose/you/1440x900": {
-      "rest-placement": 4
+      "rest-placement": 2
     },
     "b3d:converter-choose/you/1600x900": {
-      "rest-placement": 4
+      "rest-placement": 2
     },
     "b3d:converter-choose/you/1920x1080": {
-      "rest-placement": 4
+      "rest-placement": 2
     },
     "b3d:converter-choose/you/2560x1080": {
-      "rest-placement": 4
-    },
-    "b3d:converter-exiled/opponent/1440x900": {
-      "rest-placement": 2
-    },
-    "b3d:converter-exiled/opponent/1600x900": {
-      "rest-placement": 2
-    },
-    "b3d:converter-exiled/opponent/1920x1080": {
       "rest-placement": 2
     },
     "b3d:converter-exiled/opponent/2560x1080": {
-      "rest-placement": 2,
       "step-shown": 3
     },
     "b3d:converter-exiled/you/1440x900": {
-      "rest-placement": 4
+      "rest-placement": 2
     },
     "b3d:converter-exiled/you/1600x900": {
-      "rest-placement": 4
+      "rest-placement": 2
     },
     "b3d:converter-exiled/you/1920x1080": {
-      "rest-placement": 4
+      "rest-placement": 2
     },
     "b3d:converter-exiled/you/2560x1080": {
-      "rest-placement": 4
-    },
-    "b3d:converter-may-exile/opponent/1440x900": {
-      "rest-placement": 2
-    },
-    "b3d:converter-may-exile/opponent/1600x900": {
-      "rest-placement": 2
-    },
-    "b3d:converter-may-exile/opponent/1920x1080": {
       "rest-placement": 2
     },
     "b3d:converter-may-exile/opponent/2560x1080": {
-      "rest-placement": 2,
       "step-shown": 3
     },
     "b3d:converter-may-exile/you/1440x900": {
-      "rest-placement": 4
+      "rest-placement": 2
     },
     "b3d:converter-may-exile/you/1600x900": {
-      "rest-placement": 4
+      "rest-placement": 2
     },
     "b3d:converter-may-exile/you/1920x1080": {
-      "rest-placement": 4
+      "rest-placement": 2
     },
     "b3d:converter-may-exile/you/2560x1080": {
-      "rest-placement": 4
+      "rest-placement": 2
     },
     "b3d:crystal-spray/changes-a-permanents-text-until-end-of-turn-0/opponent/2560x1080": {
       "step-shown": 1
@@ -494,17 +459,7 @@
     "b3d:crystal-spray/makes-a-forest-an-island/opponent/2560x1080": {
       "step-shown": 1
     },
-    "b3d:currency-converter/bounced/opponent/1440x900": {
-      "rest-placement": 2
-    },
-    "b3d:currency-converter/bounced/opponent/1600x900": {
-      "rest-placement": 2
-    },
-    "b3d:currency-converter/bounced/opponent/1920x1080": {
-      "rest-placement": 2
-    },
     "b3d:currency-converter/bounced/opponent/2560x1080": {
-      "rest-placement": 2,
       "step-shown": 1
     },
     "b3d:currency-converter/chooses-among-its-exiled-cards-7/opponent/2560x1080": {
@@ -514,6 +469,9 @@
       "step-shown": 1
     },
     "b3d:currency-converter/chooses-among-its-exiled-cards/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:currency-converter/chooses-among-its-exiled-cards/you/2560x1080": {
       "step-shown": 1
     },
     "b3d:currency-converter/declines-to-exile-another-loots-discard/opponent/2560x1080": {
@@ -531,36 +489,17 @@
     "b3d:currency-converter/exiles-its-own-loots-discard-for-a-rogue/opponent/2560x1080": {
       "step-shown": 1
     },
+    "b3d:currency-converter/exiles-its-own-loots-discard-for-a-rogue/you/2560x1080": {
+      "step-shown": 1
+    },
     "b3d:currency-converter/exiles-thirst-for-discoverys-discards-next-turn/opponent/2560x1080": {
       "step-shown": 1
     },
     "b3d:currency-converter/exiles-thirst-for-discoverys-discards-next-turn/you/2560x1080": {
       "step-shown": 1
     },
-    "b3d:currency-converter/exiles-thirst-for-discoverys-discards/opponent/1440x900": {
-      "rest-placement": 1
-    },
-    "b3d:currency-converter/exiles-thirst-for-discoverys-discards/opponent/1600x900": {
-      "rest-placement": 1
-    },
-    "b3d:currency-converter/exiles-thirst-for-discoverys-discards/opponent/1920x1080": {
-      "rest-placement": 1
-    },
     "b3d:currency-converter/exiles-thirst-for-discoverys-discards/opponent/2560x1080": {
-      "rest-placement": 1,
       "step-shown": 3
-    },
-    "b3d:currency-converter/exiles-thirst-for-discoverys-discards/you/1440x900": {
-      "rest-placement": 2
-    },
-    "b3d:currency-converter/exiles-thirst-for-discoverys-discards/you/1600x900": {
-      "rest-placement": 2
-    },
-    "b3d:currency-converter/exiles-thirst-for-discoverys-discards/you/1920x1080": {
-      "rest-placement": 2
-    },
-    "b3d:currency-converter/exiles-thirst-for-discoverys-discards/you/2560x1080": {
-      "rest-placement": 2
     },
     "b3d:currency-converter/nothing-to-do/you/2560x1080": {
       "step-shown": 1
@@ -569,9 +508,6 @@
       "step-shown": 1
     },
     "b3d:currency-converter/s-exiled-cards-stay-with-the-converter-that-exiled-them-4/opponent/2560x1080": {
-      "step-shown": 1
-    },
-    "b3d:currency-converter/s-exiled-cards-stay-with-the-converter-that-exiled-them/opponent/2560x1080": {
       "step-shown": 1
     },
     "b3d:currency-converter/s-exiled-cards-stay-with-the-converter-that-exiled-them/you/2560x1080": {
@@ -666,7 +602,7 @@
     },
     "b3d:first-target/opponent/2560x1080": {
       "no-jumps": 14,
-      "step-shown": 12
+      "step-shown": 11
     },
     "b3d:first-target/you/1440x900": {
       "no-jumps": 14,
@@ -867,16 +803,9 @@
     },
     "b3d:greedy-turn-9/you/2560x1080": {
       "no-jumps": 4,
-      "step-shown": 14
-    },
-    "b3d:griselbrand/bounced/opponent/1600x900": {
-      "rest-placement": 1
-    },
-    "b3d:griselbrand/bounced/opponent/1920x1080": {
-      "rest-placement": 1
+      "step-shown": 12
     },
     "b3d:griselbrand/bounced/opponent/2560x1080": {
-      "rest-placement": 3,
       "step-shown": 2
     },
     "b3d:griselbrand/combat-damage-gains-life-pass/you/2560x1080": {
@@ -1017,23 +946,16 @@
     "b3d:jace-vryns-prodigy/1-shrinks-a-creature-until-his-controllers-next-turn/opponent/2560x1080": {
       "step-shown": 1
     },
-    "b3d:jace-vryns-prodigy/bounced/opponent/1440x900": {
-      "rest-placement": 2
-    },
-    "b3d:jace-vryns-prodigy/bounced/opponent/1600x900": {
-      "rest-placement": 2
-    },
-    "b3d:jace-vryns-prodigy/bounced/opponent/1920x1080": {
-      "rest-placement": 2
-    },
     "b3d:jace-vryns-prodigy/bounced/opponent/2560x1080": {
-      "rest-placement": 2,
       "step-shown": 1
     },
     "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-bounced-0/you/2560x1080": {
       "step-shown": 1
     },
     "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him/you/2560x1080": {
       "step-shown": 1
     },
     "b3d:jace-wielder-of-mysteries/1-mills-the-target-player-two-then-draws/opponent/2560x1080": {
@@ -1068,7 +990,7 @@
     },
     "b3d:late-game/opponent/2560x1080": {
       "no-jumps": 86,
-      "step-shown": 16
+      "step-shown": 14
     },
     "b3d:late-game/you/1440x900": {
       "no-jumps": 86,
@@ -1076,11 +998,11 @@
     },
     "b3d:late-game/you/1600x900": {
       "no-jumps": 86,
-      "step-shown": 16
+      "step-shown": 17
     },
     "b3d:late-game/you/1920x1080": {
       "no-jumps": 86,
-      "step-shown": 16
+      "step-shown": 17
     },
     "b3d:late-game/you/2560x1080": {
       "no-jumps": 86,
@@ -1128,13 +1050,13 @@
       "step-shown": 4
     },
     "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard/you/2560x1080": {
-      "step-shown": 2
+      "step-shown": 1
     },
     "b3d:malcolm-alluring-scoundrel/trinisphere-raises-the-free-cast-to-three/opponent/2560x1080": {
       "step-shown": 4
     },
     "b3d:malcolm-alluring-scoundrel/trinisphere-raises-the-free-cast-to-three/you/2560x1080": {
-      "step-shown": 2
+      "step-shown": 1
     },
     "b3d:mana-crypt/s-flip-lost-3-damage-to-its-controller/opponent/2560x1080": {
       "step-shown": 1
@@ -1222,19 +1144,6 @@
       "step-shown": 1
     },
     "b3d:mindslaver/the-controller-casts-the-opponents-spell-at-the-opponents-creature/you/2560x1080": {
-      "step-shown": 1
-    },
-    "b3d:mindslaver/the-controller-chooses-the-controlled-players-cleanup-discard/opponent/1440x900": {
-      "rest-placement": 8
-    },
-    "b3d:mindslaver/the-controller-chooses-the-controlled-players-cleanup-discard/opponent/1600x900": {
-      "rest-placement": 8
-    },
-    "b3d:mindslaver/the-controller-chooses-the-controlled-players-cleanup-discard/opponent/1920x1080": {
-      "rest-placement": 8
-    },
-    "b3d:mindslaver/the-controller-chooses-the-controlled-players-cleanup-discard/opponent/2560x1080": {
-      "rest-placement": 8,
       "step-shown": 1
     },
     "b3d:mindslaver/the-controller-chooses-the-controlled-players-cleanup-discard/you/2560x1080": {
@@ -1603,20 +1512,9 @@
       "step-shown": 1
     },
     "b3d:shape-order-theirs/opponent/2560x1080": {
-      "rest-placement": 4,
       "step-shown": 3
     },
-    "b3d:shape-order-theirs/you/1440x900": {
-      "rest-placement": 4
-    },
-    "b3d:shape-order-theirs/you/1600x900": {
-      "rest-placement": 4
-    },
-    "b3d:shape-order-theirs/you/1920x1080": {
-      "rest-placement": 4
-    },
     "b3d:shape-order-theirs/you/2560x1080": {
-      "rest-placement": 4,
       "step-shown": 1
     },
     "b3d:shape-order/opponent/2560x1080": {
@@ -2310,18 +2208,6 @@
     "b3d:table-drawn/you/2560x1080": {
       "rest-placement": 64
     },
-    "b3d:table-piles/you/1440x900": {
-      "rest-placement": 6
-    },
-    "b3d:table-piles/you/1600x900": {
-      "rest-placement": 6
-    },
-    "b3d:table-piles/you/1920x1080": {
-      "rest-placement": 6
-    },
-    "b3d:table-piles/you/2560x1080": {
-      "rest-placement": 6
-    },
     "b3d:table-stack/you/1440x900": {
       "rest-placement": 50
     },
@@ -2490,36 +2376,11 @@
     "b3d:thieving-skydiver/kicked-with-no-artifact-around/you/2560x1080": {
       "step-shown": 1
     },
-    "b3d:thirst-for-discovery/discarding-a-basic-land-instead-no-1/opponent/1440x900": {
-      "rest-placement": 2
-    },
-    "b3d:thirst-for-discovery/discarding-a-basic-land-instead-no-1/opponent/1600x900": {
-      "rest-placement": 2
-    },
-    "b3d:thirst-for-discovery/discarding-a-basic-land-instead-no-1/opponent/1920x1080": {
-      "rest-placement": 2
-    },
     "b3d:thirst-for-discovery/discarding-a-basic-land-instead-no-1/opponent/2560x1080": {
-      "rest-placement": 2,
       "step-shown": 3
     },
     "b3d:thirst-for-discovery/discarding-a-basic-land-instead/opponent/2560x1080": {
       "step-shown": 3
-    },
-    "b3d:thirst-for-discovery/discarding-a-basic-land-instead/you/2560x1080": {
-      "step-shown": 1
-    },
-    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-ask-2/opponent/1440x900": {
-      "rest-placement": 3
-    },
-    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-ask-2/opponent/1600x900": {
-      "rest-placement": 3
-    },
-    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-ask-2/opponent/1920x1080": {
-      "rest-placement": 3
-    },
-    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-ask-2/opponent/2560x1080": {
-      "rest-placement": 3
     },
     "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-yes-1/opponent/2560x1080": {
       "step-shown": 3
@@ -2527,43 +2388,10 @@
     "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-yes-1/you/2560x1080": {
       "step-shown": 1
     },
-    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/opponent/1440x900": {
-      "rest-placement": 2
-    },
-    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/opponent/1600x900": {
-      "rest-placement": 2
-    },
-    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/opponent/1920x1080": {
-      "rest-placement": 2
-    },
     "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/opponent/2560x1080": {
-      "rest-placement": 2,
       "step-shown": 3
     },
-    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/you/1440x900": {
-      "rest-placement": 3
-    },
-    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/you/1600x900": {
-      "rest-placement": 3
-    },
-    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/you/1920x1080": {
-      "rest-placement": 3
-    },
-    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/you/2560x1080": {
-      "rest-placement": 3,
-      "step-shown": 1
-    },
-    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/opponent/1440x900": {
-      "rest-placement": 2
-    },
-    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/opponent/1600x900": {
-      "rest-placement": 2
-    },
-    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/opponent/1920x1080": {
-      "rest-placement": 2
-    },
     "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/opponent/2560x1080": {
-      "rest-placement": 2,
       "step-shown": 3
     },
     "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/you/1440x900": {
@@ -2578,31 +2406,8 @@
     "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/you/2560x1080": {
       "rest-placement": 1
     },
-    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/opponent/1440x900": {
-      "rest-placement": 1
-    },
-    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/opponent/1600x900": {
-      "rest-placement": 1
-    },
-    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/opponent/1920x1080": {
-      "rest-placement": 1
-    },
     "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/opponent/2560x1080": {
-      "rest-placement": 1,
       "step-shown": 3
-    },
-    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/you/1440x900": {
-      "rest-placement": 2
-    },
-    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/you/1600x900": {
-      "rest-placement": 2
-    },
-    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/you/1920x1080": {
-      "rest-placement": 2
-    },
-    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/you/2560x1080": {
-      "rest-placement": 2,
-      "step-shown": 1
     },
     "b3d:thirst-for-discovery/with-fewer-than-two-cards-to-discard/opponent/2560x1080": {
       "step-shown": 1
@@ -3219,7 +3024,7 @@
     },
     "b3d:verbs-piles-theirs/opponent/2560x1080": {
       "no-jumps": 2,
-      "step-shown": 3
+      "step-shown": 2
     },
     "b3d:verbs-piles-theirs/you/1440x900": {
       "no-jumps": 2
@@ -3231,8 +3036,7 @@
       "no-jumps": 2
     },
     "b3d:verbs-piles-theirs/you/2560x1080": {
-      "no-jumps": 2,
-      "step-shown": 1
+      "no-jumps": 2
     },
     "b3d:verbs-piles/opponent/1440x900": {
       "no-jumps": 2
@@ -3245,7 +3049,7 @@
     },
     "b3d:verbs-piles/opponent/2560x1080": {
       "no-jumps": 2,
-      "step-shown": 3
+      "step-shown": 2
     },
     "b3d:verbs-piles/you/1440x900": {
       "no-jumps": 2,
@@ -3402,27 +3206,10 @@
     "b3d:vigilance/dress-down-after-the-aura-takes-vigilance-away/opponent/2560x1080": {
       "step-shown": 1
     },
-    "b3d:walkers/opponent/1440x900": {
-      "rest-placement": 20
-    },
-    "b3d:walkers/opponent/1600x900": {
-      "rest-placement": 21
-    },
-    "b3d:walkers/opponent/1920x1080": {
-      "rest-placement": 21
-    },
     "b3d:walkers/opponent/2560x1080": {
-      "rest-placement": 34,
       "step-shown": 1
     },
-    "b3d:walkers/you/1600x900": {
-      "rest-placement": 1
-    },
-    "b3d:walkers/you/1920x1080": {
-      "rest-placement": 1
-    },
     "b3d:walkers/you/2560x1080": {
-      "rest-placement": 8,
       "step-shown": 1
     },
     "b3d:winds-of-abandon/exiles-a-creature-its-controller-fetches-a-tapped-basic-0/opponent/1440x900": {

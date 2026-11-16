@@ -667,7 +667,9 @@ pub struct Segment {
     pub from: Pose,
     pub to: Pose,
     pub arc: f32,          // how far the path rises above the straight line
-    pub shape: Shape,      // the path: `Line`, `Fading`, `TurnedOver` (flip) or `Grown` (showcase)
+    pub shape: Shape,      // the path: `Line`, `Fading`, `TurnedOver` (flip),
+                           // `Grown` (showcase), `Bowed` (sideways on the
+                           // screen, leaning) or `Thrown` (up the screen and down)
 }
 
 impl Segment {
@@ -691,7 +693,8 @@ code usually goes wrong.
   recomputed for the new shape. A segment in progress keeps its start time and
   duration and takes the new end pose. Its start pose is recomputed so that the
   object's pose at the current time is unchanged, so the card does not jump and
-  arrives at the right place.
+  arrives at the right place. A bowed or thrown path is worked out again from
+  the new ends and camera before its start pose is.
 
 ### Motion the pointer drives
 

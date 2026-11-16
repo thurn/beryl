@@ -92,8 +92,9 @@ struct Judged {
 impl Page {
     /// The check times of the recording as it plays with no action taken, in order, each once,
     /// in nanoseconds since its start: the frame after each input; for each segment its start,
-    /// its midpoint and its end, the midpoint being a flight's apex too; each step's start and
-    /// end; and the first still frame after each script, which is its end. The flat layer has no
+    /// its midpoint and its end, the midpoint being a flight's apex too, and when a thrown
+    /// permanent first reaches its greatest height (`Segment::peak`); each step's start and end;
+    /// and the first still frame after each script, which is its end. The flat layer has no
     /// transitions yet, so it adds no times.
     pub fn check_times(&mut self) -> Vec<u64> {
         let (played, end) = self.played();
@@ -327,6 +328,9 @@ fn times(given_at: &[u64], history: &[ScriptRecord], end: u64) -> Vec<u64> {
             times.insert(real(segment.start));
             times.insert(real(segment.start + segment.duration / 2));
             times.insert(real(segment.end()));
+            if let Some(peak) = segment.peak() {
+                times.insert(real(peak));
+            }
         }
         for step in &script.steps {
             times.insert(real(step.from));

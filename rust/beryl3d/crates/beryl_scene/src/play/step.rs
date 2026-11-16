@@ -497,8 +497,8 @@ impl<'a> Motion<'a> {
             }
             let segment = self.follow(slot, (rested, now), number, own, (room, regroup));
             if let Some((segment, cause)) = segment {
-                if matches!(cause, Cause::Slide(_)) && segment.end() == room.to {
-                    self.note_closing(timing, laid);
+                if matches!(cause, Cause::Slide(_)) && segment.end() > own.to {
+                    self.note_closing(segment.end());
                 }
                 self.push(slot, segment, cause);
             }
@@ -515,21 +515,23 @@ impl<'a> Motion<'a> {
             );
         }
         self.affected = affected;
-        if self.follow_abilities(mover, own, room) {
-            self.note_closing(timing, laid);
+        if self.follow_abilities(mover, own, room) && room.to > own.to {
+            self.note_closing(room.to);
         }
         self.commit(&dirty);
     }
 
-    /// Notes that something slid over the room of a step with this `timing`, `laid` out so. If
-    /// that room is what closes up after the step's subject left (`StepTiming::closes`), the
-    /// beat lasts until it has closed, as the web stage's does (`closedBy` in
-    /// `ui/src/stage/tracks.ts`).
-    fn note_closing(&mut self, timing: &StepTiming, laid: &Laid) {
-        if let (None, Some(closes)) = (laid.opens, timing.closes) {
-            let end = laid.to + closes;
-            self.closed = Some(self.closed.map_or(end, |closed| closed.max(end)));
-        }
+    /// Notes that something the step does not move itself slides until `end`, in nanoseconds,
+    /// after the step is over: what closes up after a card that left (`StepTiming::closes`), or
+    /// the cards that stay in a hand closing up in the time the step's `room` gives. The beat
+    /// lasts until it has, as the web stage's does (`closedBy` in `ui/src/stage/tracks.ts`).
+    fn note_closing(&mut self, end: u64) {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a script lasts seconds, far below f64's exact range"
+        )]
+        let end = end as f64 / 1e6;
+        self.closed = Some(self.closed.map_or(end, |closed| closed.max(end)));
     }
 
     /// When the latest slide of what closed up after a step since the last call ends, in

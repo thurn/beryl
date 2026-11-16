@@ -165,6 +165,17 @@ impl Camera {
         }
     }
 
+    /// The camera's right, up and backward directions in the table's space, each of unit
+    /// length: across the screen, up the screen, and toward the camera.
+    #[must_use]
+    pub fn axes(&self) -> [Vec3; 3] {
+        [
+            self.inverse_view.x_axis.truncate().normalize(),
+            self.inverse_view.y_axis.truncate().normalize(),
+            self.inverse_view.z_axis.truncate().normalize(),
+        ]
+    }
+
     /// The transform that lays the unit quad over `rect`, in logical points from the window's
     /// top left corner, on the flat layer's plane (docs/beryl-3d.md, "The frame": one projection
     /// serves the table and the flat layer).

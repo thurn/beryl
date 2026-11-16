@@ -258,7 +258,8 @@ fn ended(played: Option<&Played>, after: &PlayerView, script: &Script) -> Played
 /// and index in its beat, the step, its timing and when it plays, and returns when the last beat
 /// is over, in nanoseconds. Each verb drawn as an instant change sets its bit in `unbuilt`.
 /// `each` returns when what closed up after its step has closed, in milliseconds, if anything
-/// did: a beat is not over until then.
+/// did: a beat is not over until then, as the web stage's is not (`closedBy` in
+/// `ui/src/stage/tracks.ts`).
 fn lay_out<'s>(
     script: &'s Script,
     timings: &[StepTiming],

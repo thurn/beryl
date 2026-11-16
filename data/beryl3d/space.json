@@ -1,7 +1,53 @@
 {
   "verbs": {
     "fly": {
-      "arc": 55
+      "arc": 55,
+      "bows": {
+        "cast": {
+          "share": 0.15,
+          "peak": 0.5,
+          "lean": 0,
+          "back": 0
+        },
+        "theirs": {
+          "share": 0.08,
+          "peak": 0.6,
+          "lean": -8,
+          "back": 0
+        },
+        "played": {
+          "share": 0.3,
+          "peak": 0.6,
+          "lean": 20,
+          "back": 1
+        },
+        "lifts": {
+          "share": 0.02,
+          "peak": 0.5,
+          "lean": 0,
+          "back": 0
+        },
+        "drawn": {
+          "share": 0.2,
+          "peak": 0.42,
+          "lean": 0,
+          "back": 0
+        },
+        "taken": {
+          "share": 0.58,
+          "peak": 0.5,
+          "lean": 0,
+          "back": 0.45
+        }
+      },
+      "thrown": {
+        "height": 0.95,
+        "risen": 0.2,
+        "held": 0.57,
+        "scale": 0.8,
+        "shrunk": 0.06,
+        "launch": 1.4
+      }
     },
     "strike": {
       "wind": 0.08,

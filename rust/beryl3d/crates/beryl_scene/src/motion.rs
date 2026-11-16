@@ -5,9 +5,10 @@
 use std::f32::consts::PI;
 
 use beryl_protocol::script::Curve as Named;
-use glam::Vec3;
+use glam::{Quat, Vec3};
 
 use crate::data::space::verbs;
+use crate::data::space::verbs::fly::thrown;
 use crate::pose::{Curve, Pose, Segment, Shape};
 use crate::verbs::Interval;
 
@@ -103,6 +104,37 @@ impl Curve {
     }
 }
 
+/// Where a travelling segment's path is at one moment, besides the straight way between its
+/// two poses.
+struct Along {
+    /// How far along the straight way it is, from 0 to 1. Every part of the pose but the
+    /// position's offset and a `Thrown` path's scale is eased by it.
+    u: f32,
+    /// How far the position is off the straight way, in millimetres.
+    offset: Vec3,
+    /// The turn it leans by, applied after the eased rotation.
+    lean: Quat,
+}
+
+/// How high a thrown permanent is `elapsed` of its time through, as a share of its greatest
+/// height: up quickly, level, then down evenly (the web interface's `liftAt`).
+fn thrown_height(elapsed: f32) -> f32 {
+    let at = elapsed.clamp(0.0, 1.0);
+    if at < thrown::RISEN {
+        1.0 - (1.0 - at / thrown::RISEN).powi(2)
+    } else if at <= thrown::HELD {
+        1.0
+    } else {
+        1.0 - (at - thrown::HELD) / (1.0 - thrown::HELD)
+    }
+}
+
+/// The scale a thrown permanent comes down through from `aloft` to `rest`, `elapsed` of its
+/// time through (the web interface's `down` in `lifted`).
+fn thrown_down(aloft: f32, rest: f32, elapsed: f32) -> f32 {
+    rest + (aloft - rest) * (1.0 - elapsed.powf(1.5))
+}
+
 impl Segment {
     /// When it ends, in nanoseconds since the client started.
     #[must_use]
@@ -110,18 +142,25 @@ impl Segment {
         self.start.saturating_add(self.duration)
     }
 
-    /// The pose it gives at `t`: its start pose before it begins, its end pose once it has
-    /// ended, and in between as its `shape` says. Along a `Shape::Line` each part of the pose
-    /// is eased along its curve, and the path rises `arc` millimetres above the straight line
-    /// (toward the camera, `z`) at the middle of its time, along half a sine wave.
+    /// When the object is highest above the straight way, besides the middle of its time, which
+    /// every check already looks at: a thrown permanent reaches its greatest height early.
     #[must_use]
-    pub fn pose_at(&self, t: u64) -> Pose {
-        if t <= self.start && self.duration > 0 {
-            return self.from;
+    pub fn peak(&self) -> Option<u64> {
+        #[expect(
+            clippy::cast_precision_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a segment lasts seconds, far below f64's exact range"
+        )]
+        let at = |share: f32| self.start + (self.duration as f64 * f64::from(share)) as u64;
+        match self.shape {
+            Shape::Thrown { .. } => Some(at(thrown::RISEN)),
+            _ => None,
         }
-        if t >= self.end() {
-            return self.to;
-        }
+    }
+
+    /// The fraction of its time that has passed at `t`, which must be under way.
+    fn elapsed(&self, t: u64) -> f32 {
         #[expect(
             clippy::cast_precision_loss,
             reason = "a segment lasts seconds, far below f64's exact range"
@@ -131,15 +170,82 @@ impl Segment {
             reason = "the fraction is between 0 and 1"
         )]
         let elapsed = ((t - self.start) as f64 / self.duration as f64) as f32;
+        elapsed
+    }
+
+    /// Where a travelling path is `elapsed` of its time through: a line, bowed or thrown, each
+    /// rising `arc` above the straight way at the middle of its time. The other shapes keep to
+    /// the straight way, eased by the curve.
+    fn along(&self, elapsed: f32) -> Along {
+        let eased = self.curve.ease(elapsed);
+        let rise = Vec3::Z * self.arc * (PI * elapsed).sin();
         match self.shape {
-            Shape::Line => {
-                let u = self.curve.ease(elapsed);
-                let pose = between(&self.from, &self.to, u);
-                Pose {
-                    position: pose.position + Vec3::Z * self.arc * (PI * elapsed).sin(),
-                    ..pose
+            Shape::Bowed(bow) => {
+                let arch = bow.arch(eased);
+                Along {
+                    u: eased,
+                    offset: rise + bow.offset * arch,
+                    lean: Quat::from_axis_angle(bow.axis, bow.lean * arch),
                 }
             }
+            Shape::Thrown { rise: up, .. } => Along {
+                u: 1.0 - (1.0 - eased).powf(thrown::LAUNCH),
+                offset: rise + up * thrown_height(elapsed),
+                lean: Quat::IDENTITY,
+            },
+            _ => Along {
+                u: eased,
+                offset: rise,
+                lean: Quat::IDENTITY,
+            },
+        }
+    }
+
+    /// A thrown permanent's scale `elapsed` of its time through: from its start pose's to the
+    /// first scale of its way down within `thrown::SHRUNK` of its time, then down to its end
+    /// pose's.
+    fn thrown_scale(&self, aloft: f32, elapsed: f32) -> f32 {
+        let (from, to) = (self.from.scale, self.to.scale);
+        if elapsed < thrown::SHRUNK {
+            let first = thrown_down(aloft, to, thrown::SHRUNK);
+            from + (first - from) * (elapsed / thrown::SHRUNK)
+        } else {
+            thrown_down(aloft, to, elapsed)
+        }
+    }
+
+    /// A line, bowed or thrown path's pose `elapsed` of its time through.
+    fn travelled(&self, elapsed: f32) -> Pose {
+        let Along { u, offset, lean } = self.along(elapsed);
+        let pose = between(&self.from, &self.to, u);
+        let scale = match self.shape {
+            Shape::Thrown { aloft, .. } => self.thrown_scale(aloft, elapsed),
+            _ => pose.scale,
+        };
+        Pose {
+            position: pose.position + offset,
+            rotation: lean * pose.rotation,
+            scale,
+            ..pose
+        }
+    }
+
+    /// The pose it gives at `t`: its start pose before it begins, its end pose once it has
+    /// ended, and in between as its `shape` says. Along a line, bowed or thrown path each part of
+    /// the pose is eased along its curve, the path leaves the straight way as its shape says, and
+    /// it rises `arc` millimetres above the table (`z`) at the middle of its time, along half a
+    /// sine wave.
+    #[must_use]
+    pub fn pose_at(&self, t: u64) -> Pose {
+        if t <= self.start && self.duration > 0 {
+            return self.from;
+        }
+        if t >= self.end() {
+            return self.to;
+        }
+        let elapsed = self.elapsed(t);
+        match self.shape {
+            Shape::Line | Shape::Bowed(_) | Shape::Thrown { .. } => self.travelled(elapsed),
             Shape::TurnedOver => turned_over(&self.from, &self.to, elapsed),
             Shape::Grown => {
                 let u = self.curve.ease(elapsed);
@@ -199,26 +305,20 @@ fn turned_over(from: &Pose, to: &Pose, elapsed: f32) -> Pose {
 
 impl Segment {
     /// Changes the start pose so that the pose at `t` is `pose`, keeping the start, duration,
-    /// curve, end pose and arc. When the window changes shape during a flight, the segment under
+    /// curve, end pose and path. When the window changes shape during a flight, the segment under
     /// way takes the new end pose and this keeps the card where it is at that instant, so it
     /// does not jump (docs/beryl-3d.md, "Determinism"). A segment not under way at `t` is left
-    /// as it is, and so is one too near its end for the start pose to matter.
+    /// as it is, and so is one too near its end for the start pose to matter. A thrown
+    /// permanent's scale after its first frames does not depend on its start pose, so there its
+    /// `aloft` scale changes instead.
     pub fn through(&mut self, t: u64, pose: Pose) {
         if t < self.start || t >= self.end() || self.duration == 0 {
             return;
         }
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a segment lasts seconds, far below f64's exact range"
-        )]
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "the fraction is between 0 and 1"
-        )]
-        let elapsed = ((t - self.start) as f64 / self.duration as f64) as f32;
-        let u = self.curve.ease(elapsed);
+        let elapsed = self.elapsed(t);
         if self.shape == Shape::Fading {
             // It stands where it was all the way, only fading, so it starts where it is now.
+            let u = self.curve.ease(elapsed);
             let left = 1.0 - u * u;
             if left >= 1e-4 {
                 self.from = Pose {
@@ -228,6 +328,7 @@ impl Segment {
             }
             return;
         }
+        let Along { u, offset, lean } = self.along(elapsed);
         let rest = 1.0 - u;
         if rest < 1e-4 {
             return;
@@ -235,14 +336,29 @@ impl Segment {
         let to = self.to;
         // Each part of the pose is `from + (to - from) * u`, so `from = (now - to * u) / rest`.
         let back = |now: f32, to: f32| (now - to * u) / rest;
-        let lift = Vec3::Z * self.arc * (PI * elapsed).sin();
         // `slerp(from, to, u)` is `to * (to⁻¹ * from)^(1 - u)`, so `to⁻¹ * from` is
-        // `(to⁻¹ * now)^(1 / rest)`.
-        let (axis, angle) = (to.rotation.inverse() * pose.rotation).to_axis_angle();
+        // `(to⁻¹ * now)^(1 / rest)`, where `now` is the pose's rotation before its lean.
+        let unleaned = lean.inverse() * pose.rotation;
+        let (axis, angle) = (to.rotation.inverse() * unleaned).to_axis_angle();
+        let scale = match &mut self.shape {
+            Shape::Thrown { aloft, .. } if elapsed < thrown::SHRUNK => {
+                let share = elapsed / thrown::SHRUNK;
+                let first = thrown_down(*aloft, to.scale, thrown::SHRUNK);
+                (pose.scale - first * share) / (1.0 - share)
+            }
+            Shape::Thrown { aloft, .. } => {
+                let left = 1.0 - elapsed.powf(1.5);
+                if left > 1e-4 {
+                    *aloft = to.scale + (pose.scale - to.scale) / left;
+                }
+                self.from.scale
+            }
+            _ => back(pose.scale, to.scale),
+        };
         self.from = Pose {
-            position: (pose.position - lift - to.position * u) / rest,
-            rotation: to.rotation * glam::Quat::from_axis_angle(axis, angle / rest),
-            scale: back(pose.scale, to.scale),
+            position: (pose.position - offset - to.position * u) / rest,
+            rotation: to.rotation * Quat::from_axis_angle(axis, angle / rest),
+            scale,
             opacity: back(pose.opacity, to.opacity),
             turn: back(pose.turn, to.turn),
         };

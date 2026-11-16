@@ -59,10 +59,12 @@ pub struct Curve {
 }
 
 /// The path a segment takes between its two poses. A verb whose motion is not a straight
-/// line with a rise adds a variant here, and `Segment::pose_at` matches on it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// line with a rise adds a variant here, and `Segment::pose_at` matches on it. Every shape that
+/// travels also rises `Segment::arc` millimetres above the table (along `z`) at the middle of its
+/// time.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Shape {
-    /// A straight line, rising `Segment::arc` millimetres above it at the middle of its time.
+    /// A straight line.
     #[default]
     Line,
     /// The object stays at `from` and fades as it goes, its opacity `from.opacity` times
@@ -78,6 +80,43 @@ pub enum Shape {
     /// A face coming to be seen where it rests (`showcase`): it grows from `verbs.showcase.size`
     /// of its size and is opaque once `verbs.showcase.seen` of its motion is done.
     Grown,
+    /// A line that leaves the straight way between its ends sideways on the screen and leans as
+    /// it does, as the web interface's `bowed` (`ui/src/stage/bows.ts`) has it.
+    Bowed(Bow),
+    /// A permanent's flight off the stack onto its place, as the web interface's `lifted`
+    /// (`ui/src/stage/lift.ts`) has it: it rises by `rise` (millimetres, up the screen) at once,
+    /// crosses most of the way at that height and drops onto its place. Its scale goes from its
+    /// start pose's to `aloft` within the first frames and from there to its end pose's as it
+    /// comes down. Its progress along the way is launched: it is half way across after about a
+    /// quarter of its time. The fractions of its time are `verbs.fly.thrown` in
+    /// `data/beryl3d/space.json`.
+    Thrown { rise: Vec3, aloft: f32 },
+}
+
+/// How far a `Shape::Bowed` path leaves its straight way, made for the two ends and the camera
+/// it was given.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Bow {
+    /// How far off the straight way it is where it is farthest, in millimetres, in the plane
+    /// facing the camera.
+    pub offset: Vec3,
+    /// `ln 0.5 / ln peak`, where `peak` is how far along the eased progress it is farthest off:
+    /// the offset at progress `u` is `sin(π u^sharpness)` of `offset`.
+    pub sharpness: f32,
+    /// How far it turns about `axis` where it is farthest off, in radians, counterclockwise as
+    /// the camera sees it. It is upright again as it lands.
+    pub lean: f32,
+    /// The unit direction toward the camera.
+    pub axis: Vec3,
+}
+
+impl Bow {
+    /// How much of its offset and lean it has at the eased progress `u`: 0 at either end and 1
+    /// where it is farthest off.
+    #[must_use]
+    pub fn arch(&self, u: f32) -> f32 {
+        (PI * u.max(0.0).powf(self.sharpness)).sin()
+    }
 }
 
 /// One stretch of animation between two poses. Code outside this file makes one with
