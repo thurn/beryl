@@ -394,14 +394,15 @@ def count_script(
     then: list[list[str]] | None = None,
 ) -> str:
     """Counts in `name`'s target dir and Gungraun home, as `checkout`'s build, running each
-    command of `then` after `cargo` if it succeeded. A new target dir starts as a copy of the
-    gate's warm one; those of worktrees not in `live` go."""
+    command of `then` after `cargo` if it succeeded. A new target dir copies the gate's warm
+    one; those of worktrees not in `live` go. The gate's home is emptied."""
     target = f"{VM_TARGETS}/{shlex.quote(name)}"
     home = f"{VM_GUNGRAUN}/{shlex.quote(name)}"
     keep = " ".join(shlex.quote(n) for n in sorted({*live, name, GATE_NAME}))
     owner = shlex.quote(checkout)
     profile = shlex.quote(named_profile(cargo) or "bench")
     stamp = f"{target}/{VM_OWNER}.{profile}"
+    fresh = f"rm -rf -- {home}\n" if name == GATE_NAME else ""
     prepare = f"""shopt -s nullglob
 keep=({keep})
 for dir in {VM_TARGETS}/* {VM_GUNGRAUN}/*; do
@@ -414,7 +415,7 @@ if [ "$(cat {stamp} 2>/dev/null)" != {owner} ]; then
   cargo clean --quiet --workspace --profile {profile} --target-dir {target}
   mkdir -p {target} && printf '%s\\n' {owner} >{stamp}
 fi
-"""
+{fresh}"""
     env = f"CARGO_TARGET_DIR={target} GUNGRAUN_HOME={home}"
     commands = " && ".join(f"{env} {shlex.join(c)}" for c in [cargo, *(then or [])])
     return locked(f"{provision}{prepare}{commands}\n")

@@ -287,3 +287,19 @@ def test_a_run_someone_waits_for_goes_before_a_sweeps_run() -> None:
         loop.index("flock -x 8") < loop.index("flock -n 9") < loop.index("flock -u 8")
     )
     assert "flock -s" not in swept and swept.endswith("work")
+
+
+def test_the_gate_drops_last_runs_callgrind_outputs_but_a_worktree_keeps_them(
+    tmp_path: Path,
+) -> None:
+    # An unclean VM stop once left the gate's last outputs starting with zero bytes, and
+    # Gungraun failed to parse them on every later run.
+    gate = tmp_path / "gungraun" / bench.GATE_NAME / "old.out.old"
+    mine = tmp_path / "gungraun" / "a" / "old.out.old"
+    for out in (gate, mine):
+        out.parent.mkdir(parents=True)
+        out.write_bytes(b"\0" * 8)
+    run_count(tmp_path, bench.GATE_NAME, "/repo", ["a"])
+    run_count(tmp_path, "a", "/repo/a", ["a"])
+    assert not gate.exists()
+    assert mine.exists()
