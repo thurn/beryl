@@ -375,7 +375,7 @@ impl<'a> Motion<'a> {
             from: nanoseconds(laid.from),
             to: nanoseconds(laid.to),
         };
-        let (room, regroup) = room_of(step.act.verb(), timing, laid, own);
+        let (room, regroup) = room_of(&step.act, timing, laid, own);
         let Some(dirty) = self.place(&step.act, room.duration() > 0 || own.duration() > 0) else {
             return;
         };

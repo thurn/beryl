@@ -405,14 +405,6 @@ fn what_a_vanishing_card_leaves_room_for_closes_up_after_it() {
         ZoneName::Hand,
         Why::Return,
     );
-    // The cards that stay in the hand close up over the step instead, as on the web stage.
-    let in_hand: Vec<usize> = bounced
-        .view
-        .objects
-        .iter()
-        .filter(|object| object.zone == ZoneName::Hand)
-        .map(|object| usize::from(object.slot.0))
-        .collect();
     let (show, _) = play(&[start, bounced], None);
     let record = last(&show);
     let step = &record.steps[0];
@@ -421,7 +413,7 @@ fn what_a_vanishing_card_leaves_room_for_closes_up_after_it() {
     let slides: Vec<Segment> = record
         .segments
         .iter()
-        .filter(|record| !in_hand.contains(&record.slot) && record.cause == Cause::Slide(0))
+        .filter(|record| record.slot != usize::from(angel.0) && record.cause == Cause::Slide(0))
         .map(|record| record.segment)
         .collect();
     assert!(!slides.is_empty(), "what the Angel left room for closes up");
@@ -430,4 +422,36 @@ fn what_a_vanishing_card_leaves_room_for_closes_up_after_it() {
         assert_eq!(slide.end(), step.to + closes, "for 40% of the step");
     }
     assert_eq!(record.end, step.to + closes, "the beat lasts until it has");
+}
+
+#[test]
+fn a_hand_a_card_vanishes_from_closes_up_over_the_step() {
+    use beryl_scene::play::record::Cause;
+    let start = table();
+    let counterspell = slot(&start.view, ZoneName::Hand, Side::You, "Counterspell");
+    let discarded = leaves(
+        &start,
+        counterspell,
+        ZoneName::Hand,
+        ZoneName::Graveyard,
+        Why::Discard,
+    );
+    let (show, _) = play(&[start, discarded], None);
+    let record = last(&show);
+    let step = &record.steps[0];
+    let slides: Vec<Segment> = record
+        .segments
+        .iter()
+        .filter(|record| record.slot != usize::from(counterspell.0))
+        .filter(|record| record.cause == Cause::Slide(0))
+        .map(|record| record.segment)
+        .collect();
+    assert!(!slides.is_empty(), "the rest of the hand closes up");
+    for slide in &slides {
+        assert!(
+            slide.end() <= step.to,
+            "within the step, as on the web stage"
+        );
+    }
+    assert_eq!(record.end, step.to, "nothing waits after the step");
 }

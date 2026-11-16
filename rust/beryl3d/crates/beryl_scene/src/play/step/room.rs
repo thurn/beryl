@@ -1,6 +1,7 @@
 //! When the cards a step makes room among go to their new places.
 
-use beryl_protocol::script::{Room, StepTiming, Verb};
+use beryl_protocol::protocol::ZoneName;
+use beryl_protocol::script::{Act, Room, StepTiming, Verb};
 
 use super::super::compile::nanoseconds;
 use crate::beat::Laid;
@@ -17,11 +18,12 @@ use crate::verbs::{Interval, vanish};
 /// the time it gives, from when its act is applied, whatever else the step says, as the web
 /// stage's do (`carried` in `ui/src/stage/tracks.ts`).
 pub(super) fn room_of(
-    verb: Verb,
+    act: &Act,
     timing: &StepTiming,
     laid: &Laid,
     own: Interval,
 ) -> (Interval, Option<Interval>) {
+    let verb = act.verb();
     let room = match (laid.opens, timing.closes, timing.room) {
         (Some(opens), _, _) => Interval {
             from: nanoseconds(opens.at),
@@ -49,9 +51,20 @@ pub(super) fn room_of(
                 to: nanoseconds(applied + ms),
             })
         }
-        // The cards that stay in a hand a vanishing card leaves close up over the step, as on
-        // the web stage, where nothing waits for them after it.
-        Room::Step | Room::From { .. } if verb == Verb::Vanish && room != own => Some(own),
+        // The cards that stay in a hand a card vanishes from close up over the step, as on the
+        // web stage, where nothing waits for them after it. A hand a card vanishes into (a
+        // bounce) closes up after it, as a row does.
+        Room::Step | Room::From { .. }
+            if matches!(
+                act,
+                Act::Vanish {
+                    from: ZoneName::Hand,
+                    ..
+                }
+            ) && room != own =>
+        {
+            Some(own)
+        }
         Room::Step | Room::From { .. } => None,
     };
     (room, regroup)
