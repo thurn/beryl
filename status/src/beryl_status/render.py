@@ -518,13 +518,17 @@ def bead_page(
     ):
         if source.strip():
             add(heading, c.section(heading, render(source), id_=anchor(heading)))
-    for heading, table in (
-        ("Subtasks", index.children),
-        ("Blocked by", index.blocked_by),
-        ("Blocking", index.blocking),
-        ("Related", index.related),
+    # Child epics are milestones, listed apart from the child tasks they are made of.
+    children = index.children.get(bead.id, [])
+    milestones = [i for i in children if index.beads[i].issue_type == "epic"]
+    subtasks = [i for i in children if index.beads[i].issue_type != "epic"]
+    for heading, ids in (
+        ("Milestones", milestones),
+        ("Subtasks", subtasks),
+        ("Blocked by", index.blocked_by.get(bead.id, [])),
+        ("Blocking", index.blocking.get(bead.id, [])),
+        ("Related", index.related.get(bead.id, [])),
     ):
-        ids = table.get(bead.id, [])
         add(
             heading,
             related_section(heading, ids, index, link, id_=anchor(heading)),

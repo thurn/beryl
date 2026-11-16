@@ -102,6 +102,23 @@ def test_blockers_and_subtasks(tmp_path: Path) -> None:
     assert "Subtasks" in epic and "1 closed" in epic
 
 
+def test_child_epics_are_milestones(tmp_path: Path) -> None:
+    lines = [
+        record("by-top", issue_type="epic"),
+        record("by-mid", issue_type="epic", dependencies=[parent("by-mid", "by-top")]),
+        record("by-task", dependencies=[parent("by-task", "by-top")]),
+    ]
+    site, _ = made(tmp_path, lines)
+    page = (site / "beads" / "by-top.html").read_text()
+    milestones, subtasks = page.index('id="milestones"'), page.index('id="subtasks"')
+    assert (
+        milestones
+        < page.index('href="by-mid"')
+        < subtasks
+        < page.index('href="by-task"')
+    )
+
+
 def test_a_current_changelog_is_inlined(tmp_path: Path) -> None:
     found = Index.build(parse(EXPORT))
     bead = found.beads["by-free"]
