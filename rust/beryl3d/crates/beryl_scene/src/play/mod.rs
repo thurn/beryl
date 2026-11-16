@@ -458,6 +458,29 @@ impl Show {
         }
     }
 
+    /// Drops the effect runs and notices that have ended by `now`. A run is under way from its
+    /// start until, not at, its end, as on the web stage. The table is not at rest while a run
+    /// or a notice is under way (`wake`), so one that outlasts its script moves `rested` to its
+    /// end: a reply due after the rest is then given at the same time however often frames are
+    /// drawn.
+    fn forget_ended(&mut self, now: u64) {
+        let mut rested = self.rested;
+        self.effects.retain(|run| {
+            let end = run.start + run.duration;
+            if end <= now {
+                rested = rested.max(end);
+            }
+            end > now
+        });
+        self.notices.retain(|announced| {
+            if announced.over.to <= now {
+                rested = rested.max(announced.over.to);
+            }
+            announced.over.to > now
+        });
+        self.rested = rested;
+    }
+
     /// Advances the clock to `now`, ending each script whose time is up and starting the next,
     /// and writes the table as it is at `now`. Allocates nothing.
     pub fn frame(&mut self, now: u64, builder: &mut FrameBuilder) {
@@ -523,27 +546,7 @@ impl Show {
             playing.give(now, (&mut self.lit, &mut self.counts), builder);
         }
         self.lit.advance(now);
-        // A run is under way from its start until, not at, its end, as on the web stage. The table
-        // is not at rest while one is under way, so one that outlasts its script moves `rested`
-        // to its end.
-        let mut rested = self.rested;
-        self.effects.retain(|run| {
-            let end = run.start + run.duration;
-            if end <= now {
-                rested = rested.max(end);
-            }
-            end > now
-        });
-        // A notice keeps the table from resting too (`wake`), so one that outlasts its script and
-        // its effects moves `rested` to its end: a reply due after the rest is then given at the
-        // same time however often frames are drawn.
-        self.notices.retain(|announced| {
-            if announced.over.to <= now {
-                rested = rested.max(announced.over.to);
-            }
-            announced.over.to > now
-        });
-        self.rested = rested;
+        self.forget_ended(now);
         let Some(shown) = self.shown.as_ref().map(|update| &update.view) else {
             return;
         };

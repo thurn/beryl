@@ -283,19 +283,6 @@ impl Report<'_> {
                 .collect();
             let _ = writeln!(out, "slowest: {}", named.join(", "));
         }
-        let count =
-            |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
-        let _ = writeln!(
-            out,
-            "{}, {} failed, {}; {} frames, median {} a test; {:.1}s, {:.1} test-ms a test",
-            count(self.outcomes.len(), "test", "tests"),
-            self.failed,
-            count(self.found.len(), "different fault", "different faults"),
-            self.frames(),
-            self.median(),
-            self.seconds,
-            self.test_ms(),
-        );
         let judged = self.judged();
         let counts: Vec<String> = Rule::ALL
             .iter()
@@ -308,6 +295,19 @@ impl Report<'_> {
             out,
             "judged, in frames (scripts for the segment checks) / elements: {}",
             counts.join(", ")
+        );
+        let count =
+            |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+        let _ = writeln!(
+            out,
+            "{}, {} failed, {}; {} frames, median {} a test; {:.1}s, {:.1} test-ms a test",
+            count(self.outcomes.len(), "test", "tests"),
+            self.failed,
+            count(self.found.len(), "different fault", "different faults"),
+            self.frames(),
+            self.median(),
+            self.seconds,
+            self.test_ms(),
         );
         if let Some((tests, rules)) = &self.summary {
             let most: Vec<String> = rules
