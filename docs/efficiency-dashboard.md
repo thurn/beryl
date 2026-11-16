@@ -23,9 +23,10 @@ Three requirements shape everything below:
 - **The page is quiet.** It shows a few numbers and bars. Words, tables and
   per-request detail appear only when the reader opens a section.
 
-Figures in the examples are illustrative, to show the shape of a result. The
-only measured figures are in
-[What a first measurement showed](#what-a-first-measurement-showed).
+The examples are output of the shipped tool on the main development Mac, from
+the dates given. Their figures change as work continues; the shape of each
+result does not. [What the first week showed](#what-the-first-week-showed) says
+what the first measurements found.
 
 ## Related information
 
@@ -110,44 +111,70 @@ The machine:
   are free. This document calls such a command a **heavy command**. Where
   "token" appears without "CPU", it means an LLM token.
 
-## What a first measurement showed
+## What the first week showed
 
-Before designing, one pass was made over the 1,111 Claude Code transcripts on
-the main development Mac (2026-11-15, six days of work). It shows that the data
-already exists and where the large costs are.
+These figures are the tool's own, from `just efficiency` on the main development
+Mac on 2026-11-16, over everything it holds (transcripts from 2026-11-04). They
+show where the large costs are.
 
-Token volume across 85,000 model requests:
+Token volume across 119,154 model requests, 2,226 closed beads, with dollars at
+API prices (`just efficiency dollars --by class --since all`):
 
 ```text
-cache read     19,340,000,000   about 227,000 per request
-cache write       195,000,000
-output             60,000,000
-uncached input        180,000
-requests by model: Opus 79%, Fable 16%, Sonnet 5%
+class        dollars       %       tokens
+cache_read   5067.86   55.00  25033508327
+cache_write  2224.80   24.00    261997464
+output       1828.52   20.00     78716766
+input          61.25    1.00     15280030
+total        9182.42  100.00  25389502587
 ```
 
 Almost all token volume is the model reading its own earlier context again.
-Output is a third of one percent. The levers are therefore the size of the
-context and the number of requests per bead, not how much the model writes.
+Output is under a third of one percent of the tokens and a fifth of the dollars.
+A request's context has a median of 182,118 tokens (90th percentile 383,754;
+`just efficiency metrics request.context-tokens --since all`). The levers are
+therefore the size of the context and the number of requests per bead, not how
+much the model writes. By model, Opus 5.5 is 68% of the dollars, Fable 5.2 23%,
+Codex's two models 6% and Sonnet 5.5 3%.
 
-Time that sessions spent waiting for tools totals 389 hours:
+By source, 31% of the dollars is the fixed prefix (the system prompt, tool
+definitions and instruction files read again on every request), 20% output, 18%
+carried results of shell reads and searches, and 14% the model's own earlier
+output. Wake-up requests, which find nothing to do and wait again, are 1%.
+
+Agent time totals 65,230 minutes (1,087 hours) across all windows, with a
+further 122 hours waiting on a person and 39 hours idle
+(`just efficiency time --by kind --since all`):
 
 ```text
- 78 h  orchestrator sessions waiting for workers
- 62 h  commands this first pass could not classify
- 46 h  41,000 small shell reads (grep, sed, ls), 4 s each
- 34 h  Rust tests
- 30 h  enact push (rebase, fast check, push)
- 27 h  browser checks
- 19 h  waiting for slow CI
- 16 h  cargo build, check and clippy
- 11 h  waiting for the user to answer a question
- 66 h  everything else (git, card tools, session bookkeeping)
+257 h  model
+103 h  background: orchestration wait (orchestrators waiting for workers)
+ 79 h  orchestration wait
+ 60 h  browser checks
+ 60 h  python scripts
+ 53 h  read and search (grep, sed, ls)
+ 45 h  just (recipes with no kind of their own)
+ 40 h  enact
+ 25 h  push, and 23 h more in pushes run in the background
+ 23 h  slow CI wait, and 17 h more in the background
+ 20 h  rust tests
 ```
 
-These figures are rough. Parallel tool calls are counted twice, Codex sessions
-and two other machines are missing, and 62 hours could not be classified. The
-tool designed here removes each of those limitations.
+Over the seven days to 2026-11-16 the same tool found:
+
+- Slow CI ran 470 times for 350 core hours; 1,010,661 check runs; 176 catches,
+  50 stale failures, 58 flaky and 65 mixed. The Rust lane used 282 core hours
+  and caught 3 bugs, while the oracle lane used 25 core hours and caught 111.
+- The fast check ran in 937 pushes; 13 repeats after losing the race to
+  `staging` cost 547 seconds.
+- Commands waited 2.6 hours for CPU tokens, and 18 cores were at least 90% in
+  use in 35.7% of the minutes sampled.
+- 78 slow-CI failures cost $316.75 in Steward sessions, and `master` stayed
+  behind `staging` for 1,702 minutes because of them.
+- Sessions waited 799 times for Enact's ownership lock: 136 agent minutes
+  waiting and 22 syncing.
+- The findings put the largest dollar saving in running tiers apart (`tier-gap`)
+  and in runs of small reads (`small-reads`).
 
 ## Design overview
 
@@ -219,7 +246,7 @@ drill-down, because a few very large beads dominate any mean.
 
 ## Sources
 
-Each source is listed with what is read from it. None of the eight costs agents
+Each source is listed with what is read from it. None of the nine costs agents
 anything, because other tools already write them.
 
 - **Claude Code transcripts** (`~/.claude/projects/<project>/<id>.jsonl`, and
@@ -232,12 +259,13 @@ anything, because other tools already write them.
   (`local_<uuid>`) to its current transcript id (`cliSessionId`) and its earlier
   ones (`priorCliSessionIds`, with the time each ended). A session that Enact
   clears between beads gets a new transcript each time.
-- **Codex session logs** (`~/.codex/sessions/<date>/rollout-*.jsonl`). The
-  `session_meta` line gives the working directory and each `token_count` event
-  gives the tokens of the last request and the running total. Tool calls and
-  their outputs are timestamped.
-- **Beads**, read with `bd list --all --json`: ids, parents, labels, creation,
-  start and close times, and the Enact metadata named above.
+- **Codex session logs** (`~/.codex/sessions/<date>/rollout-*.jsonl`, and
+  `archived_sessions`; compressed `.zst` files are not read). The `session_meta`
+  line gives the working directory and each `token_count` event gives the tokens
+  of the last request and the running total. Tool calls and their outputs are
+  timestamped.
+- **Beads**, read with `bd list --all -n 0 --json`: ids, parents, labels,
+  creation, start and close times, and the Enact metadata named above.
 - **Git history** of `staging` and `master`: each commit's time, subject and
   changed paths.
 - **The run log** (`ci/runs.jsonl` in the cache). Each line has `time`, `host`,
@@ -402,27 +430,20 @@ what to optimise:
   that builds before it runs. A command that prints several such lines has their
   seconds added together.
 - **Inside a push.** `enact push` rebases, runs the fast check and pushes. The
-  run-log lines with the same worktree and a time inside the tool call give the
-  seconds of each check lane. What remains is rebase, waiting and push.
+  `lane_runs` rows with the same worktree and a time inside the tool call give
+  the seconds of each check lane. What remains is rebase, waiting and push. The
+  `pushes` query and the `bead` query's push lines show this split; it is not in
+  `window_time`.
 
-The example below shows one bead's split. Indented lines divide the line above
-them and are not added again.
+The `time` lines of the `bead` query show one bead's split, largest first. A
+wait on background work carries the prefix `background:`, so `push` is the
+seconds a session spent in the command and `background: push` the seconds it
+spent waiting for a push it had started in the background to finish:
 
 ```text
-bead by-bajq.6.9    34.6 agent min
-  model                     11.2
-  tool: rust tests           7.9
-      compile                5.1
-      run                    2.8
-  tool: push                 3.5
-      fast check             3.0
-      rebase and push        0.5
-  tool: read and search      3.8
-  tool: build                3.1
-  tool: slow CI wait         2.2
-  tool: other                2.0
-  queued for cores: push     0.9
-beside agent minutes: waiting on a person 0.0, idle 0.0
+time      background: fast check 9.1 | background: push 8.9 | model 5.8 | read and search 3.6
+          enact 2.2 | rust tests 1.6 | fast check 0.8 | the rest 1.9
+beside    waiting on a person 0.0 | idle 0.0
 ```
 
 ### Command kinds
@@ -442,13 +463,14 @@ changing code. The first matching pattern wins. This excerpt shows the format:
 ]
 ```
 
-- The pattern is matched against the command with leading `cd <path> &&` and
-  environment assignments removed, so a path that happens to contain a word such
-  as `enact` does not decide the kind.
-- A command that chains several heavy commands with `&&` is given the kind of
-  the first heavy one, and is flagged as chained, since its parts cannot be
-  timed apart. An entry is heavy when it has `"heavy": true`. A command with no
-  heavy part takes the kind of its first part that matches.
+- A command is split into the parts chained with `&&`, `||` or `;`, and each
+  part is matched with its leading `cd <path>`, environment assignments and
+  wrappers such as `timeout 600` removed, so a path that happens to contain a
+  word such as `enact` does not decide the kind.
+- A command that chains several heavy commands is given the kind of the first
+  heavy one, and is flagged as chained, since its parts cannot be timed apart.
+  An entry is heavy when it has `"heavy": true`. A command with no heavy part
+  takes the kind of its first part that matches.
 - Tools other than the shell are their own kinds: `Read`, `Edit`, `Agent` (a
   subagent), and so on.
 - Commands that match nothing are kind **other**. The `coverage` query lists the
@@ -581,16 +603,20 @@ split sums to the total.
   "orchestration wait" or "slow CI wait": the session woke, found nothing to do
   and went back to waiting.
 
-This example shows the split by source for one epic:
+The `dollars --by source` query gives the split by source. This is one epic's:
 
 ```text
-by-bajq    $412 direct, by source
-  fixed prefix                  $118    29%
-  carried: test and build logs  $ 96    23%
-  carried: file reads           $ 71    17%
-  carried: everything else      $ 58    14%
-  output                        $ 38     9%
-  new content                   $ 31     8%
+dollars by source  since the start (all)  --epic by-bajq
+
+source                                             dollars       %      tokens
+fixed prefix                                        322.54   29.00  1187411286
+carried: read and search                            276.05   25.00  1177764238
+carried: model output                               177.02   16.00   775458664
+output                                              152.71   14.00     7866026
+carried: user                                        54.31    5.00   255625208
+carried: enact                                       26.12    2.00   104389657
+carried: python scripts                              22.70    2.00    97869530
+new: user                                             9.98    1.00     2141335
 ```
 
 For Codex, the log gives input, cached input and output per request, and its
@@ -651,14 +677,25 @@ machine's cores divided by the mean cores a session of that cohort uses, rounded
 down. A bead's cores are its core minutes divided by its agent minutes. For the
 card cohort this says how many card-writing sessions the machine can run at once
 before they queue, which is the figure that matters for running thirty in
-parallel.
+parallel. The `machine` query shows the saturation, the time queued and the
+estimate for the whole project; the `cards` query shows the estimate for cards.
 
 ```text
-cards, last 7 days
-  cores per session            1.9 mean, 5.2 at the 90th percentile
-  machine                      18 cores
-  parallel capacity estimate   9 sessions (18 / 1.9)
+machine  since 2026-11-09T03:40:04 (7d)
+cores 18   in use 14.4 mean, 18.0 in the busiest minute   saturation 35.7% of 691 minutes   (68 minutes sampled over the cores, counted as all busy)
+queued for cores  2.62 h waiting, 23.73 core h
+...
+cpu       183.33 core h: beads 84.75 | shared 109.12 (206.16 per day, 0.06 per bead closed)
+shared    system/system 32.52 | desktop/desktop 15.61 | session/tool 10.90 | worktree ci-runner 9.44
+own cpu   sampler 0.002 cores (0.01%) | ingest 315.1 s (0.038%)
+capacity  cores per session 0.9 mean, 1.6 p90 over 83 beads; parallel capacity 19 sessions
 ```
+
+- A sampled minute whose CPU seconds exceed its cores counts as all busy, and
+  the query says how many minutes it did that to.
+- `queued for cores` gives hours of waiting and core hours, which is each wait
+  multiplied by the tokens the command wanted. Under it the query lists the
+  commands by class, and then those that got fewer tokens than they wanted.
 
 ## CI accounting
 
@@ -673,16 +710,20 @@ failure already has a **verdict**:
   real bug.
 - **stale**: the failure was fixed by changing the check itself.
 - **flaky**: the check failed and then passed on the same code.
+- **mixed**: the fix changed both the check and product code, so the failure is
+  neither clearly a catch nor clearly stale. `by verdict` in the CI tools can
+  correct it.
 - **miss**: slow CI failed a check that the fast check had not chosen to run for
   the commit at fault. A miss is recorded in addition to the catch or stale
   verdict that the fix later brings.
 
-The store keeps one row per check per day per script, with runs, failures by
-verdict, CPU seconds and wall seconds. It does not copy the run log's individual
-lines, which already exceed 700 MB. Fast-check runs are the exception, because
-each must be tied to a push: the store also keeps one row per fast-check run per
-check lane, with its worktree, start time, wall seconds, CPU seconds and
-outcome.
+The store keeps one `checks` row per check per local day per host, script and
+check lane, with runs, passes, failures, skips, CPU seconds and wall seconds. It
+does not copy the run log's individual lines, which already exceed 700 MB. Runs
+of a check lane are the exception, because each fast-check run must be tied to a
+push: the store also keeps one `lane_runs` row per run of a check lane, with its
+worktree, commit, tree, start time, wall seconds, CPU seconds and the number of
+checks and failures.
 
 ### Cost and value of checks
 
@@ -725,23 +766,32 @@ seconds. The run log is kept added up per day, so a check's CPU for one run is a
 mean, not a median.
 
 ```text
-slow CI, last 7 days      431 runs    141 core h
-  check lane   core h  catches  flaky  stale  misses  core h per catch
-  rust           71       38      6      9      4          1.9
-  oracle         34       11      0      2      1          3.1
-    forge        21        4      0      1      0          5.3
-    xmage        13        7      0      1      1          1.9
-  script         14       22      1      4      2          0.6
-  ui-smoke        9        0      3      0      0         never
-  other lanes    13        5      0      1      0          2.6
+slow CI (ci)  since 2026-11-09T03:40:07 (7d), checks from 2026-11-08
+ci runs 470   cpu 349.57 core h (87.4% estimated from wall seconds)   check runs 1010661   skipped 1.4%
+failures   catch 176 | stale 50 | flaky 58 | mixed 65 | miss 82   core h per catch 1.99
+flake cost 2122.0 cpu s, 1266.7 wall s in reruns; 20.00 dollars on beads to delete flaky checks
+
+lane            core h    runs  skip %  catch  stale  flaky  mixed  miss  core h per catch        flake cpu s  flake $
+rust            281.55  360173    0.00      3      6      3     11     0  93.85                          3.70     4.39
+oracle           24.72  256323    5.00    111      0     15      7    61  0.22                        1878.50     1.87
+  oracle:xmage   14.20  124517    7.70     95      0      9      3    56  0.15                           4.20     1.87
+  oracle:forge    8.69  131799    2.30     16      0      4      4     5  0.54                           1.00     0.00
+app              10.44     448    5.90      1      0      1      0     0  10.44                         83.90     0.00
+ui-test           9.99  103373    0.00     14     40     32     38    19  0.71                          10.60     6.30
+ui-smoke          0.97     330    5.20      0      0      0      0     0  never since 2026-11-13         0.00     0.00
 ```
+
+The CPU is estimated from wall seconds where the run log has no measurement, and
+the query says what share. A lane's sub-lines are its families. The `ci` query
+also lists the oracle scenarios by engine, with those played, those skipped and
+those remembered from earlier runs.
 
 ### What kind of process the CPU went to
 
 The run log says which check used the CPU. The sampler says which kind of
-process used it: `compile`, `test`, `oracle` (the Java virtual machines that run
-XMage and Forge), `browser`, `node` and so on. The two are joined by owner and
-minute.
+process used it: `compile`, `rust_test`, `oracle` (the Java virtual machines
+that run XMage and Forge), `browser`, `tool` and so on. The two are joined by
+owner and minute.
 
 - For each script and check lane, the tool shows CPU by kind of process. This
   answers "how much of slow CI is Java" and "how much of the fast check is
@@ -751,13 +801,16 @@ minute.
   an earlier run had recorded their outcome.
 
 ```text
-slow CI CPU by kind of process, last 7 days
-  compile    52 core h   37%
-  test       41 core h   29%
-  oracle     34 core h   24%   (Java: Forge 21, XMage 13)
-  browser     9 core h    6%
-  other       5 core h    4%
+cpu by kind of process
+  compile          6.54 core h   53.4%
+  tool             3.61 core h   29.5%
+  oracle           1.44 core h   11.7%   (Java: xmage 0.89, forge 0.55)
+  other            0.50 core h    4.1%
+  rust_test        0.16 core h    1.3%
+  browser          0.00 core h    0.0%
 ```
+
+This is the `ci` query for one check lane, `rust`, over seven days.
 
 ### The fast check
 
@@ -826,10 +879,13 @@ dollars, and `fixed later` is the share of cards that a later `fix` commit
 changed.
 
 ```text
-cards by tier, last 7 days       per card
-  tier     cards   direct   rework   agent min   fixed later
-  opus       61    $4.10     $0.60      22          11%
-  sonnet     38    $0.95     $0.70      19          24%
+cards by tier  since 2026-11-09T03:40:04 (7d)
+per card: direct dollars, rework dollars and agent minutes
+
+tier    beads  no data  cards  direct  rework  agent min  fixed later
+opus       34        0     52   12.50    0.33       71.9  56%
+sonnet     14        0     21    1.21    0.03       41.7  19%
+total      48        0     73    9.25    0.24       63.2  45%
 ```
 
 That comparison, direct cost with rework beside it, is what decides whether a
@@ -887,17 +943,22 @@ Every finding has the same shape:
 ```json
 {
   "rule": "carried-logs",
-  "summary": "Test and build logs over 2,000 tokens are read again 40 times at the median",
-  "saving_per_week": { "dollars": 310.0 },
-  "evidence": "efficiency dollars --by source --since 7d",
-  "examples": ["by-bajq.6.9", "by-bajq.8.2"]
+  "unit": "dollars",
+  "summary": "12805 tool results over 2,000 tokens cost $1,007.40 a week to read again; cut to 2,000 tokens they would save $573.06, most from read and search",
+  "saving_per_week": { "dollars": 573.06 },
+  "cost_per_week": 1007.4,
+  "reference": "the same tool results at 2,000 tokens each",
+  "evidence": "efficiency findings --rule carried-logs --since 7d",
+  "see": "efficiency dollars --by source --since 7d",
+  "examples": ["by-q44s", "by-1pi", "by-w8gv"]
 }
 ```
 
 - `saving_per_week` is the cost over the last seven days above the rule's
   **reference**, the level the cost would fall to if the waste were removed. It
   is in one unit: dollars, agent hours or core hours.
-- `evidence` is the command that prints the numbers behind it.
+- `evidence` is the command that prints the numbers behind it, and `see` the
+  wider query it draws on.
 - Findings are listed in three groups, one per unit, each sorted by saving. No
   unit is converted into another.
 - Findings never file beads. An agent is told to work one.
@@ -971,28 +1032,54 @@ How the rules are built:
 The store is one SQLite file in the Beryl cache directory. It is private to the
 machine and is never committed.
 
-The tables, each keyed so that ingesting the same bytes twice changes nothing:
+The tables, each keyed so that ingesting the same bytes twice changes nothing.
+Every table with a `host` column also has a `provider`, except those from the
+run log, the CPU sampler and git, which are the machine's own.
 
-- **requests**: one row per model request, with host, provider, transcript,
-  time, model, the four token classes, dollars, context size, prefix size, new
-  content size and the bead window it falls in.
-- **tool_calls**: one row per tool call, with start and end times, the tool, the
-  command kind, the first 300 characters of the command, the result's size, the
-  tokens it added to the context and its carrying cost.
-- **windows**: one row per bead window.
-- **beads**: the latest state of each bead and its labels.
+- **requests**: one row per model request, with its transcript, time, model, the
+  four token classes (cache writes also by the 1-hour part), dollars in total
+  and by class, context size, prefix size, new content size, stop reason and the
+  bead.
+- **tool_calls** and **tool_results**: one row per tool call, with start and end
+  times, the tool, the command kind, the first 300 characters of the command,
+  the size of its result, whether it was chained, its compile seconds and the
+  steps `enact push` left to slow CI; and one per result, with its size and
+  compile seconds.
+- **prompts**, **notifications** and **enact_events**: one row per prompt with
+  its origin (a person, another session, a background command or a scheduled
+  wake-up), per notification that a background command finished, and per Enact
+  command a session ran. Windows and the time split are derived from them.
+- **sessions** and **transcripts**: the desktop app's session records (title,
+  model, the session it was spawned from) and each transcript's span, parent and
+  session.
+- **windows**: one row per bead window, or per span of a session with no bead
+  (kind `none`, or `orchestration`), with its `label`.
+- **window_time** and **window_dollars**: the split of each window's seconds by
+  category, kind and part, and of its dollars by class, source, purpose and
+  model. Every query adds these up, so they are derived again when the command
+  kinds or the price table change.
+- **beads** and **labels**: the latest state of each bead, with its Enact
+  metadata, and its labels.
 - **commits**: each commit on `staging` and `master`, its parents, subject,
   changed paths and added paths. The bead that landed it is read from the beads'
   `enact_commits` at query time.
 - **ref_moves**: each move of `master` from its reflog, which is the only record
   of when a commit reached `master`, since Enact fast-forwards it. Rows are kept
   after git expires the reflog.
-- **checks**: one row per check per day per script, as described under
+- **checks**, **lane_runs** and **verdicts**: the run log added up, each run of
+  a check lane, and the verdict on each failure, as described under
   [CI accounting](#ci-accounting).
-- **cpu**: one row per minute per owner, kind and worktree.
-- **leases**: one row per CPU lease.
-- **sources**: for each source file, the byte offset already ingested and a
-  fingerprint of its first bytes.
+- **cpu**, **cpu_minutes** and **leases**: the sampler's rows by minute, owner,
+  kind and worktree; its rows by minute alone; and one row per CPU lease, joined
+  to the tool call that waited for it.
+- **lock_waits**: one row per acquisition of Enact's ownership lock, joined to
+  the tool call that ran the command.
+- **codex_marks**: the lines of a Codex log that give a request its model and a
+  turn its end.
+- **sources**, **ingests** and **settings**: for each source file, the byte
+  offset already ingested and a fingerprint of its first bytes; each ingest's
+  wall and CPU seconds, bytes and rows; and the command kinds and price tables
+  each derived row was computed with, which say when it must be computed again.
 
 Ingest behaviour:
 
@@ -1043,6 +1130,8 @@ just efficiency pushes --since 24h
 just efficiency failures --since 7d
 just efficiency changes
 just efficiency findings
+just efficiency findings --rule small-reads
+just efficiency metrics request.context-tokens
 just efficiency coverage
 ```
 
@@ -1050,39 +1139,52 @@ just efficiency coverage
   their trends, the time split, the dollar split and the epics.
 - `epic`, `bead` and `session` are the drill-down levels. `session` lists each
   request and tool call in order.
-- `time` and `dollars` take `--by` with any of: `kind`, `class`, `source`,
-  `purpose`, `model`, `tier`, `role`, `lane`, `epic`, `day`.
+- `time` takes `--by` with any of: `kind`, `model`, `tier`, `role`, `lane`,
+  `epic`, `day`. `dollars` takes those and `class`, `source` and `purpose`.
 - `machine` shows cores in use, saturation, queued core hours and shared CPU.
+  `enact` shows time waiting for Enact's ownership lock and syncing beads, by
+  subcommand and by the command holding the lock.
 - `ci` shows the tree described under [CI accounting](#ci-accounting).
 - `pushes` shows [the fast check](#the-fast-check) per push, and `failures`
   shows [what each slow-CI failure costs](#what-a-slow-ci-failure-costs).
 - `coverage` reports what is missing or unknown: hosts with no data, models with
   no price, unmatched commands, skipped lines, closes with no open window, and
   the tool's own cost.
-- `metrics` lists the metric names. `sql '<query>'` runs a read-only SQL query
-  against the store, for questions no named query answers.
-- `serve` starts the page. `ingest` updates the store.
+- `metrics` lists the metric names, and `metrics <name>` prints one series by
+  day. `changes` lists the efficiency changes with the medians around each.
+  `findings` ranks waste, and `findings --rule <rule>` prints one rule's items.
+- `sql '<query>'` runs a read-only SQL query against the store, for questions no
+  named query answers.
+- `serve` starts the page. `ingest` updates the store. `export` and `import`
+  move rows between machines.
 
 Text output is written for a model to read as well as a person. This is the
-`bead` query:
+`bead` query, on 2026-11-16:
 
 ```text
 $ just efficiency bead by-bajq.6.9
-by-bajq.6.9  Spell copies are never scripted onto the stack
-closed 2026-11-15 07:38   tier:opus   claude on jarvis
-agent min 34.6   core min 51.2   dollars 6.40   rework 0.00
-requests 164   median context 212040   fixed prefix 81233   wall min 36.1
-beside    waiting on a person 0.0 | idle 1.5
+by-bajq.6.9  Spell copies are never scripted onto the stack, so script checks fail for Fork and Brain Freeze
+closed 2026-11-15 07:38   role:executor   tier:opus   claude on jarvis
+agent min 34.0   core min -   dollars 3.82   rework 0.00
+requests 78   median context 145990   fixed prefix 79696   wall min 34.0
+beside    waiting on a person 0.0 | idle 0.0
+lead min  queued 3.0 | worked 34.6 | to master 72.0   commits 2   cards 0
 
-time      model 11.2 | rust tests 7.9 | read and search 3.8 | push 3.5
-          build 3.1 | slow CI wait 2.2 | queued for cores 0.9 | the rest 2.0
-dollars   by class: cache_read 3.90 | cache_write 1.10 | output 0.60 | input 0.80
-          by source: fixed prefix 2.10 | carried: rust tests 1.90 | output 0.60
-          carried: read and search 1.20 | new: rust tests 0.60
-          by purpose: working 6.10 | wake-up 0.30
-          by model: claude-opus-5-5 6.40
+time      background: fast check 9.1 | background: push 8.9 | model 5.8 | read and search 3.6
+          enact 2.2 | rust tests 1.6 | fast check 0.8 | the rest 1.9
+dollars   by class: cache_read 2.24 | cache_write 1.07 | output 0.52
+          by source: fixed prefix 1.95 | carried: read and search 0.77 | output 0.52
+          carried: model output 0.23 | carried: enact 0.13 | carried: other 0.05 | carried: git 0.04
+          the rest 0.13
+          by purpose: working 3.82
+          by model: claude-opus-5-5 3.82
 
-more: efficiency session local_ce2b4aa8 --bead by-bajq.6.9
+push 2026-11-15T07:17  536 s, not split (no run-log lines)
+
+session                                     title                                         kind  start                     minutes
+local_ce2b4aa8-b291-4649-9a86-f3862695d15f  ✅ [by-bajq.9.5] Review the decision protocol  bead  2026-11-15T07:04:31.826Z    34.00
+
+more: efficiency session local_ce2b4aa8-b291-4649-9a86-f3862695d15f --bead by-bajq.6.9
 ```
 
 Every result ends with a `more:` line naming the queries that drill into it. The
@@ -1117,7 +1219,7 @@ What the first screen shows, top to bottom:
   are named on hover.
 - The epics active in the range, one line each: id, title, beads closed out of
   total, dollars, agent hours. "(no bead)" and "orchestration" are lines too.
-- Five words that lead to the other views: Cards, Machine, CI, Changes,
+- Six words that lead to the other views: Cards, Machine, Enact, CI, Changes,
   Findings.
 
 Rules that keep the page quiet:
@@ -1244,8 +1346,9 @@ Totals and attribution:
 
 Time:
 
-- For a bead that pushed, the "push" kind must show a fast-check part. Its
-  seconds must match `just ci-report` for that worktree and time.
+- For a bead that pushed, the `bead` query's push line must split the push into
+  the fast check and the rest. The fast check's seconds must match
+  `just ci-report` for that worktree and time.
 - For a bead that ran Rust tests after an edit, the tests must show a compile
   part and a run part.
 - Start a heavy command while the machine is saturated, then find it with
