@@ -45,6 +45,11 @@ COMMAND = "sudo python3 tools/src/beryl_tools/fseventsd.py install"
 # 2026-11-15 the daemon's footprint went from 72 to 74 GB in about 30 minutes while agents built.
 LIMIT_GB = 4.0
 EVERY = 600
+# The Python the launchd job runs: macOS's own, which every Mac with the command-line tools
+# has. The Python that ran `install` may be Homebrew's, whose path is removed when Homebrew
+# moves to a newer Python, and the job would then fail every run without logging anything.
+# This file keeps to Python 3.9 for it.
+PYTHON = "/usr/bin/python3"
 UNITS = {"B": 1, "K": 1 << 10, "M": 1 << 20, "G": 1 << 30, "T": 1 << 40}
 
 
@@ -90,7 +95,7 @@ def check(limit_gb: float) -> int:
 
 
 def plist(limit_gb: float) -> str:
-    arguments = [sys.executable, str(INSTALLED), "check", "--limit-gb", str(limit_gb)]
+    arguments = [PYTHON, str(INSTALLED), "check", "--limit-gb", str(limit_gb)]
     strings = "".join(f"\n        <string>{a}</string>" for a in arguments)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

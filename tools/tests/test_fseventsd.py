@@ -14,3 +14,4 @@ def test_the_launchd_job_runs_the_installed_copy() -> None:
     job = fseventsd.plist(4.0)
     assert f"<string>{fseventsd.INSTALLED}</string>" in job
     assert "<string>check</string>" in job
+    assert f"<string>{fseventsd.PYTHON}</string>" in job
