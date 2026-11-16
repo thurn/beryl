@@ -19,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import caches, system, tokens, warm
+from .. import caches, deadline, system, tokens, warm
 from .. import paths as repo_paths
 from . import (
     app,
@@ -279,10 +279,32 @@ def run_shared_b3d(command: str) -> Callable[[argparse.Namespace], int]:
         built = shared_build()
         if built != 0:
             return built
+        arguments = [command, *args.arguments, *stop_after(command, args.arguments)]
         # The shared commands (`test`) play their tests through `runner::spread`.
-        return run_program("b3d", [command, *args.arguments], program("b3d"), grow=True)
+        return run_program("b3d", arguments, program("b3d"), grow=True)
 
     return run
+
+
+# The seconds before the fast check's hard limit after which `b3d test` starts no test. The
+# tests already running finish (the slowest took 8 s at load 20 on 2026-11-16), and then the
+# step prints its report and logs each test.
+TEST_STOP = 20.0
+
+
+def stop_after(command: str, arguments: list[str]) -> list[str]:
+    """The `--stop-after` that a fast check gives `b3d test`, so that it starts no test the hard
+    limit would kill. The limit kills a step still running and reports nothing of it, and after
+    a long shared build it cut off this step in 141 of 330 fast checks on 2026-11-16. Outside a
+    fast check, or when the arguments name it already, there is none."""
+    left = deadline.until_hard_limit()
+    if (
+        command != "test"
+        or left is None
+        or any(a.startswith("--stop-after") for a in arguments)
+    ):
+        return []
+    return ["--stop-after", f"{max(left - TEST_STOP, 0.0):.1f}"]
 
 
 def b3d_command(

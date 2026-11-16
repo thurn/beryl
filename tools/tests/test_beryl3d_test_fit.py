@@ -14,6 +14,45 @@ from beryl_tools.beryl3d import test_fit
 from beryl_tools.selection import Record
 
 
+class Nextest:
+    """A stand-in for nextest's process: it writes `junit` when it ends, after `seconds`, and
+    is stopped by SIGTERM when the step's wait runs out first, writing `stopped` instead.
+    """
+
+    def __init__(
+        self,
+        ran: list[list[str]],
+        junit: Path,
+        report: str,
+        code: int,
+        seconds: float = 0.0,
+        stopped: str = "",
+    ) -> None:
+        self.ran: list[list[str]] = ran
+        self.junit: Path = junit
+        self.report: str = report
+        self.code: int = code
+        self.seconds: float = seconds
+        self.stopped: str = stopped
+        self.signals: list[int] = []
+
+    def __call__(self, command: list[str], **_kwargs: Any) -> Nextest:
+        self.ran.append(command)
+        return self
+
+    def wait(self, timeout: float | None = None) -> int:
+        if self.signals:
+            self.junit.write_text(self.stopped)
+            return 100
+        if timeout is not None and timeout < self.seconds:
+            raise subprocess.TimeoutExpired("nextest", timeout)
+        self.junit.write_text(self.report)
+        return self.code
+
+    def send_signal(self, number: int) -> None:
+        self.signals.append(number)
+
+
 class Known:
     def __init__(
         self, records: dict[str, Record], failed: set[str] | None = None
@@ -61,12 +100,7 @@ def test_only_the_tests_that_fit_run_and_the_rest_go_to_the_sweep(
         ],
     )
 
-    def run(command: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
-        ran.append(command)
-        junit.write_text(JUNIT)
-        return subprocess.CompletedProcess(command, 0)
-
-    monkeypatch.setattr(test_fit.subprocess, "run", run)
+    monkeypatch.setattr(test_fit.subprocess, "Popen", Nextest(ran, junit, JUNIT, 0))
     known = Known(
         {
             "b3d-test:beryl_scene::pose::cheap": Record(0, 0, 10, 2.0),
@@ -170,12 +204,7 @@ def test_outside_a_fast_check_every_test_runs_and_is_logged(
         test_fit.tokens, "acquire", lambda *_a, **_k: tokens.Lease(4, [])
     )
 
-    def run(command: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
-        ran.append(command)
-        junit.write_text(JUNIT)
-        return subprocess.CompletedProcess(command, 1)
-
-    monkeypatch.setattr(test_fit.subprocess, "run", run)
+    monkeypatch.setattr(test_fit.subprocess, "Popen", Nextest(ran, junit, JUNIT, 1))
     assert test_fit.run(None) == 1
     [command] = ran
     assert command[command.index("-E") + 1] == "all()"
@@ -193,3 +222,57 @@ def test_a_test_timed_in_both_lanes_counts_the_record_with_more_runs() -> None:
         "b3d-test:a::t": Record(0, 0, 5, 1.0),
         "b3d-test:a::u": Record(0, 0, 1, 2.0),
     }
+
+
+# nextest's report when the step stopped it: one test passed, one failed by itself, one was
+# aborted by the stop, and `pose::late` never started.
+STOPPED = """<testsuites><testsuite>
+<testcase classname="beryl_scene" name="pose::cheap" time="1.0"/>
+<testcase classname="beryl_scene" name="pose::broken" time="0.2"><failure message="test failed"/></testcase>
+<testcase classname="beryl_scene" name="pose::long" time="6.0"><failure message="process aborted with signal 15 (SIGTERM)" type="test abort"/></testcase>
+</testsuite></testsuites>"""
+
+
+@pytest.mark.parametrize("broken", [False, True])
+def test_the_step_stops_nextest_before_the_hard_limit_and_keeps_what_finished(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    broken: bool,
+) -> None:
+    """A plan's times are estimates, so the tests can run past the hard limit, which kills the
+    step and reports nothing. The step stops nextest `STOP` seconds before the limit instead,
+    logs the tests that finished, and defers the rest to the sweep; it fails only for a test
+    that failed by itself."""
+    logged: list[tuple[str, str, float]] = []
+    ran: list[list[str]] = []
+    junit: Path = tmp_path / "junit.xml"
+    monkeypatch.setattr(test_fit, "JUNIT", junit)
+    monkeypatch.setattr(runlog, "result", lambda c, o, s, *_: logged.append((c, o, s)))
+    monkeypatch.setattr(test_fit.deadline, "until_hard_limit", lambda: 60.0)
+    monkeypatch.setattr(
+        test_fit.tokens, "acquire", lambda *_a, **_k: tokens.Lease(4, [], klass="push")
+    )
+    names = ["cheap", "long", "late", *(["broken"] if broken else [])]
+    monkeypatch.setattr(
+        rust_fit, "listed", lambda *_a: [f"beryl_scene pose::{n}" for n in names]
+    )
+    report = (
+        STOPPED
+        if broken
+        else STOPPED.replace('<failure message="test failed"/>', "").replace(
+            'name="pose::broken"', 'name="pose::other"'
+        )
+    )
+    nextest = Nextest(ran, junit, JUNIT, 0, seconds=500.0, stopped=report)
+    monkeypatch.setattr(test_fit.subprocess, "Popen", nextest)
+    records = {f"b3d-test:beryl_scene::pose::{n}": Record(0, 0, 10, 1.0) for n in names}
+    # pyre-ignore[6]: a stand-in for test_fit.Known
+    assert test_fit.run(Known(records)) == (1 if broken else 0)
+    assert nextest.signals == [test_fit.signal.SIGTERM]
+    assert ("b3d-test:beryl_scene::pose::cheap", "pass", 1.0) in logged
+    assert ("b3d-test:beryl_scene::pose::long", "skip", 0.0) in logged
+    assert ("b3d-test:beryl_scene::pose::late", "skip", 0.0) in logged
+    if broken:
+        assert ("b3d-test:beryl_scene::pose::broken", "fail", 0.2) in logged
+    assert "2 tests deferred to the Beryl 3D sweep: stopped" in capsys.readouterr().out

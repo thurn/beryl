@@ -124,6 +124,14 @@ pub fn full_name(filter: &str) -> String {
 /// [`recordings::weight`]), so that no thread is left with a long test after the rest finish.
 #[must_use]
 pub fn run(tests: &[Test], mode: Mode) -> Vec<Outcome> {
+    run_until(tests, mode, None)
+}
+
+/// [`run`], except that no test starts after `stop`: the outcomes are those of the tests that
+/// started before it, in the order given. The tests running at `stop` finish, and since the
+/// longest start first, those are short.
+#[must_use]
+pub fn run_until(tests: &[Test], mode: Mode, stop: Option<Instant>) -> Vec<Outcome> {
     let mut order: Vec<usize> = (0..tests.len()).collect();
     order.sort_by_cached_key(|&at| {
         let test = &tests[at];
@@ -134,9 +142,12 @@ pub fn run(tests: &[Test], mode: Mode) -> Vec<Outcome> {
         std::cmp::Reverse(recordings::weight(&test.recording, seat))
     });
     let mut outcomes: Vec<Option<Outcome>> = (0..tests.len()).map(|_| None).collect();
-    let played = each(&order, |&at| play(tests[at].clone(), mode));
+    let played = each(&order, |&at| {
+        let late = stop.is_some_and(|stop| Instant::now() >= stop);
+        (!late).then(|| play(tests[at].clone(), mode))
+    });
     for (at, outcome) in order.into_iter().zip(played) {
-        outcomes[at] = Some(outcome);
+        outcomes[at] = outcome;
     }
     outcomes.into_iter().flatten().collect()
 }
@@ -403,7 +414,9 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
 
-    use super::spread_by;
+    use super::{Side, Test, run_until, spread_by};
+    use crate::pages::DESKTOP_WINDOWS;
+    use beryl_scene::driver::Mode;
 
     /// The first job raises the grant from one thread to four and waits until four threads have
     /// taken jobs, which only happens if `spread_by` starts more threads while it runs. Without
@@ -437,5 +450,19 @@ mod tests {
             },
         );
         assert_eq!(seen(), 4);
+    }
+
+    /// A stop that has passed starts no test, so the fast check's `--stop-after` names every
+    /// test as deferred rather than letting the hard limit kill the run.
+    #[test]
+    fn no_test_starts_after_the_stop() {
+        let tests: Vec<Test> = (0..3)
+            .map(|n| Test {
+                recording: format!("no-such-recording-{n}"),
+                seat: Side::You,
+                size: DESKTOP_WINDOWS[0],
+            })
+            .collect();
+        assert!(run_until(&tests, Mode::AtCheckTimes, Some(Instant::now())).is_empty());
     }
 }

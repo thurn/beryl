@@ -29,6 +29,15 @@ failed two Beryl 3D tests, its retry cut them for time, and the commit landed an
 Beryl 3D tests failing for 72 minutes. A test the sweep saw fail on staging is kept as well, so a
 branch based on a broken staging sees the failure before it pushes on top of it.
 
+The plan's times are estimates, measured at other loads, so a plan can still run past the limit,
+and a step the limit kills reports nothing: after test_fit landed the step was still cut off in 4
+of 5 fast checks between 21:00 and 21:20 UTC on 2026-11-16, twice after cutting tests from its
+plan. So the step plans against the time left after nextest has listed the tests, which runs
+every test binary once, and it stops nextest itself [`STOP`] seconds before the limit. nextest
+writes its JUnit report when it is stopped, so the tests that finished are logged as usual, and
+those it stopped or never started are logged as skipped and named as deferred to the sweep, as a
+cut test is.
+
 Every full run, the sweep's included, writes each test's time to the run log from nextest's
 JUnit report, as `b3d-test:<binary>::<test>`. Plans read the times from the fast check's lane
 and the sweep's, so a test the fast check keeps cutting is still timed by the sweep.
@@ -38,6 +47,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import threading
 import xml.etree.ElementTree as ET
@@ -61,6 +71,9 @@ JUNIT: Path = paths.WORKSPACE / "target" / "nextest" / NEXTEST_PROFILE / "junit.
 # The seconds kept back before the hard limit: for nextest to start, for slow tests the
 # records underestimate, and for the step to write its results.
 MARGIN = 20.0
+# The seconds before the hard limit at which the step stops nextest: enough for nextest to stop
+# its tests and write its report, and for the step to log the results and exit.
+STOP = 8.0
 # How far back a test's failure keeps it from being cut. A branch's retries and the sweeps of
 # the staging it is based on fall within a few hours, and each hour of the run log is about
 # 100 MB to scan.
@@ -149,21 +162,58 @@ def kept_line(kept: list[str]) -> str:
     )
 
 
+def stopped_line(stopped: list[str]) -> str:
+    return (
+        f"cargo-test: {len(stopped)} tests deferred to the Beryl 3D sweep: stopped or not"
+        f" started {STOP:.0f} s before the fast check's hard limit"
+    )
+
+
+def nextest(
+    expression: str, env: dict[str, str], stop: float | None
+) -> tuple[int, bool]:
+    """Runs the workspace's tests that match `expression` under nextest; its exit code, and
+    whether it was stopped because `stop` seconds passed first. nextest stops its tests on
+    SIGTERM and still writes its JUnit report. The cargo shim and cargo both replace themselves
+    with the next program, so the process started here is nextest itself."""
+    child = subprocess.Popen(
+        [
+            *["cargo", "nextest", "run", f"--profile={NEXTEST_PROFILE}"],
+            *["--workspace", "--cargo-quiet", "--no-fail-fast", "--no-tests=pass"],
+            *["--status-level=fail", "--final-status-level=fail"],
+            *["-E", expression],
+        ],
+        cwd=paths.WORKSPACE,
+        env=env,
+    )
+    try:
+        return child.wait(timeout=None if stop is None else max(stop, 0.0)), False
+    except subprocess.TimeoutExpired:
+        child.send_signal(signal.SIGTERM)
+        try:
+            return child.wait(timeout=STOP / 2), True
+        except subprocess.TimeoutExpired:
+            child.kill()
+            return child.wait(), True
+
+
 def run(records: Known | None) -> int:
     """Runs the workspace's tests, those that fit when `records` are given, in a lease of CPU
-    tokens whose size is the threads the plan counts on, and logs each test's result."""
+    tokens whose size is the threads the plan counts on, and logs each test's result. Inside a
+    fast check it stops the tests [`STOP`] seconds before the hard limit."""
     lease = tokens.acquire(
         tokens.named_class(), tokens.largest(tokens.pool_size()), command="nextest"
     )
     assert lease is not None
+    chosen: list[str] | None = None
     with lease:
         env = {**os.environ, **lease.env()}
         expression = "all()"
-        limit = deadline.until_hard_limit()
-        if records is not None and limit is not None:
+        if records is not None and deadline.until_hard_limit() is not None:
             tests = rust_fit.listed(["--workspace"], "all()", paths.WORKSPACE, env)
-            # rust_fit.plan keeps back its own margin as well.
-            left = limit - MARGIN + rust_fit.MARGIN
+            # Read after the listing, which runs every test binary and may take a while
+            # under load. rust_fit.plan keeps back its own margin as well.
+            left = (deadline.until_hard_limit() or 0.0) - MARGIN + rust_fit.MARGIN
             if tests is not None:
                 failed = records.failures()
                 chosen, _, cut = rust_fit.plan(
@@ -182,20 +232,61 @@ def run(records: Known | None) -> int:
                         return 0
                     expression = nextest_filter(chosen)
         JUNIT.unlink(missing_ok=True)
-        code = subprocess.run(
-            [
-                *["cargo", "nextest", "run", f"--profile={NEXTEST_PROFILE}"],
-                *["--workspace", "--cargo-quiet", "--no-fail-fast", "--no-tests=pass"],
-                *["--status-level=fail", "--final-status-level=fail"],
-                *["-E", expression],
-            ],
-            cwd=paths.WORKSPACE,
-            env=env,
-            check=False,
-        ).returncode
+        limit = deadline.until_hard_limit()
+        code, stopped = nextest(
+            expression, env, None if limit is None else limit - STOP
+        )
     try:
-        for check, outcome, took in junit_results(JUNIT.read_text()):
-            runlog.result(check_of(check), outcome, took)
+        results = junit_results(JUNIT.read_text())
     except (OSError, ET.ParseError) as e:
         print(f"cargo-test: no per-test results for the run log: {e}", flush=True)
-    return code
+        results = []
+    if not stopped:
+        for check, outcome, took in results:
+            runlog.result(check_of(check), outcome, took)
+        return code
+    return log_stopped(results, chosen)
+
+
+def log_stopped(results: list[tuple[str, str, float]], chosen: list[str] | None) -> int:
+    """Logs the `results` of a run stopped at [`STOP`]: a test that failed by itself fails, a
+    test that the stop aborted is skipped, as is each of the `chosen` tests (every test when
+    None) that never started. A test aborted by the stop shows in the report as a failure with
+    the signal. The step fails only for a test that failed by itself."""
+    aborted = signal_failures(JUNIT)
+    logged: set[str] = set()
+    stopped: list[str] = []
+    failed = False
+    for check, outcome, took in results:
+        name = check_of(check)
+        logged.add(name)
+        if name in aborted:
+            stopped.append(name)
+            runlog.result(name, "skip", 0.0, "cut")
+            continue
+        failed = failed or outcome == "fail"
+        runlog.result(name, outcome, took)
+    for test in chosen or []:
+        name = rust_fit.check_id(test, PREFIX)
+        if name not in logged:
+            stopped.append(name)
+            runlog.result(name, "skip", 0.0, "cut")
+    print(stopped_line(stopped), flush=True)
+    return 1 if failed else 0
+
+
+def signal_failures(junit: Path) -> set[str]:
+    """The run-log checks of the tests in nextest's JUnit report that failed because a signal
+    stopped them: nextest's failure says `process aborted with signal`."""
+    try:
+        root = ET.fromstring(junit.read_text())
+    except (OSError, ET.ParseError):
+        return set()
+    found: set[str] = set()
+    for case in root.iter("testcase"):
+        failure = case.find("failure")
+        if failure is not None and "aborted with signal" in (
+            failure.get("message") or ""
+        ):
+            found.add(f"{PREFIX}:{case.get('classname')}::{case.get('name')}")
+    return found

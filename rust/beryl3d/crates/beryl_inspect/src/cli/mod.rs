@@ -196,7 +196,7 @@ const COMMANDS: [Command; 8] = [
         ],
         spec: Spec {
             recording: false,
-            values: &[],
+            values: &[test::STOP_AFTER],
             switches: &[test::EVERY_TICK, test::UPDATE, test::RAISE],
         },
         own: &[
@@ -211,6 +211,10 @@ const COMMANDS: [Command; 8] = [
             (
                 "--raise",
                 "beside --update: also raise and add entries; the commit says which bead owns the fault",
+            ),
+            (
+                "--stop-after",
+                "start no test after this many seconds, and name the rest as deferred, as the fast check does",
             ),
         ],
         run: test::test,

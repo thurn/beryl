@@ -279,7 +279,12 @@ Beryl 3D, the native client in its own Cargo workspace, has checks of its own
   time left, chosen as the Rust lane's tests are (untimed tests first), and
   names the rest as deferred to the sweep
   (`tools/src/beryl_tools/beryl3d/test_fit.py`). Each test's time goes to the
-  run log as `b3d-test:<binary>::<test>`.
+  run log as `b3d-test:<binary>::<test>`. It stops nextest 8 s before the hard
+  limit, logs the tests that finished and defers the rest to the sweep, so a
+  plan that ran long still reports its results.
+- In the fast check, the interface tests (`just b3d test`) start no test after
+  20 s before the hard limit (`--stop-after`), and name the tests they did not
+  start as deferred to the sweep.
 
 ### The Beryl 3D sweep
 

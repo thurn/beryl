@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::fmt::Write;
 use std::io::Write as _;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use beryl_scene::agent::{Context, Judged, Layout, Rule};
 use beryl_scene::driver::Mode;
@@ -30,6 +30,14 @@ pub(super) const UPDATE: &str = "--update";
 
 /// The switch that, beside [`UPDATE`], also raises and adds entries.
 pub(super) const RAISE: &str = "--raise";
+
+/// The option that stops the run from starting a test after this many seconds. The fast check
+/// passes the time left before its hard limit, which kills a step still running and reports
+/// nothing of it: after a long shared build the step was cut off in 141 of 330 fast checks on
+/// 2026-11-16. With this option the tests already started finish, the rest are named as
+/// deferred to the Beryl 3D sweep, and the run is judged as a prefix's run is, on the tests it
+/// played.
+pub(super) const STOP_AFTER: &str = "--stop-after";
 
 /// How many rules the closing summary names as having the most listed faults.
 const MOST_RULES: usize = 3;
@@ -66,6 +74,7 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
              {EVERY_TICK}"
         )));
     }
+    let stop = stop(options)?;
     let mode = if options.switch(EVERY_TICK) {
         Mode::EveryTick
     } else {
@@ -83,10 +92,12 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
     // find every fault the every-tick run finds.
     let mut listed = Some(Listed::read().map_err(Usage)?);
     let started = Instant::now();
-    let outcomes = runner::run(&tests, mode);
+    let outcomes = runner::run_until(&tests, mode, stop);
     let seconds = started.elapsed().as_secs_f64();
-    // The median is only held over the whole run: a prefix picks tests that are not typical.
-    let every_test = prefix.is_empty();
+    let deferred = tests.len() - outcomes.len();
+    // The median is only held over the whole run: a prefix, or the tests that started before
+    // `--stop-after`, are not typical.
+    let every_test = prefix.is_empty() && deferred == 0;
     let over = limits.map_or_else(Vec::new, |limits| limits.over(&outcomes, every_test));
     let mut changes = None;
     if let Some(listed) = listed.as_mut().filter(|_| options.switch(UPDATE)) {
@@ -139,6 +150,7 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
         frames: Frames::of(&outcomes),
         failed,
         outcomes: &outcomes,
+        deferred,
         seconds,
     };
     let fault = report.failed > 0 || !report.over.is_empty() || !report.comparison.high.is_empty();
@@ -148,6 +160,26 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
         report.text()
     };
     Ok(Printed { text, fault })
+}
+
+/// When [`STOP_AFTER`] says the run stops starting tests, if it was given.
+fn stop(options: &Options) -> Result<Option<Instant>, Usage> {
+    let Some(text) = options.value(STOP_AFTER) else {
+        return Ok(None);
+    };
+    if options.switch(UPDATE) {
+        return Err(Usage(format!(
+            "{UPDATE} needs every test's faults, so it does not go with {STOP_AFTER}"
+        )));
+    }
+    match text.parse::<f64>() {
+        Ok(seconds) if seconds.is_finite() => Ok(Some(
+            Instant::now() + Duration::from_secs_f64(seconds.max(0.0)),
+        )),
+        _ => Err(Usage(format!(
+            "{STOP_AFTER} takes a number of seconds, not {text}"
+        ))),
+    }
 }
 
 /// What a run of tests found, to be printed.
@@ -167,6 +199,8 @@ struct Report<'a> {
     slowest: Vec<&'a Outcome>,
     frames: Option<Frames>,
     failed: usize,
+    /// How many tests had not started when `--stop-after` passed.
+    deferred: usize,
     /// The run's time on the clock.
     seconds: f64,
 }
@@ -199,6 +233,7 @@ impl Report<'_> {
         let value = json!({
             "command": self.command,
             "tests": self.outcomes.len(),
+            "deferred": self.deferred,
             "failed": self.failed,
             "frames": self.frames(),
             "median_frames": self.median(),
@@ -309,6 +344,13 @@ impl Report<'_> {
             self.seconds,
             self.test_ms(),
         );
+        if self.deferred > 0 {
+            let _ = writeln!(
+                out,
+                "{} deferred to the Beryl 3D sweep: not started before {STOP_AFTER} passed",
+                count(self.deferred, "test", "tests"),
+            );
+        }
         if let Some((tests, rules)) = &self.summary {
             let most: Vec<String> = rules
                 .iter()
