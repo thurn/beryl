@@ -7,7 +7,7 @@ use beryl_protocol::ipc::{
     LobbyChange, Platform, TableActReply, TableHostRequest, TableHostSettings, TableJoinRequest,
     TableLink, TableLobbyRequest, TableResumeRequest,
 };
-use beryl_protocol::protocol::{Answer, ObjectId, Side, TablePhase, TablePrompt};
+use beryl_protocol::protocol::{Answer, LinkState, ObjectId, Side, TablePhase, TablePrompt};
 use beryl_protocol::{GameUpdate, SessionIds};
 use beryl_table::action::Adjustment;
 use beryl_table::state::LobbySettings;
@@ -93,6 +93,12 @@ fn linked_table(
             name: "Guest".into(),
         })
         .unwrap();
+    // Joining starts the guest's listener. Wait for the first view before
+    // sending a lobby action, as a client does when it displays the lobby.
+    assert!(matches!(
+        views.recv().unwrap().view.table.unwrap().link,
+        LinkState::Connected { .. }
+    ));
     load(&host, "Island");
     load(&guest, "Mountain");
     lobby(&guest, LobbyChange::Ready { ready: true });
