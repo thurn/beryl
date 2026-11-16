@@ -6,7 +6,11 @@ use beryl_host::{Class, current_class, set_class};
 
 #[test]
 fn a_thread_is_in_the_class_it_asked_for() {
-    if cfg!(not(any(target_vendor = "apple", windows, target_os = "android"))) {
+    if cfg!(not(any(
+        target_vendor = "apple",
+        windows,
+        target_os = "android"
+    ))) {
         return;
     }
     for class in [
@@ -36,5 +40,5 @@ fn android_nice_values_fall_as_the_class_rises() {
         Class::Interactive,
     ]
     .map(Class::nice);
-    assert_eq!(nice, [10, 0, -2, -4]);
+    assert_eq!(nice, [10, 0, -4, -10]);
 }

@@ -46,11 +46,12 @@ impl Class {
     /// The nice value Android puts a thread of this class at, from Android's
     /// `Process.THREAD_PRIORITY_*` constants: lower runs first.
     ///
-    /// `Interactive` is `THREAD_PRIORITY_DISPLAY` (-4), the value Android gives an app's own
-    /// render thread, rather than `THREAD_PRIORITY_URGENT_DISPLAY` (-8), which Android keeps
-    /// for the system's compositor: at -4 a thread's CFS weight is already about 2.4 times
-    /// that of a search thread at 0, and the scheduler preempts a search thread when the frame
-    /// thread wakes either way.
+    /// `Interactive` is -10, the nice value Android itself gives a foreground app's main and
+    /// render threads (`THREAD_PRIORITY_TOP_APP_BOOST`, hidden from apps). The frame thread is
+    /// the app's main thread and already has it when the surface arrives, so a higher value
+    /// such as `THREAD_PRIORITY_DISPLAY` (-4) would lower it. Threads it starts inherit it,
+    /// which is why the session thread and the AI's search threads, before each thread set its
+    /// own value, ran at drawing's priority.
     #[must_use]
     pub fn nice(self) -> i32 {
         match self {
@@ -58,11 +59,10 @@ impl Class {
             Self::Utility => 10,
             // THREAD_PRIORITY_DEFAULT
             Self::Default => 0,
-            // Two steps above the default (THREAD_PRIORITY_MORE_FAVORABLE is one), between the
-            // default and display.
-            Self::Initiated => -2,
-            // THREAD_PRIORITY_DISPLAY
-            Self::Interactive => -4,
+            // THREAD_PRIORITY_DISPLAY: above the AI and below drawing.
+            Self::Initiated => -4,
+            // THREAD_PRIORITY_TOP_APP_BOOST
+            Self::Interactive => -10,
         }
     }
 
@@ -198,17 +198,19 @@ mod platform {
         // value and takes no pointers. It needs no permission for an app's own thread, since
         // Android's init raises every process's nice limit to -20, but it is checked and
         // logged in case a device refuses.
-        let (tid, result) = unsafe {
+        let (tid, before, result) = unsafe {
             let tid = libc::gettid();
             #[expect(clippy::cast_sign_loss, reason = "a thread ID is positive")]
-            let result = libc::setpriority(libc::PRIO_PROCESS, tid as libc::id_t, class.nice());
-            (tid, result)
+            let who = tid as libc::id_t;
+            let before = libc::getpriority(libc::PRIO_PROCESS, who);
+            let result = libc::setpriority(libc::PRIO_PROCESS, who, class.nice());
+            (tid, before, result)
         };
         let thread = std::thread::current();
         let name = thread.name().unwrap_or("unnamed");
         let line = if result == 0 {
             format!(
-                "thread {tid} ({name}) is in class {} at nice {}",
+                "thread {tid} ({name}) is in class {} at nice {}, from {before}",
                 class.word(),
                 class.nice()
             )
@@ -246,7 +248,9 @@ mod platform {
         // The standard library already links liblog on Android.
         let _ = unsafe {
             ndk_sys::__android_log_write(
-                ndk_sys::android_LogPriority::ANDROID_LOG_DEBUG.0.cast_signed(),
+                ndk_sys::android_LogPriority::ANDROID_LOG_DEBUG
+                    .0
+                    .cast_signed(),
                 c"Beryl3dThreads".as_ptr(),
                 text.as_ptr(),
             )
