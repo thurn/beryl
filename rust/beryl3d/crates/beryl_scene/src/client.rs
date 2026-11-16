@@ -15,6 +15,7 @@ use crate::element::Press;
 use crate::faces::{FaceList, Faces};
 use crate::frame::{self, ElementId, Frame, FrameBuilder, Wake};
 use crate::hud::counts::CountFloats;
+use crate::hud::piles::PileCounts;
 use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerPhase};
 use crate::layout::Layer;
 use crate::play::Show;
@@ -57,6 +58,8 @@ pub struct Client {
     layer: Layer,
     /// The floats that show the players' life totals and pools.
     counts: CountFloats,
+    /// The floats that show how many cards each pile holds.
+    piles: PileCounts,
     /// The screen the flat layer shows. A recording or a game is fed to the client on the game
     /// screen, which it starts on.
     screen: Screen,
@@ -101,6 +104,7 @@ impl Client {
             show: Show::new(Table::default()),
             layer: Layer::new(),
             counts: CountFloats::default(),
+            piles: PileCounts::default(),
             screen: Screen::Game,
             sheet: None,
             settings: Settings::default(),
@@ -158,6 +162,9 @@ impl Client {
                     let (text, glyphs) = self.layer.text_and_glyphs();
                     (self.show.badges_mut()).shape(text, glyphs, self.window.scale);
                 }
+                let shown = self.show.shown().map(|update| &update.view);
+                let coming = self.show.coming_counts().map(|(_, view)| view);
+                (self.piles).prepare(&mut self.layer, shown.into_iter().chain(coming));
                 self.show_screen();
             }
             Input::Reply(Reply::Click(Ok(reply))) => {
@@ -234,6 +241,8 @@ impl Client {
             self.window.size,
             self.screen == Screen::Game && self.sheet.is_none(),
         );
+        let visible = self.screen == Screen::Game && self.sheet.is_none();
+        (self.piles).write(&mut self.layer, self.show.table(), visible);
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
         builder.placement_work(self.show.table().take_placed());

@@ -4,5 +4,6 @@
 pub mod banner;
 pub mod counts;
 pub mod log;
+pub mod piles;
 pub mod players;
 pub mod steps;

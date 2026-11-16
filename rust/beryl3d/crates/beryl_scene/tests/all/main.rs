@@ -19,6 +19,7 @@ mod flat_layer;
 mod light;
 mod motion;
 mod own;
+mod piles;
 mod play;
 mod pointer;
 mod table;

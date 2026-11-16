@@ -56,7 +56,12 @@ fn every_zone_of_both_sides_gets_its_cards() {
         .iter()
         .filter(|r| r.role == Role::Card)
         .count();
-    assert_eq!(cards, view.objects.len(), "every card is drawn");
+    // Each side's library of five draws only its top two cards.
+    assert_eq!(
+        cards,
+        view.objects.len() - 2 * 3,
+        "every card but those under the top two of a library is drawn"
+    );
     for side in [Side::You, Side::Opponent] {
         let places = [
             (ZoneName::Library, None),
@@ -81,7 +86,8 @@ fn every_zone_of_both_sides_gets_its_cards() {
         row: None,
     };
     assert!(frame.resolved.iter().any(|r| r.place == stack));
-    // The opponent's library is the viewer's turned half a turn about the table's centre.
+    // Each side's library lies in its own corner of the window, as the web interface's piles
+    // do: the viewer's at the bottom left, the opponent's at the top right.
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
     let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
     let library = |side: Side| {
@@ -89,11 +95,13 @@ fn every_zone_of_both_sides_gets_its_cards() {
             Side::You => &view.players.you,
             Side::Opponent => &view.players.opponent,
         };
-        placement.get(player.library[0]).unwrap().pose.position
+        camera.to_screen(placement.get(player.library[0]).unwrap().pose.position)
     };
-    assert_eq!(
-        library(Side::Opponent).truncate(),
-        -library(Side::You).truncate()
+    let (you, opponent) = (library(Side::You), library(Side::Opponent));
+    assert!(you.x < 1440.0 / 4.0 && you.y > 900.0 * 3.0 / 4.0, "{you}");
+    assert!(
+        opponent.x > 1440.0 * 3.0 / 4.0 && opponent.y < 900.0 / 4.0,
+        "{opponent}"
     );
 }
 

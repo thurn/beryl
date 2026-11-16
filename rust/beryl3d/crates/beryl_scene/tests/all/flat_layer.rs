@@ -215,14 +215,14 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
     assert!(frame.resolved[auto].interactive && frame.resolved[cancel].interactive);
     assert!(!frame.resolved[title].interactive);
     assert!(text_fits(frame, &context()).is_empty());
-    // A panel for the bar, one for each button and one under each player's life total, all in
-    // the flat layer's band.
+    // A panel for the bar, one for each button, one under each player's life total and one under
+    // the count of each of the six piles, all in the flat layer's band.
     let layer = &frame.draws[frame.layer as usize..];
     let panels = layer
         .iter()
         .filter(|draw| draw.material == Material::Panel as u8)
         .count();
-    assert_eq!(panels, 5);
+    assert_eq!(panels, 11);
     assert!(frame.work.layout_nodes > 0 && frame.work.text_runs > 0);
 }
 

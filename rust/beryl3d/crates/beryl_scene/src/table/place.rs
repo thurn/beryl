@@ -12,9 +12,10 @@ use glam::{Quat, Vec2, Vec3};
 
 mod indexed;
 
+use super::pile::{PileShown, lay_pile, pile_base, pile_scale};
 use super::rows::{Laid, NameIds, RowRules, SameName, face_up, lay_row};
 use super::stack::{OnStack, on_stack, place_stack, spells};
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, LAYER, Layout, lifted};
+use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, Layout, lifted};
 use crate::frame::Place;
 use crate::pose::Pose;
 
@@ -41,6 +42,8 @@ pub struct Placement {
     pub rests: Vec<Option<Rest>>,
     /// The abilities on the stack, sorted by number.
     pub abilities: Vec<(u32, Rest)>,
+    /// Each library, graveyard and exile pile, by `PileShown::index`.
+    pub piles: [PileShown; 6],
 }
 
 impl Placement {
@@ -134,6 +137,7 @@ pub(crate) fn place_reusing(
     let mut placement = Placement {
         rests: Vec::with_capacity(known.rests.len()),
         abilities: Vec::new(),
+        piles: known.piles,
     };
     let mut laid = 0;
     let groups = Group::ALL.into_iter().zip(all_members(zones));
@@ -542,12 +546,13 @@ fn lay(
     let (layout, camera, scroll, ids) = rules;
     match group {
         Group::Pile { side, zone } => {
-            let at = match zone {
-                ZoneName::Library => layout.library,
-                ZoneName::Graveyard => layout.graveyard,
-                _ => layout.exile,
-            };
-            pile(placement, objects, zone, side, at);
+            let at = pile_base(layout, camera, side, zone);
+            lay_pile(
+                placement,
+                objects,
+                (side, zone),
+                (at, pile_scale(layout, side)),
+            );
         }
         Group::Hand(side) => {
             let data = match side {
@@ -582,48 +587,9 @@ fn side_of(object: &ObjectView) -> Side {
     }
 }
 
-/// A point of the viewer's side on the opponent's: turned half a turn about the table's centre.
-fn turned(at: Vec2, side: Side) -> Vec2 {
-    match side {
-        Side::You => at,
-        Side::Opponent => -at,
-    }
-}
-
 /// The turn of a card that shows its face (0) or its back (1).
 pub(super) fn turn(object: &ObjectView) -> f32 {
     if face_up(object) { 0.0 } else { 1.0 }
-}
-
-/// A library, graveyard or exile pile: bottom first, each card one `LAYER` above the last. A
-/// library is always face down.
-fn pile(placement: &mut Placement, objects: &[&ObjectView], zone: ZoneName, side: Side, at: Vec2) {
-    let at = turned(at, side);
-    for (height, object) in objects.iter().enumerate() {
-        let pose = Pose {
-            position: at.extend(LAYER * (height as f32 + 0.5)),
-            turn: if zone == ZoneName::Library {
-                1.0
-            } else {
-                turn(object)
-            },
-            ..Pose::default()
-        };
-        let place = Place::Card {
-            zone,
-            side,
-            row: None,
-        };
-        placement.set(
-            object.slot,
-            Rest {
-                pose,
-                place,
-                visible: true,
-                copies: 1,
-            },
-        );
-    }
 }
 
 /// A hand, fanned along an edge of the screen and placed relative to the camera so that it

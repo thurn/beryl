@@ -9,23 +9,26 @@ use std::f32::consts::FRAC_PI_4;
 
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
-use super::badges::{self, Badges};
+use super::badges;
+use super::look::{Dress, Look};
 use super::own::{self, Fights};
+use super::pile::PileShown;
 use super::place::{
     Group, Placement, Rest, Scroll, Zones, place_group, place_reusing, place_zones,
 };
 use super::rows::NameIds;
+use super::tray::Held;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, place};
 use crate::data::space::effects as effects_space;
-use crate::effects::{self, Effect, EffectRun};
+use crate::effects::{self, Effect};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{
     Band, Draw, ElementId, FrameBuilder, OBJECTS, Place, Resolved, Role, StateBits,
 };
 use crate::input::FaceSize;
-use crate::light::{self, Lit};
+use crate::light;
 use crate::motion::Track;
-use crate::pointer::{self, Pointer};
+use crate::pointer;
 use crate::pose::Pose;
 
 /// How large the table cloth is, in millimetres: past every edge of any window.
@@ -65,6 +68,8 @@ pub(crate) struct Objects {
     /// The numbers of the abilities on the view's stack, bottom first, which the view itself
     /// does not give.
     pub numbers: Vec<u32>,
+    /// Each library, graveyard and exile pile, by `PileShown::index`.
+    pub piles: [PileShown; 6],
 }
 
 impl Objects {
@@ -104,43 +109,13 @@ pub(crate) fn ability_track(tracks: &[(u32, Track)], id: u32) -> Option<&Track> 
     Some(&tracks[at].1)
 }
 
-/// How one card is drawn in a frame: made from its pose, face and state, and then changed in
-/// turn by the effects on it, the marks on it and the pointer.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Look {
-    pub pose: Pose,
-    /// Multiplies the face's color.
-    pub tint: [u8; 3],
-    /// How far the card has broken up, from 0 to 1.
-    pub dissolve: f32,
-    /// How far its face is replaced by white light, from 0 to 1.
-    pub whiten: f32,
-    /// The board-size layer of its face, if it has one.
-    pub face: Option<u16>,
-    /// `StateBits`.
-    pub state: u16,
-    pub interactive: bool,
-}
-
-/// What changes how the cards are drawn in a frame, beside their poses: the effects playing,
-/// the spans shown, the pointer, and the time.
-#[derive(Clone, Copy, Debug)]
-pub struct Dress<'a> {
-    pub effects: &'a [EffectRun],
-    /// The numbers the badges on permanents are made of.
-    pub badges: &'a Badges,
-    pub lit: &'a Lit,
-    pub pointer: &'a Pointer,
-    pub now: u64,
-}
-
 /// The 3D table: the camera and every scene object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Table {
     layout: Layout,
     camera: Camera,
     scroll: Scroll,
-    objects: Objects,
+    pub(super) objects: Objects,
     placed: Placed,
     /// The record of the face each card last showed when it was held up to be read, by slot,
     /// which the Revealed Cards pile draws (`Span::Revealed`).
@@ -148,6 +123,8 @@ pub struct Table {
     /// Since when each permanent has fought as its record says, by slot, for the marks of its
     /// own record.
     fights: Fights,
+    /// The cards a prompt holds up, which rest in the tray rather than in their zones.
+    pub(super) held: Option<Held>,
 }
 
 /// How many objects a table has placed since its count was last taken, for `Work::placed`.
@@ -186,6 +163,7 @@ impl Table {
             placed: Placed::default(),
             revealed: Vec::new(),
             fights: Fights::with_capacity(OBJECTS),
+            held: None,
         }
     }
 
@@ -276,7 +254,7 @@ impl Table {
     pub fn placement(&self, view: &PlayerView, abilities: &[u32]) -> Placement {
         let placement = place(view, abilities, &self.layout, &self.camera, &self.scroll);
         self.placed.add(placement.count());
-        placement
+        self.with_held(placement)
     }
 
     /// How many objects the table has placed since the last call, and starts counting again.
@@ -288,6 +266,7 @@ impl Table {
     /// same as `placement` of that view, for nothing but a copy.
     pub(crate) fn rests(&self) -> Placement {
         Placement {
+            piles: self.objects.piles,
             abilities: self
                 .objects
                 .abilities
@@ -322,7 +301,7 @@ impl Table {
     pub(crate) fn placement_of(&self, zones: &Zones) -> Placement {
         let placement = place_zones(zones, &self.layout, &self.camera, &self.scroll);
         self.placed.add(placement.count());
-        placement
+        self.with_held(placement)
     }
 
     /// Every object's resting place in `zones`, for this window, taking each group's from
@@ -336,7 +315,7 @@ impl Table {
         let (placement, laid) =
             place_reusing(zones, known, &self.layout, &self.camera, &self.scroll);
         self.placed.add(laid);
-        placement
+        self.with_held(placement)
     }
 
     /// Places the objects of `group` in `zones` into `placement` for this window, and leaves the
@@ -351,6 +330,7 @@ impl Table {
         let rules = (&self.layout, &self.camera, &self.scroll, Some(ids));
         place_group(zones, group, rules, placement, placed);
         self.placed.add(placed.len());
+        self.hold_in(placement);
     }
 
     /// Puts every object of `view` at its resting place, and forgets the objects it no longer
@@ -395,6 +375,7 @@ impl Table {
             cards: Self::cards_for(view, placement),
             abilities,
             numbers,
+            piles: placement.piles,
         }
     }
 
@@ -467,6 +448,7 @@ impl Table {
                 builder,
             );
         }
+        self.write_piles(builder);
         self.write_abilities(view, motion, faces, (back, dress), builder);
         self.write_revealed(faces, (back, dress), builder);
         let cloth = Affine3A::from_scale_rotation_translation(
@@ -501,10 +483,14 @@ impl Table {
         // A card a row has scrolled out of view rests undrawn at the row's end, above the last
         // card shown. One that is out of view both before the script and after it stays
         // undrawn while it slides, or it would cover that card.
-        let seen = [resting, last]
-            .iter()
-            .flatten()
-            .any(|object| object.visible);
+        // The same holds for a card under the top two of a pile, which is not drawn. A card
+        // that changes place is drawn on its way, wherever it starts or ends.
+        let moves = resting.zip(last).is_some_and(|(a, b)| a.place != b.place);
+        let seen = moves
+            || [resting, last]
+                .iter()
+                .flatten()
+                .any(|object| object.visible);
         let (object, view) = match last {
             Some(object) => (object, motion.view),
             None => (resting?, view),

@@ -183,6 +183,16 @@ impl Camera {
         )
     }
 
+    /// The point of the table (z = 0) that lies under `ndc`, a point of the screen in
+    /// normalized device coordinates. The camera looks down at the table, so every point of the
+    /// screen lies over one.
+    #[must_use]
+    pub fn on_table(&self, ndc: Vec2) -> Vec2 {
+        let along = self.screen_pose(ndc, 1.0, Quat::IDENTITY, 1.0).position - self.eye;
+        let point = self.eye - along * (self.eye.z / along.z);
+        point.truncate()
+    }
+
     /// The camera's right, up and backward directions in the table's space, each of unit
     /// length: across the screen, up the screen, and toward the camera.
     #[must_use]

@@ -5,7 +5,8 @@
 //! is drawn over the table without a depth test, so any element of the flat layer covers every
 //! card. Within the flat layer a later element of the tree is drawn over an earlier one; on the
 //! table a nearer element (smaller `depth`) covers a farther one. An arrow never catches a
-//! press, and neither does an element with no opacity.
+//! press, and neither does a pile's element, which names the pile but is not drawn over its top
+//! card, nor an element with no opacity.
 
 use glam::Vec2;
 
@@ -108,7 +109,7 @@ impl Overlaps {
             boxes,
         };
         for (index, element) in frame.resolved.iter().enumerate() {
-            if element.role == Role::Arrow {
+            if never_catches(element.role) {
                 continue;
             }
             let (left, top, right, bottom) = overlaps.span(overlaps.boxes[index]);
@@ -135,7 +136,7 @@ impl Overlaps {
         )
     }
 
-    /// The elements, other than arrows, whose boxes share some area with `area`, in index order.
+    /// The elements, other than those that never catch a press, whose boxes share some area with `area`, in index order.
     fn near(&self, area: Rect) -> Vec<u32> {
         let (left, top, right, bottom) = self.span(area);
         let mut near = Vec::new();
@@ -250,7 +251,12 @@ fn catches(element: &Resolved, point: Vec2) -> bool {
 
 /// Whether a press inside `element` lands on it, ignoring what covers it.
 fn catches_anywhere(element: &Resolved) -> bool {
-    element.role != Role::Arrow && element.opacity > 0.0
+    !never_catches(element.role) && element.opacity > 0.0
+}
+
+/// Whether an element of `role` never catches a press: an arrow, or a pile's element.
+fn never_catches(role: Role) -> bool {
+    matches!(role, Role::Arrow | Role::Pile)
 }
 
 /// Whether `point` is inside the element's quadrilateral and its clip.
@@ -298,10 +304,10 @@ fn covers(frame: &Frame, a: u32, b: u32) -> bool {
     }
 }
 
-/// Every element of `frame` other than its arrows, which never catch a press, in index order.
+/// Every element of `frame` other than those that never catch a press, in index order.
 fn everything(frame: &Frame) -> Vec<u32> {
     (0..frame.resolved.len() as u32)
-        .filter(|&index| frame.resolved[index as usize].role != Role::Arrow)
+        .filter(|&index| !never_catches(frame.resolved[index as usize].role))
         .collect()
 }
 

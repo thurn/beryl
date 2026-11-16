@@ -145,16 +145,21 @@ pub(crate) fn lay(
         // packet lie under the first.
         let order = (column * packet + packet - under) as f32;
         let pose = if library {
-            let middle = layout.library + lift::library::BESIDE;
-            let at = middle
+            let beside = lift::library::BESIDE
                 + Vec2::X * offset * lift::library::STEP * CARD_WIDTH
                 + lift::library::PACKET * under as f32;
-            let at = match side {
-                Side::You => at,
-                Side::Opponent => -at,
-            };
+            // Beside the library toward the table's middle: to its right on the viewer's side,
+            // and to its left on the opponent's.
+            // The lifted cards are as large as the pile's, and lie as far apart for their size.
+            let scale = super::pile::pile_scale(layout, side);
+            let beside = match side {
+                Side::You => beside,
+                Side::Opponent => -beside,
+            } * scale;
+            let at = super::pile::pile_base(layout, camera, side, ZoneName::Library) + beside;
             Pose {
                 position: at.extend(lift::library::RISE + LAYER * order),
+                scale,
                 turn: 1.0,
                 ..Pose::default()
             }
@@ -179,7 +184,15 @@ pub(crate) fn lay(
             pose
         };
         if let Some(rest) = placement.get(object.slot).copied() {
-            placement.set(object.slot, super::Rest { pose, ..rest });
+            // A card lifted from under the top two of a pile is drawn, as the pile's are not.
+            placement.set(
+                object.slot,
+                super::Rest {
+                    pose,
+                    visible: true,
+                    ..rest
+                },
+            );
         }
     }
 }

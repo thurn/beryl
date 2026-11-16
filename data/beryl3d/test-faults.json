@@ -234,6 +234,90 @@
     "b3d:cavern-of-souls/spell-drained-still-gives-the-mana-drain-mana/you/1920x1080": {
       "reachable": 1
     },
+    "b3d:chains-of-mephistopheles/a-draw-with-a-card-in-hand-discards-it-then-draws/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/a-draw-with-a-card-in-hand-discards-it-then-draws/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/a-draw-with-a-card-in-hand-discards-it-then-draws/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/a-draw-with-a-card-in-hand-discards-it-then-draws/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/after-a-dredged-draw-step-draw-the-next-draw-is-the-first/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:chains-of-mephistopheles/after-a-dredged-draw-step-draw-the-next-draw-is-the-first/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:chains-of-mephistopheles/after-a-dredged-draw-step-draw-the-next-draw-is-the-first/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:chains-of-mephistopheles/after-a-dredged-draw-step-draw-the-next-draw-is-the-first/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:chains-of-mephistopheles/an-upkeep-draw-is-replaced-the-draw-steps-draw-is-not/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/an-upkeep-draw-is-replaced-the-draw-steps-draw-is-not/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/an-upkeep-draw-is-replaced-the-draw-steps-draw-is-not/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/an-upkeep-draw-is-replaced-the-draw-steps-draw-is-not/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/chains-before-dredge/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:chains-of-mephistopheles/chains-before-dredge/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:chains-of-mephistopheles/chains-before-dredge/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:chains-of-mephistopheles/chains-before-dredge/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:chains-of-mephistopheles/dredge-before-chains/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/dredge-before-chains/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/dredge-before-chains/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/dredge-before-chains/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/the-draw-steps-first-draw-is-not-replaced-the-next-one-is/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/the-draw-steps-first-draw-is-not-replaced-the-next-one-is/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/the-draw-steps-first-draw-is-not-replaced-the-next-one-is/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/the-draw-steps-first-draw-is-not-replaced-the-next-one-is/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/two-chains-discard-then-mill/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/two-chains-discard-then-mill/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/two-chains-discard-then-mill/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:chains-of-mephistopheles/two-chains-discard-then-mill/opponent/2560x1080": {
+      "step-shown": 1
+    },
     "b3d:choice-pay/opponent/1440x900": {
       "reachable": 1
     },
@@ -284,37 +368,37 @@
     },
     "b3d:choice-trigger-order/opponent/1440x900": {
       "reachable": 3,
-      "step-shown": 28
+      "step-shown": 33
     },
     "b3d:choice-trigger-order/opponent/1600x900": {
       "reachable": 3,
-      "step-shown": 28
+      "step-shown": 33
     },
     "b3d:choice-trigger-order/opponent/1920x1080": {
       "reachable": 3,
-      "step-shown": 28
+      "step-shown": 33
     },
     "b3d:choice-trigger-order/opponent/2560x1080": {
-      "step-shown": 28
+      "step-shown": 32
     },
     "b3d:choice-trigger-order/you/1440x900": {
       "reachable": 3,
       "rest-placement": 1,
-      "step-shown": 7
+      "step-shown": 17
     },
     "b3d:choice-trigger-order/you/1600x900": {
       "reachable": 3,
       "rest-placement": 1,
-      "step-shown": 7
+      "step-shown": 17
     },
     "b3d:choice-trigger-order/you/1920x1080": {
       "reachable": 3,
       "rest-placement": 1,
-      "step-shown": 7
+      "step-shown": 17
     },
     "b3d:choice-trigger-order/you/2560x1080": {
       "rest-placement": 1,
-      "step-shown": 8
+      "step-shown": 17
     },
     "b3d:choice-untap/opponent/1440x900": {
       "rest-placement": 1
@@ -329,40 +413,52 @@
       "rest-placement": 1
     },
     "b3d:combat-attackers/opponent/1440x900": {
-      "reachable": 5,
-      "step-shown": 7
+      "reachable": 4,
+      "step-shown": 12
     },
     "b3d:combat-attackers/opponent/1600x900": {
-      "reachable": 5,
-      "step-shown": 7
+      "reachable": 4,
+      "step-shown": 13
     },
     "b3d:combat-attackers/opponent/1920x1080": {
-      "reachable": 5,
-      "step-shown": 7
+      "reachable": 4,
+      "step-shown": 13
     },
     "b3d:combat-attackers/opponent/2560x1080": {
-      "reachable": 3,
-      "step-shown": 7
+      "reachable": 2,
+      "step-shown": 13
     },
     "b3d:combat-attackers/you/1440x900": {
       "reachable": 4,
       "rest-placement": 5,
-      "step-shown": 7
+      "step-shown": 11
     },
     "b3d:combat-attackers/you/1600x900": {
       "reachable": 4,
       "rest-placement": 5,
-      "step-shown": 7
+      "step-shown": 11
     },
     "b3d:combat-attackers/you/1920x1080": {
       "reachable": 4,
       "rest-placement": 5,
-      "step-shown": 7
+      "step-shown": 11
     },
     "b3d:combat-attackers/you/2560x1080": {
       "reachable": 2,
       "rest-placement": 5,
-      "step-shown": 7
+      "step-shown": 11
+    },
+    "b3d:converter-choose/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:converter-choose/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:converter-choose/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:converter-choose/opponent/2560x1080": {
+      "step-shown": 2
     },
     "b3d:converter-choose/you/1440x900": {
       "rest-placement": 2
@@ -376,6 +472,18 @@
     "b3d:converter-choose/you/2560x1080": {
       "rest-placement": 2
     },
+    "b3d:converter-exiled/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:converter-exiled/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:converter-exiled/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:converter-exiled/opponent/2560x1080": {
+      "step-shown": 2
+    },
     "b3d:converter-exiled/you/1440x900": {
       "rest-placement": 2
     },
@@ -387,6 +495,18 @@
     },
     "b3d:converter-exiled/you/2560x1080": {
       "rest-placement": 2
+    },
+    "b3d:converter-may-exile/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:converter-may-exile/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:converter-may-exile/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:converter-may-exile/opponent/2560x1080": {
+      "step-shown": 2
     },
     "b3d:converter-may-exile/you/1440x900": {
       "rest-placement": 2
@@ -478,6 +598,102 @@
     "b3d:crowded-max/you/1440x900": {
       "reachable": 3
     },
+    "b3d:currency-converter/bounced/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/bounced/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/bounced/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/bounced/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/chooses-among-its-exiled-cards/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:currency-converter/chooses-among-its-exiled-cards/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:currency-converter/chooses-among-its-exiled-cards/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:currency-converter/chooses-among-its-exiled-cards/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:currency-converter/declines-to-exile-another-loots-discard/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/declines-to-exile-another-loots-discard/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/declines-to-exile-another-loots-discard/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/declines-to-exile-another-loots-discard/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/exiles-its-own-loots-discard-for-a-rogue-bounced-0/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/exiles-its-own-loots-discard-for-a-rogue-bounced-0/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/exiles-its-own-loots-discard-for-a-rogue-bounced-0/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/exiles-its-own-loots-discard-for-a-rogue-bounced-0/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/exiles-its-own-loots-discard-for-a-rogue/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/exiles-its-own-loots-discard-for-a-rogue/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/exiles-its-own-loots-discard-for-a-rogue/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/exiles-its-own-loots-discard-for-a-rogue/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/exiles-thirst-for-discoverys-discards/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:currency-converter/exiles-thirst-for-discoverys-discards/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:currency-converter/exiles-thirst-for-discoverys-discards/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:currency-converter/exiles-thirst-for-discoverys-discards/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:currency-converter/s-ability-returns-a-card-after-the-converter-left/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/s-ability-returns-a-card-after-the-converter-left/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/s-ability-returns-a-card-after-the-converter-left/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/s-ability-returns-a-card-after-the-converter-left/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/s-exiled-cards-stay-with-the-converter-that-exiled-them/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/s-exiled-cards-stay-with-the-converter-that-exiled-them/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/s-exiled-cards-stay-with-the-converter-that-exiled-them/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:currency-converter/s-exiled-cards-stay-with-the-converter-that-exiled-them/opponent/2560x1080": {
+      "step-shown": 1
+    },
     "b3d:death-ward/saves-a-creature-from-get-lost/opponent/1440x900": {
       "reachable": 1
     },
@@ -496,38 +712,92 @@
     "b3d:death-ward/saves-a-land-creature-from-strip-mine/opponent/1920x1080": {
       "reachable": 1
     },
+    "b3d:elite-spellbinder/spellbinders-card-costs-its-owner-2-more/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:elite-spellbinder/spellbinders-card-costs-its-owner-2-more/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:elite-spellbinder/spellbinders-card-costs-its-owner-2-more/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:elite-spellbinder/spellbinders-card-costs-its-owner-2-more/you/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:exile-cast/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:exile-cast/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:exile-cast/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:exile-cast/opponent/2560x1080": {
+      "step-shown": 1
+    },
     "b3d:first-target/opponent/1440x900": {
-      "step-shown": 7
+      "step-shown": 9
     },
     "b3d:first-target/opponent/1600x900": {
-      "step-shown": 7
+      "step-shown": 9
     },
     "b3d:first-target/opponent/1920x1080": {
-      "step-shown": 7
+      "step-shown": 9
     },
     "b3d:first-target/opponent/2560x1080": {
-      "step-shown": 7
+      "step-shown": 9
     },
     "b3d:first-target/you/1440x900": {
-      "step-shown": 21
+      "step-shown": 24
     },
     "b3d:first-target/you/1600x900": {
-      "step-shown": 21
+      "step-shown": 24
     },
     "b3d:first-target/you/1920x1080": {
-      "step-shown": 21
+      "step-shown": 24
     },
     "b3d:first-target/you/2560x1080": {
-      "step-shown": 21
+      "step-shown": 24
+    },
+    "b3d:force-of-will/for-1-life-and-a-blue-card/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:force-of-will/for-1-life-and-a-blue-card/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:force-of-will/for-1-life-and-a-blue-card/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:force-of-will/for-1-life-and-a-blue-card/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:force-of-will/for-its-alternative-cost-under-trinisphere-costs-three/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:force-of-will/for-its-alternative-cost-under-trinisphere-costs-three/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:force-of-will/for-its-alternative-cost-under-trinisphere-costs-three/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:force-of-will/for-its-alternative-cost-under-trinisphere-costs-three/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:force-of-will/the-caster-chooses-which-blue-card-to-exile-1/opponent/1440x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
     },
     "b3d:force-of-will/the-caster-chooses-which-blue-card-to-exile-1/opponent/1600x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
     },
     "b3d:force-of-will/the-caster-chooses-which-blue-card-to-exile-1/opponent/1920x1080": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
+    },
+    "b3d:force-of-will/the-caster-chooses-which-blue-card-to-exile-1/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:force-of-will/the-caster-chooses-which-blue-card-to-exile-1/you/1440x900": {
       "reachable": 1
@@ -539,13 +809,19 @@
       "reachable": 1
     },
     "b3d:force-of-will/the-caster-chooses-which-blue-card-to-exile/opponent/1440x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
     },
     "b3d:force-of-will/the-caster-chooses-which-blue-card-to-exile/opponent/1600x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
     },
     "b3d:force-of-will/the-caster-chooses-which-blue-card-to-exile/opponent/1920x1080": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
+    },
+    "b3d:force-of-will/the-caster-chooses-which-blue-card-to-exile/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:force-of-will/the-caster-chooses-which-blue-card-to-exile/you/1440x900": {
       "reachable": 1
@@ -636,18 +912,22 @@
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1440x900": {
       "reachable": 1,
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1600x900": {
       "reachable": 1,
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1920x1080": {
       "reachable": 1,
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/2560x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/you/1440x900": {
       "reachable": 2
@@ -663,34 +943,42 @@
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/1440x900": {
       "reachable": 1,
-      "rest-placement": 2
+      "rest-placement": 2,
+      "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/1600x900": {
       "reachable": 1,
-      "rest-placement": 2
+      "rest-placement": 2,
+      "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/1920x1080": {
       "reachable": 1,
-      "rest-placement": 2
+      "rest-placement": 2,
+      "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/2560x1080": {
-      "rest-placement": 2
+      "rest-placement": 2,
+      "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1440x900": {
-      "reachable": 2,
-      "rest-placement": 2
+      "reachable": 3,
+      "rest-placement": 2,
+      "step-shown": 7
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1600x900": {
       "reachable": 2,
-      "rest-placement": 2
+      "rest-placement": 2,
+      "step-shown": 7
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1920x1080": {
       "reachable": 2,
-      "rest-placement": 2
+      "rest-placement": 2,
+      "step-shown": 7
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/2560x1080": {
       "reachable": 1,
-      "rest-placement": 2
+      "rest-placement": 2,
+      "step-shown": 7
     },
     "b3d:gemrazer/glasspool-mimic-copying-gemrazers-merged-creature-has-both-cards-abilities/opponent/1440x900": {
       "reachable": 1
@@ -863,35 +1151,143 @@
     "b3d:gemrazer/s-target-gone-it-enters-as-a-creature-and-does-not-mutate/you/1920x1080": {
       "reachable": 1
     },
+    "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-and-the-graveyard/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-and-the-graveyard/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-and-the-graveyard/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-and-the-graveyard/you/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-left-on-top/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-left-on-top/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-left-on-top/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-left-on-top/you/2560x1080": {
+      "step-shown": 1
+    },
     "b3d:greedy-turn-9/opponent/1440x900": {
       "reachable": 1,
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:greedy-turn-9/opponent/1600x900": {
       "reachable": 1,
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:greedy-turn-9/opponent/1920x1080": {
       "reachable": 1,
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:greedy-turn-9/opponent/2560x1080": {
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:greedy-turn-9/you/1440x900": {
       "reachable": 1,
-      "step-shown": 7
+      "step-shown": 9
     },
     "b3d:greedy-turn-9/you/1600x900": {
       "reachable": 1,
-      "step-shown": 7
+      "step-shown": 9
     },
     "b3d:greedy-turn-9/you/1920x1080": {
       "reachable": 1,
-      "step-shown": 7
+      "step-shown": 9
     },
     "b3d:greedy-turn-9/you/2560x1080": {
-      "step-shown": 7
+      "step-shown": 9
+    },
+    "b3d:griselbrand/bounced/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:griselbrand/bounced/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:griselbrand/bounced/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:griselbrand/bounced/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:hullbreacher/an-opponents-draw-is-a-treasure-for-p0-instead/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:hullbreacher/an-opponents-draw-is-a-treasure-for-p0-instead/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:hullbreacher/an-opponents-draw-is-a-treasure-for-p0-instead/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:hullbreacher/an-opponents-draw-is-a-treasure-for-p0-instead/you/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:hullbreacher/the-opponents-draw-steps-first-draw-is-theirs-the-next-is-not/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:hullbreacher/the-opponents-draw-steps-first-draw-is-theirs-the-next-is-not/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:hullbreacher/the-opponents-draw-steps-first-draw-is-theirs-the-next-is-not/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:hullbreacher/the-opponents-draw-steps-first-draw-is-theirs-the-next-is-not/you/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen-bounced-0/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen-bounced-0/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen-bounced-0/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen-bounced-0/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:jace-the-mind-sculptor/1-returns-a-creature-12-exiles-a-library-and-shuffles-in-the-hand/you/1440x900": {
+      "step-shown": 3
+    },
+    "b3d:jace-the-mind-sculptor/1-returns-a-creature-12-exiles-a-library-and-shuffles-in-the-hand/you/1600x900": {
+      "step-shown": 3
+    },
+    "b3d:jace-the-mind-sculptor/1-returns-a-creature-12-exiles-a-library-and-shuffles-in-the-hand/you/1920x1080": {
+      "step-shown": 3
+    },
+    "b3d:jace-the-mind-sculptor/1-returns-a-creature-12-exiles-a-library-and-shuffles-in-the-hand/you/2560x1080": {
+      "step-shown": 3
+    },
+    "b3d:jace-the-mind-sculptor/ability-3/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-the-mind-sculptor/ability-3/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-the-mind-sculptor/ability-3/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-the-mind-sculptor/ability-3/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:jace-the-mind-sculptor/bounced/opponent/1440x900": {
       "no-jumps": 1
@@ -905,32 +1301,164 @@
     "b3d:jace-the-mind-sculptor/bounced/opponent/2560x1080": {
       "no-jumps": 1
     },
+    "b3d:jace-vryns-prodigy/bounced/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/bounced/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/bounced/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/bounced/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-0/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-0/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-0/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-0/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-bounced-0/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-bounced-0/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-bounced-0/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him-bounced-0/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:jace-vryns-prodigy/looting-to-five-cards-in-the-graveyard-transforms-him/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-bounced-0/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-bounced-0/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-bounced-0/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-wielder-of-mysteries/8-with-cards-left-after-the-seven-doesnt-win-bounced-0/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-wielder-of-mysteries/ability-2/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-wielder-of-mysteries/ability-2/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:jace-wielder-of-mysteries/ability-2/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:jace-wielder-of-mysteries/ability-2/opponent/2560x1080": {
+      "step-shown": 1
+    },
     "b3d:late-game/opponent/1440x900": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:late-game/opponent/1600x900": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:late-game/opponent/1920x1080": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:late-game/opponent/2560x1080": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:late-game/you/1440x900": {
       "reachable": 1,
-      "step-shown": 14
+      "step-shown": 16
     },
     "b3d:late-game/you/1600x900": {
       "reachable": 1,
-      "step-shown": 14
+      "step-shown": 16
     },
     "b3d:late-game/you/1920x1080": {
       "reachable": 1,
-      "step-shown": 14
+      "step-shown": 16
     },
     "b3d:late-game/you/2560x1080": {
-      "step-shown": 14
+      "step-shown": 16
+    },
+    "b3d:life-from-the-loam/dredge-a-draw-after-the-same-ability-milled-it/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-a-draw-after-the-same-ability-milled-it/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-a-draw-after-the-same-ability-milled-it/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-a-draw-after-the-same-ability-milled-it/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-each-draw-of-an-ability-on-its-own/opponent/1440x900": {
+      "step-shown": 4
+    },
+    "b3d:life-from-the-loam/dredge-each-draw-of-an-ability-on-its-own/opponent/1600x900": {
+      "step-shown": 4
+    },
+    "b3d:life-from-the-loam/dredge-each-draw-of-an-ability-on-its-own/opponent/1920x1080": {
+      "step-shown": 4
+    },
+    "b3d:life-from-the-loam/dredge-each-draw-of-an-ability-on-its-own/opponent/2560x1080": {
+      "step-shown": 4
+    },
+    "b3d:life-from-the-loam/dredge-in-the-draw-step/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-in-the-draw-step/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-in-the-draw-step/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-in-the-draw-step/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-under-rest-in-peace-exiles-the-milled-cards/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-under-rest-in-peace-exiles-the-milled-cards/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-under-rest-in-peace-exiles-the-milled-cards/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-under-rest-in-peace-exiles-the-milled-cards/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-with-exactly-three-cards-in-the-library/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-with-exactly-three-cards-in-the-library/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-with-exactly-three-cards-in-the-library/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/dredge-with-exactly-three-cards-in-the-library/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:life-from-the-loam/returns-three-lands-from-its-casters-graveyard/you/1440x900": {
       "reachable": 2
@@ -943,6 +1471,90 @@
     },
     "b3d:life-from-the-loam/returns-three-lands-from-its-casters-graveyard/you/2560x1080": {
       "reachable": 2
+    },
+    "b3d:life-from-the-loam/two-dredge-cards-in-the-graveyard/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/two-dredge-cards-in-the-graveyard/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/two-dredge-cards-in-the-graveyard/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:life-from-the-loam/two-dredge-cards-in-the-graveyard/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color-0/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color-0/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color-0/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color-0/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color-bounced-0/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color-bounced-0/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color-bounced-0/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color-bounced-0/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:lions-eye-diamond/it-discards-the-hand-for-three-mana-of-one-color/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard/opponent/1440x900": {
+      "step-shown": 3
+    },
+    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard/opponent/1600x900": {
+      "step-shown": 3
+    },
+    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard/opponent/1920x1080": {
+      "step-shown": 3
+    },
+    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard/opponent/2560x1080": {
+      "step-shown": 4
+    },
+    "b3d:malcolm-alluring-scoundrel/trinisphere-raises-the-free-cast-to-three/opponent/1440x900": {
+      "step-shown": 3
+    },
+    "b3d:malcolm-alluring-scoundrel/trinisphere-raises-the-free-cast-to-three/opponent/1600x900": {
+      "step-shown": 3
+    },
+    "b3d:malcolm-alluring-scoundrel/trinisphere-raises-the-free-cast-to-three/opponent/1920x1080": {
+      "step-shown": 3
+    },
+    "b3d:malcolm-alluring-scoundrel/trinisphere-raises-the-free-cast-to-three/opponent/2560x1080": {
+      "step-shown": 4
     },
     "b3d:mana-drain/on-the-casters-own-turn-mana-at-that-turns-postcombat-main-2/opponent/1440x900": {
       "reachable": 1
@@ -1208,6 +1820,90 @@
     "b3d:no-more-lies/the-controller-pays-3/you/1920x1080": {
       "reachable": 1
     },
+    "b3d:notion-thief/an-opponents-draw-is-p0s-instead/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/an-opponents-draw-is-p0s-instead/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/an-opponents-draw-is-p0s-instead/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/an-opponents-draw-is-p0s-instead/you/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/before-chains-of-mephistopheles/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/before-chains-of-mephistopheles/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/before-chains-of-mephistopheles/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/before-chains-of-mephistopheles/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/before-chains-of-mephistopheles/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/before-chains-of-mephistopheles/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/before-chains-of-mephistopheles/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/before-chains-of-mephistopheles/you/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/chains-of-mephistopheles-before-notion-thief/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/chains-of-mephistopheles-before-notion-thief/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/chains-of-mephistopheles-before-notion-thief/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/chains-of-mephistopheles-before-notion-thief/you/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/its-controllers-own-draw-is-not-replaced/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/its-controllers-own-draw-is-not-replaced/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/its-controllers-own-draw-is-not-replaced/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/its-controllers-own-draw-is-not-replaced/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/the-opponents-draw-steps-first-draw-is-theirs-the-next-is-p0s/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/the-opponents-draw-steps-first-draw-is-theirs-the-next-is-p0s/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/the-opponents-draw-steps-first-draw-is-theirs-the-next-is-p0s/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/the-opponents-draw-steps-first-draw-is-theirs-the-next-is-p0s/you/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/with-a-notion-thief-each-the-player-who-would-draw-draws/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/with-a-notion-thief-each-the-player-who-would-draw-draws/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/with-a-notion-thief-each-the-player-who-would-draw-draws/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:notion-thief/with-a-notion-thief-each-the-player-who-would-draw-draws/you/2560x1080": {
+      "step-shown": 1
+    },
     "b3d:opening-bottom/opponent/1440x900": {
       "step-shown": 14
     },
@@ -1245,16 +1941,16 @@
       "step-shown": 7
     },
     "b3d:opening-keep/you/1440x900": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:opening-keep/you/1600x900": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:opening-keep/you/1920x1080": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:opening-keep/you/2560x1080": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:opening-opponent-play/opponent/1440x900": {
       "step-shown": 7
@@ -1310,6 +2006,18 @@
     "b3d:painters-servant/two-painters-servants-add-both-their-colors-3/opponent/2560x1080": {
       "rest-placement": 1
     },
+    "b3d:painters-servant/with-blue-chosen-subtletys-evoke-cost-exiles-any-card/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:painters-servant/with-blue-chosen-subtletys-evoke-cost-exiles-any-card/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:painters-servant/with-blue-chosen-subtletys-evoke-cost-exiles-any-card/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:painters-servant/with-blue-chosen-subtletys-evoke-cost-exiles-any-card/opponent/2560x1080": {
+      "step-shown": 1
+    },
     "b3d:phantasmal-image/an-aura-spell-targeting-the-copy-has-it-sacrificed-ask-2/opponent/1440x900": {
       "reachable": 1
     },
@@ -1357,6 +2065,18 @@
     },
     "b3d:phantasmal-image/the-copys-enters-ability-triggers-0/you/2560x1080": {
       "rest-placement": 1
+    },
+    "b3d:pithing-needle/naming-lions-eye-diamond-leaves-its-mana-ability/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:pithing-needle/naming-lions-eye-diamond-leaves-its-mana-ability/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:pithing-needle/naming-lions-eye-diamond-leaves-its-mana-ability/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:pithing-needle/naming-lions-eye-diamond-leaves-its-mana-ability/opponent/2560x1080": {
+      "step-shown": 2
     },
     "b3d:portable-hole/gone-before-its-trigger-resolves/opponent/1440x900": {
       "reachable": 1
@@ -1451,6 +2171,78 @@
     "b3d:reprieve/returns-a-spell-with-x-to-its-owners-hand-and-draws/you/1920x1080": {
       "reachable": 1
     },
+    "b3d:rest-in-peace/a-card-discarded-under-rest-in-peace-is-exiled-and-still-discarded/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:rest-in-peace/a-card-discarded-under-rest-in-peace-is-exiled-and-still-discarded/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:rest-in-peace/a-card-discarded-under-rest-in-peace-is-exiled-and-still-discarded/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:rest-in-peace/a-card-discarded-under-rest-in-peace-is-exiled-and-still-discarded/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:seachrome-coast/with-two-other-lands-enters-untapped/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:seachrome-coast/with-two-other-lands-enters-untapped/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:seachrome-coast/with-two-other-lands-enters-untapped/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:seachrome-coast/with-two-other-lands-enters-untapped/you/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:shape-mode/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:shape-mode/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:shape-mode/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:shape-mode/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:shape-order-theirs/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:shape-order-theirs/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:shape-order-theirs/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:shape-order-theirs/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:shape-order/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:shape-order/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:shape-order/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:shape-order/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:shape-split/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:shape-split/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:shape-split/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:shape-split/opponent/2560x1080": {
+      "step-shown": 2
+    },
     "b3d:shape-split/you/1440x900": {
       "rest-placement": 1
     },
@@ -1463,11 +2255,41 @@
     "b3d:shape-split/you/2560x1080": {
       "rest-placement": 1
     },
-    "b3d:shape-zone-theirs/opponent/2560x1080": {
+    "b3d:shape-yes/opponent/1440x900": {
       "step-shown": 1
     },
-    "b3d:shape-zone/opponent/2560x1080": {
+    "b3d:shape-yes/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:shape-yes/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:shape-yes/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:shape-zone-theirs/opponent/1440x900": {
       "step-shown": 2
+    },
+    "b3d:shape-zone-theirs/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:shape-zone-theirs/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:shape-zone-theirs/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:shape-zone/opponent/1440x900": {
+      "step-shown": 3
+    },
+    "b3d:shape-zone/opponent/1600x900": {
+      "step-shown": 3
+    },
+    "b3d:shape-zone/opponent/1920x1080": {
+      "step-shown": 3
+    },
+    "b3d:shape-zone/opponent/2560x1080": {
+      "step-shown": 3
     },
     "b3d:show-and-tell/an-aura-may-enchant-the-opponents-creature-0/opponent/1440x900": {
       "rest-placement": 1
@@ -1492,6 +2314,18 @@
     },
     "b3d:show-and-tell/puts-both-players-creatures-onto-the-battlefield-0/you/2560x1080": {
       "rest-placement": 1
+    },
+    "b3d:show-and-tell/under-containment-priest/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:show-and-tell/under-containment-priest/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:show-and-tell/under-containment-priest/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:show-and-tell/under-containment-priest/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:sink-into-stupor/returns-a-spell-to-its-owners-hand/opponent/1440x900": {
       "reachable": 1
@@ -1556,11 +2390,53 @@
     "b3d:snapcaster-mage/flashback-a-counterspell-then-exile-it/you/1920x1080": {
       "reachable": 1
     },
+    "b3d:sparas-headquarters/cycling-sparas-headquarters/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:sparas-headquarters/cycling-sparas-headquarters/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:sparas-headquarters/cycling-sparas-headquarters/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:sparas-headquarters/cycling-sparas-headquarters/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:spellseeker/finds-a-sorcery/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:spellseeker/finds-a-sorcery/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:spellseeker/finds-a-sorcery/opponent/1920x1080": {
+      "step-shown": 1
+    },
     "b3d:spellseeker/finds-a-sorcery/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:spellseeker/finds-an-instant/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:spellseeker/finds-an-instant/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:spellseeker/finds-an-instant/opponent/1920x1080": {
       "step-shown": 1
     },
     "b3d:spellseeker/finds-an-instant/opponent/2560x1080": {
       "step-shown": 1
+    },
+    "b3d:sphinx-of-false-conclusions/sphinx-dies-as-a-card-then-as-a-token/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:sphinx-of-false-conclusions/sphinx-dies-as-a-card-then-as-a-token/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:sphinx-of-false-conclusions/sphinx-dies-as-a-card-then-as-a-token/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:sphinx-of-false-conclusions/sphinx-dies-as-a-card-then-as-a-token/opponent/2560x1080": {
+      "step-shown": 2
     },
     "b3d:stack-bounce/opponent/1440x900": {
       "reachable": 1
@@ -1590,31 +2466,31 @@
       "reachable": 1
     },
     "b3d:stack-tall/opponent/1440x900": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:stack-tall/opponent/1600x900": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:stack-tall/opponent/1920x1080": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:stack-tall/opponent/2560x1080": {
-      "step-shown": 7
+      "step-shown": 8
     },
     "b3d:stack-tall/you/1440x900": {
       "reachable": 1,
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:stack-tall/you/1600x900": {
       "reachable": 1,
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:stack-tall/you/1920x1080": {
       "reachable": 1,
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:stack-tall/you/2560x1080": {
-      "step-shown": 14
+      "step-shown": 15
     },
     "b3d:stack-x/opponent/1440x900": {
       "reachable": 1
@@ -1651,6 +2527,18 @@
     },
     "b3d:staff-of-the-storyteller/staff-resolves-after-an-opposing-flash-creature/you/1920x1080": {
       "reachable": 1
+    },
+    "b3d:stifle/counters-a-cycling-ability/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:stifle/counters-a-cycling-ability/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:stifle/counters-a-cycling-ability/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:stifle/counters-a-cycling-ability/you/2560x1080": {
+      "step-shown": 1
     },
     "b3d:stifle/counters-a-storm-trigger/opponent/1440x900": {
       "reachable": 1
@@ -1741,13 +2629,19 @@
       "reachable": 1
     },
     "b3d:subtlety/evoked-sacrificed-its-trigger-still-tucks-a-planeswalker-spell/opponent/1440x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
     },
     "b3d:subtlety/evoked-sacrificed-its-trigger-still-tucks-a-planeswalker-spell/opponent/1600x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
     },
     "b3d:subtlety/evoked-sacrificed-its-trigger-still-tucks-a-planeswalker-spell/opponent/1920x1080": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
+    },
+    "b3d:subtlety/evoked-sacrificed-its-trigger-still-tucks-a-planeswalker-spell/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:subtlety/evoked-sacrificed-its-trigger-still-tucks-a-planeswalker-spell/you/1440x900": {
       "reachable": 1
@@ -1822,13 +2716,19 @@
       "reachable": 1
     },
     "b3d:subtlety/with-mana-and-blue-cards-cast-or-evoke-then-which-card-to-exile-1/opponent/1440x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
     },
     "b3d:subtlety/with-mana-and-blue-cards-cast-or-evoke-then-which-card-to-exile-1/opponent/1600x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
     },
     "b3d:subtlety/with-mana-and-blue-cards-cast-or-evoke-then-which-card-to-exile-1/opponent/1920x1080": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
+    },
+    "b3d:subtlety/with-mana-and-blue-cards-cast-or-evoke-then-which-card-to-exile-1/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:subtlety/with-mana-and-blue-cards-cast-or-evoke-then-which-card-to-exile-1/you/1440x900": {
       "reachable": 1
@@ -1840,13 +2740,19 @@
       "reachable": 1
     },
     "b3d:subtlety/with-mana-and-blue-cards-cast-or-evoke-then-which-card-to-exile/opponent/1440x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
     },
     "b3d:subtlety/with-mana-and-blue-cards-cast-or-evoke-then-which-card-to-exile/opponent/1600x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
     },
     "b3d:subtlety/with-mana-and-blue-cards-cast-or-evoke-then-which-card-to-exile/opponent/1920x1080": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 1
+    },
+    "b3d:subtlety/with-mana-and-blue-cards-cast-or-evoke-then-which-card-to-exile/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:subtlety/with-mana-and-blue-cards-cast-or-evoke-then-which-card-to-exile/you/1440x900": {
       "reachable": 1
@@ -1925,6 +2831,18 @@
     },
     "b3d:tarmogoyf/grows-as-a-land-is-put-into-a-graveyard-in-response/you/1920x1080": {
       "reachable": 1
+    },
+    "b3d:teferi-hero-of-dominaria/8s-emblem-triggers-once-for-each-card-of-a-multiple-draw/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:teferi-hero-of-dominaria/8s-emblem-triggers-once-for-each-card-of-a-multiple-draw/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:teferi-hero-of-dominaria/8s-emblem-triggers-once-for-each-card-of-a-multiple-draw/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:teferi-hero-of-dominaria/8s-emblem-triggers-once-for-each-card-of-a-multiple-draw/opponent/2560x1080": {
+      "step-shown": 2
     },
     "b3d:teferis-protection/a-stolen-artifact-phases-in-at-its-thiefs-untap-step/opponent/1440x900": {
       "reachable": 1
@@ -2007,6 +2925,78 @@
     "b3d:tendrils-of-agony/with-storm-2/you/1920x1080": {
       "reachable": 2
     },
+    "b3d:thirst-for-discovery/discarding-a-basic-land-instead-no-1/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/discarding-a-basic-land-instead-no-1/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/discarding-a-basic-land-instead-no-1/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/discarding-a-basic-land-instead-no-1/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/discarding-a-basic-land-instead/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:thirst-for-discovery/discarding-a-basic-land-instead/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:thirst-for-discovery/discarding-a-basic-land-instead/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:thirst-for-discovery/discarding-a-basic-land-instead/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-ask-2/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-ask-2/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-ask-2/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-ask-2/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-yes-1/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-yes-1/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-yes-1/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand-yes-1/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/discarding-two-cards-with-a-basic-land-in-hand/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/opponent/2560x1080": {
+      "step-shown": 2
+    },
     "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/you/1440x900": {
       "rest-placement": 1
     },
@@ -2019,76 +3009,210 @@
     "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land-0/you/2560x1080": {
       "rest-placement": 1
     },
+    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/opponent/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/opponent/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/opponent/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/two-nonbasic-cards-with-no-basic-land/opponent/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:thirst-for-discovery/with-fewer-than-two-cards-to-discard/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:thirst-for-discovery/with-fewer-than-two-cards-to-discard/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:thirst-for-discovery/with-fewer-than-two-cards-to-discard/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:thirst-for-discovery/with-fewer-than-two-cards-to-discard/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:thundertrap-trainer/takes-a-spell-ask-2/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:thundertrap-trainer/takes-a-spell-ask-2/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:thundertrap-trainer/takes-a-spell-ask-2/opponent/1920x1080": {
+      "step-shown": 1
+    },
     "b3d:thundertrap-trainer/takes-a-spell-ask-2/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:thundertrap-trainer/takes-a-spell/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:thundertrap-trainer/takes-a-spell/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:thundertrap-trainer/takes-a-spell/opponent/1920x1080": {
       "step-shown": 1
     },
     "b3d:thundertrap-trainer/takes-a-spell/opponent/2560x1080": {
       "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/opponent/1440x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/opponent/1600x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/opponent/1920x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/opponent/2560x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
+    },
+    "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/you/2560x1080": {
+      "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/opponent/1440x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/opponent/1600x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/opponent/1920x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/opponent/2560x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/you/1440x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/you/1600x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/you/1920x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/you/2560x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/opponent/1440x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/opponent/1600x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/opponent/1920x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/opponent/2560x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/you/1440x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 3
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/you/1600x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 3
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/you/1920x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 3
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/you/2560x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 3
+    },
+    "b3d:timetwister/shuffles-graveyards-away/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:timetwister/shuffles-graveyards-away/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:timetwister/shuffles-graveyards-away/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:timetwister/with-empty-graveyards/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:timetwister/with-empty-graveyards/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:timetwister/with-empty-graveyards/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:timetwister/with-empty-graveyards/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:timetwister/with-empty-graveyards/you/1440x900": {
+      "step-shown": 2
+    },
+    "b3d:timetwister/with-empty-graveyards/you/1600x900": {
+      "step-shown": 2
+    },
+    "b3d:timetwister/with-empty-graveyards/you/1920x1080": {
+      "step-shown": 2
+    },
+    "b3d:timetwister/with-empty-graveyards/you/2560x1080": {
+      "step-shown": 2
+    },
+    "b3d:trinket-mage/finds-mana-crypt/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:trinket-mage/finds-mana-crypt/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:trinket-mage/finds-mana-crypt/opponent/1920x1080": {
+      "step-shown": 1
     },
     "b3d:trinket-mage/finds-mana-crypt/opponent/2560x1080": {
       "step-shown": 1
     },
+    "b3d:trinket-mage/finds-portable-hole/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:trinket-mage/finds-portable-hole/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:trinket-mage/finds-portable-hole/opponent/1920x1080": {
+      "step-shown": 1
+    },
     "b3d:trinket-mage/finds-portable-hole/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:trinket-mage/searches-with-a-known-library-top/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:trinket-mage/searches-with-a-known-library-top/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:trinket-mage/searches-with-a-known-library-top/opponent/1920x1080": {
       "step-shown": 1
     },
     "b3d:trinket-mage/searches-with-a-known-library-top/opponent/2560x1080": {
@@ -2120,6 +3244,30 @@
     },
     "b3d:underworld-breach/an-instant-escapes-at-instant-speed-a-sorcery-doesnt/you/1920x1080": {
       "reachable": 1
+    },
+    "b3d:verbs-cast-theirs-stops/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:verbs-cast-theirs-stops/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:verbs-cast-theirs-stops/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:verbs-cast-theirs-stops/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:verbs-cast-theirs/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:verbs-cast-theirs/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:verbs-cast-theirs/opponent/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:verbs-cast-theirs/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:verbs-dig/you/1440x900": {
       "rest-placement": 3
@@ -2157,17 +3305,57 @@
     "b3d:verbs-opening-theirs/you/2560x1080": {
       "step-shown": 14
     },
+    "b3d:verbs-piles-theirs/opponent/1440x900": {
+      "step-shown": 3
+    },
+    "b3d:verbs-piles-theirs/opponent/1600x900": {
+      "step-shown": 3
+    },
+    "b3d:verbs-piles-theirs/opponent/1920x1080": {
+      "step-shown": 3
+    },
+    "b3d:verbs-piles-theirs/opponent/2560x1080": {
+      "step-shown": 3
+    },
+    "b3d:verbs-piles-theirs/you/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:verbs-piles-theirs/you/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:verbs-piles-theirs/you/1920x1080": {
+      "step-shown": 1
+    },
+    "b3d:verbs-piles-theirs/you/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:verbs-piles/opponent/1440x900": {
+      "step-shown": 3
+    },
+    "b3d:verbs-piles/opponent/1600x900": {
+      "step-shown": 3
+    },
+    "b3d:verbs-piles/opponent/1920x1080": {
+      "step-shown": 3
+    },
+    "b3d:verbs-piles/opponent/2560x1080": {
+      "step-shown": 3
+    },
     "b3d:verbs-piles/you/1440x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:verbs-piles/you/1600x900": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:verbs-piles/you/1920x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:verbs-piles/you/2560x1080": {
-      "rest-placement": 1
+      "rest-placement": 1,
+      "step-shown": 1
     },
     "b3d:verbs-place-theirs/opponent/1440x900": {
       "reachable": 1
@@ -2187,7 +3375,25 @@
     "b3d:verbs-place-theirs/you/1920x1080": {
       "reachable": 1
     },
+    "b3d:verbs-reveal-theirs/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:verbs-reveal-theirs/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:verbs-reveal-theirs/opponent/1920x1080": {
+      "step-shown": 1
+    },
     "b3d:verbs-reveal-theirs/opponent/2560x1080": {
+      "step-shown": 1
+    },
+    "b3d:verbs-reveal/opponent/1440x900": {
+      "step-shown": 1
+    },
+    "b3d:verbs-reveal/opponent/1600x900": {
+      "step-shown": 1
+    },
+    "b3d:verbs-reveal/opponent/1920x1080": {
       "step-shown": 1
     },
     "b3d:verbs-reveal/opponent/2560x1080": {
@@ -2230,13 +3436,19 @@
       "reachable": 1
     },
     "b3d:verbs-zones-theirs/opponent/1440x900": {
-      "reachable": 3
+      "reachable": 3,
+      "step-shown": 1
     },
     "b3d:verbs-zones-theirs/opponent/1600x900": {
-      "reachable": 3
+      "reachable": 3,
+      "step-shown": 1
     },
     "b3d:verbs-zones-theirs/opponent/1920x1080": {
-      "reachable": 3
+      "reachable": 3,
+      "step-shown": 1
+    },
+    "b3d:verbs-zones-theirs/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:verbs-zones-theirs/you/1440x900": {
       "reachable": 2
@@ -2248,13 +3460,19 @@
       "reachable": 2
     },
     "b3d:verbs-zones/opponent/1440x900": {
-      "reachable": 2
+      "reachable": 2,
+      "step-shown": 1
     },
     "b3d:verbs-zones/opponent/1600x900": {
-      "reachable": 2
+      "reachable": 2,
+      "step-shown": 1
     },
     "b3d:verbs-zones/opponent/1920x1080": {
-      "reachable": 2
+      "reachable": 2,
+      "step-shown": 1
+    },
+    "b3d:verbs-zones/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:verbs-zones/you/1440x900": {
       "reachable": 2
@@ -2284,13 +3502,19 @@
       "reachable": 1
     },
     "b3d:walkers/you/1440x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 5
     },
     "b3d:walkers/you/1600x900": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 5
     },
     "b3d:walkers/you/1920x1080": {
-      "reachable": 1
+      "reachable": 1,
+      "step-shown": 5
+    },
+    "b3d:walkers/you/2560x1080": {
+      "step-shown": 5
     },
     "b3d:winds-of-abandon/exiles-a-creature-its-controller-fetches-a-tapped-basic-0/opponent/1440x900": {
       "rest-placement": 1

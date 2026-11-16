@@ -9,21 +9,27 @@
 pub mod badges;
 mod camera;
 pub(crate) mod lifted;
+mod look;
 mod own;
+mod pile;
 mod place;
 mod revealed;
 mod rows;
 mod scene;
 mod stack;
+mod tray;
 
 use glam::{Vec2, Vec3};
 
 pub use camera::{Camera, CameraData};
+pub use look::{Dress, Look};
+pub use pile::{PILE_IDS, PileShown, pile_name};
 pub(crate) use place::{Group, NO_GROUP, Zones};
 pub use place::{Placement, ROWS, Rest, Scroll, place};
 pub(crate) use rows::NameIds;
-pub use scene::{ABILITY_IDS, Dress, Look, Motion, Table};
+pub use scene::{ABILITY_IDS, Motion, Table};
 pub(crate) use scene::{Objects, ability_track};
+pub use tray::{Held, TraySpace, tray};
 
 use crate::data::space;
 use crate::input::{Insets, Size};
@@ -108,9 +114,15 @@ pub struct Layout {
     /// How far each copy under the top of a pile of identical permanents peeks out, in
     /// millimetres to the right and away from the viewer.
     pub pile_step: Vec2,
-    pub library: Vec2,
-    pub graveyard: Vec2,
-    pub exile: Vec2,
+    /// Where each pile lies: the point of the screen, in normalized device coordinates, over
+    /// which its bottom card's centre lies on the table. By side, the viewer's first, then
+    /// library, graveyard and exile.
+    pub piles: [[Vec2; 3]; 2],
+    /// How large a pile's cards are against a card's printed size, the viewer's then the
+    /// opponent's.
+    pub pile_scale: [f32; 2],
+    /// The space the cards a prompt holds up are laid out in.
+    pub tray: TraySpace,
     /// The bottom item of the stack, and how far each item above it moves.
     pub stack: Vec3,
     pub stack_step: Vec3,
@@ -162,9 +174,25 @@ pub const DESKTOP: Layout = Layout {
     others: row_area!(others),
     gap: desktop::GAP,
     pile_step: desktop::PILE_STEP,
-    library: desktop::LIBRARY,
-    graveyard: desktop::GRAVEYARD,
-    exile: desktop::EXILE,
+    // The web interface's `PILES` (`ui/src/game/pileLook.ts`): the middle of each top card as
+    // `pileLook` draws it on the 1600 by 900 stage, converted as `x / 800 - 1` and `1 - y / 450`.
+    piles: [
+        [
+            desktop::piles::you::LIBRARY,
+            desktop::piles::you::GRAVEYARD,
+            desktop::piles::you::EXILE,
+        ],
+        [
+            desktop::piles::opponent::LIBRARY,
+            desktop::piles::opponent::GRAVEYARD,
+            desktop::piles::opponent::EXILE,
+        ],
+    ],
+    // The web draws a pile's card 80 stage pixels wide on the viewer's side and 82 on the
+    // opponent's (`PILES[side].width`), against 128 for a creature (`CREATURE_WIDTH` in
+    // `ui/src/game/placement.ts`); a creature here is a card at its printed size.
+    pile_scale: [desktop::piles::you::SCALE, desktop::piles::opponent::SCALE],
+    tray: TraySpace::DESKTOP,
     stack: desktop::STACK,
     stack_step: desktop::STACK_STEP,
     hand: hand_data!(hand),

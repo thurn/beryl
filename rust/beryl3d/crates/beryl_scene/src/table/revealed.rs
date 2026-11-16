@@ -7,7 +7,8 @@
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use glam::{Quat, Vec2};
 
-use super::scene::{Dress, Look, Table, face_of};
+use super::look::{Dress, Look};
+use super::scene::{Table, face_of};
 use crate::data::space::revealed;
 use crate::faces::Faces;
 use crate::frame::{ElementId, FrameBuilder, Place, REVEALED_FACE, Role};

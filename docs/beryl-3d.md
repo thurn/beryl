@@ -1013,6 +1013,15 @@ camera, how game objects are placed in it and how verbs move them.
   card in a pile lies 0.3 above the one below, so a 60-card library is 18
   millimetres tall and visibly shrinks as it is drawn from. A card in flight
   rises along an arc.
+- **A pile draws few records however tall it is.** Only its top card and the
+  card under it are drawn as cards. The cards beneath keep their scene objects
+  and resting poses, undrawn, so a card taken from inside the pile starts where
+  it lay. One record of the card mesh, stood on its edge and scaled to their
+  height in the color of card stock, is the side of the pile facing the camera.
+  Each pile with a card has a `Role::Pile` element named as the web interface's
+  `pileName` names it, and its count is a float beside it. The piles stand in
+  the corners of the window where the web interface's `PILES` puts them, at the
+  web's size against a creature, on the point of the table under each.
 - **One camera per layout, with a fixed orientation.** The desktop layout and
   the phone layout each have one perspective camera, defined by its pitch, its
   vertical field of view and the point on the table it looks at. It never turns,
@@ -1074,6 +1083,11 @@ flight start exactly where the card was.
   positions are given relative to the camera, not the table, so they are the
   same size and in the same place at any window shape. They are still 3D
   objects: they tilt, they are lit and they cast shadows on the table below.
+- **Cards a prompt holds up lie in the tray.** `table::tray` ports the web
+  interface's `laidOut` for one pile (rows about the middle of the space) and
+  two (boxes side by side), in the space `desktopTray` gives, placed relative to
+  the camera. `Table::hold` names the cards held up, and placement then gives
+  them their tray places in place of their zones'.
 - **Cards the opponent looks at lie beside their pile.** While a view's
   `handling` names a look, the cards it holds up are placed apart from their
   pile: a library's top cards lie face down on the table beside it, at its size
