@@ -286,4 +286,7 @@ pub mod floats {
             [FloatId(26), FloatId(27)],
         ],
     ];
+    /// The inspector: the card under the pointer at full size beside the table
+    /// (`inspect::inspector`).
+    pub const INSPECTOR: FloatId = FloatId(28);
 }

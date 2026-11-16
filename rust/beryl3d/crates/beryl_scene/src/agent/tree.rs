@@ -332,7 +332,9 @@ fn states(frame: &Frame, index: u32, element: &Resolved, out: &mut String) {
             really.replace('\\', "\\\\").replace('"', "\\\"")
         );
     }
-    if element.role != Role::Arrow {
+    // An element the pointer goes through is never reached by a press, so no share of it is
+    // covered in the sense the word means.
+    if element.role != Role::Arrow && !element.state.has(StateBits::PASSES) {
         let percent = (covered(frame, index) * 100.0).round();
         if percent >= 1.0 {
             let _ = write!(out, " covered({percent}%)");

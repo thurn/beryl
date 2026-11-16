@@ -866,6 +866,10 @@ impl Client {
     /// The glyphs that laid-out text needs and no page holds yet. Each is
     /// returned once. The host hands them to the rasterizer.
     pub fn wanted_glyphs(&mut self) -> impl Iterator<Item = GlyphKey> + '_;
+    /// The faces a card being read needs at full size, such as the card in
+    /// the inspector. Each is returned once. The host hands them to its
+    /// asset workers, which report each one's layer as an `AssetReady::Face`.
+    pub fn wanted_faces(&mut self) -> impl Iterator<Item = FaceId> + '_;
 }
 ```
 
@@ -1548,16 +1552,22 @@ fn prompt_bar(prompt: &PromptView) -> Element {
   named constants generated from one data file, `data/design-tokens.json`, which
   also generates the web interface's CSS variables (`just design-tokens`), so
   the two clients cannot drift apart in color or type.
-- **An element can show a scene object.** The card browser, the mulligan screen
-  and the inspector lay out boxes with `taffy` and place real 3D cards in them,
-  so a card looks and animates the same wherever it appears.
+- **An element can show a scene object.** The card browser and the mulligan
+  screen lay out boxes with `taffy` and place real 3D cards in them, so a card
+  looks and animates the same wherever it appears.
+- **An element can show a face flat** (`Shown::Face`): the inspector draws the
+  card under the pointer this way, at full size, beside the table. It is no
+  scene object, so a game object still has exactly one. Until the full-size face
+  arrives, the board-size face is drawn enlarged.
 
 ### Floats
 
 A **float** is a small element placed at a point of the window instead of in a
 screen's layout: the turn banner, the pill above a player who is looking at
-cards, a life total and the number that floats off it, the count on a pile, and
-the count of cards scrolled off the end of a row. `Layer::float(id, element)`
+cards, a life total and the number that floats off it, the count on a pile, the
+count of cards scrolled off the end of a row, and the inspector. An element
+whose style `passes` lets the pointer through, as CSS's `pointer-events: none`
+does, so the card under the inspector stays hovered. `Layer::float(id, element)`
 shows or removes one, and its ids are in `element::floats`.
 
 - **Each float is a taffy tree of its own**, laid out at its content's size and

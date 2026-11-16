@@ -140,6 +140,10 @@ pub struct Style {
     /// web interface's `useTextFit` (`ui/src/components/fit.ts`) shrinks a button's long label,
     /// rather than breaking onto more lines (`layout::fit`).
     pub fit: bool,
+    /// Whether the pointer goes through it and everything under it to what lies beneath, as
+    /// CSS's `pointer-events: none` lets it: a press never lands on it, and what it covers
+    /// stays hovered. Its resolved elements have the `PASSES` state.
+    pub passes: bool,
 }
 
 impl Default for Style {
@@ -178,6 +182,7 @@ impl Default for Style {
             text_align: TextAlign::Start,
             color: None,
             fit: false,
+            passes: false,
         }
     }
 }
@@ -212,6 +217,7 @@ setters! {
     opacity: f32,
     radius: f32,
     fit: bool,
+    passes: bool,
 }
 
 /// Builder methods that set one optional field of `Style` each to `Some`, named for the field.

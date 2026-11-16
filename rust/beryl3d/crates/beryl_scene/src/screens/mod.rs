@@ -17,7 +17,9 @@ use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};
 
 use crate::element::Element;
+use crate::faces::FaceList;
 use crate::frame::ElementId;
+use crate::inspect::inspector::Inspected;
 use crate::settings::Settings;
 use crate::table::Window;
 use crate::widgets::Fields;
@@ -96,6 +98,10 @@ pub struct ScreenIn<'a> {
     pub agents: &'a [String],
     /// What each text field holds, by its name.
     pub fields: &'a Fields,
+    /// The card the pointer is over that the inspector shows, if any (`inspect::inspector`).
+    pub inspected: Option<&'a Inspected>,
+    /// The faces of the match, once its card records have arrived.
+    pub faces: Option<&'a FaceList>,
 }
 
 /// What the flat layer shows on `screen`.

@@ -199,6 +199,8 @@ mod milestone_three {
             sheet: None,
             agents: &[],
             fields: &FIELDS,
+            inspected: None,
+            faces: None,
         }
     }
 

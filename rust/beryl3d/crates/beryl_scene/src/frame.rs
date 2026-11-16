@@ -162,6 +162,9 @@ impl StateBits {
     pub const PHASED_OUT: u16 = 1 << 10;
     /// A card its player picked in a hidden pick, which lies apart from their hand.
     pub const PICKED: u16 = 1 << 11;
+    /// A flat-layer element the pointer goes through (`Style::passes`), which never catches a
+    /// press. The tree printout leaves it out.
+    pub const PASSES: u16 = 1 << 12;
 
     /// Whether every bit of `bits` is set.
     #[must_use]

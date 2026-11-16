@@ -419,6 +419,21 @@
         "gap": 14,
         "heading": 30,
         "depth": 280
+      },
+      "inspector": {
+        "stage_height": 900,
+        "base_width": 1600,
+        "width": 330,
+        "top": 118,
+        "pad": 8,
+        "artist": 30,
+        "least_width": 230,
+        "narrow_step": 10,
+        "edge": 24,
+        "orbs_right": 940,
+        "between_top": 172,
+        "stack_left": 1284,
+        "stack_gap": 54
       }
     }
   },

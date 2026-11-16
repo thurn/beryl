@@ -278,6 +278,11 @@ pub struct Faces {
     board: Vec<Option<u16>>,
     /// By [`FaceId`]: the face's layer in the full-size array, once it has one.
     full: Vec<Option<u16>>,
+    /// The faces asked for at full size (`want_full`) that the host has not been told of yet.
+    wanted: Vec<FaceId>,
+    /// By [`FaceId`]: whether the face has been asked for at full size since it last lost its
+    /// full-size layer, so that it is asked for once.
+    asked: Vec<bool>,
 }
 
 impl Faces {
@@ -289,6 +294,8 @@ impl Faces {
             list,
             board: vec![None; count],
             full: vec![None; count],
+            wanted: Vec::new(),
+            asked: vec![false; count],
         }
     }
 
@@ -298,8 +305,18 @@ impl Faces {
     }
 
     /// Records that `face` has landed in `layer` of the array for `size`. A face the list does
-    /// not hold, from a match that has since been replaced, is ignored.
+    /// not hold, from a match that has since been replaced, is ignored. The full-size array
+    /// holds few layers and reuses the least recently asked-for one, so a full-size face that
+    /// held `layer` before has lost it, and is drawn at board size until it is asked for again.
     pub fn arrived(&mut self, face: FaceId, size: FaceSize, layer: u16) {
+        if size == FaceSize::Full && usize::from(face.0) < self.full.len() {
+            for (held, asked) in self.full.iter_mut().zip(&mut self.asked) {
+                if *held == Some(layer) {
+                    *held = None;
+                    *asked = false;
+                }
+            }
+        }
         let layers = match size {
             FaceSize::Board => &mut self.board,
             FaceSize::Full => &mut self.full,
@@ -314,6 +331,25 @@ impl Faces {
     /// board-size layers until a full-size layer arrives again. Board-size layers are kept.
     pub fn low_memory(&mut self) {
         self.full.fill(None);
+        self.asked.fill(false);
+    }
+
+    /// Asks for `face` at full size, because a card is being read (docs/beryl-3d.md, "Sizes
+    /// and memory"). A face that has a full-size layer, or has been asked for already, is not
+    /// asked for again. Until its full-size layer arrives it is drawn from its board-size one.
+    pub fn want_full(&mut self, face: FaceId) {
+        let at = usize::from(face.0);
+        if self.full_layer_of(face).is_some() || self.asked.get(at).is_none_or(|&asked| asked) {
+            return;
+        }
+        self.asked[at] = true;
+        self.wanted.push(face);
+    }
+
+    /// The faces asked for at full size since the last call, each once, for the host to hand
+    /// its asset workers.
+    pub fn drain_wanted(&mut self) -> impl Iterator<Item = FaceId> + '_ {
+        self.wanted.drain(..)
     }
 
     /// The face that shows the card or face named `name`. Allocates nothing.

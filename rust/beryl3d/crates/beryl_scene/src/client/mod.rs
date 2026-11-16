@@ -20,7 +20,7 @@ use crate::hud::counts::CountFloats;
 use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
 use crate::hud::rows::RowCounts;
-use crate::input::{AssetReady, GlyphKey, Input, Lifecycle, Tier};
+use crate::input::{AssetReady, FaceId, GlyphKey, Input, Lifecycle, Tier};
 use crate::layout::{self, Layer};
 use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
@@ -32,6 +32,9 @@ use crate::table::{Table, Window};
 use crate::widgets::Fields;
 
 mod input;
+mod inspect;
+
+use inspect::Inspector;
 
 /// The platform a host runs on, as far as the client cares: where `Cmd` in a shortcut means
 /// the Command key, and where it means Control.
@@ -134,6 +137,8 @@ pub struct Client {
     /// Whether the host has said memory is low (`Lifecycle::LowMemory`), which fixes the tier at
     /// Baseline.
     low_memory: bool,
+    /// What the inspector shows and when to lay it out again (`inspect`).
+    inspector: Inspector,
 }
 
 impl Client {
@@ -174,6 +179,7 @@ impl Client {
             commands: VecDeque::new(),
             tier: Tier::Baseline,
             low_memory: false,
+            inspector: Inspector::default(),
         }
     }
 
@@ -322,6 +328,7 @@ impl Client {
         let transitioning = self.layer.tick(now);
         self.show.pointer_mut().advance(now);
         self.show.advance_slide(now);
+        self.inspect();
         let mut builder = FrameBuilder::new(&mut self.frame);
         self.show.frame(now, &mut builder);
         // Elements anchored to a card, an ability or a player stand where the table drew it.
@@ -352,7 +359,8 @@ impl Client {
         builder.layout_work(layout_nodes, text_runs);
         builder.placement_work(self.show.table().take_placed());
         self.open = self.show.settled();
-        (self.layer).write(&mut builder, self.show.table().camera(), self.open);
+        let faces = Some(self.show.faces());
+        (self.layer).write_with(&mut builder, self.show.table().camera(), self.open, faces);
         builder.finish();
         // The element a press under the mouse would reach is drawn `hovered`. A press on a card
         // that ended since the last frame and means a click on it (a press that picked nothing
@@ -365,7 +373,8 @@ impl Client {
             };
             self.click(Click::On { on });
         }
-        self.wake = if transitioning {
+        // The inspector follows the card just found under the pointer in the next frame.
+        self.wake = if transitioning || self.hovered_slot() != self.inspector.judged {
             Wake::Now
         } else {
             self.show.wake(now)
@@ -399,6 +408,7 @@ impl Client {
     /// Rebuilds the flat layer's screen, or the sheet open over it, from what the client holds
     /// now, and asks the host for the music it calls for if that has changed.
     fn show_screen(&mut self) {
+        self.inspector.due = true;
         let view = self.show.latest().map(|update| &update.view);
         let input = ScreenIn {
             window: self.window,
@@ -409,6 +419,8 @@ impl Client {
             sheet: self.sheet,
             agents: &self.agents,
             fields: &self.fields,
+            inspected: None,
+            faces: None,
         };
         // Until the sheets are built, an open sheet takes the screen's place in the flat layer.
         // Until the game screen shows anything besides the open prompt, it shows nothing while
@@ -675,6 +687,13 @@ impl Client {
     /// The host hands them to the rasterizer.
     pub fn wanted_glyphs(&mut self) -> impl Iterator<Item = GlyphKey> + '_ {
         self.layer.glyphs_mut().drain_wanted()
+    }
+
+    /// The faces a card being read needs at full size and has not been asked for yet (a card in
+    /// the inspector). Each is returned once. The host hands them to its asset workers, which
+    /// report each one's full-size layer as an `AssetReady::Face`.
+    pub fn wanted_faces(&mut self) -> impl Iterator<Item = FaceId> + '_ {
+        self.show.faces_mut().drain_wanted()
     }
 }
 

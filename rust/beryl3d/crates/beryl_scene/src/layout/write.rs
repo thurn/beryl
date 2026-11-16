@@ -3,33 +3,50 @@
 //! button, a glyph record for each glyph a page holds (`text::write_block`), and the boxes of
 //! the text's lines. It reads only what `Client::handle` laid out, and allocates nothing.
 
-use glam::Vec2;
+use glam::{Affine3A, Vec2, Vec3};
 
 use super::edit::Marks;
 use super::{Layer, Node, has_panel, text_top};
 use crate::element::{Display, Overflow, Shown, TextAlign};
+use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{Band, Draw, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
-use crate::input::Rect;
-use crate::table::Camera;
+use crate::input::{FaceId, FaceSize, Rect};
+use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera};
 use crate::text::{self, BlockLook, faded};
 use crate::tokens::{color, size};
 
 /// How a node and everything under it is drawn: where its tree's top left corner stands, how
-/// opaque it is, the color of its text, and the clip it is drawn under.
+/// opaque it is, the color of its text, the clip it is drawn under, whether the pointer goes
+/// through it, and the faces its cards are drawn from.
 #[derive(Clone, Copy)]
-struct Look {
+struct Look<'a> {
     point: Vec2,
     opacity: f32,
     tint: Option<[u8; 4]>,
     /// The clip's rectangle on the window, in logical points, and its entry in the frame's
     /// clips (`FrameBuilder::clip`), 0 when the frame's clips were all taken.
     clip: Option<(Rect, u8)>,
+    /// It or an element over it lets the pointer through (`Style::passes`).
+    passes: bool,
+    faces: Option<&'a Faces>,
 }
 
 impl Layer {
     /// Writes the flat layer into `builder`, on the plane `camera` puts in front of the table:
     /// the screen if it is `open`, then every float, whether the screen is open or not.
     pub fn write(&self, builder: &mut FrameBuilder, camera: &Camera, open: bool) {
+        self.write_with(builder, camera, open, None);
+    }
+
+    /// `write`, drawing each face an element shows (`Shown::Face`) from the layers `faces`
+    /// gives it. With no faces, such an element draws no face.
+    pub fn write_with(
+        &self,
+        builder: &mut FrameBuilder,
+        camera: &Camera,
+        open: bool,
+        faces: Option<&Faces>,
+    ) {
         if open && let Some(node) = &self.screen {
             // An anchored screen stands at its corner, and is not drawn while that is unknown.
             let corner = match node.element.anchor {
@@ -42,6 +59,8 @@ impl Layer {
                     opacity: 1.0,
                     tint: None,
                     clip: None,
+                    passes: false,
+                    faces,
                 };
                 self.write_node(node, u32::MAX, true, look, builder, camera);
             }
@@ -52,6 +71,8 @@ impl Layer {
                 opacity: float.look.opacity,
                 tint: float.look.tint,
                 clip: None,
+                passes: false,
+                faces,
             };
             self.write_node(&float.node, u32::MAX, true, look, builder, camera);
         }
@@ -68,7 +89,7 @@ impl Layer {
         node: &Node,
         parent: u32,
         top: bool,
-        mut look: Look,
+        mut look: Look<'_>,
         builder: &mut FrameBuilder,
         camera: &Camera,
     ) {
@@ -77,8 +98,12 @@ impl Layer {
         }
         builder.visit();
         look.opacity *= node.opacity();
+        look.passes |= node.element.style.passes;
         let element = &node.element;
-        let state = self.state(node);
+        let mut state = self.state(node);
+        if look.passes {
+            state.0 |= StateBits::PASSES;
+        }
         // A transition moves the node alone: each node under it has its own. A button held down
         // sinks a point, as the `.button:active` rule moves it.
         let sink = if state.has(StateBits::HELD) && sinks(node) {
@@ -137,7 +162,7 @@ impl Layer {
         if node.block.is_some() {
             self.write_text(node, index, state, shown, builder, camera);
         }
-        self.write_icon(node, state, shown, builder, camera);
+        self.write_shown(node, state, shown, builder, camera);
         if let Some(editing) = edited {
             write_marks(node, &editing.marks, false, shown, builder, camera);
         }
@@ -167,35 +192,47 @@ impl Layer {
         }
     }
 
-    /// Writes the icon `node` shows, if any, centred in its content box, moved, tinted and
-    /// clipped by `look`.
-    fn write_icon(
+    /// Writes what `node` shows in its content box (`Shown`), moved, colored and clipped by
+    /// `look`: an icon centred in it, or a face drawn flat to fill it.
+    fn write_shown(
         &self,
         node: &Node,
         state: StateBits,
-        look: Look,
+        look: Look<'_>,
         builder: &mut FrameBuilder,
         camera: &Camera,
     ) {
-        let Some(Shown::Icon(icon, side)) = node.element.shows else {
-            return;
-        };
-        let Some(sprite) = self.icons.get(icon, side) else {
-            return;
-        };
-        let side = f32::from(side);
+        let clip = look.clip.map_or(0, |(_, entry)| entry);
         let content = moved(node.content, look.point);
-        let at = Rect {
-            x: content.x + (content.width - side) / 2.0,
-            y: content.y + (content.height - side) / 2.0,
-            width: side,
-            height: side,
+        let draw = match node.element.shows {
+            Some(Shown::Icon(icon, side)) => {
+                let Some(sprite) = self.icons.get(icon, side) else {
+                    return;
+                };
+                let side = f32::from(side);
+                let at = Rect {
+                    x: content.x + (content.width - side) / 2.0,
+                    y: content.y + (content.height - side) / 2.0,
+                    width: side,
+                    height: side,
+                };
+                let tint = faded(ink(node, state, look.tint), look.opacity);
+                Draw::icon(camera.layer_transform(at), tint, sprite)
+            }
+            Some(Shown::Face(face, size)) => {
+                let Some(faces) = look.faces else {
+                    return;
+                };
+                let transform = camera.layer_transform(content);
+                let Some(mut draw) = face_draw(faces, face, size, transform) else {
+                    return;
+                };
+                draw.tint = faded([255; 4], look.opacity);
+                draw
+            }
+            Some(Shown::Object(_)) | None => return,
         };
-        let tint = faded(ink(node, state, look.tint), look.opacity);
-        let mut draw = Draw::icon(camera.layer_transform(at), tint, sprite);
-        if let Some((_, clip)) = look.clip.filter(|&(_, clip)| clip > 0) {
-            draw = draw.with_clip(clip);
-        }
+        let draw = if clip > 0 { draw.with_clip(clip) } else { draw };
         builder.draw(Band::Layer, draw);
     }
 
@@ -206,7 +243,7 @@ impl Layer {
         node: &Node,
         index: u32,
         state: StateBits,
-        look: Look,
+        look: Look<'_>,
         builder: &mut FrameBuilder,
         camera: &Camera,
     ) {
@@ -285,6 +322,36 @@ fn write_marks(
             mark(*rect, color::TYPE);
         }
     }
+}
+
+/// The record that draws `face` flat in the box `transform` takes the unit square to: a card
+/// with the `Card` material, from its full-size layer when `size` asks for one and it has
+/// landed, and otherwise from its board-size layer, enlarged. `None` while it has neither.
+fn face_draw(faces: &Faces, face: FaceId, size: FaceSize, transform: Affine3A) -> Option<Draw> {
+    let full = match size {
+        FaceSize::Full => faces.full_layer_of(face),
+        FaceSize::Board => None,
+    };
+    let (size, layer) = match full {
+        Some(layer) => (FaceSize::Full, layer),
+        None => (FaceSize::Board, faces.board_layer_of(face)?),
+    };
+    let back = match size {
+        FaceSize::Full => faces.full_layer_of(CARD_BACK),
+        FaceSize::Board => faces.board_layer_of(CARD_BACK),
+    }
+    .unwrap_or(0);
+    // The card mesh is a card's size in millimetres about its middle; the box is the unit square.
+    let card = Affine3A::from_scale(Vec3::new(1.0 / CARD_WIDTH, 1.0 / CARD_HEIGHT, 1.0));
+    Some(Draw::card(
+        transform * card,
+        [255; 4],
+        size,
+        layer,
+        back,
+        0.0,
+        0.0,
+    ))
 }
 
 /// The panel an element is drawn on.

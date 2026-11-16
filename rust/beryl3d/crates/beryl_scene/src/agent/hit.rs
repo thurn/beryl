@@ -10,7 +10,7 @@
 
 use glam::Vec2;
 
-use crate::frame::{Frame, Place, Resolved, Role};
+use crate::frame::{Frame, Place, Resolved, Role, StateBits};
 use crate::input::{Rect, Size};
 
 /// The index of the element a press at `point` (in logical points) reaches, if any.
@@ -249,9 +249,10 @@ fn catches(element: &Resolved, point: Vec2) -> bool {
     catches_anywhere(element) && within(element, point)
 }
 
-/// Whether a press inside `element` lands on it, ignoring what covers it.
+/// Whether a press inside `element` lands on it, ignoring what covers it. One the pointer goes
+/// through (`StateBits::PASSES`) never does.
 fn catches_anywhere(element: &Resolved) -> bool {
-    !never_catches(element.role) && element.opacity > 0.0
+    !never_catches(element.role) && element.opacity > 0.0 && !element.state.has(StateBits::PASSES)
 }
 
 /// Whether an element of `role` never catches a press: an arrow, or a pile's element.
