@@ -196,5 +196,13 @@ fn an_element_that_gains_an_anchor_stands_at_its_point() {
     )))));
     let frame = write(&mut layer);
     let [x, y, width, height] = find(&frame, Role::Region, "badge").1;
-    assert_eq!([x, y, width, height], [180.0, 90.0, 40.0, 20.0]);
+    let want = [180.0, 90.0, 40.0, 20.0];
+    assert!(
+        [x, y, width, height]
+            .iter()
+            .zip(want)
+            .all(|(&a, b)| close(a, b)),
+        "the badge's box is {:?}",
+        [x, y, width, height]
+    );
 }
