@@ -340,14 +340,16 @@ fn two_timeline_runs_print_identical_bytes() {
 }
 
 #[test]
-fn export_writes_the_messages_find_gives() {
+fn export_writes_the_messages_find_gives_after_the_own_timings() {
+    use beryl_protocol::ipc::{FixtureMessage, STAGE_TIMINGS};
     let directory = std::env::temp_dir().join(format!("b3d-export-{}", std::process::id()));
     let printed = ok(&["export", directory.to_str().unwrap()]);
     let file = directory.join(format!("{RECORDING}.you.json"));
-    let read: Vec<beryl_protocol::ipc::FixtureMessage> =
-        serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    let read: Vec<FixtureMessage> = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
     let found = beryl_inspect::recordings::find(RECORDING, beryl_protocol::Seat::P0).unwrap();
-    assert_eq!(read, found.to_vec());
+    // The web interface's timeline times the steps a prompt makes itself by this response.
+    let timings = FixtureMessage::response(STAGE_TIMINGS, &beryl_protocol::script::own_timings());
+    assert_eq!(read, [&[timings][..], &found].concat());
     assert!(printed.contains(" files"), "{printed}");
     std::fs::remove_dir_all(&directory).unwrap();
 }

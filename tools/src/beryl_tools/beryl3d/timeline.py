@@ -14,8 +14,8 @@ steps than its entry. `--update` rewrites the entries to what was measured and r
 raise or add one unless `--raise` is given as well; a commit that raises one says why.
 
 The web side's lines are kept in `$BERYL_CACHE/b3d/web-timelines-<hash>.jsonl`. The hash covers
-the recordings pack and every source file the web timeline reads, so a run that finds the file
-does not start `node`.
+the recordings pack, the exported recordings and every source file the web timeline reads, so a
+run that finds the file does not start `node`.
 
 Measured with `--fixtures` (the lane's step) on 2026-11-15 at load averages of 20 to 60, five
 runs each: with the web lines cached, 24.8, 26.5, 27.3, 57.3 and 59.4 s (median 27.3 s); with
@@ -172,10 +172,15 @@ def lowered(
     return entries, refused
 
 
-def web_hash(pack: str, ui: Path) -> str:
-    """The hash that names the web timelines' cache file: the pack's name and the content of
-    every file under the web timeline's sources."""
+def web_hash(pack: str, ui: Path, exported: Path) -> str:
+    """The hash that names the web timelines' cache file: the pack's name, the content of
+    every recording exported to `exported` and of every file under the web timeline's
+    sources. The exported files count because `b3d export` adds messages of its own to the
+    pack's, so a change to the exporter changes what the web timeline prints."""
     digest = hashlib.sha256(pack.encode())
+    for file in sorted(exported.glob("*.json")):
+        digest.update(file.name.encode())
+        digest.update(file.read_bytes())
     for source in WEB_SOURCES:
         root = ui / source
         files = (
@@ -242,7 +247,7 @@ def web_lines(pack: str, directory: Path) -> list[str]:
     """The web interface's timeline of every recording exported to `directory`, from the cache
     or by playing it with `node`."""
     ui = repo_paths.REPO / "ui"
-    cached = paths.cache() / f"web-timelines-{web_hash(pack, ui)}.jsonl"
+    cached = paths.cache() / f"web-timelines-{web_hash(pack, ui, directory)}.jsonl"
     if cached.exists():
         return cached.read_text().splitlines()
     warm.ensure_node_modules(repo_paths.REPO)
@@ -308,6 +313,9 @@ def run_parity(args: argparse.Namespace) -> int:
     allowed = load_allowlist()
     web_command = f"node ui/scripts/timeline.mjs {shlex.quote(str(directory))}"
     if args.update:
+        # An entry for a recording that no longer exists (a renamed spec moment) goes.
+        exported = {key_of(n, s) for n, s in names}
+        allowed = {k: v for k, v in allowed.items() if k in exported}
         entries, refused = lowered(found, allowed, scope, args.raise_)
         write_allowlist(entries)
         print(f"wrote {ALLOWLIST.name}: {len(entries)} recordings listed")

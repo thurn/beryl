@@ -7,8 +7,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use beryl_protocol::ipc::{FixtureMessage, STAGE_TIMINGS};
 use beryl_protocol::protocol::Side;
-use beryl_protocol::script::Edge;
+use beryl_protocol::script::{Edge, own_timings};
 use beryl_scene::driver::TimelineStep;
 use serde_json::Value;
 
@@ -132,6 +133,20 @@ fn all(options: &Options) -> Result<Printed, Usage> {
     )))
 }
 
+/// `messages` with the session's `stage_timings` response first, unless they hold one. The
+/// recordings in the pack hold no such response, since Beryl 3D reads the table of the steps
+/// a prompt makes itself from `own_timings` directly. The web interface's timeline asks the
+/// recording for it, and without it prints nothing for a recording whose prompts make steps.
+fn with_own_timings(mut messages: Vec<FixtureMessage>) -> Vec<FixtureMessage> {
+    let held = messages
+        .iter()
+        .any(|m| matches!(m, FixtureMessage::Response { command, .. } if command == STAGE_TIMINGS));
+    if !held {
+        messages.insert(0, FixtureMessage::response(STAGE_TIMINGS, &own_timings()));
+    }
+    messages
+}
+
 pub(super) fn export(options: &Options) -> Result<Printed, Usage> {
     let directory = match options.rest.as_slice() {
         [directory] => PathBuf::from(directory),
@@ -149,8 +164,8 @@ pub(super) fn export(options: &Options) -> Result<Printed, Usage> {
     for (name, seat) in &names {
         let seat = side_of(*seat);
         let recording = pages::recording(name, seat).map_err(Usage)?;
-        let json =
-            serde_json::to_string(&recording.0).map_err(|e| Usage(format!("{name}: {e}")))?;
+        let json = serde_json::to_string(&with_own_timings(recording.0))
+            .map_err(|e| Usage(format!("{name}: {e}")))?;
         let file = directory.join(format!(
             "{}.{}.json",
             name.replace('/', "__"),

@@ -128,9 +128,11 @@ project, and selects the main lanes.
   has. The `timeline-parity` check fails for a recording that differs by more
   steps than its entry, or is not listed. A count may only go down:
   `just b3d timeline-parity --update` lowers entries and refuses to raise or add
-  one unless `--raise` is given, and a commit that does says why in its body. A
-  recording the web script cannot time (it needs `stage_timings` for a step the
-  stage makes itself) prints no lines there and counts every step.
+  one unless `--raise` is given, and a commit that does says why in its body.
+  `just b3d export` puts the session's `stage_timings` response first in every
+  recording, so the web script can time the steps a prompt makes itself. A
+  recording the web script still cannot time prints no lines there and counts
+  every step. `--update` drops entries for recordings that no longer exist.
 
 - `data/beryl3d/gates.json`: the audit, frame, tier, material and test gates.
   Each number under `audit` becomes an `f32` constant in `beryl_scene`'s
