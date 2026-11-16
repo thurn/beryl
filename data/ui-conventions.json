@@ -940,7 +940,7 @@
     {
       "kind": "no-equivalent",
       "name": "Manual table connection",
-      "rule": "A dropped connection freezes input on both seats under the existing step banner, which names the other player. The guest redials automatically and the returning view appears at once. A table that the other player left offers Lobby. The start screen offers Resume table for saved hosted tables. Join failures appear on the join form, and a version mismatch appears for both players."
+      "rule": "A dropped connection freezes input on both seats under the existing step banner, which names the other player. The guest redials automatically and the returning view appears at once. A table that the other player left offers Lobby. The start screen offers Resume table for saved hosted tables and for the last table the guest joined. Quitting keeps the guest’s join available, and leaving the table clears it. Join failures appear on the join form, and a version mismatch appears for both players."
     },
     {
       "kind": "no-equivalent",

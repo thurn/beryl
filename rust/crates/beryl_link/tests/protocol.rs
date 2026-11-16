@@ -241,7 +241,14 @@ fn acts_updates_and_refusals_share_one_order() {
     thread::scope(|scope| {
         let guest = guest;
         let server = scope.spawn(|| serve(link, &mut host(), &table, PING_INTERVAL));
-        verify_connected(&events, &Event::Joined { seat: 1 }, 0);
+        verify_connected(
+            &events,
+            &Event::Joined {
+                seat: 1,
+                host: "Derek".into(),
+            },
+            0,
+        );
         assert_eq!(guest.peer().unwrap().name, "Derek");
         assert_eq!(guest.peer().unwrap().route, Route::Memory);
         table.lock().increment();
@@ -325,13 +332,27 @@ fn a_severed_link_redials_and_resumes_with_a_whole_view() {
             serve(resume_link, &mut host, &table, PING_INTERVAL)
         });
 
-        verify_connected(&events, &Event::Joined { seat: 1 }, 0);
+        verify_connected(
+            &events,
+            &Event::Joined {
+                seat: 1,
+                host: "Derek".into(),
+            },
+            0,
+        );
         let n = guest.act(json!("increment")).unwrap();
         assert_eq!(events.recv().unwrap(), Event::Update(json!({"count": 1})));
         assert_eq!(events.recv().unwrap(), Event::Done { n });
         disconnect.close().unwrap();
         assert_eq!(events.recv().unwrap(), Event::Reconnecting);
-        verify_connected(&events, &Event::Resumed { seat: 1 }, 1);
+        verify_connected(
+            &events,
+            &Event::Resumed {
+                seat: 1,
+                host: "Derek".into(),
+            },
+            1,
+        );
         assert_eq!(guest.act_on(1, json!("increment")), Err(LinkError::Closed));
         let n = guest.act_on(2, json!("increment")).unwrap();
         assert_eq!(events.recv().unwrap(), Event::Update(json!({"count": 2})));
@@ -370,7 +391,14 @@ fn leave_cancels_redial_during_an_attempt() {
     let table = TableQueue::new(Counter::default());
     thread::scope(|scope| {
         let server = scope.spawn(|| serve(link, &mut host(), &table, PING_INTERVAL));
-        verify_connected(&events, &Event::Joined { seat: 1 }, 0);
+        verify_connected(
+            &events,
+            &Event::Joined {
+                seat: 1,
+                host: "Derek".into(),
+            },
+            0,
+        );
         disconnect.close().unwrap();
         assert_eq!(events.recv().unwrap(), Event::Reconnecting);
         attempted.recv().unwrap();
@@ -424,7 +452,13 @@ fn a_guest_stops_when_the_application_stops_draining_events() {
         }
     }
     assert_eq!(peer.receive(), Err(LinkError::Closed));
-    assert_eq!(events.recv().unwrap(), Event::Joined { seat: 1 });
+    assert_eq!(
+        events.recv().unwrap(),
+        Event::Joined {
+            seat: 1,
+            host: "Derek".into()
+        }
+    );
     assert!(events.into_iter().count() < 128);
     assert_eq!(guest.act(json!("increment")), Err(LinkError::Closed));
 }

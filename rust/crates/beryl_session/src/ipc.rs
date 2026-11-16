@@ -145,7 +145,7 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             TABLE_SETTINGS_SET,
             request(name::<TableSettings>(cfg)),
             name::<()>(cfg),
-            table_error,
+            table_error.clone(),
         ),
         (
             TABLE_ACT,
@@ -175,7 +175,7 @@ pub(crate) fn typescript(cfg: &Config) -> String {
             TABLE_LEAVE,
             "Record<string, never>".to_owned(),
             name::<()>(cfg),
-            never.clone(),
+            table_error,
         ),
         (
             TABLE_KEYS,

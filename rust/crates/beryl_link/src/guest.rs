@@ -19,14 +19,14 @@ const EVENT_CAPACITY: usize = 32;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Event {
-    Joined { seat: u8 },
+    Joined { seat: u8, host: String },
     Done { n: u64 },
     Refused { n: u64, reason: RefusalReason },
     Update(Value),
     Lobby(Value),
     Left,
     Reconnecting,
-    Resumed { seat: u8 },
+    Resumed { seat: u8, host: String },
     Mismatch(String),
     Failed(LinkError),
 }
@@ -97,6 +97,15 @@ impl Guest {
     /// Leave the current connection or cancel redial. A connect call already
     /// in progress can return later, but its link will be closed before hello.
     pub fn leave(&self) {
+        self.stop(true);
+    }
+
+    /// Close the transport so that the host keeps the table open for a reconnect.
+    pub fn disconnect(&self) {
+        self.stop(false);
+    }
+
+    fn stop(&self, notify_host: bool) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
@@ -108,7 +117,11 @@ impl Guest {
         if let Some(connection) = state.connection.take() {
             // Hold the guard through the final write so the worker cannot drop
             // the live link before Leave has been sent.
-            let _ = connection.finish(&Message::Leave);
+            if notify_host {
+                let _ = connection.finish(&Message::Leave);
+            } else {
+                connection.close();
+            }
         }
         state.ready = false;
     }
@@ -245,7 +258,7 @@ impl Session<'_> {
         }
         match connection.handshake()? {
             Message::Welcome { seat, table, host } => {
-                connection.set_name(host);
+                connection.set_name(host.clone());
                 let mut state = self.state.lock().map_err(|_| LinkError::Closed)?;
                 if state.stopped {
                     return Ok(End::Left);
@@ -254,8 +267,8 @@ impl Session<'_> {
                 *joined = true;
                 *reconnecting = false;
                 if !self.emit(match table {
-                    TableStatus::New => Event::Joined { seat },
-                    TableStatus::Resumed => Event::Resumed { seat },
+                    TableStatus::New => Event::Joined { seat, host },
+                    TableStatus::Resumed => Event::Resumed { seat, host },
                 }) {
                     return Ok(End::EventConsumerUnavailable);
                 }

@@ -35,7 +35,6 @@ export function TableEntries({
   const [saved, setSaved] = useState<SavedTable[]>([]);
   const [savedError, setSavedError] = useState(false);
   useEffect(() => {
-    if (phone) return;
     let mounted = true;
     void tableSaved().then(
       (tables) => {
@@ -48,7 +47,7 @@ export function TableEntries({
     return () => {
       mounted = false;
     };
-  }, [phone]);
+  }, []);
   const blocked = disabled || pending;
   useEffect(() => {
     if (phone) return;
@@ -182,7 +181,7 @@ export function TableEntries({
           </Button>
         </form>
       )}
-      {!phone && saved.length > 0 && (
+      {saved.length > 0 && (
         <ul className="lobby-saved" aria-label="Saved tables">
           {saved.map(({ id, host, guest }) => (
             <li key={id}>
@@ -198,9 +197,7 @@ export function TableEntries({
           ))}
         </ul>
       )}
-      {!phone && savedError && (
-        <p role="status">Could not load saved tables.</p>
-      )}
+      {savedError && <p role="status">Could not load saved tables.</p>}
       {error && (
         <p className="game-error" role="alert">
           {error}

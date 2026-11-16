@@ -147,7 +147,9 @@ impl GuestSession {
 
 impl Drop for GuestSession {
     fn drop(&mut self) {
-        drop(self.stop());
+        if let Some(guest) = self.stop() {
+            guest.disconnect();
+        }
     }
 }
 

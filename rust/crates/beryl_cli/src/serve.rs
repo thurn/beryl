@@ -153,7 +153,7 @@ fn handle(mut stream: TcpStream, seats: &[BrowserSeat; 2]) -> Result<(), String>
                 ipc::TABLE_RESUME => table_command(args, |r: TableResumeRequest| {
                     tables.resume(Platform::current(), &r)
                 }),
-                ipc::TABLE_SAVED => answer(tables.saved()),
+                ipc::TABLE_SAVED => answer(tables.saved(Platform::current())),
                 ipc::TABLE_SETTINGS_GET => answer(tables.settings()),
                 ipc::TABLE_SETTINGS_SET => {
                     table_command(args, |r: TableSettings| tables.set_settings(&r))
@@ -170,10 +170,7 @@ fn handle(mut stream: TcpStream, seats: &[BrowserSeat; 2]) -> Result<(), String>
                     table_command(args, |r: TableLobbyRequest| tables.lobby(r))
                 }
                 ipc::TABLE_CURRENT => answer::<_, ()>(Ok(tables.current())),
-                ipc::TABLE_LEAVE => {
-                    tables.leave();
-                    answer::<_, ()>(Ok(()))
-                }
+                ipc::TABLE_LEAVE => answer(tables.leave()),
                 ipc::TABLE_KEYS => answer(request::<TableKeysRequest>(args).map(|_| ())),
                 ipc::TABLE_QUIT => answer::<_, ()>(Ok(())),
                 ipc::DECK_IMPORT => answer(

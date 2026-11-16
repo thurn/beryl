@@ -1364,7 +1364,7 @@ export type Commands = {
   table_answer: { args: { request: TableAnswerRequest }; result: TableActReply; error: never };
   table_lobby: { args: { request: TableLobbyRequest }; result: LobbyUpdate | null; error: TableRefused };
   table_current: { args: Record<string, never>; result: GameUpdate | null; error: never };
-  table_leave: { args: Record<string, never>; result: null; error: never };
+  table_leave: { args: Record<string, never>; result: null; error: TableConnectionError };
   table_keys: { args: { request: TableKeysRequest }; result: null; error: SessionError };
   table_quit: { args: Record<string, never>; result: null; error: SessionError };
   deck_import: { args: { request: DeckImportRequest }; result: DeckImportReply; error: SessionError };

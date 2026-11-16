@@ -28,14 +28,14 @@ pub async fn table_quit(app: tauri::AppHandle) -> Result<(), beryl_session::Sess
     tauri::async_runtime::spawn_blocking(move || {
         if app
             .dialog()
-            .message("Leave table and quit?")
+            .message("Quit Beryl?")
             .buttons(MessageDialogButtons::OkCancelCustom(
                 "Quit".into(),
                 "Cancel".into(),
             ))
             .blocking_show()
         {
-            app.state::<TableConnections>().leave();
+            app.state::<TableConnections>().shutdown();
             app.exit(0);
         }
     })

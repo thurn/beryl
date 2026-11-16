@@ -3,10 +3,11 @@ use std::sync::mpsc::{Receiver, channel};
 
 use beryl_session::ipc::{
     LobbyChange, Platform, TableActReply, TableHostRequest, TableHostSettings, TableJoinRequest,
-    TableLink, TableLobbyRequest,
+    TableLink, TableLobbyRequest, TableResumeRequest,
 };
 use beryl_session::protocol::{Answer, ObjectId, Side, TablePhase, TablePrompt};
 use beryl_session::{GameUpdate, SessionIds};
+use beryl_table::action::Adjustment;
 use beryl_table::state::LobbySettings;
 use beryl_table::{Action, Seat};
 use beryl_table_session::connections::{MemoryInvites, TableConnections};
@@ -48,18 +49,18 @@ fn receive(views: &Receiver<GameUpdate>, matches: impl Fn(&GameUpdate) -> bool) 
     views.iter().find(matches).expect("publication ended")
 }
 
-fn linked_table(dir: &Path) -> (TableConnections, TableConnections, Receiver<GameUpdate>) {
+fn linked_table(
+    dir: &Path,
+) -> (
+    TableConnections,
+    TableConnections,
+    Receiver<GameUpdate>,
+    MemoryInvites,
+) {
     let memory = MemoryInvites::default();
-    let (send, views) = channel();
     let host = TableConnections::new(SessionIds::default(), dir.join("host"), |_| {}, |_| {})
         .for_server(memory.clone());
-    let guest = TableConnections::new(
-        SessionIds::default(),
-        dir.join("guest"),
-        move |update| send.send(update).unwrap(),
-        |_| {},
-    )
-    .for_server(memory);
+    let (guest, views) = guest_profile(dir, memory.clone());
     let invite = host
         .host(
             Platform::Macos,
@@ -83,13 +84,78 @@ fn linked_table(dir: &Path) -> (TableConnections, TableConnections, Receiver<Gam
     load(&host, "Island");
     load(&guest, "Mountain");
     lobby(&guest, LobbyChange::Ready { ready: true });
-    (host, guest, views)
+    (host, guest, views, memory)
+}
+
+fn guest_profile(dir: &Path, memory: MemoryInvites) -> (TableConnections, Receiver<GameUpdate>) {
+    let (send, views) = channel();
+    let guest = TableConnections::new(
+        SessionIds::default(),
+        dir.join("guest"),
+        move |update| send.send(update).unwrap(),
+        |_| {},
+    )
+    .for_server(memory);
+    (guest, views)
+}
+
+fn gain_life(guest: &TableConnections) {
+    assert_eq!(
+        guest.act(Action::Life {
+            seat: GUEST,
+            adjustment: Adjustment::Add(3),
+        }),
+        TableActReply::Ok { ok: true }
+    );
+}
+
+#[test]
+fn guest_resumes_the_same_game_after_quitting() {
+    let dir = tempfile::tempdir().unwrap();
+    let (host, guest, views, memory) = linked_table(dir.path());
+    assert_eq!(
+        host.act(Action::Start {
+            first: GUEST,
+            opening: false,
+        }),
+        TableActReply::Ok { ok: true }
+    );
+    receive(&views, |update| update.view.turn.number == 1);
+    gain_life(&guest);
+    let before = receive(&views, |update| update.view.players.you.life == 23);
+    guest.shutdown();
+    drop(guest);
+
+    let (guest, views) = guest_profile(dir.path(), memory.clone());
+    // Mobile guests can resume using the same start screen command as desktop guests.
+    let [saved]: [_; 1] = guest.saved(Platform::Ios).unwrap().try_into().unwrap();
+    assert_eq!(saved.host, "Host");
+    assert_eq!(saved.guest.as_deref(), Some("Guest"));
+    let request = TableResumeRequest { id: saved.id };
+    guest.resume(Platform::Ios, &request).unwrap();
+
+    let resumed = views.recv().unwrap();
+    assert_eq!(resumed.view.players.you.life, 23);
+    assert_eq!(resumed.view.turn, before.view.turn);
+    let resumed = resumed.view.table.unwrap();
+    let before = before.view.table.unwrap();
+    assert_eq!(resumed.orders.you.hand, before.orders.you.hand);
+    assert_eq!(resumed.log, before.log);
+
+    gain_life(&guest);
+    assert_eq!(host.current().unwrap().view.players.opponent.life, 26);
+    guest.leave().unwrap();
+    drop(guest);
+
+    let (guest, _views) = guest_profile(dir.path(), memory);
+    assert!(guest.saved(Platform::Ios).unwrap().is_empty());
+    assert!(guest.resume(Platform::Ios, &request).is_err());
 }
 
 #[test]
 fn linked_seats_keep_independently_and_bottom_two_cards() {
     let dir = tempfile::tempdir().unwrap();
-    let (host, guest, views) = linked_table(dir.path());
+    let (host, guest, views, _) = linked_table(dir.path());
     lobby(
         &host,
         LobbyChange::Settings {

@@ -228,7 +228,7 @@ impl TableSessions {
         name: String,
         secret: String,
     ) -> Result<SessionId, LinkError> {
-        self.join_checked_with_wire(connect, name, secret, WIRE_HASH)
+        self.join_checked_with_wire(connect, name, secret, WIRE_HASH, |_| Ok(()))
     }
 
     pub(super) fn join_checked_with_wire<L: Link + 'static>(
@@ -237,6 +237,7 @@ impl TableSessions {
         name: String,
         secret: String,
         wire: &str,
+        before_open: impl FnOnce(&str) -> Result<(), LinkError>,
     ) -> Result<SessionId, LinkError> {
         let (guest, events) = dial_guest(connect, name, secret, wire);
         let first = match events.recv() {
@@ -252,6 +253,13 @@ impl TableSessions {
                 ));
             }
         };
+        let (Event::Joined { host, .. } | Event::Resumed { host, .. }) = &first else {
+            unreachable!("the handshake accepted the join");
+        };
+        if let Err(error) = before_open(host) {
+            guest.disconnect();
+            return Err(error);
+        }
         Ok(self.open_guest(guest, events, Some(first)))
     }
 
@@ -465,6 +473,16 @@ impl TableSessions {
             host.cut_link_for_test();
             current.take();
         }
+    }
+
+    pub(super) fn is_joined(&self) -> bool {
+        matches!(self.lock().as_ref(), Some(Current::Joined(_)))
+    }
+
+    /// Close on app exit so the other seat can reconnect.
+    pub(super) fn disconnect(&self) {
+        let old = self.lock().take();
+        drop(old);
     }
 
     pub fn leave(&self) {

@@ -9,7 +9,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
-use beryl_link::{Invite, TcpHost, TcpLink};
+use beryl_link::{Invite, LinkError, TcpHost, TcpLink};
 use beryl_session::ipc::{
     LobbyChange, LobbyUpdate, Platform, SavedTable, TableActReply, TableConnectionError,
     TableHostReply, TableHostRequest, TableJoinRequest, TableLink, TableLobbyRequest, TableRefused,
@@ -17,6 +17,7 @@ use beryl_session::ipc::{
 };
 use beryl_session::protocol::{Answer, TableAction};
 use beryl_session::{GameUpdate, SessionId, SessionIds};
+use serde::{Deserialize, Serialize};
 
 use crate::{HostSettings, TableEvent, TableSessions};
 use incoming::{Incoming, MemoryInvite};
@@ -25,6 +26,15 @@ pub use incoming::MemoryInvites;
 
 const NO_INTERNET: &str = "This build has no internet play.";
 const NO_HOSTING: &str = "Hosting is not available on this device.";
+
+// Hosted saves use hexadecimal IDs. Each profile has one resumable guest seat.
+const JOINED_TABLE_ID: &str = "joined";
+
+#[derive(Serialize, Deserialize)]
+struct JoinedTable {
+    request: TableJoinRequest,
+    host: String,
+}
 
 pub struct TableConnections {
     tables: TableSessions,
@@ -107,10 +117,25 @@ impl TableConnections {
         self.tables.current()
     }
 
-    pub fn leave(&self) {
+    pub fn leave(&self) -> Result<(), TableConnectionError> {
         let mut listener = self.listener.lock().unwrap_or_else(PoisonError::into_inner);
+        if self.tables.is_joined() {
+            match fs::remove_file(self.joined_path()) {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(cause) => return Err(error(cause)),
+            }
+        }
         self.tables.leave();
         *listener = None;
+        Ok(())
+    }
+
+    /// Shut down on quit while keeping the table available to resume.
+    pub fn shutdown(&self) {
+        let mut listener = self.listener.lock().unwrap_or_else(PoisonError::into_inner);
+        *listener = None;
+        self.tables.disconnect();
     }
 
     pub fn host(
@@ -186,37 +211,57 @@ impl TableConnections {
         wire: &str,
     ) -> Result<SessionId, TableConnectionError> {
         let mut listener = self.listener.lock().unwrap_or_else(PoisonError::into_inner);
+        let session = self.connect_guest(request, wire)?;
+        *listener = None;
+        Ok(session)
+    }
+
+    fn connect_guest(
+        &self,
+        request: TableJoinRequest,
+        wire: &str,
+    ) -> Result<SessionId, TableConnectionError> {
         let invite = ConnectionInvite::parse(request.invite.trim())
             .map_err(|_| error("Invalid invite code."))?;
-        let session = match invite {
-            ConnectionInvite::Link(ref invite @ Invite::Local { ref secret, .. }) => {
-                let invite = invite.clone();
-                let secret = secret.clone();
+        let secret = invite.secret()?;
+        let name = request.name.clone();
+        let save = |host: &str| {
+            write_profile_json(
+                &self.joined_path(),
+                &JoinedTable {
+                    request,
+                    host: host.into(),
+                },
+            )
+            .map_err(|cause| LinkError::Io(format!("Could not save the joined table: {cause}")))
+        };
+        match invite {
+            ConnectionInvite::Link(invite @ Invite::Local { .. }) => {
                 self.tables.join_checked_with_wire(
                     move || TcpLink::connect(&invite),
-                    request.name,
+                    name,
                     secret,
                     wire,
+                    save,
                 )
             }
             ConnectionInvite::Memory(invite) => {
                 let registry = self.memory()?.clone();
-                let secret = invite.secret().to_owned();
                 self.tables.join_checked_with_wire(
                     move || registry.connect(&invite),
-                    request.name,
+                    name,
                     secret,
                     wire,
+                    save,
                 )
             }
             ConnectionInvite::Link(invite @ Invite::Remote(_)) => {
                 self.check_internet()?;
                 #[cfg(feature = "iroh")]
                 {
-                    let secret = remote::secret(&invite).map_err(error)?;
                     let connect = remote::connector(&self.data_dir, invite).map_err(error)?;
                     self.tables
-                        .join_checked_with_wire(connect, request.name, secret, wire)
+                        .join_checked_with_wire(connect, name, secret, wire, save)
                 }
                 #[cfg(not(feature = "iroh"))]
                 {
@@ -225,9 +270,7 @@ impl TableConnections {
                 }
             }
         }
-        .map_err(error)?;
-        *listener = None;
-        Ok(session)
+        .map_err(error)
     }
 
     pub fn resume(
@@ -235,8 +278,17 @@ impl TableConnections {
         platform: Platform,
         request: &TableResumeRequest,
     ) -> Result<TableHostReply, TableConnectionError> {
-        check_hosting(platform)?;
         let mut listener = self.listener.lock().unwrap_or_else(PoisonError::into_inner);
+        if request.id == JOINED_TABLE_ID {
+            let joined = self
+                .joined()?
+                .ok_or_else(|| error("The joined table was not found."))?;
+            let invite = joined.request.invite.clone();
+            self.connect_guest(joined.request, beryl_session::WIRE_HASH)?;
+            *listener = None;
+            return Ok(TableHostReply { invite });
+        }
+        check_hosting(platform)?;
         let invite_text = self.tables.saved_invite(&request.id).map_err(error)?;
         let (incoming, links) = match ConnectionInvite::parse(&invite_text)? {
             ConnectionInvite::Link(invite @ Invite::Local { .. }) => {
@@ -266,8 +318,40 @@ impl TableConnections {
         })
     }
 
-    pub fn saved(&self) -> Result<Vec<SavedTable>, TableConnectionError> {
-        self.tables.list_saved().map_err(error)
+    pub fn saved(&self, platform: Platform) -> Result<Vec<SavedTable>, TableConnectionError> {
+        let mut tables = if matches!(platform, Platform::Ios | Platform::Android) {
+            Vec::new()
+        } else {
+            self.tables.list_saved().map_err(error)?
+        };
+        match self.joined() {
+            Ok(Some(joined)) => tables.insert(
+                0,
+                SavedTable {
+                    id: JOINED_TABLE_ID.into(),
+                    host: joined.host,
+                    guest: Some(joined.request.name),
+                },
+            ),
+            Ok(None) => {}
+            Err(error) if tables.is_empty() => return Err(error),
+            Err(error) => eprintln!("Cannot read joined table: {}", error.reason),
+        }
+        Ok(tables)
+    }
+
+    fn joined(&self) -> Result<Option<JoinedTable>, TableConnectionError> {
+        match File::open(self.joined_path()) {
+            Ok(file) => serde_json::from_reader(io::BufReader::new(file))
+                .map(Some)
+                .map_err(error),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(cause) => Err(error(cause)),
+        }
+    }
+
+    fn joined_path(&self) -> PathBuf {
+        self.data_dir.join("joined-table.json")
     }
 
     pub fn settings(&self) -> Result<TableSettings, TableConnectionError> {
@@ -282,7 +366,7 @@ impl TableConnections {
         if let Some(relay) = &settings.relay {
             validate_relay(relay)?;
         }
-        write_settings(&self.settings_path(), settings).map_err(error)
+        write_profile_json(&self.settings_path(), settings).map_err(error)
     }
 
     fn settings_path(&self) -> PathBuf {
@@ -324,13 +408,13 @@ fn validate_relay(text: &str) -> Result<(), TableConnectionError> {
     }
 }
 
-fn write_settings(path: &Path, settings: &TableSettings) -> io::Result<()> {
+fn write_profile_json(path: &Path, value: &impl Serialize) -> io::Result<()> {
     let directory = path
         .parent()
-        .expect("settings are inside the data directory");
+        .expect("profile files are inside the data directory");
     fs::create_dir_all(directory)?;
     let mut pending = tempfile::NamedTempFile::new_in(directory)?;
-    serde_json::to_writer(&mut pending, settings)?;
+    serde_json::to_writer(&mut pending, value)?;
     pending.as_file().sync_all()?;
     pending.persist(path)?;
     Ok(())

@@ -78,9 +78,8 @@ pub fn table_current(tables: State<'_, TableConnections>) -> Option<GameUpdate> 
 }
 
 #[tauri::command]
-pub async fn table_leave(app: AppHandle) {
-    let _ =
-        tauri::async_runtime::spawn_blocking(move || app.state::<TableConnections>().leave()).await;
+pub async fn table_leave(app: AppHandle) -> Result<(), TableConnectionError> {
+    run(app, TableConnections::leave).await
 }
 
 #[tauri::command]
@@ -112,7 +111,7 @@ pub async fn table_resume(
 
 #[tauri::command]
 pub async fn table_saved(app: AppHandle) -> Result<Vec<SavedTable>, TableConnectionError> {
-    run(app, TableConnections::saved).await
+    run(app, |tables| tables.saved(Platform::current())).await
 }
 
 #[tauri::command]

@@ -713,6 +713,8 @@ copy and makes rejoining automatic.
 - **If the host's app quits, the host reopens the table from the start screen.**
   Its identity and the table secret are unchanged, so the guest's redial
   succeeds without a new invite.
+- **If the guest quits, the guest can select Resume table on the start screen**
+  to rejoin once the host is available. Leaving the table clears that option.
 - **A guest never becomes the host.** If the host does not return, the game is
   over.
 
@@ -1040,7 +1042,7 @@ follows, by decision T17.
 | Cmd+,                      | Remove a −1/−1 counter                                      | The settings window                                                                                      |
 | Cmd+B                      | Move card to bottom of library                              | Beryl's bug report, which is Cmd+Shift+B at a table and stays Cmd+B everywhere else, the lobby included. |
 | Cmd+R, Cmd+P, Cmd+=, Cmd+− | Clear arrows, set power and toughness, add and remove power | The web view's reload, print and zoom                                                                    |
-| Cmd+Q                      | Quits Beryl, after asking to leave the table                | Cockatrice's "Leave game", which it absorbs                                                              |
+| Cmd+Q                      | Quits Beryl after confirmation                              | Cockatrice's "Leave game", which it absorbs                                                              |
 | Cmd+Space                  | Stays with macOS (Spotlight)                                | "Next phase", which keeps Tab and gains Space                                                            |
 | Cmd+Z                      | Undo, which Cockatrice does not have                        | Nothing                                                                                                  |
 | F2 to F12                  | As in Cockatrice, where function keys are available         | Nothing. See below.                                                                                      |
@@ -1536,8 +1538,9 @@ Then work through the areas below.
 - Paste a wrong invite code. Confirm a clear failure and no table.
 - Join from an app whose wire types differ. Confirm both players see the message
   about needing the same version.
-- Quit the guest app during a game and reopen it. Confirm it rejoins the same
-  table without a new invite.
+- Quit the guest app during a game, reopen it, and choose Resume table. Confirm
+  it rejoins the same game without a new invite. Leave the table and confirm the
+  guest's saved entry is gone.
 - Quit the host app during a game, reopen it and resume the table. Confirm the
   guest reconnects and the table is as it was.
 - Between two machines on different networks, confirm the lobby reports a direct

@@ -316,8 +316,9 @@ restore the old behavior.
   under the existing step banner, which names the other player. The guest
   redials automatically and the returning view appears at once. A table that the
   other player left offers Lobby. The start screen offers Resume table for saved
-  hosted tables. Join failures appear on the join form, and a version mismatch
-  appears for both players.
+  hosted tables and for the last table the guest joined. Quitting keeps the
+  guest’s join available, and leaving the table clears it. Join failures appear
+  on the join form, and a version mismatch appears for both players.
 - **Manual table prompts.** Numbers, text and power/toughness are entered in the
   lower-right action dock. The field starts selected, and numeric entries have a
   step down and a step up. A sign changes the current value where one exists.
