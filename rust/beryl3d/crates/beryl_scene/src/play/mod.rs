@@ -182,7 +182,8 @@ pub struct Show {
     reported: u32,
     /// How many scripts the show has been given.
     given: usize,
-    /// When the last script to end ended, in nanoseconds since the client started.
+    /// When the last script to end ended, or the last effect run to end after it did, in
+    /// nanoseconds since the client started.
     rested: u64,
     /// A record of every script given since `record` was called, in order.
     history: Option<Vec<ScriptRecord>>,
@@ -283,8 +284,9 @@ impl Show {
         self.plants.push(plant);
     }
 
-    /// When the last script to end ended, in nanoseconds since the client started: when the
-    /// table came to rest, if nothing has played since. However the frames fell, it is the same.
+    /// When the last script, or an effect run that outlasted it, ended, in nanoseconds since the
+    /// client started: when the table came to rest, if nothing has played since. However the
+    /// frames fell, it is the same, because a reply is due a fixed time after the table rests.
     #[must_use]
     pub fn rested(&self) -> u64 {
         self.rested
@@ -586,8 +588,18 @@ impl Show {
             playing.light(now, &mut self.lit, &mut self.counts);
         }
         self.lit.advance(now);
-        // A run is under way from its start until, not at, its end, as on the web stage.
-        self.effects.retain(|run| run.start + run.duration > now);
+        // A run is under way from its start until, not at, its end, as on the web stage. The table
+        // is not at rest while one is under way, so one that outlasts its script moves `rested`
+        // to its end.
+        let mut rested = self.rested;
+        self.effects.retain(|run| {
+            let end = run.start + run.duration;
+            if end <= now {
+                rested = rested.max(end);
+            }
+            end > now
+        });
+        self.rested = rested;
         let Some(shown) = self.shown.as_ref().map(|update| &update.view) else {
             return;
         };

@@ -369,17 +369,17 @@
     "b3d:combat-attackers/you/1600x900": {
       "no-jumps": 215,
       "rest-placement": 5,
-      "step-shown": 10
+      "step-shown": 7
     },
     "b3d:combat-attackers/you/1920x1080": {
       "no-jumps": 215,
       "rest-placement": 5,
-      "step-shown": 10
+      "step-shown": 7
     },
     "b3d:combat-attackers/you/2560x1080": {
       "no-jumps": 215,
       "rest-placement": 5,
-      "step-shown": 19
+      "step-shown": 17
     },
     "b3d:combat-blockers/you/2560x1080": {
       "step-shown": 1
@@ -618,7 +618,7 @@
     },
     "b3d:first-target/you/2560x1080": {
       "no-jumps": 14,
-      "step-shown": 25
+      "step-shown": 24
     },
     "b3d:flickerwisp/exiles-a-token-which-does-not-return/you/2560x1080": {
       "step-shown": 1
@@ -998,15 +998,15 @@
     },
     "b3d:late-game/you/1600x900": {
       "no-jumps": 86,
-      "step-shown": 17
+      "step-shown": 14
     },
     "b3d:late-game/you/1920x1080": {
       "no-jumps": 86,
-      "step-shown": 17
+      "step-shown": 14
     },
     "b3d:late-game/you/2560x1080": {
       "no-jumps": 86,
-      "step-shown": 23
+      "step-shown": 20
     },
     "b3d:life-from-the-loam/dredge-a-draw-after-the-same-ability-milled-it/you/2560x1080": {
       "step-shown": 1
@@ -1355,7 +1355,7 @@
     },
     "b3d:opponent-turn/you/2560x1080": {
       "no-jumps": 17,
-      "step-shown": 1
+      "step-shown": 2
     },
     "b3d:oust/cant-be-cast-without-a-target/you/2560x1080": {
       "step-shown": 1
@@ -1987,15 +1987,15 @@
     },
     "b3d:stack-tall/you/1600x900": {
       "no-jumps": 7,
-      "step-shown": 15
+      "step-shown": 14
     },
     "b3d:stack-tall/you/1920x1080": {
       "no-jumps": 7,
-      "step-shown": 15
+      "step-shown": 14
     },
     "b3d:stack-tall/you/2560x1080": {
       "no-jumps": 7,
-      "step-shown": 19
+      "step-shown": 17
     },
     "b3d:staff-of-the-storyteller/bounced/opponent/2560x1080": {
       "step-shown": 1
@@ -3066,7 +3066,10 @@
     "b3d:verbs-piles/you/2560x1080": {
       "no-jumps": 2,
       "rest-placement": 1,
-      "step-shown": 2
+      "step-shown": 1
+    },
+    "b3d:verbs-place-theirs/opponent/2560x1080": {
+      "step-shown": 1
     },
     "b3d:verbs-place-theirs/you/2560x1080": {
       "step-shown": 1
@@ -3123,7 +3126,8 @@
       "no-jumps": 5
     },
     "b3d:verbs-reveal/you/2560x1080": {
-      "no-jumps": 5
+      "no-jumps": 5,
+      "step-shown": 1
     },
     "b3d:verbs-scry-theirs/opponent/1440x900": {
       "no-jumps": 3
@@ -3176,6 +3180,9 @@
       "no-jumps": 3,
       "step-shown": 1
     },
+    "b3d:verbs-tuck-theirs/opponent/2560x1080": {
+      "step-shown": 1
+    },
     "b3d:verbs-tuck-theirs/you/2560x1080": {
       "step-shown": 1
     },
@@ -3183,7 +3190,7 @@
       "step-shown": 1
     },
     "b3d:verbs-zones-theirs/opponent/2560x1080": {
-      "step-shown": 3
+      "step-shown": 2
     },
     "b3d:verbs-zones-theirs/you/2560x1080": {
       "step-shown": 2

@@ -141,6 +141,30 @@ fn an_effect_outlives_its_script_and_never_holds_up_the_show() {
     assert_eq!(show.wake(1500 * MS), Wake::Never);
 }
 
+/// The recorded reply to a view is due a fixed time after the table rests, so the table must
+/// rest at the same time however its frames fall. It used to rest when the first frame after the
+/// effect found it over, so a check on every tick played the replies later than a check at the
+/// check times did, and the two disagreed about what the steps after showed.
+#[test]
+fn the_table_rests_as_an_effect_that_outlives_its_script_ends_however_the_frames_fall() {
+    let glow = || {
+        started(vec![StepEffect {
+            duration: Some(1000.0),
+            ..effect("glow", Edge::End)
+        }])
+        .0
+    };
+    let mut buffer = empty_frame();
+    for frames in [&[700, 1500][..], &[700, 1517], &[1999]] {
+        let mut show = glow();
+        for &t in frames {
+            frame(&mut show, &mut buffer, t * MS);
+        }
+        assert_eq!(show.wake(frames[frames.len() - 1] * MS), Wake::Never);
+        assert_eq!(show.rested(), 1500 * MS, "drawn at {frames:?} ms");
+    }
+}
+
 #[test]
 fn the_show_wakes_for_an_effect_that_begins_after_its_script_ends() {
     let (mut show, _) = started(vec![StepEffect {
