@@ -70,42 +70,28 @@
       "step-shown": 17
     },
     "b3d:combat-attackers/opponent/1440x900": {
-      "reachable": 2,
       "step-shown": 8
     },
     "b3d:combat-attackers/opponent/1600x900": {
-      "reachable": 2,
       "step-shown": 10
     },
     "b3d:combat-attackers/opponent/1920x1080": {
-      "reachable": 2,
       "step-shown": 10
     },
     "b3d:combat-attackers/opponent/2560x1080": {
-      "reachable": 2,
       "step-shown": 12
     },
     "b3d:combat-attackers/you/1440x900": {
-      "reachable": 2,
       "step-shown": 8
     },
     "b3d:combat-attackers/you/1600x900": {
-      "reachable": 2,
       "step-shown": 8
     },
     "b3d:combat-attackers/you/1920x1080": {
-      "reachable": 2,
       "step-shown": 8
     },
     "b3d:combat-attackers/you/2560x1080": {
-      "reachable": 2,
       "step-shown": 8
-    },
-    "b3d:crowded-max/opponent/1440x900": {
-      "reachable": 3
-    },
-    "b3d:crowded-max/you/1440x900": {
-      "reachable": 3
     },
     "b3d:elite-spellbinder/spellbinders-card-costs-its-owner-2-more/you/1440x900": {
       "step-shown": 1
@@ -215,18 +201,6 @@
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/2560x1080": {
       "step-shown": 8
     },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/you/1440x900": {
-      "reachable": 1
-    },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/you/1600x900": {
-      "reachable": 1
-    },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/you/1920x1080": {
-      "reachable": 1
-    },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/you/2560x1080": {
-      "reachable": 1
-    },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/1440x900": {
       "step-shown": 10
     },
@@ -240,23 +214,16 @@
       "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1440x900": {
-      "reachable": 1,
       "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1600x900": {
-      "reachable": 1,
       "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1920x1080": {
-      "reachable": 1,
       "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/2560x1080": {
-      "reachable": 1,
       "step-shown": 7
-    },
-    "b3d:gemrazer/s-merged-creature-bounced-both-cards-to-hand/you/1440x900": {
-      "reachable": 1
     },
     "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-and-the-graveyard/you/1440x900": {
       "step-shown": 1
@@ -492,18 +459,6 @@
     "b3d:life-from-the-loam/dredge-with-exactly-three-cards-in-the-library/opponent/2560x1080": {
       "step-shown": 1
     },
-    "b3d:life-from-the-loam/returns-three-lands-from-its-casters-graveyard/you/1440x900": {
-      "reachable": 2
-    },
-    "b3d:life-from-the-loam/returns-three-lands-from-its-casters-graveyard/you/1600x900": {
-      "reachable": 2
-    },
-    "b3d:life-from-the-loam/returns-three-lands-from-its-casters-graveyard/you/1920x1080": {
-      "reachable": 2
-    },
-    "b3d:life-from-the-loam/returns-three-lands-from-its-casters-graveyard/you/2560x1080": {
-      "reachable": 2
-    },
     "b3d:life-from-the-loam/two-dredge-cards-in-the-graveyard/opponent/1440x900": {
       "step-shown": 1
     },
@@ -733,43 +688,35 @@
       "step-shown": 15
     },
     "b3d:stress-1024/you/1440x900": {
-      "blank-card": 143,
-      "reachable": 139,
+      "blank-card": 106,
       "step-shown": 7
     },
     "b3d:stress-1024/you/1600x900": {
-      "blank-card": 153,
-      "reachable": 149,
+      "blank-card": 114,
       "step-shown": 7
     },
     "b3d:stress-1024/you/1920x1080": {
-      "blank-card": 177,
-      "reachable": 173,
+      "blank-card": 129,
       "step-shown": 7
     },
     "b3d:stress-1024/you/2560x1080": {
-      "blank-card": 194,
-      "reachable": 171,
+      "blank-card": 139,
       "step-shown": 7
     },
     "b3d:stress-255/you/1440x900": {
-      "blank-card": 143,
-      "reachable": 143,
+      "blank-card": 106,
       "step-shown": 7
     },
     "b3d:stress-255/you/1600x900": {
-      "blank-card": 153,
-      "reachable": 153,
+      "blank-card": 114,
       "step-shown": 7
     },
     "b3d:stress-255/you/1920x1080": {
-      "blank-card": 177,
-      "reachable": 177,
+      "blank-card": 129,
       "step-shown": 7
     },
     "b3d:stress-255/you/2560x1080": {
-      "blank-card": 192,
-      "reachable": 172,
+      "blank-card": 139,
       "step-shown": 7
     },
     "b3d:stress-hand/you/1440x900": {
@@ -795,23 +742,22 @@
     },
     "b3d:stress-verbs/you/1440x900": {
       "crowded": 1,
-      "reachable": 47,
-      "step-shown": 31
+      "reachable": 3,
+      "step-shown": 30
     },
     "b3d:stress-verbs/you/1600x900": {
       "crowded": 1,
-      "reachable": 44,
-      "step-shown": 32
+      "reachable": 1,
+      "step-shown": 31
     },
     "b3d:stress-verbs/you/1920x1080": {
       "crowded": 1,
-      "reachable": 25,
-      "step-shown": 32
+      "reachable": 1,
+      "step-shown": 31
     },
     "b3d:stress-verbs/you/2560x1080": {
       "crowded": 1,
-      "reachable": 24,
-      "step-shown": 32
+      "step-shown": 31
     },
     "b3d:subtlety/evoked-sacrificed-its-trigger-still-tucks-a-planeswalker-spell/opponent/1440x900": {
       "step-shown": 1

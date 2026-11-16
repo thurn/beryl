@@ -5,10 +5,11 @@ use beryl_scene::frame::{Frame, Role};
 
 #[test]
 fn rank_picks_the_frames_with_the_most_work() {
-    // Every frame of a flight writes each card and evaluates each card's segment, and the rest
-    // frames before it draw only the cards the rows show, so only frames of the flight rank.
-    // The first, which also places every card, ranks highest; the others are those in which
-    // the most cards have risen high enough to cast a shadow.
+    // The first frame of the flight places every object and lays out every card's track, so
+    // it ranks highest. The rest frames before it draw only the cards the rows show, so only
+    // frames of the flight rank: those in which the most cards are in the air, high enough to
+    // cast a shadow. A card waiting in the library under its top two is not drawn until it sets
+    // out, and one that lands out of its row's view is not drawn once it has landed.
     for name in ["stress-255", "stress-1024"] {
         let ranked = rank(name).expect("a gated board");
         assert_eq!(ranked[0], REST_FRAMES, "{name}: {ranked:?}");

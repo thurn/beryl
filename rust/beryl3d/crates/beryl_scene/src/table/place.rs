@@ -8,7 +8,6 @@ use beryl_protocol::protocol::{
     CardType, ObjectId, ObjectView, PlayerState, PlayerView, RowName, Side, StackItem, ZoneName,
 };
 use beryl_protocol::script::{Piles, Table as Played};
-use glam::Vec3;
 
 mod indexed;
 mod merged;

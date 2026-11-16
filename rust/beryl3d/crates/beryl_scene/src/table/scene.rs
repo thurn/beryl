@@ -452,7 +452,8 @@ impl Table {
             Some(object) => (object, motion.view),
             None => (resting?, view),
         };
-        // A permanent tapping or untapping on its track reads as tapped past half its turn.
+        // A permanent that taps or untaps on its track reads as tapped once it has turned
+        // more than half of its quarter turn, from the middle of its step.
         let tapped = [resting, last].iter().flatten().any(|object| object.tapped)
             && pose.rotation.angle_between(Quat::IDENTITY) > FRAC_PI_4;
         // Until its track first moves it, a card stands where it rested: a copy beneath a pile's
