@@ -1,5 +1,5 @@
 """The page's views beyond the first screen (docs/efficiency-dashboard.md, "The page"): Cards,
-Machine, Changes and Findings, and the sections they open in place (one metric's trend, one
+Machine, Enact, Changes and Findings, and the sections they open in place (one metric's trend, one
 finding's items); `ci_views` holds the CI view. Each renders one query's JSON as it is with
 the first screen's parts (`page`), and adds no figure of its own.
 
@@ -271,6 +271,71 @@ def machine(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
     )
 
 
+def enact(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
+    """Time waiting for Enact's ownership lock and syncing under it, by subcommand, then
+    the commands that held the lock while others waited."""
+    subcommands = [
+        (
+            [
+                text(s["subcommand"]),
+                integer(s["lines"]),
+                integer(s["gave_up"]),
+                number(s["wait_minutes"], 1),
+                number(s["sync_minutes"], 1),
+                number(s["held_minutes"], 1),
+                integer(s["calls"]),
+                number(s["call_minutes"], 1),
+                "",
+            ],
+            None,
+        )
+        for s in rows(data["subcommands"])
+    ]
+    holders = [
+        (
+            [text(h["holder"]), integer(h["waits"]), number(h["wait_minutes"], 1), ""],
+            None,
+        )
+        for h in rows(data["holders"])
+    ]
+    return (
+        '<div class="figs">'
+        + figure(
+            "lock wait min",
+            number(data["lock_wait_minutes"], 1),
+            fields,
+            "lock_wait_minutes",
+        )
+        + figure("sync min", number(data["sync_minutes"], 1), fields, "sync_minutes")
+        + figure("lines", integer(data["lines"]), fields, "lock_lines")
+        + figure("joined", integer(data["joined"]), fields, "lock_lines")
+        + figure("no call", integer(data["unjoined"]), fields, "lock_lines")
+        + "</div>"
+        + line_grid(
+            [
+                ("subcommand", "lock_lines"),
+                ("lines", None),
+                ("gave up", None),
+                ("wait min", None),
+                ("sync min", None),
+                ("held min", None),
+                ("calls", None),
+                ("call min", None),
+                ("", None),
+            ],
+            subcommands,
+            fields,
+            "subcommands",
+        )
+        + line_grid(
+            [("holder", "lock_lines"), ("waits", None), ("wait min", None), ("", None)],
+            holders,
+            fields,
+            "holders",
+        )
+    )
+
+
 def metric_address(spec: str) -> str | None:
     """The address of a change's metric over all time, in the cohort its filter names."""
     try:
@@ -418,6 +483,7 @@ page.RENDERERS.update(
         "metrics": series,
         "cards": cards,
         "machine": machine,
+        "enact": enact,
         "changes": changes,
         "findings": findings,
     }
@@ -429,6 +495,7 @@ page.TITLES.update(
         ),
         "cards": lambda d: heading_of("Cards", f"by {d['by']}"),
         "machine": lambda _: heading_of("Machine"),
+        "enact": lambda _: heading_of("Enact"),
         "changes": lambda _: heading_of("Changes"),
         "findings": lambda d: heading_of("Findings", None),
     }
@@ -445,6 +512,8 @@ page.STYLES.append("""
 .cards{--cols:96px 56px 56px 72px 72px 72px 80px 64px minmax(0,1fr)}
 .queued{--cols:minmax(0,260px) 64px 72px 72px minmax(0,1fr)}
 .narrow{--cols:minmax(0,260px) 64px 72px 64px 64px minmax(0,1fr)}
+.subcommands{--cols:minmax(0,200px) 56px 56px 64px 64px 64px 56px 64px minmax(0,1fr)}
+.holders{--cols:minmax(0,260px) 56px 72px minmax(0,1fr)}
 .changes{--cols:104px minmax(0,220px) 64px 64px minmax(0,190px) minmax(0,1fr)}
 .findings{--cols:150px 80px 80px minmax(0,1fr)}
 .items{--cols:minmax(0,260px) 56px 72px 80px 72px minmax(0,1fr)}
@@ -456,6 +525,11 @@ page.STYLES.append("""
 .queued{--cols:minmax(0,1fr) 64px 56px}
 .queued .cols>span:nth-child(2),.queued .cols>span:nth-child(5){display:none}
 .narrow{--cols:minmax(0,1fr) 44px 52px}
+.subcommands{--cols:minmax(0,1fr) 52px 52px 52px}
+.subcommands .cols>span:nth-child(2),.subcommands .cols>span:nth-child(3),
+.subcommands .cols>span:nth-child(n+6){display:none}
+.holders{--cols:minmax(0,1fr) 48px 64px}
+.holders .cols>span:nth-child(4){display:none}
 .narrow .cols>span:nth-child(2),.narrow .cols>span:nth-child(3),
 .narrow .cols>span:nth-child(6){display:none}
 .changes{--cols:52px 52px minmax(0,96px) minmax(0,1fr)}

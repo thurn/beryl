@@ -252,6 +252,12 @@ anything, because other tools already write them.
 - **Check verdicts**. On the bead of a check that has failed, each failure is a
   comment holding a JSON object with the commit and a `verdict`. See
   [CI accounting](#ci-accounting) for the verdicts.
+- **Enact's lock-wait log** (`.git/enact/lock-waits.jsonl` in the main checkout,
+  rotated to `lock-waits.1.jsonl` at 8 MB). Enact writes one line per
+  acquisition of its ownership lock: `time` (when the wait began), `pid`,
+  `command`, `outcome` (`acquired` or `gave_up`), `waited_s`, `held_s`, `sync_s`
+  (seconds syncing beads with the remote while holding the lock), `syncs` and
+  `holder` (the command holding the lock once a wait passed a second).
 
 The design adds two things to what is collected, and three small data files.
 
@@ -349,7 +355,11 @@ could apply, the first in this list wins.
   CPU lease. It is subdivided by kind of command. See
   [Command kinds](#command-kinds).
 - **Tool**: a tool call is running, from the call to its result. It is
-  subdivided by kind of command.
+  subdivided by kind of command. An Enact command's seconds waiting for Enact's
+  ownership lock and syncing beads under it are the kinds `enact lock wait` and
+  `enact sync`, taken from its kind in proportion: each line of the lock-wait
+  log is joined to the top-level tool call that ran its command and was running
+  for the whole of its wait and hold, preferring one that names its bead.
 - **Model**: the model is generating, from a tool result or a message to the
   next assistant message. This applies whether or not a background command is
   also running.
@@ -911,6 +921,8 @@ The rules, each with its unit and its reference:
   median. Reference: the cohort's median for each.
 - **queued** (agent hours): time queued for cores, by command kind. Reference:
   zero.
+- **enact-lock-wait** (agent hours): time sessions' Enact commands waited for
+  the ownership lock, by the command seen holding it. Reference: zero.
 - **compile-share** (agent hours): compile time inside tests and checks.
   Reference: the same commands at the 10th percentile compile time of commands
   of the same kind in the range.
@@ -1025,6 +1037,7 @@ just efficiency time --by kind --where tier=sonnet
 just efficiency dollars --by source --epic by-bajq
 just efficiency cards --by tier
 just efficiency machine --since 7d
+just efficiency enact --since 7d
 just efficiency ci --lane oracle
 just efficiency pushes --since 24h
 just efficiency failures --since 7d

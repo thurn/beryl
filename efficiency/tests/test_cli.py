@@ -29,6 +29,7 @@ TABLES = {
     "cpu",
     "cpu_minutes",
     "leases",
+    "lock_waits",
     "sources",
     "ingests",
     "sessions",

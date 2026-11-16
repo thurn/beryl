@@ -456,6 +456,32 @@ MIGRATIONS: tuple[str, ...] = (
     -- Transcripts are read again from the start for both.
     DELETE FROM sources WHERE source = 'claude';
     """,
+    """
+    -- One row per acquisition of Enact's ownership lock, from its lock-wait log: `time` is
+    -- when the wait began, `subcommand` and `bead` are read from `command`, and
+    -- `held_seconds` and `sync_seconds` are zero for a wait that gave up. `transcript` and
+    -- `call` name the tool call that ran the command; `call` is empty when none was found
+    -- and null until ingest has looked.
+    CREATE TABLE lock_waits (
+        host TEXT NOT NULL,
+        time TEXT NOT NULL,
+        pid INTEGER NOT NULL,
+        command TEXT NOT NULL,
+        subcommand TEXT NOT NULL,
+        bead TEXT,
+        outcome TEXT NOT NULL,
+        waited_seconds REAL NOT NULL,
+        held_seconds REAL NOT NULL,
+        sync_seconds REAL NOT NULL,
+        syncs INTEGER NOT NULL,
+        holder TEXT,
+        provider TEXT,
+        transcript TEXT,
+        call TEXT,
+        PRIMARY KEY (host, time, pid, outcome, waited_seconds, held_seconds, sync_seconds)
+    );
+    CREATE INDEX lock_waits_call ON lock_waits (host, provider, transcript, call);
+    """,
 )
 
 

@@ -11,7 +11,9 @@ in this order wins:
   Leases that waited at once, such as two lanes of one fast check, count once.
 - `tool`: a tool call is running, by kind of command. Seconds when several run at once are
   divided equally among them. A cargo command's seconds are split into `compile` and `run`
-  parts by the share its `Finished` lines name.
+  parts by the share its `Finished` lines name. An Enact command's seconds waiting for
+  Enact's ownership lock and syncing beads under it are the kinds `enact lock wait` and
+  `enact sync` (`locks.py` joins each line of Enact's lock-wait log to the call that ran it).
 - `model`: the model is generating. This is every second no other category claims.
 - `background`: the session ended its turn and the next prompt reports that a background
   command or another session finished, by the kind of that command (`session` for another
@@ -49,9 +51,12 @@ AGENT_CATEGORIES: frozenset[str] = frozenset({"queued", "tool", "model", "backgr
 QUESTION_TOOLS: frozenset[str] = frozenset({"AskUserQuestion"})
 # Raised whenever a change to this file changes the split, so that the next ingest gives
 # every call its kind and splits every window again, as it does when the kinds table changes.
-VERSION = 1
+VERSION = 2
 # Stop reasons of a request that ends a turn: anything but stopping to run a tool.
 TOOL_STOP = "tool_use"
+# The kinds an Enact command's lock waits and syncs move to.
+LOCK_WAIT = "enact lock wait"
+SYNC = "enact sync"
 
 Key = tuple[str, str, str]  # category, kind, part
 
@@ -59,7 +64,8 @@ Key = tuple[str, str, str]  # category, kind, part
 @dataclass
 class Span:
     """A stretch of a transcript in one category, from `start` to `end` in seconds since the
-    epoch. A tool call's span carries its call id, its compile and queued seconds."""
+    epoch. A tool call's span carries its call id, its compile and queued seconds, and its
+    seconds waiting for Enact's lock and syncing under it."""
 
     start: float
     end: float
@@ -68,6 +74,8 @@ class Span:
     call: str | None = None
     compile_seconds: float = 0.0
     queued_seconds: float = 0.0
+    lock_seconds: float = 0.0
+    sync_seconds: float = 0.0
 
 
 def seconds(value: str) -> float:
@@ -99,6 +107,15 @@ def spans_of(
         key,
     ):
         waits[str(call)].append((seconds(str(wait_start)), seconds(str(wait_end))))
+    locked: dict[str, tuple[float, float]] = {
+        str(r[0]): (float(r[1]), float(r[2]))
+        for r in db.execute(
+            "SELECT call, sum(waited_seconds), sum(sync_seconds) FROM lock_waits "
+            "WHERE host = ? AND provider = ? AND transcript = ? AND call != '' "
+            "GROUP BY call",
+            key,
+        )
+    }
     kind_of: dict[str, str] = {}
     for call, start, end, tool, kind, compiled in calls:
         kind_of[str(call)] = str(kind)
@@ -115,6 +132,7 @@ def spans_of(
                 str(call),
                 float(compiled) if str(kind) in heavy else 0.0,
                 covered(waits.get(str(call), []), low, high),
+                *locked.get(str(call), (0.0, 0.0)),
             )
         )
     # Every record before a prompt, as (time, ends a turn).
@@ -227,10 +245,18 @@ def split(spans: list[Span], start: float, end: float) -> dict[Key, float]:
         if not share:
             continue
         length = span.end - span.start
-        queued = share * min(span.queued_seconds / length, 1.0)
-        if queued:
-            totals[("queued", span.kind, "")] += queued
-        working = share - queued
+        # Each part takes its share of the call, never more than the parts before it left.
+        left = 1.0
+        for part_key, part_seconds in (
+            (("queued", span.kind, ""), span.queued_seconds),
+            (("tool", LOCK_WAIT, ""), span.lock_seconds),
+            (("tool", SYNC, ""), span.sync_seconds),
+        ):
+            fraction = min(part_seconds / length, left)
+            left -= fraction
+            if fraction:
+                totals[part_key] += share * fraction
+        working = share * left
         if span.compile_seconds:
             compiled = working * min(span.compile_seconds / length, 1.0)
             totals[("tool", span.kind, "compile")] += compiled

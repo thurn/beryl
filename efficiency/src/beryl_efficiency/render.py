@@ -80,6 +80,16 @@ FIELDS: dict[str, str] = {
     "shared_core_hours": "CPU hours no bead claims, per day sampled and per bead closed",
     "shared": "CPU hours no bead claims, by owner and kind of work, or by worktree for a "
     "worktree's minutes outside its bead",
+    "lock_wait_minutes": "agent minutes Enact commands waited for Enact's ownership lock, "
+    "from Enact's lock-wait log joined to the tool calls that ran each command",
+    "sync_minutes": "agent minutes Enact commands spent syncing beads with the remote "
+    "while holding the ownership lock",
+    "lock_lines": "the lock-wait log's lines in the range: joined to a session's tool call, "
+    "joined to none (such as a vizier's loop run outside a session) and not looked at "
+    "yet. By subcommand: lines, waits that gave up, minutes waited, syncing and holding "
+    "the lock, and the tool calls joined with their wall minutes. Holders: the command "
+    "seen holding the lock while a wait passed a second, with the minutes of the waits it "
+    "held up",
     "own": "the tool's own CPU: the sampler's cores on average since it started and the "
     "range's ingests' CPU seconds, each also as a percent of the machine",
     "capacity": "the cohort's cores per session (core minutes over agent minutes) and how "

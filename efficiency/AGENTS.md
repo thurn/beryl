@@ -59,6 +59,15 @@ store" and "Isolation" before changing anything here.
   for cores. It also gives each minute of a worktree's CPU to a bead.
   `facts.Facts.core_minutes` uses it per bead, and `machine.py` is the `machine`
   query and the CPU metrics.
+- `locks.py`: Enact's lock-wait log (`.git/enact/lock-waits.jsonl` in the main
+  checkout, and `lock-waits.1.jsonl` it is rotated to), one line per acquisition
+  of Enact's ownership lock, into `lock_waits`. Each line is joined to the
+  top-level tool call that ran its command (one that names its bead first), and
+  `timing.py` moves the call's waited and sync seconds into the kinds
+  `enact lock wait` and `enact sync`. `locks.report` is the `enact` query: those
+  agent minutes, the log's lines by subcommand and the commands seen holding the
+  lock; the `enact-lock-wait` finding ranks waits by holder. Lines from commands
+  other than `enact.py` are not read.
 - `cilog.py`: CI's sources. The run log is added up as it is read into one
   `checks` row per check per local day per host and script and one `lane_runs`
   row per run of a check lane (a `LineSource` whose `merges` add each row to the
@@ -137,21 +146,22 @@ store" and "Isolation" before changing anything here.
   is computed there), with one script that fetches a line's section the first
   time it opens. A category's colour comes from its place in the command kinds
   table, so it is the same in every bar and strip. `views.py` and `ci_views.py`
-  add the views the header leads to (`cards`, `machine`, `ci`, `changes`,
-  `findings`) and the sections they open (`metrics`, `pushes`, `failures`, one
-  finding's items) to `page.RENDERERS`, built from the same parts. A view's
-  trend lines are the metrics its result names under `more`, as lines open from
-  the start whose section the script fetches at once; a trend marks each
-  efficiency change on its metric, and the summary's figures carry the marks of
-  the metrics in `rollups.FIGURE_METRICS`. `time` and `dollars` answer `.json`
-  only. The server answers each connection on its own thread, because a browser
-  holds connections open that it sends nothing on. A request never waits for an
-  ingest: the server answers from the store as it is and keeps each answer until
-  the next ingest. While the page is open, a thread runs `efficiency ingest` as
-  a separate background-priority process whenever the store is over five minutes
-  old, then computes the recently asked answers again. `/status.json` feeds the
-  header's "updated" or "updating" note, which offers a reload once new data is
-  in. `just efficiency serve` alone runs at normal priority.
+  add the views the header leads to (`cards`, `machine`, `enact`, `ci`,
+  `changes`, `findings`) and the sections they open (`metrics`, `pushes`,
+  `failures`, one finding's items) to `page.RENDERERS`, built from the same
+  parts. A view's trend lines are the metrics its result names under `more`, as
+  lines open from the start whose section the script fetches at once; a trend
+  marks each efficiency change on its metric, and the summary's figures carry
+  the marks of the metrics in `rollups.FIGURE_METRICS`. `time` and `dollars`
+  answer `.json` only. The server answers each connection on its own thread,
+  because a browser holds connections open that it sends nothing on. A request
+  never waits for an ingest: the server answers from the store as it is and
+  keeps each answer until the next ingest. While the page is open, a thread runs
+  `efficiency ingest` as a separate background-priority process whenever the
+  store is over five minutes old, then computes the recently asked answers
+  again. `/status.json` feeds the header's "updated" or "updating" note, which
+  offers a reload once new data is in. `just efficiency serve` alone runs at
+  normal priority.
 - `just efficiency shot <address> [--dark] [--width N]` renders an address to a
   PNG under `$BERYL_CACHE/efficiency/shots/` with `shot.mjs`, which uses the
   main checkout's `ui/node_modules` Playwright and takes one of the machine's

@@ -15,6 +15,9 @@ anything at the time; ingest reads these sources afterwards:
 - Beads (`bd list`), and `git log` and `master`'s reflog from the main checkout.
 - The CPU sampler, the CPU token pool's lease log, the CI run log and the
   verdicts on `ci-check` beads.
+- Enact's lock-wait log (`.git/enact/lock-waits.jsonl` in the main checkout):
+  one line per acquisition of Enact's ownership lock, with the seconds waited,
+  held and spent syncing beads, joined to the tool call that ran the command.
 
 The store is `$BERYL_CACHE/efficiency/store.sqlite`
 (`~/Library/Caches/beryl/efficiency/`). It holds only what ran on this machine.
@@ -53,6 +56,7 @@ just efficiency time --by kind --tier sonnet     # --by kind|model|tier|role|lan
 just efficiency dollars --by source --epic by-ig5e  # --by class|source|purpose|model|tier|role|lane|epic|day
 just efficiency cards --by tier                  # cost per card file added, with rework beside it
 just efficiency machine --since 7d               # cores in use, saturation, time queued for cores
+just efficiency enact --since 7d                 # time waiting for Enact's lock and syncing, by subcommand and holder
 just efficiency ci --lane oracle                 # CI cost by script, lane, family, check (--script ci|check|sweep|nightly|bisect)
 just efficiency pushes --since 24h               # the fast check per push: seconds, CPU, repeats
 just efficiency failures --since 7d              # what each slow-CI failure cost (Steward bead, bisection, time behind)
@@ -66,14 +70,14 @@ just efficiency sql "select count(*) from requests where model like 'claude-opus
 
 `findings` is where to start looking for savings. Its rules include
 `small-reads`, `carried-logs`, `fixed-prefix`, `wake-ups`, `outlier-beads`,
-`tier-gap`, `queued`, `compile-share`, `repeated-command`, `chained-commands`,
+`tier-gap`, `queued`, `enact-lock-wait`, `compile-share`, `repeated-command`, `chained-commands`,
 `never-caught` and `flake-cost`; `just efficiency findings --help` lists them
 all. Each item names its evidence query and example beads.
 
 `sql` is read-only and is for questions no named query answers. The main tables
 are `beads`, `labels`, `sessions`, `windows`, `requests`, `tool_calls`,
 `tool_results`, `window_time`, `window_dollars`, `checks`, `lane_runs`, `cpu`,
-`cpu_minutes`, `leases` and `commits`. Read the schema in
+`cpu_minutes`, `leases`, `lock_waits` and `commits`. Read the schema in
 `efficiency/src/beryl_efficiency/store.py` before writing a query.
 
 ## Other machines
