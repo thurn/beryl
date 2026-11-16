@@ -330,22 +330,6 @@
     "b3d:stack-tall/you/2560x1080": {
       "step-shown": 1
     },
-    "b3d:stress-verbs/you/1440x900": {
-      "crowded": 1,
-      "step-shown": 30
-    },
-    "b3d:stress-verbs/you/1600x900": {
-      "crowded": 1,
-      "step-shown": 30
-    },
-    "b3d:stress-verbs/you/1920x1080": {
-      "crowded": 1,
-      "step-shown": 32
-    },
-    "b3d:stress-verbs/you/2560x1080": {
-      "crowded": 1,
-      "step-shown": 31
-    },
     "b3d:teferi-hero-of-dominaria/8s-emblem-triggers-once-for-each-card-of-a-multiple-draw/opponent/2560x1080": {
       "step-shown": 1
     },
