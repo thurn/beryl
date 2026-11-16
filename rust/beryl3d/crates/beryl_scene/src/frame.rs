@@ -511,6 +511,11 @@ impl<'a> FrameBuilder<'a> {
         self.frame.sounds.push(sound);
     }
 
+    /// Starts each of `sounds` in this frame.
+    pub fn sounds(&mut self, sounds: impl IntoIterator<Item = Sound>) {
+        self.frame.sounds.extend(sounds);
+    }
+
     /// Shakes the whole picture, but for the flat layer, by `offset` physical pixels.
     pub fn shake(&mut self, offset: Vec2) {
         self.frame.shake = offset;

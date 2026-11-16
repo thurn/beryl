@@ -108,6 +108,15 @@ pub struct Command {
 
 include!(concat!(env!("OUT_DIR"), "/table_commands.rs"));
 
+impl Command {
+    /// Whether the command applies to targets of the kind `kind`, with a menu row there or not
+    /// (`applies` in `ui/src/table/TableMenu.tsx`).
+    #[must_use]
+    pub fn applies(&self, kind: AppliesTo) -> bool {
+        self.applies_to == kind || self.also_applies_to.iter().any(|(other, _)| *other == kind)
+    }
+}
+
 /// A command that applies to a target, with its menu placement there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Entry {

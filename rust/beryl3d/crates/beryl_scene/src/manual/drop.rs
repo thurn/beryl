@@ -303,6 +303,18 @@ pub fn actions(
         .collect()
 }
 
+/// The one action a drop sends for its `actions`: the only one, or a batch of several, as the
+/// web's `dropAction` sends a drop (`batch` in dropActions.ts), so that the table applies or
+/// refuses the whole drop at once and its log shows one line that one undo takes back.
+#[must_use]
+pub fn batch(mut actions: Vec<TableAction>) -> Option<TableAction> {
+    if actions.len() > 1 {
+        Some(TableAction::Batch { actions })
+    } else {
+        actions.pop()
+    }
+}
+
 /// The actions that put `found` cards on the battlefield in `row`, let go at `at`
 /// (`placement` in dropActions.ts, without attaching a card to the permanent it was dropped on,
 /// which the table's Attach command does).

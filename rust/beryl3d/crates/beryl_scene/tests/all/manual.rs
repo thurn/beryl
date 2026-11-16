@@ -122,33 +122,61 @@ fn acts(client: &mut Client) -> Vec<TableAction> {
 }
 
 #[test]
-fn the_commands_for_a_permanent_are_the_files_permanent_commands_in_order() {
+fn the_commands_for_each_kind_of_target_are_the_files_in_order() {
     let text = include_str!("../../../../../../data/table-commands.json");
     let file: Vec<serde_json::Value> = serde_json::from_str(text).unwrap();
-    // With every assist off and no card drawn, a command of an assist or with a condition is
-    // not offered.
-    let expected: Vec<&str> = (file.iter())
-        .filter(|command| {
-            let applies = command["applies_to"] == "permanent"
-                || command["also_applies_to"].get("permanent").is_some();
-            applies
-                && command["scope"] == "table"
-                && command.get("assist").is_none()
-                && command.get("when").is_none()
-        })
-        .map(|command| command["id"].as_str().unwrap())
-        .collect();
+    let kinds = [
+        (AppliesTo::Permanent, "permanent"),
+        (AppliesTo::TheirPermanent, "their_permanent"),
+        (AppliesTo::HandCard, "hand_card"),
+        (AppliesTo::StackEntry, "stack_entry"),
+        (AppliesTo::PileCard, "pile_card"),
+        (AppliesTo::Library, "library"),
+        (AppliesTo::Graveyard, "graveyard"),
+        (AppliesTo::Exile, "exile"),
+        (AppliesTo::Sideboard, "sideboard"),
+        (AppliesTo::Hand, "hand"),
+        (AppliesTo::Life, "life"),
+        (AppliesTo::Player, "player"),
+        (AppliesTo::Table, "table"),
+        (AppliesTo::Lobby, "lobby"),
+        (AppliesTo::ViewerCard, "viewer_card"),
+    ];
     let view = table_view();
-    let ids: Vec<&str> = commands_for(
-        AppliesTo::Permanent,
-        &view,
-        &Context::new(true, &Bindings::new()),
-    )
-    .iter()
-    .map(|entry| entry.command.id)
-    .collect();
-    assert_eq!(ids, expected);
-    assert!(ids.contains(&"permanent.tap"));
+    let bindings = Bindings::new();
+    let context = Context::new(true, &bindings);
+    for (kind, word) in kinds {
+        // `commandsFor` in ui/src/table/commands.ts, with every assist off and no card drawn,
+        // so that a command of an assist or with a condition is not offered: each command of
+        // the table's scope for which `word` is its kind or one of its others, with a menu row
+        // where its own kind has one, or its other entry is `true` and it has one, or its
+        // other entry is a placement.
+        let expected: Vec<(&str, bool)> = (file.iter())
+            .filter(|command| {
+                command["scope"] == "table"
+                    && command.get("assist").is_none()
+                    && command.get("when").is_none()
+            })
+            .filter_map(|command| {
+                let has_menu = command.get("menu").is_some();
+                let menu = if command["applies_to"] == word {
+                    has_menu
+                } else {
+                    match command.get("also_applies_to")?.get(word)? {
+                        serde_json::Value::Bool(true) => has_menu,
+                        serde_json::Value::Bool(false) => false,
+                        _ => true,
+                    }
+                };
+                Some((command["id"].as_str().unwrap(), menu))
+            })
+            .collect();
+        let found: Vec<(&str, bool)> = commands_for(kind, &view, &context)
+            .iter()
+            .map(|entry| (entry.command.id, entry.menu.is_some()))
+            .collect();
+        assert_eq!(found, expected, "the commands for {word}");
+    }
 }
 
 #[test]
@@ -1104,5 +1132,126 @@ fn the_arrow_command_sends_an_arrow_to_the_card_clicked_next() {
         sent[0]["arrow"]["to"]["object"]["id"]["handle"],
         serde_json::json!(theirs.0),
         "{sent:?}"
+    );
+}
+
+#[test]
+fn a_key_over_the_table_acts_on_the_selected_cards() {
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let lands: Vec<ObjectId> = (view.objects.iter())
+        .filter(|object| {
+            object.zone == ZoneName::Battlefield
+                && object.controller == Side::You
+                && matches!(object.name.as_deref(), Some("Island" | "Plains"))
+        })
+        .map(|object| object.slot)
+        .collect();
+    let corners: Vec<Vec2> = lands
+        .iter()
+        .flat_map(|&slot| corners_of(&frame, slot))
+        .collect();
+    let low = corners
+        .iter()
+        .fold(Vec2::INFINITY, |low, &corner| low.min(corner));
+    let high = (corners.iter()).fold(Vec2::NEG_INFINITY, |high, &corner| high.max(corner));
+    let margin = Vec2::splat(4.0);
+    drag(&mut client, low - margin, high + margin, MS);
+    let frame = client.frame(500 * MS).clone();
+    // The pointer rests on the table, off every card, as the sweep ended past them.
+    assert_eq!(target_at(&frame, high + margin), Target::Table);
+    acts(&mut client);
+    // Option+L, Peek, acts on the three selected lands as the web's `currentTarget` gives
+    // the selection's first card for a key.
+    let option = Modifiers {
+        alt: true,
+        ..Modifiers::default()
+    };
+    client.handle(key(KeyCode::L, option));
+    let sent = json(&acts(&mut client));
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    assert_eq!(sent[0]["peek"]["objects"].as_array().map(Vec::len), Some(3));
+}
+
+#[test]
+fn cmd_d_over_the_opponents_life_draws_for_you() {
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let life = middle(&frame, Role::Player, "Opponent");
+    assert_eq!(target_at(&frame, life), Target::Life(Side::Opponent));
+    client.handle(pointer(PointerPhase::Move, life, Button::None));
+    client.handle(key(KeyCode::D, cmd()));
+    let expected = action(serde_json::json!({ "draw": { "seat": 0, "count": 1 } }));
+    assert_eq!(acts(&mut client), vec![expected]);
+}
+
+#[test]
+fn a_refused_action_plays_the_refusal_sound_once() {
+    let view = table_view();
+    let (mut client, _) = client_at_table(&view);
+    client.handle(key(KeyCode::D, cmd()));
+    assert_eq!(acts(&mut client).len(), 1);
+    client.handle(Input::Reply(Reply::TableAct(TableActReply::Refused(
+        TableRefused {
+            refused: TableRefusalReason::Permission,
+            blocked_by: None,
+        },
+    ))));
+    let no = beryl_scene::sound::id("no");
+    let sounds = |client: &Client| {
+        client
+            .sounds()
+            .iter()
+            .map(|sound| sound.id)
+            .collect::<Vec<_>>()
+    };
+    client.frame(MS);
+    assert_eq!(sounds(&client), vec![no]);
+    client.frame(2 * MS);
+    assert_eq!(sounds(&client), Vec::new());
+}
+
+#[test]
+fn a_drop_of_cards_from_two_zones_sends_one_batch() {
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let centre = |slot| corners_of(&frame, slot).iter().sum::<Vec2>() / 4.0;
+    let angel = centre(slot_of(
+        &view,
+        ZoneName::Battlefield,
+        Side::You,
+        "Serra Angel",
+    ));
+    let counterspell = centre(slot_of(&view, ZoneName::Hand, Side::You, "Counterspell"));
+    let graveyard = centre(slot_of(&view, ZoneName::Graveyard, Side::You, "Brainstorm"));
+    let cmd_click = |at| {
+        move |phase| {
+            Input::Pointer(Pointer {
+                id: 0,
+                kind: PointerKind::Mouse,
+                phase,
+                position: at,
+                button: Button::Primary,
+                wheel: Vec2::ZERO,
+                modifiers: cmd(),
+            })
+        }
+    };
+    for (at, now) in [(angel, MS), (counterspell, 2 * MS)] {
+        let click = cmd_click(at);
+        client.handle(click(PointerPhase::Down));
+        client.handle(click(PointerPhase::Up));
+        client.frame(now);
+    }
+    drag(&mut client, counterspell, graveyard, 10 * MS);
+    // One move for the permanent and one for the hand card, sent as one batch.
+    let sent = json(&acts(&mut client));
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    let moves = sent[0]["batch"]["actions"].as_array().expect("a batch");
+    assert_eq!(moves.len(), 2, "{sent:?}");
+    assert!(
+        moves
+            .iter()
+            .all(|step| step["move"]["to"] == serde_json::json!({ "graveyard": 0 }))
     );
 }

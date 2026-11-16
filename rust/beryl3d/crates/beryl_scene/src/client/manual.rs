@@ -37,6 +37,9 @@ pub(super) struct Manual {
     /// makes a click on a card add it to the selection or take it out.
     pub(super) meta: bool,
     pub(super) lobby: Lobby,
+    /// Whether the table refused an action since the last frame, which then plays the refusal
+    /// sound, as the web's `shakeRefusal` plays it for every refused table action.
+    pub(super) refused: bool,
 }
 
 impl std::ops::Deref for Manual {
@@ -66,6 +69,15 @@ struct Hold {
 }
 
 impl Manual {
+    /// The refusal sound, once for a refusal since the last frame, as the web's
+    /// `shakeRefusal` plays it.
+    pub(super) fn take_refusal(&mut self) -> Option<crate::frame::Sound> {
+        std::mem::take(&mut self.refused).then(|| crate::frame::Sound {
+            id: crate::sound::id("no"),
+            theirs: false,
+        })
+    }
+
     /// When the touch held still opens its menu, if one is down and its timing has begun.
     pub(super) fn hold_due(&self) -> Option<u64> {
         let since = self.hold?.since?;
@@ -224,9 +236,17 @@ impl Client {
         }
     }
 
-    /// A key of the table gave the command at `index` of `COMMANDS`: it acts on what the mouse
-    /// is over, or on the table with no mouse, as the web's keys act on the pointed target.
+    /// A key of the table gave the command at `index` of `COMMANDS`. It acts as the web's keys
+    /// do (`listenTableKeys` in `ui/src/table/keyboard.ts` and `TableCommands.shortcut` in
+    /// `ui/src/table/TableMenu.tsx`): on the first selected card while cards are selected, and
+    /// otherwise on what the mouse is over (a card of an open pile viewer before the table
+    /// under it), except that a life key and the row and column selections always act on what
+    /// the mouse is over. A command that does not apply there acts on the table or on the
+    /// viewer's own library, hand, life total, graveyard or exile, the first it applies to, so
+    /// that Cmd+D over the opponent's life total draws the viewer a card, not the opponent.
+    /// The viewer's player and sideboard have no `Target`; the table stands for them.
     pub(super) fn table_key(&mut self, index: u16) {
+        use beryl_protocol::protocol::{Side, ZoneName};
         let Some(command) = commands::COMMANDS.get(usize::from(index)) else {
             return;
         };
@@ -236,8 +256,27 @@ impl Client {
         if view.table.is_none() {
             return;
         }
-        let target =
-            (self.owned.mouse).map_or(Target::Table, |at| manual::target_at(&self.frame, at));
+        let pointed = (self.owned.mouse).map_or(Target::Table, |at| {
+            (self.viewer_card_at(at)).unwrap_or_else(|| manual::target_at(&self.frame, at))
+        });
+        let on_pointer = command.id.starts_with("life.")
+            || matches!(command.id, "selection.row" | "selection.column");
+        let current = match self.manual.state.selection.first() {
+            Some(&slot) if !on_pointer => Target::Card(slot),
+            _ => pointed,
+        };
+        let fallbacks = [
+            Target::Table,
+            Target::Pile(Side::You, ZoneName::Library),
+            Target::Hand(Side::You),
+            Target::Life(Side::You),
+            Target::Pile(Side::You, ZoneName::Graveyard),
+            Target::Pile(Side::You, ZoneName::Exile),
+        ];
+        let target = std::iter::once(current)
+            .chain(fallbacks)
+            .find(|target| command.applies(target.applies_to(view)))
+            .unwrap_or(Target::Table);
         let act = menus::act(command, target, view, &self.table_context());
         self.give(act, target, false);
     }
@@ -278,8 +317,13 @@ impl Client {
 
     /// The table answered the oldest table action not yet answered: a token it made is the one
     /// Create another token makes again, and an undo or rewind it refused because later lines
-    /// depend on it opens the log with those lines highlighted.
+    /// depend on it opens the log with those lines highlighted. Any refusal plays the refusal
+    /// sound in the next frame, so that a key or a drop the table would not take does not
+    /// pass in silence.
     pub(super) fn take_table_reply(&mut self, reply: TableActReply) {
+        if matches!(reply, TableActReply::Refused(_)) {
+            self.manual.refused = true;
+        }
         let Some(sent) = self.manual.pending.pop_front() else {
             return;
         };

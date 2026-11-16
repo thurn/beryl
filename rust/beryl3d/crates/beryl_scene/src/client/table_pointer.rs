@@ -190,7 +190,7 @@ impl Client {
             return;
         };
         let actions = drop::actions(view, &self.frame, &cards, &to, at);
-        self.send_table(actions);
+        self.send_table(drop::batch(actions).into_iter().collect());
         self.show_screen();
     }
 
