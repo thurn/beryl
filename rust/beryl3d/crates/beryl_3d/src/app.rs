@@ -601,7 +601,7 @@ fn run_of(options: &Options, pause_at: Option<u64>) -> Run {
         window: options.window.word().to_owned(),
         display_hz: 0.0,
         adapter: String::new(),
-        load: load(),
+        load: crate::load::averages(),
         fixture: options.fixture.clone(),
         pause_at_ms: pause_at.map(|at| at as f64 / 1e6),
         drive: options.drive.clone(),
@@ -778,24 +778,4 @@ fn home() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default()
-}
-
-/// The machine's load averages, where the system reports them: `sysctl` on macOS, the proc
-/// file on Linux. Read once, before the host starts.
-fn load() -> Option<[f64; 3]> {
-    let text = if cfg!(target_os = "macos") {
-        let output = std::process::Command::new("sysctl")
-            .args(["-n", "vm.loadavg"])
-            .output()
-            .ok()?;
-        String::from_utf8(output.stdout).ok()?
-    } else {
-        std::fs::read_to_string("/proc/loadavg").ok()?
-    };
-    let numbers: Vec<f64> = text
-        .split_whitespace()
-        .filter_map(|word| word.parse().ok())
-        .take(3)
-        .collect();
-    numbers.try_into().ok()
 }

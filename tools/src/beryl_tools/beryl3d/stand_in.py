@@ -40,7 +40,7 @@ PROMPT_LIMIT_MS = 60_000
 # before the run fails: the opponent answers in moments, so this is a stall.
 STALL_LIMIT_MS = 120_000
 # The states a pointer gives an element, which a press changes before its answer is taken.
-POINTER_STATES = frozenset({"hovered", "held"})
+POINTER_STATES: frozenset[str] = frozenset({"hovered", "held"})
 # How many prompts are answered before the app is quit and started again.
 RESUME_AFTER = 20
 # How long each run of the app may last before it ends itself: a bound on a hang.
@@ -437,8 +437,11 @@ def run_stand_in(args: argparse.Namespace) -> int:
         second_output = second.quit()
         sounds: Counter[str] = Counter()
         for output in (first_output, second_output):
-            summary = frame_log(output)
-            sounds.update(summary.get("sounds") or {})
+            counted = frame_log(output).get("sounds")
+            if isinstance(counted, dict):
+                for name, times in counted.items():
+                    if isinstance(name, str) and isinstance(times, int):
+                        sounds[name] += times
         print(f"stand-in: {played.prompts} prompts answered; outcome: {played.outcome}")
         print(
             "stand-in: sounds played: "

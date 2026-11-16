@@ -1,7 +1,8 @@
 //! `--load <threads>[:<class>]` (docs/beryl-3d.md, "Driving the running app"): busy threads in
 //! a scheduling class of their own, so that a run can reproduce a loaded machine on purpose
 //! instead of waiting for one. On this machine the usual load of 20 to 50 comes from other
-//! sessions' builds and tests, in the default class.
+//! sessions' builds and tests, in the default class. `averages` reads the load a run's frame
+//! log records.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -84,4 +85,25 @@ impl Drop for Load {
             let _ = thread.join();
         }
     }
+}
+
+/// The machine's load averages, where the system reports them: `sysctl` on macOS, the proc
+/// file on Linux. Read once, before the host starts.
+#[must_use]
+pub fn averages() -> Option<[f64; 3]> {
+    let text = if cfg!(target_os = "macos") {
+        let output = std::process::Command::new("sysctl")
+            .args(["-n", "vm.loadavg"])
+            .output()
+            .ok()?;
+        String::from_utf8(output.stdout).ok()?
+    } else {
+        std::fs::read_to_string("/proc/loadavg").ok()?
+    };
+    let numbers: Vec<f64> = text
+        .split_whitespace()
+        .filter_map(|word| word.parse().ok())
+        .take(3)
+        .collect();
+    numbers.try_into().ok()
 }
