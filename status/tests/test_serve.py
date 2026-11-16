@@ -46,3 +46,12 @@ def test_serves_the_stand_in_until_its_own_build(tmp_path: Path) -> None:
     site.rebuild()
     assert site.serving == tmp_path / "new"
     assert (site.serving / "index.html").is_file()
+
+
+def test_only_the_first_build_logs(tmp_path: Path) -> None:
+    lines: list[str] = []
+    site = Site(tmp_path, tmp_path / "site", log=lines.append)
+    site.index = Index.build(parse(EXPORT))
+    site.rebuild()
+    site.rebuild()
+    assert len(lines) == 1 and lines[0].startswith("status: built")

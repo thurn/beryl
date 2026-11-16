@@ -93,6 +93,8 @@ class Site:
     # Another code version's site that the server answers from until this one's first build
     # finishes (`paths.last_site`).
     standin: Path | None = None
+    # Whether a build has finished, so later ones build without a log line.
+    built: bool = False
 
     @property
     def serving(self) -> Path:
@@ -122,10 +124,14 @@ class Site:
             done = build.build(
                 self.folder, self.index, self.version, lookup, self.base, self.pages
             )
-            self.log(
-                f"status: built {done.pages} pages, wrote {done.written} files "
-                f"in {time.monotonic() - started:.1f}s"
-            )
+            # Only the first build is worth a line: the ones after it run every few
+            # seconds while the beads change, and each takes a fraction of a second.
+            if not self.built:
+                self.log(
+                    f"status: built {done.pages} pages, wrote {done.written} files "
+                    f"in {time.monotonic() - started:.1f}s"
+                )
+            self.built = True
             self.standin = None
             return done
 
