@@ -3,9 +3,10 @@
 
 use std::path::PathBuf;
 
-use beryl_3d::frame_log::{self, FrameLog, Run};
+use beryl_3d::frame_log::{self, FrameLog, InputLine, Run};
 use beryl_host::rate::Step;
 use beryl_host::{Shown, Ticked};
+use beryl_scene::input::{Input, Insets, Lifecycle, Size};
 
 const MS: u64 = 1_000_000;
 
@@ -209,4 +210,71 @@ fn a_log_that_cannot_be_written_is_reported_when_it_finishes() {
     log.frame(&ticked(10, None, true), &[], false);
     assert!(log.finish().is_err(), "a log in no folder finished");
     let _ = std::fs::remove_file(&dir);
+}
+
+#[test]
+fn an_input_line_says_how_long_ago_the_last_frame_was_drawn() {
+    let run = Run {
+        checkout: "/checkout".to_owned(),
+        pid: 45,
+        started_ms: 4_000,
+        window: "phone".to_owned(),
+        display_hz: 60.0,
+        adapter: "a GPU".to_owned(),
+        load: None,
+        fixture: None,
+        pause_at_ms: None,
+        drive: None,
+        load_threads: None,
+        slow_gpu_ms: None,
+        game: None,
+    };
+    let dir = dir("inputs");
+    let mut log = FrameLog::create(&dir, &run).expect("the log is made");
+    let surface = InputLine::Surface {
+        width: 393.0,
+        height: 852.0,
+        scale: 3.0,
+        top: 59.0,
+        right: 0.0,
+        bottom: 34.0,
+        left: 0.0,
+    };
+    log.input(&Input::Surface {
+        size: Size {
+            width: 393.0,
+            height: 852.0,
+        },
+        scale: 3.0,
+        safe_area: Insets {
+            top: 59.0,
+            right: 0.0,
+            bottom: 34.0,
+            left: 0.0,
+        },
+    });
+    log.frame(&ticked(10, None, true), &[], false);
+    let lifecycle = InputLine::Lifecycle {
+        event: "Suspended".to_owned(),
+    };
+    log.input(&Input::Lifecycle(Lifecycle::Suspended));
+    let path = log.path().to_owned();
+    log.finish().expect("the log is finished");
+
+    let read = frame_log::read(&path).expect("the log reads back");
+    assert_eq!(read.inputs, [surface, lifecycle]);
+    // The surface came before any frame, so its line has no time since one.
+    let text = std::fs::read_to_string(&path).expect("the log reads");
+    let inputs: Vec<serde_json::Value> = text
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("each line is JSON"))
+        .filter_map(|line: serde_json::Value| line.get("input").cloned())
+        .collect();
+    assert_eq!(inputs[0].get("since_frame_ms"), None);
+    assert_eq!(inputs[0]["surface"]["top"], 59.0);
+    let since = inputs[1]["since_frame_ms"]
+        .as_f64()
+        .expect("a time since the frame");
+    assert!(since >= 0.0, "{since}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

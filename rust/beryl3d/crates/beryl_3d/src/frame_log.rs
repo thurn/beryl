@@ -175,7 +175,19 @@ pub enum Line {
     /// The first presentation after resume, or any presentation while suspended.
     LifecycleShownMs(f64),
     Summary(Summary),
-    Input(InputLine),
+    Input(Inputted),
+}
+
+/// An input line as written: the input, and how long before it the last frame was drawn.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Inputted {
+    #[serde(flatten)]
+    pub input: InputLine,
+    /// Milliseconds since the frame before this input was drawn, or none when no frame had
+    /// been. A phone smoke test reads it on the last input to prove the host stopped asking for
+    /// frames while nothing moved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub since_frame_ms: Option<f64>,
 }
 
 /// An input a host handed the client, as a line `{"input": {"<kind>": {...}}}`. The phone
@@ -310,6 +322,8 @@ pub struct FrameLog {
     reached_pause: bool,
     /// Suspension, or a resume still waiting for its first presented frame.
     presentation_lifecycle: Option<Lifecycle>,
+    /// When the last frame was drawn.
+    last_frame: Option<Instant>,
     /// How many shown frames waited for a drawable for each tenth of a millisecond, made once
     /// so that counting a frame allocates nothing.
     waits: Box<[u32; WAIT_BUCKETS]>,
@@ -349,6 +363,7 @@ impl FrameLog {
             summary: Summary::default(),
             reached_pause: false,
             presentation_lifecycle: None,
+            last_frame: None,
             waits: Box::new([0; WAIT_BUCKETS]),
         })
     }
@@ -368,6 +383,7 @@ impl FrameLog {
 
     /// Counts a frame the host drew, and sends a line for it to be written when it was late.
     pub fn frame(&mut self, ticked: &Ticked, verbs: &[&str], searching: bool) {
+        self.last_frame = Some(Instant::now());
         let summary = &mut self.summary;
         summary.frames += 1;
         summary.hz = ticked.hz;
@@ -450,14 +466,21 @@ impl FrameLog {
         let _ = self.lines.send(Line::Late(late));
     }
 
-    /// Records an input the host handed the client when it is one the log keeps.
+    /// Records an input the host handed the client when it is one the log keeps, with how
+    /// long ago the last frame was drawn.
     pub fn input(&mut self, input: &Input) {
         if let Input::Lifecycle(event @ (Lifecycle::Suspended | Lifecycle::Resumed)) = input {
             self.presentation_lifecycle = Some(*event);
         }
         if let Some(line) = InputLine::of(input) {
+            let since_frame_ms = self
+                .last_frame
+                .map(|drawn| drawn.elapsed().as_secs_f64() * 1e3);
             // The writer ends only with the log, so a failed send has nowhere to go.
-            let _ = self.lines.send(Line::Input(line));
+            let _ = self.lines.send(Line::Input(Inputted {
+                input: line,
+                since_frame_ms,
+            }));
         }
     }
 
@@ -557,7 +580,7 @@ pub fn read(path: &Path) -> Result<Log, String> {
             Line::FirstShownMs(_) | Line::LifecycleShownMs(_) => {}
             Line::Late(late) => log.late.push(late),
             Line::Summary(summary) => log.summary = Some(summary),
-            Line::Input(input) => log.inputs.push(input),
+            Line::Input(input) => log.inputs.push(input.input),
         }
     }
     Ok(log)

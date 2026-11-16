@@ -898,9 +898,16 @@ There are four hosts.
   re-enter fullscreen. The `background` window mode makes the app an accessory
   app on macOS, with no Dock icon, so its window never becomes active and never
   gets the keyboard.
-- **The iOS host** is a Swift app of a few hundred lines. It owns a
-  `CAMetalLayer` and a `CADisplayLink`, asks for the display's highest refresh
-  rate, and calls the Rust library through C functions.
+- **The iOS host** is a Swift app of a few hundred lines (`ios/Beryl3D`). It
+  owns a `CAMetalLayer` and a `CADisplayLink`, and calls the Rust library
+  through C functions. It passes each touch with the lowest free pointer id from
+  1, the view's size and safe-area insets on every layout (rotating passes a new
+  size for the same layer), and the display's highest refresh rate. After each
+  frame it sets the display link's frame rate to the `hz` the library returned,
+  and pauses the link while the library wants no frame, until a timer at the
+  wake time, a touch, a layout, a lifecycle event or the library's wake callback
+  unpauses it. Its audio session is `ambient`, so Beryl mixes with the player's
+  music and respects the silent switch.
 - **The Android host** is a Kotlin app of a few hundred lines. It owns a
   `SurfaceView` and a `Choreographer` frame callback, and calls the same C
   functions through JNI. It sends touch events in logical points, keeping each

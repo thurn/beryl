@@ -3,6 +3,7 @@ when the log holds its summary, and fails at once when the app writes an error o
 """
 
 import json
+from typing import Any
 
 import pytest
 
@@ -112,3 +113,74 @@ def test_android_lifecycle_rejects_frames_in_the_background_and_events_out_of_or
         "host.log did not record surface-lost",
         "host.log did not record share",
     ]
+
+
+def ios_touch_log(*inputs: dict[str, Any]) -> list[dict[str, Any]]:
+    log: list[dict[str, Any]] = [{"run": {}}]
+    log.extend({"input": line} for line in inputs)
+    return log
+
+
+def pointer(id: int, phase: str) -> dict[str, Any]:
+    return {"pointer": {"id": id, "kind": "Touch", "phase": phase, "x": 1.0, "y": 1.0}}
+
+
+def surface(width: float, height: float, top: float) -> dict[str, Any]:
+    return {
+        "surface": {
+            "width": width,
+            "height": height,
+            "scale": 3.0,
+            "top": top,
+        }
+    }
+
+
+SUSPENDED: dict[str, Any] = {
+    "lifecycle": {"event": "Suspended"},
+    "since_frame_ms": 2500.0,
+}
+
+
+def test_a_touch_log_with_every_event_and_an_idle_end_has_no_faults() -> None:
+    log = ios_touch_log(
+        surface(393, 852, 59),
+        pointer(1, "Down"),
+        pointer(1, "Up"),
+        pointer(1, "Down"),
+        pointer(2, "Down"),
+        pointer(1, "Up"),
+        pointer(2, "Up"),
+        surface(852, 393, 0),
+        surface(393, 852, 59),
+        SUSPENDED,
+    )
+    assert phone_log.ios_touch_faults(log) == ([], 2500.0)
+
+
+def test_a_touch_log_names_each_missing_event() -> None:
+    # Two fingers one after the other, a resize that is not a rotation, no inset, and a frame
+    # drawn just before the app was suspended.
+    log = ios_touch_log(
+        surface(393, 852, 0),
+        pointer(1, "Down"),
+        pointer(1, "Up"),
+        pointer(2, "Down"),
+        pointer(2, "Up"),
+        surface(400, 852, 0),
+        {"lifecycle": {"event": "Suspended"}, "since_frame_ms": 16.0},
+    )
+    faults, idle = phone_log.ios_touch_faults(log)
+    assert idle == 16.0
+    assert faults == [
+        "no touches with ids 1 and 2 down at the same time",
+        "no two surfaces whose width and height swap",
+        "no surface with a nonzero top safe-area inset",
+        "the app drew a frame 16 ms before it was suspended, in the final 2000 ms of idle",
+    ]
+    assert phone_log.ios_touch_faults(ios_touch_log(pointer(2, "Down")))[0][:1] == [
+        "no touch down and up for id 1"
+    ]
+    assert (
+        "the app was not suspended after a frame" in phone_log.ios_touch_faults([])[0]
+    )

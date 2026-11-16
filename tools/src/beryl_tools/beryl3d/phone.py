@@ -2,7 +2,9 @@
 `just b3d android-smoke` build the app's library and its small Swift or Kotlin host, install it
 in the headless iOS Simulator or Android emulator, replay a recording, wait for its frame log
 to say the first frame was shown and the recording's last script ended, save a PNG of the
-screen and exit. `just b3d ios-device` does the same on the user's paired iPhone, and only when
+screen and exit. `just b3d ios-smoke --touch` instead runs a UI test that touches and rotates a
+live game, and reads the frame log for proof that each event arrived and that the app stopped
+drawing while idle. `just b3d ios-device` does the same on the user's paired iPhone, and only when
 he asked for it.
 
 A phone has no recordings pack and no engine to build one, so each recording is written to a
@@ -31,6 +33,7 @@ from . import app, paths
 from .phone_log import (
     android_lifecycle_faults,
     android_touch_faults,
+    ios_touch_faults,
     lines,
     logged_inputs,
     rotated_and_returned,
@@ -48,6 +51,8 @@ DEVICE_FIXTURES = ("verbs-zones", "stress-255")
 # a prompt nobody answers (signing, trust, unlock) before it counts as not reachable.
 REPLAY_LIMIT_S = 600
 DEVICE_LIMIT_S = 600
+# How long the touch smoke's UI test may run before it counts as hung.
+UI_TEST_LIMIT_S = 600
 # The library's error log in the app's data folder (`ERRORS` in beryl_3d's src/ffi), and the
 # log of the warnings wgpu reports through the `log` crate.
 ERRORS = "beryl3d.log"
@@ -187,9 +192,10 @@ def finish(label: str, log: str | None, png: Path) -> int:
 # The iOS Simulator and the iPhone.
 
 
-def ios_app(sdk: str, release: bool, sign: bool) -> Path:
+def ios_app(sdk: str, release: bool, sign: bool, tests: bool = False) -> Path:
     """Builds the library and the Swift host for `sdk` (iphonesimulator or iphoneos), and
-    returns the app."""
+    returns the app. With `tests`, also builds the UI test bundle, and the `.xctestrun` file
+    that runs it is in the app's products folder's parent."""
     target = (
         "aarch64-apple-ios-sim" if sdk == "iphonesimulator" else "aarch64-apple-ios"
     )
@@ -222,7 +228,7 @@ def ios_app(sdk: str, release: bool, sign: bool) -> Path:
             *["-derivedDataPath", str(root / "derived"), *signing],
             f"BERYL3D_LIB_DIR={lib}",
             f"BERYL3D_CRATE_DIR={CRATE}",
-            "build",
+            "build-for-testing" if tests else "build",
         ],
         check=False,
         timeout=DEVICE_LIMIT_S,
@@ -235,9 +241,16 @@ def ios_app(sdk: str, release: bool, sign: bool) -> Path:
 
 def ios_smoke_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--fixture", default=FIXTURE, help="the recording to replay")
+    parser.add_argument(
+        "--touch",
+        action="store_true",
+        help="run the UI test that touches, rotates and idles a live game instead of a replay",
+    )
 
 
 def run_ios_smoke(args: argparse.Namespace) -> int:
+    if args.touch:
+        return run_ios_touch()
     bundle = ios_app("iphonesimulator", release=False, sign=False)
     run = out_dir("phone") / f"{run_name()}-ios"
     run.mkdir()
@@ -297,6 +310,81 @@ def run_ios_smoke(args: argparse.Namespace) -> int:
             if not booted:
                 mobile.run("xcrun", "simctl", "shutdown", udid)
     return finish("ios-smoke", log, png)
+
+
+def run_ios_touch() -> int:
+    """`ios-smoke --touch`: builds the app and its UI test, runs the test against a live game
+    in the simulator, and checks the frame log the app wrote."""
+    bundle = ios_app("iphonesimulator", release=False, sign=False, tests=True)
+    products = bundle.parent.parent
+    xctestrun = next(products.glob("Beryl3D_*.xctestrun"), None)
+    if xctestrun is None:
+        raise SystemExit(f"xcodebuild wrote no .xctestrun in {products}")
+    run = out_dir("phone") / f"{run_name()}-ios-touch"
+    run.mkdir()
+    with system.file_lock(repo_paths.cache_root() / "ios-smoke.lock"):
+        udid, booted = mobile.simulator()
+        mobile.boot(udid)
+        try:
+            mobile.install(udid, bundle)
+            container = mobile.run(
+                "xcrun", "simctl", "get_app_container", udid, BUNDLE, "data"
+            )
+            documents: Path = Path(container.stdout.strip()) / "Documents"
+            documents.mkdir(parents=True, exist_ok=True)
+            for old in [
+                *documents.glob("*.jsonl"),
+                documents / ERRORS,
+                documents / LIBRARY_LOG,
+            ]:
+                old.unlink(missing_ok=True)
+            started = time.monotonic()
+            try:
+                tested = subprocess.run(
+                    [
+                        *["xcodebuild", "-quiet", "test-without-building"],
+                        *["-xctestrun", str(xctestrun)],
+                        *["-destination", f"id={udid}"],
+                        *["-resultBundlePath", str(run / "result.xcresult")],
+                    ],
+                    check=False,
+                    timeout=UI_TEST_LIMIT_S,
+                ).returncode
+            except subprocess.TimeoutExpired:
+                print(f"ios-smoke --touch: FAILED: the UI test ran {UI_TEST_LIMIT_S} s")
+                return 1
+            print(
+                f"ios-smoke --touch: UI test ran in {time.monotonic() - started:.0f} s"
+            )
+            # The test runner installs the app again, which moves its data folder.
+            container = mobile.run(
+                "xcrun", "simctl", "get_app_container", udid, BUNDLE, "data"
+            )
+            documents = Path(container.stdout.strip()) / "Documents"
+            logs = sorted(documents.glob("*.jsonl"))
+            log = logs[-1].read_text(encoding="utf-8") if logs else ""
+            errors = documents / ERRORS
+            if errors.exists():
+                print(errors.read_text(encoding="utf-8"))
+        finally:
+            mobile.run("xcrun", "simctl", "terminate", udid, BUNDLE)
+            if not booted:
+                mobile.run("xcrun", "simctl", "shutdown", udid)
+    saved = run / "frames.jsonl"
+    saved.write_text(log, encoding="utf-8")
+    print(f"ios-smoke --touch: frame log {saved}")
+    if tested != 0:
+        print("ios-smoke --touch: FAILED: the UI test failed")
+        return 1
+    faults, idle = ios_touch_faults(lines(log))
+    if idle is not None:
+        print(f"ios-smoke --touch: {idle:.0f} ms without a frame when suspended")
+    for fault in faults:
+        print(f"ios-smoke --touch: FAILED: {fault}")
+    if faults:
+        return 1
+    print("ios-smoke --touch: passed")
+    return 0
 
 
 def ios_device_arguments(parser: argparse.ArgumentParser) -> None:

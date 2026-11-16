@@ -1,10 +1,10 @@
-# The iOS host of Beryl 3D's phone spike (docs/beryl-3d.md, "Hosts"). `just b3d ios-smoke` and
+# The iOS host of Beryl 3D (docs/beryl-3d.md, "Hosts"). `just b3d ios-smoke` and
 # `just b3d ios-device` generate the Xcode project from this file with xcodegen into
 # $BERYL_CACHE/b3d/ios, build the Rust library, and pass the folder holding it as
 # BERYL3D_LIB_DIR and beryl_3d's crate folder as BERYL3D_CRATE_DIR, since the project is not
-# beside its sources. Info.plist
-# says the app runs full screen in landscape and lets devicectl copy its frame logs off a phone
-# (UIFileSharingEnabled).
+# beside its sources. Info.plist says the app runs full screen in portrait or landscape and lets
+# devicectl copy its frame logs off a phone (UIFileSharingEnabled). Beryl3DUITests is the UI
+# test that `just b3d ios-smoke --touch` runs.
 name: Beryl3D
 options:
   bundleIdPrefix: ca.thurn
@@ -35,3 +35,23 @@ targets:
         ENABLE_BITCODE: false
         INFOPLIST_FILE: $(BERYL3D_CRATE_DIR)/ios/Beryl3D/Info.plist
         GENERATE_INFOPLIST_FILE: false
+    scheme:
+      testTargets: [Beryl3DUITests]
+  Beryl3DUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Beryl3DUITests
+    dependencies:
+      - target: Beryl3D
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ca.thurn.beryl3d.uitests
+        DEVELOPMENT_TEAM: D77745XTVL
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        ARCHS: arm64
+        ONLY_ACTIVE_ARCH: false
+        GENERATE_INFOPLIST_FILE: true
+        TEST_TARGET_NAME: Beryl3D

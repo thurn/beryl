@@ -1,7 +1,11 @@
-"""Read Beryl 3D's phone frame log and check the Android smoke's inputs."""
+"""Read Beryl 3D's phone frame log and check the phone smokes' inputs."""
 
 import json
 from typing import Any
+
+# How long the iOS touch smoke's app must have drawn nothing when its UI test suspends it,
+# which leaves it idle at the end.
+IDLE_MS = 2000
 
 
 def lines(text: str) -> list[dict[str, Any]]:
@@ -132,3 +136,45 @@ def resumed_surface_was_shown(entries: list[dict[str, Any]]) -> bool:
         if surface and "lifecycle_shown_ms" in line:
             return True
     return False
+
+
+def ios_touch_faults(parsed: list[dict[str, Any]]) -> tuple[list[str], float | None]:
+    """What the touch smoke's frame log lacks, and how many milliseconds the app had drawn
+    nothing when it was last suspended (None when it never was). The log must hold a touch
+    down and up for id 1, downs for ids 1 and 2 at the same time (the two-finger tap), two
+    surfaces whose width and height swap (the rotation), a nonzero top safe-area inset, and a
+    suspension at least `IDLE_MS` after the last frame."""
+    inputs = [line["input"] for line in parsed if "input" in line]
+    pointers = logged_inputs(parsed, "pointer")
+    surfaces = logged_inputs(parsed, "surface")
+    faults = []
+    phases = {p["phase"] for p in pointers if p["id"] == 1}
+    if not {"Down", "Up"} <= phases:
+        faults.append("no touch down and up for id 1")
+    down: set[int] = set()
+    overlapped = False
+    for pointer in pointers:
+        if pointer["phase"] == "Down":
+            down.add(pointer["id"])
+        elif pointer["phase"] in ("Up", "Cancel"):
+            down.discard(pointer["id"])
+        overlapped |= {1, 2} <= down
+    if not overlapped:
+        faults.append("no touches with ids 1 and 2 down at the same time")
+    sizes = {(s["width"], s["height"]) for s in surfaces}
+    if not any(w != h and (h, w) in sizes for w, h in sizes):
+        faults.append("no two surfaces whose width and height swap")
+    if not any(s.get("top", 0) > 0 for s in surfaces):
+        faults.append("no surface with a nonzero top safe-area inset")
+    suspended = [
+        line for line in inputs if line.get("lifecycle", {}).get("event") == "Suspended"
+    ]
+    idle: float | None = suspended[-1].get("since_frame_ms") if suspended else None
+    if idle is None:
+        faults.append("the app was not suspended after a frame")
+    elif idle < IDLE_MS:
+        faults.append(
+            f"the app drew a frame {idle:.0f} ms before it was suspended, in the"
+            f" final {IDLE_MS} ms of idle"
+        )
+    return faults, idle
