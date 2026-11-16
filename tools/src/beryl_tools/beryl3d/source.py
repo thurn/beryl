@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 
 from .. import paths as repo_paths
 from . import paths, vm
@@ -72,7 +73,20 @@ def stream_script(script: str) -> str:
 def run_with_sources(script: str) -> subprocess.CompletedProcess[str] | None:
     """Runs `script` in the machine with the sources as a tar stream, which it reads with
     [`take_in_script`]. Its result, or `None` if only the tar stream failed."""
-    files = sources()
+    # tar reads the file list from a file, not from a pipe this process writes. tar writes the
+    # archive while it is still reading names, and nothing reads the archive until the machine's
+    # shell starts below. With a list longer than a pipe's buffer, tar would block on its full
+    # stdout and this process on tar's full stdin, for ever.
+    with tempfile.NamedTemporaryFile(suffix=".list") as listing:
+        listing.write("\0".join(sources()).encode() + b"\0")
+        listing.flush()
+        return stream_sources(script, listing.name)
+
+
+def stream_sources(
+    script: str, listing: str
+) -> subprocess.CompletedProcess[str] | None:
+    """[`run_with_sources`] for the NUL-separated file list in the file `listing`."""
     tar = subprocess.Popen(
         # macOS's tar would add an AppleDouble `._` file for each file with extended
         # attributes, which the card crates' build scripts would read as sources.
@@ -85,17 +99,13 @@ def run_with_sources(script: str) -> subprocess.CompletedProcess[str] | None:
             "--no-mac-metadata",
             "--null",
             "-T",
-            "-",
+            listing,
         ],
         cwd=repo_paths.REPO,
         env={**os.environ, "COPYFILE_DISABLE": "1"},
-        stdin=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
     )
-    stdin = tar.stdin
-    assert stdin is not None
-    stdin.write("\0".join(files).encode() + b"\0")
-    stdin.close()
     # From the machine's root, since this checkout's path may not be mounted there.
     command = [
         "limactl",

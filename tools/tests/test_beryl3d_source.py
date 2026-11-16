@@ -2,7 +2,10 @@
 
 import os
 import subprocess
+import threading
 from pathlib import Path
+
+import pytest
 
 from beryl_tools.beryl3d import counts, gpu, source
 
@@ -54,3 +57,39 @@ def test_only_the_take_in_lines_read_the_stream(tmp_path: Path) -> None:
     )
     assert done.stdout.decode().strip() == "eaten 0"
     assert (home / "b3d-source" / "rust" / "lib.rs").read_text() == "fn main() {}\n"
+
+
+def test_a_file_list_longer_than_a_pipe_holds_is_sent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """tar once read its file list from a pipe this process wrote before the machine's shell
+    started. A list over a pipe's buffer then left both blocked for ever, and the sweep's GPU
+    gate was killed at its hang limit. The shell here is a fake `limactl` that reads the whole
+    stream and counts its bytes."""
+    files = tmp_path / "files"
+    files.mkdir()
+    names = []
+    for i in range(1500):
+        path = files / f"{i:04d}-{'x' * 60}.rs"
+        path.write_text("fn main() {}\n")
+        names.append(str(path))
+    assert len("\0".join(names)) > 1 << 16
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    limactl = bin_dir / "limactl"
+    limactl.write_text('#!/bin/sh\necho "read $(wc -c | tr -d " ")"\n')
+    limactl.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setattr(source, "sources", lambda: names)
+
+    result: list[subprocess.CompletedProcess[str] | None] = []
+    sender = threading.Thread(
+        target=lambda: result.append(source.run_with_sources("true")), daemon=True
+    )
+    sender.start()
+    # Only catches a hang: the send takes well under a second.
+    sender.join(timeout=120)
+    assert result, "sending the sources hung"
+    done = result[0]
+    assert done is not None and done.returncode == 0
+    assert int(done.stdout.split()[-1]) > 1500 * 512
