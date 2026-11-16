@@ -26,6 +26,7 @@ def step(
         "start": start,
         "end": start + 100.0,
         "effects": [],
+        "sounds": [],
         **extra,
     }
 
@@ -52,6 +53,18 @@ def test_a_step_one_side_lacks_counts_once() -> None:
 def test_a_step_counts_once_however_many_fields_differ() -> None:
     found = timeline.compare([step()], [step(7.0, verb="tap", effects=["settle@end"])])
     assert found is not None and found.count == 1
+
+
+def test_a_step_whose_sound_alone_differs_counts() -> None:
+    # The web interface picks a step's sounds in audio/steps.ts and Beryl 3D in its port,
+    # sound.rs: a step whose sound differs while its timing agrees is one differing step.
+    web = [step(sounds=[["cast", "start", None]]), step(100.0, number=1)]
+    native = [step(sounds=[["place", "end", None]]), step(100.0, number=1)]
+    found = timeline.compare(web, native)
+    assert found is not None and found.count == 1
+    assert found.web is not None and found.web["sounds"] == [["cast", "start", None]]
+    hit = [["hit", "start", 0.376]]
+    assert timeline.compare([step(sounds=hit)], [step(sounds=hit)]) is None
 
 
 def test_an_unlisted_differing_recording_fails() -> None:

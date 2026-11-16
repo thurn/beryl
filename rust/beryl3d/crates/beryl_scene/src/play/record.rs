@@ -11,6 +11,7 @@ use glam::Vec3;
 use crate::effects::EffectRun;
 use crate::motion::pose_at;
 use crate::pose::{Pose, Segment};
+use crate::sound::Cue;
 use crate::verbs::{Follows, StepTime};
 
 /// One step of a script, as it was laid out. Times are on the script's own clock, in
@@ -34,6 +35,8 @@ pub struct StepRecord {
     /// What kind of move it is, for "not crowded". `None` for a step that moves nothing from
     /// place to place.
     pub key: Option<MoveKey>,
+    /// The sounds it asks for (`sound::cues`).
+    pub cues: [Option<Cue>; 2],
 }
 
 impl StepRecord {

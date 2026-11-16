@@ -137,7 +137,7 @@ project, and selects the main lanes.
 
 - `data/beryl3d/timeline-parity.json`: `{"recordings": {"<name>/<seat>": n}}`,
   the number of steps of each recording and seat whose start or end, verb, case,
-  effects or place differ between the web interface's timeline
+  effects, sounds or place differ between the web interface's timeline
   (`ui/scripts/timeline.mjs`) and `just b3d timeline`, or that only one of them
   has. The `timeline-parity` check fails for a recording that differs by more
   steps than its entry, or is not listed. A count may only go down:

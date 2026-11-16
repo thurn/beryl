@@ -210,6 +210,7 @@ fn flight(from: u64, zone: ZoneName, why: Why) -> StepRecord {
             to: Some(ZoneName::Battlefield),
             why: Some(why),
         }),
+        cues: [None, None],
     }
 }
 

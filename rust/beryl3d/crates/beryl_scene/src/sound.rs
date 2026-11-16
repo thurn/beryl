@@ -55,6 +55,12 @@ pub fn id(name: &str) -> SoundId {
     SoundId(u16::try_from(at).expect("the sounds' ids fit 16 bits"))
 }
 
+/// The name the manifest gives the sound `id`, the name the web interface's `Cue` carries.
+#[must_use]
+pub fn name(id: SoundId) -> &'static str {
+    NAMES[usize::from(id.0)]
+}
+
 fn at(edge: Edge, sound: Option<&str>) -> [Option<Cue>; 2] {
     [
         sound.map(|name| Cue {
@@ -136,12 +142,17 @@ fn attacks(object: &ObjectView, table: &Played) -> bool {
         )
 }
 
-/// The sounds the step with `act` asks for, given what it found, one match over the verbs with
-/// no wildcard arm, so that a new verb does not build until it has a line.
-#[allow(clippy::too_many_lines)] // One arm for each verb.
+/// The sounds the step with `act` asks for, given what it found.
 pub fn cues(act: &Act, found: &Found<'_>) -> impl Iterator<Item = Cue> {
+    pair(act, found).into_iter().flatten()
+}
+
+/// The sounds the step with `act` asks for, at most two, one match over the verbs with no
+/// wildcard arm, so that a new verb does not build until it has a line.
+#[allow(clippy::too_many_lines)] // One arm for each verb.
+fn pair(act: &Act, found: &Found<'_>) -> [Option<Cue>; 2] {
     let table = found.table;
-    let cues = match act {
+    match act {
         // A card is placed as it lands; any other move sounds as it sets out. A permanent that
         // stays on the battlefield and changes sides is taken.
         Act::Fly {
@@ -246,8 +257,7 @@ pub fn cues(act: &Act, found: &Found<'_>) -> impl Iterator<Item = Cue> {
         | Act::Point { .. }
         | Act::Mark { .. }
         | Act::Lift { .. } => [None, None],
-    };
-    cues.into_iter().flatten()
+    }
 }
 
 /// The sounds of a `count`, from the tally it sets and the table it found.
@@ -389,14 +399,15 @@ impl Sounds {
 
     /// Adds the sounds of the step `index` of `beat`, the script's step `number`, which plays as
     /// `laid` says, over `table`, the table as the step finds it before its act is played over
-    /// it, if the script is played over one.
+    /// it, if the script is played over one. Returns the cues the step asked for, which a
+    /// script's record keeps for `just b3d timeline`.
     pub(crate) fn step(
         &mut self,
         table: Option<&Played>,
         (beat, index, number): (&[Step], usize, usize),
         timing: &StepTiming,
         laid: &Laid,
-    ) {
+    ) -> [Option<Cue>; 2] {
         let table = table
             .or(self.unplayed.as_ref())
             .expect("a step of a script finds some table");
@@ -408,7 +419,8 @@ impl Sounds {
         };
         let theirs = side_of(step, table) == Some(Side::Opponent);
         let span = laid.to - laid.from;
-        for cue in cues(&step.act, &found) {
+        let asked = pair(&step.act, &found);
+        for cue in asked.into_iter().flatten() {
             let edge = match cue.edge {
                 Edge::Start => laid.from,
                 Edge::End => laid.to,
@@ -425,6 +437,7 @@ impl Sounds {
                 },
             ));
         }
+        asked
     }
 
     /// The sounds in the order they begin, a sound asked for more than once at one time once,

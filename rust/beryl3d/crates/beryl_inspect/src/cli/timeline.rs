@@ -11,6 +11,7 @@ use beryl_protocol::ipc::{FixtureMessage, STAGE_TIMINGS};
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::{Edge, own_timings};
 use beryl_scene::driver::TimelineStep;
+use beryl_scene::sound;
 use serde_json::Value;
 
 use super::options::{self, Options, Usage, seat_word, side_of};
@@ -30,6 +31,35 @@ fn string(s: &str) -> String {
     Value::String(s.to_owned()).to_string()
 }
 
+/// An edge of a step as a line names it.
+fn edge_name(edge: Edge) -> &'static str {
+    match edge {
+        Edge::Start => "start",
+        Edge::End => "end",
+    }
+}
+
+/// A step's sounds as a JSON list of `[sound, edge, into]`, `into` 3 decimal places or null,
+/// sorted by sound, edge and then `into` (none first), as `ui/scripts/timeline.mjs` sorts the
+/// web interface's.
+fn sounds(step: &TimelineStep) -> String {
+    let mut cues: Vec<(&str, &str, Option<f64>)> = (step.sounds.iter())
+        .map(|cue| (sound::name(cue.sound), edge_name(cue.edge), cue.into))
+        .collect();
+    cues.sort_by(|a, b| {
+        (a.0, a.1)
+            .cmp(&(b.0, b.1))
+            .then(a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal))
+    });
+    let items: Vec<String> = (cues.iter())
+        .map(|(name, edge, into)| {
+            let into = into.map_or_else(|| "null".to_owned(), |into| format!("{into:.3}"));
+            format!("[{},{},{into}]", string(name), string(edge))
+        })
+        .collect();
+    format!("[{}]", items.join(","))
+}
+
 /// One step as a line of JSON whose keys are in a fixed order.
 fn line(name: &str, seat: Side, step: &TimelineStep) -> String {
     let case = step
@@ -40,17 +70,14 @@ fn line(name: &str, seat: Side, step: &TimelineStep) -> String {
         .effects
         .iter()
         .map(|(effect, edge, into)| {
-            let edge = match edge {
-                Edge::Start => "start",
-                Edge::End => "end",
-            };
+            let edge = edge_name(*edge);
             let into = into.map_or_else(String::new, |into| format!("+{into:.3}"));
             string(&format!("{effect}@{edge}{into}"))
         })
         .collect();
     format!(
         "{{\"recording\":{},\"seat\":{},\"view\":{},\"beat\":{},\"step\":{},\"verb\":{},\
-         \"case\":{case},\"start\":{},\"end\":{},\"effects\":[{}]{own}}}",
+         \"case\":{case},\"start\":{},\"end\":{},\"effects\":[{}],\"sounds\":{}{own}}}",
         string(name),
         string(seat_word(seat)),
         step.view,
@@ -60,6 +87,7 @@ fn line(name: &str, seat: Side, step: &TimelineStep) -> String {
         ms(step.from),
         ms(step.to),
         effects.join(","),
+        sounds(step),
         own = if step.own { ",\"own\":true" } else { "" },
     )
 }

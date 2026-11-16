@@ -4,8 +4,8 @@ timeline (docs/beryl-3d.md, 'Timeline parity').
 It exports the recordings (`just b3d export`), plays them with `ui/scripts/timeline.mjs` (the
 web interface's timeline), prints Beryl 3D's own (`just b3d timeline`) and compares the two
 recording by recording and seat by seat. Two timelines agree when they hold the same steps
-with the same view, beat, step, verb, case, effects and `own`, and every start and end is
-within [`TOLERANCE_MS`] of the other's.
+with the same view, beat, step, verb, case, effects, sounds and `own`, and every start and
+end is within [`TOLERANCE_MS`] of the other's.
 
 `data/beryl3d/timeline-parity.json` lists the recordings that differ and by how many steps. A
 step counts once however many of its fields differ, and a step that only one side has counts
@@ -53,7 +53,7 @@ TOLERANCE_MS = 1.0
 # The most differing recordings a run prints before it only counts the rest.
 MOST_PRINTED = 20
 # The fields of a step that must be equal, the start and end aside.
-EXACT: tuple[str, ...] = ("verb", "case", "effects")
+EXACT: tuple[str, ...] = ("verb", "case", "effects", "sounds")
 # The web timeline's script, under `ui/`, from which [`web_sources`] follows its imports.
 WEB_ENTRY = "scripts/timeline.mjs"
 # A module specifier in an `import ... from`, `export ... from`, `import "..."` or `import(...)`.

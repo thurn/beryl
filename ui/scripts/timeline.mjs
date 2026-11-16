@@ -8,12 +8,15 @@
 // fixture recorder writes it (or the bare array of its messages). Every file is played in
 // name order, and one line of JSON is printed for each step, in the order the steps begin:
 //   {"recording":"verbs-zones","seat":"you","view":3,"beat":0,"step":1,"verb":"fly",
-//    "case":"own spell cast","start":0,"end":370,"effects":["settle@end"]}
+//    "case":"own spell cast","start":0,"end":370,"effects":["settle@end"],
+//    "sounds":[["cast","start",null]]}
 // `view` counts the recording's views from 1. `beat` and `step` place a step the session sent
 // in the script it sent, from 0. `start` and `end` are milliseconds from the start of the
 // script the stage played the step in. A step the stage made itself while a prompt was open
 // (prompt.ts: its marks, its arrows and the cards it holds up) has `"own": true`; its `beat`
-// and `step` are its place in the script the stage played it in.
+// and `step` are its place in the script the stage played it in. `sounds` lists the sounds the
+// step asks for (audio/steps.ts `stepCues`), each `[sound, edge, into]` with `into` the share
+// of the step after that edge, or null, sorted by sound, edge and then `into`.
 //
 // The stage plays on a clock this steps itself, as Beryl 3D's test driver does (its
 // `REPLY_DELAY` and `plays_on`): the first view is given at stage time 0, with every view
@@ -65,8 +68,10 @@ function literalExports(file, text) {
     return kept.join("\n");
 }
 
-/** The modules of src/ that read the browser as they load. */
-const BROWSER = ["freeze.ts"];
+/** The modules of src/ that read the browser as they load. audio/sound.ts plays through Web
+ * Audio and the app's IPC; audio/steps.ts only names its `play`, in a function this never
+ * calls. */
+const BROWSER = ["freeze.ts", "audio/sound.ts"];
 
 /** A module with the exports of the TypeScript module `text`, each a function that throws if
  * called: for a module the stage's modules import from but never call while playing. */
@@ -135,6 +140,7 @@ const { Feed } = await import("../src/stage/feed.ts");
 const { Prompts } = await import("../src/stage/prompt.ts");
 const { ScriptStage } = await import("../src/stage/stage.ts");
 const { ownTimings, played } = await import("../src/stage/timing.ts");
+const { stepCues } = await import("../src/audio/steps.ts");
 
 /** How long after the stage comes to rest the next views are given (Beryl 3D's driver,
  * `REPLY_DELAY`). */
@@ -152,6 +158,25 @@ const rounded = (x) => Math.round(x * 1000) / 1000 + 0;
 /** An effect of a step's timing as a line names it: "impact@start+0.376". */
 const effectName = ({ name, when, into }) =>
     `${name}@${when}${into === undefined ? "" : `+${into.toFixed(3)}`}`;
+
+/** -1, 0 or 1 as `a` comes before, with or after `b` in code unit order, as Rust orders
+ * strings. */
+const order = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** A step's sounds as a line lists them: `[sound, edge, into]`, sorted, a null `into` first. */
+const soundsOf = (cues) =>
+    cues
+        .map(({ sound, edge, into }) => [
+            sound,
+            edge,
+            into === undefined ? null : rounded(into),
+        ])
+        .sort(
+            (a, b) =>
+                order(a[0], b[0]) ||
+                order(a[1], b[1]) ||
+                (a[2] ?? -Infinity) - (b[2] ?? -Infinity),
+        );
 
 /** The lines of one recording's timeline, as `seat` sees it. */
 function timeline(recording, seat, messages) {
@@ -258,6 +283,7 @@ function timeline(recording, seat, messages) {
                 start: edge.at,
                 end: edge.span.to,
                 effects: effects.map(effectName),
+                sounds: soundsOf(stepCues(edge.step, edge)),
                 own: from.own,
                 script,
             };
@@ -295,6 +321,7 @@ function timeline(recording, seat, messages) {
         start: rounded(line.start - line.script.start),
         end: rounded(line.end - line.script.start),
         effects: line.effects,
+        sounds: line.sounds,
         ...(line.own ? { own: true } : {}),
     }));
 }

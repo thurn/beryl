@@ -200,7 +200,7 @@ pub(crate) fn compile<'a>(
             &mut compiled.closes,
         ),
         |number, (beat, index), step, timing, laid, closes| {
-            sounds.step(
+            let cues = sounds.step(
                 motion.as_ref().map(|motion| &motion.played),
                 (&script.beats[beat], index, number),
                 timing,
@@ -229,6 +229,7 @@ pub(crate) fn compile<'a>(
                 to: nanoseconds(laid.to),
                 timed: nanoseconds(timing.duration),
                 key: MoveKey::of(&step.act),
+                cues,
             });
         },
     );

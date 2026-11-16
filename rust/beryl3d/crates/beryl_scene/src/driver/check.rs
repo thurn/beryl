@@ -53,6 +53,9 @@ pub struct TimelineStep {
     /// Each of the step's `StepTiming::effects`, as its name, the edge it begins at and how far
     /// through the step it begins when that is not an edge.
     pub effects: Vec<(String, Edge, Option<f64>)>,
+    /// The sounds it asks for (`sound::cues`). A step the client made itself asks for none:
+    /// its verbs (`mark`, `point`, `lift`) have no sound in either client.
+    pub sounds: Vec<crate::sound::Cue>,
     /// Whether the client made the step itself while a prompt was open (`prompts::own`),
     /// rather than the session sending it in a script. Its `view` is then the number of views
     /// given when it played, its `beat` 0, and its times are on the clock of that one beat,
@@ -369,6 +372,7 @@ impl Page {
                             .map(|effect| (effect.name.clone(), effect.when, effect.into))
                             .collect()
                     }),
+                    sounds: step.cues.iter().flatten().copied().collect(),
                     own: false,
                 });
             }
@@ -388,6 +392,7 @@ impl Page {
                         .map(|effect| (effect.name.clone(), effect.when, effect.into))
                         .collect()
                 }),
+                sounds: Vec::new(),
                 own: true,
             }
         }));

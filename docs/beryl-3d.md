@@ -3784,6 +3784,10 @@ one-shot sounds tied to script steps and looping ambience.
   so a sound's time is on the script's clock like the step's own. Tests read
   those requests like any other output, so the timing of a sound against its
   animation is checkable.
+- **The port is held to `steps.ts` by timeline parity**: both clients print each
+  step's sounds in their timelines, and a step whose sounds differ counts as a
+  differing step (see [Timeline parity](#timeline-parity)). When `steps.ts`
+  changes, the sweep names the recordings whose sounds now differ.
 - **On Android the Kotlin host plays the sound.** `cpal`'s Android backend uses
   AAudio, which first shipped in API level 26, and it links `libaaudio.so`
   unconditionally. A library that links it fails to load at all on API 24 and
@@ -3877,8 +3881,15 @@ JSON for each step, with its start and end in milliseconds from the start of its
 script, as one seat sees it. A step a client made itself has `"own": true`.
 
 ```json
-{"view":12,"beat":0,"step":1,"verb":"fly","case":"own spell cast","start":0,"end":370,"effects":["settle@end"]}
+{"view":12,"beat":0,"step":1,"verb":"fly","case":"own spell cast","start":0,"end":370,"effects":["settle@end"],"sounds":[["cast","start",null]]}
 ```
+
+`sounds` lists the sounds the step asks for, each as `[sound, edge, into]`: the
+sound's name in `ui/src/audio/manifest.json`, the edge of the step it is asked
+for at, and how far into the step after that edge it sounds, as a share of the
+step's time, or null for at the edge. The list is sorted by sound, edge and then
+`into`. On the web side it comes from `stepCues` in `ui/src/audio/steps.ts`, and
+on Beryl 3D's from `sound::cues`.
 
 - **The web interface's side** is a script, `ui/scripts/timeline.mjs`. It plays
   a recording through the stage's model in Node, with no browser and no drawing
@@ -3887,8 +3898,8 @@ script, as one seat sees it. A step a client made itself has `"own": true`.
 - **Beryl 3D's side** is `just b3d timeline <recording>`.
 - **The check**, `just b3d timeline-parity`, compares the two for every fixture
   and card spec moment, from both seats. Two timelines agree when they hold the
-  same steps with the same verb, case and effects, and every start and end is
-  within 1 millisecond.
+  same steps with the same verb, case, effects and sounds, and every start and
+  end is within 1 millisecond.
 - **Recordings that do not agree yet are listed** in
   `data/beryl3d/timeline-parity.json`, each with the number of its steps that
   differ. Like every allowlist under `data/`, its counts may only go down.

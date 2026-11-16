@@ -281,7 +281,7 @@ fn an_unknown_action_says_so_once() {
     assert!(message.contains("The actions are press"), "{message}");
 }
 
-const TIMELINE_KEYS: [&str; 10] = [
+const TIMELINE_KEYS: [&str; 11] = [
     "recording",
     "seat",
     "view",
@@ -292,6 +292,7 @@ const TIMELINE_KEYS: [&str; 10] = [
     "start",
     "end",
     "effects",
+    "sounds",
 ];
 
 /// The JSON lines `timeline` printed after its first line, the command that prints them again.
@@ -338,6 +339,7 @@ fn every_timeline_line_is_json_with_its_keys_in_order() {
         }
         assert!(value["end"].as_f64() >= value["start"].as_f64(), "{line}");
         assert!(value["effects"].is_array(), "{line}");
+        assert!(value["sounds"].is_array(), "{line}");
     }
 }
 
