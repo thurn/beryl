@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_efficiency import claude, cli, ingest, locks, paths, store
+from beryl_efficiency import claude, cli, ingest, locks, paths, rollups, store
 from beryl_efficiency.beads import Beads
 from tests.synthetic import CHECKOUT, PROJECT, Transcript, listing
 from tests.synthetic import bead as bead_record
@@ -148,6 +148,13 @@ def root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         locks.LockLog(state, HOST),
     ]
     monkeypatch.setattr(cli, "sources", lambda: sources)
+    # The range's length, which scales every finding to a week, runs to now. Pinned, the
+    # fixture's two-hour spread stays the same size however long ago it is dated.
+    monkeypatch.setattr(
+        rollups,
+        "now",
+        lambda: datetime.fromisoformat(at(12, 0).replace("Z", "+00:00")),
+    )
     assert cli.main(["ingest"]) == 0
     assert cli.main(["ingest"]) == 0  # A second ingest changes nothing.
     return tmp_path
