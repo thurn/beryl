@@ -100,9 +100,11 @@ impl Level {
 pub(crate) struct FaceArray {
     texture: wgpu::Texture,
     pub(crate) view: wgpu::TextureView,
-    format: Format,
-    size: (u32, u32),
+    pub(crate) format: Format,
+    pub(crate) size: (u32, u32),
     levels: u32,
+    /// By layer: whether a face's layer has been written into it (placeholders do not count).
+    filled: Vec<bool>,
 }
 
 impl FaceArray {
@@ -139,12 +141,13 @@ impl FaceArray {
             format,
             size,
             levels,
+            filled: vec![false; layers.max(2) as usize],
         }
     }
 
     /// Writes `layer`'s levels into layer `index`. Logs and writes nothing when the layer is of
     /// another format or size than the array, or the array has no such layer.
-    pub(crate) fn write(&self, queue: &wgpu::Queue, index: u16, layer: &Layer) -> bool {
+    pub(crate) fn write(&mut self, queue: &wgpu::Queue, index: u16, layer: &Layer) -> bool {
         let fits = layer.format == self.format
             && (layer.width, layer.height) == self.size
             && u32::from(index) < self.texture.depth_or_array_layers();
@@ -160,7 +163,16 @@ impl FaceArray {
             );
             return false;
         }
-        self.write_levels(queue, index, &layer.levels)
+        let written = self.write_levels(queue, index, &layer.levels);
+        if written {
+            self.filled[usize::from(index)] = true;
+        }
+        written
+    }
+
+    /// How many layers hold a face written by `write`.
+    pub(crate) fn filled(&self) -> usize {
+        self.filled.iter().filter(|filled| **filled).count()
     }
 
     fn write_levels(&self, queue: &wgpu::Queue, index: u16, levels: &[Vec<u8>]) -> bool {
@@ -239,13 +251,23 @@ pub(crate) fn face_arrays(
         };
         board.placeholder(queue, index as u16, &pixels);
     }
-    let full = FaceArray::new(
+    [board, full_array(device, format)]
+}
+
+/// The full-size array of `FULL_LAYERS` empty layers in `format`.
+pub(crate) fn full_array(device: &wgpu::Device, format: Format) -> FaceArray {
+    FaceArray::new(
         device,
         format,
         dimensions(FaceSize::Full),
         FULL_LAYERS as u32,
-    );
-    [board, full]
+    )
+}
+
+/// A two-layer array of 4 by 4 texels that no face fits: what stands bound in place of the
+/// full-size array while there is none.
+pub(crate) fn token_array(device: &wgpu::Device) -> FaceArray {
+    FaceArray::new(device, Format::Rgba8, (BLOCK, BLOCK), 1)
 }
 
 /// The face arrays of a renderer with no match yet: the board-size array holds the placeholder
@@ -254,10 +276,7 @@ pub(crate) fn empty_arrays(device: &wgpu::Device, queue: &wgpu::Queue) -> [FaceA
     let size = dimensions(FaceSize::Board);
     let board = FaceArray::new(device, Format::Rgba8, size, 1);
     board.placeholder(queue, 0, &back(size));
-    [
-        board,
-        FaceArray::new(device, Format::Rgba8, (BLOCK, BLOCK), 1),
-    ]
+    [board, token_array(device)]
 }
 
 /// Level `level` of the placeholder `pixels`, RGBA `size` texels large, in `format`: each texel,
@@ -360,6 +379,11 @@ impl Waiting {
 
     pub(crate) fn len(&self) -> usize {
         self.board.len() + self.full.len()
+    }
+
+    /// Drops the full-size faces still waiting: they were asked for before memory ran low.
+    pub(crate) fn drop_full(&mut self) {
+        self.full.clear();
     }
 }
 

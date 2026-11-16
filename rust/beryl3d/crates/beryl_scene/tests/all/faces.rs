@@ -6,7 +6,7 @@ use beryl_scene::agent::checks::blank_cards;
 use beryl_scene::agent::{Context, Layout, Rule};
 use beryl_scene::faces::{CARD_BACK, FaceList};
 use beryl_scene::frame::{Frame, Material, Role};
-use beryl_scene::input::{AssetReady, FaceId, FaceSize, Input, Insets, Size};
+use beryl_scene::input::{AssetReady, FaceId, FaceSize, Input, Insets, Lifecycle, Size, Tier};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::{Client, Config};
 
@@ -139,4 +139,69 @@ fn a_face_arriving_gives_its_cards_that_layer() {
 fn no_card_is_blank_once_every_face_has_arrived() {
     let mut client = client(|list| list.all_ready().collect());
     assert_eq!(blank(client.frame(0)), Vec::<String>::new());
+}
+
+/// The names of the cards `frame` draws face up, each once, in the order first drawn.
+fn drawn_names(frame: &Frame) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for resolved in frame.resolved.iter().filter(|r| r.role == Role::Card) {
+        let name = frame.name(resolved.name);
+        if !name.is_empty() && !names.iter().any(|known| known == name) {
+            names.push(name.to_owned());
+        }
+    }
+    names
+}
+
+#[test]
+fn low_memory_forgets_full_size_faces_and_keeps_the_tier_at_baseline() {
+    let mut client = client(|_| Vec::new());
+    let names = drawn_names(client.frame(0));
+    assert!(names.len() >= 3, "the sample draws three cards: {names:?}");
+    let faces: Vec<FaceId> = names[..3]
+        .iter()
+        .map(|name| client.faces().find(name).expect("a drawn card has a face"))
+        .collect();
+    for (layer, &face) in (10..).zip(&faces) {
+        client.handle(Input::Assets(board(face, layer)));
+    }
+    for (layer, &face) in (0..).zip(&faces[..2]) {
+        client.handle(Input::Assets(AssetReady::Face {
+            face,
+            size: FaceSize::Full,
+            layer,
+        }));
+    }
+    assert_eq!(client.face_layers().full_layer_of(faces[1]), Some(1));
+    client.handle(Input::Tier(Tier::Enhanced));
+    assert_eq!(client.tier(), Tier::Enhanced);
+
+    client.handle(Input::Lifecycle(Lifecycle::LowMemory));
+    let layers_of = |client: &Client, face| {
+        let layers = client.face_layers();
+        (layers.board_layer_of(face), layers.full_layer_of(face))
+    };
+    for (layer, &face) in (10..).zip(&faces) {
+        assert_eq!(layers_of(&client, face), (Some(layer), None));
+    }
+    assert_eq!(client.tier(), Tier::Baseline);
+    let frame = client.frame(1);
+    for (layer, name) in (10..).zip(&names[..2]) {
+        let (drawn, records) = layers(frame, name, layer);
+        assert!(
+            drawn.iter().all(|&face| face == Some(layer)),
+            "{name}: {drawn:?}"
+        );
+        assert!(
+            records >= drawn.len(),
+            "each {name} is drawn from layer {layer}"
+        );
+    }
+
+    client.handle(Input::Tier(Tier::Enhanced));
+    assert_eq!(
+        client.tier(),
+        Tier::Baseline,
+        "the tier stays Baseline after low memory"
+    );
 }

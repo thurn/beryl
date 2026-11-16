@@ -19,7 +19,7 @@ use crate::hud::counts::CountFloats;
 use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
 use crate::hud::rows::RowCounts;
-use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerPhase};
+use crate::input::{AssetReady, Button, GlyphKey, Input, Lifecycle, Pointer, PointerPhase, Tier};
 use crate::layout::{self, Layer};
 use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
@@ -102,6 +102,10 @@ pub struct Client {
     wake: Wake,
     requests: VecDeque<Request>,
     commands: VecDeque<SessionCommand>,
+    tier: Tier,
+    /// Whether the host has said memory is low (`Lifecycle::LowMemory`), which fixes the tier at
+    /// Baseline.
+    low_memory: bool,
 }
 
 impl Client {
@@ -133,7 +137,17 @@ impl Client {
             wake: Wake::Never,
             requests: VecDeque::new(),
             commands: VecDeque::new(),
+            tier: Tier::Baseline,
+            low_memory: false,
         }
+    }
+
+    /// The visual tier frames are drawn in. It starts at Baseline (docs/beryl-3d.md, "Choosing a
+    /// tier"), follows `Input::Tier`, and stays Baseline for the rest of the session once memory
+    /// has run low.
+    #[must_use]
+    pub fn tier(&self) -> Tier {
+        self.tier
     }
 
     /// Takes a session update, a pointer or key event, a new surface or another input. An
@@ -238,9 +252,27 @@ impl Client {
                     (self.show.badges_mut()).rescale(scale, glyphs);
                 }
             }
+            Input::Tier(tier) => self.set_tier(tier),
+            Input::Lifecycle(Lifecycle::LowMemory) => self.low_memory(),
             input => self.inputs.push(input),
         }
         self.wake = Wake::Now;
+    }
+
+    /// Takes the tier the host's rate rule chose, unless memory has run low, after which the
+    /// tier stays Baseline (docs/beryl-3d.md, "Choosing a tier").
+    fn set_tier(&mut self, tier: Tier) {
+        if !self.low_memory {
+            self.tier = tier;
+        }
+    }
+
+    /// Memory is low (docs/beryl-3d.md, "Hosts": "Low memory"): forgets every full-size face,
+    /// which the renderer has freed, and draws in the Baseline tier for the rest of the session.
+    fn low_memory(&mut self) {
+        self.low_memory = true;
+        self.tier = Tier::Baseline;
+        self.show.faces_mut().low_memory();
     }
 
     /// The frame at `now`, in nanoseconds since the client started.
@@ -544,6 +576,12 @@ impl Client {
     #[must_use]
     pub fn faces(&self) -> &FaceList {
         self.show.faces().list()
+    }
+
+    /// The layer each face has landed in at each size.
+    #[must_use]
+    pub fn face_layers(&self) -> &Faces {
+        self.show.faces()
     }
 
     /// The pointer on the table, for tests that read the held card's lean.

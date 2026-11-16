@@ -261,3 +261,49 @@ fn one_full_size_face_is_uploaded_a_frame_even_while_animating() {
         );
     }
 }
+
+#[test]
+fn low_memory_frees_the_full_size_array_and_keeps_the_board_size_one() {
+    for limits in BOTH {
+        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        renderer.set_faces(&["", "a", "b"], Format::Rgba8);
+        for face in 1..=2 {
+            let board = prepared(face, FaceSize::Board, face, plain_layer(FaceSize::Board, 9));
+            assert!(renderer.upload_layer(&board), "{limits:?}");
+            let full = prepared(
+                face,
+                FaceSize::Full,
+                face - 1,
+                plain_layer(FaceSize::Full, 9),
+            );
+            assert!(renderer.upload_layer(&full), "{limits:?}");
+        }
+        renderer.hold(prepared(
+            1,
+            FaceSize::Full,
+            2,
+            plain_layer(FaceSize::Full, 9),
+        ));
+        assert_eq!(renderer.uploaded(FaceSize::Full), 2, "{limits:?}");
+
+        renderer.low_memory();
+        assert_eq!(renderer.uploaded(FaceSize::Full), 0, "{limits:?}");
+        assert_eq!(renderer.uploaded(FaceSize::Board), 2, "{limits:?}");
+        assert_eq!(
+            renderer.waiting(),
+            0,
+            "a full-size face asked for earlier is dropped"
+        );
+        // The board-size faces still draw, from the array that was kept.
+        assert_eq!(
+            at(&draw_card(&mut renderer, 1, FAR), 0.0, 0.0),
+            [9; 3],
+            "{limits:?}"
+        );
+
+        let full = prepared(2, FaceSize::Full, 0, plain_layer(FaceSize::Full, 9));
+        assert!(renderer.upload_layer(&full), "{limits:?}");
+        assert_eq!(renderer.uploaded(FaceSize::Full), 1, "{limits:?}");
+        assert_eq!(renderer.uploaded(FaceSize::Board), 2, "{limits:?}");
+    }
+}

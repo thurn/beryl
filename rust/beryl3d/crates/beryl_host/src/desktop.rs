@@ -391,6 +391,7 @@ impl<S: FnOnce(&mut Renderer)> ApplicationHandler<UserEvent> for App<S> {
 
     fn memory_warning(&mut self, _event_loop: &ActiveEventLoop) {
         if let Some(running) = &mut self.running {
+            running.screen.renderer.low_memory();
             running
                 .frames
                 .handle(Input::Lifecycle(Lifecycle::LowMemory));

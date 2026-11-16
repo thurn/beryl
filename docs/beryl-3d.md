@@ -1059,16 +1059,23 @@ Three behaviors are specified because they differ most between platforms.
   change. On the desktop the field is edited in place, using `parley`'s editing
   support and `winit`'s input-method events.
 - **Losing the surface.** When an app is suspended, Android destroys the GPU
-  surface and iOS forbids GPU work. The host calls `beryl3d_surface_lost`, the
-  renderer drops the surface, and on return the host supplies a new one. Workers
-  read the compressed textures back from the disk cache and the renderer uploads
-  them before the first frame after the return is shown, which takes
-  milliseconds. The client core's state is untouched, so the table reappears
-  exactly as it was.
-- **Low memory.** On a low-memory `Lifecycle` input the client drops every
-  full-size card face, and the renderer switches to the Baseline tier for the
-  rest of the session and frees the Enhanced tier's buffers. The small faces are
-  kept.
+  surface and iOS forbids GPU work. The host calls `beryl3d_surface_lost`, and
+  the renderer drops the surface but keeps the GPU device and queue: wgpu's
+  `Device` outlives its `Surface` on Metal, Vulkan and OpenGL, so every uploaded
+  face, glyph page and pipeline survives the suspension. On return the host
+  supplies a new surface and the renderer attaches it to the same device
+  (`Renderer::attach`), uploading nothing. The client core's state is untouched,
+  so the table reappears exactly as it was. A lost device, which would need
+  every texture made again from the disk cache, is not handled yet.
+- **Low memory.** On a low-memory `Lifecycle` input the host tells the renderer
+  directly (`Renderer::low_memory`), beside handing the input to the client. The
+  renderer frees the full-size face array and the full-size faces waiting to be
+  uploaded, and makes the array again, empty, at its next full-size upload. It
+  will also free the Enhanced tier's buffers once that tier has any. The client
+  forgets every full-size face's layer, so those cards draw from their
+  board-size faces until a full-size face arrives again, and it stays in the
+  Baseline tier for the rest of the session, ignoring a later Enhanced tier.
+  Board-size faces and glyph pages are kept.
 
 ## The table
 

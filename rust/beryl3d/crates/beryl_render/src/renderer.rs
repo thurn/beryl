@@ -4,7 +4,7 @@
 //! the opaque records with a depth buffer, then the blended ones, tested against it on the
 //! table and untested in the flat layer.
 
-use beryl_assets::{Format, Prepared};
+use beryl_assets::{Format, Prepared, dimensions};
 use beryl_scene::frame::{Frame, TextureArray, Wake};
 use beryl_scene::input::{AssetReady, FaceSize};
 use wgpu::util::DeviceExt;
@@ -12,7 +12,8 @@ use wgpu::util::DeviceExt;
 use crate::atlas::Atlas;
 use crate::count::FragmentCounter;
 use crate::faces::{
-    COMPRESSION, FaceArray, Waiting, empty_arrays, face_arrays, face_upload, supported,
+    COMPRESSION, FaceArray, Waiting, empty_arrays, face_arrays, face_upload, full_array, supported,
+    token_array,
 };
 use crate::mesh::meshes;
 use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
@@ -63,6 +64,9 @@ pub struct Renderer {
     atlas: Atlas,
     /// Faces that arrived during play, waiting to be uploaded (`hold`).
     waiting: Waiting,
+    /// The format of the full-size array that `low_memory` freed, which the next full-size
+    /// upload makes again, empty.
+    freed_full: Option<Format>,
     depth: Option<(wgpu::TextureView, u32, u32)>,
     /// Present when the renderer counts the fragments each frame shades.
     counter: Option<FragmentCounter>,
@@ -120,6 +124,7 @@ impl Renderer {
             faces,
             atlas,
             waiting: Waiting::default(),
+            freed_full: None,
             depth: None,
             counter: None,
             adapter: "unknown".to_owned(),
@@ -227,6 +232,11 @@ impl Renderer {
     pub fn set_faces(&mut self, names: &[&str], format: Format) {
         self.faces = face_arrays(&self.device, &self.queue, names, format);
         self.waiting = Waiting::default();
+        self.freed_full = None;
+        self.rebind();
+    }
+
+    fn rebind(&mut self) {
         let (device, layout, sampler) = (&self.device, &self.layout, &self.sampler);
         let (faces, atlas) = (&self.faces, &self.atlas);
         self.slots
@@ -240,7 +250,37 @@ impl Renderer {
         let Some((size, index, layer)) = face_upload(prepared) else {
             return false;
         };
+        if size == FaceSize::Full
+            && let Some(format) = self.freed_full.take()
+        {
+            self.faces[face_array(size)] = full_array(&self.device, format);
+            self.rebind();
+        }
         self.faces[face_array(size)].write(&self.queue, index, layer)
+    }
+
+    /// How many layers of the array for `size` hold a face uploaded since the array was made.
+    #[must_use]
+    pub fn uploaded(&self, size: FaceSize) -> usize {
+        self.faces[face_array(size)].filled()
+    }
+
+    /// Frees what can be made again when the platform says memory is low (docs/beryl-3d.md,
+    /// "Hosts": "Low memory"): the full-size face array, which the next full-size upload makes
+    /// again, empty, and the full-size faces waiting to be uploaded. The client forgets its
+    /// full-size layers on the same `Lifecycle::LowMemory`, so those cards draw from their
+    /// board-size faces. Board-size faces and glyph pages are kept. The Enhanced tier's buffers
+    /// are to be freed here too once that tier has any.
+    pub fn low_memory(&mut self) {
+        self.waiting.drop_full();
+        let full = &self.faces[face_array(FaceSize::Full)];
+        // A renderer with no match holds only the token array, which there is no need to free.
+        if full.size != dimensions(FaceSize::Full) {
+            return;
+        }
+        self.freed_full = Some(full.format);
+        self.faces[face_array(FaceSize::Full)] = token_array(&self.device);
+        self.rebind();
     }
 
     /// Uploads a whole page into its page of the atlas: the shapes of light

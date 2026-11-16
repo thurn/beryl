@@ -167,6 +167,13 @@ impl Faces {
         }
     }
 
+    /// Forgets every face's full-size layer, because the renderer freed the full-size array when
+    /// memory ran low (docs/beryl-3d.md, "Hosts": "Low memory"). Those faces draw from their
+    /// board-size layers until a full-size layer arrives again. Board-size layers are kept.
+    pub fn low_memory(&mut self) {
+        self.full.fill(None);
+    }
+
     /// The face that shows the card or face named `name`. Allocates nothing.
     #[must_use]
     pub fn face(&self, name: &str) -> Option<&ListedFace> {

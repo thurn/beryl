@@ -1,11 +1,13 @@
 //! The phone host's frame rate: which display ticks draw when the rate rule has chosen less
 //! than the display's highest rate, and a loop paced as a phone's steps from 120 Hz to 60 Hz
 //! when frames keep missing 120 Hz, leaving the rate in its `Platform` for the host to apply.
+//! Also the phone host before the platform has passed a surface: it has no renderer yet, so a
+//! lifecycle input is ignored and no frame is drawn.
 
 use beryl_host::phone::{Platform, due};
-use beryl_host::{Draw, FrameLoop, Shown};
-use beryl_scene::frame::Frame;
-use beryl_scene::input::{Button, Input, Modifiers, Pointer, PointerKind, PointerPhase};
+use beryl_host::{Draw, FrameLoop, NoFeed, Phone, Shown};
+use beryl_scene::frame::{Frame, Wake};
+use beryl_scene::input::{Button, Input, Lifecycle, Modifiers, Pointer, PointerKind, PointerPhase};
 use beryl_scene::{Client, Config};
 use glam::Vec2;
 
@@ -75,4 +77,14 @@ fn frames_that_keep_missing_120_hz_step_the_phone_to_60_hz() {
     }
     let hz = frames.ticks_ref().hz();
     assert!((hz - 60.0).abs() < 1e-3, "stayed at {hz} Hz");
+}
+
+#[test]
+fn low_memory_before_a_surface_is_ignored() {
+    let mut phone = Phone::new(Client::new(Config::LARGEST), 60.0, None, |_| {
+        Box::new(NoFeed)
+    });
+    phone.lifecycle(Lifecycle::LowMemory);
+    phone.surface_lost();
+    assert_eq!(phone.frame(0), Wake::Never);
 }

@@ -223,8 +223,16 @@ impl Phone {
         }
     }
 
-    /// The app was suspended or resumed, or memory is low.
+    /// The app was suspended or resumed, or memory is low. On low memory the renderer frees
+    /// its full-size faces at once, beside the client forgetting them at its next input
+    /// (docs/beryl-3d.md, "Hosts": "Low memory"). Before the platform has passed a surface
+    /// there is no renderer and nothing to free, so the input is ignored.
     pub fn lifecycle(&mut self, lifecycle: Lifecycle) {
+        if lifecycle == Lifecycle::LowMemory
+            && let State::Running(running) = &mut self.state
+        {
+            running.screen.renderer.low_memory();
+        }
         self.give(Input::Lifecycle(lifecycle));
     }
 
