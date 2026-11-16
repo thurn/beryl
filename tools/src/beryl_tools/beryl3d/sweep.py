@@ -27,7 +27,8 @@ work to fix, never as Steward beads.
   passed, for at most [`SEARCH`] seconds per part (bisect.py, in a tree of its own), and filed
   as one P1 bead per step, labelled [`LABEL`], under the epic (`paths.EPIC`). A check that an
   open sweep bead already names gets a comment instead. Nothing here holds `master`.
-- **Cost.** Its steps run at utility priority and take CPU tokens as the browser sweep's do, and
+- **Cost.** Its steps run at normal priority and take CPU tokens of the `sweep` class, at most a
+  quarter of the cores, as the browser sweep's do (tokens.py), and
   are logged under the script [`SCRIPT`]. Slow CI's CPU budget counts only records of the script
   `ci` (check_value.slow_ci), so the sweep spends none of it.
 - **Cache.** As soon as the quick part's build steps ([`BUILDS`]) pass, it saves the
@@ -80,7 +81,7 @@ LANE_PREFIX = "b3d-"
 # The wall seconds a sweep's bisection may take.
 SEARCH = 900.0
 # The hang limit of the sweep's steps (hang.py's `$CHECK_HANG_LIMIT_S`). A cold build of the
-# workspace at utility priority on a loaded machine can take many times its time in the fast
+# workspace in a quarter of the cores can take many times its time in the fast
 # check, and a sweep blocks nothing.
 HANG_LIMIT_S = 7200
 # The run's budget in load-adjusted seconds. A sweep blocks nothing, so it is never over.
@@ -347,7 +348,8 @@ def run_command(request: Request, part: str, since: str) -> list[str]:
 
 
 def run_in_tree(commit: str, command: list[str], output: Path, part: str) -> int:
-    """`command` in a detached worktree of `commit` at utility priority, its output to `output`
+    """`command` in a detached worktree of `commit` at normal priority, its steps taking tokens
+    as `sweep` (`tokens.script_class`), its output to `output`
     and to this process's. The tree needs no clone of the main workspace's build directory:
     Beryl 3D's workspace has its own."""
     # Not the sweep's own folder, whose lock the firing holds while this runs, and a folder per
@@ -356,9 +358,7 @@ def run_in_tree(commit: str, command: list[str], output: Path, part: str) -> int
     work = folder() / ("work" if part == QUICK else f"work-{part}")
     work.mkdir(exist_ok=True)
     with open(output, "w") as out:
-        code = coverage.in_tree(
-            commit, system.utility(command), out, place=work, warm_rust=False
-        )
+        code = coverage.in_tree(commit, command, out, place=work, warm_rust=False)
     print(output.read_text(), end="")
     return code
 
@@ -436,7 +436,7 @@ def finish(request: Request, record: dict[str, object]) -> dict[str, object]:
 def start_background(
     head: Callable[[], str] = lambda: git("rev-parse", "HEAD"),
     pattern: Callable[[], re.Pattern[str]] = inputs,
-    start: Callable[[list[str], Path], bool] = coverage.detached,
+    start: Callable[[list[str], Path], bool] = coverage.detached_sweep,
 ) -> str:
     """Starts `just b3d sweep` in the background from the main checkout's tools when one is
     due at slow CI's commit and none is running, and returns a line saying which. Slow CI calls

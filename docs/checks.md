@@ -199,10 +199,11 @@ optional `iroh` feature.
 ## The browser sweep
 
 The full browser lanes are not slow CI's. `just sweep` (`sweep.py`) runs them on
-`origin/staging` at utility priority on the Mac. Slow CI starts one in the
-background after a run when none has run in 3 hours, so the sweep keeps pace
-while staging moves with nothing to install; `just sweep-install` also adds a
-launchd agent that fires every 3 hours.
+`origin/staging` on the Mac, at normal priority inside CPU tokens of the lowest
+class, `sweep`, which holds at most a quarter of the cores. Slow CI starts one
+in the background after a run when none has run in 3 hours, so the sweep keeps
+pace while staging moves with nothing to install; `just sweep-install` also adds
+a launchd agent that fires every 3 hours.
 
 - `shots`: `just ui-shots`, which renders every screen in `ui/shots.json` and
   fails on any page error.
@@ -226,15 +227,17 @@ blocks `master`. The sweep bisects each failed check over the commits since the
 last sweep that passed (up to 30 minutes), then files one P1 `sweep-failure`
 Steward bead per lane naming the checks, the culprit commit or range and how to
 replay them. A check an open sweep bead already names gets a comment instead.
-Its steps' hang limit is 2 hours, because at utility priority on a loaded
-machine they run many times slower than in a check. For the same reason, work at
-low priority sets `BERYL_LOW_PRIORITY=1`, and its Playwright waits time out
-after 3 minutes instead of 30 s (`WAIT_MS` in `ui/scripts/hang.mjs`): at a load
-of 50 to 70, a shot that takes 2 s in a check ran past 30 s, passed on its rerun
-and was filed as a flaky check to delete. A sweep that passes starts a coverage
-run of its commit in the background, so the coverage data the fast check chooses
-by is measured nightly and after each passing sweep. A ui/src line changed since
-the coverage's commit is one the data cannot place. The record is in
+Its steps' hang limit is 2 hours, because with a quarter of the cores they can
+run several times slower than in a check. The sweeps used to run at utility
+priority, where at a load of 40 to 70 they got almost no CPU and took 2 to 3.5
+hours, past their interval. Work that still runs at low priority sets
+`BERYL_LOW_PRIORITY=1`, and its Playwright waits time out after 3 minutes
+instead of 30 s (`WAIT_MS` in `ui/scripts/hang.mjs`): at a load of 50 to 70, a
+shot that takes 2 s in a check ran past 30 s, passed on its rerun and was filed
+as a flaky check to delete. A sweep that passes starts a coverage run of its
+commit in the background, so the coverage data the fast check chooses by is
+measured nightly and after each passing sweep. A ui/src line changed since the
+coverage's commit is one the data cannot place. The record is in
 `$BERYL_CACHE/sweep`.
 
 ## Beryl 3D
@@ -282,8 +285,9 @@ file Beryl 3D reads can land without Beryl 3D's checks and leave it broken.
   times the cores or another sweep runs.
 - In a detached worktree of the staging tip it runs every step of the Beryl 3D
   lanes in full, then the sweep's own steps, each as a lane of its own
-  (`b3d-<step>`), at utility priority. Its checks are logged under the script
-  `b3d-sweep`, which slow CI's CPU budget does not count.
+  (`b3d-<step>`), taking `sweep` tokens as the browser sweep does. Its checks
+  are logged under the script `b3d-sweep`, which slow CI's CPU budget does not
+  count.
 - Its own steps: `every-tick` (`just b3d test --every-tick`) runs every
   interface test again with the checks applied on every tick, the exhaustive
   form of the lane's `test` step; `frame-counts` (`just b3d gate --counts`, on
@@ -436,14 +440,16 @@ own busy figure for comparison. `cpu.py` explains how processes are attributed.
   the wait for tokens.
 - The classes, highest first, are the merge queue's fast check of a batch of
   pushes (unused while the queue is off), the fast check a push runs in its own
-  worktree, a command an agent runs by hand, and slow CI. Every push on the
-  machine waits for the queue's check, so it comes first: pushes' own checks
-  together hold at most seven eighths of the pool. Agents' commands and slow CI
-  together hold at most three quarters, so a push always finds free tokens. Slow
-  CI may take any of those tokens that nobody else holds. A class takes nothing
-  while a higher one waits. Work at utility QoS (tournaments, the nightly, the
-  justfile's `low`) takes no tokens, because macOS already gives every core to
-  normal-priority work first.
+  worktree, a command an agent runs by hand, slow CI, and the sweeps and their
+  bisections. Every push on the machine waits for the queue's check, so it comes
+  first: pushes' own checks together hold at most seven eighths of the pool.
+  Agents' commands and slow CI together hold at most three quarters, so a push
+  always finds free tokens. Slow CI may take any of those tokens that nobody
+  else holds. The sweeps hold at most a quarter of the pool, a share they get
+  even on a busy machine, which work at utility QoS does not. A class takes
+  nothing while a higher one waits. Other long work at utility QoS (tournaments,
+  the nightly, the justfile's `low`) takes no tokens, because macOS already
+  gives every core to normal-priority work first.
 - A check step's wait for tokens does not count against its hang limit or the
   run's budget: the step's log line reports the wait apart from the step's own
   time. `just tokens` shows who holds and waits for tokens. `BERYL_CPU_POOL=0`

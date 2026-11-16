@@ -14,7 +14,8 @@ exited, such as a check step killed as hung, is taken back by the next process t
 Each command has a class, highest first: `queue` (the fast check Enact's merge queue runs on a
 batch of pushes, in its tree `.worktrees/.merge-queue`), `push` (the fast check `enact push`
 runs in the branch's own worktree first), `agent` (a command a session runs by hand, such as
-`just test-rust`) and `ci` (slow CI). A class may take a token only while the tokens held by it
+`just test-rust`), `ci` (slow CI) and `sweep` (the browser and Beryl 3D sweeps and their
+bisections, `SWEEP_SCRIPTS`). A class may take a token only while the tokens held by it
 and every lower class stay under its ceiling (`ceiling`), so a push always finds a quarter of the
 cores that agents and slow CI cannot take, and the queue an eighth that no push can. A class also
 takes nothing while a higher class waits.
@@ -31,7 +32,15 @@ Cargo commands outside a check, whether `by` starts them or a session types them
 through a shim that stands in for cargo on PATH (cargo_pool.py), which also lets a build grow
 while it runs.
 
-Long background work (tournaments, the nightly, `just blunder-hunt`) takes no tokens. It runs at
+The sweeps once ran at utility QoS with no tokens, as the nightly does. At the machine's usual
+load of 40 to 70 the utility class got almost no CPU while agents' checks ran: on 2026-11-15 the
+browser sweep took 6,317 s and 12,364 s, longer than its 3-hour interval, and Beryl 3D's sweep
+spent 1,768 s on a format check that used 28 CPU-seconds. Slow CI, at normal priority with
+tokens, used about as many CPU-seconds as wall seconds on the same days. So the sweeps now run
+at normal priority as the lowest class, which together holds at most a quarter of the pool
+(`ceiling`): a bounded share they always get, instead of what is left over.
+
+Other long background work (tournaments, the nightly, `just blunder-hunt`) takes no tokens. It runs at
 utility QoS (the justfile's `low`, `system.utility`), under which macOS gives every core to
 normal-priority work first, thread by thread, which no token count can match. A lease is fixed
 when it starts, so holding it to a few tokens would leave the cores idle for hours whenever the
@@ -81,7 +90,11 @@ from typing import Any
 
 from . import paths, system
 
-CLASSES: tuple[str, ...] = ("queue", "push", "agent", "ci")
+CLASSES: tuple[str, ...] = ("queue", "push", "agent", "ci", "sweep")
+
+# The run-log scripts of the sweeps (sweep.py and beryl3d/sweep.py), whose steps and bisections
+# take tokens as `sweep`.
+SWEEP_SCRIPTS: frozenset[str] = frozenset({"sweep", "b3d-sweep"})
 
 # The name of the tree in which Enact's merge queue checks a batch of pushes (`QUEUE_TREE` in
 # enact.py), whose fast check takes tokens as `queue`.
@@ -135,12 +148,16 @@ def pool_size() -> int:
 
 def ceiling(klass: str, total: int) -> int:
     """The most tokens `klass` and every class below it may hold together: every token for the
-    merge queue's check, all but an eighth for pushes, which leaves those to the queue, and three
-    quarters for agents and slow CI, which leaves the rest to pushes and the queue."""
+    merge queue's check, all but an eighth for pushes, which leaves those to the queue, three
+    quarters for agents and slow CI, which leaves the rest to pushes and the queue, and a quarter
+    for the sweeps, so that an hour-long sweep step never holds cores a check will want.
+    """
     if klass == "queue":
         return total
     if klass == "push":
         return max(1, total - total // 8)
+    if klass == "sweep":
+        return max(1, total // 4)
     return max(1, total - total // 4)
 
 
@@ -449,11 +466,32 @@ def run_program(command: list[str], **kwargs: Any) -> subprocess.CompletedProces
 
 def script_class(script: str) -> str:
     """The class of a check run's steps: `check` is the fast check of a push, or of a batch of
-    them in the merge queue's tree, and `ci` is slow CI; any other run is a session's own.
+    them in the merge queue's tree, `ci` is slow CI, and a sweep's script (`SWEEP_SCRIPTS`) is
+    `sweep`; any other run is a session's own.
     """
     if script == "check" and paths.REPO.name == QUEUE_TREE:
         return "queue"
+    if script in SWEEP_SCRIPTS:
+        return "sweep"
     return {"check": "push", "ci": "ci"}.get(script, "agent")
+
+
+# What a lease or low priority puts in a command's environment (`Lease.env`, `system.LOW_ENV`).
+HELD_ENV: tuple[str, ...] = (
+    LEASE_ENV,
+    CLASS_ENV,
+    "CARGO_BUILD_JOBS",
+    "NEXTEST_TEST_THREADS",
+    "RUST_TEST_THREADS",
+    *system.LOW_ENV,
+)
+
+
+def unheld(env: dict[str, str]) -> dict[str, str]:
+    """`env` without what a lease or low priority set in it ([`HELD_ENV`]), for a command that
+    takes its own tokens, such as a sweep that slow CI starts from inside a step's lease.
+    """
+    return {k: v for k, v in env.items() if k not in HELD_ENV}
 
 
 def status(_args: argparse.Namespace) -> int:

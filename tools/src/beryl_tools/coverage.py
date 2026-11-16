@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO
 
-from . import paths, runlog, selection, shots, system, warm
+from . import paths, runlog, selection, shots, system, tokens, warm
 
 FORMAT = 1
 # The browser with a coverage API: Playwright measures coverage only in Chromium.
@@ -434,10 +434,12 @@ def refresh(commit: str) -> str:
     return f"coverage: measuring {commit[:10]} in the background ({log})"
 
 
-def detached(by: list[str], log: Path) -> bool:
-    """Starts `by <by>` from the main checkout's tools at low priority in a session of its own,
-    its output to `log`, so that it outlives slow CI's worktree, which Enact deletes when the
-    run ends, ending every process left inside it. False when there is no main checkout or uv.
+def detached(by: list[str], log: Path, low: bool = True) -> bool:
+    """Starts `by <by>` from the main checkout's tools in a session of its own, its output to
+    `log`, so that it outlives slow CI's worktree, which Enact deletes when the run ends, ending
+    every process left inside it. False when there is no main checkout or uv. With `low`, it runs
+    at low priority (`system.utility`); without, at normal priority, taking CPU tokens of its own
+    rather than the lease of the slow CI step that started it (`tokens.unheld`).
     """
     main = paths.main_checkout()
     uv = shutil.which("uv")
@@ -447,9 +449,11 @@ def detached(by: list[str], log: Path) -> bool:
     # Not slow CI's: its worktree's environment, or its run log's results file.
     leave = {"VIRTUAL_ENV", "PYTHONPATH", runlog.RESULTS_ENV}
     env = {k: v for k, v in os.environ.items() if k not in leave}
+    if not low:
+        env = tokens.unheld(env)
     with open(log, "w") as out:
         subprocess.Popen(
-            system.utility(command),
+            system.utility(command) if low else command,
             cwd=main,
             env=env,
             stdout=out,
@@ -458,6 +462,12 @@ def detached(by: list[str], log: Path) -> bool:
             start_new_session=True,
         )
     return True
+
+
+def detached_sweep(by: list[str], log: Path) -> bool:
+    """Starts a sweep, `by <by>`, as `detached` does, at normal priority: a sweep takes CPU
+    tokens of the `sweep` class (tokens.py) instead of running at low priority."""
+    return detached(by, log, low=False)
 
 
 def remove_tree(tree: Path) -> None:

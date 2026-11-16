@@ -183,3 +183,27 @@ def test_slow_ci_starts_a_sweep_only_when_one_is_due(
         assert background(NOW + timedelta(hours=4)) == "sweep: one is running"
     assert "started" in background(NOW + timedelta(hours=4))
     assert started == [["sweep"], ["sweep"]]
+
+
+def test_a_sweep_starts_at_normal_priority_outside_slow_ci_s_lease(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    launched: list[tuple[list[str], dict[str, str]]] = []
+
+    class Popen:
+        def __init__(
+            self, command: list[str], env: dict[str, str], **_: object
+        ) -> None:
+            launched.append((command, env))
+
+    monkeypatch.setattr(sweep.coverage.paths, "main_checkout", lambda: tmp_path)
+    monkeypatch.setattr(sweep.coverage.shutil, "which", lambda _: "/bin/uv")
+    monkeypatch.setattr(sweep.coverage.subprocess, "Popen", Popen)
+    monkeypatch.setenv("BERYL_CPU_TOKENS", "6")
+    monkeypatch.setenv("BERYL_CPU_CLASS", "ci")
+    monkeypatch.setenv("BERYL_CPU_POOL", "0")
+    assert sweep.coverage.detached_sweep(["sweep"], tmp_path / "log")
+    [(command, env)] = launched
+    assert "taskpolicy" not in command and "low" not in command
+    assert command[-2:] == ["by", "sweep"]
+    assert not {"BERYL_CPU_TOKENS", "BERYL_CPU_CLASS", "BERYL_CPU_POOL"} & env.keys()

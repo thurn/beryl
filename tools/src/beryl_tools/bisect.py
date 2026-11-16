@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import paths, runlog, system, verdicts, warm
+from . import paths, runlog, system, tokens, verdicts, warm
 from .checks import Failure, Outcome, Steps, WallClock
 from .reruns import unproven
 
@@ -551,7 +551,9 @@ def bisect_since(
         tree.path.parent.mkdir(parents=True, exist_ok=True)
         try:
             with system.file_lock(tree.path.with_suffix(".lock"), timeout=LEAST_PROBE):
-                steps = Steps(WallClock(), wall_limit=left)
+                # A sweep's bisection takes tokens as the sweep does; slow CI's as a session's.
+                klass = "sweep" if script in tokens.SWEEP_SCRIPTS else "agent"
+                steps = Steps(WallClock(), wall_limit=left, klass=klass)
                 found = search(commits, base, group, Prober(tree, steps))
         except system.LockHeld:
             print(f"bisect: another bisection holds {tree.path}")

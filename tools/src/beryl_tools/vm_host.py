@@ -4,8 +4,8 @@ The engine's count gate runs in `beryl-bench` (4 CPUs, 4 GiB) and Beryl 3D's fra
 `beryl3d-bench` (8 CPUs, 12 GiB). On 2026-11-15 they escaped every way the machine shares its
 cores and memory:
 
-- **Priority.** The Beryl 3D sweep runs its slow part at utility priority (`system.utility`) so
-  that every other process gets the CPU first. But macOS starts a Lima machine's process, the
+- **Priority.** The Beryl 3D sweep ran its slow part at utility priority (`system.utility`) so
+  that every other process got the CPU first. But macOS starts a Lima machine's process, the
   Virtualization framework's `com.apple.Virtualization.VirtualMachine` service, through
   launchd, so it inherits nothing from the command that asked for it. `beryl3d-bench` ran at
   normal priority (31) on 245% CPU while the sweep that used it asked for low priority.

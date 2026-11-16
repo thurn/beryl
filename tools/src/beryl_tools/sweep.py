@@ -1,6 +1,6 @@
 """`by sweep`: the browser sweep, which runs the full `shots`, `ui-test` and `mobile` lanes on
-origin/staging every [`EVERY`] from a launchd agent (`just sweep-install`), at utility priority
-as the nightly's steps run (nightly.py).
+origin/staging every [`EVERY`] from a launchd agent (`just sweep-install`), at normal priority
+inside CPU tokens of the `sweep` class, which hold at most a quarter of the cores (tokens.py).
 
 These lanes are most of what slow CI used to spend, and where its timeouts and flaky failures
 came from. Most of their value for a change is caught before the push, where the fast check
@@ -66,8 +66,8 @@ STEPS: dict[str, str] = {"shots": "ui-shots", "ui-test": "ui-test"}
 # The wall seconds a sweep's bisection may take. Nothing waits on it: the next firing skips
 # while it runs.
 SEARCH = 1800.0
-# The hang limit of the sweep's steps (hang.py's `$CHECK_HANG_LIMIT_S`). At utility priority on
-# a loaded machine a full `ui-test` can take many times its slow-CI time, and a sweep blocks
+# The hang limit of the sweep's steps (hang.py's `$CHECK_HANG_LIMIT_S`). With a quarter of the
+# cores at most, a full `ui-test` can take several times its slow-CI time, and a sweep blocks
 # nothing, so only a step stuck for this long counts as hung.
 HANG_LIMIT_S = 7200
 PRIORITY = "1"
@@ -126,12 +126,12 @@ def skip_reason(tip: str, swept: str, load: float, cores: int) -> str | None:
 
 
 def run_in_tree(commit: str, since: str, output: Path) -> int:
-    """`by sweep-run` in a detached worktree of `commit` at utility priority, its output to
-    `output`."""
+    """`by sweep-run` in a detached worktree of `commit`, its output to `output`. It runs at
+    normal priority: its steps take tokens as `sweep` (`tokens.script_class`)."""
     command = [sys.executable, "-m", "beryl_tools.cli", "sweep-run"]
     command += ["--since", since] if since else []
     with open(output, "w") as out:
-        return coverage.in_tree(commit, system.utility(command), out)
+        return coverage.in_tree(commit, command, out)
 
 
 def run_sweep(
@@ -199,7 +199,7 @@ def last_began(records: list[dict[str, object]]) -> datetime | None:
 
 def start_background(
     now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
-    start: Callable[[list[str], Path], bool] = coverage.detached,
+    start: Callable[[list[str], Path], bool] = coverage.detached_sweep,
 ) -> str:
     """Starts `by sweep` in the background from the main checkout's tools when one is due: no
     sweep has run in [`EVERY`] and none is running. Returns a line saying which. Slow CI calls

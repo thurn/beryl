@@ -57,6 +57,43 @@ def test_lower_classes_leave_room_for_higher(tmp_path: Path) -> None:
     assert queue is not None and queue.size == 1
 
 
+def test_sweeps_hold_at_most_a_quarter_of_the_pool(tmp_path: Path) -> None:
+    pool = Pool(tmp_path, 8)
+    sweep = pool.acquire("sweep", 8, never)
+    assert sweep is not None and sweep.size == 2
+    assert pool.acquire("sweep", 1, once) is None
+    # Their tokens count against the classes above, which still find room beside them.
+    ci = pool.acquire("ci", 8, never)
+    assert ci is not None and ci.size == 4
+
+
+def test_a_waiting_ci_step_holds_back_sweeps(tmp_path: Path) -> None:
+    pool = Pool(tmp_path, 8)
+    (tmp_path / f"wait-{os.getpid()}-1-ci").write_text(f"{os.getpid()} ci")
+    assert pool.acquire("sweep", 1, once) is None
+
+
+def test_sweep_scripts_take_sweep_tokens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tokens.paths, "REPO", tmp_path / "tree")
+    assert tokens.script_class("sweep") == "sweep"
+    assert tokens.script_class("b3d-sweep") == "sweep"
+    assert tokens.script_class("bisect") == "agent"
+
+
+def test_unheld_drops_a_lease_and_low_priority() -> None:
+    env = {
+        "PATH": "/bin",
+        tokens.LEASE_ENV: "6",
+        tokens.CLASS_ENV: "ci",
+        "CARGO_BUILD_JOBS": "6",
+        tokens.POOL_ENV: "0",
+        "BERYL_LOW_PRIORITY": "1",
+    }
+    assert tokens.unheld(env) == {"PATH": "/bin"}
+
+
 def test_a_waiting_queue_check_holds_back_pushes(tmp_path: Path) -> None:
     pool = Pool(tmp_path, 8)
     (tmp_path / f"wait-{os.getpid()}-1-queue").write_text(f"{os.getpid()} queue")
