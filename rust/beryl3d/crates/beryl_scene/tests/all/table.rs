@@ -631,3 +631,34 @@ fn stacks_of_any_size_stay_on_screen_with_the_newest_item_nearest() {
         }
     }
 }
+
+#[test]
+fn a_spell_that_exiled_itself_rests_in_exile_while_the_view_still_lists_it() {
+    // A spell that exiles itself as it resolves and then asks a player to choose: the view
+    // drawn at the choice still lists the spell on its stack, though its card is in exile.
+    let mut builder = ViewBuilder::new();
+    let spell = builder
+        .card(ZoneName::Stack, Side::Opponent, "Time Spiral")
+        .slot;
+    let mut view = builder.build();
+    assert!(
+        view.stack
+            .iter()
+            .any(|item| matches!(item, StackItem::Spell { slot, .. } if *slot == spell)),
+        "the view lists the spell on its stack"
+    );
+    let object = view.objects.iter_mut().find(|o| o.slot == spell);
+    object.expect("the spell's card").zone = ZoneName::Exile;
+
+    let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
+    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
+    let rest = placement.get(spell).expect("placed");
+    assert_eq!(
+        rest.place,
+        Place::Card {
+            zone: ZoneName::Exile,
+            side: Side::Opponent,
+            row: None,
+        }
+    );
+}

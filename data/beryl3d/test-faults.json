@@ -117,18 +117,6 @@
     "b3d:choice-trigger-order/you/2560x1080": {
       "step-shown": 19
     },
-    "b3d:choice-untap/opponent/1440x900": {
-      "rest-placement": 1
-    },
-    "b3d:choice-untap/opponent/1600x900": {
-      "rest-placement": 1
-    },
-    "b3d:choice-untap/opponent/1920x1080": {
-      "rest-placement": 1
-    },
-    "b3d:choice-untap/opponent/2560x1080": {
-      "rest-placement": 1
-    },
     "b3d:combat-attackers/opponent/1440x900": {
       "reachable": 2,
       "step-shown": 12
@@ -396,19 +384,15 @@
       "step-shown": 1
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1440x900": {
-      "rest-placement": 2,
       "step-shown": 10
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1600x900": {
-      "rest-placement": 2,
       "step-shown": 9
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1920x1080": {
-      "rest-placement": 2,
       "step-shown": 9
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/2560x1080": {
-      "rest-placement": 2,
       "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/you/1440x900": {
@@ -424,39 +408,31 @@
       "reachable": 1
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/1440x900": {
-      "rest-placement": 3,
       "step-shown": 10
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/1600x900": {
-      "rest-placement": 3,
       "step-shown": 10
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/1920x1080": {
-      "rest-placement": 3,
       "step-shown": 10
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/opponent/2560x1080": {
-      "rest-placement": 3,
       "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1440x900": {
       "reachable": 1,
-      "rest-placement": 3,
       "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1600x900": {
       "reachable": 1,
-      "rest-placement": 3,
       "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/1920x1080": {
       "reachable": 1,
-      "rest-placement": 3,
       "step-shown": 8
     },
     "b3d:fork/copies-time-spiral-which-exiles-the-copy-first/you/2560x1080": {
       "reachable": 1,
-      "rest-placement": 3,
       "step-shown": 7
     },
     "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-and-the-graveyard/you/1440x900": {
@@ -1561,19 +1537,15 @@
       "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/opponent/1440x900": {
-      "rest-placement": 1,
       "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/opponent/1600x900": {
-      "rest-placement": 1,
       "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/opponent/1920x1080": {
-      "rest-placement": 1,
       "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/opponent/2560x1080": {
-      "rest-placement": 1,
       "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/you/1440x900": {
@@ -1589,67 +1561,51 @@
       "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/opponent/1440x900": {
-      "rest-placement": 1,
       "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/opponent/1600x900": {
-      "rest-placement": 1,
       "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/opponent/1920x1080": {
-      "rest-placement": 1,
       "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/opponent/2560x1080": {
-      "rest-placement": 1,
       "step-shown": 1
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/you/1440x900": {
-      "rest-placement": 1,
       "step-shown": 2
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/you/1600x900": {
-      "rest-placement": 1,
       "step-shown": 2
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/you/1920x1080": {
-      "rest-placement": 1,
       "step-shown": 2
     },
     "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped/you/2560x1080": {
-      "rest-placement": 1,
       "step-shown": 1
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/opponent/1440x900": {
-      "rest-placement": 1,
       "step-shown": 3
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/opponent/1600x900": {
-      "rest-placement": 1,
       "step-shown": 3
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/opponent/1920x1080": {
-      "rest-placement": 1,
       "step-shown": 3
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/opponent/2560x1080": {
-      "rest-placement": 1,
       "step-shown": 1
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/you/1440x900": {
-      "rest-placement": 1,
       "step-shown": 4
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/you/1600x900": {
-      "rest-placement": 1,
       "step-shown": 4
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/you/1920x1080": {
-      "rest-placement": 1,
       "step-shown": 4
     },
     "b3d:time-spiral/with-empty-graveyards-six-lands-untapped-any-players/you/2560x1080": {
-      "rest-placement": 1,
       "step-shown": 3
     },
     "b3d:timetwister/shuffles-graveyards-away/opponent/1600x900": {

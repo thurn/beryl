@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 
 use beryl_protocol::protocol::{
-    CardType, ObjectId, ObjectView, PlayerState, PlayerView, RowName, Side, ZoneName,
+    CardType, ObjectId, ObjectView, PlayerState, PlayerView, RowName, Side, StackItem, ZoneName,
 };
 use beryl_protocol::script::{Piles, Table as Played};
 use glam::Vec3;
@@ -402,16 +402,33 @@ impl<'a> Zones<'a> {
             .map(|object| usize::from(object.slot.0) + 1)
             .max()
             .unwrap_or(0);
+        let slots = by_slot(end, view.objects.iter());
+        // A spell whose card has left the stack is not on it, though the view still lists it
+        // while its resolution goes on: a spell that exiles itself as it resolves and then
+        // asks a player to choose. The table a script plays over leaves it out the same way
+        // (`Table::of`), so its card rests in the zone it went to, not on the stack.
+        let on = |item: &StackItem| match item {
+            StackItem::Spell { slot, .. } => slots
+                .get(usize::from(slot.0))
+                .copied()
+                .flatten()
+                .is_some_and(|object| object.zone == ZoneName::Stack),
+            StackItem::Ability { .. } => true,
+        };
+        let stack = on_stack(
+            view.stack
+                .iter()
+                .filter(|item| on(item))
+                .map(|item| (item, None)),
+            abilities,
+            view.objects.iter(),
+        );
         let zones = Self {
             in_view_order: Some(&view.objects),
-            slots: Cow::Owned(by_slot(end, view.objects.iter())),
+            slots: Cow::Owned(slots),
             groups: None,
             battlefield: &view.battlefield,
-            stack: on_stack(
-                view.stack.iter().map(|item| (item, None)),
-                abilities,
-                view.objects.iter(),
-            ),
+            stack,
             piles: [player(&view.players.you), player(&view.players.opponent)],
             handling: None,
         };
