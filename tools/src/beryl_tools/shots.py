@@ -7,9 +7,8 @@ Pages run in a plain browser on the fixture transport (ui/src/ipc.ts).
 `ui-test` plays the game screen through a fixture the same way, dragging, clicking and hovering
 as a player would (ui/scripts/kept.mjs), then the stage's verbs on the stage's own clock
 (ui/scripts/verbs.mjs, the checks named `verb:...`) and its prompt shapes
-(ui/scripts/shapes.mjs, `shape:...`). It records its fixtures into the cache
-instead, where its pages fetch them, so it runs alongside `ui-shots` (slow CI's `shots` and
-`ui-test` lanes).
+(ui/scripts/shapes.mjs, `shape:...`). Each invocation records into its own
+temporary directory so another run cannot remove fixtures its pages still need.
 
 `ui-play` plays every recorded fixture from its first view to its last, on the
 desktop's layout and the phone's, under the stage's audit of each step and the screen audits of
@@ -326,17 +325,18 @@ KEPT_FIXTURES = [
 
 
 def ui_test(args: argparse.Namespace) -> int:
-    recorded = paths.cache_root() / "ui-test" / paths.REPO.name
     chooser = chooser_for("ui-test", args)
     if chooser and chooser.choice.idle():
         print("ui-test: the change reaches no check")
         return 0
     try:
         env = browser_env()
-        if record_fixtures(recorded, ui_test_fixtures()):
-            code = checks.CANNOT_RUN
-        else:
-            code = scripted(env, recorded, list(args.only), chooser)
+        with tempfile.TemporaryDirectory(prefix="beryl-ui-test-fixtures-") as tmp:
+            recorded = Path(tmp) / "fixtures"
+            if record_fixtures(recorded, ui_test_fixtures()):
+                code = checks.CANNOT_RUN
+            else:
+                code = scripted(env, recorded, list(args.only), chooser)
     except UiError as e:
         print(f"ui-test: {e}", file=sys.stderr)
         code = checks.CANNOT_RUN

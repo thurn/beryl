@@ -9,10 +9,14 @@ These tests hold both halves: the flag reaches the command, and no script opens 
 context around the helper, where its waits would fall back to Playwright's 30 s.
 """
 
+import argparse
 import re
+import shutil
 from pathlib import Path
 
-from beryl_tools import paths, system
+import pytest
+
+from beryl_tools import paths, selection, shots, system
 
 SCRIPTS: Path = paths.UI / "scripts"
 
@@ -38,3 +42,39 @@ def test_every_context_comes_from_hang_context() -> None:
         "open browser contexts with hangContext (ui/scripts/hang.mjs), so their waits "
         f"tolerate a starved low-priority run: {offenders}"
     )
+
+
+def test_overlapping_ui_test_runs_keep_their_fixtures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recordings: list[Path] = []
+
+    def record(into: Path, _only: list[str]) -> int:
+        shutil.rmtree(into, ignore_errors=True)
+        into.mkdir(parents=True)
+        recordings.append(into)
+        (into / "fixture.json").write_text(str(len(recordings)))
+        return 0
+
+    def play(
+        _env: dict[str, str],
+        recorded: Path,
+        only: list[str],
+        _chooser: selection.Chooser | None,
+    ) -> int:
+        if only == ["first"]:
+            assert shots.ui_test(argparse.Namespace(only=["second"])) == 0
+            assert recordings[0] != recordings[1]
+            assert (recorded / "fixture.json").read_text() == "1"
+        else:
+            assert (recorded / "fixture.json").read_text() == "2"
+        return 0
+
+    monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
+    monkeypatch.setattr(shots, "chooser_for", lambda *_: None)
+    monkeypatch.setattr(shots, "browser_env", dict)
+    monkeypatch.setattr(shots, "record_fixtures", record)
+    monkeypatch.setattr(shots, "scripted", play)
+    assert shots.ui_test(argparse.Namespace(only=["first"])) == 0
+    assert all(not recorded.exists() for recorded in recordings)

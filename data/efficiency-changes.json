@@ -83,5 +83,10 @@
     "label": "Clippy builds in its own target directory, and the steps that run beryl_cli share one build before taking CPU tokens",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Concurrent ui-test runs keep separate fixture recordings so they do not retry checks after deleting each other's files",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]
