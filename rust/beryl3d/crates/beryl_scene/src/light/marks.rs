@@ -54,14 +54,6 @@ fn stands(open: &Open, now: u64) -> bool {
     now >= open.begins.from && open.ends.is_none_or(|ends| now < ends.to)
 }
 
-/// The marks in `lit` on `on`, in the order they began.
-fn marks_on(lit: &Lit, on: Subject) -> impl Iterator<Item = (Mark, &Open)> {
-    lit.open().iter().filter_map(move |open| match open.span {
-        Span::Mark(MarkSpan { mark, on: marked }) if marked == on => Some((mark, open)),
-        _ => None,
-    })
-}
-
 /// Changes how the card `on` is drawn at `now` for the marks on it in `lit`: `focused` while a
 /// `dwell` step leaves it to be read (`Span::Focus`), the state bits of the marks it wears, and
 /// for `paying` a quarter turn toward tapped as the mark comes up (`ui/src/stage/tracks.ts`,
@@ -69,14 +61,15 @@ fn marks_on(lit: &Lit, on: Subject) -> impl Iterator<Item = (Mark, &Open)> {
 /// A permanent the script has already tapped under the mark lies turned as it rests, and does
 /// not turn again.
 pub fn look(lit: &Lit, on: Subject, now: u64, look: &mut Look) {
-    let read = |open: &Open| open.span == Span::Focus(on) && stands(open, now);
-    if lit.open().iter().any(read) {
-        look.state |= StateBits::FOCUSED;
-    }
-    for (mark, open) in marks_on(lit, on) {
-        if !stands(open, now) {
-            continue;
-        }
+    for open in lit.open() {
+        let mark = match open.span {
+            Span::Focus(focused) if focused == on && stands(open, now) => {
+                look.state |= StateBits::FOCUSED;
+                continue;
+            }
+            Span::Mark(MarkSpan { mark, on: marked }) if marked == on && stands(open, now) => mark,
+            _ => continue,
+        };
         match mark {
             Mark::Eligible => look.state |= StateBits::ELIGIBLE,
             Mark::Selected => look.state |= StateBits::SELECTED,

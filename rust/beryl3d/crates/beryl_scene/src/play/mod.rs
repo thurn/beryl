@@ -47,7 +47,7 @@ use beryl_protocol::script::{Act, StepTiming, Subject, Table as Played, Verb};
 use glam::Vec2;
 
 use self::compile::{Compiled, bit, compile};
-use self::playing::{Playing, Waiting};
+use self::playing::{Playing, Waiting, timings_of};
 use self::record::{Plant, ScriptRecord, StepRecord};
 use crate::data::space::catch_up;
 use crate::effects::{self, EffectRun};
@@ -105,6 +105,7 @@ pub struct Show {
     effects: Vec<EffectRun>,
     /// The runs under way in the frame. Keeps future effects out of each card's scan.
     active_effects: Vec<EffectRun>,
+    card_effects: Vec<EffectRun>,
     /// The notices shown and to be shown, in real time, until they end.
     notices: Vec<Announced>,
     /// What the pointer is doing on the table.
@@ -140,6 +141,7 @@ impl Show {
             lit: Lit::with_capacity(LIGHTS),
             effects: Vec::with_capacity(LIGHTS),
             active_effects: Vec::with_capacity(LIGHTS),
+            card_effects: Vec::with_capacity(LIGHTS),
             notices: Vec::with_capacity(notices::NOTICES),
             pointer: Pointer::default(),
             counts: Counts::default(),
@@ -402,6 +404,22 @@ impl Show {
     /// played. It is compiled now, against the view the table will show when its turn comes, and
     /// plays after every script that arrived before it.
     pub fn push(&mut self, update: Box<GameUpdate>, timings: Vec<StepTiming>) {
+        self.push_timed(update, Some(timings));
+    }
+
+    /// Takes a session update using the timings it carries beside the script.
+    pub(crate) fn push_update(&mut self, update: Box<GameUpdate>) {
+        if let Some(script) = &update.view.script {
+            debug_assert_eq!(
+                script.timing.len(),
+                script.steps(),
+                "the session sends one timing per step"
+            );
+        }
+        self.push_timed(update, None);
+    }
+
+    fn push_timed(&mut self, update: Box<GameUpdate>, timings: Option<Vec<StepTiming>>) {
         let number = self.given;
         self.given += 1;
         // The faces the script holds up to be read, for the Revealed Cards pile to draw once
@@ -413,8 +431,13 @@ impl Show {
             }
         }
         let from = self.played.take();
-        let (compiled, played) =
-            self.compile(number, self.before_next(), from.as_ref(), &update, &timings);
+        let (compiled, played) = self.compile(
+            number,
+            self.before_next(),
+            from.as_ref(),
+            &update,
+            timings_of(&update, timings.as_deref()),
+        );
         self.played = Some(played);
         self.unplaced += compiled.unplaced;
         self.write_record(number, &compiled);
@@ -448,7 +471,7 @@ impl Show {
                 before,
                 playing.from.as_ref(),
                 update,
-                &playing.timings,
+                timings_of(update, playing.timings.as_deref()),
             );
             compiled.push((playing.number, again));
             before = Some(&update.view);
@@ -459,7 +482,7 @@ impl Show {
                 before,
                 waiting.from.as_ref(),
                 &waiting.update,
-                &waiting.timings,
+                timings_of(&waiting.update, waiting.timings.as_deref()),
             );
             compiled.push((waiting.number, again));
             before = Some(&waiting.update.view);
@@ -579,8 +602,11 @@ impl Show {
                 .copied()
                 .filter(|run| run.start <= now && now < run.start + run.duration),
         );
+        self.card_effects.clear();
+        self.card_effects
+            .extend(active.iter().copied().filter(|run| run.effect.on_card()));
         let dress = Dress {
-            effects: &self.active_effects,
+            effects: &self.card_effects,
             badges: &self.badges,
             lit: &self.lit,
             pointer: &self.pointer,

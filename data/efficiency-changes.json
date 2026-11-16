@@ -168,5 +168,10 @@
     "label": "A Beryl 3D program in a fast check (record, b3d test) takes more CPU tokens while it runs as other steps release them, and adds threads, instead of keeping the one to three tokens it started with",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D reuses placement lookups while compiling scripts and visits fewer effects for each card",
+    "metric": "machine.saturation",
+    "expect": "down"
   }
 ]

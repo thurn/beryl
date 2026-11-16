@@ -59,12 +59,13 @@ impl PileRules {
     }
 
     /// Applies the replay's new pile rules and marks any additional rows that need placement.
-    pub(crate) fn update(&mut self, zones: &Zones, dirty: &mut [bool; Group::ALL.len()]) {
-        if dirty[Group::Stack.index()]
-            || Group::ALL
-                .iter()
-                .any(|group| matches!(group, Group::Row { .. }) && dirty[group.index()])
-        {
+    pub(crate) fn update(
+        &mut self,
+        zones: &Zones,
+        dirty: &mut [bool; Group::ALL.len()],
+        lands_may_change: bool,
+    ) {
+        if lands_may_change {
             let lands = piled_lands(zones.battlefield.iter().filter_map(|&slot| zones.get(slot)));
             for side in [Side::You, Side::Opponent] {
                 if self.lands[side_index(side)] != lands[side_index(side)] {

@@ -19,7 +19,7 @@ use super::shown::Shown;
 use super::tray::TrayMotion;
 use super::tray_layout::Held;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window};
-use crate::effects::{self, Effect};
+use crate::effects;
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{
     Band, Draw, ElementId, FrameBuilder, OBJECTS, Place, Resolved, Role, StateBits,
@@ -375,15 +375,7 @@ impl Table {
         let copies = motion
             .and_then(|motion| motion.copies(slot))
             .unwrap_or_else(|| resting.map_or(1, |object| object.copies));
-        let turn = motion.and_then(|motion| {
-            let at = motion
-                .turns
-                .iter()
-                .filter(|turn| turn.slot == slot)
-                .map(|turn| turn.at)
-                .min()?;
-            Some((motion, at))
-        });
+        let turn = motion.and_then(|motion| motion.turn(slot).map(|at| (motion, at)));
         let track = motion.and_then(|motion| {
             let track = motion.tracks.get(slot)?;
             (!track.segments().is_empty()).then_some((motion, track))
@@ -473,12 +465,16 @@ impl Table {
     ) {
         let shown = &view.objects[object.view_index as usize];
         let name = shown.name.as_deref().unwrap_or("");
-        let face = face_of(faces, shown);
-        let listed = shown
+        let (printed, layer) = shown
             .token_printing
             .as_deref()
-            .and_then(|printing| faces.face(printing))
-            .or_else(|| faces.face(name));
+            .map_or((None, None), |printing| faces.listed_board(printing));
+        let (listed, face) = if printed.is_some() && layer.is_some() {
+            (printed, layer)
+        } else {
+            let (listed, face) = faces.listed_board(name);
+            (printed.or(listed), layer.or(face))
+        };
         let mut state = 0;
         if object.tapped {
             state |= StateBits::TAPPED;
@@ -508,17 +504,17 @@ impl Table {
         let on = Subject::Object {
             slot: ObjectId(u16::try_from(slot).expect("slots are u16")),
         };
-        let covered = dress
-            .effects
-            .iter()
-            .any(|run| run.effect == Effect::Cover && run.on == on);
-        let earlier_face = match self.objects.cards.get(slot).copied().flatten() {
-            Some(resting) if covered => {
-                face_of(faces, &shown_view.objects[resting.view_index as usize])
-            }
-            _ => face,
+        let earlier_face = || {
+            self.objects
+                .cards
+                .get(slot)
+                .copied()
+                .flatten()
+                .map_or(face, |resting| {
+                    face_of(faces, &shown_view.objects[resting.view_index as usize])
+                })
         };
-        effects::card::look(dress.effects, on, dress.now, earlier_face, &mut look);
+        effects::card::look_with_face(dress.effects, on, dress.now, earlier_face, &mut look);
         light::marks::look(dress.lit, on, dress.now, &mut look);
         pointer::look(dress.pointer, slot, (dress.now, &self.camera), &mut look);
         effects::card::write(dress.effects, on, dress.now, &look, builder);

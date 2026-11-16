@@ -599,6 +599,22 @@ impl Track {
         Ok(())
     }
 
+    /// Appends to a track already cut to the start of `segment`.
+    pub(crate) fn append(&mut self, segment: Segment) {
+        debug_assert!(
+            self.segments()
+                .last()
+                .is_none_or(|last| last.start <= segment.start)
+        );
+        if self.segments.is_full() {
+            self.drop_ended(segment.start);
+            if self.segments.is_full() {
+                self.segments.clear();
+            }
+        }
+        self.segments.push(segment);
+    }
+
     /// Moves each segment later by what `later` gives for it, keeping them sorted by start and,
     /// of two that start together, in the order they were added. Allocates nothing.
     pub fn shift(&mut self, later: impl Fn(&Segment) -> u64) {

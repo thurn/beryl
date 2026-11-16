@@ -269,7 +269,9 @@ fn take_motion(compiled: &mut Compiled, motion: Motion<'_>) -> Played {
     compiled.counts = motion.written.counts;
     compiled.counts.sort_by_key(|change| change.at);
     compiled.turns = motion.written.turns;
-    compiled.turns.sort_by_key(|turn| turn.at);
+    compiled
+        .turns
+        .sort_unstable_by_key(|turn| (turn.slot, turn.at));
     compiled.pile_counts = motion.written.pile_counts;
     compiled.pile_counts.sort_unstable_by_key(PileCount::order);
     motion.played

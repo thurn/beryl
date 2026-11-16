@@ -26,34 +26,6 @@ pub(crate) struct Written {
     pub pile_counts: Vec<PileCount>,
 }
 
-impl super::Motion<'_> {
-    /// A set changes placement at once. Other steps apply the count when their motion ends.
-    pub(super) fn pile_count(
-        &mut self,
-        (slot, step): (usize, usize),
-        dirty: &[bool],
-        (own, still): (Interval, bool),
-    ) {
-        let before = self
-            .rests
-            .rests
-            .get(slot)
-            .copied()
-            .flatten()
-            .map_or(1, |rest| rest.copies);
-        let copies = self.now(slot, dirty).map_or(1, |rest| rest.copies);
-        if copies != before {
-            let at = if still { own.from } else { own.to };
-            self.written.pile_counts.push(PileCount {
-                slot,
-                at,
-                step,
-                copies,
-            });
-        }
-    }
-}
-
 /// What a verb writes for one step.
 pub struct StepOut<'a> {
     pub(super) number: usize,

@@ -1,6 +1,7 @@
 //! The groups each script step places again.
 
-use beryl_protocol::script::Act;
+use beryl_protocol::protocol::{CardType, ObjectView, ZoneName};
+use beryl_protocol::script::{Act, Fact, Subject};
 
 use super::Motion;
 use crate::play::index;
@@ -13,21 +14,7 @@ impl<'a> Motion<'a> {
     /// places go to `fresh` and their slots to `next`; `rests` is left as it was. Returns which
     /// groups it placed, or none if the table could not take the act.
     pub(super) fn place(&mut self, act: &'a Act, timed: bool) -> Option<[bool; Group::ALL.len()]> {
-        // These acts replace a record where it stands. A flight can carry an equal record
-        // and still reorder the row. A set can end a motion even where the rest stays put.
-        let in_place = match act {
-            Act::Flip { .. }
-            | Act::Tap { .. }
-            | Act::Showcase { .. }
-            | Act::Count { .. }
-            | Act::Strike { .. }
-            | Act::Streak { .. } => act.object(),
-            _ => None,
-        };
-        let change = in_place.and_then(|now| {
-            let was = self.played.objects.get(&now.slot)?;
-            Some((now, RowChange::between(was, now)))
-        });
+        let (change, lands_may_change) = self.placement_change(act);
         let touched = &mut self.touched;
         touched.clear();
         if self
@@ -111,7 +98,7 @@ impl<'a> Motion<'a> {
             }
         }
         if !self.touched.is_empty() || dirty[Group::Stack.index()] {
-            self.piles.update(&zones, &mut dirty);
+            self.piles.update(&zones, &mut dirty, lands_may_change);
         }
         for (group, next) in Group::ALL.into_iter().zip(&mut self.next) {
             if dirty[group.index()] {
@@ -122,4 +109,47 @@ impl<'a> Motion<'a> {
         }
         Some(dirty)
     }
+
+    /// Whether the act changes a row in place or can change the land count for either side.
+    fn placement_change(&self, act: &'a Act) -> (Option<(&'a ObjectView, RowChange)>, bool) {
+        // These acts replace a record where it stands. A flight can carry an equal record
+        // and still reorder the row. A set can end a motion even where the rest stays put.
+        let in_place = match act {
+            Act::Flip { .. }
+            | Act::Tap { .. }
+            | Act::Showcase { .. }
+            | Act::Count { .. }
+            | Act::Strike { .. }
+            | Act::Streak { .. } => act.object(),
+            _ => None,
+        };
+        let carried = act.object();
+        let slot = carried.map(|object| object.slot).or(match act {
+            Act::Vanish {
+                subject: Subject::Object { slot },
+                ..
+            } => Some(*slot),
+            _ => None,
+        });
+        let was = slot.and_then(|slot| self.played.objects.get(&slot));
+        let change = in_place
+            .zip(was)
+            .map(|(now, was)| (now, RowChange::between(was, now)));
+        let lands_may_change = self.first
+            || self.whole
+            || matches!(
+                act,
+                Act::Set {
+                    fact: Fact::Forget { .. } | Fact::ShuffledLibrary { .. }
+                }
+            )
+            || was.and_then(land_side) != carried.and_then(land_side);
+        (change, lands_may_change)
+    }
+}
+
+/// A land counts for its controller while it is on the battlefield.
+fn land_side(object: &ObjectView) -> Option<beryl_protocol::protocol::Side> {
+    (object.zone == ZoneName::Battlefield && object.types.contains(&CardType::Land))
+        .then_some(object.controller)
 }

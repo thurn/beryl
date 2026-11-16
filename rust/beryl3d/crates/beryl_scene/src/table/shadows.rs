@@ -108,22 +108,17 @@ impl Table {
                 if lying.band != band || lying.x > high {
                     break;
                 }
-                let index = lying.slot as usize;
-                let Some(object) = self.objects.cards.get(index).copied().flatten() else {
-                    continue;
-                };
-                let pose = object.pose();
-                if slot == Some(index) || pose.position.z <= floor {
+                if slot == Some(lying.slot as usize) || lying.z <= floor {
                     continue;
                 }
-                let offset = point - pose.position.truncate();
-                let reach = HALF_DIAGONAL * pose.scale;
+                let offset = point - Vec2::new(lying.x, lying.y);
+                let reach = HALF_DIAGONAL * lying.scale;
                 if offset.x.abs() > reach || offset.y.abs() > reach {
                     continue;
                 }
-                let local = pose.rotation.inverse() * offset.extend(0.0) / pose.scale;
+                let local = lying.inverse * offset.extend(0.0) / lying.scale;
                 if local.x.abs() <= CARD_WIDTH / 2.0 && local.y.abs() <= CARD_HEIGHT / 2.0 {
-                    floor = pose.position.z;
+                    floor = lying.z;
                 }
             }
         }
@@ -148,6 +143,10 @@ pub(crate) struct Floors {
 struct Lying {
     band: i32,
     x: f32,
+    y: f32,
+    z: f32,
+    scale: f32,
+    inverse: glam::Quat,
     slot: u32,
 }
 
@@ -171,10 +170,14 @@ impl Floors {
             .fold(0.0_f32, f32::max);
         let mut lying: Vec<Lying> = (cards.iter().enumerate())
             .filter_map(|(slot, object)| {
-                let position = object.as_ref().filter(lies)?.pose().position;
+                let pose = object.as_ref().filter(lies)?.pose();
                 Some(Lying {
-                    band: band(position.y, reach),
-                    x: position.x,
+                    band: band(pose.position.y, reach),
+                    x: pose.position.x,
+                    y: pose.position.y,
+                    z: pose.position.z,
+                    scale: pose.scale,
+                    inverse: pose.rotation.inverse(),
                     slot: u32::try_from(slot).expect("slots are u16"),
                 })
             })

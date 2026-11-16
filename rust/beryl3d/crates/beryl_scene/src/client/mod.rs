@@ -267,22 +267,8 @@ impl Client {
                     }
                     _ => None,
                 });
-                // The session sends one timing for each step of the script beside it.
-                let timings = update
-                    .view
-                    .script
-                    .as_ref()
-                    .map(|script| {
-                        debug_assert_eq!(
-                            script.timing.len(),
-                            script.steps(),
-                            "the session sends one timing per step"
-                        );
-                        script.timing.clone()
-                    })
-                    .unwrap_or_default();
                 self.prepare_pill(&update.view);
-                self.show.push(update, timings);
+                self.show.push_update(update);
                 // Every life total and pool the scripts to come will show is laid out now, so
                 // that a frame lays out none of them.
                 self.prepare_counts();

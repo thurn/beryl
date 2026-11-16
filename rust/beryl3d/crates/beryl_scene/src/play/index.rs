@@ -34,6 +34,8 @@ pub(super) struct Index<'a> {
     /// Slots of cards in the stack zone, sorted as the table lists its objects. A resolving
     /// spell can still be in this zone after its entry has left the stack.
     stack_slots: Vec<ObjectId>,
+    /// Hands and exile piles, in the order the table lists their objects.
+    object_order: [Vec<ObjectId>; Group::ALL.len()],
     /// Slots of cards that name a possible host, in the table's order by slot.
     tucked: Vec<ObjectId>,
 }
@@ -72,8 +74,14 @@ impl<'a> Index<'a> {
             .map_or(0, |(slot, _)| usize::from(slot.0) + 1);
         let mut groups = vec![NO_GROUP; end];
         let mut tucked = Vec::new();
+        let mut object_order = [const { Vec::new() }; Group::ALL.len()];
         for object in played.objects.values() {
-            groups[usize::from(object.slot.0)] = group_number(Some(object));
+            if let Some(group) = Group::of(object) {
+                groups[usize::from(object.slot.0)] = group.number();
+                if group.in_object_order() {
+                    object_order[group.index()].push(object.slot);
+                }
+            }
             if names_host(object) {
                 tucked.push(object.slot);
             }
@@ -100,6 +108,7 @@ impl<'a> Index<'a> {
             groups,
             stack: stack_of(played, &stack_slots),
             stack_slots,
+            object_order,
             tucked,
         }
     }
@@ -120,7 +129,22 @@ impl<'a> Index<'a> {
                 self.groups.resize(index + 1, NO_GROUP);
             }
             let group = group_number(now);
-            let was_on_stack = self.groups[index] == stacked;
+            let previous = self.groups[index];
+            if previous != group {
+                if let Some(group) = Group::ALL
+                    .get(usize::from(previous))
+                    .filter(|group| group.in_object_order())
+                {
+                    update_slots(&mut self.object_order[group.index()], slot, false);
+                }
+                if let Some(group) = Group::ALL
+                    .get(usize::from(group))
+                    .filter(|group| group.in_object_order())
+                {
+                    update_slots(&mut self.object_order[group.index()], slot, true);
+                }
+            }
+            let was_on_stack = previous == stacked;
             let on_stack = group == stacked;
             if on_stack || was_on_stack {
                 update_slots(&mut self.stack_slots, slot, on_stack);
@@ -166,7 +190,7 @@ impl<'a> Index<'a> {
 
     /// The zones of `played`, the table this indexes.
     pub(super) fn zones<'z>(&'z self, played: &'z Played) -> Zones<'z> {
-        let groups = (&self.groups[..], &self.tucked[..]);
+        let groups = (&self.groups[..], &self.tucked[..], &self.object_order);
         match &self.objects {
             Some(objects) => Zones::of_table_indexed(played, (objects, &self.stack), groups),
             None => Zones::of_table_grouped(played, groups),

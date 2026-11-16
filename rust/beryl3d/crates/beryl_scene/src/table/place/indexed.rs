@@ -7,6 +7,12 @@ use std::borrow::Cow;
 
 use super::{Group, OnStack, Zones, row_of, side_of};
 
+type ReplayGroups<'a> = (
+    &'a [u8],
+    &'a [ObjectId],
+    &'a [Vec<ObjectId>; Group::ALL.len()],
+);
+
 impl<'a> Zones<'a> {
     /// The zones of the table a script plays over, as `of_table` gives them, where `groups`
     /// holds the `Group::number` of the object in each slot (`Group::of`), or `NO_GROUP`: a
@@ -14,11 +20,12 @@ impl<'a> Zones<'a> {
     /// card's side and types.
     pub(crate) fn of_table_grouped(
         table: &'a Played,
-        (groups, tucked): (&'a [u8], &'a [ObjectId]),
+        (groups, tucked, object_order): ReplayGroups<'a>,
     ) -> Self {
         let mut zones = Self::of_table(table);
         zones.groups = Some(groups);
         zones.tucked = Some(tucked);
+        zones.object_order = Some(object_order);
         zones
     }
 
@@ -28,7 +35,7 @@ impl<'a> Zones<'a> {
     pub(crate) fn of_table_indexed(
         table: &'a Played,
         (slots, stack): (&'a [Option<&'a ObjectView>], &'a [OnStack]),
-        (groups, tucked): (&'a [u8], &'a [ObjectId]),
+        (groups, tucked, object_order): ReplayGroups<'a>,
     ) -> Self {
         let piles = |piles: &'a Piles| [&piles.library[..], &piles.graveyard[..]];
         Self {
@@ -36,6 +43,7 @@ impl<'a> Zones<'a> {
             slots: Cow::Borrowed(slots),
             groups: Some(groups),
             tucked: Some(tucked),
+            object_order: Some(object_order),
             battlefield: &table.battlefield,
             stack: Cow::Borrowed(stack),
             stack_items: super::policy::StackItems::Played(&table.stack),
@@ -87,7 +95,9 @@ impl<'a> Zones<'a> {
                 );
             }
         }
-        found.retain(|object| object.attached_to.is_none() || self.host(object).is_none());
+        if !self.tucked.is_some_and(<[_]>::is_empty) {
+            found.retain(|object| object.attached_to.is_none() || self.host(object).is_none());
+        }
         found
     }
 }

@@ -102,6 +102,8 @@ pub(crate) struct Motion<'a> {
     marks: Vec<u64>,
     /// The slots `affected` gives, kept between steps so that a step need not allocate them.
     affected: Vec<usize>,
+    /// Old members that have no resting place after the step.
+    removed: Vec<ObjectId>,
     pub tracks: Vec<Track>,
     /// One track for each ability that moves, sorted by number.
     pub ability_tracks: Vec<(u32, Track)>,
@@ -172,6 +174,7 @@ impl<'a> Motion<'a> {
             piles: PileRules::of_view(before),
             marks: Vec::new(),
             affected: Vec::new(),
+            removed: Vec::new(),
             tracks,
             ability_tracks: Vec::new(),
             moved: Vec::new(),
@@ -196,7 +199,16 @@ impl<'a> Motion<'a> {
         if self.whole {
             return self.table.placement(view, abilities);
         }
-        let (played, view) = (self.played_zones(), Zones::of_view(view, abilities));
+        let played = self
+            .index
+            .as_ref()
+            .map_or_else(
+                || Zones::of_table(&self.played),
+                |index| index.zones(&self.played),
+            )
+            .handled(self.look.handled())
+            .arrived(&self.arrival);
+        let view = Zones::of_view(view, abilities);
         self.table.placement_reusing(&view, (&played, &self.rests))
     }
 
@@ -226,11 +238,16 @@ impl<'a> Motion<'a> {
         }
     }
 
-    /// The slots the step may move, including its own object, in slot order. For steps that
-    /// place a group again, followers whose poses and pile counts match need no new segment. A `set` can
-    /// still interrupt a track at the same resting pose, so it also visits those followers.
-    fn mark_affected(&mut self, dirty: &[bool], subject: Option<usize>, still: bool) {
+    /// Finds the slots the step may move in slot order and records pile count changes.
+    /// A `set` can interrupt a track even if the card's resting pose stays the same.
+    fn mark_affected(
+        &mut self,
+        dirty: &[bool],
+        subject: Option<usize>,
+        (number, own, still): (usize, Interval, bool),
+    ) {
         self.affected.clear();
+        self.removed.clear();
         if !dirty.iter().any(|&changed| changed) {
             self.affected.extend(subject);
             return;
@@ -243,20 +260,39 @@ impl<'a> Motion<'a> {
         marks.clear();
         marks.resize(end.div_ceil(64), 0);
         let mut mark = |slot: usize| marks[slot / 64] |= 1 << (slot % 64);
+        let lifting = self.look.lifting();
+        let mut changed = |slot, before: Option<&Rest>, after: Option<&Rest>| {
+            let counts = (copies(before), copies(after));
+            if counts.0 != counts.1 && !lifting.iter().any(|id| usize::from(id.0) == slot) {
+                self.written.pile_counts.push(crate::table::PileCount {
+                    slot,
+                    at: if still { own.from } else { own.to },
+                    step: number,
+                    copies: counts.1,
+                });
+            }
+            if still || before.map(|rest| &rest.pose) != after.map(|rest| &rest.pose) {
+                mark(slot);
+            }
+        };
         if self.whole {
-            (0..end).for_each(&mut mark);
+            for slot in 0..end {
+                changed(
+                    slot,
+                    before.get(slot).and_then(Option::as_ref),
+                    after.get(slot).and_then(Option::as_ref),
+                );
+            }
         } else {
             for (group, _) in dirty.iter().enumerate().filter(|(_, changed)| **changed) {
                 for &id in &self.members[group] {
                     if self.fresh.get(id).is_none() {
-                        mark(usize::from(id.0));
+                        changed(usize::from(id.0), self.rests.get(id), None);
+                        self.removed.push(id);
                     }
                 }
                 for &id in &self.next[group] {
-                    let slot = usize::from(id.0);
-                    if still || changed_rest(self.rests.get(id), self.fresh.get(id)) {
-                        mark(slot);
-                    }
+                    changed(usize::from(id.0), self.rests.get(id), self.fresh.get(id));
                 }
             }
         }
@@ -280,31 +316,29 @@ impl<'a> Motion<'a> {
             self.rests.rests.clear();
             self.groups.clear();
         }
-        for (group, members) in self.members.iter().enumerate() {
-            if dirty[group] && !self.whole {
-                for &slot in members {
-                    if self.fresh.get(slot).is_none() {
-                        self.rests.unset(slot);
-                        self.groups[usize::from(slot.0)] = None;
-                    }
-                }
-            }
+        for &slot in &self.removed {
+            let index = usize::from(slot.0);
+            self.rests.rests[index] = None;
+            self.groups[index] = None;
         }
         if dirty[Group::Stack.index()] {
             std::mem::swap(&mut self.rests.abilities, &mut self.fresh.abilities);
             self.fresh.abilities.clear();
         }
         let placed = dirty.iter().enumerate().filter(|(_, dirty)| **dirty);
+        let end = self.fresh.rests.len();
+        if self.rests.rests.len() < end {
+            self.rests.rests.resize(end, None);
+            self.groups.resize(end, None);
+        }
         for (group, _) in placed {
             for &slot in &self.next[group] {
                 let index = usize::from(slot.0);
-                let rest = self.fresh.rests[index]
-                    .take()
-                    .expect("a group places each of its slots");
-                self.rests.set(slot, rest);
-                if self.groups.len() <= index {
-                    self.groups.resize(index + 1, None);
-                }
+                debug_assert!(
+                    self.fresh.rests[index].is_some(),
+                    "a group places each of its slots"
+                );
+                self.rests.rests[index] = self.fresh.rests[index].take();
                 self.groups[index] = Some(group);
             }
             std::mem::swap(&mut self.members[group], &mut self.next[group]);
@@ -354,7 +388,7 @@ impl<'a> Motion<'a> {
         // place as the step begins. Only the cards that stay in a hand regroup round one it
         // takes out of the fan or puts back, as on the web stage (`carried` in `tracks.ts`).
         let still = verb == Verb::Set;
-        self.mark_affected(&dirty, subject, still);
+        self.mark_affected(&dirty, subject, (number, own, still));
         let affected = std::mem::take(&mut self.affected);
         // A step that moves no card of its own (a player's, an ability's, a span's) has its verb
         // play it first. The cards a look lifts or puts back are the `lift` verb's to move, so
@@ -371,32 +405,34 @@ impl<'a> Motion<'a> {
             if self
                 .look
                 .lifting()
-                .contains(&ObjectId(u16::try_from(slot).unwrap_or(u16::MAX)))
+                .iter()
+                .any(|id| usize::from(id.0) == slot)
             {
                 continue;
             }
-            self.pile_count((slot, number), &dirty, (own, still));
+            let before = self.rests.rests.get(slot).and_then(Option::as_ref);
             if Some(slot) == subject {
+                let after = self.now(slot, &dirty);
                 let from = self.pose(slot, own.from);
-                let to = match self.now(slot, &dirty) {
-                    Some(rest) => Some(rest.pose),
-                    None if self.rests.rests.get(slot).is_some_and(Option::is_some) => Some(Pose {
+                let to = after.map(|rest| rest.pose).or_else(|| {
+                    before.map(|_| Pose {
                         opacity: 0.0,
                         ..from
-                    }),
-                    None => None,
-                };
-                let poses = (Some(from), to);
-                self.play(number, (beat, index), timing, own, mover, poses, &dirty);
+                    })
+                });
+                self.play(
+                    number,
+                    (beat, index),
+                    timing,
+                    own,
+                    mover,
+                    (Some(from), to),
+                    &dirty,
+                );
                 played = true;
                 continue;
             }
-            if let Some((segment, cause)) = self.follow(slot, still, number, own, (room, regroup)) {
-                self.push(slot, segment, cause);
-                if matches!(cause, Cause::Slide(_)) && segment.end() > own.to {
-                    self.note_closing(Some(slot), segment.end(), number);
-                }
-            }
+            self.follow(slot, number, own, (room, regroup), still);
         }
         if !played {
             self.play(
@@ -453,27 +489,25 @@ impl<'a> Motion<'a> {
         }
     }
 
-    /// The segment that carries the object in `slot`, which the `number`th step does not move
-    /// itself, from where it `rested` to where it rests `now` that the step is done: a slide
-    /// over `room` (or `regroup`, for a card that stays in a hand), or an instant change at the
-    /// start of the step's `own` time where it comes onto the table or leaves it.
+    /// Carries a follower to its new resting pose over the step's room interval, or moves
+    /// it at the start of the step when it appears, leaves or takes an instant change.
     fn follow(
         &mut self,
         slot: usize,
-        still: bool,
         number: usize,
         own: Interval,
         (room, regroup): (Interval, Option<Interval>),
-    ) -> Option<(Segment, Cause)> {
-        let rested = self
+        still: bool,
+    ) {
+        let before = self
             .rests
             .rests
             .get(slot)
             .and_then(Option::as_ref)
             .map(|rest| &rest.pose);
-        let next = self.fresh.rests.get(slot).and_then(Option::as_ref);
+        let after = self.fresh.rests.get(slot).and_then(Option::as_ref);
         let regroup = regroup.filter(|_| {
-            next.is_some_and(|rest| {
+            after.is_some_and(|rest| {
                 matches!(
                     rest.place,
                     Place::Card {
@@ -483,57 +517,63 @@ impl<'a> Motion<'a> {
                 )
             })
         });
-        let now = next.map(|rest| &rest.pose);
+        let after = after.map(|rest| &rest.pose);
         if still && regroup.is_none() {
-            return self.change(slot, (rested.copied(), now.copied()), number, own);
+            if let Some((segment, cause)) =
+                self.change(slot, (before.copied(), after.copied()), number, own)
+            {
+                self.push(slot, segment, cause);
+            }
+            return;
         }
-        if rested == now {
-            return None;
-        }
-        match (rested.copied(), now.copied()) {
-            (Some(rested), Some(now)) => {
-                let room = regroup.unwrap_or(room);
-                if self.retarget(slot, room.from, rested, now) {
-                    return None;
+        let (segment, cause) = match (before, after) {
+            (Some(before), Some(after)) => {
+                if still && before == after {
+                    return;
                 }
-                let from = self.pose(slot, room.from);
-                if only_height(from, now) {
-                    // A card that only lies higher or lower among the cards of its row (one
-                    // `LAYER` for each card placed before it, so that two never flicker where
-                    // they overlap) has not moved: it takes its new height at once. The web
-                    // stage gives a card no such height, so nothing closes up after the step
-                    // for it there.
-                    Some((verbs::instant(from, now, room.from), Cause::Change(number)))
+                let room = regroup.unwrap_or(room);
+                let track = self.tracks.get_mut(slot);
+                if retarget(track, &mut self.segments, slot, room.from, before, after) {
+                    return;
+                }
+                let from = self
+                    .tracks
+                    .get(slot)
+                    .filter(|track| !track.segments().is_empty())
+                    .map_or(*before, |track| track.pose_at(room.from));
+                // A change in draw height alone does not count towards the beat's duration.
+                if only_height(from, *after) {
+                    (
+                        verbs::instant(from, *after, room.from),
+                        Cause::Change(number),
+                    )
                 } else {
-                    Some((verbs::slide(from, now, room), Cause::Slide(number)))
+                    (verbs::slide(from, *after, room), Cause::Slide(number))
                 }
             }
             (Some(_), None) => {
                 let from = self.pose(slot, own.from);
-                Some((
-                    verbs::instant(
-                        from,
-                        Pose {
-                            opacity: 0.0,
-                            ..from
-                        },
-                        own.from,
-                    ),
-                    Cause::Change(number),
-                ))
+                let gone = Pose {
+                    opacity: 0.0,
+                    ..from
+                };
+                (verbs::instant(from, gone, own.from), Cause::Change(number))
             }
-            (None, Some(now)) => Some((
-                verbs::instant(
-                    Pose {
-                        opacity: 0.0,
-                        ..now
-                    },
-                    now,
-                    own.from,
-                ),
-                Cause::Change(number),
-            )),
-            _ => None,
+            (None, Some(after)) => {
+                let unseen = Pose {
+                    opacity: 0.0,
+                    ..*after
+                };
+                (
+                    verbs::instant(unseen, *after, own.from),
+                    Cause::Change(number),
+                )
+            }
+            _ => return,
+        };
+        self.push(slot, segment, cause);
+        if matches!(cause, Cause::Slide(_)) && segment.end() > own.to {
+            self.note_closing(Some(slot), segment.end(), number);
         }
     }
 
@@ -597,34 +637,6 @@ impl<'a> Motion<'a> {
         self.written = written;
     }
 
-    /// Sends every segment of the object in `slot` that lands at `was` and has not ended by
-    /// `from` to `to` instead, and says whether there was one. When several cards are drawn in
-    /// one beat, each later draw makes room in the hand while the cards before it are still in
-    /// flight, or have not left yet. A slide from `from` would be cut off by a flight that
-    /// begins after it, or would cut short one under way, and the card would end the script
-    /// at the place it had before the room was made and jump as the script ends; so the
-    /// flight lands at the new place.
-    fn retarget(&mut self, slot: usize, from: u64, was: Pose, to: Pose) -> bool {
-        let Some(track) = self.tracks.get_mut(slot) else {
-            return false;
-        };
-        let mut found = false;
-        for segment in track.segments_mut() {
-            if segment.end() > from && segment.to == was {
-                segment.to = to;
-                found = true;
-            }
-        }
-        // The same segments in the records, which the interface checks read.
-        for record in &mut self.segments {
-            let segment = &mut record.segment;
-            if record.slot == slot && segment.end() > from && segment.to == was {
-                segment.to = to;
-            }
-        }
-        found
-    }
-
     /// Where the object in `slot` is at `t` as the steps so far have it: on its track, or where
     /// it rested before the script if nothing has moved it, or nowhere to be seen.
     fn pose(&self, slot: usize, t: u64) -> Pose {
@@ -665,25 +677,22 @@ impl<'a> Motion<'a> {
         // out of date: this step has moved the object's resting place since. When three
         // permanents tap at once, the first tap's row waits until its card has turned, but
         // the second card turns from the start of its own step, before that slide began.
-        if self
-            .tracks
-            .get_mut(slot)
-            .is_some_and(|track| track.cut_after(segment.start))
-        {
-            self.segments
-                .retain(|record| record.slot != slot || record.segment.start <= segment.start);
+        if let Some(track) = self.tracks.get_mut(slot) {
+            if track.cut_after(segment.start) && self.records {
+                self.segments
+                    .retain(|record| record.slot != slot || record.segment.start <= segment.start);
+            }
+            if !track.segments().is_empty() {
+                track.append(segment);
+                self.record(slot, cause, segment);
+                return;
+            }
         }
-        if self
-            .tracks
-            .get(slot)
-            .is_none_or(|track| track.segments().is_empty())
-        {
-            let start = self.pose(slot, 0);
-            let hold = verbs::instant(start, start, 0);
-            add(&mut self.tracks, slot, hold);
-            self.record(slot, Cause::Hold, hold);
-        }
-        add(&mut self.tracks, slot, segment);
+        let start = self.pose(slot, 0);
+        let hold = verbs::instant(start, start, 0);
+        add(&mut self.tracks, slot, hold);
+        self.tracks[slot].append(segment);
+        self.record(slot, Cause::Hold, hold);
         self.record(slot, cause, segment);
     }
 
@@ -699,13 +708,43 @@ impl<'a> Motion<'a> {
     }
 }
 
-/// Whether a fresh resting place changes the follower's pose or displayed pile count.
-fn changed_rest(before: Option<&Rest>, after: Option<&Rest>) -> bool {
-    match (before, after) {
-        (Some(before), Some(after)) => before.copies != after.copies || before.pose != after.pose,
-        (None, None) => false,
-        _ => true,
+/// Sends every segment of the object in `slot` that lands at `was` and has not ended by
+/// `from` to `to` instead, and says whether there was one. When several cards are drawn in
+/// one beat, each later draw makes room in the hand while the cards before it are still in
+/// flight, or have not left yet. A slide from `from` would be cut off by a flight that
+/// begins after it, or would cut short one under way, and the card would end the script
+/// at the place it had before the room was made and jump as the script ends; so the
+/// flight lands at the new place.
+fn retarget(
+    track: Option<&mut Track>,
+    records: &mut [SegmentRecord],
+    slot: usize,
+    from: u64,
+    was: &Pose,
+    to: &Pose,
+) -> bool {
+    let Some(track) = track else {
+        return false;
+    };
+    let mut found = false;
+    for segment in track.segments_mut() {
+        if segment.end() > from && &segment.to == was {
+            segment.to = *to;
+            found = true;
+        }
     }
+    // The same segments in the records, which the interface checks read.
+    for record in records {
+        let segment = &mut record.segment;
+        if record.slot == slot && segment.end() > from && &segment.to == was {
+            segment.to = *to;
+        }
+    }
+    found
+}
+
+fn copies(rest: Option<&Rest>) -> u16 {
+    rest.map_or(1, |rest| rest.copies)
 }
 
 /// Something that closes up after a step of the current beat (`Motion::note_closing`).

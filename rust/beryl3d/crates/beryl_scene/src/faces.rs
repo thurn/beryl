@@ -409,6 +409,13 @@ impl Faces {
         self.list.get(self.list.find(name)?)
     }
 
+    /// The listed face and its board-size layer, if resident, from one name lookup.
+    pub(crate) fn listed_board(&self, name: &str) -> (Option<&ListedFace>, Option<u16>) {
+        self.list.find(name).map_or((None, None), |id| {
+            (self.list.get(id), self.board_layer_of(id))
+        })
+    }
+
     /// The board-size layer of the face that shows the card or face named `name`, once it has
     /// one. Allocates nothing.
     #[must_use]

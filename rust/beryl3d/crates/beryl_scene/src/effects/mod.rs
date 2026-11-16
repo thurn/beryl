@@ -70,6 +70,14 @@ impl Effect {
         }
     }
 
+    /// Whether this changes the face or material of a card, or draws its settle burst.
+    pub(crate) fn on_card(self) -> bool {
+        matches!(
+            self,
+            Self::Settle | Self::Dissolve | Self::Dim | Self::Blanch | Self::Cover
+        )
+    }
+
     /// The effect named `name` in `data/ui-conventions.json`.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {

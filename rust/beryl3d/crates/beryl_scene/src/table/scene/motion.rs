@@ -18,7 +18,7 @@ pub struct Motion<'a> {
     pub(crate) finals: &'a Objects,
     pub view: &'a PlayerView,
     /// When cards show the record the script leads to, where a step says (`Turn`), sorted by
-    /// time.
+    /// slot and then time.
     pub turns: &'a [Turn],
     pub(crate) pile_counts: &'a [PileCount],
 }
@@ -52,6 +52,15 @@ impl PileCount {
 }
 
 impl Motion<'_> {
+    /// When the card in `slot` first shows the record the script leads to.
+    pub(super) fn turn(&self, slot: usize) -> Option<u64> {
+        let first = self.turns.partition_point(|turn| turn.slot < slot);
+        self.turns
+            .get(first)
+            .filter(|turn| turn.slot == slot)
+            .map(|turn| turn.at)
+    }
+
     /// The last pile count this script applied to the card in `slot`.
     pub(super) fn copies(&self, slot: usize) -> Option<u16> {
         let end = self

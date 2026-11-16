@@ -58,6 +58,18 @@ fn darken(tint: [u8; 3], by: f32) -> [u8; 3] {
 /// `earlier_face` is the face of the record the card showed before the playing script, which a
 /// `cover` shows until `cover.face` of its run; `look.face` is the new record's.
 pub fn look(runs: &[EffectRun], on: Subject, now: u64, earlier_face: Option<u16>, look: &mut Look) {
+    look_with_face(runs, on, now, || earlier_face, look);
+}
+
+/// Like `look`, taking the earlier face only if a cover effect shows it.
+pub(crate) fn look_with_face(
+    runs: &[EffectRun],
+    on: Subject,
+    now: u64,
+    earlier_face: impl FnOnce() -> Option<u16>,
+    look: &mut Look,
+) {
+    let mut earlier_face = Some(earlier_face);
     for (effect, p) in under_way(runs, on, now) {
         match effect {
             Effect::Settle => look.whiten = look.whiten.max(settle_white(p)),
@@ -84,8 +96,10 @@ pub fn look(runs: &[EffectRun], on: Subject, now: u64, earlier_face: Option<u16>
                     1.0 - share(p, cover::HELD, 1.0)
                 };
                 look.whiten = look.whiten.max(white);
-                if p < cover::FACE {
-                    look.face = earlier_face;
+                if p < cover::FACE
+                    && let Some(earlier_face) = earlier_face.take()
+                {
+                    look.face = earlier_face();
                 }
             }
             _ => {}

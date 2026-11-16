@@ -77,13 +77,6 @@ impl Placement {
         Some(&self.abilities[at].1)
     }
 
-    /// Forgets where the object in `slot` rests.
-    pub(crate) fn unset(&mut self, slot: ObjectId) {
-        if let Some(rest) = self.rests.get_mut(usize::from(slot.0)) {
-            *rest = None;
-        }
-    }
-
     /// How many objects of `rests` have a resting place. The abilities on the stack are left
     /// out, as `Work::placed` leaves them out.
     pub(crate) fn count(&self) -> usize {
@@ -397,6 +390,8 @@ pub(crate) struct Zones<'a> {
     groups: Option<&'a [u8]>,
     /// Slots of cards with a possible host, when the script indexes them.
     tucked: Option<&'a [ObjectId]>,
+    /// Hand and exile slots, by group, where replay maintains them between steps.
+    object_order: Option<&'a [Vec<ObjectId>; Group::ALL.len()]>,
     /// Permanents, in the order they entered.
     battlefield: &'a [ObjectId],
     /// The spells and numbered abilities on the stack, bottom first.
@@ -448,6 +443,7 @@ impl<'a> Zones<'a> {
             slots: Cow::Owned(slots),
             groups: None,
             tucked: None,
+            object_order: None,
             battlefield: &view.battlefield,
             stack: Cow::Owned(stack),
             stack_items: policy::StackItems::View(&view.stack),
@@ -472,6 +468,7 @@ impl<'a> Zones<'a> {
             slots: Cow::Owned(by_slot(end, table.objects.values())),
             groups: None,
             tucked: None,
+            object_order: None,
             battlefield: &table.battlefield,
             stack: Cow::Owned(on_stack(
                 table.stack.iter().map(|entry| (&entry.item, entry.id)),
@@ -514,11 +511,23 @@ impl<'a> Zones<'a> {
     /// The objects in one side's `zone`, in the order the table lists them, but for the cards
     /// in exile that lie under a permanent, in its row (`host`).
     fn in_zone(&self, side: Side, zone: ZoneName) -> Vec<&'a ObjectView> {
-        let mut found: Vec<&'a ObjectView> = self
-            .objects()
-            .filter(|object| object.zone == zone && side_of(object) == side)
-            .filter(|object| zone != ZoneName::Exile || self.host(object).is_none())
-            .collect();
+        let mut found: Vec<&'a ObjectView> = if let Some(order) = self.object_order {
+            let group = if zone == ZoneName::Hand {
+                Group::Hand(side)
+            } else {
+                Group::Pile { side, zone }
+            };
+            order[group.index()]
+                .iter()
+                .filter_map(|&slot| self.get(slot))
+                .filter(|object| zone != ZoneName::Exile || self.host(object).is_none())
+                .collect()
+        } else {
+            self.objects()
+                .filter(|object| object.zone == zone && side_of(object) == side)
+                .filter(|object| zone != ZoneName::Exile || self.host(object).is_none())
+                .collect()
+        };
         self.in_arrival_order(&mut found);
         found
     }

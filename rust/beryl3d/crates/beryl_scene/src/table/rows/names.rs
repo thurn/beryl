@@ -1,5 +1,7 @@
 //! Finding cards that share names in a battlefield row.
 
+use std::cell::RefCell;
+
 use beryl_protocol::protocol::ObjectView;
 
 /// A number for each card name, kept by slot for every object of a table, so that a row finds the
@@ -15,6 +17,8 @@ pub(crate) struct NameIds<'a> {
     names: Vec<(u64, Option<&'a str>, u32)>,
     /// Names first seen when an object was numbered again, each with its number.
     later: Vec<(Option<String>, u32)>,
+    /// Per-name scratch used to find the preceding card in a row.
+    seen: RefCell<Seen>,
 }
 
 impl<'a> NameIds<'a> {
@@ -36,6 +40,7 @@ impl<'a> NameIds<'a> {
             by_slot: vec![u32::MAX; end],
             names: Vec::new(),
             later: Vec::new(),
+            seen: RefCell::default(),
         };
         for run in sorted.chunk_by(|(a_hash, a), (b_hash, b)| a_hash == b_hash && a.name == b.name)
         {
@@ -102,6 +107,13 @@ impl<'a> NameIds<'a> {
     }
 }
 
+#[derive(Default)]
+struct Seen {
+    row: usize,
+    /// The pass that last visited this name and its position in that row.
+    last: Vec<(usize, usize)>,
+}
+
 /// For each card of a row, the nearest card before it with the same name. With `NameIds`, a card
 /// looks up the last card seen with its name's number. Without, the cards are sorted by a hash
 /// of their names, which compares as one number where sorting by the names compares strings,
@@ -114,21 +126,30 @@ pub(in crate::table) struct SameName {
 impl SameName {
     pub(in crate::table) fn of(cards: &[&ObjectView], ids: Option<&NameIds<'_>>) -> Self {
         if let Some(ids) = ids {
-            // By name number, the index of the last card seen with that name, or `u32::MAX`.
-            let mut last = vec![u32::MAX; ids.count()];
-            let previous = cards
-                .iter()
-                .enumerate()
-                .map(|(index, card)| {
-                    let id = ids.get(card)?;
-                    let before = std::mem::replace(
-                        &mut last[id],
-                        u32::try_from(index).expect("a row holds fewer than 2^32 cards"),
-                    );
-                    Some((before != u32::MAX).then_some(before as usize))
-                })
-                .collect();
-            if let Some(previous) = previous {
+            let mut seen = ids.seen.borrow_mut();
+            let Seen { row, last } = &mut *seen;
+            *row = row.wrapping_add(1);
+            if *row == 0 {
+                last.clear();
+                *row = 1;
+            }
+            last.resize(ids.count(), (0, 0));
+            let mut previous = Vec::new();
+            let mut missing = false;
+            for (index, card) in cards.iter().enumerate() {
+                let Some(id) = ids.get(card) else {
+                    missing = true;
+                    break;
+                };
+                let (pass, before) = std::mem::replace(&mut last[id], (*row, index));
+                if pass == *row {
+                    if previous.is_empty() {
+                        previous.resize(cards.len(), None);
+                    }
+                    previous[index] = Some(before);
+                }
+            }
+            if !missing {
                 return Self { previous };
             }
         }
@@ -165,13 +186,14 @@ impl SameName {
 
     /// The last card before the one at `index` with the same name.
     pub(in crate::table) fn before(&self, index: usize) -> Option<usize> {
-        self.previous[index]
+        self.previous.get(index).copied().flatten()
     }
 
     /// The first card with the same name as the one at `index`, given the answers for every
     /// card before it.
     pub(in crate::table) fn first(&self, index: usize, firsts: &[usize]) -> usize {
-        self.previous[index].map_or(index, |previous| firsts[previous])
+        self.before(index)
+            .map_or(index, |previous| firsts[previous])
     }
 }
 

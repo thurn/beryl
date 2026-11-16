@@ -18,7 +18,7 @@ use beryl_protocol::script::{self, Act, Script, StepTiming};
 
 use super::Show;
 use super::compile::{Compiled, nanoseconds};
-use super::playing::Waiting;
+use super::playing::{Waiting, timings_of};
 use crate::beat::{Laid, lay};
 use crate::light::{ArrowSpan, Lit, MarkSpan, Span};
 use crate::motion::Track;
@@ -40,17 +40,14 @@ impl Show {
         let Some(script) = waiting.update.view.script.as_ref() else {
             return;
         };
+        let timings = timings_of(&waiting.update, waiting.timings.as_deref());
         let compiled = &mut waiting.compiled;
         // A script the table takes at once has no wait to lay out again, beyond the announcements
         // of a reset, which wait for nothing a script before them shows.
-        if compiled.immediate
-            || compiled.laid.is_empty()
-            || compiled.laid.len() != waiting.timings.len()
-        {
+        if compiled.immediate || compiled.laid.is_empty() || compiled.laid.len() != timings.len() {
             return;
         }
-        let waits = waiting
-            .timings
+        let waits = timings
             .iter()
             .any(|timing| timing.hold.is_some() || timing.alone);
         if waits {
@@ -61,7 +58,7 @@ impl Show {
                 start,
                 rate,
             };
-            let end = again(compiled, script, &waiting.timings, &starting);
+            let end = again(compiled, script, timings, &starting);
             shift(compiled, end);
             self.relays += 1;
             self.write_record(waiting.number, &waiting.compiled);
@@ -284,7 +281,7 @@ fn shift(compiled: &mut Compiled, end: u64) {
     for turn in turns.iter_mut() {
         turn.at += start(turn.step);
     }
-    settle(turns, |turn| turn.at);
+    turns.sort_unstable_by_key(|turn| (turn.slot, turn.at));
     for change in pile_counts.iter_mut() {
         change.at += start(change.step);
     }

@@ -15,7 +15,8 @@ pub(super) struct Waiting {
     /// How many scripts the show was given before this one.
     pub(super) number: usize,
     pub(super) update: Box<GameUpdate>,
-    pub(super) timings: Vec<StepTiming>,
+    /// Overrides the timings in the update where a caller supplies its own.
+    pub(super) timings: Option<Vec<StepTiming>>,
     /// The table the script before it ended with, which it is played from.
     pub(super) from: Option<Played>,
     pub(super) compiled: Compiled,
@@ -28,7 +29,8 @@ pub(super) struct Playing {
     /// Its update, until the table shows it. A script that moves nothing (a reset, the first
     /// view) shows its view as it starts and then only holds the time its beats take.
     pub(super) update: Option<Box<GameUpdate>>,
-    pub(super) timings: Vec<StepTiming>,
+    /// Overrides the timings in the update where a caller supplies its own.
+    pub(super) timings: Option<Vec<StepTiming>>,
     /// The table the script before it ended with, which it is played from.
     pub(super) from: Option<Played>,
     pub(super) compiled: Compiled,
@@ -42,6 +44,20 @@ pub(super) struct Playing {
     pub(super) counts_given: usize,
     /// How many of its `compiled.sounds` the frames have listed.
     pub(super) sounds_given: usize,
+}
+
+/// A session update already owns its timings. Other callers may supply their own.
+pub(super) fn timings_of<'a>(
+    update: &'a GameUpdate,
+    timings: Option<&'a [StepTiming]>,
+) -> &'a [StepTiming] {
+    timings.unwrap_or_else(|| {
+        update
+            .view
+            .script
+            .as_ref()
+            .map_or(&[], |script| &script.timing)
+    })
 }
 
 impl Playing {
