@@ -444,10 +444,17 @@ impl<'a> Motion<'a> {
         let Some(dirty) = self.place(&step.act, room.duration() > 0 || own.duration() > 0) else {
             return;
         };
-        let subject = subject_of(step);
+        let verb = step.act.verb();
+        // A streak may carry a new record for its target. If that changes the target's
+        // resting place, it slides with the other cards the new placement moved.
+        let subject = if verb == Verb::Streak {
+            None
+        } else {
+            subject_of(step)
+        };
         // A `set` moves nothing: what it places again, a library it reorders, is at its new
         // place as the step begins.
-        let still = step.act.verb() == Verb::Set;
+        let still = verb == Verb::Set;
         self.mark_affected(&dirty, subject);
         let affected = std::mem::take(&mut self.affected);
         // A step that moves no card of its own (a player's, an ability's, a span's) has its verb

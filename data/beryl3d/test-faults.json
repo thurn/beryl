@@ -1335,25 +1335,21 @@
     },
     "b3d:stress-verbs/you/1440x900": {
       "crowded": 1,
-      "no-jumps": 5,
       "reachable": 47,
       "step-shown": 31
     },
     "b3d:stress-verbs/you/1600x900": {
       "crowded": 1,
-      "no-jumps": 5,
       "reachable": 44,
       "step-shown": 32
     },
     "b3d:stress-verbs/you/1920x1080": {
       "crowded": 1,
-      "no-jumps": 5,
       "reachable": 25,
       "step-shown": 32
     },
     "b3d:stress-verbs/you/2560x1080": {
       "crowded": 1,
-      "no-jumps": 5,
       "reachable": 24,
       "step-shown": 32
     },

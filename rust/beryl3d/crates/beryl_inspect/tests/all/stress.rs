@@ -73,6 +73,8 @@ fn the_board_is_mixed() {
 fn verbs_play_in_one_beat_with_live_timings() {
     use beryl_protocol::protocol::Why;
     use beryl_protocol::script::{Act, Verb, time_script};
+    use beryl_scene::agent::Rule;
+    use beryl_scene::driver::Mode;
     let board = stress("stress-verbs").unwrap();
     let [before, after] = board.views.as_slice() else {
         panic!("one beat follows the reset");
@@ -116,6 +118,16 @@ fn verbs_play_in_one_beat_with_live_timings() {
     let steps = page.timeline();
     assert_eq!(steps.len(), beat.len());
     assert!(steps.iter().all(|step| step.from == steps[0].from));
+    for step in steps.iter().filter(|step| step.verb == Verb::Streak) {
+        assert_eq!(step.to - step.from, 250_000_000);
+    }
+    let faults: Vec<_> = page
+        .check_all(Mode::AtCheckTimes)
+        .faults
+        .into_iter()
+        .filter(|fault| matches!(fault.rule, Rule::Jump | Rule::RestPlacement))
+        .collect();
+    assert!(faults.is_empty(), "{faults:?}");
 }
 
 #[test]
