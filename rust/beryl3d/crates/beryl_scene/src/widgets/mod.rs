@@ -3,6 +3,7 @@
 //! Screens build themselves from these, so a widget looks and behaves the same everywhere.
 
 mod button;
+mod check;
 mod field;
 mod icon_button;
 pub mod icons;
@@ -13,6 +14,7 @@ mod toggle;
 mod tooltip;
 
 pub use button::{button, primary};
+pub use check::check_mark;
 pub use field::{FieldState, Fields, field};
 pub use icon_button::icon_button;
 pub use icons::IconId;

@@ -25,7 +25,7 @@ use crate::input::Rect;
 use crate::text::TypeStyle;
 use crate::text::fonts::Font;
 use crate::tokens::{color, size, type_style};
-use crate::widgets::{self, field, icon_button, primary};
+use crate::widgets::{self, check_mark, field, icon_button, primary};
 
 /// The name of the field the player describes the bug in.
 pub const DESCRIPTION: &str = "description";
@@ -304,7 +304,7 @@ fn ai_box(on: bool) -> Element {
         .border((color::GOLD, size::BORDER))
         .align_items(Align::Center)
         .justify_content(Justify::Center)
-        .children(on.then(|| text("✓").style(ERROR).color(color::GOLD)));
+        .children(on.then(|| check_mark(CHECKBOX - 8.0)));
     Element::new(Role::Toggle)
         .name("AI play")
         .selected(on)

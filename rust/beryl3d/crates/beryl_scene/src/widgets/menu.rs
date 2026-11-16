@@ -166,7 +166,7 @@ fn menu_row(
     let check = row().name("check").width(size::MENU_CHECK).children(
         row_view
             .checked
-            .then(|| text("✓").style(type_style::MENU).color(color::GOLD)),
+            .then(|| super::check_mark(size::MENU_CHECK * 0.5)),
     );
     let mut item = Element::new(Role::MenuItem)
         .name(&row_view.label)
