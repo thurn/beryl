@@ -1547,7 +1547,7 @@ adds to some of them.
 
 | Effect     | Baseline tier                                                                                               | Enhanced tier adds |
 | ---------- | ----------------------------------------------------------------------------------------------------------- | ------------------ |
-| `glow`     | A `glow` record under the card: a soft disc that spreads and fades.                                         | Bloom              |
+| `glow`     | A `glow` record just over the card: a soft outline round it that spreads and fades.                         | Bloom              |
 | `settle`   | The card's `whiten` rises to 1 and falls back, under a burst with rays one and a half cards wide.           | Bloom              |
 | `dissolve` | The card darkens through its tint, then its `dissolve` runs from 0 to 1 and it breaks up from the top down. | Ash particles      |
 | `dim`      | The card's tint darkens and its opacity falls to 0.                                                         | Nothing            |

@@ -13,6 +13,7 @@ mod contract;
 mod driver;
 mod effects;
 mod effects_card;
+mod effects_light;
 mod faces;
 mod flat_layer;
 mod light;

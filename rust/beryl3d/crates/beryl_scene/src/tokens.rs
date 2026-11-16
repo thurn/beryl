@@ -57,6 +57,22 @@ pub mod color {
     /// The glow of a streak of damage: `ember` in `TONES`, which `TONE` names for damage.
     pub const DAMAGE: [u8; 4] = [255, 38, 10, 255];
 
+    /// The halo of the `glow` effect: the warm outer shadow of `.stage-effect-glow` in
+    /// `ui/src/stage/effects.css`, at its 75% opacity.
+    pub const GLOW: [u8; 4] = [255, 214, 140, 191];
+    /// The burst of the `impact` effect: the middle stop of `.stage-effect-impact`'s gradient.
+    pub const IMPACT: [u8; 4] = [255, 196, 120, 255];
+    /// The flare of the `flash` effect: the `--light` of `.stage-effect-flash` at 85% opacity.
+    pub const FLASH: [u8; 4] = [255, 246, 222, 217];
+    /// The cone of the `beam` effect: white warmed toward yellow by `warm` 0.35 in `beamLight`
+    /// (`ui/src/stage/flare.ts`).
+    pub const BEAM: [u8; 4] = [255, 238, 190, 255];
+    /// The ring of the `pulse` effect: the outer shadow of `.stage-effect-pulse`, at its 80%
+    /// opacity.
+    pub const PULSE: [u8; 4] = [255, 226, 170, 204];
+    /// The streak of the `trail` effect: the `--light` of `.stage-effect`, white light.
+    pub const TRAIL: [u8; 4] = [255, 246, 222, 255];
+
     /// The outline of what may be picked: the `--tone` of `.stage-mark-eligible` in
     /// `ui/src/stage/stage.css`.
     pub const MARK_ELIGIBLE: [u8; 4] = [51, 220, 254, 255];

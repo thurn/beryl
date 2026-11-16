@@ -1,7 +1,8 @@
 //! A frame that ends one script and starts the next allocates nothing (docs/beryl-3d.md, "The
 //! frame": no allocation): scripts are compiled when their updates arrive. This binary counts
 //! every heap allocation, so it holds one test, which also checks that the effects a starting
-//! script begins, `Lit::advance` and a frame of twenty streaks allocate nothing.
+//! script begins, `Lit::advance`, a frame of twenty streaks and one of forty effects of light
+//! allocate nothing.
 
 mod common;
 
@@ -162,6 +163,7 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
     assert_eq!(lit.open().len(), 2);
 
     twenty_streaks_allocate_nothing();
+    forty_effects_allocate_nothing();
 }
 
 /// A frame that draws twenty streaks at once allocates nothing.
@@ -211,6 +213,53 @@ fn twenty_streaks_allocate_nothing() {
         );
         if now > 0 {
             assert_eq!(drawn, 20 * RECORDS, "twenty streaks are drawn");
+        }
+    }
+}
+
+/// A frame that holds forty effects of light at once allocates nothing. Each is on a slot of
+/// its own, so that none cuts another short; those on the table's cards are drawn.
+fn forty_effects_allocate_nothing() {
+    let (start, cards) = before();
+    let (after, mut timings) = three_beats(&start, cards);
+    let names = ["glow", "impact", "flash", "beam", "pulse", "trail"];
+    timings[0].effects = (0..40)
+        .map(|at| StepEffect {
+            name: names[at % names.len()].to_owned(),
+            when: Edge::Start,
+            on: Some(Subject::Object {
+                slot: ObjectId(u16::try_from(at).expect("few slots")),
+            }),
+            into: None,
+            duration: Some(2000.0),
+            delay: 0.0,
+            curve: Curve::Linear,
+        })
+        .collect();
+    let mut show = show();
+    let mut frame = Frame::with_capacity(256, 1024, 8192);
+    show.push(Box::new(start), Vec::new());
+    show.push(Box::new(after), timings);
+    for now in [0, 150 * MS, 300 * MS] {
+        let before = ALLOCATIONS.load(Ordering::Relaxed);
+        let mut builder = FrameBuilder::new(&mut frame);
+        show.frame(now, &mut builder);
+        let lights = builder
+            .finish()
+            .draws
+            .iter()
+            .filter(|draw| draw.material == Material::Glow as u8)
+            .count();
+        let after = ALLOCATIONS.load(Ordering::Relaxed);
+        assert_eq!(
+            after - before,
+            0,
+            "allocations in the frame at {} ms",
+            now / MS
+        );
+        assert_eq!(show.effects().len(), 40);
+        if now > 0 {
+            assert!(lights > 0, "the effects are drawn");
         }
     }
 }

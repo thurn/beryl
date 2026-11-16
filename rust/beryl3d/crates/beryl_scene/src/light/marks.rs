@@ -182,7 +182,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
 /// so that a card would fill the hand's share of the window's height
 /// (`Camera::screen_pose`), which gives how many millimetres there one pixel of the stage's
 /// 900 covers.
-fn player_half(scene: &Scene<'_>, scale: f32) -> Vec2 {
+pub(crate) fn player_half(scene: &Scene<'_>, scale: f32) -> Vec2 {
     let window = scale * CARD_HEIGHT / scene.table().layout().hand.height;
     light::PLAYER_HALF_PIXELS * (window / 900.0)
 }

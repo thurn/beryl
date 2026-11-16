@@ -35,6 +35,14 @@ impl Scene<'_> {
         self.show.reach(subject, self.now)
     }
 
+    /// Where `subject` was `ago` nanoseconds before the frame's time, on the playing script's
+    /// track: at the script's start for a time before it, and where it rests once no script
+    /// moves it.
+    #[must_use]
+    pub fn reach_before(&self, subject: Subject, ago: u64) -> Option<Reach> {
+        self.show.reach(subject, self.now.saturating_sub(ago))
+    }
+
     /// The table, for its camera and layout.
     #[must_use]
     pub fn table(&self) -> &Table {
