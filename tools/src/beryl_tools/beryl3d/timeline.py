@@ -57,7 +57,9 @@ EXACT: tuple[str, ...] = ("verb", "case", "effects")
 # The web timeline's script, under `ui/`, from which [`web_sources`] follows its imports.
 WEB_ENTRY = "scripts/timeline.mjs"
 # A module specifier in an `import ... from`, `export ... from`, `import "..."` or `import(...)`.
-IMPORT = re.compile(r"""(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']""")
+IMPORT: re.Pattern[str] = re.compile(
+    r"""(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']"""
+)
 # Extensions an import with none may name, in the order timeline.mjs's resolve hook tries them.
 IMPLIED = (".ts", ".tsx")
 # Modules whose imports are not followed: timeline.mjs serves a `.tsx` file as its literal
