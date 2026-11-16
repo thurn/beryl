@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -304,3 +305,63 @@ def test_the_lease_log_drops_lines_older_than_it_keeps(tmp_path: Path) -> None:
     lease.release()
     times = [line["time"] for line in leases_logged(tmp_path)]
     assert times[0] == "2999-01-01T00:00:00Z" and len(times) == 2
+
+
+def test_an_elastic_lease_marks_every_token_after_its_first(tmp_path: Path) -> None:
+    pool = Pool(tmp_path, 8)
+    lease = pool.acquire("agent", 4, never, elastic_from=1)
+    assert lease is not None and lease.size == 4
+    held = pool.holders()
+    assert sorted(h.elastic for h in held.values()) == [False, True, True, True]
+    extra = pool.top_up("agent", 4, 6, elastic=True)
+    assert extra.size == 2
+    assert sum(h.elastic for h in pool.holders().values()) == 5
+    # Giving back takes only elastic tokens, and drops them from the lease.
+    assert pool.give_back(lease, 9) == 3
+    assert lease.size == 4 and len(lease.files) == 1
+    lease.release()
+    extra.release()
+    assert not pool.holders()
+
+
+def test_a_short_lease_waits_for_lower_classes_to_give_back(tmp_path: Path) -> None:
+    pool = Pool(tmp_path, 8)
+    # Agents may hold six of the eight tokens; this build holds all six, five of them elastic.
+    build = pool.acquire("agent", 6, never, elastic_from=1)
+    assert build is not None and build.size == 6
+    assert not pool.higher_waiting("agent")
+    got: list[tokens.Lease | None] = []
+    push = threading.Thread(target=lambda: got.append(pool.acquire("push", 6, never)))
+    push.start()
+    # The push could take one token now, but waits for the build's elastic ones instead.
+    deadline = time.monotonic() + 5
+    while not pool.higher_waiting("agent"):
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
+    assert pool.give_back(build, 5) == 5
+    push.join(5)
+    granted = got[0] if got else None
+    assert granted is not None and granted.size == 6
+    granted.release()
+    build.release()
+
+
+def test_a_short_lease_takes_what_is_free_once_it_has_waited(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pool = Pool(tmp_path, 8)
+    build = pool.acquire("agent", 6, never, elastic_from=1)
+    assert build is not None
+    # Without elastic tokens below, or once `RECLAIM_SECONDS` has passed, nothing waits.
+    monkeypatch.setattr(tokens, "RECLAIM_SECONDS", 0.0)
+    push = pool.acquire("push", 6, once)
+    assert push is not None and push.size == 1
+    push.release()
+    build.release()
+    fixed = pool.acquire("agent", 6, never)
+    assert fixed is not None
+    monkeypatch.setattr(tokens, "RECLAIM_SECONDS", 60.0)
+    push = pool.acquire("push", 6, once)
+    assert push is not None and push.size == 1
+    push.release()
+    fixed.release()

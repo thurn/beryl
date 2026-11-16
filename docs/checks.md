@@ -448,9 +448,14 @@ own busy figure for comparison. `cpu.py` explains how processes are attributed.
   always finds free tokens. Slow CI may take any of those tokens that nobody
   else holds. The sweeps hold at most a quarter of the pool, a share they get
   even on a busy machine, which work at utility QoS does not. A class takes
-  nothing while a higher one waits. Other long work at utility QoS (tournaments,
-  the nightly, the justfile's `low`) takes no tokens, because macOS already
-  gives every core to normal-priority work first.
+  nothing while a higher one waits. A lease's size is fixed when it starts, so a
+  cargo build that only compiles (`cargo_pool.SHRINKS`) hands its tokens after
+  the first back to the pool, one job slot at a time, while a higher class
+  waits. A lease that would get fewer tokens than it wants waits up to
+  `tokens.RECLAIM_SECONDS` for such tokens before it takes what is free. Other
+  long work at utility QoS (tournaments, the nightly, the justfile's `low`)
+  takes no tokens, because macOS already gives every core to normal-priority
+  work first.
 - A check step's wait for tokens does not count against its hang limit or the
   run's budget: the step's log line reports the wait apart from the step's own
   time. `just tokens` shows who holds and waits for tokens. `BERYL_CPU_POOL=0`

@@ -60,6 +60,18 @@ beside the two browser lanes, took 6 of 18 tokens, and ran nextest 6 tests wide 
 those lanes ended about 20 s in, with 12 cores idle. A command inside a lease can take the tokens
 free at a later point without waiting (`top_up`), as the tests step does once its build is done.
 
+A lease's size is also fixed from the other side: a long build of a lower class keeps the tokens
+it took while a push that starts later gets what is left. Between 10:00 UTC 2026-11-15 and the
+same time the next day, 933 of 1,943 push leases got a single token, though most wanted 12; at
+those moments agents held about 11 of the 18 tokens, mostly through `cargo build` (54 of the
+agents' 112 token-hours). The fast check then hit its 180 s limit in 296 of 544 runs. So a lease
+whose command can shrink marks its tokens after the first as `elastic` in their files
+(`Holder.elastic`). Cargo builds started through the shim do this (cargo_pool.py), and hand such
+tokens back while a higher class waits (`higher_waiting`, `give_back`). A lease that would get
+fewer tokens than it wants waits up to `RECLAIM_SECONDS` while lower classes hold elastic tokens
+(`reclaimable`), as a waiter, which stops them taking more and makes them give theirs back. Only
+then does it take what is free.
+
 When a lease that owns tokens is released, the pool appends one line to `leases.jsonl` beside the
 tokens ([`LEASE_LOG`]): when, the class, the worktree, the command, the tokens it got (`cores`)
 and wanted, and the seconds it waited and held them. The efficiency dashboard reads it for the
@@ -116,6 +128,15 @@ POOL_ENV = "BERYL_CPU_POOL"
 # comment), and how many days of lines it keeps, as many as the CPU sampler's rows (cpu.py).
 LEASE_LOG = "leases.jsonl"
 LEASE_LOG_DAYS = 30
+
+# The longest a lease that would come up short waits for lower classes to give back their elastic
+# tokens (see the module comment). A cargo build checks every `cargo_pool.GROW_SECONDS` and can
+# give back a job slot only once a compiler job ends, so this allows a few of each.
+RECLAIM_SECONDS = 10.0
+
+# The word after the class in a token's file whose lease can give it back while a higher class
+# waits.
+ELASTIC = "elastic"
 
 # A check's steps that run many threads (`lane:step`), which each want a share of the pool
 # (`step_tokens`). Every other step is a script that keeps one core busy at most and takes none.
@@ -184,12 +205,16 @@ def step_tokens(lane: str, step: str, lanes: int = 1, total: int = 0) -> int:
 class Holder:
     pid: int
     klass: str
+    # Whether its lease gives this token back while a higher class waits.
+    elastic: bool = False
 
 
 def _read(path: Path) -> Holder | None:
     try:
-        pid, klass = path.read_text().split()
-        return Holder(int(pid), klass) if klass in CLASSES else None
+        pid, klass, *rest = path.read_text().split()
+        if klass not in CLASSES or rest not in ([], [ELASTIC]):
+            return None
+        return Holder(int(pid), klass, bool(rest))
     except (OSError, ValueError):
         return None
 
@@ -329,9 +354,18 @@ class Pool:
             live.append((path, holder))
         return live
 
-    def grant(self, klass: str, want: int, me: Path) -> list[Path]:
+    def grant(
+        self,
+        klass: str,
+        want: int,
+        me: Path,
+        elastic_from: int | None = None,
+        hold_out: bool = False,
+    ) -> list[Path]:
         """The token files taken for a lease of up to `want` tokens; none when the class may
-        take none now. Call under the lock."""
+        take none now, or, with `hold_out`, when it would get fewer than `want` while lower
+        classes hold elastic tokens they will give back. The files from index `elastic_from` on
+        are marked elastic. Call under the lock."""
         rank = CLASSES.index(klass)
         held = self.holders()
         below = sum(1 for h in held.values() if CLASSES.index(h.klass) >= rank)
@@ -350,12 +384,30 @@ class Pool:
         n = min(want, room, share)
         if n < 1:
             return []
+        if hold_out and n < want and reclaimable(held, rank):
+            return []
         free = [self.root / str(i) for i in range(self.size)]
         free = [p for p in free if p not in held][:n]
         mine = f"{os.getpid()} {klass}"
-        for path in free:
-            path.write_text(mine)
+        for i, path in enumerate(free):
+            elastic = elastic_from is not None and i >= elastic_from
+            path.write_text(f"{mine} {ELASTIC}" if elastic else mine)
         return free
+
+    def higher_waiting(self, klass: str) -> bool:
+        """Whether a lease of a class above `klass` waits for tokens. Takes the lock."""
+        rank = CLASSES.index(klass)
+        with _THREADS, system.file_lock(self.root / "lock"):
+            return any(CLASSES.index(w.klass) < rank for _, w in self.waiters())
+
+    def give_back(self, lease: Lease, n: int) -> int:
+        """Returns up to `n` of `lease`'s elastic tokens to the pool at once, and how many."""
+        with _THREADS, system.file_lock(self.root / "lock"):
+            mine = [f for f in lease.files if _is_elastic(f)][:n]
+            for f in mine:
+                lease.files.remove(f)
+                f.unlink(missing_ok=True)
+        return len(mine)
 
     def acquire(
         self,
@@ -363,10 +415,14 @@ class Pool:
         want: int,
         give_up: Callable[[], bool] = lambda: False,
         command: str = "",
+        elastic_from: int | None = None,
     ) -> Lease | None:
-        """A lease of between one and `want` tokens of `klass`, waiting while none is free;
-        None if `give_up` turns true first. Inside another lease (`LEASE_ENV`), that lease.
-        Its release writes a line naming `command` to the pool's log (`LEASE_LOG`).
+        """A lease of between one and `want` tokens of `klass`, waiting while none is free, and
+        for up to `RECLAIM_SECONDS` while lower classes would give back enough elastic tokens to
+        make up `want`; None if `give_up` turns true first. Inside another lease (`LEASE_ENV`),
+        that lease. Its release writes a line naming `command` to the pool's log (`LEASE_LOG`).
+        Its tokens from index `elastic_from` on are elastic: the caller gives them back
+        (`give_back`) while a higher class waits.
         """
         inherited = os.environ.get(LEASE_ENV, "")
         if inherited.isdigit() and int(inherited) > 0:
@@ -380,7 +436,8 @@ class Pool:
         try:
             while True:
                 with _THREADS, system.file_lock(self.root / "lock"):
-                    files = self.grant(klass, want, me)
+                    hold_out = time.monotonic() - started < RECLAIM_SECONDS
+                    files = self.grant(klass, want, me, elastic_from, hold_out)
                     if files:
                         now = time.monotonic()
                         return Lease(
@@ -401,19 +458,30 @@ class Pool:
         finally:
             me.unlink(missing_ok=True)
 
-    def top_up(self, klass: str, held: int, want: int) -> Lease:
+    def top_up(self, klass: str, held: int, want: int, elastic: bool = False) -> Lease:
         """The tokens of `klass` free now, without waiting, that bring a lease of `held` up to
         `want` in all: an empty lease when none is. The same rules as a waiting lease's apply
         (`grant`): a waiting higher class takes everything, and waiters of the same class
-        share."""
+        share. With `elastic`, every token taken is elastic."""
         extra = min(want, self.size) - held
         if extra < 1:
             return Lease(0, [])
         # A waiter's file this call never writes, so `grant` counts no waiter as its own.
         me = self.root / f"wait-{os.getpid()}-{threading.get_ident()}-{klass}"
         with _THREADS, system.file_lock(self.root / "lock"):
-            files = self.grant(klass, extra, me)
+            files = self.grant(klass, extra, me, 0 if elastic else None)
         return Lease(len(files), files, klass=klass)
+
+
+def _is_elastic(path: Path) -> bool:
+    holder = _read(path)
+    return holder is not None and holder.elastic
+
+
+def reclaimable(held: dict[Path, Holder], rank: int) -> int:
+    """How many of the `held` tokens belong to classes ranked below `rank` and are elastic, so
+    that their leases give them back while a lease of that rank waits."""
+    return sum(1 for h in held.values() if h.elastic and CLASSES.index(h.klass) > rank)
 
 
 def top_up(want: int) -> Lease:

@@ -24,6 +24,14 @@ shared across the machine, because a byte read by a process that is then killed 
 good; this FIFO belongs to one cargo command and is removed with it, and the tokens behind its
 bytes are files that the pool takes back whenever this process exits. Cargo ignores the
 jobserver when `CARGO_BUILD_JOBS` is set, so this lease's environment leaves that out.
+
+The jobserver also lets a build shrink. A command that only compiles (`SHRINKS`) marks its
+tokens after the first as elastic, and while a lease of a higher class waits for tokens
+(`tokens.Pool.higher_waiting`) it reads back the bytes no compiler job holds and returns a token
+for each (`give_back`). Cargo then runs fewer jobs, and a push that starts during an agent's long
+build gets the cores within seconds instead of after the build. `cargo test`, `nextest` and `run`
+are left out, because the tests or the program they run take as many threads as the lease had
+when it started, which the jobserver does not control.
 """
 
 from __future__ import annotations
@@ -69,8 +77,14 @@ NO_LEASE: frozenset[str] = frozenset(
     }
 )
 
-# How often a running command takes the tokens that have come free.
+# How often a running command takes the tokens that have come free, or, while it gives tokens back
+# to a higher class, looks for job slots that have come free.
 GROW_SECONDS = 2.0
+SHRINK_SECONDS = 0.25
+
+# Cargo commands that only compile, whose parallelism the jobserver controls throughout, so they
+# can give tokens back while they run.
+SHRINKS: frozenset[str] = frozenset({"build", "check", "clippy", "rustc", "doc"})
 
 
 def install() -> None:
@@ -116,6 +130,15 @@ class Jobserver:
         if n > 0:
             os.write(self.fd, b"+" * n)
 
+    def take(self, n: int) -> int:
+        """Reads back up to `n` job slots that no job holds now, and how many it got."""
+        if n < 1:
+            return 0
+        try:
+            return len(os.read(self.fd, n))
+        except BlockingIOError:
+            return 0
+
     def env(self) -> dict[str, str]:
         return {"CARGO_MAKEFLAGS": f"-j --jobserver-auth=fifo:{self.path}"}
 
@@ -154,8 +177,12 @@ def run(argv: list[str], pool: tokens.Pool | None = None) -> int:
         return subprocess.run(command, check=False).returncode
     pool = pool or tokens.Pool()
     want = tokens.largest(pool.size)
+    shrinks = subcommand(argv) in SHRINKS
     lease = pool.acquire(
-        tokens.named_class(), want, command=f"cargo {subcommand(argv)}"
+        tokens.named_class(),
+        want,
+        command=f"cargo {subcommand(argv)}",
+        elastic_from=1 if shrinks else None,
     )
     assert lease is not None
     extra: list[tokens.Lease] = []
@@ -174,25 +201,46 @@ def run(argv: list[str], pool: tokens.Pool | None = None) -> int:
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         held = lease.size
         code: int | None = None
+        yielding = False
         while code is None:
             try:
-                code = child.wait(timeout=GROW_SECONDS)
+                code = child.wait(timeout=SHRINK_SECONDS if yielding else GROW_SECONDS)
             except subprocess.TimeoutExpired:
                 pass
-            if code is None and held < want:
-                more = pool.top_up(lease.klass, held, want)
+            if code is not None:
+                break
+            yielding = shrinks and held > 1 and pool.higher_waiting(lease.klass)
+            if yielding:
+                held -= give_back(pool, [lease, *extra], jobserver, held - 1)
+            elif held < want:
+                more = pool.top_up(lease.klass, held, want, elastic=shrinks)
                 if more.size:
                     extra.append(more)
                     jobserver.grow(more.size)
                     held += more.size
                     # The pool's log records the most tokens the command held.
-                    lease.size = held
+                    lease.size = max(lease.size, held)
         return code
     finally:
         jobserver.close()
         for more in extra:
             more.release()
         lease.release()
+
+
+def give_back(
+    pool: tokens.Pool, leases: list[tokens.Lease], jobserver: Jobserver, n: int
+) -> int:
+    """Returns to the pool up to `n` of the leases' elastic tokens whose job slots no compiler
+    job holds now, newest lease first, and how many. A slot read back from the FIFO and not
+    matched by a token (none left to return) is written back."""
+    slots = jobserver.take(n)
+    returned = 0
+    for lease in reversed(leases):
+        if returned < slots:
+            returned += pool.give_back(lease, slots - returned)
+    jobserver.grow(slots - returned)
+    return returned
 
 
 def main() -> int:

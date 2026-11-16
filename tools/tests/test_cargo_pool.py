@@ -143,6 +143,69 @@ def test_a_build_grows_when_tokens_come_free(
     assert not pool.holders()
 
 
+def test_a_build_gives_tokens_back_while_a_push_waits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release: Path = tmp_path / "release"
+    cargo, out = fake_cargo(tmp_path / "bin", release)
+    monkeypatch.setenv(cargo_pool.REAL_ENV, str(cargo))
+    monkeypatch.setattr(cargo_pool, "GROW_SECONDS", 0.05)
+    monkeypatch.setattr(cargo_pool, "SHRINK_SECONDS", 0.05)
+    pool: Pool = Pool(tmp_path / "pool", 9)
+    got: list[tokens.Lease | None] = []
+
+    def push() -> None:
+        # Wait until the build holds its six tokens, then ask for six as a push.
+        while len(pool.holders()) < 6:
+            time.sleep(0.01)
+        lease = pool.acquire("push", 6)
+        got.append(lease)
+        release.touch()
+
+    thread = threading.Thread(target=push)
+    thread.start()
+    assert cargo_pool.run(["build"], pool) == 0
+    thread.join(5)
+    # The push got the build's five spare tokens instead of the three left free.
+    granted = got[0] if got else None
+    assert granted is not None and granted.size == 6
+    seen = json.loads(out.read_text())
+    # The build gave back every job slot. It may since have taken the two tokens the push left
+    # free, but no more while the push holds its six.
+    assert seen["slots"] <= 2
+    granted.release()
+    assert not pool.holders()
+
+
+def test_a_test_run_keeps_its_tokens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release: Path = tmp_path / "release"
+    cargo, out = fake_cargo(tmp_path / "bin", release)
+    monkeypatch.setenv(cargo_pool.REAL_ENV, str(cargo))
+    monkeypatch.setattr(cargo_pool, "GROW_SECONDS", 0.05)
+    monkeypatch.setattr(tokens, "RECLAIM_SECONDS", 0.3)
+    pool: Pool = Pool(tmp_path / "pool", 9)
+    got: list[tokens.Lease | None] = []
+
+    def push() -> None:
+        while len(pool.holders()) < 6:
+            time.sleep(0.01)
+        got.append(pool.acquire("push", 6))
+        release.touch()
+
+    thread = threading.Thread(target=push)
+    thread.start()
+    # Its tests take as many threads as it started with, so it gives nothing back.
+    assert cargo_pool.run(["test"], pool) == 0
+    thread.join(5)
+    granted = got[0] if got else None
+    assert granted is not None and granted.size == 2
+    assert json.loads(out.read_text())["slots"] == 5
+    granted.release()
+    assert not pool.holders()
+
+
 def test_commands_that_compile_nothing_take_no_tokens(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

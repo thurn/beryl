@@ -153,5 +153,10 @@
     "label": "Each fast-check lane reads per-hour and per-day sums of the run log instead of scanning the whole 1.4 GB file twice, so choosing and timing its checks takes under half a second",
     "metric": "machine.saturation",
     "expect": "down"
+  },
+  {
+    "label": "An agent's cargo build gives its spare CPU tokens back while a push waits, and a push that would start short waits up to 10 s for them, so a push's fast-check steps stop running on one core beside long agent builds",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]
