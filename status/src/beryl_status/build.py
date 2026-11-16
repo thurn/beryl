@@ -47,17 +47,12 @@ class PageCache:
 def summary(index: Index, bead_id: str) -> tuple[object, ...]:
     """What a page shows of a bead it links to: its row, hovercard and progress."""
     bead = index.beads[bead_id]
-    children = index.children.get(bead_id, ())
-    closed = sum(1 for i in children if index.beads[i].closed)
-    working = sum(1 for i in children if index.beads[i].status == "in_progress")
     return (
         bead.title,
         bead.status,
         bead.priority,
         bead.issue_type,
-        len(children),
-        closed,
-        working,
+        index.progress(bead_id),
     )
 
 
@@ -71,6 +66,7 @@ def fingerprint(bead: Bead, index: Index, current: bool, log: Changelog | None) 
             current,
             log,
             index.parent.get(bead.id),
+            index.progress(bead.id),
             tuple((i, summary(index, i)) for i in linked),
         )
     )

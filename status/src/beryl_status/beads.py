@@ -8,6 +8,7 @@ import subprocess
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NamedTuple
 
 # The label the bug button (⌘B in the app) puts on the beads it files.
 BUG_REPORT = "bug-report"
@@ -195,6 +196,14 @@ class Home:
     deferred: list[Bead] = field(default_factory=list)
 
 
+class Progress(NamedTuple):
+    """How many of the beads under a bead are closed, in progress, and in all."""
+
+    closed: int
+    working: int
+    total: int
+
+
 @dataclass
 class Index:
     """The beads by id, with each one's parent, children, blockers and the beads it blocks."""
@@ -205,6 +214,11 @@ class Index:
     blocked_by: dict[str, list[str]] = field(default_factory=dict)
     blocking: dict[str, list[str]] = field(default_factory=dict)
     related: dict[str, list[str]] = field(default_factory=dict)
+    # `progress` per bead, filled as pages ask, since an epic's count is asked for by every
+    # page that links to it.
+    counted: dict[str, Progress] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
     @staticmethod
     def build(beads: Iterable[Bead]) -> Index:
@@ -269,4 +283,18 @@ class Index:
             seen.add(current)
             found.append(self.beads[current])
             stack.extend(self.children.get(current, []))
+        return found
+
+    def progress(self, bead_id: str) -> Progress:
+        """How far along the work under a bead is: every bead under it, children's children
+        included, so an epic of epics counts the tasks inside them."""
+        found = self.counted.get(bead_id)
+        if found is None:
+            under = self.descendants(bead_id)
+            found = Progress(
+                closed=sum(1 for b in under if b.closed),
+                working=sum(1 for b in under if b.status == "in_progress"),
+                total=len(under),
+            )
+            self.counted[bead_id] = found
         return found

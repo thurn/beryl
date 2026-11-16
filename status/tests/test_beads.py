@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from beryl_status.beads import Bead, Index, parse
 
-from tests.conftest import EXPORT
+from tests.conftest import EXPORT, parent, record
 
 
 def index() -> Index:
@@ -57,3 +57,31 @@ def test_comments_and_labels() -> None:
     found = index()
     assert [c.author for c in found.beads["by-epic.1"].comments] == ["Someone"]
     assert found.beads["by-free"].labels == ("tier:opus",)
+
+
+def test_progress_counts_every_bead_under_an_epic() -> None:
+    # An epic of epics: its progress counts the tasks inside its child epics too.
+    found = Index.build(
+        parse(
+            [
+                record("by-top", issue_type="epic"),
+                record(
+                    "by-mid",
+                    issue_type="epic",
+                    dependencies=[parent("by-mid", "by-top")],
+                ),
+                record(
+                    "by-a", status="closed", dependencies=[parent("by-a", "by-mid")]
+                ),
+                record(
+                    "by-b",
+                    status="in_progress",
+                    dependencies=[parent("by-b", "by-mid")],
+                ),
+                record("by-c", dependencies=[parent("by-c", "by-mid")]),
+            ]
+        )
+    )
+    assert found.progress("by-top") == (1, 1, 4)
+    assert found.progress("by-mid") == (1, 1, 3)
+    assert found.progress("by-a") == (0, 0, 0)

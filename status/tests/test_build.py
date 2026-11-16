@@ -10,7 +10,7 @@ from beryl_status.beads import Bead, Index, parse
 from beryl_status.changelog import Changelog, Event
 from beryl_status.serve import resolve
 
-from tests.conftest import EXPORT, record
+from tests.conftest import EXPORT, parent, record
 
 
 def nothing(bead: Bead) -> tuple[bool, Changelog | None]:
@@ -141,3 +141,22 @@ def test_changelog_events_parse_and_round_trip() -> None:
     assert log.events[0].fields == (("priority", "0"),)
     assert changelog.from_json(changelog.to_json(log)) == log
     assert not changelog.parse("null", "u").recorded
+
+
+def test_epic_pages_count_grandchildren(tmp_path: Path) -> None:
+    lines = [
+        record("by-top", issue_type="epic"),
+        record("by-mid", issue_type="epic", dependencies=[parent("by-mid", "by-top")]),
+        record("by-a", status="closed", dependencies=[parent("by-a", "by-mid")]),
+        record("by-b", dependencies=[parent("by-b", "by-mid")]),
+    ]
+    site, cache = tmp_path / "site", build.PageCache()
+    build.build(site, Index.build(parse(lines)), "v1", nothing, cache=cache)
+    assert "1/3" in (site / "index.html").read_text()
+    assert "1/2" in (site / "beads" / "by-top.html").read_text()
+    # Closing a grandchild changes the top epic's page, through its subtask's count, even
+    # though none of the top epic's own children changed.
+    lines[3] = record("by-b", status="closed", dependencies=[parent("by-b", "by-mid")])
+    build.build(site, Index.build(parse(lines)), "v2", nothing, cache=cache)
+    assert "2/3" in (site / "index.html").read_text()
+    assert "2/2" in (site / "beads" / "by-top.html").read_text()

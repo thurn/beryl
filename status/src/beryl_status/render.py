@@ -131,9 +131,8 @@ class Linker:
 
 
 def hovercard(bead: Bead, index: Index) -> str:
-    children = index.children.get(bead.id, [])
-    done = sum(1 for i in children if index.beads[i].closed)
-    extra = c.progress(done, len(children)) if children else ""
+    count = index.progress(bead.id)
+    extra = c.progress(count.closed, count.total) if count.total else ""
     return (
         f'<div class="c-card-top">{c.mono(bead.id)}{priority_chip(bead.priority)}</div>'
         f'<div class="c-hovercard-title">{c.esc(bead.title)}</div>'
@@ -143,15 +142,14 @@ def hovercard(bead: Bead, index: Index) -> str:
 
 
 def children_progress(bead: Bead, index: Index) -> str:
-    children = index.children.get(bead.id, [])
-    if not children:
+    count = index.progress(bead.id)
+    if not count.total:
         return ""
-    done = sum(1 for i in children if index.beads[i].closed)
-    working = sum(1 for i in children if index.beads[i].status == "in_progress")
+    to_do = count.total - count.closed - count.working
     return c.progress(
-        done,
-        len(children),
-        f"{done} closed, {working} in progress, {len(children) - done - working} to do",
+        count.closed,
+        count.total,
+        f"{count.closed} closed, {count.working} in progress, {to_do} to do",
     )
 
 
