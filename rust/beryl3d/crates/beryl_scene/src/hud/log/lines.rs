@@ -39,8 +39,10 @@ pub type Names = BTreeMap<ObjectId, String>;
 pub fn learn_names(names: &mut Names, view: &PlayerView) {
     for object in &view.objects {
         // A name already known is kept, so that a view of a large board copies only the names
-        // it changes.
+        // it changes. An empty name (a face-down copy's) names nothing, as the web's
+        // `if (o.name)` has it, so the card is still "a card".
         if let Some(name) = &object.name
+            && !name.is_empty()
             && names.get(&object.slot) != Some(name)
         {
             names.insert(object.slot, name.clone());

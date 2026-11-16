@@ -1,5 +1,5 @@
 //! The game log's lines (`hud::log`), checked against the web interface's `logLines`
-//! (`ui/src/game/log.ts`) over the views of four recordings.
+//! (`ui/src/game/log.ts`) over the views of five recordings.
 //!
 //! The expected lines are the web's own output, made by exporting the recordings with
 //! `just b3d export <dir>` and running `logged` from `ui/src/game/log.ts` under
@@ -14,7 +14,7 @@ use beryl_protocol::protocol::Side;
 use beryl_scene::hud::log::{LogKind, Logged};
 
 /// What the web's `logged` gave, for each recording and seat.
-const WEB: [(&str, Side, &str); 4] = [
+const WEB: [(&str, Side, &str); 5] = [
     (
         "verbs-zones",
         Side::You,
@@ -81,6 +81,22 @@ const WEB: [(&str, Side, &str); 4] = [
 ",
     ),
     (
+        // A face-down copy's token, whose view names it with an empty name.
+        "abhorrent-oculus/fractured-identity-copies-a-face-down-permanent-as-a-22",
+        Side::You,
+        "\
+2	turn	opponent	Turn 1: Opponent's turn\n\
+3	action	you	Abhorrent Oculus triggered\n\
+4	action	you	Wetland Sambar entered the battlefield\n\
+4	action	you	Island was put into your graveyard\n\
+8	action	opponent	Opponent cast Fractured Identity\n\
+8	action	you	Wetland Sambar was exiled\n\
+8	action	opponent	Opponent created a a card\n\
+8	action	opponent	Fractured Identity resolved\n\
+16	turn	you	Turn 2: your turn\n\
+",
+    ),
+    (
         "verbs-combat",
         Side::You,
         "\
@@ -141,3 +157,4 @@ fn the_log_says_what_the_web_log_says_of_each_view() {
         assert_eq!(lines(name, seat), web, "{name} from {seat:?}");
     }
 }
+
