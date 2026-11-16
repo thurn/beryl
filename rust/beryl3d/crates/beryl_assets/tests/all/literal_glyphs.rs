@@ -38,9 +38,7 @@ fn scene_literals_have_a_glyph() {
                 continue;
             }
             for character in code.split("//").next().unwrap().chars() {
-                if character.is_ascii()
-                    || character.is_whitespace()
-                {
+                if character.is_ascii() || character.is_whitespace() {
                     continue;
                 }
                 if !fonts.iter().any(|font| font.charmap().map(character) != 0) {

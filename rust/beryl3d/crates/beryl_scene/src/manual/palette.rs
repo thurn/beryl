@@ -237,7 +237,7 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
         row()
             .name("hints")
             .gap(space::L)
-            .children(["↵ run", "⇧↵ shifted", "Esc close"].map(|hint| {
+            .children(["Enter run", "Shift+Enter shifted", "Esc close"].map(|hint| {
                 text(hint)
                     .style(type_style::MENU_HINT)
                     .color(color::TEXT_DIM)
