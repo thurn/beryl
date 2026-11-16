@@ -3,6 +3,7 @@
 //! that checking every tick finds must be found at the check times too. A fault only every tick
 //! finds means a check time is missing.
 
+use beryl_inspect::pages::Windows;
 use beryl_inspect::runner::{self, Test};
 use beryl_scene::agent::{Fault, Rule};
 use beryl_scene::driver::{Checked, Mode, StepMoment, TICK};
@@ -72,7 +73,7 @@ fn key(fault: &Fault) -> (Rule, Vec<String>) {
 fn plantings() -> Vec<Planting> {
     // The stress boards are left out: they exist to count a frame's work at the engine's
     // capacity, and checking one on every tick takes hours.
-    let tests: Vec<Test> = runner::tests("")
+    let tests: Vec<Test> = runner::tests("", Windows::Desktop)
         .expect("the recordings pack opens")
         .into_iter()
         .filter(|test| beryl_inspect::stress::Board::parse(&test.recording).is_none())

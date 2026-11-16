@@ -70,6 +70,9 @@ through the client with no window or GPU (the `b3d` skill has the details):
 - `just b3d test [prefix]` runs every interface test whose name starts with the
   prefix: each recording from each seat in each desktop window, as
   `b3d:<recording>/<seat>/<width>x<height>`, which `tree` and `check` also take.
+  `--phone-only` runs the three phone windows instead, in the phone layout with
+  a fixed safe area (`pages::PHONE_SAFE_AREA`), and never writes the list of
+  allowed faults.
 - `just b3d timeline <name> [--seat <seat>]` prints one JSON line for each step
   of each script of a recording, and `--all` writes every recording and seat to
   a file under `$BERYL_CACHE/b3d/out`.

@@ -8,9 +8,12 @@ use beryl_scene::agent::{Layout, Rule};
 use beryl_scene::command::Request;
 use beryl_scene::element::{Press, describe, row, text};
 use beryl_scene::frame::{Frame, Material, Role, StateBits, Wake};
-use beryl_scene::input::{IconCell, Input, Key, KeyCode, KeyPhase, Modifiers, PointerPhase};
+use beryl_scene::input::{
+    IconCell, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, PointerPhase, Size,
+};
 use beryl_scene::layout::{Layer, Navigation};
 use beryl_scene::settings::Setting;
+use beryl_scene::table::Window;
 use beryl_scene::tokens::{color, size, type_style};
 use beryl_scene::widgets::{self, MenuGroup, MenuId, MenuRow, icons};
 use glam::Vec2;
@@ -148,6 +151,59 @@ fn an_icon_button_is_44_points_square_and_passes_the_phone_sizes_check() {
     let frame = write_layer(&mut layer, true);
     let faults = phone_sizes(&frame, &phone);
     assert_eq!(faults.len(), 1);
+    assert_eq!(faults[0].rule, Rule::PhoneSizes);
+}
+
+/// In a phone window whose safe area differs on every side, the flat layer keeps an icon
+/// button inside the safe area, at the size a finger can press, so the checks given the same
+/// insets find nothing; narrowed to 43 points it fails "phone sizes" alone.
+#[test]
+fn an_icon_button_in_an_inset_phone_window_stays_inside_the_safe_area() {
+    let safe_area = Insets {
+        top: 44.0,
+        right: 20.0,
+        bottom: 34.0,
+        left: 12.0,
+    };
+    let size = Size {
+        width: 375.0,
+        height: 647.0,
+    };
+    let phone = beryl_scene::agent::Context {
+        layout: Layout::Phone,
+        size,
+        safe_area,
+        ..context()
+    };
+    let frame_of = |width: f32| {
+        let mut layer = Layer::new();
+        layer.resize(Window {
+            size,
+            scale: 3.0,
+            safe_area,
+        });
+        layer.show(Some(
+            row().name("corner").child(
+                widgets::icon_button(icons::GEAR, "Settings")
+                    .width(width)
+                    .on_press(Press::Sheet(None)),
+            ),
+        ));
+        write_layer(&mut layer, true)
+    };
+    let frame = frame_of(44.0);
+    let gear = find(&frame, Role::Button, "Settings");
+    let (left, top, right, bottom) = edges(&frame, gear);
+    assert!(
+        left >= 12.0 && top >= 44.0 && right <= 355.0 && bottom <= 613.0,
+        "the button is at {left},{top} to {right},{bottom}"
+    );
+    assert_eq!(on_screen(&frame, &phone), Vec::new());
+    assert_eq!(phone_sizes(&frame, &phone), Vec::new());
+    let narrow = frame_of(43.0);
+    assert_eq!(on_screen(&narrow, &phone), Vec::new());
+    let faults = phone_sizes(&narrow, &phone);
+    assert_eq!(faults.len(), 1, "{faults:?}");
     assert_eq!(faults[0].rule, Rule::PhoneSizes);
 }
 

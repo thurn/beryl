@@ -1,10 +1,13 @@
 //! `just b3d test` and the interface test runner behind it (docs/beryl-3d.md, "Test speed").
 
-use beryl_inspect::cli::{Ran, main};
+use beryl_inspect::cli::{Options, Ran, Spec, main};
 use beryl_inspect::faults::PATH_VARIABLE;
+use beryl_inspect::pages::{self, PHONE_SAFE_AREA, Windows};
 use beryl_inspect::runner::{self, Limits, Outcome, Test};
 use beryl_protocol::protocol::Side;
-use beryl_scene::input::Size;
+use beryl_scene::agent::Layout;
+use beryl_scene::driver::Page;
+use beryl_scene::input::{Insets, Size};
 use serde_json::Value;
 
 fn run(line: &[&str]) -> Ran {
@@ -45,7 +48,7 @@ fn one_test_runs_and_closes_with_one_line() {
 /// given to `tree`, shows that test's recording from its seat in its window.
 #[test]
 fn a_tests_name_opens_its_recording_in_tree() {
-    let tests = runner::tests("verbs-zones/").expect("the pack opens");
+    let tests = runner::tests("verbs-zones/", Windows::Desktop).expect("the pack opens");
     let names: Vec<String> = tests.iter().map(Test::name).collect();
     assert_eq!(
         names,
@@ -67,6 +70,135 @@ fn a_tests_name_opens_its_recording_in_tree() {
         command.starts_with("just b3d tree verbs-zones --seat opponent --size 2560x1080"),
         "{command}"
     );
+    assert!(tests.iter().all(|test| test.layout() == Layout::Desktop));
+}
+
+/// The whole matrix is the four desktop windows and the three phone windows, from each seat a
+/// recording is recorded for; the default run plays only the desktop ones and `--phone-only`
+/// only the phone ones.
+#[test]
+fn the_window_matrix_has_seven_sizes_from_each_recorded_seat() {
+    let names = |windows| -> Vec<String> {
+        let tests = runner::tests("pay-default/", windows).expect("the pack opens");
+        tests.iter().map(Test::name).collect()
+    };
+    let sizes = [
+        "1440x900",
+        "1600x900",
+        "1920x1080",
+        "2560x1080",
+        "393x759",
+        "375x647",
+        "430x932",
+    ];
+    let every: Vec<String> = ["you", "opponent"]
+        .iter()
+        .flat_map(|seat| sizes.map(|size| format!("b3d:pay-default/{seat}/{size}")))
+        .collect();
+    assert_eq!(names(Windows::All), every);
+    let phone = |name: &String| sizes[4..].iter().any(|size| name.ends_with(size));
+    let desktop: Vec<String> = every.iter().filter(|n| !phone(n)).cloned().collect();
+    let phones: Vec<String> = every.iter().filter(|n| phone(n)).cloned().collect();
+    assert_eq!(names(Windows::Desktop), desktop);
+    assert_eq!(names(Windows::Phone), phones);
+}
+
+/// A phone test plays in the phone layout with the fixed phone safe area, and `tree` and
+/// `check`, given the test's name, open the same layout and insets: the client draws what the
+/// test checked, and a fault is reported against the same safe area.
+#[test]
+fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() {
+    let name = "b3d:pay-default/you/375x647";
+    let size = Size {
+        width: 375.0,
+        height: 647.0,
+    };
+    let test = Test {
+        recording: "pay-default".to_owned(),
+        seat: Side::You,
+        size,
+    };
+    assert_eq!(test.name(), name);
+    assert_eq!(test.layout(), Layout::Phone);
+    let insets = pages::safe_area(test.layout());
+    assert_eq!(insets, PHONE_SAFE_AREA);
+    assert!(insets.top > 0.0 && insets.bottom > 0.0, "{insets:?}");
+    for command in ["tree", "check"] {
+        let spec = Spec {
+            recording: true,
+            ..Spec::default()
+        };
+        let options = Options::parse(command, &[name.to_owned()], spec).expect("a test's name");
+        assert_eq!(
+            (options.name(), options.seat, options.layout, options.size),
+            ("pay-default", Side::You, Layout::Phone, size)
+        );
+    }
+    // The insets reach the client: the test's page lays out differently from the same page with
+    // none, and `tree` prints the test's page.
+    let tested = test.page().expect("the page opens").tree();
+    let recording = pages::recording("pay-default", Side::You).expect("the recording");
+    let bare = Page::new(recording.into(), Side::You, Layout::Phone, size)
+        .expect("the page opens")
+        .tree();
+    assert_ne!(tested, bare, "the safe area changed nothing on the phone");
+    let inset = Page::new(
+        pages::recording("pay-default", Side::You)
+            .expect("the recording")
+            .into(),
+        Side::You,
+        Layout::Phone,
+        size,
+    )
+    .expect("the page opens")
+    .with_safe_area(PHONE_SAFE_AREA)
+    .tree();
+    assert_eq!(tested, inset);
+    let ran = run(&["tree", name]);
+    assert_eq!(ran.code, 0, "{}", ran.stderr);
+    let command = ran.stdout.lines().next().unwrap_or_default();
+    assert_eq!(
+        command,
+        "just b3d tree pay-default --seat you --layout phone --size 375x647"
+    );
+    // A desktop test's name still opens the desktop layout with no safe area.
+    let options = Options::parse(
+        "check",
+        &["b3d:pay-default/you/1440x900".to_owned()],
+        Spec {
+            recording: true,
+            ..Spec::default()
+        },
+    )
+    .expect("a test's name");
+    assert_eq!(options.layout, Layout::Desktop);
+    assert_eq!(pages::safe_area(options.layout), Insets::default());
+}
+
+/// `--phone-only` plays only the phone windows, names each fault by the phone test that
+/// reproduces it, and never writes the list of allowed faults.
+#[test]
+fn phone_only_plays_the_phone_windows_and_never_updates_the_list() {
+    let ran = run(&["test", "pay-default/", "--phone-only", "--json"]);
+    assert!(ran.code <= 1, "{}{}", ran.stdout, ran.stderr);
+    let value: Value = serde_json::from_str(&ran.stdout).expect("JSON");
+    assert_eq!(value["tests"], 6, "{value}");
+    assert_eq!(
+        value["command"],
+        "just b3d test pay-default/ --phone-only --json"
+    );
+    for fault in value["faults"].as_array().expect("faults") {
+        let test = fault["test"].as_str().unwrap_or_default();
+        assert!(
+            ["393x759", "375x647", "430x932"]
+                .iter()
+                .any(|size| test.ends_with(size)),
+            "{fault}"
+        );
+    }
+    let ran = run(&["test", "pay-default/", "--phone-only", "--update"]);
+    assert_eq!(ran.code, 2, "{}", ran.stdout);
+    assert!(ran.stderr.contains("--phone-only"), "{}", ran.stderr);
 }
 
 #[test]

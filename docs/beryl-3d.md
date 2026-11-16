@@ -2818,14 +2818,29 @@ from its seat at its size.
 Before its closing line, `just b3d test` prints how many frames and elements
 each rule judged (`judged`; scripts instead of frames for the checks over a
 script's segments), so a rule that passes because it judged nothing shows a
-zero. 'Phone sizes' is not run until the phone layout exists.
+zero. 'Phone sizes' judges only the phone windows, so it shows a zero on the
+desktop ones.
+
+A window narrower than 500 points on its shorter side is shown in the phone
+layout (`Layout::for_size`), so a test's size also picks its layout. Every phone
+test is played with the same safe area, 44 points at the top and 34 at the
+bottom (`pages::PHONE_SAFE_AREA` in `beryl_inspect`). These are test geometry,
+fixed so that a test finds the same faults on every machine; the phone hosts
+pass the device's own insets. The client lays the window out inside the safe
+area and the checks hold its elements to the same insets, and `tree` and `check`
+open a phone test's name with the same layout and insets.
+
+While the phone layout is built, `just b3d test` and the sweep run the desktop
+windows only, and `just b3d test --phone-only` runs the phone windows only. A
+phone run is held to `data/beryl3d/test-faults.json` like any other, but it
+never writes the list (`--update` does not go with it) and never counts a
+desktop entry as stale, since it is never the whole run.
 
 How many there are, as measured on 2026-11-15:
 
 - 1,904 recordings from a seat: each card spec moment and fixture in the pack
   from each seat it is recorded for, and the two stress boards.
-- Four desktop window sizes each. The three phone sizes come with the phone
-  layout.
+- Four desktop window sizes each, and three phone sizes under `--phone-only`.
 - 7,616 tests in all, about 13,300 with the phone sizes.
 
 ### The target

@@ -69,7 +69,7 @@ pub enum Rule {
 
 impl Rule {
     /// Every rule, in the doc's order.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::OnScreen,
         Self::Overlap,
         Self::Reachable,
@@ -77,6 +77,7 @@ impl Rule {
         Self::TextFits,
         Self::Named,
         Self::Clips,
+        Self::PhoneSizes,
         Self::Jump,
         Self::RestPlacement,
         Self::StepTime,

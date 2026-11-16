@@ -9,7 +9,7 @@ use beryl_protocol::protocol::Side;
 use beryl_protocol::{GameUpdate, Seat, SessionId};
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Duration, Page, Recording, TICK};
-use beryl_scene::input::Size;
+use beryl_scene::input::{Insets, Size};
 
 use crate::faults::Listed;
 use crate::runner::Test;
@@ -36,6 +36,67 @@ pub const DESKTOP_WINDOWS: [Size; 4] = [
         height: 1080.0,
     },
 ];
+
+/// The phone windows every recording is checked in, in portrait: the two sizes the web
+/// interface's phone shots use and a large phone's.
+pub const PHONE_WINDOWS: [Size; 3] = [
+    Size {
+        width: 393.0,
+        height: 759.0,
+    },
+    Size {
+        width: 375.0,
+        height: 647.0,
+    },
+    Size {
+        width: 430.0,
+        height: 932.0,
+    },
+];
+
+/// The safe area of every phone window a recording is played in here: a status bar of 44
+/// points at the top and a home indicator of 34 at the bottom, as on a phone with a notch.
+/// This is test geometry, fixed so that a test gives the same faults on every machine; no
+/// native host supplies it, and the phone hosts pass the device's own insets.
+pub const PHONE_SAFE_AREA: Insets = Insets {
+    top: 44.0,
+    right: 0.0,
+    bottom: 34.0,
+    left: 0.0,
+};
+
+/// The safe area a page in `layout` is played with: [`PHONE_SAFE_AREA`] on the phone and
+/// none on the desktop.
+#[must_use]
+pub fn safe_area(layout: Layout) -> Insets {
+    match layout {
+        Layout::Desktop => Insets::default(),
+        Layout::Phone => PHONE_SAFE_AREA,
+    }
+}
+
+/// Which windows of the matrix a run of the interface tests plays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Windows {
+    /// [`DESKTOP_WINDOWS`] only, as `just b3d test` runs while the phone layout is built.
+    Desktop,
+    /// [`PHONE_WINDOWS`] only (`just b3d test --phone-only`).
+    Phone,
+    /// Both, desktop first.
+    All,
+}
+
+impl Windows {
+    /// The window sizes, in the order tests are named in.
+    #[must_use]
+    pub fn sizes(self) -> Vec<Size> {
+        match self {
+            Self::Desktop => DESKTOP_WINDOWS.to_vec(),
+            Self::Phone => PHONE_WINDOWS.to_vec(),
+            Self::All => [DESKTOP_WINDOWS.as_slice(), PHONE_WINDOWS.as_slice()].concat(),
+        }
+    }
+}
 
 /// A page for a recording found by name.
 pub trait Recorded: Sized {
@@ -66,7 +127,8 @@ impl Recorded for Page {
     }
 }
 
-/// The recording `name` at its start, as `seat` sees it in a window of `size`.
+/// The recording `name` at its start, as `seat` sees it in a window of `size`, with the
+/// layout's [`safe_area`].
 ///
 /// # Errors
 ///
@@ -76,6 +138,10 @@ pub fn page(name: &str, seat: Side, layout: Layout, size: Size) -> Result<Page, 
     let mut page = Page::new(recording.into(), seat, layout, size)
         .map_err(|error| format!("{name}: {error}"))?
         .named(name);
+    if layout == Layout::Phone {
+        // Only here, since giving a page its safe area sets its client up again.
+        page = page.with_safe_area(safe_area(layout));
+    }
     if let Some(board) = Board::parse(name) {
         let drive = board.drive();
         if drive.pointer_over_hand {
@@ -202,9 +268,6 @@ fn usual_window(layout: Layout) -> Size {
             width: 1600.0,
             height: 900.0,
         },
-        Layout::Phone => Size {
-            width: 393.0,
-            height: 759.0,
-        },
+        Layout::Phone => PHONE_WINDOWS[0],
     }
 }

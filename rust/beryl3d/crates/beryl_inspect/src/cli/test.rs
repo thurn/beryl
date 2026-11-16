@@ -6,14 +6,14 @@ use std::fmt::Write;
 use std::io::Write as _;
 use std::time::{Duration, Instant};
 
-use beryl_scene::agent::{Context, Judged, Layout, Rule};
+use beryl_scene::agent::{Context, Judged, Rule};
 use beryl_scene::driver::Mode;
-use beryl_scene::input::Insets;
 use serde_json::{Value, json};
 
 use super::options::{self, Options, Usage};
 use super::{Printed, milliseconds};
 use crate::faults::{Changes, Comparison, Listed};
+use crate::pages::{self, Windows};
 use crate::runner::{self, Frames, Limits, Outcome, Test};
 
 /// How many faults `test` prints before it gives a count of the rest.
@@ -38,6 +38,9 @@ pub(super) const RAISE: &str = "--raise";
 /// deferred to the Beryl 3D sweep, and the run is judged as a prefix's run is, on the tests it
 /// played.
 pub(super) const STOP_AFTER: &str = "--stop-after";
+
+/// The switch that plays the phone windows of the matrix instead of the desktop ones.
+pub(super) const PHONE_ONLY: &str = "--phone-only";
 
 /// How many rules the closing summary names as having the most listed faults.
 const MOST_RULES: usize = 3;
@@ -65,22 +68,10 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
             )));
         }
     };
-    if options.switch(RAISE) && !options.switch(UPDATE) {
-        return Err(Usage(format!("{RAISE} goes beside {UPDATE}")));
-    }
-    if options.switch(UPDATE) && options.switch(EVERY_TICK) {
-        return Err(Usage(format!(
-            "{UPDATE} lists the faults found at the check times, so it does not go with \
-             {EVERY_TICK}"
-        )));
-    }
+    let (mode, windows) = switches(options)?;
+    let phone_only = windows == Windows::Phone;
     let stop = stop(options)?;
-    let mode = if options.switch(EVERY_TICK) {
-        Mode::EveryTick
-    } else {
-        Mode::AtCheckTimes
-    };
-    let tests = runner::tests(prefix).map_err(Usage)?;
+    let tests = runner::tests(prefix, windows).map_err(Usage)?;
     if tests.is_empty() {
         return Err(nothing_matches(prefix)?);
     }
@@ -96,8 +87,9 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
     let seconds = started.elapsed().as_secs_f64();
     let deferred = tests.len() - outcomes.len();
     // The median is only held over the whole run: a prefix, or the tests that started before
-    // `--stop-after`, are not typical.
-    let every_test = prefix.is_empty() && deferred == 0;
+    // `--stop-after`, are not typical. A phone run is never every test, so no desktop entry of
+    // the list counts as not a test.
+    let every_test = prefix.is_empty() && deferred == 0 && !phone_only;
     let over = limits.map_or_else(Vec::new, |limits| limits.over(&outcomes, every_test));
     let mut changes = None;
     if let Some(listed) = listed.as_mut().filter(|_| options.switch(UPDATE)) {
@@ -180,6 +172,41 @@ fn stop(options: &Options) -> Result<Option<Instant>, Usage> {
             "{STOP_AFTER} takes a number of seconds, not {text}"
         ))),
     }
+}
+
+/// The mode and the windows `test`'s switches choose.
+///
+/// # Errors
+///
+/// When two switches do not go together.
+fn switches(options: &Options) -> Result<(Mode, Windows), Usage> {
+    if options.switch(RAISE) && !options.switch(UPDATE) {
+        return Err(Usage(format!("{RAISE} goes beside {UPDATE}")));
+    }
+    if options.switch(UPDATE) && options.switch(EVERY_TICK) {
+        return Err(Usage(format!(
+            "{UPDATE} lists the faults found at the check times, so it does not go with \
+             {EVERY_TICK}"
+        )));
+    }
+    // The phone layout is still being built, and its faults are fixed rather than listed, so a
+    // phone run never writes the list: it could only add phone entries or drop desktop ones.
+    if options.switch(PHONE_ONLY) && options.switch(UPDATE) {
+        return Err(Usage(format!(
+            "{UPDATE} lists the desktop tests' faults, so it does not go with {PHONE_ONLY}"
+        )));
+    }
+    let windows = if options.switch(PHONE_ONLY) {
+        Windows::Phone
+    } else {
+        Windows::Desktop
+    };
+    let mode = if options.switch(EVERY_TICK) {
+        Mode::EveryTick
+    } else {
+        Mode::AtCheckTimes
+    };
+    Ok((mode, windows))
 }
 
 /// What a run of tests found, to be printed.
@@ -417,9 +444,9 @@ fn context(test: &Test) -> Context {
     Context {
         recording: test.recording.clone(),
         seat: test.seat,
-        layout: Layout::Desktop,
+        layout: test.layout(),
         size: test.size,
-        safe_area: Insets::default(),
+        safe_area: pages::safe_area(test.layout()),
         at: 0,
     }
 }

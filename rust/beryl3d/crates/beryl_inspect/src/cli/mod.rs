@@ -197,7 +197,12 @@ const COMMANDS: [Command; 8] = [
         spec: Spec {
             recording: false,
             values: &[test::STOP_AFTER],
-            switches: &[test::EVERY_TICK, test::UPDATE, test::RAISE],
+            switches: &[
+                test::EVERY_TICK,
+                test::UPDATE,
+                test::RAISE,
+                test::PHONE_ONLY,
+            ],
         },
         own: &[
             (
@@ -215,6 +220,10 @@ const COMMANDS: [Command; 8] = [
             (
                 "--stop-after",
                 "start no test after this many seconds, and name the rest as deferred, as the fast check does",
+            ),
+            (
+                "--phone-only",
+                "the phone windows (393x759, 375x647, 430x932) instead of the desktop ones",
             ),
         ],
         run: test::test,

@@ -3,7 +3,7 @@
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use beryl_scene::agent::checks::{
     KeptArrow, blank_cards, check, duplicates, keep_arrows, lines_hold, named, on_screen, overlap,
-    reachable,
+    phone_sizes, reachable,
 };
 use beryl_scene::agent::locate::LocateError;
 use beryl_scene::agent::tree::line;
@@ -407,6 +407,84 @@ fn an_element_off_screen_is_a_fault() {
     inset.size.width = 1700.0;
     inset.safe_area.right = 100.0;
     assert_eq!(summary(&on_screen(&frame, &inset)).len(), 1);
+}
+
+/// A 375 by 647 phone window whose safe area is a different distance in from every edge, so
+/// that a check reading one inset for another fails: x from 12 to 355, y from 44 to 613.
+fn inset_phone() -> Context {
+    let mut context = context(Layout::Phone);
+    context.safe_area = Insets {
+        top: 44.0,
+        right: 20.0,
+        bottom: 34.0,
+        left: 12.0,
+    };
+    context
+}
+
+#[test]
+fn an_enabled_button_one_point_into_any_inset_is_off_screen() {
+    let context = inset_phone();
+    let button =
+        |x: f32, y: f32| frame(vec![layer(Role::Button, "Done", 1, rect(x, y, 44.0, 44.0))]);
+    let fault = one(Rule::OnScreen, &["button \"Done\" #1"]);
+    // Touching each edge of the safe area, then one point past it.
+    for (inside, past) in [
+        ((12.0, 300.0), (11.0, 300.0)),
+        ((311.0, 300.0), (312.0, 300.0)),
+        ((100.0, 44.0), (100.0, 43.0)),
+        ((100.0, 569.0), (100.0, 570.0)),
+    ] {
+        assert_eq!(
+            summary(&on_screen(&button(inside.0, inside.1), &context)),
+            vec![]
+        );
+        assert_eq!(
+            summary(&on_screen(&button(past.0, past.1), &context)),
+            fault,
+            "{past:?}"
+        );
+    }
+    // A disabled button is not a target, so it may sit under the status bar.
+    let disabled = frame(vec![
+        layer(Role::Button, "Done", 1, rect(100.0, 0.0, 44.0, 44.0))
+            .with(|e| e.interactive = false),
+    ]);
+    assert_eq!(summary(&on_screen(&disabled, &context)), vec![]);
+}
+
+/// A frame of one button of `width` by `height` points inside the phone's safe area, with one line
+/// of its text at `text` points.
+fn sized(width: f32, height: f32, text: f32) -> Frame {
+    let mut frame = Frame::with_capacity(1, 1, 4096);
+    let mut builder = FrameBuilder::new(&mut frame);
+    let spec = layer(Role::Button, "Done", 1, rect(100.0, 300.0, width, height));
+    builder.resolved(spec.name, spec.element);
+    builder.line(0, rect(104.0, 310.0, 30.0, text), text);
+    builder.finish();
+    frame
+}
+
+#[test]
+fn a_44_point_button_and_11_point_text_pass_the_phone_sizes_and_one_point_less_fails() {
+    let context = inset_phone();
+    let safe = sized(44.0, 44.0, 11.0);
+    assert_eq!(summary(&on_screen(&safe, &context)), vec![]);
+    assert_eq!(summary(&phone_sizes(&safe, &context)), vec![]);
+    let fault = one(Rule::PhoneSizes, &["button \"Done\" #1"]);
+    for (width, height, text) in [(43.0, 44.0, 11.0), (44.0, 43.0, 11.0), (44.0, 44.0, 10.0)] {
+        let frame = sized(width, height, text);
+        assert_eq!(
+            summary(&phone_sizes(&frame, &context)),
+            fault,
+            "{width}x{height}, {text}-point text"
+        );
+    }
+    // The desktop layout has no such limits.
+    assert_eq!(
+        summary(&phone_sizes(&sized(30.0, 30.0, 9.0), &desktop())),
+        vec![]
+    );
 }
 
 #[test]

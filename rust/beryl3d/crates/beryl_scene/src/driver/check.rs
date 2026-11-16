@@ -165,7 +165,7 @@ impl Page {
             let frame = page.frame();
             if checked.contains(&t) {
                 faults.extend(agent::check(frame, &context));
-                tally.frame(frame);
+                tally.frame(frame, context.layout);
                 tally.lines(&kept, frame);
                 if arrows_held(&kept, frame) > 0 {
                     line_pairs += 1;

@@ -304,7 +304,7 @@ impl Options {
     }
 
     /// The recording's name from `name`, which is either a name or a test's name, setting the
-    /// seat and the window from a test's name.
+    /// seat, the window and the layout from a test's name.
     fn test_name(&mut self, name: &str) -> Result<String, Usage> {
         let Some(test) = name.strip_prefix("b3d:") else {
             return Ok(name.to_owned());
@@ -330,6 +330,8 @@ impl Options {
             ))
         })?;
         self.sized = true;
+        // The layout and its safe area follow the window, as they do in `just b3d test`.
+        self.layout = Layout::for_size(self.size);
         Ok(recording.to_owned())
     }
 }

@@ -20,7 +20,7 @@ use beryl_scene::driver::{Mode, Page};
 use beryl_scene::input::Size;
 
 use crate::cli::options::side_of;
-use crate::pages::{self, DESKTOP_WINDOWS};
+use crate::pages::{self, Windows};
 use crate::{recordings, stress};
 
 /// The prefix of every test's name.
@@ -50,13 +50,21 @@ impl Test {
         )
     }
 
-    /// The test's recording at its start, from its seat in its window.
+    /// The layout its window is shown in: the phone layout below `Layout::PHONE_BELOW_POINTS`
+    /// on the shorter side, as a host chooses it.
+    #[must_use]
+    pub fn layout(&self) -> Layout {
+        Layout::for_size(self.size)
+    }
+
+    /// The test's recording at its start, from its seat in its window, in its layout with the
+    /// layout's safe area (`pages::safe_area`).
     ///
     /// # Errors
     ///
     /// When the recording cannot be read or the client cannot open it.
     pub fn page(&self) -> Result<Page, String> {
-        pages::page(&self.recording, self.seat, Layout::Desktop, self.size)
+        pages::page(&self.recording, self.seat, self.layout(), self.size)
     }
 }
 
@@ -86,16 +94,17 @@ impl Outcome {
 
 /// Every test whose name starts with `filter`, which may leave out the `b3d:` prefix: every
 /// recording in the pack and every stress board, from each seat it is recorded for, in each of
-/// [`DESKTOP_WINDOWS`], ordered by recording, then seat (yours first), then window.
+/// `windows`, ordered by recording, then seat (yours first), then window.
 ///
 /// # Errors
 ///
 /// When the pack cannot be built or read.
-pub fn tests(filter: &str) -> Result<Vec<Test>, String> {
+pub fn tests(filter: &str, windows: Windows) -> Result<Vec<Test>, String> {
     let filter = full_name(filter);
+    let sizes = windows.sizes();
     let mut tests = Vec::new();
     for (recording, seat) in recordings::names()? {
-        for size in DESKTOP_WINDOWS {
+        for &size in &sizes {
             let test = Test {
                 recording: recording.clone(),
                 seat: side_of(seat),

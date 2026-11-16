@@ -7,7 +7,7 @@
 use std::ops::AddAssign;
 
 use super::checks::{KeptArrow, arrows_held};
-use super::fault::Rule;
+use super::fault::{Layout, Rule};
 use crate::frame::{Frame, Place, Role, StateBits};
 use crate::play::record::ScriptRecord;
 
@@ -40,13 +40,15 @@ impl Judged {
         }
     }
 
-    /// Counts what the frame checks (`agent::check`) judge in `frame`. Each count follows the
-    /// filter its check applies before it judges an element.
-    pub fn frame(&mut self, frame: &Frame) {
+    /// Counts what the frame checks (`agent::check`) judge in `frame`, shown in `layout`. Each
+    /// count follows the filter its check applies before it judges an element.
+    pub fn frame(&mut self, frame: &Frame, layout: Layout) {
         let mut interactive = 0;
         let mut layer = 0;
         let mut cards = 0;
         let mut held = 0;
+        // Flat-layer targets other than cards, which "phone sizes" holds to a finger's size.
+        let mut targets = 0;
         let mut moving = false;
         let mut face_up = 0;
         for element in &frame.resolved {
@@ -70,6 +72,9 @@ impl Judged {
             } else if element.place == Place::Layer {
                 layer += 1;
             }
+            if element.place == Place::Layer && element.role != Role::Card {
+                targets += 1;
+            }
         }
         self.add(Rule::OnScreen, interactive - held);
         self.add(Rule::Overlap, layer);
@@ -79,6 +84,10 @@ impl Judged {
         self.add(Rule::TextFits, frame.lines.len());
         self.add(Rule::Named, interactive);
         self.add(Rule::BlankCard, face_up);
+        // "Phone sizes" judges only the phone layout.
+        if layout == Layout::Phone {
+            self.add(Rule::PhoneSizes, targets + frame.lines.len());
+        }
         // "Clips fit" judges every frame's list of clip rectangles, entry 0 of which is no clip;
         // its elements are the rectangles the frame asked for.
         let clips = &mut self.0[Rule::Clips.index()];

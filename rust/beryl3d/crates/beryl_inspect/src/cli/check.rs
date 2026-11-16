@@ -5,7 +5,6 @@ use std::time::Instant;
 
 use beryl_scene::agent::{Context, Fault};
 use beryl_scene::driver::Mode;
-use beryl_scene::input::Insets;
 use serde_json::{Value, json};
 
 use super::options::{Options, Usage};
@@ -57,7 +56,7 @@ pub(super) fn check(options: &Options) -> Result<Printed, Usage> {
         seat: options.seat,
         layout: options.layout,
         size: options.size,
-        safe_area: Insets::default(),
+        safe_area: crate::pages::safe_area(options.layout),
         at: 0,
     };
     let seconds = started.elapsed().as_secs_f64();

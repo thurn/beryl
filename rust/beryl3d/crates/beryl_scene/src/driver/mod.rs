@@ -113,6 +113,8 @@ pub struct Page {
     seat: Side,
     layout: Layout,
     size: Size,
+    /// The window's safe area, for the client and the checks alike ([`Page::with_safe_area`]).
+    safe_area: Insets,
     tick: Duration,
     cues: Cues,
     client: Client,
@@ -164,6 +166,7 @@ impl Page {
             seat,
             layout,
             size,
+            safe_area: Insets::default(),
             tick: TICK,
             cues: Cues::default(),
             client: Client::new(Config::LARGEST),
@@ -188,6 +191,15 @@ impl Page {
     #[must_use]
     pub fn named(mut self, name: &str) -> Self {
         name.clone_into(&mut self.name);
+        self
+    }
+
+    /// The same page at its start, in a window whose safe area starts `safe_area` in from each
+    /// edge: the client lays out within it and the interface checks hold it to the same insets.
+    #[must_use]
+    pub fn with_safe_area(mut self, safe_area: Insets) -> Self {
+        self.safe_area = safe_area;
+        self.restart();
         self
     }
 
@@ -245,8 +257,7 @@ impl Page {
     ///
     /// # Panics
     ///
-    /// When the locator names no element or several, with the nearest names and the clock's
-    /// state.
+    /// When the locator names no element or several, with the nearest names and the clock's state.
     pub fn find(&mut self, locator: &str) -> Element {
         self.try_find(locator)
             .unwrap_or_else(|error| panic!("{error}"))
@@ -496,7 +507,7 @@ impl Page {
             seat: self.seat,
             layout: self.layout,
             size: self.size,
-            safe_area: Insets::default(),
+            safe_area: self.safe_area,
             at: self.now,
         }
     }
@@ -545,7 +556,7 @@ impl Page {
         self.give(Input::Surface {
             size: self.size,
             scale: 1.0,
-            safe_area: Insets::default(),
+            safe_area: self.safe_area,
         });
         if let Some(cards) = &self.cards {
             self.give(Input::Cards(Box::new(CardRecords::clone(cards))));
@@ -695,6 +706,7 @@ impl Page {
             seat: self.seat,
             layout: self.layout,
             size: self.size,
+            safe_area: self.safe_area,
             tick: self.tick,
             cues: self.cues.fresh(),
             client: Client::new(Config::LARGEST),
