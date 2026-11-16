@@ -82,6 +82,15 @@ The line is written under the pool's lock, which the releasing process takes any
 its tokens, and a failed write is reported without failing the command. An inherited lease and
 a top-up (extra tokens for a lease already logged, taken without waiting) write nothing.
 
+A wait that never gets a lease logs a line too, with `cores` 0, `held_s` 0 and an `outcome`:
+`gave_up` when its caller stopped it (`give_up`), and `abandoned` when its process died while it
+waited, as a check step does when the fast check kills it at its hard limit. Before, only
+released leases wrote a line, so the longest waits left none: on 2026-11-16 between 18:00 and
+19:00 UTC, the Beryl 3D record step was killed at 180 s 13 times, several of them having used
+under a CPU-second, and the log's longest push wait for the hour was 62 s. A dead process runs no
+cleanup, so each waiter also keeps a `waitinfo-` file beside its `wait-` file, holding what its
+line needs, and the next process that lists the waiters writes the line for it (`waiters`).
+
 Browser pages keep their own slots (ui/scripts/slots.mjs). The step that opens them, such as
 `ui-test`, holds tokens for the build and the Node side, and a page holds a slot for a few
 seconds at a time from Node, which would need the same protocol written again there.
@@ -345,6 +354,74 @@ def drop_old_lines(log: Path, now: float) -> None:
     tmp.replace(log)
 
 
+# The prefix of the file beside each waiter's `wait-` file that holds what the wait's line in the
+# pool's log needs if its process dies before it gets a lease (see the module comment). It does
+# not start with `wait-`, so `waiters` in older checkouts' copies of this module ignore it.
+WAIT_INFO = "waitinfo"
+
+
+def _write_info(info: Path, klass: str, command: str, want: int) -> None:
+    """Records a wait that has begun in `info`. Call under the lock."""
+    record = {
+        "class": klass,
+        "worktree": paths.REPO.name,
+        "command": command,
+        "wanted": want,
+        "started": time.time(),
+    }
+    try:
+        info.write_text(json.dumps(record))
+    except OSError as error:
+        print(f"tokens: could not record the wait in {info}: {error}", file=sys.stderr)
+
+
+def _touch(info: Path) -> None:
+    try:
+        os.utime(info)
+    except OSError:
+        pass  # Logged without it, the wait ends when the next waiter looked.
+
+
+def _info_pid(info: Path) -> int:
+    """The pid in a `waitinfo-<pid>-<thread>-<class>` file's name; 0 if it has none."""
+    pid = info.name.split("-")[1] if info.name.count("-") >= 3 else ""
+    return int(pid) if pid.isdigit() else 0
+
+
+def _log_wait(info: Path, outcome: str) -> None:
+    """Appends the line of a wait that got no lease, recorded in `info`, to the pool's log,
+    and removes `info`; reports a failure instead of raising it. Call under the lock."""
+    try:
+        last = info.stat().st_mtime
+        record = json.loads(info.read_text())
+        info.unlink(missing_ok=True)
+    except FileNotFoundError:
+        return
+    except (OSError, ValueError):
+        info.unlink(missing_ok=True)
+        return
+    # A process that died stopped waiting when it last touched the file, not when it was found.
+    now = time.time() if outcome != "abandoned" else min(time.time(), last)
+    line = {
+        "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+        "class": record.get("class", ""),
+        "worktree": record.get("worktree", ""),
+        "command": record.get("command", ""),
+        "cores": 0,
+        "wanted": record.get("wanted", 0),
+        "waited_s": round(max(0.0, now - float(record.get("started", now))), 1),
+        "held_s": 0.0,
+        "outcome": outcome,
+    }
+    log = info.parent / LEASE_LOG
+    try:
+        drop_old_lines(log, time.time())
+        with log.open("a") as handle:
+            handle.write(json.dumps(line) + "\n")
+    except (OSError, ValueError) as error:
+        print(f"tokens: could not log the wait to {log}: {error}", file=sys.stderr)
+
+
 class Pool:
     """The token files in `root`, `size` of them."""
 
@@ -377,6 +454,9 @@ class Pool:
                 path.unlink(missing_ok=True)
                 continue
             live.append((path, holder))
+        for info in self.root.glob(f"{WAIT_INFO}-*"):
+            if not system.alive(_info_pid(info)):
+                _log_wait(info, "abandoned")
         return live
 
     def grant(
@@ -457,6 +537,7 @@ class Pool:
         want = max(1, min(want, self.size))
         # One file per waiting lease: the threads of one process wait apart.
         me = self.root / f"wait-{os.getpid()}-{threading.get_ident()}-{klass}"
+        info = self.root / f"{WAIT_INFO}-{os.getpid()}-{threading.get_ident()}-{klass}"
         started = time.monotonic()
         try:
             while True:
@@ -477,11 +558,19 @@ class Pool:
                         )
                     if not me.exists():
                         me.write_text(f"{os.getpid()} {klass}")
+                    if not info.exists():
+                        _write_info(info, klass, command, want)
+                    else:
+                        # Its time is when the wait was last alive (`_log_wait`).
+                        _touch(info)
                 if give_up():
+                    with _THREADS, system.file_lock(self.root / "lock"):
+                        _log_wait(info, "gave_up")
                     return None
                 time.sleep(0.2 + random.random() * 0.2)
         finally:
             me.unlink(missing_ok=True)
+            info.unlink(missing_ok=True)
 
     def top_up(self, klass: str, held: int, want: int, elastic: bool = False) -> Lease:
         """The tokens of `klass` free now, without waiting, that bring a lease of `held` up to

@@ -144,7 +144,7 @@ def queued(db: sqlite3.Connection, scope: Scope) -> tuple[list[Queued], list[Nar
         for r in db.execute(
             f"""SELECT class, command, count(*), sum(cores < wanted) AS fewer, avg(cores),
                 avg(wanted)
-            FROM leases WHERE 1{clause} GROUP BY class, command HAVING fewer > 0
+            FROM leases WHERE cores > 0{clause} GROUP BY class, command HAVING fewer > 0
             ORDER BY fewer DESC, class, command""",
             given,
         )

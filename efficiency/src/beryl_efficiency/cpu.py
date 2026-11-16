@@ -10,6 +10,8 @@ Both files are written by the repository's tools and read here by their document
 - `<cache>/cpu-tokens/leases.jsonl` (tools/src/beryl_tools/tokens.py) has one line per lease,
   written when it is released: `time`, `class`, `worktree`, `command`, `cores`, `wanted`,
   `waited_s` and `held_s`. A lease waited from `time - held_s - waited_s` to `time - held_s`.
+  A wait that got no lease has a line too, with `cores` 0, `held_s` 0 and an `outcome`
+  (`gave_up`, or `abandoned` when its process died waiting).
 
 After each ingest the leases not yet joined are joined to the tool call that was running in
 the lease's worktree while it waited, and the transcripts of those calls are accounted again,

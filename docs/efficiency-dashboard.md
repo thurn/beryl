@@ -655,7 +655,10 @@ more sessions running in parallel.
   row's CPU seconds divided by its seconds) were at least 90% of the cores the
   machine has.
 - **Queued for cores** is exact: the CPU token pool writes one line when a lease
-  is released, with how long the command waited to get it.
+  is released, with how long the command waited to get it. A wait that never got
+  a lease also writes a line, with `cores` 0 and an `outcome` of `gave_up` or
+  `abandoned` (its process died waiting, as a step killed at the fast check's
+  limit does). The narrower-lease table leaves those lines out.
 
 ```json
 {"time": "2026-11-15T14:25:49Z", "class": "agent", "worktree": "by-bajq.6.9",

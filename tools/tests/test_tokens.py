@@ -264,6 +264,56 @@ def test_a_released_lease_logs_one_line(tmp_path: Path) -> None:
     assert first["worktree"] == tokens.paths.REPO.name
 
 
+def test_a_wait_that_gives_up_logs_a_line_with_no_cores(tmp_path: Path) -> None:
+    pool = Pool(tmp_path, 4)
+    blocker = pool.acquire("queue", 4, never)
+    assert blocker is not None
+    checks = iter([False, False, True])
+    assert pool.acquire("push", 2, lambda: next(checks), command="record") is None
+    (line,) = leases_logged(tmp_path)
+    assert line["outcome"] == "gave_up"
+    assert (line["class"], line["command"], line["cores"], line["wanted"]) == (
+        "push",
+        "record",
+        0,
+        2,
+    )
+    assert float(str(line["waited_s"])) >= 0.0 and line["held_s"] == 0.0
+    assert not list(tmp_path.glob(f"{tokens.WAIT_INFO}-*"))
+    blocker.release()
+
+
+# A process that waits for a token of a full pool until it is killed.
+WAITER = """
+import sys
+from pathlib import Path
+from beryl_tools.tokens import Pool
+Pool(Path(sys.argv[1]), 2).acquire("push", 2, command="cargo build")
+"""
+
+
+def test_a_wait_whose_process_dies_is_logged_by_the_next_lister(tmp_path: Path) -> None:
+    pool = Pool(tmp_path, 2)
+    blocker = pool.acquire("queue", 2, never)
+    assert blocker is not None
+    waiter = subprocess.Popen([sys.executable, "-c", WAITER, str(tmp_path)])
+    deadline = time.monotonic() + 30
+    while not list(tmp_path.glob(f"{tokens.WAIT_INFO}-*")):
+        assert time.monotonic() < deadline and waiter.poll() is None
+        time.sleep(0.05)
+    time.sleep(0.6)
+    waiter.kill()
+    waiter.wait()
+    with tokens.system.file_lock(tmp_path / "lock"):
+        assert pool.waiters() == []
+    (line,) = [x for x in leases_logged(tmp_path) if x.get("outcome")]
+    assert line["outcome"] == "abandoned"
+    assert line["command"] == "cargo build" and line["cores"] == 0
+    assert float(str(line["waited_s"])) >= 0.4
+    assert not list(tmp_path.glob(f"{tokens.WAIT_INFO}-*"))
+    blocker.release()
+
+
 def test_inherited_and_top_up_leases_log_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
