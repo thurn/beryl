@@ -86,7 +86,7 @@ def suspension_bounds(log: list[dict[str, Any]]) -> tuple[int, int] | None:
     return None
 
 
-def android_lifecycle_faults(log: str, host: str) -> list[str]:
+def lifecycle_faults(log: str, host: str) -> list[str]:
     parsed = lines(log)
     faults = []
     cycle = suspension_bounds(parsed)
@@ -110,8 +110,9 @@ def android_lifecycle_faults(log: str, host: str) -> list[str]:
         elif not resumed_surface_was_shown(after):
             faults.append("no frame shown on the resumed surface")
 
-    if not any("summary" in line for line in parsed):
-        faults.append("the fixture did not finish")
+    replay_end = parsed[cycle[1] + 1 :] if cycle else parsed
+    if not any("summary" in line for line in replay_end):
+        faults.append("the fixture did not finish after resume")
     for event in ("surface-lost", "haptic", "share", "open-url"):
         if event not in host.splitlines():
             faults.append(f"host.log did not record {event}")

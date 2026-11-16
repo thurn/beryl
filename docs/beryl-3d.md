@@ -1029,9 +1029,9 @@ bool beryl3d_next_request(Beryl3d *, BerylRequest *out);
 - **Requests are polled.** After each frame the host calls
   `beryl3d_next_request` until it returns false.
 
-What exists so far is the library's side of the hosts. The Swift and Kotlin apps
-are still the spike's, which replays one recording, built to find problems with
-the graphics paths and the build before milestone 4 builds the real hosts on it:
+The Swift and Kotlin hosts build on the apps used to test the graphics paths on
+each platform. They can replay a recording for a smoke test or start a live
+game:
 
 - **The functions.** `beryl_3d` exports every function above (`src/ffi`,
   declared by hand in `include/beryl3d.h`). With a recording named, the app
@@ -1056,8 +1056,8 @@ the graphics paths and the build before milestone 4 builds the real hosts on it:
   Their bundle and application ids are `ca.thurn.beryl3d`, so both apps can be
   installed beside the Tauri app. The Android host passes platform events to the
   library, applies its requested rate and schedules its callbacks from the
-  returned wake times. The iOS spike still calls `beryl3d_frame` on each display
-  tick while the app is in front.
+  returned wake times. The iOS host uses a display link, applies the requested
+  rate and pauses between wakes and while the app is inactive.
 - **The library** is built with `cargo rustc --crate-type staticlib` for iOS and
   `cdylib` for Android, so that desktop builds link neither. On Android it loads
   at API 24 and needs the system's libraries and the NDK's `libc++_shared.so`,
@@ -1092,14 +1092,16 @@ The phone hosts handle the following platform behaviors.
 - **Losing the surface.** The Android host stops its frame callbacks on pause
   and drops the GPU surface before returning from `surfaceDestroyed`. On resume
   it waits for a valid surface before scheduling a frame. iOS forbids GPU work
-  while suspended. The host calls `beryl3d_surface_lost`, and the renderer drops
-  the surface but keeps the GPU device and queue. wgpu's `Device` outlives its
-  `Surface` on Metal, Vulkan and OpenGL, so every uploaded face, glyph page and
-  pipeline survives the suspension. On return the host supplies a new surface
-  and the renderer attaches it to the same device (`Renderer::attach`),
-  uploading nothing. The client core's state is untouched, so the table
-  reappears exactly as it was. A lost device, which would need every texture
-  made again from the disk cache, is not handled yet.
+  while suspended. The host stops its display link when the app becomes
+  inactive, calls `beryl3d_surface_lost` on entry to the background and supplies
+  the layer again on entry to the foreground. Frames resume when the app becomes
+  active. The renderer drops the surface but keeps the GPU device and queue.
+  wgpu's `Device` outlives its `Surface` on Metal, Vulkan and OpenGL, so every
+  uploaded face, glyph page and pipeline survives the suspension. On return the
+  host supplies a new surface and the renderer attaches it to the same device
+  (`Renderer::attach`), uploading nothing. The client core's state is untouched,
+  so the table reappears exactly as it was. A lost device, which would need
+  every texture made again from the disk cache, is not handled yet.
 - **Low memory.** On a low-memory `Lifecycle` input the host tells the renderer
   directly (`Renderer::low_memory`), beside handing the input to the client. The
   renderer frees the full-size face array and the full-size faces waiting to be
@@ -1110,7 +1112,13 @@ The phone hosts handle the following platform behaviors.
   Baseline tier for the rest of the session, ignoring a later Enhanced tier.
   Board-size faces and glyph pages are kept. The Android host forwards
   `onLowMemory` and critical trim notices, using the foreground or background
-  threshold according to the activity's state.
+  threshold according to the activity's state. The iOS host forwards UIKit's
+  memory warning and schedules a frame when active.
+- **iOS requests.** The host presents a share sheet for a file, uses UIKit
+  impact feedback and opens links through `UIApplication`.
+  `just b3d ios-smoke --lifecycle` exercises suspend and resume in the headless
+  Simulator. The debug host also accepts test notifications for low memory and
+  the three platform requests and records the dispatched requests in `host.log`.
 - **Android requests.** The host uses Android's haptic feedback, opens links
   with an `ACTION_VIEW` intent and shares report files through a read-only
   `FileProvider` URI. `just b3d android-smoke --lifecycle` exercises Home and

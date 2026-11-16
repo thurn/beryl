@@ -31,8 +31,8 @@ from typing import Any
 from .. import checks, mobile, paths as repo_paths, system
 from . import app, paths
 from .phone_log import (
-    android_lifecycle_faults,
     android_touch_faults,
+    lifecycle_faults,
     lines,
     logged_inputs,
     rotated_and_returned,
@@ -234,81 +234,6 @@ def ios_app(sdk: str, release: bool, sign: bool, tests: bool = False) -> Path:
         raise SystemExit("xcodebuild failed")
     print(f"ios: host built in {time.monotonic() - started:.0f} s")
     return root / "derived" / "Build" / "Products" / f"Debug-{sdk}" / "Beryl3D.app"
-
-
-def ios_smoke_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--fixture", default=FIXTURE, help="the recording to replay")
-    parser.add_argument(
-        "--touch",
-        action="store_true",
-        help="run the UI test that touches, rotates and idles a live game instead of a replay",
-    )
-
-
-def run_ios_smoke(args: argparse.Namespace) -> int:
-    if args.touch:
-        from .ios_touch import run_ios_touch  # ios_touch imports this module.
-
-        return run_ios_touch()
-    bundle = ios_app("iphonesimulator", release=False, sign=False)
-    run = out_dir("phone") / f"{run_name()}-ios"
-    run.mkdir()
-    (fixture,) = write_fixtures((args.fixture,), run)
-    # The simulator `just ios-smoke` uses, under the same lock, so that neither reinstalls an
-    # app under the other or shuts the simulator down while the other runs.
-    with system.file_lock(repo_paths.cache_root() / "ios-smoke.lock"):
-        udid, booted = mobile.simulator()
-        mobile.boot(udid)
-        try:
-            mobile.install(udid, bundle)
-            container = mobile.run(
-                "xcrun", "simctl", "get_app_container", udid, BUNDLE, "data"
-            )
-            documents: Path = Path(container.stdout.strip()) / "Documents"
-            documents.mkdir(parents=True, exist_ok=True)
-            for old in [
-                *documents.glob("*.jsonl"),
-                documents / ERRORS,
-                documents / LIBRARY_LOG,
-            ]:
-                old.unlink(missing_ok=True)
-            shutil.copyfile(fixture, documents / fixture.name)
-            launched = subprocess.run(
-                [
-                    *["xcrun", "simctl", "launch", "--terminate-running-process"],
-                    *[udid, BUNDLE],
-                ],
-                env={**os.environ, "SIMCTL_CHILD_BERYL3D_FIXTURE": args.fixture},
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            pid = int(launched.stdout.rsplit(":", 1)[1])
-
-            def read() -> str | None:
-                logs = sorted(documents.glob("*.jsonl"))
-                return logs[-1].read_text(encoding="utf-8") if logs else None
-
-            def errors() -> str:
-                path = documents / ERRORS
-                if not path.exists():
-                    return ""
-                library_log = documents / LIBRARY_LOG
-                warned = (
-                    library_log.read_text(encoding="utf-8")
-                    if library_log.exists()
-                    else ""
-                )
-                return path.read_text(encoding="utf-8") + warned
-
-            log = wait_for_log(read, lambda: mobile.alive(pid), errors, "ios-smoke")
-            png = run / "screen.png"
-            mobile.run("xcrun", "simctl", "io", udid, "screenshot", str(png))
-        finally:
-            mobile.run("xcrun", "simctl", "terminate", udid, BUNDLE)
-            if not booted:
-                mobile.run("xcrun", "simctl", "shutdown", udid)
-    return finish("ios-smoke", log, png)
 
 
 def ios_device_arguments(parser: argparse.ArgumentParser) -> None:
@@ -763,7 +688,7 @@ def run_android_smoke(args: argparse.Namespace) -> int:
                     log = read()
                 host = android_lifecycle.host_log()
                 (run / "host.log").write_text(host, encoding="utf-8")
-                faults.extend(android_lifecycle_faults(log or "", host))
+                faults.extend(lifecycle_faults(log or "", host))
                 if reported := errors():
                     faults.append(reported)
                 library_log = adb(*shell, f"'cat files/{LIBRARY_LOG}'").stdout

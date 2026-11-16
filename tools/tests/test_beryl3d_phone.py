@@ -84,7 +84,7 @@ SHOWN = {"lifecycle_shown_ms": 4000}
 HOST = "surface-lost\nhaptic\nshare\nopen-url\n"
 
 
-def test_android_lifecycle_accepts_surface_recreation_and_platform_requests() -> None:
+def test_phone_lifecycle_accepts_surface_recreation_and_platform_requests() -> None:
     log = "\n".join(
         [
             RUN,
@@ -95,23 +95,42 @@ def test_android_lifecycle_accepts_surface_recreation_and_platform_requests() ->
             SUMMARY,
         ]
     )
-    assert phone_log.android_lifecycle_faults(log, HOST) == []
+    assert phone_log.lifecycle_faults(log, HOST) == []
 
 
-def test_android_lifecycle_rejects_frames_in_the_background_and_events_out_of_order() -> (
+def test_phone_lifecycle_rejects_frames_in_the_background_and_events_out_of_order() -> (
     None
 ):
     entries = (LOW_MEMORY, SUSPEND, SHOWN, RESUME, SHOWN, SURFACE)
     log = "\n".join([RUN, *(json.dumps(line) for line in entries)])
-    assert phone_log.android_lifecycle_faults(
+    assert phone_log.lifecycle_faults(
         log, "haptic\nshare failed: IOException\nopen-url\n"
     ) == [
         "a frame was shown while suspended",
         "no LowMemory after Resumed",
         "no frame shown on the resumed surface",
-        "the fixture did not finish",
+        "the fixture did not finish after resume",
         "host.log did not record surface-lost",
         "host.log did not record share",
+    ]
+
+
+def test_ios_lifecycle_requires_a_post_resume_summary_and_showing_the_new_surface() -> (
+    None
+):
+    log = "\n".join(
+        [
+            RUN,
+            SUMMARY,
+            *(
+                json.dumps(line)
+                for line in (SUSPEND, RESUME, SHOWN, SURFACE, LOW_MEMORY)
+            ),
+        ]
+    )
+    assert phone_log.lifecycle_faults(log, HOST) == [
+        "no frame shown on the resumed surface",
+        "the fixture did not finish after resume",
     ]
 
 

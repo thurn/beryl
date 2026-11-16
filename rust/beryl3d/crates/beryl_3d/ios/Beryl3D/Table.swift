@@ -1,13 +1,15 @@
 // The view controller of Beryl 3D's iOS host: one MetalView and a CADisplayLink that asks the
 // Rust library for a frame on every tick while the library wants frames.
 
+import CoreFoundation
 import QuartzCore
 import UIKit
 
 final class TableController: UIViewController {
     private var app: OpaquePointer?
     private var link: CADisplayLink?
-    private var visible = true
+    private var foregrounded = true
+    private var active = false
     /// The frame rate last asked of the display link, from the library's wake.
     private var hz: Float = 0
     /// The one-shot timer that unpauses the display link at the library's wake time.
@@ -59,6 +61,8 @@ final class TableController: UIViewController {
             }
         }
         let link = CADisplayLink(target: self, selector: #selector(tick))
+        active = UIApplication.shared.applicationState == .active
+        link.isPaused = !active
         link.add(to: .main, forMode: .common)
         self.link = link
         let center = NotificationCenter.default
@@ -71,6 +75,15 @@ final class TableController: UIViewController {
         center.addObserver(
             self, selector: #selector(lowMemory),
             name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+        center.addObserver(
+            self, selector: #selector(resignActive),
+            name: UIApplication.willResignActiveNotification, object: nil)
+        center.addObserver(
+            self, selector: #selector(becomeActive),
+            name: UIApplication.didBecomeActiveNotification, object: nil)
+        #if DEBUG
+            observeTestNotifications(context: context)
+        #endif
     }
 
     override func viewDidLayoutSubviews() {
@@ -86,7 +99,7 @@ final class TableController: UIViewController {
     /// Passes the layer at the view's size in pixels and its safe area in points. Rotating
     /// passes a new size for the same layer.
     private func attach() {
-        guard let app, visible else { return }
+        guard let app, foregrounded else { return }
         let layer = view.layer as! CAMetalLayer
         let scale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale
         layer.contentsScale = scale
@@ -119,7 +132,7 @@ final class TableController: UIViewController {
     }
 
     @objc private func tick(_ link: CADisplayLink) {
-        guard let app, visible else {
+        guard let app, foregrounded, active else {
             link.isPaused = true
             return
         }
@@ -141,7 +154,7 @@ final class TableController: UIViewController {
     /// frame, or until a timer at its time. A time within the next tick keeps the link running,
     /// since a timer could not wake it sooner.
     private func schedule(_ wake: BerylWake, now: UInt64) {
-        guard let link else { return }
+        guard foregrounded, active, let link else { return }
         switch Int(wake.kind) {
         case BERYL_WAKE_NEVER:
             link.isPaused = true
@@ -159,59 +172,82 @@ final class TableController: UIViewController {
         }
     }
 
-    /// Unpauses the display link, so that the next tick asks the library for a frame.
+    /// A wake from Rust or a scheduled timer can arrive while the app is inactive.
     func resume() {
+        guard foregrounded, active else { return }
         timer?.cancel()
         timer = nil
         link?.isPaused = false
     }
 
-    /// Carries out something the library asks of the platform.
-    private func perform(_ request: BerylRequest) {
-        switch Int(request.kind) {
-        case BERYL_REQUEST_BEGIN_TEXT_ENTRY:
-            log(request, "begin text entry")
-        case BERYL_REQUEST_END_TEXT_ENTRY:
-            log(request, "end text entry")
-        case BERYL_REQUEST_SHARE:
-            log(request, "share")
-        case BERYL_REQUEST_HAPTIC:
-            log(request, "haptic")
-        case BERYL_REQUEST_OPEN_URL:
-            log(request, "open URL")
-        default:
-            log(request, "unknown")
-        }
+    private func pause() {
+        timer?.cancel()
+        timer = nil
+        link?.isPaused = true
     }
 
-    private func log(_ request: BerylRequest, _ kind: String) {
-        #if DEBUG
-            print("beryl3d: request \(kind) (\(request.kind))")
-        #endif
+    @objc private func resignActive() {
+        active = false
+        pause()
+    }
+
+    @objc private func becomeActive() {
+        active = true
+        resume()
     }
 
     @objc private func background() {
-        guard let app else { return }
-        resume()
-        visible = false
+        foregrounded = false
         passed = nil
-        beryl3d_lifecycle(app, UInt32(BERYL_SUSPENDED))
-        beryl3d_surface_lost(app)
+        if let app {
+            beryl3d_lifecycle(app, UInt32(BERYL_SUSPENDED))
+            beryl3d_surface_lost(app)
+            #if DEBUG
+                logHostEvent("surface-lost")
+            #endif
+        }
+        pause()
     }
 
     @objc private func foreground() {
+        foregrounded = true
         guard let app else { return }
-        resume()
-        visible = true
         beryl3d_lifecycle(app, UInt32(BERYL_RESUMED))
         attach()
+        resume()
     }
 
     @objc private func lowMemory() {
         guard let app else { return }
-        resume()
         beryl3d_lifecycle(app, UInt32(BERYL_LOW_MEMORY))
+        resume()
     }
+
+    #if DEBUG
+        // The simulator cannot raise a UIKit memory warning through simctl. These notifications
+        // let the headless smoke drive the same handlers as UIKit and the Rust request queue.
+        private func observeTestNotifications(context: UnsafeMutableRawPointer) {
+            let center = CFNotificationCenterGetDarwinNotifyCenter()
+            for name in ["memory-warning", "share", "haptic", "open-url"] {
+                CFNotificationCenterAddObserver(
+                    center, context,
+                    { _, observer, name, _, _ in
+                        guard let observer, let name else { return }
+                        let controller = Unmanaged<TableController>.fromOpaque(observer)
+                            .takeUnretainedValue()
+                        let event = String((name.rawValue as String).split(separator: ".").last ?? "")
+                        DispatchQueue.main.async {
+                            if event == "memory-warning" {
+                                controller.lowMemory()
+                            } else {
+                                controller.simulateRequest(event)
+                            }
+                        }
+                    },
+                    "ca.thurn.beryl3d.test.\(name)" as CFString, nil, .deliverImmediately)
+            }
+        }
+    #endif
 }
 
 /// Calls `body` with `string` as a C string, or with nil when there is none.

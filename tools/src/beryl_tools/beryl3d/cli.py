@@ -21,7 +21,19 @@ from pathlib import Path
 
 from .. import caches, system, tokens, warm
 from .. import paths as repo_paths
-from . import app, camera, gate, lane, live, paths, phone, sweep, timeline, vm
+from . import (
+    app,
+    camera,
+    gate,
+    ios_smoke,
+    lane,
+    live,
+    paths,
+    phone,
+    sweep,
+    timeline,
+    vm,
+)
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
 USAGE = 2
@@ -532,14 +544,17 @@ COMMANDS: tuple[Command, ...] = (
         "ios-smoke",
         "replays a recording in the app's iOS host in the headless Simulator, and saves the screen",
         (
-            ("just b3d ios-smoke", "build, install and replay verbs-zones"),
             (
                 "just b3d ios-smoke --touch",
                 "touch, rotate and idle a live game through a UI test",
             ),
+            (
+                "just b3d ios-smoke --lifecycle",
+                "suspend and resume a replay, trim memory and exercise platform requests",
+            ),
         ),
-        phone.checked(phone.run_ios_smoke),
-        phone.ios_smoke_arguments,
+        phone.checked(ios_smoke.run_ios_smoke),
+        ios_smoke.ios_smoke_arguments,
     ),
     Command(
         "android-smoke",

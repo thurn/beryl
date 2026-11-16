@@ -99,9 +99,11 @@ and wgpu's warnings to `wgpu.log` in its data folder, and the smoke prints them
 when it fails. `just b3d ios-smoke --touch` runs a UI test
 (`ios/Beryl3DUITests`) that touches, rotates and idles a live game, then checks
 the frame log for each event, a nonzero top inset and no frame in the last 2
-seconds before the test suspends the app. `just b3d ios-device --user-asked`
-installs on the paired iPhone, only when the user asked for it in chat. None of
-these are in the lane or the sweep yet.
+seconds before the test suspends the app. `just b3d ios-smoke --lifecycle`
+backgrounds and resumes a replay, checks that frames resume on the reattached
+surface, and exercises low memory, haptics, sharing and opening a URL.
+`just b3d ios-device --user-asked` installs on the paired iPhone, only when the
+user asked for it in chat. None of these are in the lane or the sweep yet.
 
 ## Paths
 
