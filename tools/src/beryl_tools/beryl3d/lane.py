@@ -34,7 +34,7 @@ RECORD = Step("record", [*CARGO, "record"], paths.REPO)
 # that build nothing in the shared build directory (clippy has a target directory of its own,
 # `cli.CLIPPY_TARGET`); each other lane starts with [`RECORD`].
 GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    (NAME, ("fmt", "clippy", "scene-purity", "lints-match", "data-names")),
+    (NAME, ("fmt", "clippy", "scene-purity", "lints-match", "data-names", "scene-literals")),
     (f"{NAME}-tests", ("cargo-test", "gate")),
     (f"{NAME}-interface", ("test",)),
     (f"{NAME}-timeline", ("timeline-parity",)),
@@ -55,6 +55,7 @@ def steps() -> list[Step]:
         Step("scene-purity", [*PURITY, "scene-purity"], paths.REPO),
         Step("lints-match", [*PURITY, "lints-match"], paths.REPO),
         Step("data-names", [*PURITY, "data-names"], paths.REPO),
+        Step("scene-literals", [*PURITY, "scene-literals"], paths.REPO),
         # Beryl 3D's own timeline of every recording takes minutes, so the lane compares the
         # recorded fixtures only and the sweep compares everything (sweep.py).
         Step("timeline-parity", [*CARGO, "timeline-parity", "--fixtures"], paths.REPO),

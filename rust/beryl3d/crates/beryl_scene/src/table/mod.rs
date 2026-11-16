@@ -41,6 +41,7 @@ pub(crate) use stack::{OnStack, on_stack, row_area};
 pub use tray_layout::{Held, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes};
 
 use crate::data::space;
+use crate::data::space::flat::PHONE_UNDER;
 use crate::input::{Insets, Size};
 
 /// A card's printed width and height (`card` in `space.json`).
@@ -76,7 +77,7 @@ impl Window {
     /// (docs/beryl-3d.md, "Sizes").
     #[must_use]
     pub fn phone(self) -> bool {
-        self.size.width.min(self.size.height) < 500.0
+        self.size.width.min(self.size.height) < PHONE_UNDER
     }
 }
 

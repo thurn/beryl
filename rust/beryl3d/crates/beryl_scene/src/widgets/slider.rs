@@ -8,7 +8,7 @@
 use crate::element::{Align, Element, Position, Press, row};
 use crate::frame::Role;
 use crate::settings::Setting;
-use crate::tokens::{color, size};
+use crate::tokens::{color, ratio, size};
 
 /// How far a level moves for one step of a drag or one key: the web range input's `step` of
 /// 0.05.
@@ -18,7 +18,7 @@ pub const STEP: u8 = 5;
 /// `Press::Setting` with the same setting at the level dragged to.
 #[must_use]
 pub fn slider(name: &str, setting: Setting) -> Element {
-    let value = f32::from(setting.level().unwrap_or(0).min(100)) / 100.0;
+    let value = f32::from(setting.level().unwrap_or(0).min(100)) / ratio::PERCENT;
     let track = size::SLIDER_WIDTH;
     let thumb = size::SLIDER_THUMB;
     let mut element = Element::new(Role::Slider)
@@ -70,6 +70,6 @@ pub fn level_at(x: f32, left: f32, width: f32) -> u8 {
     let share = ((x - left - thumb / 2.0) / room).clamp(0.0, 1.0);
     let step = f32::from(STEP);
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let level = ((share * 100.0 / step).round() * step) as u8;
+    let level = ((share * ratio::PERCENT / step).round() * step) as u8;
     level
 }

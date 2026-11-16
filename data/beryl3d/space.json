@@ -622,6 +622,7 @@
     "tooltip_delay": 500,
     "tooltip_gap": 8,
     "menu_edge": 8,
+    "phone_under": 500,
     "sheet": {
       "max_width": 430,
       "preview_width": 144

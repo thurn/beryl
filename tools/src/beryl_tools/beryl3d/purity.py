@@ -1,5 +1,5 @@
 """Beryl 3D's source lints (docs/beryl-3d.md, 'Determinism' and 'Checks and isolation'):
-`scene-purity`, `lints-match` and `data-names`. Each prints one line per finding and exits 1
+`scene-purity`, `lints-match`, `data-names` and `scene-literals`. Each prints one line per finding and exits 1
 when there is any."""
 
 from __future__ import annotations
@@ -301,6 +301,58 @@ def data_names(root: Path) -> list[str]:
     ]
 
 
+# The folders of beryl_scene's `src` whose code is built from design tokens: a screen, prompt,
+# widget, heads-up display, inspector or manual element takes its sizes from the generated
+# `tokens` module (rust/beryl3d/crates/beryl_scene/src/tokens.rs), never from a number of its own
+# (docs/beryl-3d.md, "Elements").
+TOKEN_FOLDERS: tuple[str, ...] = ("screens", "prompts", "widgets", "hud", "inspect", "manual")
+TOKEN_FILE = "data/design-tokens.json"
+# The float literals that are not sizes: zero, one, a half to centre and two to halve or double.
+PLAIN_FLOATS: frozenset[float] = frozenset({0.0, 0.5, 1.0, 2.0})
+# A float literal: `12.0`, `1.35`, `1_000.0` or `4f32`, not the `0` of a field `x.0` or a part of
+# a name.
+FLOAT_LITERAL: re.Pattern[str] = re.compile(r"(?<![\w.])(\d[\d_]*\.\d[\d_]*|\d[\d_]*(?=f32))")
+STRING_LITERAL: re.Pattern[str] = re.compile(r'"(?:[^"\\]|\\.)*"')
+
+
+def non_test_lines(path: Path) -> list[tuple[int, str]]:
+    """The code lines of `path` outside `#[cfg(test)]` items, comments and string contents."""
+    kept: list[tuple[int, str]] = []
+    depth = 0
+    waiting = False
+    for number, line in code_lines(path):
+        if depth == 0 and not waiting and line.strip() == "#[cfg(test)]":
+            waiting = True
+            continue
+        if waiting or depth > 0:
+            depth += line.count("{") - line.count("}")
+            if waiting and "{" in line:
+                waiting = False
+            elif waiting and ";" in line:
+                waiting = False
+            continue
+        kept.append((number, STRING_LITERAL.sub('""', line.split("//")[0])))
+    return kept
+
+
+def scene_literals(root: Path) -> list[str]:
+    """Each float literal in beryl_scene's screens, prompts, widgets, heads-up display,
+    inspector and manual code, outside tests, that is not 0, 0.5, 1 or 2."""
+    found: list[str] = []
+    src = crates(root) / SCENE / "src"
+    for folder in TOKEN_FOLDERS:
+        for path in sorted((src / folder).rglob("*.rs")):
+            for number, line in non_test_lines(path):
+                for match in FLOAT_LITERAL.finditer(line):
+                    if float(match[0].replace("_", "")) not in PLAIN_FLOATS:
+                        found.append(
+                            f"{path.relative_to(root)}:{number}: the literal {match[0]} is a "
+                            f"size, so it is a design token in {TOKEN_FILE}, under `flat`, "
+                            "that the code names through `tokens`"
+                        )
+    return found
+
+
 def report(name: str, found: list[str]) -> int:
     for line in found:
         print(f"{name}: {line}")
@@ -322,10 +374,16 @@ def data_names_step(*_args: str) -> int:
     return report("data-names", data_names(paths.REPO))
 
 
+def scene_literals_step(*_args: str) -> int:
+    """The `scene-literals` check."""
+    return report("scene-literals", scene_literals(paths.REPO))
+
+
 STEPS = {
     "scene-purity": scene_purity_step,
     "lints-match": lints_match_step,
     "data-names": data_names_step,
+    "scene-literals": scene_literals_step,
 }
 
 if __name__ == "__main__":

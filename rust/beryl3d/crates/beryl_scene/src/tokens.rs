@@ -28,6 +28,13 @@ pub mod size {
     include!(concat!(env!("OUT_DIR"), "/tokens/size.rs"));
 }
 
+/// Numbers that are not sizes in points: the share a small button keeps, a quarter to round a
+/// corner by, percent and the nanoseconds in a millisecond.
+#[allow(clippy::doc_markdown, clippy::unreadable_literal)]
+pub mod ratio {
+    include!(concat!(env!("OUT_DIR"), "/tokens/ratio.rs"));
+}
+
 /// Colors as RGBA, not premultiplied: each token of kind `color`, named for it in upper case
 /// (`--surface-raised` is `SURFACE_RAISED`), then the flat layer's own (`PANEL`, `BUTTON`), then
 /// the effects' colors, which the web interface writes in `ui/src/stage/effects.css` rather than

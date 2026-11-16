@@ -361,7 +361,8 @@ pub struct OwnRecord {
 }
 
 /// Nanoseconds in a millisecond.
-const NS_PER_MS: f64 = 1_000_000.0;
+#[allow(clippy::cast_lossless, reason = "`From` is not `const`")]
+const NS_PER_MS: f64 = crate::tokens::ratio::NANOS_PER_MS as f64;
 
 impl<'a> Steps<'a> {
     #[expect(

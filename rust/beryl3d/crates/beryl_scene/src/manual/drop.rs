@@ -20,7 +20,7 @@ use crate::element::{Align, Anchor, Element, Justify, column, text};
 use crate::frame::{Frame, Place, Role, StateBits};
 use crate::input::Rect;
 use crate::table::{Camera, Layout};
-use crate::tokens::{color, type_style};
+use crate::tokens::{color, ratio, type_style};
 
 /// What a dropped card lands in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -426,7 +426,8 @@ fn place_in_row(
             else {
                 return None;
             };
-            let middle = element.corners.iter().map(|corner| corner.x).sum::<f32>() / 4.0;
+            let middle =
+                element.corners.iter().map(|corner| corner.x).sum::<f32>() * ratio::QUARTER;
             (found == row).then_some((index, middle))
         })
         .collect();

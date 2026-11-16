@@ -413,6 +413,90 @@
         "size": 20.2,
         "line_height": 1,
         "note": "The step banner's detail: `.step-banner-detail`, 20.2 points (upright: the flat layer has no italic face)."
+      },
+      "START_TITLE": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 38,
+        "line_height": 1.2
+      },
+      "SCREEN_BODY": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 15,
+        "line_height": 1.35
+      },
+      "START_SUBTITLE": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 19,
+        "line_height": 1.2
+      },
+      "START_LABEL": {
+        "font": "OpenSans",
+        "weight": 600,
+        "size": 15,
+        "line_height": 1.3
+      },
+      "START_AGENT_NAME": {
+        "font": "CrimsonPro",
+        "weight": 600,
+        "size": 18,
+        "line_height": 1.25
+      },
+      "START_CHEATING_NOTE": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 14,
+        "line_height": 1.25
+      },
+      "START_ABOUT": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 14,
+        "line_height": 1.35
+      },
+      "BUG_TITLE": {
+        "font": "Cinzel",
+        "weight": 600,
+        "size": 22,
+        "line_height": 1.2
+      },
+      "BUG_SAVED": {
+        "font": "Cinzel",
+        "weight": 600,
+        "size": 20,
+        "line_height": 1
+      },
+      "GAME_OVER_TITLE": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 72,
+        "line_height": 1.1
+      },
+      "GAME_OVER_REASON": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 24,
+        "line_height": 1.3
+      },
+      "LOBBY_HEADING": {
+        "font": "CrimsonPro",
+        "weight": 600,
+        "size": 20,
+        "line_height": 1.25
+      },
+      "OPENING_TITLE": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 56,
+        "line_height": 1.05
+      },
+      "OPENING_COIN": {
+        "font": "CrimsonPro",
+        "weight": 600,
+        "size": 22,
+        "line_height": 1.2
       }
     },
     "size": {
@@ -715,6 +799,183 @@
       "BANNER_HEIGHT": {
         "value": 80,
         "note": "The step banner's shade: `.step-banner`'s `height`."
+      },
+      "START_PANEL_WIDTH": {
+        "value": 620
+      },
+      "START_PANEL_PADDING_TOP": {
+        "value": 28
+      },
+      "START_PANEL_PADDING_SIDE": {
+        "value": 36
+      },
+      "START_PANEL_PADDING_BOTTOM": {
+        "value": 32
+      },
+      "START_PANEL_GAP": {
+        "value": 18
+      },
+      "START_AROUND_AGENTS": {
+        "value": 470
+      },
+      "START_AGENTS_LEAST": {
+        "value": 130
+      },
+      "START_SEED_WIDTH": {
+        "value": 160
+      },
+      "START_CORNER": {
+        "value": 18
+      },
+      "START_RADIO": {
+        "value": 16
+      },
+      "CHECKBOX": {
+        "value": 18
+      },
+      "START_SUBTITLE_PULL": {
+        "value": 10
+      },
+      "START_LEGEND_GAP": {
+        "value": 6
+      },
+      "START_SEED_PADDING_Y": {
+        "value": 6
+      },
+      "START_SEED_PADDING_X": {
+        "value": 10
+      },
+      "START_SEED_GAP": {
+        "value": 12
+      },
+      "START_BUTTONS_GAP": {
+        "value": 14
+      },
+      "START_RADIO_DROP": {
+        "value": 3
+      },
+      "START_AGENT_GAP": {
+        "value": 8
+      },
+      "START_AGENT_RADIUS": {
+        "value": 8
+      },
+      "START_AGENT_PADDING_Y": {
+        "value": 8
+      },
+      "START_AGENT_PADDING_X": {
+        "value": 10
+      },
+      "START_CHECKBOX_RADIUS": {
+        "value": 3
+      },
+      "START_TICK_RADIUS": {
+        "value": 1.5
+      },
+      "BUG_CLICK": {
+        "value": 6
+      },
+      "BUG_DESCRIPTION_HEIGHT": {
+        "value": 110
+      },
+      "BUG_PANEL_WIDTH": {
+        "value": 520
+      },
+      "BUG_PANEL_PADDING_Y": {
+        "value": 18
+      },
+      "BUG_PANEL_PADDING_X": {
+        "value": 20
+      },
+      "BUG_PANEL_GAP": {
+        "value": 12
+      },
+      "BUG_PANEL_RADIUS": {
+        "value": 10
+      },
+      "BUG_TOOLS_INSET_TOP": {
+        "value": 14
+      },
+      "BUG_TOOLS_INSET_RIGHT": {
+        "value": 16
+      },
+      "BUG_TOOL": {
+        "value": 40
+      },
+      "BUG_HINT_TOP": {
+        "value": 22
+      },
+      "BUG_HINT_SIZE": {
+        "value": 15
+      },
+      "BUG_ERROR_SIZE": {
+        "value": 14
+      },
+      "BUG_PILL_RADIUS": {
+        "value": 999
+      },
+      "BUG_HINT_PADDING_Y": {
+        "value": 6
+      },
+      "BUG_HINT_PADDING_X": {
+        "value": 14
+      },
+      "BUG_CHECKBOX_RADIUS": {
+        "value": 3
+      },
+      "BUG_CHECK_INSET": {
+        "value": 8
+      },
+      "BUG_AI_GAP": {
+        "value": 8
+      },
+      "BUG_TOOLS_PADDING": {
+        "value": 3
+      },
+      "GAME_OVER_CULPRIT_WIDTH": {
+        "value": 230
+      },
+      "GAME_OVER_REASON_GAP": {
+        "value": 14
+      },
+      "GAME_OVER_BUTTONS_BOTTOM": {
+        "value": 87
+      },
+      "GAME_OVER_CARD_GAP": {
+        "value": 22
+      },
+      "LOBBY_NUMBER_WIDTH": {
+        "value": 90
+      },
+      "LOBBY_DECKLIST_HEIGHT": {
+        "value": 121.5
+      },
+      "SCREEN_MARGIN": {
+        "value": 24
+      },
+      "LOBBY_ROW_GAP": {
+        "value": 8
+      },
+      "LOBBY_GAP": {
+        "value": 12
+      },
+      "SETTINGS_WIDTH": {
+        "value": 360
+      },
+      "SETTINGS_GEAR_INSET": {
+        "value": 12
+      },
+      "ORDER_ENDS_SIZE": {
+        "value": 18
+      },
+      "ORDER_ENDS_MOST": {
+        "value": 640
+      },
+      "SPLIT_LABEL_LEAST": {
+        "value": 12
+      },
+      "INSPECTOR_RADIUS": {
+        "value": 22
       }
     },
     "color": {
@@ -837,10 +1098,6 @@
       },
       "TRAY_SHADE": {
         "value": "rgb(6 9 12 / 62%)",
-        "note": "The shade over the table under what a prompt holds up or lists, such as waiting triggers to order: `.stage-tray`'s `background` in `ui/src/stage/stage.css`."
-      },
-      "TRAY_SHADE": {
-        "value": "rgb(6 9 12 / 62%)",
         "note": "What darkens the table while a prompt covers it: `.stage-tray`'s `background` in `ui/src/stage/stage.css`."
       },
       "ENTRY": {
@@ -924,6 +1181,24 @@
       "U_INK": {
         "value": "#020405",
         "note": "A blue mana symbol's glyph: the `color` of `.mana-u`."
+      }
+    },
+    "ratio": {
+      "SMALL_SCALE": {
+        "value": 0.75,
+        "note": "`button-small`: a small button is this share of a button's height and type size."
+      },
+      "QUARTER": {
+        "value": 0.25,
+        "note": "A quarter, to round a corner by."
+      },
+      "PERCENT": {
+        "value": 100,
+        "note": "Percent in a whole."
+      },
+      "NANOS_PER_MS": {
+        "value": 1000000,
+        "note": "Nanoseconds in a millisecond."
       }
     }
   }

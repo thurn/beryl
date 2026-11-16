@@ -21,34 +21,23 @@ use crate::manual::lobby::{
     asked_settings, unreadable,
 };
 use crate::text::TypeStyle;
-use crate::text::fonts::Font;
-use crate::tokens::{color, size};
+use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{FieldState, button, field, primary};
 
 /// `.lobby-deck h2` and the section headings: semibold 20-point serif.
-const HEADING: TypeStyle = TypeStyle {
-    font: Font::CrimsonPro,
-    weight: 600,
-    size: 20.0,
-    line_height: 1.25,
-};
+const HEADING: TypeStyle = type_style::LOBBY_HEADING;
 
 /// Body text: 15-point sans.
-const BODY: TypeStyle = TypeStyle {
-    font: Font::OpenSans,
-    weight: 400,
-    size: 15.0,
-    line_height: 1.35,
-};
+const BODY: TypeStyle = type_style::SCREEN_BODY;
 
 /// The width of a game setting's number field.
-const NUMBER_WIDTH: f32 = 90.0;
+const NUMBER_WIDTH: f32 = size::LOBBY_NUMBER_WIDTH;
 
 /// The least height of the decklist field: six lines, as the web's `<textarea rows={6}>`.
-const DECKLIST_HEIGHT: f32 = 6.0 * 15.0 * 1.35;
+const DECKLIST_HEIGHT: f32 = size::LOBBY_DECKLIST_HEIGHT;
 
 /// The space the panel keeps from the window's top and bottom edges.
-const MARGIN: f32 = 24.0;
+const MARGIN: f32 = size::SCREEN_MARGIN;
 
 /// What the flat layer shows on the lobby screen. Until the session sends the lobby, only the
 /// heading.
@@ -134,7 +123,7 @@ fn section(name: &str) -> Element {
     column()
         .name(name)
         .align_self(Align::Stretch)
-        .gap(8.0)
+        .gap(size::LOBBY_ROW_GAP)
         .child(
             text(&name.to_uppercase())
                 .style(LABEL)
@@ -226,7 +215,7 @@ fn deck(lobby: &Lobby, view: &LobbyView) -> Element {
     }
     let actions = row()
         .name("deck actions")
-        .gap(10.0)
+        .gap(space::M)
         .child(button("Change").on_press(Press::Lobby(LobbyPress::Change)))
         .child(
             button("Sideboard")
@@ -261,7 +250,7 @@ fn picker(lobby: &Lobby, panel: DeckPanel, input: &ScreenIn) -> Element {
             .child(
                 row()
                     .name("picker actions")
-                    .gap(10.0)
+                    .gap(space::M)
                     .child(button("Paste decklist").on_press(Press::Lobby(LobbyPress::Paste))),
             ),
         DeckPanel::Paste => {
@@ -304,7 +293,7 @@ fn saved_deck(at: u16, saved: &SavedDeck) -> Element {
     let counts = format!("{} main · {} sideboard", saved.main_count, saved.side_count);
     row()
         .name(&format!("saved {}", saved.deck.name))
-        .gap(12.0)
+        .gap(size::LOBBY_GAP)
         .align_items(Align::Center)
         .child(button(&saved.deck.name).on_press(Press::Lobby(LobbyPress::Pick(at))))
         .child(text(&counts).style(BODY).color(color::TEXT_DIM))
@@ -338,7 +327,7 @@ fn sideboard(lobby: &Lobby, view: &LobbyView) -> Option<Element> {
                     .align_self(Align::Stretch)
                     .align_items(Align::Center)
                     .justify_content(Justify::SpaceBetween)
-                    .gap(12.0)
+                    .gap(size::LOBBY_GAP)
                     .child(
                         text(&format!("{count} × {name}"))
                             .style(BODY)
@@ -359,7 +348,7 @@ fn sideboard(lobby: &Lobby, view: &LobbyView) -> Option<Element> {
 
 /// The five assists' switches (`AssistSwitches.tsx`).
 fn assists(view: &LobbyView) -> Element {
-    let mut boxes = row().name("assist switches").gap(16.0).wrap(true);
+    let mut boxes = row().name("assist switches").gap(space::L).wrap(true);
     for (at, (assist, label)) in (0u8..).zip(ASSISTS) {
         let on = view.assists.contains(&assist);
         boxes = boxes.child(checkbox(label, on, Press::Lobby(LobbyPress::Assist(at))));
@@ -381,7 +370,7 @@ fn settings(view: &LobbyView, input: &ScreenIn) -> Element {
     let changed = matches!(asked_settings(current, &life.text, &hand.text), Ok(Some(_)));
     let fields = row()
         .name("game fields")
-        .gap(16.0)
+        .gap(space::L)
         .align_items(Align::Center)
         .child(number(
             "Starting life",
@@ -413,7 +402,7 @@ fn number(label: &str, name: &str, state: &FieldState, wrong: bool) -> Element {
     }
     row()
         .name(label)
-        .gap(8.0)
+        .gap(size::LOBBY_ROW_GAP)
         .align_items(Align::Center)
         .child(text(label).style(LABEL).color(color::TEXT_DIM))
         .child(number)

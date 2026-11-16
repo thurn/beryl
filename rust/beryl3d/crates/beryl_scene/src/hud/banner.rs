@@ -20,7 +20,7 @@ use crate::element::{Align, Element, Justify, column, floats, text};
 use crate::frame::Role;
 use crate::layout::{FloatLook, Layer};
 use crate::table::Window;
-use crate::tokens::{color, size, type_style};
+use crate::tokens::{color, ratio, size, type_style};
 
 /// The banner's title, the same for every detail.
 const TITLE: &str = "Combat";
@@ -80,7 +80,7 @@ pub fn words(detail: usize) -> (&'static str, &'static str) {
     clippy::cast_sign_loss,
     reason = "a banner shows for a few seconds"
 )]
-const SHOWS: u64 = (BANNER * 1_000_000.0) as u64;
+const SHOWS: u64 = (BANNER * ratio::NANOS_PER_MS) as u64;
 
 impl Banner {
     /// Lays out in `layer` the banner `view` will call for once the table shows it, and the

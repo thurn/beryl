@@ -24,13 +24,13 @@ pub enum Concede {
 }
 
 /// How wide the panel is, in logical points.
-const WIDTH: f32 = 360.0;
+const WIDTH: f32 = size::SETTINGS_WIDTH;
 
 /// The gap between the window's edge and the panel at the least.
-const MARGIN: f32 = 24.0;
+const MARGIN: f32 = size::SCREEN_MARGIN;
 
 /// How far the gear stands from the window's top and right edges, in logical points.
-pub const GEAR_INSET: f32 = 12.0;
+pub const GEAR_INSET: f32 = size::SETTINGS_GEAR_INSET;
 
 /// The gear that opens the sheet, which the client shows at the game screen's top right.
 #[must_use]

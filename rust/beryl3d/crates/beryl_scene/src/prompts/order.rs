@@ -25,15 +25,15 @@ use crate::input::{FaceSize, Rect, Size};
 use crate::screens::ScreenIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, TraySpace, tray_area};
 use crate::text::TypeStyle;
-use crate::tokens::{color, size, type_style};
+use crate::tokens::{color, size, space, type_style};
 
 /// The space between the row and the words under it, their type's size and weight, and the
 /// widest they spread, in stage pixels: `.stage-order`'s `gap` and `.stage-order-ends`' `font`
 /// and `width` in `ui/src/stage/stage.css`.
-const ENDS_GAP: f32 = 10.0;
-const ENDS_SIZE: f32 = 18.0;
+const ENDS_GAP: f32 = space::M;
+const ENDS_SIZE: f32 = size::ORDER_ENDS_SIZE;
 const ENDS_WEIGHT: u16 = 600;
-const ENDS_MOST: f32 = 640.0;
+const ENDS_MOST: f32 = size::ORDER_ENDS_MOST;
 
 /// The tray's space on the desktop layout, where the row lies.
 const SPACE: TraySpace = TraySpace::DESKTOP;

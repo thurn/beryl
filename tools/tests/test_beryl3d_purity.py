@@ -120,3 +120,24 @@ def test_only_the_app_and_the_recorder_depend_on_the_engine(tmp_path: Path) -> N
     write(tmp_path, f"{CRATES}/beryl_assets/Cargo.toml", cards)
     (found,) = purity.scene_purity(tmp_path)
     assert "beryl_assets depends on beryl_cards" in found
+
+
+def test_a_screen_takes_its_sizes_from_tokens(tmp_path: Path) -> None:
+    screen = f"{CRATES}/beryl_scene/src/screens/start.rs"
+    write(tmp_path, screen, "let a = row().grow(1.0).margin([0.0, 0.5, 2.0, 1.0]);\n")
+    assert purity.scene_literals(tmp_path) == []
+    write(tmp_path, screen, "// gap(9.0)\nlet a = row()\n    .gap(12.0);\n")
+    (found,) = purity.scene_literals(tmp_path)
+    assert found.startswith(f"{screen}:3: the literal 12.0")
+    assert "data/design-tokens.json" in found
+
+
+def test_a_test_module_may_hold_numbers(tmp_path: Path) -> None:
+    screen = f"{CRATES}/beryl_scene/src/hud/steps.rs"
+    write(
+        tmp_path,
+        screen,
+        "fn a() {}\n#[cfg(test)]\nmod tests {\n    fn t() { let w = 1600.0; }\n}\nlet b = 3.0;\n",
+    )
+    (found,) = purity.scene_literals(tmp_path)
+    assert f"{screen}:6:" in found

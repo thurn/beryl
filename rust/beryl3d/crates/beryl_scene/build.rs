@@ -153,7 +153,7 @@ fn write_credits(manifest: &std::path::Path, out_dir: &std::path::Path) {
 /// The modules of `src/tokens.rs` from `design-tokens.json`, each as its name and its
 /// constants. `color` holds a constant for every token of kind `color`, named for the token in
 /// upper case with `_` for `-`, then the colors of `flat.color`. `space`, `type_style` and
-/// `size` hold the entries of `flat` under the same names, and `mana` the colors of
+/// `size` and `ratio` hold the entries of `flat` under the same names, and `mana` the colors of
 /// `flat.mana`. A number in `flat` is a `value`, or the `token` of kind `length` whose pixels it
 /// takes; a `note` becomes the doc comment.
 fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
@@ -163,7 +163,12 @@ fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
     };
     let mut space = String::new();
     let mut size = String::new();
-    for (module, out) in [("space", &mut space), ("size", &mut size)] {
+    let mut ratio = String::new();
+    for (module, out) in [
+        ("space", &mut space),
+        ("size", &mut size),
+        ("ratio", &mut ratio),
+    ] {
         for (key, entry) in tokens.entries(module) {
             let (value, doc) = tokens.number(entry, &format!("flat.{module}.{key}"));
             writeln!(out, "/// {doc}\npub const {key}: f32 = {value:?};").unwrap();
@@ -173,6 +178,7 @@ fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
         ("space", space),
         ("type_style", write_type_styles(&tokens)),
         ("size", size),
+        ("ratio", ratio),
         ("color", write_colors(&tokens)),
         ("mana", write_mana(&tokens)),
     ]

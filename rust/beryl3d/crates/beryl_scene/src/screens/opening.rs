@@ -29,8 +29,7 @@ use crate::element::{Align, Anchor, Element, Shown, column, row, text};
 use crate::frame::Role;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::text::TypeStyle;
-use crate::text::fonts::Font;
-use crate::tokens::color;
+use crate::tokens::{color, type_style};
 
 /// The starting hand size ([CR 103.5]): "Each player draws a number of cards equal to their
 /// starting hand size, which is normally seven."
@@ -39,20 +38,10 @@ use crate::tokens::color;
 const STARTING_HAND: usize = 7;
 
 /// The title, `.opening-title`: 56 points of the serif face, bold.
-const TITLE: TypeStyle = TypeStyle {
-    font: Font::CrimsonPro,
-    weight: 700,
-    size: 56.0,
-    line_height: 1.05,
-};
+const TITLE: TypeStyle = type_style::OPENING_TITLE;
 
 /// Whether the viewer is on the play, `.opening-coin`: 22 points of the serif face.
-const COIN: TypeStyle = TypeStyle {
-    font: Font::CrimsonPro,
-    weight: 600,
-    size: 22.0,
-    line_height: 1.2,
-};
+const COIN: TypeStyle = type_style::OPENING_COIN;
 
 /// Whether the game is in its opening, as the web's `GameScreen` decides it
 /// (`ui/src/screens/Game.tsx`): before the first turn, while the game is being decided or

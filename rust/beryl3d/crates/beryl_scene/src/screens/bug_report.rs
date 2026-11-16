@@ -23,8 +23,7 @@ use crate::element::{
 use crate::frame::Role;
 use crate::input::Rect;
 use crate::text::TypeStyle;
-use crate::text::fonts::Font;
-use crate::tokens::{color, size, type_style};
+use crate::tokens::{color, ratio, size, type_style};
 use crate::widgets::{self, check_mark, field, icon_button, primary};
 
 /// The name of the field the player describes the bug in.
@@ -32,16 +31,21 @@ pub const DESCRIPTION: &str = "description";
 
 /// A drag shorter than this across or down, in logical points, is a click: the whole window
 /// (`CLICK`).
-pub const CLICK: f32 = 6.0;
+pub const CLICK: f32 = size::BUG_CLICK;
 
 /// The least height of the description field: the `.bug-text` rule's `min-height`.
-const DESCRIPTION_HEIGHT: f32 = 110.0;
+const DESCRIPTION_HEIGHT: f32 = size::BUG_DESCRIPTION_HEIGHT;
 
 /// The panel's width, padding, gap and corner radius (`.bug-panel`).
-const PANEL_WIDTH: f32 = 520.0;
-const PANEL_PADDING: [f32; 4] = [18.0, 20.0, 18.0, 20.0];
-const PANEL_GAP: f32 = 12.0;
-const PANEL_RADIUS: f32 = 10.0;
+const PANEL_WIDTH: f32 = size::BUG_PANEL_WIDTH;
+const PANEL_PADDING: [f32; 4] = [
+    size::BUG_PANEL_PADDING_Y,
+    size::BUG_PANEL_PADDING_X,
+    size::BUG_PANEL_PADDING_Y,
+    size::BUG_PANEL_PADDING_X,
+];
+const PANEL_GAP: f32 = size::BUG_PANEL_GAP;
+const PANEL_RADIUS: f32 = size::BUG_PANEL_RADIUS;
 
 /// `.bug-panel`'s and `.bug-tools`'s background: the surface at 97% and 92%.
 const PANEL: [u8; 4] = [33, 31, 28, 247];
@@ -56,40 +60,30 @@ const SHADE_DESCRIBE: [u8; 4] = [0, 0, 0, 166];
 
 /// Where the tools stand from the window's top right corner, and the side of each tool
 /// (`.bug-tools`, `.bug-tool`).
-const TOOLS_INSET: [f32; 2] = [14.0, 16.0];
-const TOOL: f32 = 40.0;
+const TOOLS_INSET: [f32; 2] = [size::BUG_TOOLS_INSET_TOP, size::BUG_TOOLS_INSET_RIGHT];
+const TOOL: f32 = size::BUG_TOOL;
 
 /// How far the hint stands below the window's top (`.bug-hint`).
-const HINT_TOP: f32 = 22.0;
+const HINT_TOP: f32 = size::BUG_HINT_TOP;
 
 /// The checkbox's side, as the start screen's fair-deal box.
-const CHECKBOX: f32 = 18.0;
+const CHECKBOX: f32 = size::CHECKBOX;
 
 /// `.bug-title`: semibold 22-point display type.
-const TITLE: TypeStyle = TypeStyle {
-    font: Font::Cinzel,
-    weight: 600,
-    size: 22.0,
-    line_height: 1.2,
-};
+const TITLE: TypeStyle = type_style::BUG_TITLE;
 
 /// `.bug-hint`, `.bug-ai` and `.bug-error`: interface type of 15 and 14 points.
 const HINT: TypeStyle = TypeStyle {
-    size: 15.0,
+    size: size::BUG_HINT_SIZE,
     ..type_style::BODY
 };
 const ERROR: TypeStyle = TypeStyle {
-    size: 14.0,
+    size: size::BUG_ERROR_SIZE,
     ..type_style::BODY
 };
 
 /// `.bug-saved`: semibold 20-point display type.
-const SAVED: TypeStyle = TypeStyle {
-    font: Font::Cinzel,
-    weight: 600,
-    size: 20.0,
-    line_height: 1.0,
-};
+const SAVED: TypeStyle = type_style::BUG_SAVED;
 
 /// Where the bug report is, from Cmd+B until it closes.
 #[derive(Clone, Debug, PartialEq)]
@@ -213,10 +207,15 @@ fn select(drag: Option<Rect>, window: Rect) -> Vec<Element> {
             .color(color::TEXT)
             .background(TOOLS)
             .border((color::METAL, 1.0))
-            .radius(999.0)
+            .radius(size::BUG_PILL_RADIUS)
             .margin([HINT_TOP, 0.0, 0.0, 0.0]);
         let mut hint = hint;
-        hint.style.padding = [6.0, 14.0, 6.0, 14.0];
+        hint.style.padding = [
+            size::BUG_HINT_PADDING_Y,
+            size::BUG_HINT_PADDING_X,
+            size::BUG_HINT_PADDING_Y,
+            size::BUG_HINT_PADDING_X,
+        ];
         children.push(
             row()
                 .name("hint")
@@ -249,8 +248,8 @@ fn describe(
     let submit = primary(if saving { "Saving…" } else { "Submit" });
     let mut submit = submit.enabled(ready).on_press(Press::Bug(BugPress::Save));
     // `size="small"`: shorter, with smaller type, and only as wide as its label.
-    submit.style.height = Some(size::BUTTON_HEIGHT * 0.75);
-    submit.style.text.size = type_style::BUTTON.size * 0.75;
+    submit.style.height = Some(size::BUTTON_HEIGHT * ratio::SMALL_SCALE);
+    submit.style.text.size = type_style::BUTTON.size * ratio::SMALL_SCALE;
     submit.style.min_width = None;
     let actions = row()
         .name("actions")
@@ -300,15 +299,15 @@ fn ai_box(on: bool) -> Element {
         .name("checkbox")
         .width(CHECKBOX)
         .height(CHECKBOX)
-        .radius(3.0)
+        .radius(size::BUG_CHECKBOX_RADIUS)
         .border((color::GOLD, size::BORDER))
         .align_items(Align::Center)
         .justify_content(Justify::Center)
-        .children(on.then(|| check_mark(CHECKBOX - 8.0)));
+        .children(on.then(|| check_mark(CHECKBOX - size::BUG_CHECK_INSET)));
     Element::new(Role::Toggle)
         .name("AI play")
         .selected(on)
-        .gap(8.0)
+        .gap(size::BUG_AI_GAP)
         .align_items(Align::Center)
         .on_press(Press::Bug(BugPress::Ai))
         .child(check)
@@ -332,7 +331,7 @@ fn tools(choosing: bool) -> Element {
         .gap(2.0)
         .background(TOOLS)
         .border((color::METAL, 1.0))
-        .radius(999.0)
+        .radius(size::BUG_PILL_RADIUS)
         .position(Position::Absolute)
         .inset([Some(TOOLS_INSET[0]), Some(TOOLS_INSET[1]), None, None])
         .children(choosing.then(|| {
@@ -343,7 +342,7 @@ fn tools(choosing: bool) -> Element {
             )
         }))
         .child(tool(widgets::icons::CLOSE, "Close", Press::Sheet(None)));
-    pill.style.padding = [3.0; 4];
+    pill.style.padding = [size::BUG_TOOLS_PADDING; 4];
     pill
 }
 
@@ -385,7 +384,7 @@ fn framed(region: Rect, window: Rect, shade: [u8; 4]) -> Vec<Element> {
     children.push(
         placed("region", region)
             .background([0; 4])
-            .border((color::GOLD, 1.5)),
+            .border((color::GOLD, size::BORDER)),
     );
     children
 }

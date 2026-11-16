@@ -10,8 +10,7 @@ use super::{Screen, ScreenIn, Sheet};
 use crate::element::{Align, Element, Justify, LobbyPress, Position, Press, column, row, text};
 use crate::frame::Role;
 use crate::text::TypeStyle;
-use crate::text::fonts::Font;
-use crate::tokens::{color, size, type_style};
+use crate::tokens::{color, ratio, size, space, type_style};
 use crate::widgets::{self, FieldState, button, field, icon_button, list, primary, tooltip};
 
 /// The name of the seed's text field.
@@ -26,83 +25,53 @@ const CHEATING: [&str; 2] = ["mcts-omniscient-quick", "pimc18-omniscient-30m-anc
 const DEFAULT_AGENT: &str = "mcts-hidden";
 
 /// The panel's width and padding (`.start-panel`).
-pub(super) const PANEL_WIDTH: f32 = 620.0;
-pub(super) const PANEL_PADDING: [f32; 4] = [28.0, 36.0, 32.0, 36.0];
-pub(super) const PANEL_GAP: f32 = 18.0;
-pub(super) const PANEL_RADIUS: f32 = 12.0;
+pub(super) const PANEL_WIDTH: f32 = size::START_PANEL_WIDTH;
+pub(super) const PANEL_PADDING: [f32; 4] = [
+    size::START_PANEL_PADDING_TOP,
+    size::START_PANEL_PADDING_SIDE,
+    size::START_PANEL_PADDING_BOTTOM,
+    size::START_PANEL_PADDING_SIDE,
+];
+pub(super) const PANEL_GAP: f32 = size::START_PANEL_GAP;
+pub(super) const PANEL_RADIUS: f32 = size::PANEL_RADIUS;
 
 /// The height of everything in the window but the opponents' rows: the panel's other contents,
 /// its padding and gaps, and a margin above and below it.
-const AROUND_AGENTS: f32 = 470.0;
+const AROUND_AGENTS: f32 = size::START_AROUND_AGENTS;
 
 /// The least height the opponents' rows are given, about two rows.
-const AGENTS_LEAST: f32 = 130.0;
+const AGENTS_LEAST: f32 = size::START_AGENTS_LEAST;
 
 /// The seed field's width (`.start-seed input`).
-const SEED_WIDTH: f32 = 160.0;
+const SEED_WIDTH: f32 = size::START_SEED_WIDTH;
 
 /// How far the sound button stands from the window's right and bottom edges (`.sound-corner`).
-const CORNER: f32 = 18.0;
+const CORNER: f32 = size::START_CORNER;
 
 /// The radio dot's and the fair-deal box's sides.
-const RADIO: f32 = 16.0;
-const CHECKBOX: f32 = 18.0;
+const RADIO: f32 = size::START_RADIO;
+const CHECKBOX: f32 = size::CHECKBOX;
 
 /// `.start-title`: bold 38-point serif.
-pub(super) const TITLE: TypeStyle = TypeStyle {
-    font: Font::CrimsonPro,
-    weight: 700,
-    size: 38.0,
-    line_height: 1.2,
-};
+pub(super) const TITLE: TypeStyle = type_style::START_TITLE;
 
 /// `.start-subtitle`: 19-point serif.
 /// Body text: 15-point sans, for what the screen says when the solo table did not open.
-const BODY: TypeStyle = TypeStyle {
-    font: Font::OpenSans,
-    weight: 400,
-    size: 15.0,
-    line_height: 1.35,
-};
+const BODY: TypeStyle = type_style::SCREEN_BODY;
 
-const SUBTITLE: TypeStyle = TypeStyle {
-    font: Font::CrimsonPro,
-    weight: 400,
-    size: 19.0,
-    line_height: 1.2,
-};
+const SUBTITLE: TypeStyle = type_style::START_SUBTITLE;
 
 /// `.start-agents legend`, `.start-seed` and `.start-fair`: semibold 15-point sans.
-pub(super) const LABEL: TypeStyle = TypeStyle {
-    font: Font::OpenSans,
-    weight: 600,
-    size: 15.0,
-    line_height: 1.3,
-};
+pub(super) const LABEL: TypeStyle = type_style::START_LABEL;
 
 /// `.start-agent-name`: semibold 18-point serif.
-const AGENT_NAME: TypeStyle = TypeStyle {
-    font: Font::CrimsonPro,
-    weight: 600,
-    size: 18.0,
-    line_height: 1.25,
-};
+const AGENT_NAME: TypeStyle = type_style::START_AGENT_NAME;
 
 /// `.start-cheating`: 14-point serif.
-const CHEATING_NOTE: TypeStyle = TypeStyle {
-    font: Font::CrimsonPro,
-    weight: 400,
-    size: 14.0,
-    line_height: 1.25,
-};
+const CHEATING_NOTE: TypeStyle = type_style::START_CHEATING_NOTE;
 
 /// `.start-agent-about`: 14-point sans.
-const ABOUT: TypeStyle = TypeStyle {
-    font: Font::OpenSans,
-    weight: 400,
-    size: 14.0,
-    line_height: 1.35,
-};
+const ABOUT: TypeStyle = type_style::START_ABOUT;
 
 /// What the person has chosen on the start screen besides the seed, which is a text field the
 /// client keeps in `Fields`. The client keeps it so that the choices stay while the screen is
@@ -182,7 +151,7 @@ pub fn start(input: &ScreenIn) -> Element {
         text("WU Control mirror")
             .style(SUBTITLE)
             .color(color::TEXT_DIM)
-            .margin([-10.0, 0.0, 0.0, 0.0]),
+            .margin([-size::START_SUBTITLE_PULL, 0.0, 0.0, 0.0]),
     ];
     let rows = input.agents.iter().enumerate().map(|(at, agent)| {
         let at = u16::try_from(at).unwrap_or(u16::MAX);
@@ -198,9 +167,9 @@ pub fn start(input: &ScreenIn) -> Element {
             text("OPPONENT")
                 .style(LABEL)
                 .color(color::TEXT_DIM)
-                .margin([0.0, 0.0, 6.0, 0.0]),
+                .margin([0.0, 0.0, size::START_LEGEND_GAP, 0.0]),
         )
-        .child(list("Opponent", rows).gap(4.0).max_height(room));
+        .child(list("Opponent", rows).gap(space::S).max_height(room));
     let seed_row = seed_row(&seed_state, seed_ok);
     let buttons = buttons(going_on, form.confirming, startable);
     let solo = button("Solo table").on_press(Press::Lobby(LobbyPress::Solo));
@@ -267,7 +236,12 @@ pub fn start(input: &ScreenIn) -> Element {
 fn seed_row(state: &FieldState, ok: bool) -> Element {
     let mut seed_field = field(SEED, state);
     seed_field.style.width = Some(SEED_WIDTH);
-    seed_field.style.padding = [6.0, 10.0, 6.0, 10.0];
+    seed_field.style.padding = [
+        size::START_SEED_PADDING_Y,
+        size::START_SEED_PADDING_X,
+        size::START_SEED_PADDING_Y,
+        size::START_SEED_PADDING_X,
+    ];
     if !ok {
         seed_field.style.border = Some((color::EMBER, size::BORDER));
         seed_field.style.color = Some(color::EMBER);
@@ -275,7 +249,7 @@ fn seed_row(state: &FieldState, ok: bool) -> Element {
     row()
         .name("Seed")
         .align_items(Align::Center)
-        .gap(12.0)
+        .gap(size::START_SEED_GAP)
         .child(text("Seed").style(LABEL).color(color::TEXT_DIM))
         .child(seed_field)
 }
@@ -299,7 +273,7 @@ fn buttons(going_on: bool, confirming: bool, startable: bool) -> Element {
     };
     row()
         .name("buttons")
-        .gap(14.0)
+        .gap(size::START_BUTTONS_GAP)
         .children(going_on.then(|| primary("Return to Game").on_press(Press::Open(Screen::Game))))
         .child(start.enabled(startable).on_press(Press::Start))
 }
@@ -327,21 +301,21 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool) -> Element {
         .border((color::GOLD, size::BORDER))
         .align_items(Align::Center)
         .justify_content(Justify::Center)
-        .margin([3.0, 0.0, 0.0, 0.0]);
+        .margin([size::START_RADIO_DROP, 0.0, 0.0, 0.0]);
     if chosen {
         dot = dot.child(
             row()
                 .name("dot")
                 .width(RADIO / 2.0)
                 .height(RADIO / 2.0)
-                .radius(RADIO / 4.0)
+                .radius(RADIO * ratio::QUARTER)
                 .background(color::GOLD),
         );
     }
     let cheats = CHEATING.contains(&agent.name.as_str());
     let title = row()
         .name("title")
-        .gap(10.0)
+        .gap(space::M)
         .align_items(Align::End)
         .child(text(&agent.title).style(AGENT_NAME).color(color::TYPE))
         .children(cheats.then(|| {
@@ -358,13 +332,18 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool) -> Element {
     let mut element = Element::new(Role::Toggle)
         .name(&agent.title)
         .selected(chosen)
-        .gap(8.0)
-        .radius(8.0)
+        .gap(size::START_AGENT_GAP)
+        .radius(size::START_AGENT_RADIUS)
         .align_items(Align::Start)
         .on_press(Press::Agent(at))
         .child(dot)
         .child(words);
-    element.style.padding = [8.0, 10.0, 8.0, 10.0];
+    element.style.padding = [
+        size::START_AGENT_PADDING_Y,
+        size::START_AGENT_PADDING_X,
+        size::START_AGENT_PADDING_Y,
+        size::START_AGENT_PADDING_X,
+    ];
     if chosen {
         element = element
             .background(color::MENU_ACTIVE)
@@ -385,7 +364,7 @@ pub(super) fn checkbox(label: &str, on: bool, press: Press) -> Element {
         .name("checkbox")
         .width(CHECKBOX)
         .height(CHECKBOX)
-        .radius(3.0)
+        .radius(size::START_CHECKBOX_RADIUS)
         .border((color::GOLD, size::BORDER))
         .align_items(Align::Center)
         .justify_content(Justify::Center)
@@ -396,13 +375,13 @@ pub(super) fn checkbox(label: &str, on: bool, press: Press) -> Element {
                 .name("tick")
                 .width(CHECKBOX / 2.0)
                 .height(CHECKBOX / 2.0)
-                .radius(1.5)
+                .radius(size::START_TICK_RADIUS)
                 .background(color::GOLD)
         }));
     Element::new(Role::Toggle)
         .name(label)
         .selected(on)
-        .gap(10.0)
+        .gap(space::M)
         .align_items(Align::Center)
         .on_press(press)
         .child(check)
@@ -411,8 +390,8 @@ pub(super) fn checkbox(label: &str, on: bool, press: Press) -> Element {
 
 /// `button` at the web's small size (`button-small`): shorter, with smaller type.
 pub(super) fn small(mut button: Element) -> Element {
-    button.style.height = Some(size::BUTTON_HEIGHT * 0.75);
-    button.style.text.size = type_style::BUTTON.size * 0.75;
+    button.style.height = Some(size::BUTTON_HEIGHT * ratio::SMALL_SCALE);
+    button.style.text.size = type_style::BUTTON.size * ratio::SMALL_SCALE;
     button.style.min_width = None;
     button
 }

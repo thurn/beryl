@@ -20,28 +20,17 @@ use crate::frame::Role;
 use crate::input::FaceSize;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::text::TypeStyle;
-use crate::text::fonts::Font;
-use crate::tokens::color;
+use crate::tokens::{color, size, type_style};
 use crate::widgets::primary;
 
 /// The width of the card that ended the game, the web's 230 on the desktop.
-const CULPRIT_WIDTH: f32 = 230.0;
+const CULPRIT_WIDTH: f32 = size::GAME_OVER_CULPRIT_WIDTH;
 
 /// The result's title, `.game-over-title`: 72 points, bold.
-const TITLE: TypeStyle = TypeStyle {
-    font: Font::CrimsonPro,
-    weight: 700,
-    size: 72.0,
-    line_height: 1.1,
-};
+const TITLE: TypeStyle = type_style::GAME_OVER_TITLE;
 
 /// Why the game ended, `.game-over-reason`: 24 points of interface text.
-const REASON: TypeStyle = TypeStyle {
-    font: Font::OpenSans,
-    weight: 400,
-    size: 24.0,
-    line_height: 1.3,
-};
+const REASON: TypeStyle = type_style::GAME_OVER_REASON;
 
 /// The result's title, as the web's `resultTitle` words it for `outcome`; none is a game that
 /// was stopped.
@@ -111,7 +100,7 @@ pub fn game_over(input: &ScreenIn) -> Option<Element> {
         .child(heading)
         .children(outcome.and_then(reason).map(|why| {
             let mut line = text(why).style(REASON).color(color::TEXT).passes(true);
-            line.style.margin = [14.0, 0.0, 0.0, 0.0];
+            line.style.margin = [size::GAME_OVER_REASON_GAP, 0.0, 0.0, 0.0];
             line
         }))
         .children(culprit);
@@ -138,7 +127,7 @@ pub fn buttons(input: &ScreenIn) -> Option<Element> {
 }
 
 /// How far the buttons' bottom edge stands above the window's: the root's dock offset.
-const BUTTONS_BOTTOM: f32 = 87.0;
+const BUTTONS_BOTTOM: f32 = size::GAME_OVER_BUTTONS_BOTTOM;
 
 /// The middle of the window.
 fn middle(input: &ScreenIn) -> Vec2 {
@@ -175,6 +164,6 @@ fn culprit_card(culprit: &Culprit, faces: &FaceList) -> Option<Element> {
         .passes(true)
         .width(CULPRIT_WIDTH)
         .height(CULPRIT_WIDTH * CARD_HEIGHT / CARD_WIDTH)
-        .margin([22.0, 0.0, 0.0, 0.0]),
+        .margin([size::GAME_OVER_CARD_GAP, 0.0, 0.0, 0.0]),
     )
 }

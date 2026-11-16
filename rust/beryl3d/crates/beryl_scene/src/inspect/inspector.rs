@@ -26,7 +26,7 @@ use crate::frame::Role;
 use crate::input::{FaceId, FaceSize, Rect};
 use crate::screens::ScreenIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
-use crate::tokens::{color, space, type_style};
+use crate::tokens::{color, size, space, type_style};
 
 /// The card the pointer is over, which the inspector shows, and what decides where it stands.
 #[derive(Clone, Debug, PartialEq)]
@@ -42,7 +42,7 @@ pub struct Inspected {
 }
 
 /// The inspector's corner radius, `.inspect`'s `border-radius`.
-const RADIUS: f32 = 22.0;
+const RADIUS: f32 = size::INSPECTOR_RADIUS;
 
 /// What the game screen shows for it: the full-size face of the card the pointer is over, at
 /// the place `place` gives, with its state beneath it. Nothing when no card is inspected, on the

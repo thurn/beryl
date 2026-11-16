@@ -27,7 +27,7 @@ use crate::tokens::{color, size, type_style};
 /// The share of a box's heading its name's type takes, and the least size it is drawn at, in
 /// stage pixels: `.stage-tray-label`'s `max(12px, calc(var(--heading) * 0.5))`.
 const LABEL_SHARE: f32 = 0.5;
-const LABEL_LEAST: f32 = 12.0;
+const LABEL_LEAST: f32 = size::SPLIT_LABEL_LEAST;
 
 /// What the flat layer shows for `prompt`: the prompt bar, and a box round each pile's place in
 /// the tray, its name in the strip over its cards; none for a fan, and none of their edges for
