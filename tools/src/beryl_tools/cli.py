@@ -151,7 +151,8 @@ def main(argv: list[str] | None = None) -> int:
 
 def entry() -> int:
     """The `by` command: `main`, after the setup every command first makes sure of. Tests call
-    `main`, so that this setup's git commands never meet a test's stand-in for subprocess."""
+    `main`, so that this setup's git commands never meet a test's stand-in for subprocess.
+    """
     # So that a rebase merges data/beryl3d/gates.json's limits as numbers (gates_merge.py).
     gates_merge.install(paths.REPO)
     return main()
