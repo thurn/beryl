@@ -12,7 +12,7 @@
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView};
 use beryl_protocol::script::{Act, Fact, Table as Played, Tally};
 
-use crate::table::{Group, NO_GROUP, Zones};
+use crate::table::{Group, NO_GROUP, OnStack, Zones, on_stack};
 
 /// The fewest steps a script needs for its index to be built: building it reads every object of
 /// the table about four times as long as listing them for one step does, so a script of a step or
@@ -28,6 +28,33 @@ pub(super) struct Index<'a> {
     /// The `Group::number` of each object of the table (`Group::of`), or `NO_GROUP`, by slot,
     /// which a battlefield row finds its cards by.
     groups: Vec<u8>,
+    /// The items of the table's stack (`on_stack`), listed again only after a step that may
+    /// have changed them, since listing them reads every object of the table.
+    stack: Vec<OnStack>,
+}
+
+/// Whether `act` may change the stack without naming an object on it: put an ability on it,
+/// take one off it, or set a fact about it. Any other change to the stack moves a spell's card,
+/// which the act names. An act that does neither, such as an arrow that opens over a full
+/// stack, leaves every item of the stack where it was.
+pub(super) fn restacks(act: &Act) -> bool {
+    matches!(
+        act,
+        Act::Emerge { .. }
+            | Act::Vanish { .. }
+            | Act::Set { .. }
+            | Act::Fly { .. }
+            | Act::Appear { .. }
+    )
+}
+
+/// The items of `played`'s stack, as placement reads them.
+fn stack_of(played: &Played) -> Vec<OnStack> {
+    on_stack(
+        played.stack.iter().map(|entry| (&entry.item, entry.id)),
+        &[],
+        played.objects.values(),
+    )
 }
 
 impl<'a> Index<'a> {
@@ -60,19 +87,24 @@ impl<'a> Index<'a> {
         Self {
             objects: same.then_some(objects),
             groups,
+            stack: stack_of(played),
         }
     }
 
     /// Brings the index up to date after `act` changed `played`, given the slots it named.
     pub(super) fn update(&mut self, played: &Played, act: &'a Act, touched: &[ObjectId]) {
         let mut lost = false;
+        let stacked = Group::Stack.number();
+        let mut restacked = restacks(act);
         for &slot in touched {
             let index = usize::from(slot.0);
             let now = played.objects.get(&slot);
             if self.groups.len() <= index {
                 self.groups.resize(index + 1, NO_GROUP);
             }
-            self.groups[index] = group_number(now);
+            let group = group_number(now);
+            restacked |= group == stacked || self.groups[index] == stacked;
+            self.groups[index] = group;
             let Some(objects) = &mut self.objects else {
                 continue;
             };
@@ -100,12 +132,15 @@ impl<'a> Index<'a> {
         if lost {
             self.objects = None;
         }
+        if restacked {
+            self.stack = stack_of(played);
+        }
     }
 
     /// The zones of `played`, the table this indexes.
     pub(super) fn zones<'z>(&'z self, played: &'z Played) -> Zones<'z> {
         match &self.objects {
-            Some(objects) => Zones::of_table_indexed(played, objects, &self.groups),
+            Some(objects) => Zones::of_table_indexed(played, (objects, &self.stack), &self.groups),
             None => Zones::of_table_grouped(played, &self.groups),
         }
     }

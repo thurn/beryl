@@ -219,6 +219,10 @@ pub struct Work {
     /// resting places are copied from a placement already made counts nothing, and neither do
     /// the abilities on the stack, which are few.
     pub placed: u32,
+    /// Script steps compiled, in `handle` or in the frame: each step of each script the show
+    /// was given or compiled again. A step costs work even where it places nothing and writes
+    /// no segment, such as an arrow that opens.
+    pub steps: u32,
 }
 
 /// When the client next needs a frame, as of the last call to `Client::frame`.
@@ -521,9 +525,11 @@ impl<'a> FrameBuilder<'a> {
         self.frame.work.text_runs += text_runs;
     }
 
-    /// Records the objects the table placed since the last frame.
-    pub fn placement_work(&mut self, placed: u32) {
+    /// Records the objects the table placed and the script steps the show compiled since the
+    /// last frame.
+    pub fn placement_work(&mut self, placed: u32, steps: u32) {
         self.frame.work.placed += placed;
+        self.frame.work.steps += steps;
     }
 
     /// Adds a clip rectangle in physical pixels and returns its entry, for `Draw::with_clip`.

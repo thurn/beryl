@@ -15,7 +15,7 @@ use crate::pose::Pose;
 
 /// An item of the stack as placement reads it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum OnStack {
+pub(crate) enum OnStack {
     /// The spell whose card is in this slot.
     Spell(ObjectId),
     /// The ability with this number, on its controller's side.
@@ -29,7 +29,7 @@ pub(super) enum OnStack {
 /// none takes the next of `numbers`, and one with neither is unnumbered. A spell resolving is
 /// the top item: the game takes it off the stack as it begins to resolve, but its card, one of
 /// `objects`, stays in the stack's zone until it is put into its next zone.
-pub(super) fn on_stack<'a>(
+pub(crate) fn on_stack<'a>(
     stack: impl Iterator<Item = (&'a StackItem, Option<u32>)>,
     numbers: &[u32],
     objects: impl Iterator<Item = &'a ObjectView>,

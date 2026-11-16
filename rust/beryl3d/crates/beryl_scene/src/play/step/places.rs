@@ -36,7 +36,10 @@ impl Places<'_> {
                 .now(usize::from(slot.0), self.dirty)
                 .map(|rest| rest.pose),
             Subject::Player { player } => Some(self.motion.table.player_pose(player)),
-            Subject::Ability { id } => self.motion.fresh.ability(id).map(|rest| rest.pose),
+            Subject::Ability { id } => self
+                .motion
+                .ability_now(id, self.dirty)
+                .map(|rest| rest.pose),
         }
     }
 

@@ -396,7 +396,7 @@ pub(crate) struct Zones<'a> {
     /// Permanents, in the order they entered.
     battlefield: &'a [ObjectId],
     /// The spells and numbered abilities on the stack, bottom first.
-    stack: Vec<OnStack>,
+    stack: Cow<'a, [OnStack]>,
     /// Each side's library and graveyard, bottom first: the viewer's and then the opponent's.
     piles: [[&'a [ObjectId]; 2]; 2],
     /// The cards the opponent is handling, which rest lifted off their pile (`lifted`).
@@ -442,7 +442,7 @@ impl<'a> Zones<'a> {
             slots: Cow::Owned(slots),
             groups: None,
             battlefield: &view.battlefield,
-            stack,
+            stack: Cow::Owned(stack),
             piles: [player(&view.players.you), player(&view.players.opponent)],
             handling: None,
             arrival: None,
@@ -464,11 +464,11 @@ impl<'a> Zones<'a> {
             slots: Cow::Owned(by_slot(end, table.objects.values())),
             groups: None,
             battlefield: &table.battlefield,
-            stack: on_stack(
+            stack: Cow::Owned(on_stack(
                 table.stack.iter().map(|entry| (&entry.item, entry.id)),
                 &[],
                 table.objects.values(),
-            ),
+            )),
             piles: [piles(&table.you), piles(&table.opponent)],
             handling: None,
             arrival: None,

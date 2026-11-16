@@ -355,6 +355,7 @@ fn total(work: Work) -> u64 {
         work.layout_nodes,
         work.text_runs,
         work.placed,
+        work.steps,
     ]
     .into_iter()
     .map(u64::from)

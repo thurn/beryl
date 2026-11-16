@@ -376,20 +376,17 @@ fn clipped(
         corner(-half.x, half.y),
     ]);
     let mut count = 4;
-    // The view volume in clip space, with depth from 0 to w: each plane keeps the points where
-    // the dot product with it is at least zero.
-    let planes = [
-        Vec4::new(1.0, 0.0, 0.0, 1.0),
-        Vec4::new(-1.0, 0.0, 0.0, 1.0),
-        Vec4::new(0.0, 1.0, 0.0, 1.0),
-        Vec4::new(0.0, -1.0, 0.0, 1.0),
-        Vec4::new(0.0, 0.0, 1.0, 0.0),
-        Vec4::new(0.0, 0.0, -1.0, 1.0),
-    ];
-    for plane in planes {
-        count = cut(polygon, count, plane);
-        if count < 3 {
-            return 0;
+    // A quad wholly inside the view volume, as most are, keeps its four corners, so it is cut
+    // only when one of them lies outside.
+    let inside = polygon[..4]
+        .iter()
+        .all(|point| PLANES.iter().all(|plane| point.dot(*plane) >= 0.0));
+    if !inside {
+        for plane in PLANES {
+            count = cut(polygon, count, plane);
+            if count < 3 {
+                return 0;
+            }
         }
     }
     count
@@ -492,6 +489,17 @@ fn screen_rect(draw: &Draw, view_projection: &Mat4) -> Rect {
         rect[3].min(1.0) + OVERLAP_MARGIN,
     ]
 }
+
+/// The view volume in clip space, with depth from 0 to w: each plane keeps the points where the
+/// dot product with it is at least zero.
+const PLANES: [Vec4; 6] = [
+    Vec4::new(1.0, 0.0, 0.0, 1.0),
+    Vec4::new(-1.0, 0.0, 0.0, 1.0),
+    Vec4::new(0.0, 1.0, 0.0, 1.0),
+    Vec4::new(0.0, -1.0, 0.0, 1.0),
+    Vec4::new(0.0, 0.0, 1.0, 0.0),
+    Vec4::new(0.0, 0.0, -1.0, 1.0),
+];
 
 /// Cuts the convex polygon `polygon[..count]` by the half-space where `plane` is at least zero,
 /// in place (Sutherland and Hodgman), and returns its new number of vertices.

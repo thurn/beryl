@@ -113,6 +113,7 @@ fn measure(name: &str) -> Option<Value> {
             "layout_nodes": work.layout_nodes,
             "text_runs": work.text_runs,
             "placed": work.placed,
+            "steps": work.steps,
             "draw_calls": load.draw_calls,
             "instances": load.instances,
             "upload_bytes": load.upload_bytes,

@@ -218,12 +218,9 @@ fn write_ribbon(
         let long = pair[0].distance(pair[1]);
         let half = width_of(cut, lengths, arc + long / 2.0, whole);
         arc += long;
-        let way = pair[1] - pair[0];
-        let transform = camera.screen_transform(
-            (pair[0] + pair[1]) / 2.0,
-            Vec2::new(long, 2.0 * half),
-            way.y.atan2(way.x),
-        );
+        let way = (pair[1] - pair[0]).normalize_or(Vec2::X);
+        let transform =
+            camera.screen_transform((pair[0] + pair[1]) / 2.0, Vec2::new(long, 2.0 * half), way);
         builder.draw(
             Band::Glows,
             Draw::glow(transform, tint, sprites::RIBBON, 1.0),
@@ -251,7 +248,7 @@ fn write_head(
     let transform = scene.table().camera().screen_transform(
         tip - way * (long / 2.0),
         Vec2::new(long, 2.0 * long * light::head::SPREAD),
-        way.y.atan2(way.x),
+        way,
     );
     builder.draw(Band::Glows, Draw::glow(transform, tint, sprites::HEAD, 1.0));
 }

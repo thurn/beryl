@@ -183,8 +183,8 @@ impl<'a> Motion<'a> {
     }
 
     /// Applies `act` to the table and places again every group whose resting places it may
-    /// have changed: the groups that held or now hold an object the act named, and the stack,
-    /// whose abilities an act may add or take away without naming an object. Their resting
+    /// have changed: the groups that held or now hold an object the act named, and the stack
+    /// where the act may change it without naming an object on it (`restacks`). Their resting
     /// places go to `fresh` and their slots to `next`; `rests` is left as it was. Returns which
     /// groups it placed, or none if the table could not take the act.
     fn place(&mut self, act: &'a Act, timed: bool) -> Option<[bool; Group::ALL.len()]> {
@@ -200,7 +200,9 @@ impl<'a> Motion<'a> {
             return None;
         }
         let mut dirty = [self.whole; Group::ALL.len()];
-        dirty[Group::Stack.index()] = true;
+        // The resting places a script starts from may not number an ability the table played
+        // over does, so its first step places the stack again whatever its act.
+        dirty[Group::Stack.index()] |= self.first || index::restacks(act);
         self.look.follow((act, timed), &self.played, &mut dirty);
         let zones = index::step_zones(self.index.as_mut(), &self.played, act, &self.touched)
             .handled(self.look.handled())
@@ -341,9 +343,10 @@ impl<'a> Motion<'a> {
                 }
             }
         }
-        // Every step places the stack again.
-        std::mem::swap(&mut self.rests.abilities, &mut self.fresh.abilities);
-        self.fresh.abilities.clear();
+        if dirty[Group::Stack.index()] {
+            std::mem::swap(&mut self.rests.abilities, &mut self.fresh.abilities);
+            self.fresh.abilities.clear();
+        }
         let placed = dirty.iter().enumerate().filter(|(_, dirty)| **dirty);
         for (group, _) in placed {
             for &slot in &self.next[group] {
@@ -489,7 +492,7 @@ impl<'a> Motion<'a> {
             );
         }
         self.affected = affected;
-        if self.follow_abilities(number, mover, own, room) && room.to > own.to {
+        if self.follow_abilities(number, (mover, &dirty), own, room) && room.to > own.to {
             self.note_closing(None, room.to, number);
         }
         self.commit(&dirty);

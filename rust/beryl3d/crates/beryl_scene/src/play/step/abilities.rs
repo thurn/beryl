@@ -7,10 +7,20 @@ use super::Motion;
 use crate::motion::Track;
 use crate::play::record::Cause;
 use crate::pose::{Pose, Segment};
-use crate::table::ability_track;
+use crate::table::{Group, Rest, ability_track};
 use crate::verbs::{self, Interval};
 
 impl Motion<'_> {
+    /// Where the ability numbered `id` rests after a step that placed the groups `dirty` again:
+    /// its new place if the step placed the stack again, and otherwise the one it had.
+    pub(super) fn ability_now(&self, id: u32, dirty: &[bool]) -> Option<&Rest> {
+        if dirty[Group::Stack.index()] {
+            self.fresh.ability(id)
+        } else {
+            self.rests.ability(id)
+        }
+    }
+
     /// The poses of the ability numbered `id`, the subject of a step that begins at `from`: where
     /// it is then and where it rests once the step is done, or, where it comes onto the stack or
     /// leaves it, the same faded out.
@@ -32,14 +42,18 @@ impl Motion<'_> {
     /// one it moves itself, a segment to where it rests now: a slide over `room` where the
     /// items below it changed, and an instant change at the start of the step's `own` time
     /// where it comes onto the stack or leaves it without being the step's subject. Returns
-    /// whether any ability slid. `number` is the step's index in its script.
+    /// whether any ability slid. `number` is the step's index in its script, and `dirty` the
+    /// groups it placed again; one that did not place the stack moves no ability.
     pub(super) fn follow_abilities(
         &mut self,
         number: usize,
-        mover: Option<Subject>,
+        (mover, dirty): (Option<Subject>, &[bool]),
         own: Interval,
         room: Interval,
     ) -> bool {
+        if !dirty[Group::Stack.index()] {
+            return false;
+        }
         let subject = match mover {
             Some(Subject::Ability { id }) => Some(id),
             _ => None,

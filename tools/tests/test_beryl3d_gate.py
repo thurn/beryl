@@ -18,6 +18,7 @@ def output(records: list[int], allocation: int | None = None) -> str:
             "layout_nodes": 0,
             "text_runs": 0,
             "placed": 0,
+            "steps": 0,
             "draw_calls": 1,
             "instances": n,
             "upload_bytes": 80 * n,

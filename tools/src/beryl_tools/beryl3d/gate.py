@@ -46,6 +46,7 @@ COUNTERS: tuple[str, ...] = (
     "layout_nodes",
     "text_runs",
     "placed",
+    "steps",
 )
 # The draw list's load (`beryl_scene::frame::Load`) and the limit each starts from before its
 # first measurement lowers it.

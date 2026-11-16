@@ -460,6 +460,7 @@ pub struct Work {
     pub text_runs: u32,       // runs of text shaped, in `handle`
     pub records: u32,         // draw records written
     pub placed: u32,          // objects placed, mostly compiling scripts in `handle`
+    pub steps: u32,           // script steps compiled, mostly in `handle`
 }
 ```
 
@@ -3079,7 +3080,8 @@ over the board. The gate holds them to these limits under `frames.<board>` in
 `data/beryl3d/gates.json`:
 
 - `worst_frame_<counter>` and `total_<counter>` for each work counter
-  (`elements`, `segments`, `records`, `layout_nodes`, `text_runs`);
+  (`elements`, `segments`, `records`, `layout_nodes`, `text_runs`, `placed`,
+  `steps`);
 - `worst_frame_draw_calls`, `worst_frame_upload_bytes` and
   `worst_frame_blended_area` for the Baseline tier's load;
 - `handle_allocations` over the board, and `frame_allocations`, which is 0.

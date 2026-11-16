@@ -368,7 +368,7 @@ impl Client {
         (self.row_counts).write(&mut self.layer, self.show.table(), visible);
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
-        builder.placement_work(self.show.table().take_placed());
+        builder.placement_work(self.show.table().take_placed(), self.show.take_compiled());
         self.open = self.show.settled();
         let faces = Some(self.show.faces());
         (self.layer).write_with(&mut builder, self.show.table().camera(), self.open, faces);

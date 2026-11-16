@@ -37,6 +37,7 @@ mod wake;
 
 pub use scene::{Reach, Scene};
 
+use std::cell::Cell;
 use std::collections::VecDeque;
 
 use beryl_protocol::GameUpdate;
@@ -77,6 +78,8 @@ pub struct Show {
     played: Option<Played>,
     /// How many steps of the scripts given so far the table could not take.
     unplaced: usize,
+    /// How many script steps the show has compiled since `take_compiled` was last called.
+    compiled: Cell<u32>,
     /// The playing script compiled again for a window of a new shape, which the next frame
     /// takes over from the old one at its own `now`.
     recompiled: Option<Compiled>,
@@ -122,6 +125,7 @@ impl Show {
             waiting: VecDeque::new(),
             played: None,
             unplaced: 0,
+            compiled: Cell::new(0),
             recompiled: None,
             unbuilt: 0,
             reported: 0,
@@ -244,6 +248,8 @@ impl Show {
         // Each script given after the first is played from the table the one before ended with;
         // the first has no view before it either.
         let before = before.zip(from);
+        let steps = u32::try_from(timings.len()).unwrap_or(u32::MAX);
+        self.compiled.set(self.compiled.get().saturating_add(steps));
         let (mut compiled, played) =
             compile(before, &update.view, timings, &self.table, records, shown);
         for plant in plants {
@@ -340,6 +346,12 @@ impl Show {
     #[must_use]
     pub fn unplaced(&self) -> usize {
         self.unplaced
+    }
+
+    /// How many script steps the show has compiled since the last call, and starts counting
+    /// again. A script played again for a window of a new shape counts its steps again.
+    pub fn take_compiled(&self) -> u32 {
+        self.compiled.take()
     }
 
     /// The view the table shows at rest: that of the last script to end.

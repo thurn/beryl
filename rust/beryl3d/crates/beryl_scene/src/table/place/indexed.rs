@@ -5,7 +5,7 @@ use beryl_protocol::protocol::{ObjectView, PlayerView, RowName, Side, ZoneName};
 use beryl_protocol::script::{Piles, Table as Played};
 use std::borrow::Cow;
 
-use super::{Group, Zones, on_stack, row_of, side_of};
+use super::{Group, OnStack, Zones, row_of, side_of};
 
 impl<'a> Zones<'a> {
     /// The zones of the table a script plays over, as `of_table` gives them, where `groups`
@@ -19,10 +19,11 @@ impl<'a> Zones<'a> {
     }
 
     /// The zones of the table a script plays over, as `of_table_grouped` gives them, where
-    /// `slots` already holds the table's objects by slot, as equal objects.
+    /// `slots` already holds the table's objects by slot, as equal objects, and `stack` its
+    /// stack's items as `on_stack` lists them.
     pub(crate) fn of_table_indexed(
         table: &'a Played,
-        slots: &'a [Option<&'a ObjectView>],
+        (slots, stack): (&'a [Option<&'a ObjectView>], &'a [OnStack]),
         groups: &'a [u8],
     ) -> Self {
         let piles = |piles: &'a Piles| [&piles.library[..], &piles.graveyard[..]];
@@ -31,11 +32,7 @@ impl<'a> Zones<'a> {
             slots: Cow::Borrowed(slots),
             groups: Some(groups),
             battlefield: &table.battlefield,
-            stack: on_stack(
-                table.stack.iter().map(|entry| (&entry.item, entry.id)),
-                &[],
-                table.objects.values(),
-            ),
+            stack: Cow::Borrowed(stack),
             piles: [piles(&table.you), piles(&table.opponent)],
             handling: None,
             arrival: None,

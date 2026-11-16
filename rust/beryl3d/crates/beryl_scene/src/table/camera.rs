@@ -4,7 +4,7 @@
 //! window's safe area.
 
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
-use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
+use glam::{Affine3A, Mat3, Mat4, Quat, Vec2, Vec3};
 
 use super::{CARD_HEIGHT, CARD_WIDTH, Window};
 use crate::input::Rect;
@@ -224,10 +224,11 @@ impl Camera {
 
     /// The transform that lays the unit quad on the flat layer's plane centred on `centre`, in
     /// logical points from the window's top left corner, `size.x` points long and `size.y` wide,
-    /// its length turned `angle` radians clockwise on the screen from pointing right: a quad of
-    /// light along a line drawn on the screen (`light::arrows`).
+    /// its length along `way`, a direction on the screen of length 1: a quad of light along a
+    /// line drawn on the screen (`light::arrows`). The rotation is built from the direction's
+    /// two parts, with no angle, so that a ribbon of many quads takes no trigonometry.
     #[must_use]
-    pub fn screen_transform(&self, centre: Vec2, size: Vec2, angle: f32) -> Affine3A {
+    pub fn screen_transform(&self, centre: Vec2, size: Vec2, way: Vec2) -> Affine3A {
         let window = self.window.size;
         // One logical point on the layer's plane, in millimetres, the same across and down.
         let point = 2.0 * self.tan_half * LAYER_DEPTH / window.height;
@@ -237,11 +238,11 @@ impl Camera {
         );
         let half_height = self.tan_half * LAYER_DEPTH;
         let half_width = half_height * window.width / window.height;
-        let local = Affine3A::from_scale_rotation_translation(
-            Vec3::new(size.x * point, size.y * point, 1.0),
-            // The screen's y runs down and the camera's up, so clockwise there is a negative
-            // turn here.
-            Quat::from_rotation_z(-angle),
+        // The screen's y runs down and the camera's up, so a way down the screen points down
+        // here.
+        let (along, across) = (Vec3::new(way.x, -way.y, 0.0), Vec3::new(way.y, way.x, 0.0));
+        let local = Affine3A::from_mat3_translation(
+            Mat3::from_cols(along * (size.x * point), across * (size.y * point), Vec3::Z),
             Vec3::new(ndc.x * half_width, ndc.y * half_height, -LAYER_DEPTH),
         );
         Affine3A::from_mat4(self.inverse_view) * local
