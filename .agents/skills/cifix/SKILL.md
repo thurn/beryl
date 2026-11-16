@@ -73,8 +73,8 @@ A session working alone this way:
   `beryl_flaky_check`, `beryl_nightly_checks`, or for a cut, its checks with
   their runs, catches and CPU seconds), the host, the commit or range, and an
   output tail. Its comments list later runs that failed or flaked again.
-- The run log, `$BERYL_CACHE/ci/runs.jsonl`: one JSON line per check per run
-  (`runlog.py`). Filter it with `python3` or `jq` by `check`, `commit` and
+- The run log, one file per UTC hour in `$BERYL_CACHE/ci/runs/`: one JSON line
+  per check per run (`runlog.py`, `runstore.py`). Filter it with `python3` or `jq` by `check`, `commit` and
   `script` (`check`, `ci`, `nightly`, `sweep-run`). A flaky check's failing
   record is followed by a pass of the same check on the same `tree`. Other
   checks that failed in the same run are clues to a shared cause: a loaded

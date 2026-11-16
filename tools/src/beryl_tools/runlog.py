@@ -1,6 +1,6 @@
 """The run log: every run of every check `by check` and `by ci` make
-appends one JSON line to `$BERYL_CACHE/ci/runs.jsonl`, under a file lock, since worktrees and
-slow CI write at once. It is this machine's record, never committed. `by ci-report` sums it,
+appends one JSON line to the current hour's file in `$BERYL_CACHE/ci/runs/` (runstore.py), under
+a file lock, since worktrees and slow CI write at once. It is this machine's record, never committed. `by ci-report` sums it,
 with the verdicts on each check's failures that verdicts.py records in beads.
 
 A check is the finest thing a step can report: one Rust test (`rust:<binary>::<test path>`), one

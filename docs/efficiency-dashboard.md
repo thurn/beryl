@@ -268,9 +268,10 @@ anything, because other tools already write them.
   creation, start and close times, and the Enact metadata named above.
 - **Git history** of `staging` and `master`: each commit's time, subject and
   changed paths.
-- **The run log** (`ci/runs.jsonl` in the cache). Each line has `time`, `host`,
-  `commit`, `script`, `lane`, `check`, `outcome` (`pass`, `fail` or `skip`),
-  `seconds`, `cpu_seconds` and `load`. The first record of each step also has
+- **The run log** (the hour files in `ci/runs/` in the cache, and the old single
+  file `ci/runs.jsonl`). Each line has `time`, `host`, `commit`, `script`,
+  `lane`, `check`, `outcome` (`pass`, `fail` or `skip`), `seconds`,
+  `cpu_seconds` and `load`. The first record of each step also has
   `step_seconds` and `step_cpu_seconds`, the whole step's wall and CPU time.
 - **CPU sampler rows** (`cpu/samples.jsonl` in the cache). Each row covers about
   a minute and has `time`, `seconds`, `cores` (how many the machine has), `cpu`
