@@ -23,11 +23,12 @@ use crate::light::{MarkSpan, Span, SpanChange, StreakRun};
 use crate::motion::Track;
 use crate::notice::NoticeRun;
 use crate::pose::{Curve, Pose};
+use crate::sound::{SoundRun, Sounds};
 use crate::table::{Objects, Table};
 use crate::verbs::{self, Interval};
 
 /// A script laid out in time, ready to start.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct Compiled {
     /// One track for each object that moves, by slot. An object whose track is empty stands at
     /// its resting place in the view the table showed before the script.
@@ -69,6 +70,8 @@ pub(crate) struct Compiled {
     /// The life totals and pools its `count` steps set, ordered by when each is set on its
     /// clock, and as its steps wrote them where two are set together.
     pub counts: Vec<CountChange>,
+    /// The sounds its steps ask for, ordered by when each begins on its clock.
+    pub sounds: Vec<SoundRun>,
 }
 
 impl Compiled {
@@ -140,23 +143,7 @@ pub(crate) fn compile<'a>(
         let placement = table.placement(after, &numbers);
         Table::objects_for(after, numbers, &placement)
     };
-    let mut compiled = Compiled {
-        tracks: Vec::new(),
-        ability_tracks: Vec::new(),
-        finals: Objects::default(),
-        end: 0,
-        unbuilt: 0,
-        verbs: 0,
-        steps: Vec::new(),
-        segments: Vec::new(),
-        unplaced: 0,
-        reset: false,
-        spans: Vec::new(),
-        streaks: Vec::new(),
-        notices: Vec::new(),
-        effects: Vec::new(),
-        counts: Vec::new(),
-    };
+    let mut compiled = Compiled::default();
     let Some(script) = after.script.as_ref() else {
         let played = numbered(Played::of(after));
         compiled.finals = at_rest(&played);
@@ -180,12 +167,20 @@ pub(crate) fn compile<'a>(
         });
     let mut steps = Vec::new();
     let mut number = 0;
+    // The steps sound whether or not they move anything.
+    let mut sounds = Sounds::new(script, after, motion.is_some());
     let effects = &mut compiled.effects;
     compiled.end = lay_out(
         script,
         timings,
         &mut compiled.unbuilt,
         |(beat, index), step, timing, laid| {
+            sounds.step(
+                motion.as_ref().map(|motion| &motion.played),
+                (&script.beats[beat], index),
+                timing,
+                laid,
+            );
             let closed = motion.as_mut().and_then(|motion| {
                 motion.step(number, (&script.beats[beat], index), timing, laid);
                 motion.take_closed()
@@ -210,6 +205,7 @@ pub(crate) fn compile<'a>(
         },
     );
     compiled.steps = steps;
+    compiled.sounds = sounds.finish();
     // The steps of a beat need not begin in the order they are written, nor their effects.
     compiled.effects.sort_by_key(|run| run.start);
     let Some(motion) = motion else {

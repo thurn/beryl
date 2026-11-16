@@ -294,6 +294,13 @@ impl Page {
         self.steps.clone().unwrap_or_default()
     }
 
+    /// Every sound the recording plays with no action taken, in the order the frames list
+    /// them, each with the time of the frame that listed it, in nanoseconds since the
+    /// recording's start.
+    pub fn sounds(&self) -> Vec<(u64, crate::frame::Sound)> {
+        self.played().0.heard
+    }
+
     /// Every step of every script the recording plays with no action taken, in the order the
     /// scripts are given, with the timing the same view's script gives it entry by entry.
     pub fn timeline(&mut self) -> Vec<TimelineStep> {

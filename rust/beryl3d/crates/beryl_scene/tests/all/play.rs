@@ -118,8 +118,13 @@ fn a_moment_drawn_directly_equals_the_same_moment_after_every_tick() {
         }
     }
     for (moment, ticked) in moments.iter().zip(&ticks) {
-        let drawn = frame(&mut direct, &mut scratch, *moment);
-        assert_eq!(&drawn, ticked, "the frame at {} ms", moment / MS);
+        let mut drawn = frame(&mut direct, &mut scratch, *moment);
+        // The picture is the same; the sounds a frame lists are those that began since the frame
+        // before it, so a frame drawn in one jump lists all of them.
+        drawn.sounds.clear();
+        let mut ticked = ticked.clone();
+        ticked.sounds.clear();
+        assert_eq!(drawn, ticked, "the frame at {} ms", moment / MS);
     }
 }
 

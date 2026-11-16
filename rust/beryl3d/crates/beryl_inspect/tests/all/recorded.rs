@@ -66,6 +66,28 @@ fn verbs_zones_plays_to_its_end_from_both_seats() {
     }
 }
 
+/// Each sound a frame lists comes within one tick of the start or the end of a step: the step
+/// that asks for it. A strike's hit sounds part of the way through its step.
+#[test]
+fn verbs_zones_sounds_as_its_steps_begin_and_end() {
+    for seat in SEATS {
+        let mut page = Page::fixture("verbs-zones", seat, Layout::Desktop);
+        let steps = page.steps();
+        let sounds = page.sounds();
+        assert!(!sounds.is_empty(), "{seat:?}: the recording has sounds");
+        for (time, sound) in sounds {
+            let near = |edge: u64| (edge..=edge + TICK.0).contains(&time);
+            assert!(
+                steps.iter().any(|step| near(step.from)
+                    || near(step.to)
+                    || (step.verb == Verb::Strike
+                        && (step.from..=step.to + TICK.0).contains(&time))),
+                "{seat:?}: sound {sound:?} at {time} ns is not within a tick of a step's start or end"
+            );
+        }
+    }
+}
+
 /// Every script of every recording in the pack, from each seat it is recorded for, finds on
 /// the client's table everything its steps name. A step the table cannot take makes the step
 /// after it place the whole table, so that its cards jump instead of moving. The client keeps

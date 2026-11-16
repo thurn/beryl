@@ -73,6 +73,10 @@ impl Show {
                 next = next.min(run.over.from);
             }
         }
+        // A sound is listed in the first frame at its time, so a frame is due then.
+        if let Some(run) = compiled.sounds.get(playing.sounds_given) {
+            next = next.min(run.at);
+        }
         if next <= t {
             Wake::Now
         } else {

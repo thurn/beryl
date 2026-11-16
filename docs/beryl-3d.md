@@ -3251,9 +3251,14 @@ one-shot sounds tied to script steps and looping ambience.
   described below.
 - **Sounds are decoded at startup** into memory, so playing one is a message to
   the audio thread and never a file read.
-- **A sound is triggered by the client core**, which emits a sound request when
-  a step that has one begins. Tests read those requests like any other output,
-  so the timing of a sound against its animation is checkable.
+- **A sound is triggered by the client core**, which lists it in `Frame::sounds`
+  in the first frame whose time is at or after the time its step asks for it
+  (`beryl_scene`'s `sound.rs`, a port of `CUES` in `steps.ts`; the list of
+  names, `sound::NAMES`, is the manifest's `sounds` keys in file order, and
+  `SoundId(n)` is the n-th). Each step has its sounds as the script is compiled,
+  so a sound's time is on the script's clock like the step's own. Tests read
+  those requests like any other output, so the timing of a sound against its
+  animation is checkable.
 - **On Android the Kotlin host plays the sound.** `cpal`'s Android backend uses
   AAudio, which first shipped in API level 26, and it links `libaaudio.so`
   unconditionally. A library that links it fails to load at all on API 24 and

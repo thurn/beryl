@@ -120,12 +120,12 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let mut builder = FrameBuilder::new(&mut frame);
         show.frame(now, &mut builder);
-        let ability = builder
-            .finish()
-            .resolved
-            .iter()
-            .any(|element| element.role == Role::Ability);
+        let drawn = builder.finish();
+        let ability = (drawn.resolved.iter()).any(|element| element.role == Role::Ability);
+        let sounded = !drawn.sounds.is_empty();
         let after = ALLOCATIONS.load(Ordering::Relaxed);
+        // The emerge's sound is listed in the frame at its start, which allocates nothing.
+        assert_eq!(sounded, now == 1_000 * MS, "sounds at {} ms", now / MS);
         assert_eq!(
             after - before,
             0,

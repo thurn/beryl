@@ -32,7 +32,7 @@ pub use recording::{Answer, OPEN, Recording, Responses, plays_on};
 
 use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
 use crate::faces::FaceList;
-use crate::frame::{Frame, Place, Role, StateBits, Wake};
+use crate::frame::{Frame, Place, Role, Sound, StateBits, Wake};
 use crate::input::{
     AssetReady, Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind,
     PointerPhase, Rect, Size, TextChange,
@@ -131,6 +131,7 @@ pub struct Page {
     moments: Option<Vec<(Name, u64)>>,
     /// Every step of the recording's scripts, once asked for.
     steps: Option<Vec<StepMoment>>,
+    heard: Vec<(u64, Sound)>,
     /// The glyph pages a host has given (`give_glyphs`), given again whenever the client is
     /// made anew, so that its text keeps drawing after a seek back.
     glyphs: Vec<AssetReady>,
@@ -171,6 +172,7 @@ impl Page {
             plants: Vec::new(),
             moments: None,
             steps: None,
+            heard: Vec::new(),
             glyphs: Vec::new(),
         };
         page.begin();
@@ -308,16 +310,8 @@ impl Page {
     /// Presses on `from`'s element, moves in eight even steps along the straight line to `to`'s
     /// element with a 16 ms step after each, and releases there.
     pub fn drag(&mut self, from: &str, to: &str) {
-        let start = self.point(from);
-        let end = self.point(to);
-        self.pointer(PointerPhase::Down, start, Button::Primary);
-        for move_number in 1..=DRAG_MOVES {
-            let point = start.lerp(end, move_number as f32 / DRAG_MOVES as f32);
-            self.pointer(PointerPhase::Move, point, Button::Primary);
-            self.step(DRAG_STEP);
-        }
-        self.pointer(PointerPhase::Up, end, Button::Primary);
-        self.render();
+        let (start, end) = (self.point(from), self.point(to));
+        self.drag_between(start, end);
     }
 
     /// Presses the field `locator` names and gives it `text` as its whole new contents.
@@ -627,7 +621,8 @@ impl Page {
     /// recording, until it sends none.
     fn render(&mut self) {
         loop {
-            self.client.frame(self.now);
+            let sounds = &self.client.frame(self.now).sounds;
+            self.heard.extend(sounds.iter().map(|s| (self.now, *s)));
             let mut answered = false;
             while let Some(command) = self.client.next_command() {
                 let answer = match self.responses.answer(&command) {
@@ -718,6 +713,7 @@ impl Page {
             plants: self.plants.clone(),
             moments: Some(Vec::new()),
             steps: Some(Vec::new()),
+            heard: Vec::new(),
             glyphs: self.glyphs.clone(),
         };
         page.begin();

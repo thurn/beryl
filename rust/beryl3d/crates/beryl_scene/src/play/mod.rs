@@ -29,6 +29,7 @@ mod notices;
 pub mod record;
 mod scene;
 mod scroll;
+mod sounds;
 pub(crate) mod step;
 mod wake;
 
@@ -90,6 +91,8 @@ struct Playing {
     spans_given: usize,
     streaks_given: usize,
     counts_given: usize,
+    /// How many of its `compiled.sounds` the frames have listed.
+    sounds_given: usize,
 }
 
 impl Playing {
@@ -538,7 +541,7 @@ impl Show {
                 ended = Some(real);
                 self.rested = real;
                 if let Some(playing) = &mut self.playing {
-                    playing.light(real, &mut self.lit, &mut self.counts);
+                    playing.give(real, (&mut self.lit, &mut self.counts), builder);
                 }
                 self.finish();
             }
@@ -571,6 +574,7 @@ impl Show {
                 spans_given: 0,
                 streaks_given: 0,
                 counts_given: 0,
+                sounds_given: 0,
             });
             self.hand_over(now);
             if let Some(playing) = &self.playing {
@@ -582,7 +586,7 @@ impl Show {
             }
         }
         if let Some(playing) = &mut self.playing {
-            playing.light(now, &mut self.lit, &mut self.counts);
+            playing.give(now, (&mut self.lit, &mut self.counts), builder);
         }
         self.lit.advance(now);
         // A run is under way from its start until, not at, its end, as on the web stage. The table

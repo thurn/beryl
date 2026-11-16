@@ -25,6 +25,7 @@ pub mod pose;
 pub mod prompts;
 pub mod screens;
 pub mod settings;
+pub mod sound;
 pub mod table;
 #[cfg(feature = "driver")]
 pub mod testing;
