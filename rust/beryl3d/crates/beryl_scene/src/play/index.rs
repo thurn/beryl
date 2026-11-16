@@ -10,7 +10,7 @@
 //! its view), each step lists the table's objects again.
 
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView};
-use beryl_protocol::script::{Act, Fact, Table as Played, Tally};
+use beryl_protocol::script::{Act, Fact, Subject, Table as Played};
 
 use crate::table::{Group, NO_GROUP, OnStack, Zones, names_host, on_stack, stack_slots};
 
@@ -38,18 +38,19 @@ pub(super) struct Index<'a> {
     tucked: Vec<ObjectId>,
 }
 
-/// Whether `act` may change the stack without naming an object on it: put an ability on it,
-/// take one off it, or set a fact about it. Any other change to the stack moves a spell's card,
-/// which the act names. An act that does neither, such as an arrow that opens over a full
-/// stack, leaves every item of the stack where it was.
+/// Whether `act` changes stack entries apart from moving a spell's object. The caller
+/// also checks whether any touched object joins, leaves or changes on the stack.
 pub(super) fn restacks(act: &Act) -> bool {
     matches!(
         act,
         Act::Emerge { .. }
-            | Act::Vanish { .. }
-            | Act::Set { .. }
-            | Act::Fly { .. }
-            | Act::Appear { .. }
+            | Act::Vanish {
+                subject: Subject::Ability { .. },
+                ..
+            }
+            | Act::Set {
+                fact: Fact::Item { .. }
+            }
     )
 }
 
@@ -105,12 +106,16 @@ impl<'a> Index<'a> {
 
     /// Brings the index up to date after `act` changed `played`, given the slots it named.
     pub(super) fn update(&mut self, played: &Played, act: &'a Act, touched: &[ObjectId]) {
+        let replaced = act.object();
         let mut lost = false;
         let stacked = Group::Stack.number();
         let mut restacked = restacks(act);
         for &slot in touched {
             let index = usize::from(slot.0);
-            let now = played.objects.get(&slot);
+            // A successful act carrying one object puts that exact record in its slot.
+            // An order change or a multi-object act still reads the resulting table.
+            let replacement = replaced.filter(|object| object.slot == slot);
+            let now = replacement.or_else(|| played.objects.get(&slot));
             if self.groups.len() <= index {
                 self.groups.resize(index + 1, NO_GROUP);
             }
@@ -130,14 +135,15 @@ impl<'a> Index<'a> {
                 continue;
             };
             // The object the slot held, if the act left it as it was, or the act's own.
-            let found = match now {
-                None => Some(None),
-                Some(now) => objects
+            let found = match (replacement, now) {
+                (None, None) => Some(None),
+                (Some(object), _) => Some(Some(object)),
+                (None, Some(now)) => objects
                     .get(index)
                     .copied()
                     .flatten()
                     .filter(|&kept| kept == now)
-                    .or_else(|| objects_of(act).iter().find(|&object| object == now))
+                    .or_else(|| shuffled_object(act, slot).filter(|&object| object == now))
                     .map(Some),
             };
             match found {
@@ -201,30 +207,13 @@ fn group_number(object: Option<&ObjectView>) -> u8 {
     object.and_then(Group::of).map_or(NO_GROUP, Group::number)
 }
 
-/// The objects `act` puts on the table as they are after it.
-fn objects_of(act: &Act) -> &[ObjectView] {
-    match act {
-        Act::Fly { object, .. }
-        | Act::Appear { object, .. }
-        | Act::Flip { object }
-        | Act::Tap { object }
-        | Act::Showcase { object }
-        | Act::Count {
-            tally:
-                Tally::Counters { object, .. }
-                | Tally::NamedCounters { object, .. }
-                | Tally::Stats { object }
-                | Tally::Damage { object },
-        }
-        | Act::Set {
-            fact: Fact::Object { object },
-        } => std::slice::from_ref(object),
-        Act::Vanish { object, .. } | Act::Strike { object, .. } | Act::Streak { object, .. } => {
-            object.as_slice()
-        }
-        Act::Set {
-            fact: Fact::ShuffledLibrary { cards, .. },
-        } => cards,
-        _ => &[],
-    }
+/// The replacement record for a card in a shuffled library.
+fn shuffled_object(act: &Act, slot: ObjectId) -> Option<&ObjectView> {
+    let Act::Set {
+        fact: Fact::ShuffledLibrary { cards, .. },
+    } = act
+    else {
+        return None;
+    };
+    cards.iter().rev().find(|object| object.slot == slot)
 }

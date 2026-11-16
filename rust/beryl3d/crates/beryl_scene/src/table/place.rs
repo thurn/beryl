@@ -19,7 +19,7 @@ use row::battlefield_row;
 mod under;
 pub(crate) use under::{host_slot, names_host};
 
-use super::hands::hand;
+use super::hands::{HandFits, hand};
 use super::pile::{PileShown, lay_pile, pile_base, pile_scale};
 use super::rows::{NameIds, RowWindow, face_up};
 use super::stack::{OnStack, on_stack, place_stack, spells};
@@ -126,7 +126,12 @@ pub(crate) fn place_zones(zones: &Zones, rules: Rules<'_>) -> Placement {
     let mut placement = Placement::default();
     let piles = zones.pile_rules();
     for (group, objects) in Group::ALL.into_iter().zip(all_members(zones)) {
-        lay(group, &objects, (zones, &piles, rules), &mut placement);
+        lay(
+            group,
+            &objects,
+            (zones, &piles, rules, None),
+            &mut placement,
+        );
     }
     placement
 }
@@ -173,7 +178,12 @@ pub(crate) fn place_reusing(
             }
         } else {
             laid += objects.len();
-            lay(group, &objects, (zones, &piles, rules), &mut placement);
+            lay(
+                group,
+                &objects,
+                (zones, &piles, rules, None),
+                &mut placement,
+            );
         }
     }
     (placement, laid)
@@ -185,13 +195,18 @@ pub(crate) fn place_group(
     (zones, piles): (&Zones, &PileRules),
     group: Group,
     rules: Rules,
-    placement: &mut Placement,
+    (placement, hands): (&mut Placement, &mut HandFits),
     placed: &mut Vec<ObjectId>,
 ) {
     let objects = members(zones, group);
     placed.clear();
     placed.extend(objects.iter().map(|object| object.slot));
-    lay(group, &objects, (zones, piles, rules), placement);
+    lay(
+        group,
+        &objects,
+        (zones, piles, rules, Some(hands)),
+        placement,
+    );
 }
 
 /// What placement follows besides the objects: the layout, the camera, the rows' scroll offsets
@@ -621,7 +636,7 @@ fn all_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
 fn lay(
     group: Group,
     objects: &[&ObjectView],
-    (zones, piles, rules): (&Zones, &PileRules, Rules),
+    (zones, piles, rules, hands): (&Zones, &PileRules, Rules, Option<&mut HandFits>),
     placement: &mut Placement,
 ) {
     let (layout, camera, scroll, fits, ids) = rules;
@@ -640,7 +655,14 @@ fn lay(
                 Side::You => layout.hand,
                 Side::Opponent => layout.opponent_hand,
             };
-            hand(placement, objects, side, (data, layout.strip), camera);
+            hand(
+                placement,
+                objects,
+                side,
+                (data, layout.strip),
+                camera,
+                hands,
+            );
         }
         Group::Row { side, row } => {
             let offset = scroll[side_index(side)][row_index(row)];

@@ -11,7 +11,7 @@ use crate::table::Placement;
 /// Adds `segment` to the track of the object in `slot`, growing `tracks` to hold it.
 pub(crate) fn add(tracks: &mut Vec<Track>, slot: usize, segment: Segment) {
     if tracks.len() <= slot {
-        tracks.resize(slot + 1, Track::default());
+        tracks.resize_with(slot + 1, Track::default);
     }
     // No segment of the object begins after this one (`Motion::push` cuts them), so any that
     // ended before this one starts no longer decides a pose and can go to make room.

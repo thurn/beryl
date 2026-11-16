@@ -56,7 +56,16 @@ STD_PATH: re.Pattern[str] = re.compile(r"\bstd\s*::\s*(\{|[a-z_]+)")
 # touch no file inside `Client::handle` and `Client::frame`; a new one is added here once it
 # has been checked the same way, and the frame gate runs it twice to hold its counts equal.
 SCENE_DEPENDENCIES: frozenset[str] = frozenset(
-    {"beryl_protocol", "bytemuck", "glam", "taffy", "parley", "serde", "serde_json"}
+    {
+        "arrayvec",
+        "beryl_protocol",
+        "bytemuck",
+        "glam",
+        "taffy",
+        "parley",
+        "serde",
+        "serde_json",
+    }
 )
 # What beryl_inspect's manifest may not name: the inspector reads a scene with no GPU.
 INSPECT_BANNED: tuple[str, ...] = (

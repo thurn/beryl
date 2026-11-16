@@ -9,6 +9,7 @@
 pub mod badges;
 mod camera;
 mod hands;
+pub(crate) use hands::HandFits;
 pub(crate) mod lifted;
 mod look;
 mod own;

@@ -32,12 +32,14 @@ impl Zones<'_> {
     }
 
     fn fill_pile_rules(&self, rules: &mut PileRules) {
-        let objects = self.battlefield.iter().filter_map(|&slot| self.get(slot));
+        rules.lands = piled_lands(self.battlefield.iter().filter_map(|&slot| self.get(slot)));
+        self.stack_names(&mut rules.named);
+    }
+
+    fn stack_names(&self, names: &mut Vec<ObjectId>) {
         match self.stack_items {
-            StackItems::View(stack) => rules.fill(objects, stack.iter()),
-            StackItems::Played(stack) => {
-                rules.fill(objects, stack.iter().map(|entry| &entry.item));
-            }
+            StackItems::View(stack) => stack_names(names, stack.iter()),
+            StackItems::Played(stack) => stack_names(names, stack.iter().map(|entry| &entry.item)),
         }
     }
 }
@@ -48,55 +50,38 @@ impl PileRules {
             .objects
             .iter()
             .filter(|object| object.zone == ZoneName::Battlefield);
-        let mut rules = Self::default();
-        rules.fill(permanents, view.stack.iter());
+        let mut rules = Self {
+            lands: piled_lands(permanents),
+            ..Self::default()
+        };
+        stack_names(&mut rules.named, view.stack.iter());
         rules
-    }
-
-    fn fill<'a>(
-        &mut self,
-        permanents: impl Iterator<Item = &'a ObjectView>,
-        stack: impl Iterator<Item = &'a StackItem>,
-    ) {
-        let mut lands = [0; 2];
-        for object in permanents {
-            if object.types.contains(&CardType::Land) {
-                lands[side_index(object.controller)] += 1;
-                if lands.iter().all(|&count| count >= LANDS_PILED) {
-                    break;
-                }
-            }
-        }
-        self.lands = lands.map(|count| count >= LANDS_PILED);
-        self.named.clear();
-        self.named.extend(stack.flat_map(|item| {
-            let (source, targets) = match item {
-                StackItem::Spell { targets, .. } => (None, targets),
-                StackItem::Ability {
-                    source, targets, ..
-                } => (*source, targets),
-            };
-            source
-                .into_iter()
-                .chain(targets.iter().filter_map(|target| match target {
-                    TargetRef::Object { slot } => Some(*slot),
-                    _ => None,
-                }))
-        }));
-        self.named.sort_unstable();
-        self.named.dedup();
     }
 
     /// Applies the replay's new pile rules and marks any additional rows that need placement.
     pub(crate) fn update(&mut self, zones: &Zones, dirty: &mut [bool; Group::ALL.len()]) {
-        let mut after = Self {
-            named: std::mem::take(&mut self.scratch),
-            ..Self::default()
-        };
-        zones.fill_pile_rules(&mut after);
-        self.mark_changes(&after, zones, dirty);
-        after.scratch = std::mem::take(&mut self.named);
-        *self = after;
+        if dirty[Group::Stack.index()]
+            || Group::ALL
+                .iter()
+                .any(|group| matches!(group, Group::Row { .. }) && dirty[group.index()])
+        {
+            let lands = piled_lands(zones.battlefield.iter().filter_map(|&slot| zones.get(slot)));
+            for side in [Side::You, Side::Opponent] {
+                if self.lands[side_index(side)] != lands[side_index(side)] {
+                    dirty[Group::Row {
+                        side,
+                        row: RowName::Lands,
+                    }
+                    .index()] = true;
+                }
+            }
+            self.lands = lands;
+        }
+        if dirty[Group::Stack.index()] {
+            zones.stack_names(&mut self.scratch);
+            self.mark_named_changes(zones, dirty);
+            std::mem::swap(&mut self.scratch, &mut self.named);
+        }
     }
 
     /// The sorted slots that stand alone in a row whose twins can pile.
@@ -125,19 +110,12 @@ impl PileRules {
         }
     }
 
-    /// Re-place a lands row when its controller crosses the threshold. Re-place a named
-    /// permanent's row when it must leave or may rejoin a pile, even if its own view is unchanged.
-    fn mark_changes(&self, after: &Self, zones: &Zones, dirty: &mut [bool; Group::ALL.len()]) {
-        for side in [Side::You, Side::Opponent] {
-            if self.lands[side_index(side)] != after.lands[side_index(side)] {
-                dirty[Group::Row {
-                    side,
-                    row: RowName::Lands,
-                }
-                .index()] = true;
-            }
+    /// Re-place a named permanent's row when it must leave or may rejoin a pile.
+    fn mark_named_changes(&self, zones: &Zones, dirty: &mut [bool; Group::ALL.len()]) {
+        if self.named == self.scratch {
+            return;
         }
-        for (was, now) in [(&self.named, &after.named), (&after.named, &self.named)] {
+        for (was, now) in [(&self.named, &self.scratch), (&self.scratch, &self.named)] {
             for &slot in was.iter().filter(|slot| now.binary_search(slot).is_err()) {
                 let Some(object) = zones.get(slot) else {
                     continue;
@@ -145,9 +123,7 @@ impl PileRules {
                 let Some(group @ Group::Row { .. }) = Group::of(object) else {
                     continue;
                 };
-                if dirty[group.index()]
-                    || (self.for_group(group).is_none() && after.for_group(group).is_none())
-                {
+                if dirty[group.index()] || self.for_group(group).is_none() {
                     continue;
                 }
                 let row = zones
@@ -161,6 +137,39 @@ impl PileRules {
             }
         }
     }
+}
+
+fn piled_lands<'a>(permanents: impl Iterator<Item = &'a ObjectView>) -> [bool; 2] {
+    let mut lands = [0; 2];
+    for object in permanents {
+        if object.types.contains(&CardType::Land) {
+            lands[side_index(object.controller)] += 1;
+            if lands.iter().all(|&count| count >= LANDS_PILED) {
+                break;
+            }
+        }
+    }
+    lands.map(|count| count >= LANDS_PILED)
+}
+
+fn stack_names<'a>(names: &mut Vec<ObjectId>, stack: impl Iterator<Item = &'a StackItem>) {
+    names.clear();
+    names.extend(stack.flat_map(|item| {
+        let (source, targets) = match item {
+            StackItem::Spell { targets, .. } => (None, targets),
+            StackItem::Ability {
+                source, targets, ..
+            } => (*source, targets),
+        };
+        source
+            .into_iter()
+            .chain(targets.iter().filter_map(|target| match target {
+                TargetRef::Object { slot } => Some(*slot),
+                _ => None,
+            }))
+    }));
+    names.sort_unstable();
+    names.dedup();
 }
 
 fn pile_twin<'a>(

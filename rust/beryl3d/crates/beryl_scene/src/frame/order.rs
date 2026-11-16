@@ -378,9 +378,9 @@ fn clipped(
     let mut count = 4;
     // A quad wholly inside the view volume, as most are, keeps its four corners, so it is cut
     // only when one of them lies outside.
-    let inside = polygon[..4]
-        .iter()
-        .all(|point| PLANES.iter().all(|plane| point.dot(*plane) >= 0.0));
+    let inside = polygon[..4].iter().all(|point| {
+        point.x.abs() <= point.w && point.y.abs() <= point.w && point.z >= 0.0 && point.z <= point.w
+    });
     if !inside {
         for plane in PLANES {
             count = cut(polygon, count, plane);

@@ -5,6 +5,8 @@
 use beryl_protocol::protocol::{ObjectView, Side, ZoneName};
 use glam::{Quat, Vec2};
 
+use crate::pose::Pose;
+
 use super::place::{Placement, Rest, turn};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData};
 use crate::frame::Place;
@@ -26,6 +28,7 @@ pub(super) fn hand(
     side: Side,
     (data, strip): (HandData, f32),
     camera: &Camera,
+    cache: Option<&mut HandFits>,
 ) {
     // A hand with no card picked, as nearly every hand is, is laid out with no copy of its list.
     let (picked, fan): (Vec<&ObjectView>, Vec<&ObjectView>);
@@ -37,6 +40,89 @@ pub(super) fn hand(
         objects
     };
     let count = objects.len();
+    let place = Place::Card {
+        zone: ZoneName::Hand,
+        side,
+        row: None,
+    };
+    let mut place_card = |object: &ObjectView, pose: Pose| {
+        placement.set(
+            object.slot,
+            Rest {
+                pose: Pose {
+                    turn: turn(object),
+                    ..pose
+                },
+                place,
+                visible: true,
+                copies: 1,
+            },
+        );
+    };
+    if let Some(cache) = cache.filter(|_| count <= HandFits::MAX_CACHED) {
+        for (object, &pose) in objects
+            .iter()
+            .zip(cache.poses(side, count, data, strip, camera))
+        {
+            place_card(object, pose);
+        }
+    } else {
+        fan_poses(count, side, data, strip, camera, |index, pose| {
+            place_card(objects[index], pose);
+        });
+    }
+    super::lifted::lay_picked(&picked, side, camera, placement);
+}
+
+/// Fans of each size for a single script, whose window and hand layout stay fixed. A script
+/// can return to the same fan size after drawing and playing cards. The cache holds only small
+/// hands so a script that runs through many sizes cannot use memory quadratic in its hand size.
+#[derive(Default)]
+pub(crate) struct HandFits([FanCache; 2]);
+
+#[derive(Default)]
+struct FanCache {
+    starts: Vec<Option<usize>>,
+    poses: Vec<Pose>,
+}
+
+impl HandFits {
+    const MAX_CACHED: usize = 32;
+
+    fn poses(
+        &mut self,
+        side: Side,
+        count: usize,
+        data: HandData,
+        strip: f32,
+        camera: &Camera,
+    ) -> &[Pose] {
+        let FanCache { starts, poses } = &mut self.0[usize::from(side == Side::Opponent)];
+        if starts.len() <= count {
+            starts.resize(count + 1, None);
+        }
+        let start = *starts[count].get_or_insert_with(|| {
+            let start = poses.len();
+            poses.reserve(count);
+            fan_poses(count, side, data, strip, camera, |_, pose| poses.push(pose));
+            start
+        });
+        &poses[start..start + count]
+    }
+}
+
+/// The geometry of the cards in a fan, before taking their faces from the object records.
+fn fan_poses(
+    count: usize,
+    side: Side,
+    data: HandData,
+    strip: f32,
+    camera: &Camera,
+    mut place: impl FnMut(usize, Pose),
+) {
+    if count == 0 {
+        return;
+    }
     let window = camera.window.size;
     let aspect = window.width / window.height;
     // Distances on screen are in half the window's height, the vertical unit of normalized
@@ -58,7 +144,7 @@ pub(super) fn hand(
         // with room left where the strip's slanted sides meet the square's corners.
         margin: SPARE * 2.0 / window.height,
     };
-    let rows = fan.rows(count);
+    let (rows, spacing) = fan.rows(count);
     let radius = data.fan_radius * wide;
     let bias = data.bias_degrees.to_radians();
     // The viewer's cards hang down from their edge on the circle, and the opponent's stand up
@@ -71,25 +157,30 @@ pub(super) fn hand(
     for row in 0..rows {
         // The first rows take a card more than the last when the cards do not split evenly.
         let length = count / rows + usize::from(row < count % rows);
-        let spacing = fan.spacing(length);
+        let spacing = if length == count.div_ceil(rows) {
+            spacing
+        } else {
+            fan.spacing(length)
+        };
         // Each row stands `Fan::rise` above the one in front of it, the first row at the back.
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a hand holds far fewer than 2^24 cards"
-        )]
-        let above = (rows - 1 - row) as f32 * fan.rise(length, spacing);
+        let behind = rows - 1 - row;
+        let above = if behind == 0 {
+            0.0
+        } else {
+            behind as f32 * fan.rise(length, spacing)
+        };
         #[expect(
             clippy::cast_precision_loss,
             reason = "a hand holds far fewer than 2^24 cards"
         )]
         let middle = (length as f32 - 1.0) / 2.0;
-        for (at, object) in objects[first..first + length].iter().enumerate() {
+        for at in 0..length {
             #[expect(
                 clippy::cast_precision_loss,
                 reason = "a hand holds far fewer than 2^24 cards"
             )]
-            let (at, index) = (at as f32, (first + at) as f32);
-            let dx = (at - middle) * spacing;
+            let (across, depth_index) = (at as f32, (first + at) as f32);
+            let dx = (across - middle) * spacing;
             let along = dx.clamp(-radius, radius);
             let sink = radius - (radius * radius - along * along).sqrt();
             // Turned clockwise right of the middle on the viewer's side, and anticlockwise on
@@ -101,27 +192,14 @@ pub(super) fn hand(
             let rotation = Quat::from_rotation_z(angle + half_turn);
             // Each card stands nearer the eye than every card before it, so a later row covers
             // the foot of an earlier one.
-            let depth = data.depth - index * data.step_depth;
-            let mut pose = camera.screen_pose(ndc, depth, rotation, data.height);
-            pose.turn = turn(object);
-            let place = Place::Card {
-                zone: ZoneName::Hand,
-                side,
-                row: None,
-            };
-            placement.set(
-                object.slot,
-                Rest {
-                    pose,
-                    place,
-                    visible: true,
-                    copies: 1,
-                },
+            let depth = data.depth - depth_index * data.step_depth;
+            place(
+                first + at,
+                camera.screen_pose(ndc, depth, rotation, data.height),
             );
         }
         first += length;
     }
-    super::lifted::lay_picked(&picked, side, camera, placement);
 }
 
 /// The points each strip of the viewer's hand is widened by, and each row raised by, beyond what
@@ -148,14 +226,15 @@ impl Fan {
     /// cards that cannot all keep a strip would leave some out of reach, so the cards fill a
     /// second row before they close up past their strips. Sixty cards take two rows in every
     /// desktop window.
-    fn rows(&self, count: usize) -> usize {
-        let mut rows = 1;
-        while rows < count
-            && self.spacing_needed(count.div_ceil(rows)) > self.widest(count.div_ceil(rows))
-        {
-            rows += 1;
+    fn rows(&self, count: usize) -> (usize, f32) {
+        for rows in 1..count {
+            let length = count.div_ceil(rows);
+            let needed = self.spacing_needed(length);
+            if needed <= self.widest(length) {
+                return (rows, needed);
+            }
         }
-        rows
+        (count.max(1), 0.0)
     }
 
     /// How far apart the centres of a row of `count` cards stand: `data.spacing` while the row

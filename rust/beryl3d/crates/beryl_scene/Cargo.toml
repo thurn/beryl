@@ -15,6 +15,8 @@ workspace = true
 driver = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
+# Stores a bounded track without initializing or cloning its unused segment slots.
+arrayvec = "0.7.8"
 # The game state the scene shows: PlayerView and the table commands.
 beryl_protocol = { path = "../../../crates/beryl_protocol" }
 # Lets the renderer upload draw records as bytes with no unsafe cast of its own.

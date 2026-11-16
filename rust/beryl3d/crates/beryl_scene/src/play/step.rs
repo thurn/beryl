@@ -2,17 +2,18 @@
 //! and what a verb is given (`StepIn`, `Places`) and what it writes (`StepOut`)
 //! (docs/beryl-3d.md, "Verbs").
 
-use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, ZoneName};
+use beryl_protocol::protocol::{ObjectId, PlayerView, ZoneName};
 use beryl_protocol::script::{Act, Step, StepTiming, Subject, Table as Played, Verb, mover_of};
 
-use super::compile::{nanoseconds, subject_of};
+use super::compile::nanoseconds;
 use super::index::{self, Index};
 use super::record::{Cause, SegmentRecord};
 use crate::beat::Laid;
+use crate::frame::Place;
 use crate::motion::Track;
 use crate::pose::{Curve, Pose, Segment};
 use crate::table::lifted::Look;
-use crate::table::{Group, NameIds, PileRules, Placement, Rest, Table, Zones};
+use crate::table::{Group, HandFits, NameIds, PileRules, Placement, Rest, Table, Zones};
 use crate::verbs::{self, Interval};
 
 mod abilities;
@@ -51,8 +52,6 @@ pub struct StepIn<'a> {
     pub curve: Curve,
     /// What the step moves (`mover_of`).
     pub subject: Option<Subject>,
-    /// The subject's record before the act, when the subject is a card.
-    pub was: Option<&'a ObjectView>,
     /// The subject's pose as the step begins; `None` when it has no scene object.
     pub from: Option<Pose>,
     /// Where the subject rests after the act, or `from` faded out where the act takes it off
@@ -90,6 +89,7 @@ pub(crate) struct Motion<'a> {
     /// The resting places of the groups a step placed again, until it makes them the table's
     /// own. Kept between steps, empty, so that a step need not allocate it.
     fresh: Placement,
+    hands: HandFits,
     /// The slots each group a step placed again placed, by `Group::index`, until the step makes
     /// them its `members`.
     next: [Vec<ObjectId>; Group::ALL.len()],
@@ -115,8 +115,9 @@ pub(crate) struct Motion<'a> {
     pub written: Written,
     /// What is closing up after a step of the current beat, as the web stage's `closedBy`
     /// finds it on each entry's track: a later step of the beat that moves the same card
-    /// again takes its place (`Closing::gone`).
-    closing: Vec<Closing>,
+    /// again takes its place. The stack's close-ups are tracked separately.
+    closing: Vec<Option<Closing>>,
+    stack_closing: Vec<Closing>,
     /// The cards the opponent is handling as the steps so far leave the table, which the table
     /// played over does not keep.
     look: Look,
@@ -165,6 +166,7 @@ impl<'a> Motion<'a> {
             unplaced: 0,
             first: true,
             fresh: Placement::default(),
+            hands: HandFits::default(),
             next: [const { Vec::new() }; Group::ALL.len()],
             touched: Vec::new(),
             piles: PileRules::of_view(before),
@@ -177,6 +179,7 @@ impl<'a> Motion<'a> {
             records,
             written: Written::default(),
             closing: Vec::new(),
+            stack_closing: Vec::new(),
             look: Look::opening(
                 (before, after),
                 timings.iter().any(|timing| timing.duration > 0.0),
@@ -223,11 +226,18 @@ impl<'a> Motion<'a> {
         }
     }
 
-    /// The slots whose resting place the step may have changed, given the groups `dirty` it
-    /// placed again, and the step's own object, in order, in `self.affected`. They are marked in
-    /// a bit set by slot and read back in order, which costs less than sorting them.
-    fn mark_affected(&mut self, dirty: &[bool], subject: Option<usize>) {
-        let end = self.rests.rests.len().max(self.fresh.rests.len());
+    /// The slots the step may move, including its own object, in slot order. For steps that
+    /// place a group again, followers whose poses and pile counts match need no new segment. A `set` can
+    /// still interrupt a track at the same resting pose, so it also visits those followers.
+    fn mark_affected(&mut self, dirty: &[bool], subject: Option<usize>, still: bool) {
+        self.affected.clear();
+        if !dirty.iter().any(|&changed| changed) {
+            self.affected.extend(subject);
+            return;
+        }
+        let before = &self.rests.rests;
+        let after = &self.fresh.rests;
+        let end = before.len().max(after.len());
         let end = end.max(subject.map_or(0, |slot| slot + 1));
         let marks = &mut self.marks;
         marks.clear();
@@ -236,20 +246,26 @@ impl<'a> Motion<'a> {
         if self.whole {
             (0..end).for_each(&mut mark);
         } else {
-            let placed = dirty.iter().enumerate().filter(|(_, dirty)| **dirty);
-            for (group, _) in placed {
-                for slot in self.members[group].iter().chain(&self.next[group]) {
-                    mark(usize::from(slot.0));
+            for (group, _) in dirty.iter().enumerate().filter(|(_, changed)| **changed) {
+                for &id in &self.members[group] {
+                    if self.fresh.get(id).is_none() {
+                        mark(usize::from(id.0));
+                    }
+                }
+                for &id in &self.next[group] {
+                    let slot = usize::from(id.0);
+                    if still || changed_rest(self.rests.get(id), self.fresh.get(id)) {
+                        mark(slot);
+                    }
                 }
             }
         }
         subject.into_iter().for_each(mark);
-        let affected = &mut self.affected;
-        affected.clear();
         for (word, &bits) in self.marks.iter().enumerate() {
-            let mut bits: u64 = bits;
+            let mut bits = bits;
             while bits != 0 {
-                affected.push(word * 64 + bits.trailing_zeros() as usize);
+                self.affected
+                    .push(word * 64 + bits.trailing_zeros() as usize);
                 bits &= bits - 1;
             }
         }
@@ -282,16 +298,14 @@ impl<'a> Motion<'a> {
         for (group, _) in placed {
             for &slot in &self.next[group] {
                 let index = usize::from(slot.0);
-                let rest = *self
-                    .fresh
-                    .get(slot)
+                let rest = self.fresh.rests[index]
+                    .take()
                     .expect("a group places each of its slots");
                 self.rests.set(slot, rest);
                 if self.groups.len() <= index {
                     self.groups.resize(index + 1, None);
                 }
                 self.groups[index] = Some(group);
-                self.fresh.unset(slot);
             }
             std::mem::swap(&mut self.members[group], &mut self.next[group]);
         }
@@ -319,10 +333,6 @@ impl<'a> Motion<'a> {
     ) {
         let step = &beat[index];
         let mover = mover_of(&step.act);
-        let was = match mover {
-            Some(Subject::Object { slot }) => self.played.objects.get(&slot).cloned(),
-            _ => None,
-        };
         // A step the table cannot take changes nothing; the table takes the view as it stands
         // when the script ends, whatever the steps did.
         let own = Interval {
@@ -333,18 +343,18 @@ impl<'a> Motion<'a> {
         let Some(dirty) = self.place(&step.act, room.duration() > 0 || own.duration() > 0) else {
             return;
         };
+        let verb = step.act.verb();
         // A streak may carry a new record for its target. If that changes the target's
         // resting place, it slides with the other cards the new placement moved.
-        let subject = if step.act.verb() == Verb::Streak {
-            None
-        } else {
-            subject_of(step)
+        let subject = match mover {
+            Some(Subject::Object { slot }) if verb != Verb::Streak => Some(usize::from(slot.0)),
+            _ => None,
         };
         // A `set` moves nothing: what it places again, a library it reorders, is at its new
         // place as the step begins. Only the cards that stay in a hand regroup round one it
         // takes out of the fan or puts back, as on the web stage (`carried` in `tracks.ts`).
-        let still = matches!(step.act, Act::Set { .. });
-        self.mark_affected(&dirty, subject);
+        let still = verb == Verb::Set;
+        self.mark_affected(&dirty, subject, still);
         let affected = std::mem::take(&mut self.affected);
         // A step that moves no card of its own (a player's, an ability's, a span's) has its verb
         // play it first. The cards a look lifts or puts back are the `lift` verb's to move, so
@@ -355,15 +365,7 @@ impl<'a> Motion<'a> {
                 Some(Subject::Ability { id }) => self.ability_poses(id, own.from),
                 _ => (None, None),
             };
-            self.play(
-                number,
-                (beat, index),
-                timing,
-                own,
-                (mover, was.as_ref()),
-                poses,
-                &dirty,
-            );
+            self.play(number, (beat, index), timing, own, mover, poses, &dirty);
         }
         for &slot in &affected {
             if self
@@ -385,21 +387,11 @@ impl<'a> Motion<'a> {
                     None => None,
                 };
                 let poses = (Some(from), to);
-                self.play(
-                    number,
-                    (beat, index),
-                    timing,
-                    own,
-                    (mover, was.as_ref()),
-                    poses,
-                    &dirty,
-                );
+                self.play(number, (beat, index), timing, own, mover, poses, &dirty);
                 played = true;
                 continue;
             }
-            if let Some((segment, cause)) =
-                self.follow(slot, (&dirty, still), number, own, (room, regroup))
-            {
+            if let Some((segment, cause)) = self.follow(slot, still, number, own, (room, regroup)) {
                 self.push(slot, segment, cause);
                 if matches!(cause, Cause::Slide(_)) && segment.end() > own.to {
                     self.note_closing(Some(slot), segment.end(), number);
@@ -412,7 +404,7 @@ impl<'a> Motion<'a> {
                 (beat, index),
                 timing,
                 own,
-                (mover, was.as_ref()),
+                mover,
                 (None, None),
                 &dirty,
             );
@@ -436,30 +428,26 @@ impl<'a> Motion<'a> {
             reason = "a script lasts seconds, far below f64's exact range"
         )]
         let end = end as f64 / 1e6;
-        self.closing.push(Closing {
-            slot,
-            end,
-            number,
-            gone: false,
-        });
+        let closing = Closing { end, number };
+        if let Some(slot) = slot {
+            if self.closing.len() <= slot {
+                self.closing.resize(slot + 1, None);
+            }
+            self.closing[slot] = Some(closing);
+        } else {
+            self.stack_closing.push(closing);
+        }
     }
 
     /// Forgets what closes up after the steps of the last beat, as the next one begins.
     pub(crate) fn begin_beat(&mut self) {
         self.closing.clear();
+        self.stack_closing.clear();
     }
 
-    /// Sets `closes`, which holds an entry for each step of the current beat from the script's
-    /// `first`th step, to when what closed up after each step closes, in milliseconds on the
-    /// script's clock, as the beat's steps so far leave it.
-    pub(crate) fn closings_into(&mut self, first: usize, closes: &mut [Option<f64>]) {
-        // Each step a close-up is gone from is worked out again from those left, which a step
-        // with none left has none of.
-        for closing in self.closing.iter().filter(|closing| closing.gone) {
-            closes[closing.number - first] = None;
-        }
-        self.closing.retain(|closing| !closing.gone);
-        for closing in &self.closing {
+    /// Sets when the surviving close-ups of each step in the finished beat end.
+    pub(crate) fn closings_into(&self, first: usize, closes: &mut [Option<f64>]) {
+        for closing in self.closing.iter().flatten().chain(&self.stack_closing) {
             let entry = &mut closes[closing.number - first];
             *entry = Some(entry.map_or(closing.end, |end| end.max(closing.end)));
         }
@@ -472,7 +460,7 @@ impl<'a> Motion<'a> {
     fn follow(
         &mut self,
         slot: usize,
-        (dirty, still): (&[bool], bool),
+        still: bool,
         number: usize,
         own: Interval,
         (room, regroup): (Interval, Option<Interval>),
@@ -483,8 +471,20 @@ impl<'a> Motion<'a> {
             .get(slot)
             .and_then(Option::as_ref)
             .map(|rest| &rest.pose);
-        let now = self.now(slot, dirty).map(|rest| &rest.pose);
-        if still && !(regroup.is_some() && self.stays_in_hand(slot)) {
+        let next = self.fresh.rests.get(slot).and_then(Option::as_ref);
+        let regroup = regroup.filter(|_| {
+            next.is_some_and(|rest| {
+                matches!(
+                    rest.place,
+                    Place::Card {
+                        zone: ZoneName::Hand,
+                        ..
+                    }
+                )
+            })
+        });
+        let now = next.map(|rest| &rest.pose);
+        if still && regroup.is_none() {
             return self.change(slot, (rested.copied(), now.copied()), number, own);
         }
         if rested == now {
@@ -492,10 +492,7 @@ impl<'a> Motion<'a> {
         }
         match (rested.copied(), now.copied()) {
             (Some(rested), Some(now)) => {
-                let room = match regroup {
-                    Some(regroup) if self.stays_in_hand(slot) => regroup,
-                    _ => room,
-                };
+                let room = regroup.unwrap_or(room);
                 if self.retarget(slot, room.from, rested, now) {
                     return None;
                 }
@@ -540,8 +537,8 @@ impl<'a> Motion<'a> {
         }
     }
 
-    /// Has the verb of the step `index` of `beat`, the `number`th, play it over `own`, given its subject and that
-    /// subject's record before the act, and its poses as the step begins and once it is done.
+    /// Has the verb of the step `index` of `beat`, the `number`th, play it over `own`, given its subject and
+    /// its poses as the step begins and once it is done.
     /// Adds the segments the verb wrote to the tracks, and keeps what else it wrote.
     #[expect(
         clippy::too_many_arguments,
@@ -553,7 +550,7 @@ impl<'a> Motion<'a> {
         (beat, index): (&[Step], usize),
         timing: &StepTiming,
         own: Interval,
-        (subject, was): (Option<Subject>, Option<&ObjectView>),
+        subject: Option<Subject>,
         (from, to): (Option<Pose>, Option<Pose>),
         dirty: &[bool],
     ) {
@@ -573,7 +570,6 @@ impl<'a> Motion<'a> {
             own,
             curve: Curve::named(timing.curve),
             subject,
-            was,
             from,
             to,
             table: &self.played,
@@ -599,19 +595,6 @@ impl<'a> Motion<'a> {
         }
         written.ability_segments = segments;
         self.written = written;
-    }
-
-    /// Whether the object in `slot` lies in a hand after the step being played: one of the
-    /// cards of a hand that regroup round a card that joins or leaves it, where the step does
-    /// not move it itself. Where it lay before is not asked: the first step of a script has
-    /// no record of the groups.
-    fn stays_in_hand(&self, slot: usize) -> bool {
-        u16::try_from(slot).is_ok_and(|slot| {
-            self.played
-                .objects
-                .get(&ObjectId(slot))
-                .is_some_and(|object| object.zone == ZoneName::Hand)
-        })
     }
 
     /// Sends every segment of the object in `slot` that lands at `was` and has not ended by
@@ -660,8 +643,7 @@ impl<'a> Motion<'a> {
                 .rests
                 .rests
                 .get(slot)
-                .copied()
-                .flatten()
+                .and_then(Option::as_ref)
                 .map(|rest| rest.pose),
         }
     }
@@ -672,8 +654,8 @@ impl<'a> Motion<'a> {
     fn push(&mut self, slot: usize, segment: Segment, cause: Cause) {
         // Its new segment takes the place of what it was closing up along, as a new track does
         // on the web stage, whose beat then waits only for the track the card is on.
-        for closing in &mut self.closing {
-            closing.gone |= closing.slot == Some(slot);
+        if let Some(closing) = self.closing.get_mut(slot) {
+            *closing = None;
         }
         let segment = Segment {
             step: cause.step_time(),
@@ -717,14 +699,20 @@ impl<'a> Motion<'a> {
     }
 }
 
+/// Whether a fresh resting place changes the follower's pose or displayed pile count.
+fn changed_rest(before: Option<&Rest>, after: Option<&Rest>) -> bool {
+    match (before, after) {
+        (Some(before), Some(after)) => before.copies != after.copies || before.pose != after.pose,
+        (None, None) => false,
+        _ => true,
+    }
+}
+
 /// Something that closes up after a step of the current beat (`Motion::note_closing`).
+#[derive(Clone, Copy)]
 struct Closing {
-    /// The slot of the object that slides; none for the abilities on the stack.
-    slot: Option<usize>,
     /// When it is where it rests, in milliseconds on the script's clock.
     end: f64,
     /// The step it closes up after, by its number in the script.
     number: usize,
-    /// A later step of the beat moved the object again, so the beat no longer waits for this.
-    gone: bool,
 }

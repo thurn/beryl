@@ -4,13 +4,14 @@
 
 use std::f32::consts::PI;
 
+use arrayvec::ArrayVec;
 use beryl_protocol::script::Curve as Named;
 use glam::{Quat, Vec3};
 
 use crate::data::space::verbs;
 use crate::data::space::verbs::fly::thrown;
 use crate::pose::{Curve, Pose, Segment, Shape};
-use crate::verbs::{Follows, Interval};
+use crate::verbs::Follows;
 
 impl Curve {
     /// CSS's `linear`: progress equals elapsed time.
@@ -487,11 +488,12 @@ impl Segment {
 /// all it stands at the default pose.
 #[must_use]
 pub fn pose_at(segments: &[Segment], t: u64) -> Pose {
-    let begun = segments.partition_point(|segment| segment.start <= t);
-    match (begun.checked_sub(1), segments.first()) {
-        (Some(latest), _) => segments[latest].pose_at(t),
-        (None, Some(first)) => first.from,
-        (None, None) => Pose::default(),
+    if let Some(segment) = segments.iter().rev().find(|segment| segment.start <= t) {
+        segment.pose_at(t)
+    } else {
+        segments
+            .first()
+            .map_or_else(Pose::default, |first| first.from)
     }
 }
 
@@ -506,38 +508,22 @@ pub struct Full;
 
 /// One object's segments, sorted by start, in a fixed array so that adding one never
 /// allocates.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Track {
-    segments: [Segment; SEGMENTS],
-    len: usize,
-}
-
-impl Default for Track {
-    fn default() -> Self {
-        let rest = Segment::between(
-            Pose::default(),
-            Pose::default(),
-            Interval { from: 0, to: 0 },
-            Curve::LINEAR,
-        );
-        Self {
-            segments: [rest; SEGMENTS],
-            len: 0,
-        }
-    }
+    segments: ArrayVec<Segment, SEGMENTS>,
 }
 
 impl Track {
     /// The segments it holds, sorted by start.
     #[must_use]
     pub fn segments(&self) -> &[Segment] {
-        &self.segments[..self.len]
+        self.segments.as_slice()
     }
 
     /// The segments it holds, to change their poses. Their starts must not change, so that
     /// they stay sorted.
     pub fn segments_mut(&mut self) -> &mut [Segment] {
-        &mut self.segments[..self.len]
+        self.segments.as_mut_slice()
     }
 
     /// The object's pose at `t` (`pose_at`).
@@ -594,18 +580,22 @@ impl Track {
     ///
     /// `Full` when the track holds `SEGMENTS` segments and at most one of them has ended.
     pub fn push(&mut self, segment: Segment, now: u64) -> Result<(), Full> {
-        if self.len == SEGMENTS {
+        if self.segments.is_full() {
             self.drop_ended(now);
+            if self.segments.is_full() {
+                return Err(Full);
+            }
         }
-        if self.len == SEGMENTS {
-            return Err(Full);
+        if self
+            .segments
+            .last()
+            .is_none_or(|last| last.start <= segment.start)
+        {
+            self.segments.push(segment);
+        } else {
+            let at = self.segments.partition_point(|s| s.start <= segment.start);
+            self.segments.insert(at, segment);
         }
-        let at = self
-            .segments()
-            .partition_point(|s| s.start <= segment.start);
-        self.segments.copy_within(at..self.len, at + 1);
-        self.segments[at] = segment;
-        self.len += 1;
         Ok(())
     }
 
@@ -617,7 +607,7 @@ impl Track {
         }
         // An insertion sort, which is stable and allocates nothing; the segments are almost
         // always in order already.
-        for i in 1..self.len {
+        for i in 1..self.segments.len() {
             let mut j = i;
             while j > 0 && self.segments[j - 1].start > self.segments[j].start {
                 self.segments.swap(j - 1, j);
@@ -628,10 +618,12 @@ impl Track {
 
     /// Drops every segment that begins after `t`, and says whether there was one.
     pub fn cut_after(&mut self, t: u64) -> bool {
-        let kept = self.segments().partition_point(|s| s.start <= t);
-        let cut = kept < self.len;
-        self.len = kept;
-        cut
+        if self.segments().last().is_none_or(|last| last.start <= t) {
+            return false;
+        }
+        self.segments
+            .truncate(self.segments.partition_point(|s| s.start <= t));
+        true
     }
 
     /// Drops every segment that ended by `now` except the latest of them.
@@ -639,13 +631,11 @@ impl Track {
         let Some(kept) = self.segments().iter().rposition(|s| s.end() <= now) else {
             return;
         };
-        let mut len = 0;
-        for i in 0..self.len {
-            if i == kept || self.segments[i].end() > now {
-                self.segments[len] = self.segments[i];
-                len += 1;
-            }
-        }
-        self.len = len;
+        let mut index = 0;
+        self.segments.retain(|s| {
+            let retain = index == kept || s.end() > now;
+            index += 1;
+            retain
+        });
     }
 }

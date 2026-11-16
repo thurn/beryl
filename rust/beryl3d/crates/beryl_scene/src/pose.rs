@@ -43,7 +43,7 @@ impl Pose {
     pub fn transform(&self) -> Affine3A {
         Affine3A::from_scale_rotation_translation(
             Vec3::splat(self.scale),
-            self.rotation * Quat::from_rotation_x(PI * self.turn),
+            self.rotation_for(self.turn),
             self.position,
         )
     }
@@ -56,9 +56,17 @@ impl Pose {
     pub fn upward(&self) -> Affine3A {
         Affine3A::from_scale_rotation_translation(
             Vec3::splat(self.scale),
-            self.rotation * Quat::from_rotation_x(PI * (self.turn - self.turn.round())),
+            self.rotation_for(self.turn - self.turn.round()),
             self.position,
         )
+    }
+
+    fn rotation_for(&self, turn: f32) -> Quat {
+        if turn == 0.0 {
+            self.rotation
+        } else {
+            self.rotation * Quat::from_rotation_x(PI * turn)
+        }
     }
 }
 

@@ -3,6 +3,7 @@
 use beryl_protocol::protocol::{ObjectId, PlayerView};
 
 use super::Table;
+use crate::table::HandFits;
 use crate::table::place::{
     Group, PileRules, Placement, Rules, Zones, place_group, place_reusing, place_zones,
 };
@@ -52,11 +53,11 @@ impl Table {
         &self,
         (zones, ids, piles): (&Zones, &NameIds<'_>, &PileRules),
         group: Group,
-        placement: &mut Placement,
+        output: (&mut Placement, &mut HandFits),
         placed: &mut Vec<ObjectId>,
     ) {
         let rules = self.placement_rules(Some(ids));
-        place_group((zones, piles), group, rules, placement, placed);
+        place_group((zones, piles), group, rules, output, placed);
         self.placed.add(placed.len());
     }
 }

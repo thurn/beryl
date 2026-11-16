@@ -467,6 +467,7 @@ dependencies = [
 name = "beryl_scene"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
  "beryl_card_records",
  "beryl_protocol",
  "beryl_scene",

@@ -103,6 +103,8 @@ pub struct Show {
     lit: Lit,
     /// The effects playing, in nanoseconds since the client started, until they end.
     effects: Vec<EffectRun>,
+    /// The runs under way in the frame. Keeps future effects out of each card's scan.
+    active_effects: Vec<EffectRun>,
     /// The notices shown and to be shown, in real time, until they end.
     notices: Vec<Announced>,
     /// What the pointer is doing on the table.
@@ -137,6 +139,7 @@ impl Show {
             plants: Vec::new(),
             lit: Lit::with_capacity(LIGHTS),
             effects: Vec::with_capacity(LIGHTS),
+            active_effects: Vec::with_capacity(LIGHTS),
             notices: Vec::with_capacity(notices::NOTICES),
             pointer: Pointer::default(),
             counts: Counts::default(),
@@ -568,8 +571,16 @@ impl Show {
             .playing
             .as_ref()
             .and_then(|playing| playing.motion(now));
+        let active = &mut self.active_effects;
+        active.clear();
+        active.extend(
+            self.effects
+                .iter()
+                .copied()
+                .filter(|run| run.start <= now && now < run.start + run.duration),
+        );
         let dress = Dress {
-            effects: &self.effects,
+            effects: &self.active_effects,
             badges: &self.badges,
             lit: &self.lit,
             pointer: &self.pointer,
@@ -581,9 +592,9 @@ impl Show {
         light::arrows::write(&self.lit, now, &scene, builder);
         light::marks::write(&self.lit, now, &scene, builder);
         light::streaks::write(&self.lit, now, &scene, builder);
-        effects::light::write(&self.effects, now, &scene, builder);
+        effects::light::write(&self.active_effects, now, &scene, builder);
         let scale = self.table.camera().window.scale;
-        builder.shake(effects::shake::offset(&self.effects, now, scale));
+        builder.shake(effects::shake::offset(&self.active_effects, now, scale));
     }
 
     /// Ends the playing script: the table shows its view, at rest, with its life totals and

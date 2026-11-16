@@ -211,7 +211,9 @@ pub(crate) fn compile<'a>(
                     motion.begin_beat();
                 }
                 motion.step(number, (&script.beats[beat], index), timing, laid);
-                motion.closings_into(number - index, closes);
+                if index + 1 == script.beats[beat].len() {
+                    motion.closings_into(number - index, closes);
+                }
             }
             effects_of(number, step, timing, laid, effects);
             if !records {

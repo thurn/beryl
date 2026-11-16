@@ -46,6 +46,9 @@ impl<'a> Motion<'a> {
         // over does, so its first step places the stack again whatever its act.
         dirty[Group::Stack.index()] |= self.first || index::restacks(act);
         self.look.follow((act, timed), &self.played, &mut dirty);
+        if self.touched.is_empty() && !self.first && !dirty.iter().any(|&changed| changed) {
+            return Some(dirty);
+        }
         let zones = index::step_zones(self.index.as_mut(), &self.played, act, &self.touched)
             .handled(self.look.handled())
             .arrived(&self.arrival);
@@ -113,7 +116,8 @@ impl<'a> Motion<'a> {
         for (group, next) in Group::ALL.into_iter().zip(&mut self.next) {
             if dirty[group.index()] {
                 let zones = (&zones, &self.names, &self.piles);
-                self.table.place_group(zones, group, &mut self.fresh, next);
+                self.table
+                    .place_group(zones, group, (&mut self.fresh, &mut self.hands), next);
             }
         }
         Some(dirty)
