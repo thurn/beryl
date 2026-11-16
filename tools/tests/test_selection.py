@@ -303,7 +303,10 @@ def test_records_join_the_run_log_and_the_beads_verdicts() -> None:
     catch: dict[str, object] = {"verdict": "catch", "time": NOW.isoformat()}
     history = {"ui-test:b": [catch]}
     found = coverage_of(**{"ui-test:c": {}})
-    known = selection.records(log, history, found, since)
+    counted: dict[str, runlog.Tally] = {}
+    for r in log:
+        counted.setdefault(str(r["check"]), runlog.Tally()).add(r)
+    known = selection.records(counted, history, found, since)
     assert known["ui-test:a"] == Record(0, 1, 4, 2.0)
     assert known["ui-test:b"].catches == 1
     assert known["ui-test:c"].seconds == 1.0  # Timed by the coverage run alone.
@@ -446,11 +449,7 @@ def test_a_kept_parts_body_and_harness_choose(
     choice = selection.choose("ui-test", [harness], changed, universe, None, "base")
     assert set(choice.reasons) == set(universe)
     # Its titles are the lane's checks, computed ones as the log names them.
-    log: list[dict[str, object]] = [
-        {"lane": "ui-test", "check": kept[2]},
-        {"lane": "ui-test", "check": "ui-test:gone"},
-    ]
-    every = selection.every_check("ui-test", log, None)
+    every = selection.every_check("ui-test", [kept[2], "ui-test:gone"], None)
     assert {kept[0], kept[2]} <= set(every)
     assert kept[1] not in every and "ui-test:gone" not in every
 

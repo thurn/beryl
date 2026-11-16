@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import bisect, checks, runlog, slow_ci, verdicts
+from beryl_tools import bisect, checks, runlog, runstore, slow_ci, verdicts
 
 # A browser lane's step over a repository whose `version` file counts its commits: "plays a
 # land" and "casts a spell" fail from version 3, "draws a card" from version 5, and "untaps"
@@ -137,7 +137,7 @@ def test_bisection_names_each_culprit_flake_and_record_last(
     # Each probe's checks reached the run log, with the probe's commit.
     records = [
         json.loads(line)
-        for line in checks.runlog.log_path().read_text().splitlines()
+        for line in runstore.read_lines(None)
         if json.loads(line)["script"] == "bisect"
     ]
     assert {r["commit"][:10] for r in records} == {

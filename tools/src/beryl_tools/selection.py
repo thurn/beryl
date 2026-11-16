@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import checks, deadline, paths, runlog, system, verdicts
+from . import checks, deadline, paths, runlog, runstore, system, verdicts
 from .beryl3d import paths as beryl3d_paths
 from .kept_checks import (
     COMMENT,
@@ -75,8 +75,6 @@ STARTUP = 4.0
 DEFAULT_SECONDS = 3.0
 # How far back the run log's records count (runlog.tally).
 RECORD_DAYS = 30
-# The fields of a run-log record that `records` and `every_check` read.
-RECORD_KEYS = ("script", "lane", "check", "outcome", "seconds", "backfilled")
 # The pages a capture script runs at once (capture.mjs' workers).
 WORKERS = 4
 # What `--select` tells a check script to run: a file of titles, one a line, matched exactly.
@@ -371,14 +369,14 @@ class Record:
 
 
 def records(
-    log: list[dict[str, object]],
+    counted: Mapping[str, runlog.Tally],
     history: dict[str, list[verdicts.Entry]],
     found: Coverage | None,
     since: datetime,
 ) -> dict[str, Record]:
-    """Each check's record from the run log and its bead's verdicts, timed by its mean run in the
-    log, or the coverage run's."""
-    tallies, _ = runlog.tally(log, history, since)
+    """Each check's record from its tally in the run log (runstore.lane_tallies) and its bead's
+    verdicts, timed by its mean run in the log, or the coverage run's."""
+    tallies, _ = runlog.tally([], history, since, counted)
     measured = found.checks if found else {}
     out: dict[str, Record] = {}
     for check in set(tallies) | set(measured):
@@ -567,20 +565,17 @@ def hashes(folder: Path) -> dict[str, str]:
     }
 
 
-def lane_checks(
-    lane: str, log: list[dict[str, object]], found: Coverage | None
-) -> list[str]:
+def lane_checks(lane: str, logged: Iterable[str], found: Coverage | None) -> list[str]:
     """The lane's checks as they are now, but those the prune moved to slow CI alone
     (verdicts.SLOW_ONLY): shots.json's names, or the checks the kept files spell out with
     those the log and coverage name that it can still give, and the verb and shape suites'.
     """
     slow = {s.check for s in verdicts.SLOW_ONLY}
-    return [c for c in every_check(lane, log, found) if c not in slow]
+    return [c for c in every_check(lane, logged, found) if c not in slow]
 
 
-def every_check(
-    lane: str, log: list[dict[str, object]], found: Coverage | None
-) -> list[str]:
+def every_check(lane: str, logged: Iterable[str], found: Coverage | None) -> list[str]:
+    """`logged` is the checks the run log names for the lane."""
     prefix = f"{lane}:"
     if lane == "shots":
         return [f"{prefix}{n}" for n in shot_entries((paths.REPO / SHOTS).read_text())]
@@ -591,7 +586,7 @@ def every_check(
         found_literal, found_patterns = kept_titles(source)
         literal += found_literal
         patterns += found_patterns
-    named = {str(r.get("check")) for r in log if r.get("lane") == lane}
+    named = set(logged)
     named |= set(found.checks) if found else set()
     current = {
         c
@@ -620,15 +615,13 @@ class Chooser:
         self.started: float = self.clock.now()
         now = datetime.now(timezone.utc)
         self.since: datetime = now - timedelta(days=RECORD_DAYS)
-        self.log: list[dict[str, object]] = runlog.read_log(
-            self.since, lane=lane, keys=RECORD_KEYS
-        )
+        self.counted: dict[str, runlog.Tally] = runstore.lane_tallies(self.since, lane)
         loaded = Coverage.load()
         fallback = stale(loaded, now)
         self.coverage: Coverage | None = None if fallback else loaded
         base = base or checks.branch_base()
         universe = (every_check if self.whole else lane_checks)(
-            lane, self.log, self.coverage
+            lane, self.counted, self.coverage
         )
         self.choice: Choice = choose(
             lane,
@@ -647,7 +640,9 @@ class Chooser:
         choice = self.choice
         if choice.recorded and self.coverage is not None:
             fixture_reasons(choice, recorded, self.coverage)
-        known = records(self.log, verdicts.cached_history(), self.coverage, self.since)
+        known = records(
+            self.counted, verdicts.cached_history(), self.coverage, self.since
+        )
         ranked = order(choice.reasons, known)
         if choice.fill:
             rest = order((c for c in choice.universe if c not in choice.reasons), known)

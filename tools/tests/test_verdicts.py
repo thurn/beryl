@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import checks, cli, paths, runlog, verdicts
+from beryl_tools import checks, cli, paths, runlog, runstore, verdicts
 
 
 class FakeBd(verdicts.Beads):
@@ -385,7 +385,7 @@ def test_verdicts_that_cannot_be_recorded_fail_no_run(
 
 
 def logged() -> list[dict[str, object]]:
-    return [json.loads(line) for line in runlog.log_path().read_text().splitlines()]
+    return [json.loads(line) for line in runstore.read_lines(None)]
 
 
 def report_args(**more: object) -> argparse.Namespace:

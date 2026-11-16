@@ -2,7 +2,9 @@
 on the checks' beads. Both are written by the repository's tools and read here by their
 documented formats:
 
-- `<cache>/ci/runs.jsonl` (tools/src/beryl_tools/runlog.py) has one line per check per run:
+- The run log (tools/src/beryl_tools/runlog.py and runstore.py), the hour files
+  `<cache>/ci/runs/<YYYY-MM-DDTHH>.jsonl` and the old single file `<cache>/ci/runs.jsonl`, has
+  one line per check per run:
   `time` (the end of its step), `host`, `worktree` (the checkout's directory name, absent in
   lines from before it was recorded), `commit`, `tree`, `script` (`check`, `ci`, `sweep`,
   `nightly`, `bisect` and others), `lane`, `check`, `outcome` (`pass`, `fail`, `skip`,
@@ -115,7 +117,15 @@ class RunLog(LineSource):
         self.path = path
 
     def files(self) -> list[Path]:
-        return [self.path] if self.path.exists() else []
+        """The old single file while tools from before the split still write it, then the
+        hour files beside it (runstore.py in tools), but the `.folded.jsonl` ones: those hold
+        lines moved out of the single file, which were read from there already."""
+        hours = sorted(
+            p
+            for p in (self.path.parent / "runs").glob("*.jsonl")
+            if not p.name.endswith(".folded.jsonl")
+        )
+        return ([self.path] if self.path.exists() else []) + hours
 
     def parse(self, path: Path, line: bytes) -> list[Row]:
         record = json.loads(line)
@@ -259,5 +269,6 @@ class Verdicts(SnapshotSource):
 
 
 def runlog_path(cache: Path) -> Path:
-    """Where runlog.py writes the run log (`log_path`)."""
+    """The run log's old single file (runstore.legacy_path in tools); its hour files are in
+    `runs/` beside it."""
     return cache / "ci" / "runs.jsonl"

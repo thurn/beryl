@@ -83,13 +83,13 @@ class Records:
 
     def read(self) -> None:
         # They import this module, by way of checks.py.
-        from . import runlog, verdicts
-        from .selection import RECORD_DAYS, RECORD_KEYS, records
+        from . import runstore, verdicts
+        from .selection import RECORD_DAYS, records
 
         since = datetime.now(timezone.utc) - timedelta(days=RECORD_DAYS)
         try:
-            log = runlog.read_log(since, lane=self.lane, keys=RECORD_KEYS)
-            self.known = records(log, verdicts.cached_history(), None, since)
+            counted = runstore.lane_tallies(since, self.lane)
+            self.known = records(counted, verdicts.cached_history(), None, since)
         except Exception as e:  # A plan without records still fits, at default times.
             print(f"{self.lane}: no records to plan with: {e}", flush=True)
 

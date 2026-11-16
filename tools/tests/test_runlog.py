@@ -15,13 +15,14 @@ from beryl_tools import (
     paths,
     reruns,
     runlog,
+    runstore,
     system,
     verdicts,
 )
 
 
 def logged() -> list[dict[str, object]]:
-    return [json.loads(line) for line in runlog.log_path().read_text().splitlines()]
+    return [json.loads(line) for line in runstore.read_lines(None)]
 
 
 def reports(*results: tuple[str, str, float], then: str = "true") -> list[str]:
@@ -126,7 +127,7 @@ def test_reading_the_log_keeps_only_the_asked_lane_host_window_and_fields() -> N
             record("rust", "mac", timedelta(days=40)),
         ]
     )
-    with open(runlog.log_path(), "a") as f:
+    with open(runstore.legacy_path(), "a") as f:
         f.write('not json, "lane": "rust"\n')
     since = now - timedelta(days=30)
     assert len(runlog.read_log(since)) == 3
@@ -217,7 +218,7 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
             record("shots:board", "fail", 100.0, days_ago=40),
         ]
     )
-    with open(runlog.log_path(), "a") as f:
+    with open(runstore.legacy_path(), "a") as f:
         f.write("not a record\n")
     args = argparse.Namespace(days=30, json=True, pending=False, prune=False)
     assert runlog.report(args) == 0

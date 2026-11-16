@@ -31,7 +31,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import flaky, nightly, paths, prune, system, verdicts
+from . import flaky, nightly, paths, prune, runstore, system, verdicts
+from .runstore import Tally
 
 # The file a step appends its checks' results to, one JSON object a line: check, outcome, seconds.
 RESULTS_ENV = "BERYL_CHECK_RESULTS"
@@ -46,7 +47,8 @@ PENDING_OUTCOMES = {"pass": "pending-pass", "fail": "pending-fail"}
 
 
 def log_path() -> Path:
-    return paths.cache_root() / "ci" / "runs.jsonl"
+    """Where the run log's hour files are (runstore.py)."""
+    return runstore.hours_dir()
 
 
 def warn(e: BaseException) -> None:
@@ -325,12 +327,7 @@ class Run:
 
 
 def append(records: Iterable[dict[str, object]]) -> None:
-    text = "".join(json.dumps(r) + "\n" for r in records)
-    path = log_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with system.file_lock(path.with_suffix(".lock")):
-        with open(path, "a") as f:
-            f.write(text)
+    runstore.append("".join(json.dumps(r) + "\n" for r in records))
 
 
 def field_bytes(key: str, value: str) -> bytes:
@@ -347,92 +344,55 @@ def read_log(
     """The records from `since` on, skipping any line that is not one: only those of `lane`
     and of `host` when given, each cut to `keys` (and `time`) when given.
 
-    The log holds every check of every run for weeks: 2 million lines and 720 MB after four
-    days. Reading it whole into one list of full records took 7 s and 5.7 GB of memory, once
-    per lane per fast check, so the file is streamed, and a line naming another lane or host
-    is dropped before it is parsed.
+    The log holds every check of every run for weeks, over a gigabyte at a time, so only the
+    hour files from `since` on are read (runstore.read_lines), they are streamed, and a line
+    naming another lane or host is dropped before it is parsed. A step choosing its checks
+    reads runstore.lane_tallies instead, which does not grow with the log.
     """
     needles = [
         field_bytes(k, v) for k, v in (("lane", lane), ("host", host)) if v is not None
     ]
     kept = None if keys is None else {*keys, "time"}
     records: list[dict[str, object]] = []
-    try:
-        f = open(log_path(), "rb")
-    except FileNotFoundError:
-        return []
-    with f:
-        for line in f:
-            if not all(n in line for n in needles):
-                continue
-            try:
-                r = json.loads(line)
-                when = datetime.fromisoformat(r["time"])
-            except (
-                KeyError,
-                TypeError,
-                ValueError,
-            ):  # JSON and Unicode errors among them.
-                continue
-            if when < since:
-                continue
-            if (lane is not None and r.get("lane") != lane) or (
-                host is not None and r.get("host") != host
-            ):
-                continue
-            records.append(r if kept is None else {k: r[k] for k in kept if k in r})
+    for line in runstore.read_lines(since):
+        if not all(n in line for n in needles):
+            continue
+        try:
+            r = json.loads(line)
+            when = datetime.fromisoformat(r["time"])
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+        ):  # JSON and Unicode errors among them.
+            continue
+        if when < since:
+            continue
+        if (lane is not None and r.get("lane") != lane) or (
+            host is not None and r.get("host") != host
+        ):
+            continue
+        records.append(r if kept is None else {k: r[k] for k in kept if k in r})
     return records
-
-
-@dataclass
-class Tally:
-    runs: int = 0
-    failures: int = 0
-    skips: int = 0
-    seconds: float = 0.0
-    verdicts: dict[str, int] = field(default_factory=dict)
-    backfilled: int = 0
-
-    def add(self, r: dict[str, object]) -> None:
-        outcome = r.get("outcome")
-        self.backfilled += bool(r.get("backfilled"))
-        if outcome == REWRITE:
-            self.judged("stale")
-            return
-        if outcome == "skip":
-            self.skips += 1
-            return
-        self.runs += 1
-        self.failures += outcome == "fail"
-        seconds = r.get("seconds")
-        self.seconds += seconds if isinstance(seconds, (int, float)) else 0.0
-
-    def judged(self, verdict: str, backfilled: bool = False) -> None:
-        self.verdicts[verdict] = self.verdicts.get(verdict, 0) + 1
-        self.backfilled += backfilled
-
-    def json(self) -> dict[str, object]:
-        return {
-            "runs": self.runs,
-            "failures": self.failures,
-            "skips": self.skips,
-            "seconds": round(self.seconds, 1),
-            "verdicts": self.verdicts,
-            "backfilled": self.backfilled,
-        }
 
 
 def tally(
     records: Iterable[dict[str, object]],
     history: dict[str, list[verdicts.Entry]],
     since: datetime,
+    counted: Mapping[str, Tally] | None = None,
+    lane: str = "",
 ) -> tuple[dict[str, Tally], dict[str, Tally]]:
     """Per check and per lane, costliest first: runs and seconds from the run log, verdicts
     since `since` from the checks' beads (verdicts.py). A bisection's reruns at older commits
     (bisect.py, script `bisect`) say nothing of the check's own record and are left out.
+    `counted` holds tallies already summed from the log (runstore.lane_tallies) for `lane`.
     """
     checks: dict[str, Tally] = {}
     lanes: dict[str, Tally] = {}
+    for check, found in (counted or {}).items():
+        checks.setdefault(check, Tally()).merge(found)
+        lanes.setdefault(lane, Tally()).merge(found)
     for r in records:
         if r.get("script") == BISECT:
             continue
@@ -571,3 +531,8 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         help="each check the pruning rule acts on, with its action and numbers",
     )
     p.set_defaults(func=report)
+    p = sub.add_parser(
+        "run-log-roll",
+        help="fold the old single run log into hour files and build the missing sums",
+    )
+    p.set_defaults(func=lambda args: print(runstore.roll()) or 0)

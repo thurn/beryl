@@ -387,3 +387,23 @@ def test_the_ci_metrics(log: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert [(p["count"], p["median"]) for p in per_run] == [(2, 18.0)]
     assert [p["median"] for p in series("slow-ci.runs-per-day")] == [2.0]
     assert [p["median"] for p in series("fast-check.cpu-seconds")] == [3.0]
+
+
+def test_the_run_log_reads_the_hour_files_but_not_the_folded_ones(
+    tmp_path: Path,
+) -> None:
+    single = cilog.runlog_path(tmp_path)
+    hours = single.parent / "runs"
+    hours.mkdir(parents=True)
+    for name in (
+        "2026-11-16T09.jsonl",
+        "2026-11-16T08.jsonl",
+        "2026-11-16T08.folded.jsonl",
+    ):
+        (hours / name).write_text("")
+    assert [p.name for p in cilog.RunLog(single).files()] == [
+        "2026-11-16T08.jsonl",
+        "2026-11-16T09.jsonl",
+    ]
+    single.write_text("")
+    assert cilog.RunLog(single).files()[0] == single
