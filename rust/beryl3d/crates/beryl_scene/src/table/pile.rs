@@ -147,6 +147,13 @@ pub(super) fn lay_pile(
 }
 
 impl Table {
+    /// How many cards the pile numbered `index` (`PileShown::index`) holds as the table stands
+    /// now, whether or not a box of the flat layer shows its top card.
+    #[must_use]
+    pub fn pile_count(&self, index: usize) -> usize {
+        self.objects.piles[index].count
+    }
+
     /// `side`'s pile of `zone` as the table shows it at rest: how many cards it holds and its
     /// top card's corners on screen, in logical points. None for an empty pile.
     #[must_use]

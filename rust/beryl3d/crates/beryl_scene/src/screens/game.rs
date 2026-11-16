@@ -24,7 +24,7 @@ pub fn game(input: &ScreenIn) -> Element {
         game_over::scrim(input),
         game_over::game_over(input),
         game_over::buttons(input),
-        players::players(input),
+        players::players(input).filter(|_| !opening::shown(input)),
         steps::steps(input),
         log::log(input),
         viewer::viewer(input),

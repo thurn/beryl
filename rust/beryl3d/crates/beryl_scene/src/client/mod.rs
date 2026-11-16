@@ -288,7 +288,8 @@ impl Client {
                 }
                 let shown = self.show.shown().map(|update| &update.view);
                 let coming = self.show.coming_counts().map(|(_, view)| view);
-                (self.piles).prepare(&mut self.layer, shown.into_iter().chain(coming));
+                let table = self.show.table();
+                (self.piles).prepare(&mut self.layer, table, shown.into_iter().chain(coming));
                 (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
                 self.show_screen();
             }

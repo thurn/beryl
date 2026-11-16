@@ -629,6 +629,17 @@
       "prompt_width": 336,
       "scry_card": 154,
       "scry_source": 184
+    },
+    "opening": {
+      "top": 92,
+      "coin_height": 52,
+      "coin_gap": 14,
+      "title_gap": 30,
+      "card": 176,
+      "card_gap": 8,
+      "slot": 120,
+      "slot_gap": 12,
+      "slots_gap": 26
     }
   },
   "notices": {

@@ -10,6 +10,7 @@ mod faults;
 mod frame_allocation;
 mod gate;
 mod hud;
+mod opening;
 mod pack;
 mod pointer_held;
 mod prompts;

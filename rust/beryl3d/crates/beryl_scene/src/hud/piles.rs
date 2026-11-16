@@ -28,11 +28,29 @@ pub struct PileCounts {
 
 impl PileCounts {
     /// Lays out ahead, in `layer`, each count that `views`, the view the table shows and those
-    /// the scripts to come lead to, give a pile, and forgets those laid out before that none of
-    /// them gives. The client calls it as each update arrives.
-    pub fn prepare<'a>(&mut self, layer: &mut Layer, views: impl Iterator<Item = &'a PlayerView>) {
+    /// the scripts to come lead to, give a pile, and each count `table` holds now, and forgets
+    /// those laid out before that none of them gives. The client calls it as each update
+    /// arrives.
+    ///
+    /// The table's own counts are kept because the table can still be playing an earlier
+    /// script when the update arrives: a pile whose top card a box of the flat layer shows has
+    /// no count, and once the box lets the card go, the pile shows the count the table holds,
+    /// which no view still to come may give. The opening hand's boxes do this during a
+    /// mulligan, while the table still holds the whole library.
+    pub fn prepare<'a>(
+        &mut self,
+        layer: &mut Layer,
+        table: &Table,
+        views: impl Iterator<Item = &'a PlayerView>,
+    ) {
         let coming = &mut self.coming;
         coming.clear();
+        for index in 0..6 {
+            let count = table.pile_count(index);
+            if count > 0 {
+                coming.push((index, count));
+            }
+        }
         for view in views {
             for index in 0..6 {
                 let count = count_in(view, index);

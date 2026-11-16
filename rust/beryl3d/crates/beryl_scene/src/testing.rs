@@ -15,10 +15,14 @@ pub struct ViewBuilder {
 }
 
 impl Default for ViewBuilder {
+    /// A view of a game in its first turn, past the opening hands, which the game screen shows
+    /// over the table (`screens::opening`) before it.
     fn default() -> Self {
-        Self {
-            view: PlayerView::neutral(player(), player()),
-        }
+        let mut view = PlayerView::neutral(player(), player());
+        view.turn.number = 1;
+        view.turn.own_number = 1;
+        view.turn.starting = Some(Side::You);
+        Self { view }
     }
 }
 
