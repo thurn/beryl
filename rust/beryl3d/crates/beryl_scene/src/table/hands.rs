@@ -16,7 +16,8 @@ use crate::frame::Place;
 /// camera a little nearer the eye than the card before it, so later cards cover earlier ones.
 /// The viewer's hand runs along the bottom edge, as the web interface's `handPlacements` has
 /// it; the opponent's along the top, upside down to the viewer as the opponent holds it and
-/// mostly out of view, as `heldPlacements` has it.
+/// mostly out of view, as `heldPlacements` has it. A card its player picked in a hidden pick
+/// lies apart from the fan (`lifted::lay_picked`).
 pub(super) fn hand(
     placement: &mut Placement,
     objects: &[&ObjectView],
@@ -24,6 +25,15 @@ pub(super) fn hand(
     (data, strip): (HandData, f32),
     camera: &Camera,
 ) {
+    // A hand with no card picked, as nearly every hand is, is laid out with no copy of its list.
+    let (picked, fan): (Vec<&ObjectView>, Vec<&ObjectView>);
+    let objects = if objects.iter().any(|object| object.hidden_pick) {
+        (picked, fan) = objects.iter().partition(|object| object.hidden_pick);
+        &fan[..]
+    } else {
+        picked = Vec::new();
+        objects
+    };
     let count = objects.len();
     let window = camera.window.size;
     let aspect = window.width / window.height;
@@ -85,6 +95,7 @@ pub(super) fn hand(
             },
         );
     }
+    super::lifted::lay_picked(&picked, side, camera, placement);
 }
 
 /// How far apart the centres of a hand of `count` cards `wide` stand, in half the window's

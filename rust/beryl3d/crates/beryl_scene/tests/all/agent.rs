@@ -48,6 +48,7 @@ fn element(role: Role, name: &'static str, id: u32, place: Place, rect: Rect) ->
             interactive: false,
             state: StateBits::default(),
             face: (role == Role::Card).then_some(1),
+            really: NameRef::default(),
         },
     }
 }

@@ -14,6 +14,7 @@ use glam::{Quat, Vec2};
 use super::place::{Group, Placement, Zones, members};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout};
 use crate::data::space::verbs::lift;
+use crate::frame::Place;
 use crate::pose::Pose;
 
 /// The group that holds the cards `handling` takes, if the table places any of them.
@@ -164,24 +165,7 @@ pub(crate) fn lay(
                 ..Pose::default()
             }
         } else {
-            let aspect = camera.window.size.width / camera.window.size.height;
-            // A card's width, in normalized device coordinates of the window.
-            let width = lift::hand::HEIGHT * 2.0 * (CARD_WIDTH / CARD_HEIGHT) / aspect;
-            let ndc = lift::hand::AT
-                + Vec2::new(
-                    offset * lift::hand::STEP * width,
-                    -offset.abs() * lift::hand::DROP,
-                )
-                + lift::hand::PACKET * under as f32;
-            let rotation = Quat::from_rotation_z(-(offset * lift::hand::LEAN_DEGREES).to_radians());
-            let depth = lift::hand::DEPTH - order;
-            let mut pose = camera.screen_pose(ndc, depth, rotation, lift::hand::HEIGHT);
-            pose.turn = if object.owner == Side::Opponent || !super::rows::face_up(object) {
-                1.0
-            } else {
-                0.0
-            };
-            pose
+            held_up(object, side, (offset, under, order), camera)
         };
         if let Some(rest) = placement.get(object.slot).copied() {
             // A card lifted from under the top two of a pile is drawn, as the pile's are not.
@@ -194,6 +178,81 @@ pub(crate) fn lay(
                 },
             );
         }
+    }
+}
+
+/// Where a card taken from `side`'s hand is held up in front of the camera, as the web's
+/// `handlingPlacements` holds it: the viewer's low in the middle of the screen, the opponent's
+/// high. `offset` is its column's distance from the middle column, `under` how many cards of its
+/// column lie over it, and `order` how far it lies over the first card. The opponent's cards show
+/// their backs.
+fn held_up(
+    object: &ObjectView,
+    side: Side,
+    (offset, under, order): (f32, usize, f32),
+    camera: &Camera,
+) -> Pose {
+    let aspect = camera.window.size.width / camera.window.size.height;
+    // A card's width, in normalized device coordinates of the window.
+    let width = lift::hand::HEIGHT * 2.0 * (CARD_WIDTH / CARD_HEIGHT) / aspect;
+    let at = match side {
+        Side::You => lift::hand::AT,
+        Side::Opponent => lift::hand::THEIRS_AT,
+    };
+    #[expect(clippy::cast_precision_loss, reason = "a handful of cards")]
+    let ndc =
+        at + Vec2::new(
+            offset * lift::hand::STEP * width,
+            -offset.abs() * lift::hand::DROP,
+        ) + lift::hand::PACKET * under as f32;
+    let rotation = Quat::from_rotation_z(-(offset * lift::hand::LEAN_DEGREES).to_radians());
+    let depth = lift::hand::DEPTH - order;
+    let mut pose = camera.screen_pose(ndc, depth, rotation, lift::hand::HEIGHT);
+    pose.turn = if object.owner == Side::Opponent || !super::rows::face_up(object) {
+        1.0
+    } else {
+        0.0
+    };
+    pose
+}
+
+/// Lays out `picked`, the cards of `side`'s hand its player picked in a hidden pick of the
+/// resolution that is paused, apart from the hand where the cards a player handles from their
+/// hand are held up: face up for their player, face down for the other ([CR 101.4a]): "each
+/// player must clearly indicate which face-down card they are choosing." The web interface's
+/// `pickedPlacements` (`ui/src/game/layout.ts`) lays them out the same way.
+///
+/// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
+pub(crate) fn lay_picked(
+    picked: &[&ObjectView],
+    side: Side,
+    camera: &Camera,
+    placement: &mut Placement,
+) {
+    let columns = lift::hand::COLUMNS.min(picked.len());
+    if columns == 0 {
+        return;
+    }
+    let packet = picked.len().div_ceil(columns);
+    #[expect(clippy::cast_precision_loss, reason = "a handful of cards")]
+    for (index, object) in picked.iter().enumerate() {
+        let (column, under) = (index % columns, index / columns);
+        let offset = column as f32 - (columns as f32 - 1.0) / 2.0;
+        let order = (column * packet + packet - under) as f32;
+        let pose = held_up(object, side, (offset, under, order), camera);
+        placement.set(
+            object.slot,
+            super::Rest {
+                pose,
+                place: Place::Card {
+                    zone: ZoneName::Hand,
+                    side,
+                    row: None,
+                },
+                visible: true,
+                copies: 1,
+            },
+        );
     }
 }
 

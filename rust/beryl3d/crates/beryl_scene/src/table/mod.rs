@@ -154,6 +154,10 @@ pub struct Layout {
     /// How far each copy under the top of a pile of identical permanents peeks out, in
     /// millimetres to the right and away from the viewer.
     pub pile_step: Vec2,
+    /// How far each card under a merged permanent peeks out from behind it, to the left and
+    /// away from the viewer, as a fraction of a card's width and height: the web interface's
+    /// `BENEATH_STEP` (`ui/src/game/placement.ts`).
+    pub beneath_step: Vec2,
     /// Where each pile lies: the point of the screen, in normalized device coordinates, over
     /// which its bottom card's centre lies on the table. By side, the viewer's first, then
     /// library, graveyard and exile.
@@ -215,6 +219,7 @@ pub const DESKTOP: Layout = Layout {
     others: row_area!(others),
     gap: desktop::GAP,
     pile_step: desktop::PILE_STEP,
+    beneath_step: desktop::BENEATH_STEP,
     // The web interface's `PILES` (`ui/src/game/pileLook.ts`): the middle of each top card as
     // `pileLook` draws it on the 1600 by 900 stage, converted as `x / 800 - 1` and `1 - y / 450`.
     piles: [

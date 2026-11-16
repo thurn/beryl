@@ -384,6 +384,7 @@ pub struct Resolved {
     pub state: StateBits,
     pub face: Option<u16>,     // a card's face layer; None while it has no
                                // face of its own and is drawn blank
+    pub really: NameRef,       // the card a copy really is; empty otherwise
 }
 
 /// Closed. A new role is added here with the word the tree printout uses.
@@ -1171,6 +1172,27 @@ flight start exactly where the card was.
   at, is held up in the middle of the screen. Which cards those are is fixed as
   the look begins. A script that changes the look with no `lift` step takes the
   look of the view it leads to.
+- **A card picked in a hidden pick lies apart from its hand.** While a
+  resolution such as Show and Tell waits for the other player to pick, a hand
+  card whose `hidden_pick` is set is held up where the cards of that player's
+  hand are held for a look: low in the middle of the screen for the viewer's,
+  high for the opponent's. It shows its face to its player and its back to the
+  other. The tree marks it `picked`.
+- **A merged permanent's other cards peek out from under it.** A card in the
+  merged zone (`ZoneName::Merged`) lies in its permanent's row, a step to its
+  left and away from the viewer for each card under it, as the web interface
+  tucks the cards a permanent holds, and the row leaves room for them. They peek
+  away from the viewer on both sides, where the web's peek toward their
+  controller: a card nearer the viewer is nearer the camera, which the interface
+  checks and the hit test take for in front. The tree places them
+  `merged.<side>.<row>`.
+- **A phased-out permanent stays where it lay, faded** to 40% opacity
+  (`card.phased_out_opacity`), and the tree marks it `phased-out`. **A copy**
+  shows the copied card's face and name, and the tree names the card it really
+  is, as `copy("Phantasmal Image")`.
+- **A decision made for another player says so.** While the viewer controls the
+  opponent's turn, the prompt bar says "For opponent:" before what a decision
+  asks, and a priority says only "For opponent".
 - **A revealed card has a second card element.** A card held up to be read
   (`showcase`) lies where it was, and its face joins the Revealed Cards pile at
   the top left of the screen, placed relative to the camera. The face's element
@@ -2208,6 +2230,7 @@ game
 - **States** are words from a closed list: `interactive`, `tapped`, `face-down`,
   `moving(<verb> <percent>)` (`moving` alone until an element carries its verb),
   `hovered`, `held`, `eligible`, `selected`, `target`, `disabled`, `focused`,
+  `phased-out`, `picked`, `copy("<name>")` (the card a copy really is),
   `covered(<percent>)` and `faded(<percent>)`.
 - **`covered(<percent>)`** is how much of the element other elements hide, and
   **`faded(<percent>)`** how far its opacity is below 1. Neither is printed

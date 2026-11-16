@@ -264,10 +264,11 @@ mod milestone_three {
         for body in bodies() {
             let mut shaped = prompt("Choose");
             shaped.body = body;
-            let element = prompts::screen(&shaped, &input(Some(&shaped), &settings));
+            let input = input(Some(&shaped), &settings);
+            let element = prompts::screen(&shaped, &input);
             assert_eq!(
                 element,
-                Some(prompts::prompt_bar(&shaped)),
+                Some(prompts::prompt_bar(&shaped, &input)),
                 "{:?}",
                 shaped.body
             );

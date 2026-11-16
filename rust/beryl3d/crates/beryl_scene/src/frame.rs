@@ -52,6 +52,12 @@ pub struct Resolved {
     /// For a card, the layer of the face-texture array its face is drawn from, or `None` when
     /// it has no face of its own yet and is drawn blank. `None` for every other role.
     pub face: Option<u16>,
+    /// For a card that is a copy of another card, the name of the card it really is in
+    /// `Frame::names` ([CR 707.2]), while `name` is the copied card's. Empty for every other
+    /// element.
+    ///
+    /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+    pub really: NameRef,
 }
 
 /// What kind of thing an element is. Closed: a new role is added here with the word the tree
@@ -148,6 +154,10 @@ impl StateBits {
     pub const TARGET: u16 = 1 << 7;
     pub const DISABLED: u16 = 1 << 8;
     pub const FOCUSED: u16 = 1 << 9;
+    /// A phased-out permanent, which stays where it lay, faded.
+    pub const PHASED_OUT: u16 = 1 << 10;
+    /// A card its player picked in a hidden pick, which lies apart from their hand.
+    pub const PICKED: u16 = 1 << 11;
 
     /// Whether every bit of `bits` is set.
     #[must_use]
@@ -388,6 +398,17 @@ impl<'a> FrameBuilder<'a> {
     #[must_use]
     pub fn centre(&self, id: ElementId) -> Option<Vec2> {
         self.frame.centre(id)
+    }
+
+    /// Names the card the element at `at` in `Frame::resolved` really is, for a copy
+    /// (`Resolved::really`).
+    pub fn really(&mut self, at: u32, name: &str) {
+        let really = NameRef {
+            start: index(self.frame.names.len()),
+            len: index(name.len()),
+        };
+        self.frame.names.push_str(name);
+        self.frame.resolved[at as usize].really = really;
     }
 
     /// Counts an element visited: an object slot of the table or a node of the flat layer.

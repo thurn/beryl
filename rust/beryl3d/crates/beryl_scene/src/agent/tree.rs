@@ -316,11 +316,21 @@ fn states(frame: &Frame, index: u32, element: &Resolved, out: &mut String) {
         (StateBits::TARGET, "target"),
         (StateBits::DISABLED, "disabled"),
         (StateBits::FOCUSED, "focused"),
+        (StateBits::PHASED_OUT, "phased-out"),
+        (StateBits::PICKED, "picked"),
     ] {
         if element.state.has(bit) {
             out.push(' ');
             out.push_str(word);
         }
+    }
+    let really = frame.name(element.really);
+    if !really.is_empty() {
+        let _ = write!(
+            out,
+            " copy(\"{}\")",
+            really.replace('\\', "\\\\").replace('"', "\\\"")
+        );
     }
     if element.role != Role::Arrow {
         let percent = (covered(frame, index) * 100.0).round();

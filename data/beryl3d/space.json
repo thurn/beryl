@@ -133,7 +133,11 @@
           0.002,
           -0.003
         ],
-        "drop": 0.0067
+        "drop": 0.0067,
+        "theirs_at": [
+          0.0,
+          0.347
+        ]
       }
     },
     "streak": {
@@ -277,7 +281,8 @@
   "card": {
     "width": 63,
     "height": 88,
-    "layer": 0.3
+    "layer": 0.3,
+    "phased_out_opacity": 0.4
   },
   "own": {
     "lift": 0.1,
@@ -356,6 +361,10 @@
       "pile_step": [
         4,
         4
+      ],
+      "beneath_step": [
+        0.3,
+        0.17
       ],
       "piles": {
         "you": {

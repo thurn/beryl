@@ -551,6 +551,8 @@ impl Table {
         if under_way {
             state |= StateBits::MOVING;
         }
+        state |= u16::from(shown.phased_out) * StateBits::PHASED_OUT;
+        state |= u16::from(shown.hidden_pick) * StateBits::PICKED;
         let mut look = Look {
             pose: object.pose,
             tint: [255, 255, 255],
@@ -585,7 +587,7 @@ impl Table {
             self.fights.forget(slot);
         }
         self.write_shadow((Some(slot), object.place), &look.pose, under_way, builder);
-        self.write_look(
+        let at = self.write_look(
             name,
             (
                 ElementId(u32::try_from(slot).expect("slots are u16")),
@@ -596,6 +598,9 @@ impl Table {
             back,
             builder,
         );
+        if let Some(really) = shown.really.as_deref() {
+            builder.really(at, really);
+        }
         // Marks on a card lying on the table are drawn with the table's marks, and on one in
         // flight with the raised marks.
         let on = badges::On {
@@ -614,6 +619,7 @@ impl Table {
 
     /// Writes the resolved element and the draw record of a card named `name` with this `id`
     /// and `role`, resting at `place` and drawn as `look` says, with its back from layer `back`.
+    /// Returns the element's index in `Frame::resolved`.
     pub(super) fn write_look(
         &self,
         name: &str,
@@ -622,9 +628,9 @@ impl Table {
         look: &Look,
         back: u16,
         builder: &mut FrameBuilder,
-    ) {
+    ) -> u32 {
         let transform = look.pose.transform();
-        builder.resolved(
+        let at = builder.resolved(
             name,
             Resolved {
                 id,
@@ -639,6 +645,7 @@ impl Table {
                 interactive: look.interactive,
                 state: StateBits(look.state),
                 face: look.face,
+                really: crate::frame::NameRef::default(),
             },
         );
         let opacity = (look.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -666,6 +673,7 @@ impl Table {
                 look.whiten,
             ),
         );
+        at
     }
 
     /// Writes each ability on the stack as a card: those of the view the table shows, and

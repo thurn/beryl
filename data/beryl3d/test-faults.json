@@ -435,6 +435,9 @@
       "reachable": 1,
       "step-shown": 7
     },
+    "b3d:gemrazer/s-merged-creature-bounced-both-cards-to-hand/you/1440x900": {
+      "reachable": 1
+    },
     "b3d:get-lost/a-map-explores-a-nonland-into-a-counter-and-the-graveyard/you/1440x900": {
       "step-shown": 1
     },
@@ -1172,18 +1175,6 @@
     },
     "b3d:shape-zone/opponent/2560x1080": {
       "step-shown": 3
-    },
-    "b3d:show-and-tell/under-containment-priest/opponent/1440x900": {
-      "step-shown": 1
-    },
-    "b3d:show-and-tell/under-containment-priest/opponent/1600x900": {
-      "step-shown": 1
-    },
-    "b3d:show-and-tell/under-containment-priest/opponent/1920x1080": {
-      "step-shown": 1
-    },
-    "b3d:show-and-tell/under-containment-priest/opponent/2560x1080": {
-      "step-shown": 1
     },
     "b3d:sparas-headquarters/blue-mana/opponent/1440x900": {
       "step-shown": 1

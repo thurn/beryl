@@ -15,8 +15,8 @@ use crate::screens::ScreenIn;
     clippy::unnecessary_wraps,
     reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
 )]
-pub(super) fn screen(prompt: &PromptView, _input: &ScreenIn) -> Option<Element> {
-    Some(prompt_bar(prompt))
+pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+    Some(prompt_bar(prompt, input))
 }
 
 /// The marks and arrows the client draws itself for `prompt`: none yet.

@@ -183,6 +183,7 @@ impl Table {
                     interactive: false,
                     state: StateBits(0),
                     face: None,
+                    really: crate::frame::NameRef::default(),
                 },
             );
             if let Some(draw) = side_record(pile) {

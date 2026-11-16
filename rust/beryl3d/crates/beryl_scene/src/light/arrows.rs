@@ -83,6 +83,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
                 interactive: false,
                 state: StateBits(if moving { StateBits::MOVING } else { 0 }),
                 face: None,
+                really: crate::frame::NameRef::default(),
             },
         );
         let points_per_millimetre = camera.points_per_millimetre(to.pose.position);

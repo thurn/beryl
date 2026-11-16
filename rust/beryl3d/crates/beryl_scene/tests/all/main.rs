@@ -20,6 +20,7 @@ mod flat_layer;
 mod light;
 mod motion;
 mod notices;
+mod object_states;
 mod own;
 mod piles;
 mod play;

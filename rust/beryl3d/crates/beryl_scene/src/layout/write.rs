@@ -81,6 +81,7 @@ impl Layer {
                     StateBits::DISABLED
                 }),
                 face: None,
+                really: crate::frame::NameRef::default(),
             },
         );
         if let Some(panel) = panel(node, top) {

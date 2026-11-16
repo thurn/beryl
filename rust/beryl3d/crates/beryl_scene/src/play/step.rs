@@ -285,7 +285,7 @@ impl<'a> Motion<'a> {
             if let Some(group) = self.groups.get(usize::from(slot.0)).copied().flatten() {
                 dirty[group] = true;
             }
-            if let Some(group) = zones.get(slot).and_then(Group::of) {
+            if let Some(group) = zones.get(slot).and_then(|object| zones.group_of(object)) {
                 dirty[group.index()] = true;
             }
         }
