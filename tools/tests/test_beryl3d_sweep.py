@@ -124,7 +124,8 @@ class Runner:
 
     def __call__(self, commit: str, command: list[str], output: Path, part: str) -> int:
         self.runs.append((commit, command))
-        assert command[command.index("--part") + 1] == part
+        # A replay's tree is kept apart from the parts', whatever part its step is in.
+        assert part == sweep.REPLAY or command[command.index("--part") + 1] == part
         if self.during is not None and part == self.during_part:
             self.during()
         return self.codes.get(part, self.code)
@@ -233,6 +234,33 @@ def test_a_quick_part_runs_while_another_sweeps_slow_part_holds_its_lock() -> No
     assert inner[0]["reason"] == "another sweep is in progress"
 
 
+def test_a_replay_of_one_step_runs_while_a_sweep_holds_its_lock() -> None:
+    inner: list[dict[str, object]] = []
+    replayed: Runner = Runner()
+
+    def replay() -> None:
+        # Asked for while the sweep's quick part runs.
+        request = sweep.Request(step="clippy")
+        inner.append(fire(replayed, tip="bbb", is_due=False, request=request))
+
+    fire(Runner(), tip="aaa")
+    fire(Runner(during=replay, during_part=sweep.QUICK), tip="bbb")
+    [record] = inner
+    assert record["outcome"] == "ok"
+    [(commit, command)] = replayed.runs
+    # No bisection and no filing: a dry run with no `--since`.
+    assert commit == "bbb" and "--since" not in command
+    assert command[-3:] == ["--step", "clippy", "--dry-run"]
+    # Not logged as the machine's sweep.
+    assert [r["commit"] for r in sweep.read_log()] == ["aaa", "bbb"]
+
+
+def test_a_steps_own_command_is_what_a_worker_types() -> None:
+    assert sweep.own_command("cargo-test") == "just b3d cargo-test"
+    assert sweep.own_command("gpu") == "just b3d gate --gpu"
+    assert sweep.own_command("scene-purity").startswith("just b3d sweep --step")
+
+
 class FakeBd(verdicts.Beads):
     """bd as the sweep's filing uses it, in memory."""
 
@@ -291,7 +319,9 @@ def test_a_failed_step_files_one_bead_under_the_epic_and_a_repeat_comments(
     assert sweep.LABEL in issue["labels"]  # pyre-ignore[58]
     text = str(issue["description"])
     assert "just b3d sweep --step cargo-test --commit bad1" in text
-    assert "--commit origin/staging` passes" in str(issue["acceptance"])
+    accept = str(issue["acceptance"])
+    assert accept.startswith("`just b3d cargo-test` passes in a worktree rebased on")
+    assert "just b3d sweep --step cargo-test --commit origin/staging" in accept
     assert "last sweep that passed on this machine was at good" in text
 
     # The same check failing again comments on that bead, in a dry run too.

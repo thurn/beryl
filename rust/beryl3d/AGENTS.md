@@ -167,16 +167,20 @@ project, and selects the main lanes.
   and `frame_abba` on the Mac, and leave the counts to the sweep, which files a
   bead when one moves past its tolerance. A bead may ask for `--counts` only
   when instruction counts are what it is about, and it takes a few minutes. A
-  count may pass its limit by the tolerance, 1%, which absorbs inlining and
-  layout shifts from unrelated changes; the work counters' limits have none. A
-  count below its limit (past the tolerance, for instructions) fails too, so
-  that no room is left for a later change to add work back unseen: a change that
-  cuts the work lowers the native limits in the same commit, and the sweep's
-  bead lowers the instruction limits. A limit rises only when the work itself
-  changed (a new verb, a new element on every screen) or a compiler or
-  dependency upgrade moved the count with no change to Beryl's code, and the
-  commit that raises it gives the old and new numbers. It needs nobody's
-  approval.
+  `--gpu` or `--counts` run that a session starts goes ahead of the sweep's runs
+  on `beryl3d-bench`, though it still waits for one that has started. To fix a
+  bead the sweep filed, run the failed step's own command in your worktree;
+  `just b3d sweep --step <step>` replays it in a tree of its own without waiting
+  for a running sweep. A count may pass its limit by the tolerance, 1%, which
+  absorbs inlining and layout shifts from unrelated changes; the work counters'
+  limits have none. A count below its limit (past the tolerance, for
+  instructions) fails too, so that no room is left for a later change to add
+  work back unseen: a change that cuts the work lowers the native limits in the
+  same commit, and the sweep's bead lowers the instruction limits. A limit rises
+  only when the work itself changed (a new verb, a new element on every screen)
+  or a compiler or dependency upgrade moved the count with no change to Beryl's
+  code, and the commit that raises it gives the old and new numbers. It needs
+  nobody's approval.
 
   A rebase does not stop on gates.json when two branches both raised the same
   limits. The repository's `.gitattributes` gives the file to a merge driver,

@@ -138,5 +138,10 @@
     "label": "Beryl 3D timeline parity reuses the shared build for export and timeline playback",
     "metric": "machine.saturation",
     "expect": "down"
+  },
+  {
+    "label": "Sweep step replays skip the sweep's lock, and waited-for runs go first on the bench VM",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

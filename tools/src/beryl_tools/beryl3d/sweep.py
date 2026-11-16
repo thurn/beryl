@@ -31,6 +31,10 @@ work to fix, never as Steward beads.
   quarter of the cores, as the browser sweep's do (tokens.py), and
   are logged under the script [`SCRIPT`]. Slow CI's CPU budget counts only records of the script
   `ci` (check_value.slow_ci), so the sweep spends none of it.
+- **Replays.** `just b3d sweep --step <step>` replays one step for whoever fixes it, in a tree
+  of its own: it takes neither part's lock, so it never waits for a running sweep, it bisects
+  and files nothing, and its steps take CPU tokens as a session's own ([`REPLAY_SCRIPT`]). A
+  bead the sweep files asks for the step's own command to pass in the worker's worktree.
 - **Cache.** As soon as the quick part's build steps ([`BUILDS`]) pass, it saves the
   workspace's build directory to `$BERYL_CACHE/b3d/target` ([`save_target`]), which `just b3d`
   clones into a new worktree.
@@ -74,6 +78,14 @@ from ..reruns import whole
 from . import lane, paths
 
 SCRIPT = "b3d-sweep"
+# The script a replay of one step logs under: someone waits for a replay, so its steps take CPU
+# tokens as a session's own (`tokens.script_class`), not as the sweep's.
+REPLAY_SCRIPT = "b3d-replay"
+# Set in a replay's tree for `sweep-run`, which then logs under [`REPLAY_SCRIPT`]. An
+# environment variable rather than a flag, because a replay may run an older commit's tools.
+REPLAY_ENV = "BERYL_B3D_REPLAY"
+# The part name a replay's tree is kept under, beside the sweep's own parts.
+REPLAY = "replay"
 LABEL = "b3d-sweep"
 PRIORITY = "1"
 # Each step runs as a lane of its own, named this and the step's name.
@@ -318,6 +330,10 @@ class Request:
     # Sweep even when none is due or the machine is overloaded.
     force: bool = False
 
+    def replay(self) -> bool:
+        """Whether the run replays one step, for whoever is fixing it ([`run_sweep`])."""
+        return self.step is not None and not self.dry_run
+
     def full(self) -> bool:
         """Whether the run counts as this machine's sweep of its commit in the log."""
         return self.step is None and self.part is None and not self.dry_run
@@ -342,9 +358,10 @@ def run_command(request: Request, part: str, since: str) -> list[str]:
         "--part",
         part,
     ]
-    command += ["--since", since] if since else []
+    command += ["--since", since] if since and not request.replay() else []
     command += ["--step", request.step] if request.step else []
-    return command + (["--dry-run"] if request.dry_run else [])
+    quiet = request.dry_run or request.replay()
+    return command + (["--dry-run"] if quiet else [])
 
 
 def run_in_tree(commit: str, command: list[str], output: Path, part: str) -> int:
@@ -357,8 +374,11 @@ def run_in_tree(commit: str, command: list[str], output: Path, part: str) -> int
     # folder, so two parts in one folder could not run at once.
     work = folder() / ("work" if part == QUICK else f"work-{part}")
     work.mkdir(exist_ok=True)
+    env = {**os.environ, REPLAY_ENV: "1"} if part == REPLAY else None
     with open(output, "w") as out:
-        code = coverage.in_tree(commit, command, out, place=work, warm_rust=False)
+        code = coverage.in_tree(
+            commit, command, out, env=env, place=work, warm_rust=False
+        )
     print(output.read_text(), end="")
     return code
 
@@ -372,7 +392,9 @@ def run_sweep(
     pattern: Callable[[], re.Pattern[str]] = inputs,
     run: Callable[[str, list[str], Path, str], int] = run_in_tree,
 ) -> dict[str, object]:
-    """One firing: skips, or sweeps the commit, the quick part and then the slow part. A full
+    """One firing: skips, or sweeps the commit, the quick part and then the slow part. A replay
+    of one step ([`Request.replay`]) runs in a tree of its own, taking no part's lock, so it
+    never waits for a sweep that is running; it bisects and files nothing. A full
     sweep's outcome (`ok`, `failed` or `skipped` with a `reason`) is appended to the log, with
     each part's seconds and exit code, or why it was skipped, under `parts`; every outcome is
     returned."""
@@ -406,6 +428,13 @@ def run_sweep(
             print(f"b3d sweep: dry run of {commit[:10]} in a detached tree: {names}")
             print(f"b3d sweep: {shlex.join(command)}")
         part_began = time.monotonic()
+        if request.replay():
+            output = folder() / f"last-replay-{request.step}-output.txt"
+            part_code = run(commit, command, output, REPLAY)
+            parts[part] = {"seconds": round(time.monotonic() - part_began, 1)}
+            parts[part]["code"] = part_code
+            code = part_code
+            continue
         try:
             with system.file_lock(lock(part), timeout=0):
                 output = folder() / f"last-{part}-output.txt"
@@ -468,8 +497,29 @@ def commits_since(since: str) -> list[str]:
 
 
 def reproduce(step: str, commit: str) -> str:
-    """The command that replays one step of the sweep at `commit`."""
+    """The command that replays one step of the sweep at `commit`, in a tree of its own."""
     return f"just b3d sweep --step {shlex.quote(step)} --commit {shlex.quote(commit)}"
+
+
+def own_command(step: str) -> str:
+    """The step's own command as someone types it in a worktree: `just b3d ...` for a step that
+    runs `by b3d`, otherwise the replay of the step at the worktree's commit."""
+    found = [s for s in steps() if s.name == step]
+    if found and found[0].cmd[: len(BY)] == tuple(BY):
+        return shlex.join(["just", *found[0].cmd[len(BY) :]])
+    return reproduce(step, "HEAD")
+
+
+def acceptance(step: str) -> str:
+    """What closes a bead the sweep files for `step`. The worker checks the step in its own
+    worktree, rebased on the staging tip, at the priority of its own work. A replay through
+    `just b3d sweep --commit origin/staging` used to wait for the background sweep's lock and
+    then bisect and file again: on 2026-11-15 workers waited 16 to 91 minutes in retry loops
+    for that lock."""
+    return (
+        f"`{own_command(step)}` passes in a worktree rebased on the staging tip "
+        f"(`{reproduce(step, 'origin/staging')}` replays it in a tree of its own)."
+    )
 
 
 def body(
@@ -491,8 +541,9 @@ def body(
         f"The Beryl 3D sweep (`just b3d sweep`, tools/src/beryl_tools/beryl3d/sweep.py) "
         f"failed its step `{step}` on {sys.platform} at {commit}. {origin}\n\n{listed}\n\n"
         f"Bisection over the commits since that sweep:\n```\n{searched}\n```\n\n"
-        f"Replay it with `{reproduce(step, commit[:12])}`, or run the step's own command in a "
-        "worktree of the staging tip (`just b3d` lists them).\n\n"
+        f"Run the step's own command, `{own_command(step)}`, in your worktree, or replay it at "
+        f"that commit with `{reproduce(step, commit[:12])}`. A replay runs in a tree of its "
+        "own and does not wait for a sweep that is running.\n\n"
         "Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main "
         "workspace (the session, the fixture recorder, the image cache, the data files) can "
         "break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not "
@@ -541,7 +592,7 @@ def file(
             "--description",
             body(commit, step, new, since, mine, tail),
             "--acceptance",
-            f"`{reproduce(step, 'origin/staging')}` passes at the staging tip.",
+            acceptance(step),
             "--priority",
             PRIORITY,
             "--parent",
@@ -643,7 +694,8 @@ def sweep_run(args: argparse.Namespace) -> int:
         return 2
     commit = git("rev-parse", "HEAD")
     began = datetime.now(timezone.utc).replace(microsecond=0)
-    report = checks.run_all(lanes(found_steps), SCRIPT, BUDGET)
+    script = REPLAY_SCRIPT if os.environ.get(REPLAY_ENV) == "1" else SCRIPT
+    report = checks.run_all(lanes(found_steps), script, BUDGET)
     failed = [o for o in report.outcomes if not o.ok]
     built = {step_of(o.lane) for o in report.outcomes if o.ok}
     if not args.dry_run and set(BUILDS) <= built:
