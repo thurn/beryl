@@ -389,5 +389,8 @@ def save_kept(checkout: Path) -> None:
 
 
 def incremental_folders(target: Path) -> list[Path]:
-    """The incremental-cache folders of each build profile in `target`, the Tauri CLI's too."""
-    return [*target.glob("*/incremental"), *target.glob(f"{warm.TAURI}/*/incremental")]
+    """The incremental-cache folders of each build profile in `target`, the Tauri CLI's and
+    clippy's too (`warm.PROFILES`)."""
+    return [
+        p for profile in warm.PROFILES for p in target.glob(f"{profile}/incremental")
+    ]

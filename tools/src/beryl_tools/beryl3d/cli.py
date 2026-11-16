@@ -46,7 +46,7 @@ class Command:
 def run_lane(_args: argparse.Namespace) -> int:
     from .. import checks  # It imports this package's lane.
 
-    return checks.run_all([lane.lane()], "b3d", checks.FAST_BUDGET).code
+    return checks.run_all(lane.lanes(), "b3d", checks.FAST_BUDGET).code
 
 
 def warm_target() -> None:
@@ -77,12 +77,28 @@ def warm_target() -> None:
             warm.mark_unread(target)
 
 
-def cargo(arguments: list[str]) -> int:
-    """Runs cargo with `arguments` in Beryl 3D's workspace."""
+def cargo(arguments: list[str], env: dict[str, str] | None = None) -> int:
+    """Runs cargo with `arguments` in Beryl 3D's workspace, in `env` (this process's own by
+    default)."""
     warm_target()
     return subprocess.run(
-        ["cargo", *arguments], cwd=paths.WORKSPACE, env=os.environ, check=False
+        ["cargo", *arguments],
+        cwd=paths.WORKSPACE,
+        env=os.environ if env is None else env,
+        check=False,
     ).returncode
+
+
+def build(arguments: list[str]) -> int:
+    """Runs `cargo <arguments>`, a build in the workspace's own target directory, one at a time
+    across every process of this checkout. Cargo's lock on the directory makes a second build
+    wait while another runs, but the cargo shim takes its CPU tokens before cargo starts
+    (cargo_pool.py), so the waiting build held a lease of up to two thirds of the pool while it
+    did nothing. The fast check's Beryl 3D lanes start their builds together (lane.py), as do
+    the sweep's steps. Here a build waits on a file lock first (`paths.build_lock`), holding
+    no tokens, and then usually finds nothing left to do."""
+    with system.file_lock(paths.build_lock()):
+        return cargo(arguments)
 
 
 def run_cargo(args: argparse.Namespace) -> int:
@@ -129,7 +145,7 @@ SHARED_BUILD: list[str] = [
 
 
 def shared_build() -> int:
-    return cargo(SHARED_BUILD)
+    return build(SHARED_BUILD)
 
 
 def program(name: str) -> Path:
@@ -203,7 +219,7 @@ def run_b3d(command: str) -> Callable[[argparse.Namespace], int]:
     """Builds the `b3d` program of `beryl_inspect` and runs its `command` with the arguments."""
 
     def run(args: argparse.Namespace) -> int:
-        built = cargo(["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"])
+        built = build(["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"])
         if built != 0:
             return built
         return run_program("b3d", [command, *args.arguments])
@@ -223,7 +239,7 @@ def run_render(command: str) -> Callable[[argparse.Namespace], int]:
     (docs/beryl-3d.md, 'Edit-to-output time')."""
 
     def run(args: argparse.Namespace) -> int:
-        built = cargo(["build", "-q", "-p", "beryl_pictures", "--bin", "b3d-render"])
+        built = build(["build", "-q", "-p", "beryl_pictures", "--bin", "b3d-render"])
         if built != 0:
             return built
         return run_program("b3d-render", [command, *args.arguments])
@@ -237,8 +253,18 @@ def render_command(name: str, summary: str) -> Command:
     return Command(name, summary, (), run_render(name), passthrough=True)
 
 
+# Clippy's own target directory, nested in the workspace's as the main workspace's is
+# (`paths.CLIPPY_TARGET`). Its check units are not the ones a build produces, so in the shared
+# directory it would share no work with the build, only Cargo's lock on it, and the fast check's
+# lanes could not run it beside the shared build (lane.py).
+CLIPPY_TARGET: Path = paths.WORKSPACE / "target" / "clippy"
+
+
 def run_clippy(_args: argparse.Namespace) -> int:
-    return cargo(["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"])
+    return cargo(
+        ["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"],
+        {**os.environ, "CARGO_TARGET_DIR": str(CLIPPY_TARGET)},
+    )
 
 
 def run_fmt(args: argparse.Namespace) -> int:
@@ -304,9 +330,9 @@ COMMANDS: tuple[Command, ...] = (
     ),
     Command(
         "lane",
-        "runs the beryl3d lane's steps, as the fast check does for a Beryl 3D change",
+        "runs the beryl3d lanes' steps, as the fast check does for a Beryl 3D change",
         (
-            ("just b3d lane", "every step of the lane"),
+            ("just b3d lane", "every step of the lanes"),
             (
                 "CHECK_HANG_LIMIT_S=600 just b3d lane",
                 "every step, each allowed 600 s before it counts as hung",

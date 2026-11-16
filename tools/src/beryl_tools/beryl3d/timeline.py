@@ -205,7 +205,7 @@ def b3d(arguments: list[str]) -> str:
     When it says the recordings pack is missing, the pack is built and it runs again."""
     from . import cli
 
-    built = cli.cargo(["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"])
+    built = cli.build(["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"])
     if built != 0:
         raise SystemExit(built)
     line = [str(cli.linked("b3d")), *arguments]

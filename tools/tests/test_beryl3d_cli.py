@@ -165,3 +165,22 @@ def test_a_target_another_step_cloned_while_this_one_waited_is_not_cloned_again(
     )
     cli.warm_target()
     assert clones == []
+
+
+def test_a_build_runs_under_the_checkouts_build_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    held: list[bool] = []
+
+    def cargo(arguments: list[str]) -> int:
+        # Another build of this checkout would wait here, before its cargo takes tokens.
+        try:
+            with cli.system.file_lock(cli.paths.build_lock(), timeout=0):
+                held.append(False)
+        except cli.system.LockHeld:
+            held.append(True)
+        return 0
+
+    monkeypatch.setattr(cli, "cargo", cargo)
+    assert cli.shared_build() == 0
+    assert held == [True]

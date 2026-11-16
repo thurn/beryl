@@ -422,6 +422,24 @@ def test_checks_share_a_steps_cpu_time_evenly_when_none_has_wall_time() -> None:
         assert "cpu_seconds" not in run.records("rust", "fmt", True, 1.0, path)[0]
 
 
+def test_a_step_that_reports_its_own_checks_logs_its_whole_time_once() -> None:
+    run = runlog.Run("ci")
+    with run.step({}) as (_, path):
+        path.write_text(
+            "".join(
+                json.dumps({"check": c, "outcome": "pass", "seconds": 1}) + "\n"
+                for c in ("a", "b")
+            )
+        )
+        records = run.records("b3d", "test", True, 5.0, path, cpu=8.0)
+    assert [r["check"] for r in records] == ["a", "b"]
+    assert (records[0]["step_seconds"], records[0]["step_cpu_seconds"]) == (5.0, 8.0)
+    assert "step_seconds" not in records[1]
+    with run.step({}) as (_, path):
+        alone = run.records("rust", "fmt", True, 1.0, path)
+    assert alone[0]["step_seconds"] == 1.0 and "step_cpu_seconds" not in alone[0]
+
+
 def test_each_record_names_the_checkout_it_ran_in() -> None:
     for run, expected in (
         (runlog.Run("check"), paths.REPO.name),

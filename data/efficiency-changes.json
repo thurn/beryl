@@ -113,5 +113,10 @@
     "label": "A rebase merges data/beryl3d/gates.json's limits as numbers instead of stopping on a conflict, and a new worktree's Beryl 3D build reuses the cached build instead of rebuilding every crate",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The fast check's Beryl 3D steps run in four lanes at once, with clippy in its own target and builds waiting without tokens",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

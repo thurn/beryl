@@ -3,6 +3,7 @@ rest of the project's."""
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Iterable
 from pathlib import Path
@@ -32,6 +33,14 @@ def target_lock() -> Path:
     """The lock under which the cache's build directory is cloned into a worktree or replaced
     by the sweep, so a clone never reads a directory the sweep is swapping out."""
     return cache() / ".target.lock"
+
+
+def build_lock() -> Path:
+    """The lock under which one build at a time runs in this checkout's Beryl 3D build
+    directory (`cli.build`). It lives in the cache, named for the workspace's path, so that it
+    adds no file to the checkout."""
+    digest = hashlib.sha256(str(WORKSPACE.resolve()).encode()).hexdigest()[:16]
+    return cache() / f"build-{digest}.lock"
 
 
 def split(changed: Iterable[str]) -> tuple[list[str], list[str]]:

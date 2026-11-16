@@ -42,9 +42,9 @@ def record() -> int:
 
 
 def build() -> int:
-    from .cli import cargo  # cli imports this module.
+    from .cli import build as cargo_build  # cli imports this module.
 
-    return cargo(
+    return cargo_build(
         [
             *["build", "--profile", "test", "-p", "beryl_3d"],
             *["--features", "tools", "--bin", "beryl3d"],

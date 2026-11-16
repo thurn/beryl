@@ -242,21 +242,31 @@ the coverage's commit is one the data cannot place. The record is in
 Beryl 3D, the native client in its own Cargo workspace, has checks of its own
 (see [Checks and isolation](beryl-3d.md#checks-and-isolation)).
 
-- A change under `rust/beryl3d/` or `data/beryl3d/` runs the `beryl3d` lane of
+- A change under `rust/beryl3d/` or `data/beryl3d/` runs the Beryl 3D lanes of
   the fast check, plus `repo` and `names`, and no other lane. Every other lane
   is chosen from the rest of the change's paths
   (`tools/src/beryl_tools/beryl3d/paths.py`), so a change elsewhere never runs
   or builds Beryl 3D's code.
 - Slow CI has no `beryl3d` lane, and Beryl 3D's paths reach none of its lanes
   but `repo` and `names`.
-- `just b3d lane` runs the lane by hand, and `just b3d` lists Beryl 3D's other
-  commands. Its steps are in `tools/src/beryl_tools/beryl3d/lane.py`; `test`
-  runs every interface test (`just b3d test`) with the checks applied at the
-  check times.
+- The lanes run at once (`tools/src/beryl_tools/beryl3d/lane.py`): `beryl3d`
+  (fmt, clippy and the source rules), `beryl3d-tests` (the workspace's tests and
+  the gate), `beryl3d-interface` (`test`, every interface test with the checks
+  applied at the check times) and `beryl3d-timeline` (timeline parity of the
+  fixtures). In one lane, one after another, they ran past the 180 s hard limit.
+  - Clippy builds in its own target directory, `rust/beryl3d/target/clippy`, so
+    it runs beside the build the other lanes share.
+  - Each of the other lanes starts with `record`: the shared build and the
+    recordings pack. `just b3d` runs one build at a time in a checkout's build
+    directory (`cli.build`), under a file lock taken before the cargo shim takes
+    CPU tokens, so a build waiting for another holds no tokens. The first lane
+    to start builds, and the others find nothing left to build.
+- `just b3d lane` runs the lanes by hand, and `just b3d` lists Beryl 3D's other
+  commands.
 - A change to Beryl 3D's tools, under `tools/src/beryl_tools/beryl3d/`, runs the
   python lane, as any change to `tools/` does, and not the `beryl3d` lane.
-- A step of the `beryl3d` lane that the fast check cuts off at its 180 s hard
-  limit is left to the Beryl 3D sweep, not to slow CI.
+- A step of a Beryl 3D lane that the fast check cuts off at its 180 s hard limit
+  is left to the Beryl 3D sweep, not to slow CI.
 
 ### The Beryl 3D sweep
 
@@ -270,8 +280,8 @@ file Beryl 3D reads can land without Beryl 3D's checks and leave it broken.
   every crate they depend on by path), `data/ui-conventions.json`,
   `data/card-store.tsv` or `ui/fixtures.json`. It skips when the load is over 8
   times the cores or another sweep runs.
-- In a detached worktree of the staging tip it runs every step of the `beryl3d`
-  lane in full, then the sweep's own steps, each as a lane of its own
+- In a detached worktree of the staging tip it runs every step of the Beryl 3D
+  lanes in full, then the sweep's own steps, each as a lane of its own
   (`b3d-<step>`), at utility priority. Its checks are logged under the script
   `b3d-sweep`, which slow CI's CPU budget does not count.
 - Its own steps: `every-tick` (`just b3d test --every-tick`) runs every

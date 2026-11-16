@@ -270,7 +270,8 @@ anything, because other tools already write them.
   changed paths.
 - **The run log** (`ci/runs.jsonl` in the cache). Each line has `time`, `host`,
   `commit`, `script`, `lane`, `check`, `outcome` (`pass`, `fail` or `skip`),
-  `seconds`, `cpu_seconds` and `load`.
+  `seconds`, `cpu_seconds` and `load`. The first record of each step also has
+  `step_seconds` and `step_cpu_seconds`, the whole step's wall and CPU time.
 - **CPU sampler rows** (`cpu/samples.jsonl` in the cache). Each row covers about
   a minute and has `time`, `seconds`, `cores` (how many the machine has), `cpu`
   (CPU seconds keyed by who asked for the work, the kind of work and the

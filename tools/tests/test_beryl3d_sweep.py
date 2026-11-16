@@ -364,7 +364,7 @@ def test_slow_ci_starts_a_sweep_only_when_one_is_due() -> None:
 
 
 def test_a_cut_off_lane_step_is_left_to_the_sweep() -> None:
-    assert "sweep" in lane.lane().deferred_to
+    assert all("sweep" in made.deferred_to for made in lane.lanes())
     assert "slow CI" == slow_ci.checks.Lane("rust").deferred_to
 
 

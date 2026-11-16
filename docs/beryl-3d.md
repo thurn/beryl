@@ -2333,8 +2333,8 @@ a wrong texture, a blending mistake or a missing glyph.
 
 Interface checks are only worth what they catch before a change lands. This
 section specifies how Beryl 3D runs all of them before every push, in seconds.
-The `beryl3d` lane's `test` step (`just b3d test`) and the sweep's `every-tick`
-step (`just b3d test --every-tick`) run them.
+The `beryl3d-interface` lane's `test` step (`just b3d test`) and the sweep's
+`every-tick` step (`just b3d test --every-tick`) run them.
 
 ### What a test is
 
@@ -2715,7 +2715,7 @@ thousands of measurements, so the gate finds its candidates first.
   that runs before each push. That catches most regressions without the virtual
   machine.
 
-The native gate is `just b3d gate`, a step of the `beryl3d` lane
+The native gate is `just b3d gate`, a step of the `beryl3d-tests` lane
 (`tools/src/beryl_tools/beryl3d/gate.py`). The `gate` binary of `beryl_inspect`
 plays each gated board as a host would at 60 frames a second
 (`beryl_inspect::gate::Playback`). The first view is handed over before the
@@ -3151,10 +3151,10 @@ What keeps the two apart:
 
 What runs, and when:
 
-| When                                                                             | What                                                                                                                                                                                                                                    | If it fails                                                             |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Before a push that changes a Beryl 3D path: the `beryl3d` lane of the fast check | Formatting, Clippy and the tests of the workspace. The source rules (`scene-purity`). Every interface test at its check times. The work counters and the allocation gate. Timeline parity.                                              | The push is refused, as for any lane.                                   |
-| After a push, on staging: `just b3d sweep`                                       | The same, then every interface test on every tick, the instruction and fragment counts in the virtual machine, every gated fixture drawn on the floor's feature set, the app's launch test, and a build for each phone and for Windows. | A task is filed under Beryl 3D's epic. The `master` branch is not held. |
+| When                                                                              | What                                                                                                                                                                                                                                    | If it fails                                                             |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Before a push that changes a Beryl 3D path: the `beryl3d` lanes of the fast check | Formatting, Clippy and the tests of the workspace. The source rules (`scene-purity`). Every interface test at its check times. The work counters and the allocation gate. Timeline parity.                                              | The push is refused, as for any lane.                                   |
+| After a push, on staging: `just b3d sweep`                                        | The same, then every interface test on every tick, the instruction and fragment counts in the virtual machine, every gated fixture drawn on the floor's feature set, the app's launch test, and a build for each phone and for Windows. | A task is filed under Beryl 3D's epic. The `master` branch is not held. |
 
 - **The sweep is not slow CI.** It is modelled on the browser sweep
   (`just sweep`). It runs at low priority on the staging tip when a Beryl 3D
@@ -3299,10 +3299,10 @@ script, as one seat sees it. A step a client made itself has `"own": true`.
 - **Recordings that do not agree yet are listed** in
   `data/beryl3d/timeline-parity.json`, each with the number of its steps that
   differ. Like every allowlist under `data/`, its counts may only go down.
-- **It runs in the `beryl3d` lane** when a Beryl 3D path changes, and in the
-  sweep. It never runs for a change to the web interface (decision C17). When
-  the web interface's timeline moves, the sweep lists the recordings that now
-  differ, and Beryl 3D follows.
+- **It runs in the `beryl3d-timeline` lane** when a Beryl 3D path changes, and
+  in the sweep. It never runs for a change to the web interface (decision C17).
+  When the web interface's timeline moves, the sweep lists the recordings that
+  now differ, and Beryl 3D follows.
 
 What the check does not cover is fixed by hand, and found by the parity list: a
 screen's layout, a prompt's wording, and how an effect looks.

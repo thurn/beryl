@@ -212,6 +212,9 @@ class Run:
         `wall`, `stopped` or `cannot-run`, checks.lane_steps): neither says anything about a
         check, so none of them waits for a verdict (verdicts.settle).
 
+        The first record also holds the step's own wall and CPU seconds, `step_seconds` and
+        `step_cpu_seconds`, which a step that reported checks has in no other record.
+
         `cpu` is the CPU seconds of the step's whole process tree, which each record gets a share
         of as `cpu_seconds` (none where it is None, as on Windows). A step that ran many checks
         has no per-check measurement, so its CPU time is split among them in proportion to their
@@ -265,6 +268,12 @@ class Run:
                 r["cpu_seconds"] = round(share(c), 3)
             if c.get("whole"):
                 r["whole"] = True
+        # The step's own time on its first record, so that a step that reported checks of its
+        # own has a measured time too, not only one inferred from the gaps between steps.
+        if records:
+            records[0]["step_seconds"] = round(seconds, 3)
+            if cpu is not None:
+                records[0]["step_cpu_seconds"] = round(cpu, 3)
         if killed:
             for r in records:
                 if r["outcome"] == "fail":
