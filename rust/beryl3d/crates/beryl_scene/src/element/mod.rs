@@ -94,8 +94,21 @@ pub enum Press {
 pub enum LobbyPress {
     /// Open a solo table's lobby, from the start screen.
     Solo,
-    /// Load the sample deck ('Change').
+    /// Open the deck picker on the saved decks ('Change').
     Change,
+    /// Open the deck picker on the field a decklist is pasted into ('Paste decklist').
+    Paste,
+    /// Load the saved deck at this index of the deck picker's list.
+    Pick(u16),
+    /// Read the pasted decklist, save it under the name typed and load it ('Import').
+    Import,
+    /// Close the deck picker.
+    ClosePicker,
+    /// Open the sideboard swap, or close it.
+    Sideboard,
+    /// Move one copy of the card at index `at` of the loaded deck's main deck to its sideboard,
+    /// or with `from_side`, of its sideboard to its main deck.
+    Swap { from_side: bool, at: u16 },
     /// Unload the loaded deck.
     Unload,
     /// Mark the guest ready, or no longer ready.

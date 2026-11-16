@@ -333,5 +333,7 @@ fn wire(command: &SessionCommand) -> (&'static str, Option<Value>) {
             ipc::CARD_SEARCH,
             value(&crate::manual::tokens::request(text.clone())),
         ),
+        SessionCommand::DeckList => (ipc::DECK_LIST, None),
+        SessionCommand::DeckImport(request) => (ipc::DECK_IMPORT, value(request)),
     }
 }

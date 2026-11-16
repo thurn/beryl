@@ -24,6 +24,7 @@ use beryl_session::{Seat, Sessions, StartGame, StopsSetting};
 use beryl_shell::Dirs;
 use beryl_table_session::TableEvent;
 use beryl_table_session::connections::TableConnections;
+use beryl_table_session::decks::{self, Decks};
 
 use crate::bugs::Job;
 
@@ -137,6 +138,9 @@ pub struct Live {
     /// The manual table, which numbers its sessions in the same sequence as `sessions` and
     /// sends its views to the same inbox, as the web app's `table_*` commands share one.
     tables: TableConnections,
+    /// The deck library, in the folder the web app keeps its decks in (`decks` in the data
+    /// folder), so that a deck saved in one app is offered in the other.
+    decks: Decks,
     /// The host's inbox, which `begin` sends the agents to.
     inbox: Inbox,
     /// The game `--agent` asked for, and the agent that answers for the viewer in it.
@@ -146,7 +150,8 @@ pub struct Live {
 impl Live {
     /// Sessions that keep their replays and ledger in the data folder of `dirs`, the web app's,
     /// or keep none without it, and send every view to `inbox`. The manual table keeps its
-    /// saves and settings in the same folder, or in the system's temporary folder without it.
+    /// saves, settings and deck library in the same folder, or in the system's temporary folder
+    /// without it.
     #[must_use]
     pub fn new(dirs: Option<Dirs>, inbox: Inbox) -> Self {
         let views = inbox.clone();
@@ -157,6 +162,7 @@ impl Live {
             || std::env::temp_dir().join("beryl3d-tables"),
             |dirs| dirs.data.clone(),
         );
+        let decks = Decks::new(data.join("decks"));
         let sessions = match dirs {
             Some(dirs) => beryl_shell::sessions(&dirs, emit),
             None => Sessions::new(None, emit),
@@ -180,6 +186,7 @@ impl Live {
         Self {
             sessions,
             tables,
+            decks,
             inbox,
             played_by: None,
         }
@@ -302,6 +309,10 @@ impl Session for Live {
             SessionCommand::CardSearch(text) => {
                 let hits = beryl_table_session::decks::search(&tokens::request(text.clone()));
                 Reply::CardSearch(text, hits)
+            }
+            SessionCommand::DeckList => Reply::DeckList(decks::list(&self.decks)),
+            SessionCommand::DeckImport(request) => {
+                Reply::DeckImport(decks::import(&self.decks, request))
             }
         }
     }

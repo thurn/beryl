@@ -395,7 +395,7 @@ pub(super) fn checkbox(label: &str, on: bool, press: Press) -> Element {
 }
 
 /// `button` at the web's small size (`button-small`): shorter, with smaller type.
-fn small(mut button: Element) -> Element {
+pub(super) fn small(mut button: Element) -> Element {
     button.style.height = Some(size::BUTTON_HEIGHT * 0.75);
     button.style.text.size = type_style::BUTTON.size * 0.75;
     button.style.min_width = None;

@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use beryl_protocol::ipc::decks::CardSearchHit;
+use beryl_protocol::ipc::decks::{CardSearchHit, DeckImportReply, DeckImportRequest, SavedDeck};
 use beryl_protocol::ipc::{
     ChooseRequest, LobbyChange, LobbyUpdate, TableActReply, TableRefused, TableSoloRequest,
 };
@@ -42,6 +42,12 @@ pub enum SessionCommand {
     /// Find the card store's tokens whose name holds this text, for the manual table's token
     /// search, as the web's `card_search` does with `tokens` set.
     CardSearch(String),
+    /// List the decks saved in the deck library (`beryl_table_session::decks::list`), which
+    /// the web app keeps in the same folder.
+    DeckList,
+    /// Read a pasted decklist and save it in the deck library under its name
+    /// (`beryl_table_session::decks::import`).
+    DeckImport(DeckImportRequest),
 }
 
 /// The session's answer to a `SessionCommand`. `Sessions::click` returns the prompt's next
@@ -62,6 +68,10 @@ pub enum Reply {
     TableLobby(Result<Option<Box<LobbyUpdate>>, TableRefused>),
     /// The tokens a `CardSearch` for this text found, the best match first.
     CardSearch(String, Vec<CardSearchHit>),
+    /// The decks saved in the deck library, or why they could not be read.
+    DeckList(Result<Vec<SavedDeck>, SessionError>),
+    /// The deck a decklist was read as, now saved, or why it could not be read or saved.
+    DeckImport(Result<DeckImportReply, SessionError>),
 }
 
 /// What the client asks of the platform.

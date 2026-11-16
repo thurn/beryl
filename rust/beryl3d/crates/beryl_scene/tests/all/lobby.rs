@@ -1,12 +1,16 @@
 //! The manual table's lobby, on lobbies built by hand: the start screen's 'Solo table' opens
 //! it, its controls send the session lobby changes, and the lobby gives way to the table when
-//! its game starts and comes back when a game ends.
+//! its game starts and comes back when a game ends. The deck picker loads a saved deck or a
+//! pasted decklist, and the sideboard swap moves cards between the main deck and sideboard.
 
+use beryl_protocol::SessionError;
+use beryl_protocol::ipc::decks::{DeckImportReply, DeckImportRequest, SavedDeck};
 use beryl_protocol::ipc::{LobbyChange, LobbyUpdate, TableRefusalReason, TableRefused};
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::frame::{Frame, Role};
 use beryl_scene::input::{
-    Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
+    Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
+    Size,
 };
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, lobby, table};
 use beryl_scene::{Client, Config};
@@ -67,14 +71,66 @@ fn press(client: &mut Client, role: Role, name: &str) {
     }
 }
 
+/// The session commands the client has queued, in order.
+fn commands(client: &mut Client) -> Vec<SessionCommand> {
+    std::iter::from_fn(|| client.next_command()).collect()
+}
+
 /// The lobby changes the client has queued, in order.
 fn changes(client: &mut Client) -> Vec<LobbyChange> {
-    std::iter::from_fn(|| client.next_command())
+    (commands(client).into_iter())
         .filter_map(|command| match command {
             SessionCommand::TableLobby(change) => Some(change),
             _ => None,
         })
         .collect()
+}
+
+/// A deck saved in the library as `name`: 36 Islands and 4 Counterspells, with 8 Negates in
+/// its sideboard.
+fn saved(name: &str) -> SavedDeck {
+    SavedDeck {
+        deck: imported(name),
+        main_count: 40,
+        side_count: 8,
+    }
+}
+
+/// The deck the session reads a decklist as and saves as `name`.
+fn imported(name: &str) -> DeckImportReply {
+    DeckImportReply {
+        name: name.to_owned(),
+        main: vec![("Island".to_owned(), 36), ("Counterspell".to_owned(), 4)],
+        side: vec![("Negate".to_owned(), 8)],
+        unknown: Vec::new(),
+        skipped: Vec::new(),
+    }
+}
+
+/// Focuses the field named `name` and pastes `words` into it, as the host hands back the
+/// clipboard.
+fn paste(client: &mut Client, name: &str, words: &str) {
+    press(client, Role::Field, name);
+    client.handle(Input::Paste(words.to_owned()));
+}
+
+/// A client in a solo table's lobby with a deck loaded whose main deck holds `main` and whose
+/// sideboard holds `side`.
+fn client_with_deck(main: &[(&str, u16)], side: &[(&str, u16)]) -> Client {
+    let own = |cards: &[(&str, u16)]| {
+        (cards.iter())
+            .map(|(name, count)| ((*name).to_owned(), *count))
+            .collect()
+    };
+    let mut client = client_on_start();
+    press(&mut client, Role::Button, "Solo table");
+    let mut update = lobby(true);
+    let view = update.view.as_mut().expect("a lobby with a state");
+    view.main = own(main);
+    view.side = own(side);
+    client.handle(Input::Lobby(Box::new(update)));
+    commands(&mut client);
+    client
 }
 
 /// A view of the solo table, as the session sends one when its game has started.
@@ -105,15 +161,21 @@ fn solo_table_opens_a_lobby_that_loads_the_deck_and_starts_the_table() {
     assert!(reads(&shown, "No deck loaded"));
 
     press(&mut client, Role::Button, "Change");
+    assert_eq!(commands(&mut client), vec![SessionCommand::DeckList]);
+    client.handle(Input::Reply(Reply::DeckList(Ok(vec![saved("Control")]))));
+    press(&mut client, Role::Button, "Control");
     let [LobbyChange::LoadDeck { main, side }] = &changes(&mut client)[..] else {
-        panic!("'Change' did not load a deck");
+        panic!("picking a saved deck did not load it");
     };
-    assert_eq!(main.iter().map(|(_, count)| count).sum::<u16>(), 40);
-    assert!(!side.is_empty());
+    assert_eq!(main, &saved("Control").deck.main);
+    assert_eq!(side, &saved("Control").deck.side);
 
     client.handle(Input::Lobby(Box::new(lobby(true))));
     let shown = frame(&mut client);
-    assert!(reads(&shown, "Deck loaded"));
+    assert!(
+        reads(&shown, "Control"),
+        "the lobby shows the loaded deck's name"
+    );
     assert!(reads(&shown, "40 main · 8 sideboard"));
     press(&mut client, Role::Button, "Start");
     assert_eq!(changes(&mut client), vec![LobbyChange::Start]);
@@ -177,4 +239,99 @@ fn a_refused_change_says_so_and_leave_goes_back_to_the_start_screen() {
         .any(|command| command == SessionCommand::TableLeave);
     assert!(left, "'Leave table' did not leave the table");
     assert!(has(&frame(&mut client), Role::Region, "start"));
+}
+
+#[test]
+fn a_pasted_decklist_is_saved_and_loaded_under_its_name() {
+    let mut client = client_on_start();
+    press(&mut client, Role::Button, "Solo table");
+    client.handle(Input::Lobby(Box::new(lobby(false))));
+    commands(&mut client);
+    press(&mut client, Role::Button, "Change");
+    client.handle(Input::Reply(Reply::DeckList(Ok(Vec::new()))));
+    press(&mut client, Role::Button, "Paste decklist");
+    paste(&mut client, "deck name", "Islands");
+    paste(
+        &mut client,
+        "decklist",
+        "36 Island\n4 Counterspell\n\n8 Negate",
+    );
+    commands(&mut client);
+    press(&mut client, Role::Button, "Import");
+    assert_eq!(
+        commands(&mut client),
+        vec![SessionCommand::DeckImport(DeckImportRequest {
+            name: "Islands".to_owned(),
+            text: Some("36 Island\n4 Counterspell\n\n8 Negate".to_owned()),
+            cod: None,
+        })]
+    );
+
+    // A decklist the library cannot save says why, and can be imported again.
+    client.handle(Input::Reply(Reply::DeckImport(Err(SessionError::Io {
+        reason: "The disk is full.".to_owned(),
+    }))));
+    assert!(reads(&frame(&mut client), "The disk is full."));
+    press(&mut client, Role::Button, "Import");
+    commands(&mut client);
+    client.handle(Input::Reply(Reply::DeckImport(Ok(imported("Islands")))));
+    let deck = imported("Islands");
+    assert_eq!(
+        changes(&mut client),
+        vec![LobbyChange::LoadDeck {
+            main: deck.main,
+            side: deck.side,
+        }]
+    );
+    client.handle(Input::Lobby(Box::new(lobby(true))));
+    let shown = frame(&mut client);
+    assert!(reads(&shown, "Islands"));
+    assert!(!has(&shown, Role::Field, "decklist"), "the picker closed");
+}
+
+#[test]
+fn the_paste_key_opens_the_paste_field() {
+    let mut client = client_on_start();
+    press(&mut client, Role::Button, "Solo table");
+    client.handle(Input::Lobby(Box::new(lobby(false))));
+    let modifiers = Modifiers {
+        command: true,
+        shift: true,
+        ..Modifiers::default()
+    };
+    for phase in [KeyPhase::Down, KeyPhase::Up] {
+        client.handle(Input::Key(Key {
+            code: KeyCode::V,
+            phase,
+            modifiers,
+        }));
+    }
+    assert!(has(&frame(&mut client), Role::Field, "decklist"));
+}
+
+#[test]
+fn the_sideboard_swap_moves_one_copy_each_way() {
+    let mut client = client_with_deck(&[("Island", 36), ("Counterspell", 4)], &[("Negate", 8)]);
+    press(&mut client, Role::Button, "Sideboard");
+    press(&mut client, Role::Button, "Move Counterspell to sideboard");
+    press(&mut client, Role::Button, "Move Negate to main deck");
+    assert_eq!(
+        changes(&mut client),
+        vec![
+            LobbyChange::Sideboard {
+                into_main: Vec::new(),
+                into_side: vec![("Counterspell".to_owned(), 1)],
+            },
+            LobbyChange::Sideboard {
+                into_main: vec![("Negate".to_owned(), 1)],
+                into_side: Vec::new(),
+            },
+        ]
+    );
+    press(&mut client, Role::Button, "Done");
+    assert!(!has(
+        &frame(&mut client),
+        Role::Button,
+        "Move Negate to main deck"
+    ));
 }

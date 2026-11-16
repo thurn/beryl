@@ -2,12 +2,14 @@
 //! that does not return until the test lets it, the frame loop draws a frame on every tick and
 //! the commands sent meanwhile queue up. Each reply then reaches the host's inbox, in order.
 //! And what `--agent` reports of the opponent's searches, and that the live session starts a
-//! solo manual table and sends its view back, or opens one in its lobby and starts it from there.
+//! solo manual table and sends its view back, or opens one in its lobby and starts it from there,
+//! and saves a pasted decklist in its deck library and lists it.
 
 use std::sync::mpsc::{Receiver, channel};
 
 use beryl_3d::session::{self, Session};
 use beryl_host::{Class, Draw, FrameLoop, Inbox, Shown, Ticks};
+use beryl_protocol::ipc::decks::DeckImportRequest;
 use beryl_protocol::ipc::{LobbyChange, LobbyUpdate};
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::frame::Frame;
@@ -203,4 +205,48 @@ fn the_live_session_opens_a_solo_lobby_loads_a_deck_and_starts_the_table() {
     let started = lobby_after(&commands, &inbox, LobbyChange::Start);
     assert_eq!(started.view, None, "a started table has left its lobby");
     commands.close();
+}
+
+#[test]
+fn the_live_session_saves_a_pasted_decklist_and_lists_it() {
+    let data = std::env::temp_dir().join(format!("beryl3d-decks-{}", std::process::id()));
+    let dirs = beryl_shell::Dirs {
+        data: data.clone(),
+        logs: data.join("logs"),
+        bugs: data.join("bugs"),
+    };
+    let (sender, inbox) = channel();
+    let commands = session::spawn(
+        Class::Utility,
+        {
+            let inbox = Inbox::new(sender.clone(), || true);
+            move || session::Live::new(Some(dirs), inbox)
+        },
+        Inbox::new(sender, || true),
+    );
+    let reply = |inbox: &Receiver<Input>| loop {
+        if let Input::Reply(reply) = inbox.recv().expect("the session thread answers") {
+            break reply;
+        }
+    };
+    commands.send(SessionCommand::DeckImport(DeckImportRequest {
+        name: "Islands".to_owned(),
+        text: Some("36 Island\n4 Counterspell\n\n8 Negate".to_owned()),
+        cod: None,
+    }));
+    let Reply::DeckImport(Ok(deck)) = reply(&inbox) else {
+        panic!("the decklist was not saved");
+    };
+    assert_eq!(deck.name, "Islands");
+    assert_eq!(deck.side, vec![("Negate".to_owned(), 8)]);
+
+    commands.send(SessionCommand::DeckList);
+    let Reply::DeckList(Ok(saved)) = reply(&inbox) else {
+        panic!("the saved decks were not listed");
+    };
+    let names: Vec<&str> = saved.iter().map(|saved| saved.deck.name.as_str()).collect();
+    assert_eq!(names, ["Islands"]);
+    assert_eq!((saved[0].main_count, saved[0].side_count), (40, 8));
+    commands.close();
+    let _ = std::fs::remove_dir_all(&data);
 }
