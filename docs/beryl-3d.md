@@ -4106,8 +4106,10 @@ differently on purpose: a beat lasts until the cards that close up after a card
 left are at their new places, but only as long as that close-up is still each
 card's latest motion, and on the web interface a strike waits while its way
 would cross an earlier strike's. Beryl 3D follows the first rule on its own
-table and does not hold strikes back. A recording whose timelines differ only
-because of such a layout difference stays listed.
+table and does not hold strikes back. Milestone 5's exit check needs the list
+empty, so a difference that comes only from this layout rule is accepted by the
+comparison itself, which recognises it from the two timelines alone, rather than
+staying listed.
 
 What the check does not cover is fixed by hand, and found by the parity list: a
 screen's layout, a prompt's wording, and how an effect looks.
@@ -4129,36 +4131,44 @@ prompt shapes 12 / 12
 screens       9 / 11   missing: testing screen, manual table lobby
 conventions   77 / 77 entries confirmed
 tools         6 / 8    missing: motion-review, arena-pixel-match
-launch tests  macOS pass, Windows pass, iOS pass, Android pass
+launch tests  macOS pass, Windows, iOS and Android not required
 ```
 
-- **A fixture, spec moment, verb, effect, mark or prompt shape is done** when
-  Beryl 3D plays it from both seats, in both layouts, across the window matrix,
-  with every interface check passing and its timelines agreeing with the web
-  interface's.
+- **A fixture or spec moment is done** when Beryl 3D plays it from both seats,
+  in both layouts, across the window matrix, with every interface check passing
+  and its timelines agreeing with the web interface's. **A verb, effect, mark or
+  prompt shape is done** when the recording named for it is done:
+  `data/beryl3d/parity.json` names one recording for each verb, effect and mark
+  of `data/ui-conventions.json`.
 - **A tool is done** when a job that a skill or a `just` command does for the
-  web interface can be done for Beryl 3D. The jobs are listed by hand in the
-  same data file as the screens: showing a card's moments (the `specs` skill),
+  web interface can be done for Beryl 3D. The jobs are listed by hand in
+  `data/beryl3d/parity.json`, beside a map from every skill to its job (or to
+  why it looks at no client): showing a card's moments (the `specs` skill),
   reviewing the interface as a player (`ui-review`), filming a verb beside
   Arena's (`just motion --film`, `motion-review`, `arena-pixel-match`), working
   a bug report (`bugfix`), and measuring frames in the running app
   (`just ui-perf`).
-- **A UI Conventions entry is done** when its data records that Beryl 3D follows
-  it, with the fixture that shows it.
-- **A launch test** (the iOS and Android ones are not required in this epic)
-  starts the app on one platform with no window shown and passes when the app
-  draws a frame.
+- **A UI Conventions entry is done** when `data/beryl3d/conventions/<kind>.json`
+  (one file per section kind of `data/ui-conventions.json`, which Beryl 3D does
+  not edit) names a recording, a moment and a tree line that show Beryl 3D
+  following it. An entry it cannot follow without a new numbered exception is
+  recorded as open, with the reason, for the owner.
+- **A launch test** (only macOS's is required in this epic; Windows, iOS and
+  Android are not tested) starts the app on one platform with no window shown
+  and passes when the app draws a frame.
 - **Prompt shapes** are counted from the `prompt_shapes` of
   `data/beryl3d/screens.json`, which names one fixture for each shape of
   `ui/shapes.json`.
-- **Screens** are listed by hand in one data file, because nothing generates
-  them: the start screen, the opening hand and mulligan, the game, game over,
-  settings, the bug report, the card gallery, the testing screen and each of the
-  manual table's screens. Each screen marked built names a moment of its
-  recording (`at`) and a line of the tree printout there (`shows`), and a test
-  fails when the recording does not show it.
+- **Screens** are listed by hand in `data/beryl3d/screens.json`, because nothing
+  generates them: the start screen, the opening hand and mulligan, the game,
+  game over, settings, the bug report, the card gallery, the testing screen and
+  each of the manual table's screens. Each screen marked built names a moment of
+  its recording (`at`) and a line of the tree printout there (`shows`), and a
+  test fails when the recording does not show it. `parity.json` maps every
+  screen file of the web interface to a screen of that list, or to `missing`.
 - **New web interface work adds to the list** automatically where it adds a
-  fixture or a spec, and by a line in the screens file otherwise.
+  fixture or a spec. A new web screen file or skill makes the sweep's
+  `parity-list` step fail until `parity.json` maps it.
 
 ### The switch
 
