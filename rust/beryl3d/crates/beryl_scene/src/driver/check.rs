@@ -259,9 +259,14 @@ impl Page {
         let (played, _) = self.played();
         let history = played.client.history();
         let script = history.iter().enumerate().rev().find(|(_, script)| {
-            !script.steps.is_empty()
-                && script.start.is_some_and(|start| start <= at)
-                && script.real(script.end).is_some_and(|end| at <= end)
+            // A step may outlive its script's end (an announcement that moves nothing), so the
+            // script is found by its steps, not by its own span.
+            script.start.is_some_and(|start| start <= at)
+                && script
+                    .steps
+                    .iter()
+                    .filter_map(|step| script.span(step))
+                    .any(|(from, to)| from <= at && at <= to)
         });
         let Some((number, script)) = script else {
             return Err(DriverError(format!(
