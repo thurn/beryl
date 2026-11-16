@@ -92,3 +92,9 @@ def test_a_binary_with_the_socket_name_is_found(tmp_path: Path) -> None:
     unit = tmp_path / "unit"
     unit.write_bytes(b"\x01beryl3d-dc7ac5ee12d5f047\x00")
     assert live.release_socket_paths(unit) == []
+    folder = tmp_path / "folder"
+    folder.write_bytes(b"\rberyl3d-tablesberyl3d: search: nothing was searched\x00")
+    assert live.release_socket_paths(folder) == []
+    encoded = tmp_path / "encoded"
+    encoded.write_bytes(b"mod.rs\x00\x08beryl3d-\xc0\x05.sock\x00")
+    assert live.release_socket_paths(encoded) == [8]

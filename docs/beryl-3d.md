@@ -2617,7 +2617,7 @@ just b3d smoke
   frame thread, and `do` gives the action's inputs on the next display ticks, as
   a drive script's line is given, and answers when they are done or a locator
   found nothing. `just b3d release-socket`, a step of the sweep, builds release
-  and fails if its binary names a socket.
+  and fails if its binary holds the socket's file name, `beryl3d-{pid}.sock`.
 - **`smoke`** starts the app with no window, waits for its first presented frame
   and exits.
 
