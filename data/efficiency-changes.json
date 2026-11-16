@@ -118,5 +118,10 @@
     "label": "The fast check's Beryl 3D steps run in four lanes at once, with clippy in its own target and builds waiting without tokens",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D's export command writes the recordings on as many threads as its CPU tokens allow",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

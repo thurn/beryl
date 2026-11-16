@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use super::options::{self, Options, Usage, seat_word, side_of};
 use super::{Printed, open};
-use crate::{pack, pages, recordings};
+use crate::{pack, pages, recordings, runner};
 
 /// The switch that prints every recording and seat to a file.
 pub(super) const ALL: &str = "--all";
@@ -160,8 +160,10 @@ pub(super) fn export(options: &Options) -> Result<Printed, Usage> {
     };
     let names = recordings::names().map_err(Usage)?;
     fs::create_dir_all(&directory).map_err(|e| Usage(format!("{}: {e}", directory.display())))?;
-    let mut files = 0;
-    for (name, seat) in &names {
+    // Each recording on a thread of its own, as many at once as the command's CPU tokens allow
+    // (`runner::each`): one after another, the export took about 40 s, the longest of the
+    // workspace's tests and part of the lane's timeline-parity step.
+    let written = runner::each(&names, |(name, seat)| -> Result<(), Usage> {
         let seat = side_of(*seat);
         let recording = pages::recording(name, seat).map_err(Usage)?;
         let json = serde_json::to_string(&with_own_timings(recording.0))
@@ -171,9 +173,10 @@ pub(super) fn export(options: &Options) -> Result<Printed, Usage> {
             name.replace('/', "__"),
             options::seat_word(seat)
         ));
-        fs::write(&file, json).map_err(|e| Usage(format!("{}: {e}", file.display())))?;
-        files += 1;
-    }
+        fs::write(&file, json).map_err(|e| Usage(format!("{}: {e}", file.display())))
+    });
+    let files = written.len();
+    written.into_iter().collect::<Result<Vec<()>, Usage>>()?;
     Ok(Printed::text(format!(
         "{}\n{}\n{files} files\n",
         options.command_line(),
