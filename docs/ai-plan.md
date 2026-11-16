@@ -33,15 +33,16 @@ A strong opponent that **does not cheat** and **plays like a plausible human**.
 
 Two numbers measure progress, and each has a target:
 
-| Measure      | How it is counted                                                                 | Now          | Target       |
-| ------------ | --------------------------------------------------------------------------------- | ------------ | ------------ |
-| Blunder rate | Suite runs passed, of 400 (20 entries, 3M and 30M, 10 seeds each)                 | 351 of 400   | 380 of 400   |
-|              | New suite entries per human game, from the app's games ledger                     | 0 in 9 games | under 1 in 5 |
-| Strength     | Elo against the reference agent (§3) at 10M steps, over 400 games (`--bar audit`) | 0            | +50          |
+| Measure      | How it is counted                                                                 | Now                                                | Target       |
+| ------------ | --------------------------------------------------------------------------------- | -------------------------------------------------- | ------------ |
+| Blunder rate | Suite runs passed, of 400 (20 entries, 3M and 30M, 10 seeds each)                 | 351 of 400                                         | 380 of 400   |
+|              | New suite entries per human game, from the app's games ledger                     | 0 in 9 games                                       | under 1 in 5 |
+| Strength     | Elo against the reference agent (§3) at 10M steps, over 400 games (`--bar audit`) | +26 Elo (−8 to +60). Score 53.8% (48.9% to 58.6%). | +50          |
 
-The suite total comes from the rung 2 comparison in [the ladder](ladder.md).
-Nine human games are too few to say the second target is met. No entries in nine
-games is still consistent with one game in four.
+The suite total comes from the rung 2 comparison in [the ladder](ladder.md). The
+strength estimates and 95% intervals come from the November 16 reference audit
+in the same log. Nine human games are too few to say the second target is met.
+No entries in nine games is still consistent with one game in four.
 
 ## 2. What we learned
 
@@ -457,6 +458,11 @@ each override. The default is the policy's answer, or the planner's at combat.
 - **Claims:** `skip-teferi-plus-one`, `spirits-stay-home`.
 - **Measure:** a root rung, 3M, `plausible`. After it, run the audit (§4.5)
   whatever its date, since this rung changes the most moves.
+- **Result:** the suite rose from 351/400 to 353/400. Teferi's +1 rose from 1/20
+  to 20/20 and the targetless Subtlety evoke fell from 17/20 to 0/20. At 3M,
+  `first` scored 41.5% over 294 games against `paired` (−80 Elo, 95% interval
+  −131 to −32). `first` was dropped. The `waste` rung will test a policy rule
+  for the targetless evoke.
 
 ### 6.5 Rung 4: `prior`, the tree explores as the policy plays
 
