@@ -13,7 +13,7 @@ mod surface;
 mod target;
 mod textures;
 
-pub use atlas::{GLOW_SPRITE, GLYPH_PAGES};
+pub use atlas::ATLAS_PAGES;
 pub use mesh::CARD_RADIUS;
 pub use renderer::{Drawn, Limits, Renderer};
 pub use surface::{Native, Presented, Surface};

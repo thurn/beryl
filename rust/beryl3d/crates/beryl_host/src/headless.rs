@@ -19,6 +19,7 @@ use std::sync::mpsc::{self, Receiver};
 
 use beryl_art::{ArtCache, Origins};
 use beryl_assets::glyphs::{GlyphWorker, prepare_latin};
+use beryl_assets::light;
 use beryl_assets::{Config, Format, Prepared, Preparer, default_workers};
 use beryl_render::{Limits, Renderer, Target};
 use beryl_scene::driver::{DriverError, Moment, Page};
@@ -90,6 +91,7 @@ impl Headless {
         scans: &Scans,
     ) -> Result<Self, String> {
         let mut renderer = Renderer::headless(Limits::Default)?;
+        renderer.upload_page(&light::prepared());
         load_faces(&mut renderer, page.faces(), scans);
         let pixels = |points: f32| (points * scale).round().max(1.0) as u32;
         let target = Target::offscreen(&renderer, pixels(width), pixels(height));

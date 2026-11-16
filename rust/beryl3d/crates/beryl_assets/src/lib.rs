@@ -14,6 +14,7 @@ mod cache;
 mod encode;
 mod faces;
 pub mod glyphs;
+pub mod light;
 pub mod packer;
 mod placeholder;
 mod prepare;
@@ -42,8 +43,9 @@ pub struct Prepared {
 #[derive(Clone, PartialEq, Eq)]
 pub enum Upload {
     /// The whole of one atlas page: [`packer::PAGE_SIZE`] rows of as many 8-bit coverage
-    /// texels, top row first.
-    GlyphPage { page: u16, pixels: Vec<u8> },
+    /// texels, top row first. Page 0 is the shapes of light ([`light`]); the glyph worker
+    /// sends the others.
+    AtlasPage { page: u16, pixels: Vec<u8> },
     /// One card face's layer, for the layer of the board-size or full-size array that the
     /// [`AssetReady`] names.
     Face { layer: Layer, source: Source },
@@ -53,8 +55,8 @@ impl std::fmt::Debug for Upload {
     /// Names the page or face and leaves out its texels.
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::GlyphPage { page, pixels } => formatter
-                .debug_struct("GlyphPage")
+            Self::AtlasPage { page, pixels } => formatter
+                .debug_struct("AtlasPage")
                 .field("page", page)
                 .field("bytes", &pixels.len())
                 .finish(),

@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
+use beryl_assets::light;
 use beryl_render::{Presented, Renderer, Surface};
 use beryl_scene::Client;
 use beryl_scene::command::Request;
@@ -274,6 +275,7 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
         let size = window.inner_size();
         let (mut renderer, surface) =
             Renderer::for_window(Arc::clone(&window), size.width, size.height)?;
+        renderer.upload_page(&light::prepared());
         if let Some(setup) = self.setup.take() {
             setup(&mut renderer);
         }

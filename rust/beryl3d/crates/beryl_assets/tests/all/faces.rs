@@ -90,7 +90,7 @@ fn cache_every_scan(dir: &Path) {
 fn face_layer(prepared: &Prepared) -> (&Layer, Source) {
     match &prepared.upload {
         Upload::Face { layer, source } => (layer, *source),
-        Upload::GlyphPage { .. } => panic!("a face worker sent a glyph page"),
+        Upload::AtlasPage { .. } => panic!("a face worker sent a glyph page"),
     }
 }
 

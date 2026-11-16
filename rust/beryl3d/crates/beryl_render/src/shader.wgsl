@@ -21,6 +21,7 @@ const TABLE: u32 = 0u;
 const CARD: u32 = 1u;
 const CONTACT_SHADOW: u32 = 2u;
 const GLOW: u32 = 3u;
+const STREAK: u32 = 4u;
 const PANEL: u32 = 5u;
 const GLYPH: u32 = 6u;
 
@@ -140,6 +141,19 @@ fn shade_glow(sprite: vec4<f32>, tint: vec4<f32>, params: vec4<f32>) -> vec4<f32
     return vec4<f32>(tint.rgb * a, 0.0);
 }
 
+// A streak: the sprite's coverage in the tint's color, along the quad's length (mesh_uv.x) from
+// its tail at `params.x - params.y` to its head at `params.x`, nothing ahead of the head or
+// behind the tail, and fading from full at the head to nothing at the tail. Like a glow it adds
+// to what is beneath it.
+fn shade_streak(sprite: vec4<f32>, mesh_uv: vec2<f32>, tint: vec4<f32>, params: vec4<f32>) -> vec4<f32> {
+    let head = params.x;
+    let span = max(params.y, 1e-4);
+    let behind = (head - mesh_uv.x) / span;
+    let fade = select(0.0, 1.0 - behind, behind >= 0.0 && behind <= 1.0);
+    let a = sprite.r * tint.a * fade;
+    return vec4<f32>(tint.rgb * a, 0.0);
+}
+
 // A panel of the flat layer: a rounded rectangle `params.xy` logical points large with corners
 // of radius `params.z`, filled with the tint, and a border `params.w` wide in the color held in
 // the record's `uv` (`border`, from 0 to 255). Both edges are antialiased over one pixel;
@@ -184,6 +198,7 @@ fn fs(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f3
         case CARD: { color = shade_card(picture, in.tint, in.params); }
         case CONTACT_SHADOW: { color = shade_contact_shadow(in.mesh_uv, in.tint, in.params); }
         case GLOW: { color = shade_glow(picture, in.tint, in.params); }
+        case STREAK: { color = shade_streak(picture, in.mesh_uv, in.tint, in.params); }
         case PANEL: { color = shade_panel(in.mesh_uv, mesh_pixel, in.tint, in.rect, in.params); }
         case GLYPH: { color = shade_glyph(picture, in.tint); }
         default: {}

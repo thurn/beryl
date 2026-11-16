@@ -3,7 +3,7 @@
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
-use beryl_assets::glyphs::{GlyphWorker, prepare_latin};
+use beryl_assets::glyphs::{FIRST_PAGE, GlyphWorker, prepare_latin};
 use beryl_assets::packer::PAGE_SIZE;
 use beryl_assets::{Prepared, Upload};
 use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey};
@@ -26,7 +26,7 @@ fn open_sans(character: char, size: u16) -> GlyphKey {
 /// The next page the worker sends, with its pixels and its glyphs.
 fn next(results: &Receiver<Prepared>) -> (Vec<u8>, Vec<GlyphCell>) {
     let prepared = results.recv_timeout(HANG).expect("the worker sends a page");
-    let Upload::GlyphPage { page, pixels } = prepared.upload else {
+    let Upload::AtlasPage { page, pixels } = prepared.upload else {
         panic!("the glyph worker sent a face");
     };
     let AssetReady::Glyphs {
@@ -110,7 +110,9 @@ fn glyphs_that_overflow_a_page_go_on_to_the_next() {
         pages.len() > 1,
         "26 capitals at 400 pixels fill a page: {pages:?}"
     );
-    assert_eq!(pages, (0..pages.len() as u16).collect::<Vec<_>>());
+    // Page 0 holds the shapes of light, so glyphs start on the page after it.
+    let numbers = FIRST_PAGE..FIRST_PAGE + pages.len() as u16;
+    assert_eq!(pages, numbers.collect::<Vec<_>>());
     assert_eq!(
         sent, capitals,
         "each glyph is sent once, in the order asked"

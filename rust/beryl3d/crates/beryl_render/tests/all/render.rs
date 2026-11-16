@@ -4,8 +4,9 @@
 //! validation error fails the test.
 
 use beryl_assets::Format;
-use beryl_render::{BACK_LAYER, GLOW_SPRITE, Limits, Renderer, Target};
-use beryl_scene::frame::{Band, DRAWS, Draw, Frame, FrameBuilder};
+use beryl_assets::light;
+use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
+use beryl_scene::frame::{Band, DRAWS, Draw, Frame, FrameBuilder, sprites};
 use beryl_scene::input::FaceSize;
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Window};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
@@ -19,6 +20,7 @@ fn renderer(limits: Limits) -> Renderer {
     let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
     let format = Format::choose(&renderer.formats());
     renderer.set_faces(&["", "Island", "Plains", "Counterspell"], format);
+    assert!(renderer.upload_page(&light::prepared()));
     renderer
 }
 
@@ -230,7 +232,7 @@ fn a_mark_on_a_covered_card_is_hidden_with_it() {
             Vec3::new(-5.0, 0.0, 1.1),
         ),
         [255, 255, 255, 255],
-        GLOW_SPRITE,
+        sprites::DISC,
         0.0,
     );
     for limits in BOTH {
@@ -256,6 +258,68 @@ fn a_mark_on_a_covered_card_is_hidden_with_it() {
             without.overhead(-14.0, 0.0),
             "{limits:?}"
         );
+    }
+}
+
+/// A black table under the overhead camera, with `light` drawn over it as light.
+fn over_black(renderer: &mut Renderer, light: Draw) -> Picture {
+    let table = rectangle(Vec2::ZERO, Vec2::splat(400.0), 0.0, [0, 0, 0]);
+    let records = [(Band::Opaque, table), (Band::Glows, light)];
+    draw(renderer, overhead(), (200, 200), &records).0
+}
+
+#[test]
+fn a_glow_of_the_disc_is_brightest_at_its_centre() {
+    let glow = Draw::glow(
+        Affine3A::from_scale_rotation_translation(
+            Vec3::new(160.0, 160.0, 1.0),
+            Quat::IDENTITY,
+            Vec3::new(0.0, 0.0, 1.0),
+        ),
+        [255; 4],
+        sprites::DISC,
+        0.0,
+    );
+    for limits in BOTH {
+        let picture = over_black(&mut renderer(limits), glow);
+        let [centre, ..] = picture.overhead(0.0, 0.0);
+        // The disc's quad is 160 millimetres wide, so half way out is 40 from the centre.
+        let [half_way, ..] = picture.overhead(40.0, 0.0);
+        assert!(centre >= 255 - 4, "{limits:?}: the centre is {centre}");
+        assert!(
+            centre > half_way,
+            "{limits:?}: the centre is {centre} and half way out is {half_way}"
+        );
+    }
+}
+
+#[test]
+fn a_streak_lights_only_between_its_tail_and_its_head() {
+    // 160 millimetres long from x = -80 to 80, so a point `t` of the way along is at
+    // x = 160 t - 80.
+    let streak = Draw::streak(
+        Affine3A::from_scale_rotation_translation(
+            Vec3::new(160.0, 20.0, 1.0),
+            Quat::IDENTITY,
+            Vec3::new(0.0, 0.0, 1.0),
+        ),
+        [255; 4],
+        sprites::RIBBON,
+        0.5,
+        0.25,
+    );
+    let along = |t: f32| 160.0 * t - 80.0;
+    for limits in BOTH {
+        let picture = over_black(&mut renderer(limits), streak);
+        let [lit, ..] = picture.overhead(along(0.4), 0.0);
+        assert!(lit > 64, "{limits:?}: 0.4 of the way along is {lit}");
+        for t in [0.1, 0.8] {
+            assert_eq!(
+                picture.overhead(along(t), 0.0),
+                [0, 0, 0],
+                "{limits:?}: {t} of the way along"
+            );
+        }
     }
 }
 

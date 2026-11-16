@@ -6,6 +6,7 @@
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::time::{Duration, Instant};
 
+use beryl_assets::light;
 use beryl_render::{Limits, Renderer, Target};
 use beryl_scene::Client;
 use beryl_scene::frame::Frame;
@@ -84,6 +85,7 @@ impl Windowless {
     ) -> Result<(), String> {
         let options = self.options;
         let mut renderer = Renderer::headless(Limits::Default)?;
+        renderer.upload_page(&light::prepared());
         setup(&mut renderer);
         let width = (options.size.width * options.scale).round().max(1.0) as u32;
         let height = (options.size.height * options.scale).round().max(1.0) as u32;

@@ -532,8 +532,8 @@ The rules for building a frame:
   faces, the full-size card faces, or **the atlas**, which holds everything else
   (glyph pages, icons, and the shapes of shadows and glows). The atlas is an
   array of single-channel pages, each 1,024 texels square, that hold coverage:
-  the glyph worker fills pages from the first up, and the renderer keeps its own
-  shapes, such as a glow's soft disc, on the last.
+  page 0 holds the shapes of light, which every host uploads before its first
+  frame, and the glyph worker fills the pages after it.
 - **One projection.** Every record's transform is in the table's space. A
   flat-layer record's transform places it on a plane just in front of the
   camera, so the same camera matrix serves the table and the flat layer.
@@ -1555,8 +1555,10 @@ adds to some of them.
   next script or a prompt. A later run of the same effect on the same thing cuts
   the earlier one short, and a script with a reset drops them all.
 - **The shapes of light** (a soft disc, a burst with rays, a ring, a cone, a
-  comet) are sprites that `beryl_assets` draws once at startup into the atlas.
-  No image file holds them.
+  comet, a ribbon, a card outline, an arrowhead, a wedge, a crescent, a tap
+  mark, a moon, a plaque and a coin) are sprites that `beryl_assets::light`
+  draws in code into the atlas's page 0, in the cells of
+  `beryl_scene::frame::sprites`. No image file holds them.
 - **The broken edge of a dissolve** is computed in the shader from the card's
   texture coordinates, with no second texture. A dissolving card is among the
   blended records, so no pixel is discarded in the opaque pass.

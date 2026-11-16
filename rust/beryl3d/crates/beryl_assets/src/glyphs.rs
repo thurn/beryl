@@ -20,6 +20,9 @@ use swash::zeno::Format;
 use crate::packer::{Full, PAGE_SIZE, Shelves};
 use crate::{Prepared, Upload};
 
+/// The atlas page the worker fills first. Page 0 holds the shapes of light ([`crate::light`]).
+pub const FIRST_PAGE: u16 = 1;
+
 /// The keys of the printable ASCII characters, space to tilde, of every type style in
 /// `beryl_scene::tokens` at `scale` physical pixels per point, for a host to hand to
 /// [`GlyphWorker::request`] before its first frame. A character a font lacks is left out.
@@ -173,7 +176,7 @@ impl Atlas {
         Self {
             context: ScaleContext::new(),
             done: BTreeSet::new(),
-            page: 0,
+            page: FIRST_PAGE,
             pixels: blank_page(),
             shelves: Shelves::new(PAGE_SIZE),
         }
@@ -211,7 +214,7 @@ impl Atlas {
         }
         if !cells.is_empty() {
             prepared.push(Prepared {
-                upload: Upload::GlyphPage {
+                upload: Upload::AtlasPage {
                     page: self.page,
                     pixels: self.pixels.clone(),
                 },
@@ -230,7 +233,7 @@ impl Atlas {
         self.page += 1;
         self.shelves = Shelves::new(PAGE_SIZE);
         Prepared {
-            upload: Upload::GlyphPage {
+            upload: Upload::AtlasPage {
                 page,
                 pixels: std::mem::replace(&mut self.pixels, blank_page()),
             },

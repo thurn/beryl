@@ -4,4 +4,5 @@
 
 mod faces;
 mod glyphs;
+mod light;
 mod packer;

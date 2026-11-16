@@ -106,34 +106,38 @@
         "stress-255": 1.0,
         "stress-1024": 1.0,
         "verbs-zones": 1.0,
-        "pay-default": 1.028667
+        "pay-default": 1.012234
       }
     }
   },
   "materials": {
     "card": {
       "samples": 1,
-      "expressions": 72
+      "expressions": 76
     },
     "contact_shadow": {
       "samples": 1,
-      "expressions": 86
+      "expressions": 90
     },
     "glow": {
       "samples": 1,
-      "expressions": 72
+      "expressions": 76
     },
     "glyph": {
       "samples": 1,
-      "expressions": 66
+      "expressions": 70
     },
     "panel": {
       "samples": 1,
-      "expressions": 110
+      "expressions": 114
     },
     "table": {
       "samples": 1,
-      "expressions": 64
+      "expressions": 68
+    },
+    "streak": {
+      "samples": 1,
+      "expressions": 93
     }
   },
   "tests": {

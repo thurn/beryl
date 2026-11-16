@@ -102,7 +102,7 @@ impl Renderer {
             usage: wgpu::BufferUsages::INDEX,
         });
         let faces = empty_arrays(&device, &queue);
-        let atlas = Atlas::new(&device, &queue);
+        let atlas = Atlas::new(&device);
         let slots = Slots::new(&device, UNIFORMS, RECORDS * RECORD, |uniforms| {
             bind_groups(&device, &layout, uniforms, &sampler, &faces, &atlas)
         });
@@ -243,9 +243,11 @@ impl Renderer {
         self.faces[face_array(size)].write(&self.queue, index, layer)
     }
 
-    /// Uploads a glyph page from the glyph worker into its page of the atlas. Returns whether
-    /// it was uploaded: anything but a glyph page, or a page past `GLYPH_PAGES`, is not. The
-    /// host then gives the client the page's `AssetReady`, so that its text draws.
+    /// Uploads a whole page into its page of the atlas: the shapes of light
+    /// (`beryl_assets::light::prepared`), which a host uploads before its first frame, or a
+    /// glyph page from the glyph worker. Returns whether it was uploaded: anything but a page,
+    /// or a page past `ATLAS_PAGES`, is not. For a glyph page the host then gives the client
+    /// the page's `AssetReady`, so that its text draws.
     pub fn upload_page(&mut self, prepared: &Prepared) -> bool {
         self.atlas.upload(&self.queue, prepared)
     }

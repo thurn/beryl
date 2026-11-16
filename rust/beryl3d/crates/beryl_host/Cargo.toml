@@ -12,7 +12,7 @@ workspace = true
 [features]
 # `Headless`, which plays a recording through the test driver and draws its frames offscreen.
 # The app leaves it off, so that the driver is not in its build.
-headless = ["beryl_scene/driver", "dep:beryl_art", "dep:beryl_assets"]
+headless = ["beryl_scene/driver", "dep:beryl_art"]
 # `--drive`, which plays a script of actions through the frame loop. Only a debug build of the
 # app has it.
 drive = ["beryl_scene/driver"]
@@ -20,8 +20,9 @@ drive = ["beryl_scene/driver"]
 [dependencies]
 # The scan cache that `Headless`'s asset workers read card pictures from.
 beryl_art = { path = "../../../crates/beryl_art", optional = true }
-# The asset workers that prepare `Headless`'s card faces.
-beryl_assets = { path = "../beryl_assets", optional = true }
+# The shapes of light every host uploads as the atlas's page 0 before its first frame, and the
+# asset workers that prepare `Headless`'s card faces. The app links it already, through beryl_3d.
+beryl_assets = { path = "../beryl_assets" }
 beryl_render = { path = "../beryl_render" }
 beryl_scene = { path = "../beryl_scene" }
 # Pointer positions as the client's vectors.

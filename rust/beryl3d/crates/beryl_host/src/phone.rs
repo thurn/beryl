@@ -7,6 +7,7 @@
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Instant;
 
+use beryl_assets::light;
 use beryl_render::{Native, Presented, Renderer, Surface};
 use beryl_scene::Client;
 use beryl_scene::frame::{Frame, Wake};
@@ -86,13 +87,14 @@ impl Phone {
                 let (client, mut feed) = *waiting;
                 // SAFETY: the caller's promise, passed on.
                 let made = unsafe { Renderer::for_native(native, width, height) };
-                let (renderer, surface) = match made {
+                let (mut renderer, surface) = match made {
                     Ok(made) => made,
                     Err(error) => {
                         self.state = State::Waiting(Box::new((client, feed)));
                         return Err(error);
                     }
                 };
+                renderer.upload_page(&light::prepared());
                 feed.opened(&Opened {
                     // The iOS host asks its display link for 60 Hz. The Android host's
                     // Choreographer ticks at the display's own rate, which the spike does not

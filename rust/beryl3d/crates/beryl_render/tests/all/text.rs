@@ -110,7 +110,7 @@ fn rasterize(text: &str) -> (Prepared, Vec<GlyphCell>) {
 #[test]
 fn white_text_on_a_black_panel_is_inked_in_the_stem_and_empty_in_the_bowl() {
     let (page, cells) = rasterize("Pay");
-    let Upload::GlyphPage {
+    let Upload::AtlasPage {
         page: number,
         pixels: atlas,
     } = &page.upload
