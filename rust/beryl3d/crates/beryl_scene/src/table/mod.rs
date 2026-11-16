@@ -13,6 +13,7 @@ pub(crate) use hands::HandFits;
 pub(crate) mod lifted;
 mod look;
 mod own;
+pub mod phone;
 mod pile;
 mod place;
 mod revealed;
@@ -28,6 +29,7 @@ use glam::Vec2;
 
 pub use camera::{Camera, CameraData};
 pub use look::{Dress, Look};
+pub use phone::{PhoneBands, phone_bands};
 pub use pile::{PILE_IDS, PileShown, pile_name};
 pub(crate) use place::{Group, NO_GROUP, PileRules, Zones, arrival, host_slot};
 pub use place::{Placement, ROWS, Rest, Rows, Scroll, place};
@@ -119,6 +121,15 @@ pub struct HandData {
     pub room: f32,
     /// How far the whole fan leans clockwise, in degrees.
     pub bias_degrees: f32,
+    /// Where across the screen the fan's middle stands, in normalized device coordinates: the
+    /// window's middle on the desktop, and on the phone the opponent's fan stands at the right
+    /// of their strip, as the web interface's `backSpot` puts it.
+    pub across: f32,
+    /// The highest the inner edge of the hand's back row may stand, in normalized device
+    /// coordinates. A hand that would need more rows than fit under it closes its rows up past
+    /// their strips instead. On the desktop nothing limits the rows; on the phone they stop at
+    /// the top safe inset.
+    pub ceiling: f32,
 }
 
 /// Where the stack's items stand, relative to the camera at the right of the screen (`stack`
@@ -197,6 +208,33 @@ pub struct Layout {
     pub opponent_hand: HandData,
     /// The viewer's anchors, then the opponent's.
     pub players: [PlayerAnchor; 2],
+    /// On the phone layout, where the stack's items stand in the middle band, which replaces
+    /// `stack`; none on the desktop.
+    pub phone: Option<phone::PhoneStack>,
+}
+
+impl Layout {
+    /// The layout a window of this shape takes: this one on a desktop window, and the phone
+    /// layout fitted to `window` when its shorter side is under 500 points (`Window::phone`).
+    #[must_use]
+    pub fn for_window(&self, window: Window) -> Layout {
+        if window.phone() {
+            phone::layout(window)
+        } else {
+            *self
+        }
+    }
+
+    /// This layout's camera fitted to `window`: its required rectangle inside the safe area on
+    /// the desktop, and inside the battlefield's part of it on the phone (`phone::battlefield`).
+    #[must_use]
+    pub fn fit(&self, window: Window) -> Camera {
+        if self.phone.is_some() {
+            Camera::fit_inside(self.camera, window, phone::battlefield(window))
+        } else {
+            Camera::fit(self.camera, window)
+        }
+    }
 }
 
 use space::layout::desktop;
@@ -225,6 +263,8 @@ macro_rules! hand_data {
             spacing: space::$name::SPACING,
             room: space::$name::ROOM,
             bias_degrees: space::$name::BIAS_DEGREES,
+            across: 0.0,
+            ceiling: f32::INFINITY,
         }
     };
 }
@@ -292,4 +332,5 @@ pub const DESKTOP: Layout = Layout {
             pool: Vec2::new(-0.802_5, 0.503_728),
         },
     ],
+    phone: None,
 };

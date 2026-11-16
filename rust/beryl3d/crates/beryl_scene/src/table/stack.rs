@@ -74,7 +74,7 @@ pub(super) fn place_stack(
     placement: &mut Placement,
     spells: &[&ObjectView],
     stack: &[OnStack],
-    (data, camera): (&StackData, &Camera),
+    pose: impl Fn(usize, usize) -> Pose,
 ) {
     placement.abilities.clear();
     // `spells` lists the spells of `stack` in its order, leaving out any whose card the table
@@ -93,7 +93,7 @@ pub(super) fn place_stack(
         };
         let pose = Pose {
             turn,
-            ..stack_pose(index, stack.len(), data, camera)
+            ..pose(index, stack.len())
         };
         let rest = Rest {
             pose,
@@ -165,6 +165,11 @@ pub(crate) fn row_area(
         Side::You => area.y,
         Side::Opponent => -area.y,
     };
+    // The phone's stack stands about the middle band, not at the window's right, so no row
+    // ends short of it.
+    if layout.phone.is_some() {
+        return (area, y);
+    }
     let data = &layout.stack;
     let window = camera.window.size;
     let on_screen = |ndc: f32| f32::midpoint(1.0, -ndc) * window.height;
@@ -213,7 +218,7 @@ pub(crate) fn row_area(
 /// An item beneath is reachable through the strip it shows at its left, `lean` times as wide as
 /// it peeks out above. A stack so tall that the strip would be narrower than the reachable
 /// check's square (`audit::TARGET_POINTS`) stands in rows instead (`in_rows`).
-fn stack_pose(index: usize, count: usize, data: &StackData, camera: &Camera) -> Pose {
+pub(super) fn stack_pose(index: usize, count: usize, data: &StackData, camera: &Camera) -> Pose {
     let size = camera.window.size;
     let aspect = size.width / size.height;
     #[expect(

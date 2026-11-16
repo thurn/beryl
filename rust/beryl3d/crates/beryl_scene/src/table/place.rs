@@ -22,8 +22,8 @@ pub(crate) use under::{host_slot, names_host};
 use super::hands::{HandFits, hand};
 use super::pile::{PileShown, lay_pile, pile_base, pile_scale};
 use super::rows::{NameIds, RowWindow, face_up};
-use super::stack::{OnStack, on_stack, place_stack, spells};
-use super::{Camera, Layout, lifted};
+use super::stack::{OnStack, on_stack, place_stack, spells, stack_pose};
+use super::{Camera, Layout, lifted, phone};
 use crate::frame::Place;
 use crate::pose::Pose;
 
@@ -684,7 +684,14 @@ fn lay(
                 (ids, piles.for_group(group)),
             );
         }
-        Group::Stack => place_stack(placement, objects, &zones.stack, (&layout.stack, camera)),
+        Group::Stack => match &layout.phone {
+            Some(data) => place_stack(placement, objects, &zones.stack, |index, count| {
+                phone::stack_pose(index, count, data, camera)
+            }),
+            None => place_stack(placement, objects, &zones.stack, |index, count| {
+                stack_pose(index, count, &layout.stack, camera)
+            }),
+        },
     }
     lifted::lay(
         zones.handling.as_ref(),

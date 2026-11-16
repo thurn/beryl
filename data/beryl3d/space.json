@@ -472,6 +472,99 @@
         "stack_left": 1284,
         "stack_gap": 54
       }
+    },
+    "phone": {
+      "camera": {
+        "pitch_degrees": 10.0,
+        "fov_degrees": 24.29,
+        "target": [
+          0,
+          -42.36,
+          0
+        ],
+        "required": [
+          [
+            -152.1,
+            -205
+          ],
+          [
+            152.1,
+            205
+          ]
+        ]
+      },
+      "strip": 44,
+      "creatures": {
+        "y": -69,
+        "left": -152.1,
+        "right": 152.1
+      },
+      "lands": {
+        "y": -161,
+        "left": -152.1,
+        "right": -12
+      },
+      "others": {
+        "y": -161,
+        "left": 12,
+        "right": 152.1
+      },
+      "gap": 4,
+      "pile_step": [
+        3,
+        3
+      ],
+      "bands": {
+        "side": 8,
+        "opponent_strip": 48,
+        "you_strip": 60,
+        "hand_width": 100,
+        "hand_share": 0.25,
+        "hand_shown": 0.66,
+        "hand_top": 8
+      },
+      "piles": {
+        "you": {
+          "width": 48,
+          "x": [
+            32,
+            84,
+            136
+          ]
+        },
+        "opponent": {
+          "width": 40,
+          "x": [
+            28,
+            72,
+            116
+          ],
+          "below_safe": 30
+        }
+      },
+      "stack": {
+        "width": 68,
+        "step": 52,
+        "depth": 400,
+        "step_depth": 1.5
+      },
+      "hand": {
+        "depth": 300,
+        "step_depth": 1.5,
+        "fan_radius": 14,
+        "gap": 4,
+        "bias_degrees": 0.6
+      },
+      "opponent_hand": {
+        "width": 24,
+        "step": 14,
+        "rise": 10,
+        "right": 56,
+        "room": 5,
+        "depth": 320,
+        "step_depth": 1.5,
+        "fan_radius": 36.217
+      }
     }
   },
   "revealed": {

@@ -1225,6 +1225,20 @@ its own line of sight, nearer or farther:
 - A wider window then shows more table cloth at the sides, and a narrower one
   moves the camera back.
 
+The phone layout (`table::phone`, `layout.phone` in `space.json`) follows the
+web interface's portrait bands (`phoneLayout` in `ui/src/mobile/layout.ts`): the
+opponent's strip under the top safe inset, the battlefield, the viewer's strip
+and the hand, which runs off the window's bottom. Its camera fits the required
+rectangle inside the battlefield's part of the window rather than the whole safe
+area, and at 393 by 759 the rectangle fills it to within a hundredth of a point.
+It looks down at 10 degrees from straight down, against the desktop's 27, so
+that a tapped card in the far row keeps a 44-point square even at 375 by 647.
+Each side has two rows, as on the desktop, because the web's separate lands and
+other-permanents bands are too short for the phone's touch target. The middle
+band between the creatures' rows stays the same height whether or not the stack
+holds anything, and the stack's items stand side by side about its middle, in
+rows over the battlefield when there are more than fit across.
+
 ### Objects and placement
 
 Each game object has one **scene object** that lasts as long as the game object

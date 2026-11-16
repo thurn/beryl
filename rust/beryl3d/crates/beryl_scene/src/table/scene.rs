@@ -110,6 +110,10 @@ pub(crate) fn ability_track(tracks: &[(u32, Track)], id: u32) -> Option<&Track> 
 /// The 3D table: the camera and every scene object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Table {
+    /// The layout the table was made with, which a desktop window takes.
+    base: Layout,
+    /// The layout of the window the table is fitted to: `base`, or the phone layout
+    /// (`Layout::for_window`).
     layout: Layout,
     camera: Camera,
     row_fits: RowFits,
@@ -161,9 +165,11 @@ impl Default for Table {
 
 impl Table {
     #[must_use]
-    pub fn new(layout: Layout, window: Window) -> Self {
-        let camera = Camera::fit(layout.camera, window);
+    pub fn new(base: Layout, window: Window) -> Self {
+        let layout = base.for_window(window);
+        let camera = layout.fit(window);
         Self {
+            base,
             layout,
             row_fits: RowFits::new(&layout, &camera),
             camera,
@@ -220,9 +226,11 @@ impl Table {
             .screen_pose(anchor, hand.depth, Quat::IDENTITY, hand.height)
     }
 
-    /// Fits the camera to a window of a new shape and recomputes every resting place.
+    /// Fits the camera to a window of a new shape, in the layout that shape takes, and
+    /// recomputes every resting place.
     pub fn resize(&mut self, window: Window, view: Option<&PlayerView>) {
-        self.camera = Camera::fit(self.layout.camera, window);
+        self.layout = self.base.for_window(window);
+        self.camera = self.layout.fit(window);
         self.row_fits = RowFits::new(&self.layout, &self.camera);
         if let Some(view) = view {
             self.apply(view);

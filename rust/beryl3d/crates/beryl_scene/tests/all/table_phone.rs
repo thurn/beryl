@@ -1,0 +1,509 @@
+//! The table on the phone layout (docs/beryl-3d.md, "Space and camera" and "Sizes"): the
+//! camera fitted to the battlefield between the strips and the hand, the bands each part of the
+//! table stands in, and every card at rest keeping a 44-point square to press.
+
+use beryl_protocol::protocol::{CardType, RowName, Side, ZoneName};
+use beryl_scene::agent::checks::{on_screen, reachable};
+use beryl_scene::agent::{Context, Layout};
+use beryl_scene::frame::{Frame, Place, Resolved, Role};
+use beryl_scene::input::{Insets, Size};
+use beryl_scene::play::Show;
+use beryl_scene::table::phone::{Band, battlefield, layout};
+use beryl_scene::table::{DESKTOP, Table, Window, phone_bands};
+use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
+use glam::Vec2;
+
+use crate::common::{before, draw, empty_frame, frame};
+
+/// The three phone windows the interface tests run in.
+const PHONES: [(f32, f32); 3] = [(393.0, 759.0), (375.0, 647.0), (430.0, 932.0)];
+
+/// The safe area the phone interface tests give every phone window: a status bar and a home
+/// bar.
+const SAFE: Insets = Insets {
+    top: 44.0,
+    right: 0.0,
+    bottom: 34.0,
+    left: 0.0,
+};
+
+const MS: u64 = 1_000_000;
+
+fn phone(width: f32, height: f32) -> Window {
+    Window {
+        size: Size { width, height },
+        scale: 3.0,
+        safe_area: SAFE,
+    }
+}
+
+/// A phone window whose safe area is a different distance in from every edge.
+fn uneven(width: f32, height: f32) -> Window {
+    Window {
+        safe_area: Insets {
+            top: 47.0,
+            right: 20.0,
+            bottom: 21.0,
+            left: 12.0,
+        },
+        ..phone(width, height)
+    }
+}
+
+/// The table, alone, that a show draws for `view` at rest in `window`: no flat layer, whose
+/// controls the game screen lays out.
+fn frame_in(window: Window, view: &ViewBuilder) -> Frame {
+    let mut view = view.clone();
+    view.script(ScriptBuilder::reset().build());
+    let mut show = Show::new(Table::new(DESKTOP, window));
+    show.push(Box::new(view.update()), Vec::new());
+    frame(&mut show, &mut Frame::with_capacity(4096, 4096, 65_536), 0)
+}
+
+fn context(window: Window) -> Context {
+    Context {
+        recording: "phone".to_owned(),
+        seat: Side::You,
+        layout: Layout::Phone,
+        size: window.size,
+        safe_area: window.safe_area,
+        at: 0,
+    }
+}
+
+/// The faults `check` finds on cards.
+fn card_faults(
+    frame: &Frame,
+    window: Window,
+    check: fn(&Frame, &Context) -> Vec<beryl_scene::agent::Fault>,
+) -> Vec<String> {
+    check(frame, &context(window))
+        .into_iter()
+        .map(|fault| fault.message)
+        .filter(|message| message.starts_with("card "))
+        .collect()
+}
+
+/// The box around an element's corners: left, top, right, bottom.
+fn bounds(element: &Resolved) -> [f32; 4] {
+    let xs = element.corners.map(|c| c.x);
+    let ys = element.corners.map(|c| c.y);
+    [
+        xs.into_iter().fold(f32::INFINITY, f32::min),
+        ys.into_iter().fold(f32::INFINITY, f32::min),
+        xs.into_iter().fold(f32::NEG_INFINITY, f32::max),
+        ys.into_iter().fold(f32::NEG_INFINITY, f32::max),
+    ]
+}
+
+fn centre(element: &Resolved) -> Vec2 {
+    element.corners.iter().copied().sum::<Vec2>() / 4.0
+}
+
+fn cards_at(frame: &Frame, place: Place) -> Vec<&Resolved> {
+    (frame.resolved.iter())
+        .filter(|element| element.role == Role::Card && element.place == place)
+        .filter(|element| element.opacity > 0.0)
+        .collect()
+}
+
+fn battlefield_place(side: Side, row: RowName) -> Place {
+    Place::Card {
+        zone: ZoneName::Battlefield,
+        side,
+        row: Some(row),
+    }
+}
+
+#[test]
+fn the_required_rectangle_lies_inside_the_battlefield_at_every_phone_size() {
+    for (width, height) in PHONES {
+        for window in [phone(width, height), uneven(width, height)] {
+            let phone_layout = layout(window);
+            let camera = phone_layout.fit(window);
+            let field = battlefield(window);
+            assert!(camera.required_fits(), "{window:?}");
+            for corner in camera.required_corners() {
+                assert!(
+                    corner.x >= field.x - 0.01
+                        && corner.x <= field.x + field.width + 0.01
+                        && corner.y >= field.y - 0.01
+                        && corner.y <= field.y + field.height + 0.01,
+                    "{window:?}: {corner} lies outside {field:?}"
+                );
+            }
+            let inset = window.safe_area;
+            assert!(field.x >= inset.left && field.y >= inset.top);
+            assert!(field.x + field.width <= width - inset.right);
+            assert!(field.y + field.height <= height - inset.bottom);
+        }
+    }
+}
+
+/// At 393 by 759 the camera puts the required rectangle where the web interface's phone layout
+/// has its battlefield: from the foot of the opponent's strip (44 + 48) to the head of the
+/// viewer's (759 - 121 - 60), inside the 8-point side gutters, each edge within 4 points.
+#[test]
+fn the_camera_fills_the_web_battlefield_at_393_by_759() {
+    let window = phone(393.0, 759.0);
+    let camera = layout(window).fit(window);
+    let corners = camera.required_corners();
+    let measured = [
+        corners.iter().map(|c| c.x).fold(f32::INFINITY, f32::min),
+        corners.iter().map(|c| c.y).fold(f32::INFINITY, f32::min),
+        corners
+            .iter()
+            .map(|c| c.x)
+            .fold(f32::NEG_INFINITY, f32::max),
+        corners
+            .iter()
+            .map(|c| c.y)
+            .fold(f32::NEG_INFINITY, f32::max),
+    ];
+    let target = [8.0, 92.0, 385.0, 578.0];
+    let field = battlefield(window);
+    let edges = [
+        field.x,
+        field.y,
+        field.x + field.width,
+        field.y + field.height,
+    ];
+    assert!(
+        edges
+            .iter()
+            .zip(target)
+            .all(|(edge, target)| (edge - target).abs() < 0.01),
+        "the battlefield is the web's: {edges:?}"
+    );
+    for (edge, (measured, target)) in ["left", "top", "right", "bottom"]
+        .into_iter()
+        .zip(measured.into_iter().zip(target))
+    {
+        assert!(
+            (measured - target).abs() <= 4.0,
+            "{edge}: measured {measured}, target {target} ({measured:?})"
+        );
+    }
+}
+
+#[test]
+fn the_bands_follow_one_another_without_overlapping() {
+    for (width, height) in PHONES {
+        for window in [phone(width, height), uneven(width, height)] {
+            let bands = phone_bands(window).expect("a phone window");
+            let order: [Band; 8] = [
+                bands.opponent_strip,
+                bands.opponent_back,
+                bands.opponent_creatures,
+                bands.middle,
+                bands.your_creatures,
+                bands.your_back,
+                bands.your_strip,
+                bands.hand,
+            ];
+            assert!((order[0].top - window.safe_area.top).abs() < 0.01);
+            assert!((order[7].bottom() - height).abs() < 0.01);
+            for pair in order.windows(2) {
+                assert!(
+                    (pair[0].bottom() - pair[1].top).abs() < 0.01,
+                    "{window:?}: {pair:?}"
+                );
+            }
+            for band in order {
+                assert!(band.height > 0.0, "{window:?}: {band:?}");
+            }
+            let stack = layout(window).phone.expect("the phone stack");
+            assert!(
+                (stack.middle - bands.middle.middle()).abs() < 0.01,
+                "{window:?}"
+            );
+        }
+    }
+    assert_eq!(phone_bands(Window::default()), None);
+}
+
+/// A table with both sides' rows, every card tapped, so that each row takes its tapped
+/// footprint.
+fn tapped_board() -> ViewBuilder {
+    let mut view = ViewBuilder::new();
+    for side in [Side::You, Side::Opponent] {
+        for (name, types) in [
+            ("Plains", vec![CardType::Land]),
+            ("Island", vec![CardType::Land]),
+            ("Serra Angel", vec![CardType::Creature]),
+            ("Wall of Omens", vec![CardType::Creature]),
+            ("Portable Hole", vec![CardType::Artifact]),
+        ] {
+            let card = view.card(ZoneName::Battlefield, side, name);
+            card.types = types;
+            card.tapped = true;
+        }
+    }
+    view
+}
+
+#[test]
+fn each_row_stands_in_its_band_and_no_row_covers_another() {
+    for (width, height) in PHONES {
+        let window = phone(width, height);
+        let bands = phone_bands(window).expect("a phone window");
+        let frame = frame_in(window, &tapped_board());
+        let rows = [
+            (Side::Opponent, RowName::Lands, bands.opponent_back),
+            (Side::Opponent, RowName::Others, bands.opponent_back),
+            (Side::Opponent, RowName::Creatures, bands.opponent_creatures),
+            (Side::You, RowName::Creatures, bands.your_creatures),
+            (Side::You, RowName::Others, bands.your_back),
+            (Side::You, RowName::Lands, bands.your_back),
+        ];
+        let mut boxes = Vec::new();
+        for (side, row, band) in rows {
+            let cards = cards_at(&frame, battlefield_place(side, row));
+            assert!(!cards.is_empty(), "{width}x{height} {side:?} {row:?}");
+            for card in cards {
+                let [_, top, _, bottom] = bounds(card);
+                assert!(
+                    top >= band.top - 0.5 && bottom <= band.bottom() + 0.5,
+                    "{width}x{height} {side:?} {row:?}: {top}..{bottom} leaves {band:?}"
+                );
+                boxes.push(((side, row), bounds(card)));
+            }
+        }
+        for (i, (a_row, a)) in boxes.iter().enumerate() {
+            for (b_row, b) in &boxes[i + 1..] {
+                let apart = a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1];
+                assert!(
+                    apart || a_row == b_row,
+                    "{width}x{height}: {a_row:?} {a:?} overlaps {b_row:?} {b:?}"
+                );
+            }
+        }
+        assert_eq!(card_faults(&frame, window, reachable), Vec::<String>::new());
+        assert_eq!(card_faults(&frame, window, on_screen), Vec::<String>::new());
+    }
+}
+
+#[test]
+fn crowded_rows_scroll_and_every_card_in_view_can_be_pressed() {
+    let mut view = ViewBuilder::new();
+    for index in 0..14 {
+        view.card(ZoneName::Battlefield, Side::You, &format!("Land {index}"))
+            .types = vec![CardType::Land];
+        view.card(ZoneName::Battlefield, Side::You, &format!("Bear {index}"))
+            .types = vec![CardType::Creature];
+        view.card(
+            ZoneName::Battlefield,
+            Side::Opponent,
+            &format!("Rock {index}"),
+        )
+        .types = vec![CardType::Artifact];
+    }
+    for (width, height) in PHONES {
+        let window = phone(width, height);
+        let frame = frame_in(window, &view);
+        for (side, row) in [
+            (Side::You, RowName::Lands),
+            (Side::You, RowName::Creatures),
+            (Side::Opponent, RowName::Others),
+        ] {
+            let shown = cards_at(&frame, battlefield_place(side, row));
+            assert!(
+                shown.len() > 1 && shown.len() < 14,
+                "{width}x{height} {side:?} {row:?} shows {} of 14 and scrolls",
+                shown.len()
+            );
+        }
+        assert_eq!(card_faults(&frame, window, reachable), Vec::<String>::new());
+        assert_eq!(card_faults(&frame, window, on_screen), Vec::<String>::new());
+    }
+}
+
+#[test]
+fn the_hand_runs_off_the_bottom_with_every_top_edge_in_reach() {
+    for count in [1, 5, 9, 14] {
+        let mut view = ViewBuilder::new();
+        for index in 0..count {
+            view.card(ZoneName::Hand, Side::You, &format!("Card {index}"));
+        }
+        for (width, height) in PHONES {
+            let window = phone(width, height);
+            let bands = phone_bands(window).expect("a phone window");
+            let frame = frame_in(window, &view);
+            let hand = Place::Card {
+                zone: ZoneName::Hand,
+                side: Side::You,
+                row: None,
+            };
+            let cards = cards_at(&frame, hand);
+            assert_eq!(cards.len(), count);
+            let label = format!("{count} cards at {width}x{height}");
+            // The front row runs off the window's bottom, and every card's top stays clear of
+            // the top safe inset.
+            assert!(
+                cards.iter().any(|card| bounds(card)[3] > height),
+                "{label}: the hand is partly offscreen"
+            );
+            for card in &cards {
+                let [left, top, right, _] = bounds(card);
+                assert!(top >= window.safe_area.top, "{label}: {top}");
+                assert!(
+                    left >= -1.0 && right <= width + 1.0,
+                    "{label}: {left}..{right}"
+                );
+            }
+            if count <= 5 {
+                for card in &cards {
+                    assert!(
+                        bounds(card)[1] >= bands.hand.top,
+                        "{label}: one row stands in the hand band"
+                    );
+                }
+            }
+            assert_eq!(
+                card_faults(&frame, window, reachable),
+                Vec::<String>::new(),
+                "{label}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_stack_stands_in_the_middle_band_with_the_top_item_right_and_in_front() {
+    for count in [1, 2, 4, 7, 20] {
+        let mut view = ViewBuilder::new();
+        for index in 0..count {
+            view.card(ZoneName::Stack, Side::You, &format!("Spell {index}"));
+        }
+        view.card(ZoneName::Battlefield, Side::You, "Bear").types = vec![CardType::Creature];
+        for (width, height) in PHONES {
+            let window = phone(width, height);
+            let bands = phone_bands(window).expect("a phone window");
+            let frame = frame_in(window, &view);
+            let stack = Place::Card {
+                zone: ZoneName::Stack,
+                side: Side::You,
+                row: None,
+            };
+            let items = cards_at(&frame, stack);
+            assert_eq!(items.len(), count);
+            let label = format!("a stack of {count} at {width}x{height}");
+            if count <= 4 {
+                // One row, about the middle band, the top item at the right.
+                let mut lefts: Vec<f32> = items.iter().map(|item| bounds(item)[0]).collect();
+                for item in &items {
+                    let y = centre(item).y;
+                    assert!(
+                        (y - bands.middle.middle()).abs() < 1.0,
+                        "{label}: {y} is off the middle band {:?}",
+                        bands.middle
+                    );
+                }
+                let sorted = {
+                    let mut sorted = lefts.clone();
+                    sorted.sort_by(f32::total_cmp);
+                    sorted
+                };
+                lefts.dedup();
+                assert_eq!(lefts.len(), count, "{label}: no two items share a place");
+                assert!(sorted.windows(2).all(|pair| pair[1] - pair[0] >= 44.0));
+            }
+            assert_eq!(
+                card_faults(&frame, window, reachable)
+                    .into_iter()
+                    .filter(|message| message.contains("Spell"))
+                    .collect::<Vec<_>>(),
+                Vec::<String>::new(),
+                "{label}"
+            );
+            assert_eq!(
+                card_faults(&frame, window, on_screen),
+                Vec::<String>::new(),
+                "{label}"
+            );
+        }
+    }
+}
+
+#[test]
+fn each_pile_lies_in_its_players_strip() {
+    let view = ViewBuilder::sample();
+    for (width, height) in PHONES {
+        let window = phone(width, height);
+        let bands = phone_bands(window).expect("a phone window");
+        let frame = frame_in(window, &view);
+        let piles: Vec<&Resolved> = (frame.resolved.iter())
+            .filter(|element| element.role == Role::Pile)
+            .collect();
+        assert!(!piles.is_empty());
+        for pile in piles {
+            let Place::Card { side, .. } = pile.place else {
+                panic!("a pile has a side");
+            };
+            let strip = match side {
+                Side::You => bands.your_strip,
+                Side::Opponent => bands.opponent_strip,
+            };
+            let [left, top, right, bottom] = bounds(pile);
+            let middle = f32::midpoint(top, bottom);
+            assert!(
+                middle >= strip.top && middle <= strip.bottom() + 8.0,
+                "{width}x{height} {side:?}: {middle} is off {strip:?}"
+            );
+            assert!(top >= window.safe_area.top, "{width}x{height}: {top}");
+            assert!(left >= bands.left - 3.0 && right < width / 2.0);
+        }
+    }
+}
+
+/// A resize in mid-flight, from a desktop window to a phone and from one phone to another,
+/// leaves the card where it was at that instant, and it goes on to its place in the new layout.
+#[test]
+fn a_resize_in_mid_flight_into_and_between_phone_layouts_keeps_the_pose() {
+    for (from, to) in [
+        (Window::default(), phone(393.0, 759.0)),
+        (phone(393.0, 759.0), phone(430.0, 932.0)),
+        (phone(375.0, 647.0), Window::default()),
+    ] {
+        let (start, cards) = before();
+        let (drawn, timings) = draw(&start, cards);
+        let mut show = Show::new(Table::new(DESKTOP, from));
+        show.push(Box::new(start), Vec::new());
+        show.push(Box::new(drawn.clone()), timings);
+        let mut scratch = empty_frame();
+        frame(&mut show, &mut scratch, 0);
+        let card = usize::from(cards.top.0);
+        frame(&mut show, &mut scratch, 150 * MS);
+        let was = show.pose(card, 150 * MS).expect("the card is drawn");
+        show.resize(to);
+        frame(&mut show, &mut scratch, 150 * MS);
+        let now = show.pose(card, 150 * MS).expect("the card is drawn");
+        assert!(
+            was.position.distance(now.position) < 1e-3
+                && was.rotation.dot(now.rotation).abs() > 1.0 - 1e-6
+                && (was.scale - now.scale).abs() < 1e-5,
+            "{from:?} to {to:?}: the card does not jump: {was:?} became {now:?}"
+        );
+        assert_eq!(show.table().layout().phone.is_some(), to.phone());
+        frame(&mut show, &mut scratch, 400 * MS);
+        let rest = show
+            .table()
+            .placement(&drawn.view, &[])
+            .get(cards.top)
+            .expect("the drawn card rests in the hand")
+            .pose;
+        let end = show.pose(card, 400 * MS).expect("the card is drawn");
+        assert!(
+            end.position.distance(rest.position) < 1e-3,
+            "{from:?} to {to:?}: the card ends at its place in the new layout"
+        );
+    }
+}
+
+#[test]
+fn a_desktop_window_keeps_the_desktop_layout() {
+    let table = Table::new(DESKTOP, Window::default());
+    assert_eq!(*table.layout(), DESKTOP);
+    assert_eq!(DESKTOP.for_window(Window::default()), DESKTOP);
+    assert!(DESKTOP.for_window(phone(393.0, 759.0)).phone.is_some());
+}

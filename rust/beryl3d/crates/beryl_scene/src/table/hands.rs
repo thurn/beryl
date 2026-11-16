@@ -188,7 +188,7 @@ fn fan_poses(
             let angle = -down * ((along / radius).asin() + bias);
             let edge = Vec2::new(dx, data.edge - down * (sink - above));
             let centre = edge + Vec2::from_angle(angle).rotate(Vec2::new(0.0, -down * tall / 2.0));
-            let ndc = Vec2::new(centre.x / aspect, centre.y);
+            let ndc = Vec2::new(centre.x / aspect + data.across, centre.y);
             let rotation = Quat::from_rotation_z(angle + half_turn);
             // Each card stands nearer the eye than every card before it, so a later row covers
             // the foot of an earlier one.
@@ -205,6 +205,9 @@ fn fan_poses(
 /// The points each strip of the viewer's hand is widened by, and each row raised by, beyond what
 /// a square of `strip` needs exactly: four on each side.
 const SPARE: f32 = 8.0;
+
+/// The steepest turn `Fan::slant` counts, in radians: 80 degrees.
+const MOST_TURN: f32 = 80.0 * std::f32::consts::PI / 180.0;
 
 /// The measures a hand is fanned by, in half the window's height.
 struct Fan {
@@ -225,16 +228,39 @@ impl Fan {
     /// inside the window, and otherwise as few as let each row's cards keep theirs. A row of
     /// cards that cannot all keep a strip would leave some out of reach, so the cards fill a
     /// second row before they close up past their strips. Sixty cards take two rows in every
-    /// desktop window.
+    /// desktop window. Rows that would rise past `data.ceiling` are not added: the most rows
+    /// under it close up instead.
     fn rows(&self, count: usize) -> (usize, f32) {
+        // The most rows that fit under the ceiling, closed up to stay inside the window.
+        let mut closest = None;
         for rows in 1..count {
             let length = count.div_ceil(rows);
-            let needed = self.spacing_needed(length);
-            if needed <= self.widest(length) {
+            let (needed, widest) = (self.spacing_needed(length), self.widest(length));
+            // A long row slants its outer cards steeply, so fewer rows can rise higher than
+            // more: every count of rows is tried.
+            if !self.under_ceiling(rows, length, needed.min(widest)) {
+                continue;
+            }
+            if needed <= widest {
                 return (rows, needed);
             }
+            closest = Some((rows, widest));
         }
-        (count.max(1), 0.0)
+        match closest {
+            Some(closest) if self.data.ceiling.is_finite() => closest,
+            _ => (count.max(1), 0.0),
+        }
+    }
+
+    /// Whether `rows` rows of `length` cards `spacing` apart keep the back row's inner edge
+    /// under `data.ceiling`.
+    fn under_ceiling(&self, rows: usize, length: usize, spacing: f32) -> bool {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a hand holds far fewer than 2^24 cards"
+        )]
+        let behind = (rows - 1) as f32;
+        rows < 2 || self.data.edge + behind * self.rise(length, spacing) <= self.data.ceiling
     }
 
     /// How far apart the centres of a row of `count` cards stand: `data.spacing` while the row
@@ -297,7 +323,11 @@ impl Fan {
             reason = "a hand holds far fewer than 2^24 cards"
         )]
         let along = ((count as f32 - 1.0) / 2.0 * spacing).min(radius);
-        ((along / radius).asin() + self.data.bias_degrees.to_radians().abs()).tan()
+        let turn = (along / radius).asin() + self.data.bias_degrees.to_radians().abs();
+        // A row long enough to reach a quarter of the circle turns its outer cards past a right
+        // angle, where the tangent turns negative and would let the row close up as if it had
+        // no slant at all.
+        turn.min(MOST_TURN).tan()
     }
 
     /// How far a row of `count` cards `spacing` apart stands above the row in front of it, so

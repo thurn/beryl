@@ -43,6 +43,9 @@ pub struct Camera {
     pub window: Window,
     /// The distance from the eye to the target, in millimetres.
     pub distance: f32,
+    /// The part of the window the required rectangle is fitted inside, in logical points: the
+    /// safe area, or on the phone layout the battlefield's part of it (`phone::battlefield`).
+    pub area: Rect,
     pub eye: Vec3,
     pub view: Mat4,
     pub view_projection: Mat4,
@@ -55,9 +58,27 @@ impl Camera {
     /// inside `window`'s safe area.
     #[must_use]
     pub fn fit(data: CameraData, window: Window) -> Self {
+        let (size, inset) = (window.size, window.safe_area);
+        let area = Rect {
+            x: inset.left,
+            y: inset.top,
+            width: size.width - inset.left - inset.right,
+            height: size.height - inset.top - inset.bottom,
+        };
+        Self::fit_inside(data, window, area)
+    }
+
+    /// The camera for `data`, moved along its line of sight until the required rectangle fits
+    /// inside `area`, a part of `window` in logical points from its top left corner. The target
+    /// stays at the window's middle, so the rectangle is not centred in an area that is off the
+    /// window's middle: the phone layout's area is, and its target is chosen so that the fitted
+    /// rectangle fills that area at 393 by 759.
+    #[must_use]
+    pub fn fit_inside(data: CameraData, window: Window, area: Rect) -> Self {
         let mut camera = Self {
             data,
             window,
+            area,
             distance: FARTHEST,
             eye: Vec3::ZERO,
             view: Mat4::IDENTITY,
@@ -79,26 +100,29 @@ impl Camera {
         camera
     }
 
-    /// Whether every corner of the required rectangle lies inside the safe area.
+    /// Whether every corner of the required rectangle lies inside the area it is fitted in.
     #[must_use]
     pub fn required_fits(&self) -> bool {
+        let area = self.area;
+        self.required_corners().into_iter().all(|p| {
+            p.x >= area.x
+                && p.x <= area.x + area.width
+                && p.y >= area.y
+                && p.y <= area.y + area.height
+        })
+    }
+
+    /// The corners of the required rectangle on the window, in logical points.
+    #[must_use]
+    pub fn required_corners(&self) -> [Vec2; 4] {
         let [low, high] = self.data.required;
-        let size = self.window.size;
-        let inset = self.window.safe_area;
         [
             low,
             Vec2::new(high.x, low.y),
             high,
             Vec2::new(low.x, high.y),
         ]
-        .into_iter()
-        .all(|corner| {
-            let p = self.to_screen(corner.extend(0.0));
-            p.x >= inset.left
-                && p.x <= size.width - inset.right
-                && p.y >= inset.top
-                && p.y <= size.height - inset.bottom
-        })
+        .map(|corner| self.to_screen(corner.extend(0.0)))
     }
 
     fn set_distance(&mut self, distance: f32) {

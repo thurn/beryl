@@ -121,14 +121,16 @@ project, and selects the main lanes.
 
 - `data/beryl3d/space.json`: the table's spatial values, such as `verbs`,
   `catch_up`, `frame_rate`, `card`, `layout.desktop` (the desktop layout's
-  camera, rows and piles), `hand`, `opponent_hand` and `stack` (placed relative
-  to the camera) and `shadow` (contact shadows). Its keys under `verbs` name
-  verbs or cases of `data/ui-conventions.json` (`data-names`). `beryl_scene`'s
-  build script reads the whole file by one rule, with no per-key code: an object
-  becomes a `pub mod`, a number an `f32` constant, an array of two or three
-  numbers a `glam::Vec2` or `Vec3`, an array of those an array of vectors, and a
-  number whose dotted path is listed in the top-level `counts` array a `usize`.
-  The constants are in `data::space`, so `verbs.fly.arc` is
+  camera, rows and piles), `layout.phone` (the phone layout's camera, rows,
+  bands and the sizes `table::phone::layout` converts for each window), `hand`,
+  `opponent_hand` and `stack` (placed relative to the camera) and `shadow`
+  (contact shadows). Its keys under `verbs` name verbs or cases of
+  `data/ui-conventions.json` (`data-names`). `beryl_scene`'s build script reads
+  the whole file by one rule, with no per-key code: an object becomes a
+  `pub mod`, a number an `f32` constant, an array of two or three numbers a
+  `glam::Vec2` or `Vec3`, an array of those an array of vectors, and a number
+  whose dotted path is listed in the top-level `counts` array a `usize`. The
+  constants are in `data::space`, so `verbs.fly.arc` is
   `data::space::verbs::fly::ARC`. A spatial value is added by editing the file
   alone; `table::DESKTOP` is built from the constants.
 
