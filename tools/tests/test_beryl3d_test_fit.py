@@ -1,23 +1,31 @@
 """The fast check's Beryl 3D `cargo-test` step runs the workspace tests that fit the time left
 (beryl3d/test_fit.py)."""
 
+import json
 import subprocess
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from beryl_tools import runlog, rust_fit, tokens
+from beryl_tools import runlog, runstore, rust_fit, tokens
 from beryl_tools.beryl3d import test_fit
 from beryl_tools.selection import Record
 
 
 class Known:
-    def __init__(self, records: dict[str, Record]) -> None:
+    def __init__(
+        self, records: dict[str, Record], failed: set[str] | None = None
+    ) -> None:
         self.records = records
+        self.failed: set[str] = failed or set()
 
     def get(self) -> dict[str, Record]:
         return self.records
+
+    def failures(self) -> set[str]:
+        return self.failed
 
 
 JUNIT = """<testsuites><testsuite>
@@ -76,6 +84,76 @@ def test_only_the_tests_that_fit_run_and_the_rest_go_to_the_sweep(
     assert ("b3d-test:beryl_scene::pose::slow", "skip", 0.0) in logged
     assert ("b3d-test:beryl_scene::pose::cheap", "pass", 1.0) in logged
     assert "1 tests deferred to the Beryl 3D sweep" in capsys.readouterr().out
+
+    # Once the slow test has failed on this branch, the retry runs it instead of cutting it.
+    ran.clear()
+    logged.clear()
+    known.failed = {"b3d-test:beryl_scene::pose::slow"}
+    assert test_fit.run(known) == 0  # pyre-ignore[6]: a stand-in for test_fit.Known
+    [command] = ran
+    assert "test(=pose::slow)" in command[command.index("-E") + 1]
+    assert ("b3d-test:beryl_scene::pose::slow", "skip", 0.0) not in logged
+    out = capsys.readouterr().out
+    assert "1 tests that failed in the last 3 h run first" in out
+
+
+def test_a_test_that_failed_recently_runs_however_little_time_is_left() -> None:
+    known = {
+        "b3d-test:a::cheap": Record(0, 0, 10, 2.0),
+        "b3d-test:a::slow": Record(0, 0, 10, 200.0),
+        "b3d-test:a::other": Record(0, 0, 10, 4.0),
+    }
+    tests = ["a cheap", "a slow", "a other"]
+    # 20 s on 2 threads: without the failure only the two cheap tests fit.
+    assert rust_fit.plan(tests, [], known, 20.0, 2, "b3d-test")[2] == [
+        "b3d-test:a::slow"
+    ]
+    # The failed one is kept, and its 100 s leave no room for the rest.
+    chosen, _, cut = rust_fit.plan(
+        tests, [], known, 20.0, 2, "b3d-test", {"b3d-test:a::slow", "b3d-test:a::gone"}
+    )
+    assert chosen == ["a slow"]
+    assert sorted(cut) == ["b3d-test:a::cheap", "b3d-test:a::other"]
+
+
+def test_recent_failures_are_those_of_this_branch_and_of_the_sweep(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    now: datetime = datetime.now(timezone.utc)
+    hours = tmp_path / "hours"
+    hours.mkdir()
+    monkeypatch.setattr(runstore, "hours_dir", lambda: hours)
+    monkeypatch.setattr(runstore, "legacy_path", lambda: tmp_path / "none.jsonl")
+
+    def record(check: str, lane: str, place: str, **more: object) -> dict[str, object]:
+        when = more.pop("time", now)
+        assert isinstance(when, datetime)
+        return {
+            "time": when.isoformat(timespec="seconds"),
+            "script": "check",
+            "place": place,
+            "lane": lane,
+            "check": f"b3d-test:a::{check}",
+            "outcome": "fail",
+            "seconds": 1.0,
+            **more,
+        }
+
+    records = [
+        record("mine", "beryl3d-tests", "enact/mine"),
+        record("theirs", "beryl3d-tests", "enact/theirs"),
+        record("staging", "b3d-cargo-test", "/tree"),
+        record("passed", "beryl3d-tests", "enact/mine", outcome="pass"),
+        record("killed", "beryl3d-tests", "enact/mine", timeout="wall"),
+        record("old", "beryl3d-tests", "enact/mine", time=now - timedelta(hours=5)),
+    ]
+    (hours / (now.strftime(runstore.HOUR) + ".jsonl")).write_text(
+        "".join(json.dumps(r) + "\n" for r in records)
+    )
+    assert test_fit.recent_failures("enact/mine", now - test_fit.RECENT) == {
+        "b3d-test:a::mine",
+        "b3d-test:a::staging",
+    }
 
 
 def test_outside_a_fast_check_every_test_runs_and_is_logged(

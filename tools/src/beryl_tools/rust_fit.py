@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from pathlib import Path
 
 from . import paths, selection
@@ -77,17 +77,29 @@ def plan(
     left: float,
     threads: int,
     prefix: str = "rust",
+    kept: Collection[str] = (),
 ) -> tuple[list[str], list[str], list[str]]:
     """The `tests` (`<binary> <test>`) and `beside` checks (`rust:doctests`, `rust:allocations`)
     that fit `left` seconds on `threads` threads, and the run-log checks of those cut. Each
     test's check is named with `prefix` (`check_id`).
+
+    The checks in `kept` are never cut, however little time is left: their time comes off
+    `left` first and the rest fit what remains.
     """
     ids = {check_id(t, prefix): t for t in tests}
     candidates = [*ids, *beside]
-    new = [c for c in candidates if c not in known]
-    ordered = new + selection.order([c for c in candidates if c in known], known)
-    chosen, cut = selection.fit(ordered, known, left - MARGIN, max(1, threads))
-    run = set(chosen)
+    held = [c for c in candidates if c in kept]
+    rest = [c for c in candidates if c not in kept]
+    new = [c for c in rest if c not in known]
+    ordered = new + selection.order([c for c in rest if c in known], known)
+    workers = max(1, threads)
+    spent = sum(
+        known[c].seconds if c in known else selection.DEFAULT_SECONDS for c in held
+    )
+    chosen, cut = selection.fit(
+        ordered, known, left - MARGIN - spent / workers, workers
+    )
+    run = {*held, *chosen}
     return (
         [t for c, t in ids.items() if c in run],
         [c for c in beside if c in run],

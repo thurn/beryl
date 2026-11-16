@@ -150,9 +150,10 @@ def label(path: Path, chosen: Mapping[str, str], cut: Iterable[str]) -> None:
 
 def place(script: str) -> str:
     """Where a run's checks ran, so a pass settles only failures from the same place
-    (verdicts.settle): the branch, or for slow CI or the browser sweep on a detached staging tip,
-    `staging`, else the
-    working tree's path."""
+    (verdicts.settle) and Beryl 3D's test step keeps the tests that failed there
+    (beryl3d/test_fit.py); each record holds it as `place`. It is the branch, or `staging` for
+    slow CI or the browser sweep on a detached staging tip, else the working tree's path.
+    """
     branch = git("symbolic-ref", "--short", "-q", "HEAD")
     if branch:
         return branch
@@ -256,6 +257,7 @@ class Run:
                 "commit": self.commit,
                 "tree": self.tree,
                 "script": self.script,
+                "place": self.place,
                 "lane": lane,
                 "check": c["check"],
                 "outcome": c["outcome"],
