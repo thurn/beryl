@@ -41,7 +41,8 @@
 
 use beryl_protocol::protocol::{Side, Why, ZoneName};
 use beryl_protocol::script::Act;
-use glam::{Quat, Vec2, Vec3};
+use glam::{Quat, Vec3};
+use std::f32::consts::PI;
 
 use super::{Interval, StepIn, StepOut};
 use crate::data::space;
@@ -524,34 +525,34 @@ fn kept_in_window(segment: Segment, camera: &Camera) -> Segment {
         ..segment
     };
     let (size, insets) = (camera.window.size, camera.window.safe_area);
+    // The moments looked at, each as the card's centre with no bow and the share of the bow it
+    // has there, found once, since a push changes only the bow's offset. They are spread evenly
+    // over the easing curve's own parameter rather than over time, which takes no search for
+    // the progress at a given time (`Curve::ease`), a cost paid for every flight that starts.
+    // Each centre is projected alone, rather than the card's four corners. A lifted card is
+    // drawn nearer the eye along its line of sight, so lifting moves none of it on the window
+    // and the centre is measured where the straight way has it.
+    let way = segment.to.position - segment.from.position;
+    let mut moments = [(Vec3::ZERO, 0.0_f32); LOOKS as usize];
+    let mut count = 0;
+    for look in 1..LOOKS {
+        let [elapsed, eased] = segment.curve.point(f32::from(look) / f32::from(LOOKS));
+        let arch = bow.arch(eased);
+        if arch >= PUSHED_FROM {
+            let rise = Vec3::Z * segment.arc * (PI * elapsed).sin();
+            moments[count] = (segment.from.position + way * eased + rise, arch);
+            count += 1;
+        }
+    }
     let mut pushed = false;
     // The window's projection is not linear in depth, so a push is measured again after it is
     // made, and made again for what is still short.
     for _ in 0..3 {
-        let bowed = with(bow);
         let (mut down, mut left) = (0.0_f32, 0.0_f32);
-        for look in 1..LOOKS {
-            let elapsed = f32::from(look) / f32::from(LOOKS);
-            let arch = bow.arch(segment.curve.ease(elapsed));
-            if arch < PUSHED_FROM {
-                continue;
-            }
-            #[expect(
-                clippy::cast_precision_loss,
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "a step lasts seconds, far below f64's exact range"
-            )]
-            let t = segment.start + (segment.duration as f64 * f64::from(elapsed)) as u64;
-            let pose = bowed.pose_at(t);
-            let (corners, _) = camera.card_box(&pose);
-            let (low, high) = corners
-                .iter()
-                .fold((Vec2::INFINITY, Vec2::NEG_INFINITY), |(low, high), c| {
-                    (low.min(*c), high.max(*c))
-                });
-            let centre = (low + high) / 2.0;
-            let points = camera.points_per_millimetre(pose.position);
+        for &(straight, arch) in &moments[..count] {
+            let position = straight + bow.offset * arch;
+            let centre = camera.to_screen(position);
+            let points = camera.to_screen(position + Vec3::X).x - centre.x;
             let short_down = insets.top - centre.y;
             let short_left = centre.x - (size.width - insets.right);
             down = down.max(short_down / points / arch);

@@ -56,6 +56,16 @@ impl Curve {
         }
     }
 
+    /// The point of the curve at its Bezier parameter `s`, from 0 to 1: how much of the time
+    /// has passed there and how far along the motion is. Unlike `ease` it searches for no
+    /// parameter, so it costs a few multiplications, for code that needs moments spread over
+    /// the motion rather than the motion at chosen times.
+    #[must_use]
+    pub fn point(self, s: f32) -> [f32; 2] {
+        let bezier = |a: f32, b: f32| s * (3.0 * (1.0 - s) * ((1.0 - s) * a + s * b) + s * s);
+        [bezier(self.x1, self.x2), bezier(self.y1, self.y2)]
+    }
+
     /// How far along the motion is, from 0 to 1, when `x` of its time has passed. It finds
     /// the Bezier parameter whose x is `x` by Newton's method kept inside a bisection
     /// bracket, as `motion`'s `cubicBezier` does, and returns that parameter's y.
