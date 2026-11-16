@@ -1,0 +1,232 @@
+/* Header, page, stats, sections and the two-column layout. */
+
+/* Header and breadcrumbs */
+
+.c-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: saturate(1.6) blur(14px);
+  -webkit-backdrop-filter: saturate(1.6) blur(14px);
+  view-transition-name: c-header;
+}
+
+.c-crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-4) max(var(--space-4), env(safe-area-inset-left));
+  font-size: var(--text-sm);
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.c-brand {
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.c-crumb {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-crumb::before {
+  content: "/";
+  margin-right: var(--space-2);
+  color: var(--ink-3);
+  opacity: 0.6;
+}
+
+a.c-crumb:hover,
+.c-brand:hover {
+  color: var(--accent);
+}
+
+.c-crumb[aria-current] {
+  color: var(--ink-2);
+}
+
+/* Page */
+
+.c-main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4) var(--space-9);
+  view-transition-name: c-main;
+}
+
+@media (min-width: 720px) {
+  .c-main {
+    padding: var(--space-7) var(--space-6) var(--space-9);
+  }
+  .c-crumbs {
+    padding-inline: var(--space-6);
+  }
+}
+
+.c-titleblock {
+  margin-bottom: var(--space-7);
+  max-width: 820px;
+}
+
+.c-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--ink-3);
+}
+
+.c-title {
+  margin: 0;
+  font: 650 var(--text-2xl) / 1.15 var(--font-display);
+  letter-spacing: -0.022em;
+  text-wrap: balance;
+}
+
+.c-subtitle {
+  margin: var(--space-3) 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-lg);
+}
+
+@media (max-width: 560px) {
+  .c-title {
+    font-size: 26px;
+  }
+}
+
+.c-mono {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  letter-spacing: -0.01em;
+}
+
+.c-muted {
+  color: var(--ink-3);
+}
+
+/* Stats */
+
+.c-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  margin-top: var(--space-5);
+}
+
+.c-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-stat-value {
+  font: 600 var(--text-xl) / 1.2 var(--font-display);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.c-stat-label {
+  font-size: var(--text-sm);
+  color: var(--ink-3);
+}
+
+/* Sections */
+
+.c-section {
+  margin-top: var(--space-8);
+}
+
+.c-section:first-child {
+  margin-top: 0;
+}
+
+.c-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: 0.01em;
+}
+
+.c-count {
+  font-weight: 500;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Two-column layout with a property rail */
+
+.c-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-7);
+}
+
+/* On a narrow screen the properties come first, under the title, in a compact grid. */
+.c-layout-aside {
+  order: -1;
+}
+
+@media (min-width: 960px) {
+  .c-layout {
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: var(--space-8);
+  }
+  .c-layout-aside {
+    order: 2;
+    position: sticky;
+    top: 72px;
+    align-self: start;
+  }
+}
+
+.c-layout-main {
+  min-width: 0;
+}
+
+.c-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-5) var(--space-5);
+  margin: 0;
+}
+
+@media (min-width: 960px) {
+  .c-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+.c-meta-item dt {
+  margin-bottom: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 550;
+  color: var(--ink-3);
+}
+
+.c-meta-item dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.c-meta-item dd a:hover {
+  color: var(--accent);
+}

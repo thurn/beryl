@@ -83,6 +83,9 @@ write:
   commands.
 - `efficiency/`: the efficiency dashboard, `just efficiency`, a standalone
   Python project with its own check lane (`efficiency/AGENTS.md`).
+- `status/`: the bead status site, `just status`, and the cirrus design system
+  it is built from, another standalone Python project with its own lane
+  (`status/AGENTS.md`).
 - Outside the repository:
   - `~/Library/Caches/beryl` (`$BERYL_CACHE`) holds the shared `rust/target` and
     `ui/node_modules` that worktrees copy from, the oracle builds and their last

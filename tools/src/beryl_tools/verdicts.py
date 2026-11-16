@@ -83,6 +83,7 @@ CHECK_SIDE: dict[str, Side] = {
     "oracle": Side(("data/oracle-divergences.json",), rust="scenarios"),
     "python": Side(("tools/tests/*",)),
     "efficiency": Side(("efficiency/tests/*",)),
+    "status": Side(("status/tests/*",)),
     "names": Side(("data/card-names-allowlist.json",)),
     "repo": Side(("data/file-length-allowlist.json",)),
 }

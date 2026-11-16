@@ -60,7 +60,7 @@ def test_a_card_file_runs_the_lanes_that_build_and_play_it() -> None:
         "oracle",
     }
     # The rollout benchmark does not depend on the changed package.
-    assert set(chosen.left) == {"python", "ui", "counts", "efficiency"}
+    assert set(chosen.left) == {"python", "ui", "counts", "efficiency", "status"}
     assert chosen.why["rust"] == f"{CARD} changed"
 
 

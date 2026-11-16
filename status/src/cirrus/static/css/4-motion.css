@@ -1,0 +1,175 @@
+/* Popovers, loading states and page transitions. */
+
+/* Tooltips and hovercards (built by cirrus.js) */
+
+.c-tip-target,
+.c-time,
+[data-tip] {
+  cursor: default;
+}
+
+.c-popover {
+  position: fixed;
+  z-index: 100;
+  max-width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+  transform-origin: top left;
+  transition:
+    opacity var(--dur-1) var(--ease-out),
+    transform var(--dur-2) var(--ease-out);
+}
+
+.c-popover.c-shown {
+  opacity: 1;
+  transform: none;
+}
+
+.c-popover.c-interactive {
+  pointer-events: auto;
+}
+
+.c-tooltip {
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.c-hovercard {
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  font-size: var(--text-sm);
+}
+
+.c-hovercard-title {
+  margin: var(--space-2) 0 var(--space-3);
+  font-weight: 600;
+  font-size: var(--text-md);
+  line-height: 1.35;
+}
+
+.c-hovercard-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  color: var(--ink-3);
+}
+
+/* Loading: skeletons, the navigation bar and fragment reveals */
+
+.c-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+
+.c-skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--sunk) 0%,
+    color-mix(in srgb, var(--sunk) 40%, var(--bg)) 50%,
+    var(--sunk) 100%
+  );
+  background-size: 200% 100%;
+  animation: c-shimmer 1.4s var(--ease-in-out) infinite;
+}
+
+.c-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  height: 2px;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(0);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.c-progress-bar.c-loading {
+  opacity: 1;
+  transform: scaleX(0.7);
+  transition:
+    transform 2.5s cubic-bezier(0.1, 0.6, 0.2, 1),
+    opacity var(--dur-1) linear;
+}
+
+.c-progress-bar.c-done {
+  opacity: 0;
+  transform: scaleX(1);
+  transition:
+    transform var(--dur-2) var(--ease-out),
+    opacity var(--dur-3) var(--ease-out) var(--dur-1);
+}
+
+.c-reveal {
+  animation: c-reveal var(--dur-3) var(--ease-out);
+}
+
+@keyframes c-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes c-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* Page transitions: the header stays, the content crossfades with a small rise. */
+
+::view-transition-old(c-main) {
+  animation: c-fade-out 120ms var(--ease-out) both;
+}
+
+::view-transition-new(c-main) {
+  animation: c-fade-in 220ms var(--ease-out) 70ms both;
+}
+
+@keyframes c-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes c-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after,
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

@@ -56,13 +56,13 @@ from pathlib import Path
 from . import (
     bench,
     checks,
-    efficiency,
     mobile,
     oracle_selection,
     paths,
     runlog,
     script_checks,
     speed,
+    standalone,
     sweep,
     system,
     verdicts,
@@ -84,7 +84,7 @@ QUIET: re.Pattern[str] = re.compile(
 # The paths the rules of `lane_reason` place; a change to any other runs every lane it reaches
 # in full.
 PLACED: re.Pattern[str] = re.compile(
-    r"^(rust|ui|tools|data|efficiency)/|^justfile$|^\.enact\.toml$|^rust-toolchain\.toml$"
+    r"^(rust|ui|tools|data|efficiency|status)/|^justfile$|^\.enact\.toml$|^rust-toolchain\.toml$"
 )
 # The data files that Rust crates embed or their tests and the card-text step read, and the
 # toolchain's pin: these run the rust lane on the whole workspace.
@@ -124,6 +124,7 @@ LANES: tuple[str, ...] = (
     "oracle",
     "counts",
     "efficiency",
+    "status",
 )
 # The lanes the browser sweep runs in full every few hours (sweep.py) instead of slow CI, which
 # `by ci` still runs when named.
@@ -402,7 +403,8 @@ def lanes_for(packages: list[str] | None) -> dict[str, Callable[[], checks.Lane]
         "oracle": checks.oracle_lane,
         "counts": bench.lane,
         "mobile": mobile.lane,
-        "efficiency": efficiency.lane,
+        "efficiency": standalone.EFFICIENCY.lane,
+        "status": standalone.STATUS.lane,
     }
     return {name: without_fast_only(make) for name, make in made.items()}
 
@@ -483,11 +485,12 @@ def choose(
             chosen.whole.add(lane)
         else:
             # Slow CI has no lane of Beryl 3D's, and its paths reach no other lane; the
-            # efficiency dashboard's paths reach only its own lane.
+            # standalone projects' paths reach only their own lanes.
             _, found = beryl3d_paths.split(changed or [])
-            dashboard, found = efficiency.split(found)
-            if lane == efficiency.NAME:
-                reason = f"{dashboard[0]} changed" if dashboard else ""
+            projects, found = standalone.split(found)
+            if lane in standalone.NAMES:
+                own = projects.get(lane)
+                reason = f"{own[0]} changed" if own else ""
             else:
                 reason = lane_reason(lane, found, packages(found), script_inputs)
         if reason:

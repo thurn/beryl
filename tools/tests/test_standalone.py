@@ -1,11 +1,12 @@
-"""The efficiency dashboard's paths select its own lane and `repo`, and no other path selects
-its lane (docs/efficiency-dashboard.md, 'Isolation')."""
+"""A standalone project's paths (the efficiency dashboard's and the status site's) select its
+own lane and `repo`, and no other path selects its lane (docs/efficiency-dashboard.md,
+'Isolation')."""
 
 from __future__ import annotations
 
 import pytest
 
-from beryl_tools import checks, efficiency, oracles, paths, rust_tests, slow_ci
+from beryl_tools import checks, oracles, paths, rust_tests, slow_ci, standalone
 from beryl_tools.slow_ci import LANES
 
 SCRIPT_INPUTS = r"^rust/(Cargo\.(toml|lock)|crates/beryl_cli/|cards/)"
@@ -30,10 +31,16 @@ DASHBOARD: list[str] = [
     "efficiency/pyproject.toml",
     "data/efficiency-prices.json",
 ]
+STATUS: list[str] = [
+    "status/src/beryl_status/cli.py",
+    "status/src/cirrus/static/cirrus.css",
+    "status/tests/test_build.py",
+]
 ELSEWHERE: list[list[str]] = [
     ["rust/crates/beryl_session/src/lib.rs"],
     ["tools/src/beryl_tools/checks.py"],
-    ["tools/src/beryl_tools/efficiency.py"],
+    ["tools/src/beryl_tools/standalone.py"],
+    ["data/status.json"],
     ["ui/src/stage/beat.ts"],
     ["data/ui-conventions.json"],
     ["data/efficiency.txt"],
@@ -96,14 +103,28 @@ def test_a_dashboard_path_changes_no_other_lane(
 
 
 def test_every_lane_includes_it_and_slow_ci_can_make_it() -> None:
-    assert "efficiency" in LANES
-    lane = slow_ci.lanes_for(None)["efficiency"]()
-    assert [s.name for s in lane.steps] == ["black", "pyre", "pytest"]
-    assert all(s.cwd == efficiency.PROJECT for s in lane.steps)
-    assert "efficiency" in {lane.name for lane in checks.fast_lanes(None)}
+    for project in standalone.PROJECTS:
+        assert project.name in LANES
+        lane = slow_ci.lanes_for(None)[project.name]()
+        assert [s.name for s in lane.steps] == ["black", "pyre", "pytest"]
+        assert all(s.cwd == project.folder for s in lane.steps)
+        assert project.name in {lane.name for lane in checks.fast_lanes(None)}
 
 
 def test_split() -> None:
-    own, rest = efficiency.split([*DASHBOARD, "data/efficiency.txt", "efficiencyx/a"])
-    assert own == DASHBOARD
-    assert rest == ["data/efficiency.txt", "efficiencyx/a"]
+    own, rest = standalone.split(
+        [*DASHBOARD, *STATUS, "data/efficiency.txt", "efficiencyx/a", "statusx/a"]
+    )
+    assert own == {"efficiency": DASHBOARD, "status": STATUS}
+    assert rest == ["data/efficiency.txt", "efficiencyx/a", "statusx/a"]
+
+
+def test_status_paths_run_only_its_lane_and_repo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert fast(monkeypatch, STATUS) == {"repo", "status"}
+    plan = slow(STATUS)
+    assert set(plan.why) == {"repo", "names", "status"}
+    for changed in ELSEWHERE:
+        assert "status" not in fast(monkeypatch, changed), changed
+        assert "status" not in slow(changed).why, changed

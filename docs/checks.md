@@ -91,11 +91,12 @@ The lanes:
   `beryl_cli` if the cloned `rust/target` is behind) leaves too little of it for
   the capture, the capture is skipped and each check logged as cut. It also runs
   nightly.
-- `efficiency`: black, pyre and pytest on `efficiency/`, the efficiency
-  dashboard's own project. Only its paths, `efficiency/` and
-  `data/efficiency-*.json`, select it, and they select no other lane but `repo`
-  in the fast check (`tools/src/beryl_tools/efficiency.py`). Slow CI runs it
-  too, when one of those paths changed.
+- `efficiency` and `status`: black, pyre and pytest on the standalone projects
+  `efficiency/` (the efficiency dashboard) and `status/` (the bead status site).
+  Only a project's own paths select its lane (`efficiency/` and
+  `data/efficiency-*.json`; `status/`), and they select no other lane but `repo`
+  in the fast check (`tools/src/beryl_tools/standalone.py`). Slow CI runs each
+  one too, when one of its paths changed.
 
 For a change to `ui/` or `rust/`, it also runs as many of the `ui-test` and
 `shots` browser checks as fit in the time left, choosing those the change could
