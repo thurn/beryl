@@ -198,8 +198,8 @@ pub enum Target {
 impl Target {
     /// The kind of thing the target is, which says which commands apply to it: a card on the
     /// battlefield is a permanent of the viewer's or of their opponent's by who controls it, a
-    /// card in the viewer's hand a hand card, one on the stack a stack entry, and one anywhere
-    /// else a pile card.
+    /// card in the viewer's hand a hand card, one on the stack a stack entry, one in the library
+    /// (which only an open viewer shows) a viewer card, and one anywhere else a pile card.
     #[must_use]
     pub fn applies_to(self, view: &PlayerView) -> AppliesTo {
         match self {
@@ -210,6 +210,10 @@ impl Target {
                     Some((ZoneName::Battlefield, Side::Opponent)) => AppliesTo::TheirPermanent,
                     Some((ZoneName::Hand, _)) => AppliesTo::HandCard,
                     Some((ZoneName::Stack, _)) => AppliesTo::StackEntry,
+                    // A card in an open viewer of the library or of revealed cards is the web's
+                    // `viewer_card` (`kindOf` in `ui/src/table/menuRows.ts`), which offers
+                    // Reveal; one in a graveyard or exile viewer is a pile card.
+                    Some((ZoneName::Library, _)) => AppliesTo::ViewerCard,
                     _ => AppliesTo::PileCard,
                 }
             }

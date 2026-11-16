@@ -160,7 +160,7 @@ pub fn rows(target: Target, view: &PlayerView, context: &Context, settings: bool
     for (at, each) in std::iter::once(target).chain(others).enumerate() {
         for entry in commands::commands_for(each.applies_to(view), view, context) {
             let command = entry.command;
-            let act = menus::act(command, each, view, context);
+            let act = menus::act(command, each, view, context, false);
             if matches!(act, Act::Palette | Act::Nothing)
                 || (rows.iter()).any(|row| row.command == entry.index)
             {

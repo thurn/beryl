@@ -40,7 +40,13 @@ pub enum Act {
 /// `ui/src/table/commandActions.ts`). A card target among the selected cards (`context.selected`)
 /// stands for all of them (`commands::actions_for`).
 #[must_use]
-pub fn act(command: &Command, target: Target, view: &PlayerView, context: &Context) -> Act {
+pub fn act(
+    command: &Command,
+    target: Target,
+    view: &PlayerView,
+    context: &Context,
+    shift: bool,
+) -> Act {
     match command.client {
         Some("leave_table") => return Act::Leave,
         Some("open_command_list") => return Act::Palette,
@@ -57,6 +63,7 @@ pub fn act(command: &Command, target: Target, view: &PlayerView, context: &Conte
         let mut values = Values::new();
         values.insert("card", last.card.clone());
         values.insert("text", last.note.clone().into());
+        values.insert("face_down", shift.into());
         let actions = commands::actions_with(command, target, view, &values);
         return if actions.is_empty() {
             Act::Nothing
@@ -78,7 +85,9 @@ pub fn act(command: &Command, target: Target, view: &PlayerView, context: &Conte
         }
         Asks::None => {}
     }
-    let actions = commands::actions_for(command, target, context.selected, view, &Values::new());
+    let mut values = Values::new();
+    values.insert("face_down", shift.into());
+    let actions = commands::actions_for(command, target, context.selected, view, &values);
     if actions.is_empty() {
         Act::Nothing
     } else {
@@ -142,7 +151,7 @@ pub fn open(target: Target, view: &PlayerView, at: Vec2, context: &Context) -> O
             sections.push((heading, Vec::new()));
         }
         let section = sections.len() - 1;
-        let act = act(entry.command, target, view, context);
+        let act = act(entry.command, target, view, context, false);
         let mut row = MenuRow::new(&label(entry.command, target, view));
         row.key = context.key(entry.command);
         row.enabled = act != Act::Nothing;

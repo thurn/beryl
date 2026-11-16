@@ -242,6 +242,23 @@ fn a_refused_change_says_so_and_leave_goes_back_to_the_start_screen() {
 }
 
 #[test]
+fn a_solo_table_that_does_not_open_says_so_on_the_start_screen() {
+    let mut client = client_on_start();
+    press(&mut client, Role::Button, "Solo table");
+    client.handle(Input::Reply(Reply::TableLobby(Err(TableRefused {
+        refused: TableRefusalReason::Invalid,
+        blocked_by: None,
+    }))));
+    let shown = frame(&mut client);
+    assert!(has(&shown, Role::Region, "start"));
+    assert!(reads(&shown, "Could not open the table."));
+
+    // Trying again clears the message while the lobby is awaited.
+    press(&mut client, Role::Button, "Solo table");
+    assert!(!reads(&frame(&mut client), "Could not open the table."));
+}
+
+#[test]
 fn a_pasted_decklist_is_saved_and_loaded_under_its_name() {
     let mut client = client_on_start();
     press(&mut client, Role::Button, "Solo table");

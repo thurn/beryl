@@ -337,7 +337,9 @@ impl Client {
                 self.show_screen();
             }
             Input::Lobby(update) => self.take_lobby(*update),
-            Input::Reply(Reply::TableLobby(Err(refused))) => self.lobby_refused(&refused),
+            Input::Reply(Reply::TableLobby(Err(refused)) | Reply::TableSolo(Err(refused))) => {
+                self.lobby_refused(&refused);
+            }
             Input::Reply(Reply::DeckList(saved)) => self.take_saved_decks(saved),
             Input::Reply(Reply::DeckImport(imported)) => self.take_imported_deck(imported),
             Input::Settings(settings) => {
@@ -622,7 +624,7 @@ impl Client {
                 }
                 self.close_table_menu();
             }
-            Press::Command(index) => self.table_key(index),
+            Press::Command(index, shift) => self.table_key(index, shift),
             Press::Lobby(press) => self.press_lobby(press),
             Press::Table(press) => self.table_press(press),
         }

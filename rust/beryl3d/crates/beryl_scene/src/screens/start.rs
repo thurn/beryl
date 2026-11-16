@@ -57,6 +57,14 @@ pub(super) const TITLE: TypeStyle = TypeStyle {
 };
 
 /// `.start-subtitle`: 19-point serif.
+/// Body text: 15-point sans, for what the screen says when the solo table did not open.
+const BODY: TypeStyle = TypeStyle {
+    font: Font::OpenSans,
+    weight: 400,
+    size: 15.0,
+    line_height: 1.35,
+};
+
 const SUBTITLE: TypeStyle = TypeStyle {
     font: Font::CrimsonPro,
     weight: 400,
@@ -108,6 +116,8 @@ pub struct StartForm {
     /// Whether a new game was asked for with one in progress, so that the next press of the
     /// start button concedes that game and starts the new one.
     pub confirming: bool,
+    /// Whether the last 'Solo table' press failed to open a table, which the screen says.
+    pub solo_failed: bool,
 }
 
 impl StartForm {
@@ -214,6 +224,11 @@ pub fn start(input: &ScreenIn) -> Element {
         .child(fair_box(form.fair))
         .child(buttons)
         .child(solo)
+        .children(form.solo_failed.then(|| {
+            text("Could not open the table.")
+                .style(BODY)
+                .color(color::EMBER)
+        }))
         .child(export)
         .child(export_tip);
     let mut panel = panel;

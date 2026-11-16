@@ -585,6 +585,55 @@ fn the_token_search_lists_the_decks_tokens_before_searching() {
 }
 
 #[test]
+fn shift_with_a_deck_token_key_makes_the_token_face_down() {
+    let mut view = table_view();
+    view.table.as_mut().unwrap().deck_tokens = vec![CardTokenLink {
+        name: "Spirit".to_owned(),
+        scryfall_id: "spirit-1".to_owned(),
+    }];
+    let (mut client, _) = client_at_table(&view);
+    let option = |shift| Modifiers {
+        alt: true,
+        shift,
+        ..Modifiers::default()
+    };
+    let token = |face_down: bool| {
+        let mut token = serde_json::json!({
+            "card": { "token": { "name": "Spirit", "scryfall_id": "spirit-1" } },
+            "count": 1,
+            "attached_to": null,
+            "note": null,
+        });
+        if face_down {
+            token["face_down"] = true.into();
+        }
+        action(serde_json::json!({ "token": token }))
+    };
+    client.handle(key(KeyCode::Digit1, option(false)));
+    assert_eq!(acts(&mut client), vec![token(false)]);
+    client.handle(key(KeyCode::Digit1, option(true)));
+    assert_eq!(acts(&mut client), vec![token(true)]);
+}
+
+#[test]
+fn a_card_in_the_library_viewer_is_a_viewer_card() {
+    let mut view = table_view();
+    let slot = view.objects[0].slot;
+    view.objects[0].zone = ZoneName::Library;
+    assert_eq!(Target::Card(slot).applies_to(&view), AppliesTo::ViewerCard);
+    let bindings = Bindings::new();
+    let context = Context::new(true, &bindings);
+    let ids = |kind| {
+        commands_for(kind, &view, &context)
+            .iter()
+            .map(|entry| entry.command.id)
+            .collect::<Vec<_>>()
+    };
+    assert!(ids(AppliesTo::ViewerCard).contains(&"hand_card.reveal"));
+    assert!(!ids(AppliesTo::PileCard).contains(&"hand_card.reveal"));
+}
+
+#[test]
 fn undo_on_a_log_line_sends_its_undo() {
     let mut view = table_view();
     let line = |n: u32, text: &str, undoable: bool| LogLine {

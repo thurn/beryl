@@ -244,8 +244,9 @@ impl Client {
     /// the mouse is over. A command that does not apply there acts on the table or on the
     /// viewer's own library, hand, life total, graveyard or exile, the first it applies to, so
     /// that Cmd+D over the opponent's life total draws the viewer a card, not the opponent.
-    /// The viewer's player and sideboard have no `Target`; the table stands for them.
-    pub(super) fn table_key(&mut self, index: u16) {
+    /// The viewer's player and sideboard have no `Target`; the table stands for them. With
+    /// `shift`, a token command makes its token face down.
+    pub(super) fn table_key(&mut self, index: u16, shift: bool) {
         use beryl_protocol::protocol::{Side, ZoneName};
         let Some(command) = commands::COMMANDS.get(usize::from(index)) else {
             return;
@@ -277,8 +278,8 @@ impl Client {
             .chain(fallbacks)
             .find(|target| command.applies(target.applies_to(view)))
             .unwrap_or(Target::Table);
-        let act = menus::act(command, target, view, &self.table_context());
-        self.give(act, target, false);
+        let act = menus::act(command, target, view, &self.table_context(), shift);
+        self.give(act, target, shift);
     }
 
     /// What the client knows beyond the table's view that decides which commands it offers:

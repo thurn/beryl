@@ -25,6 +25,7 @@ impl Client {
         let loaded = lobby.own().is_some_and(|own| own.loaded);
         let change = match press {
             LobbyPress::Solo => {
+                self.start.solo_failed = false;
                 self.open_lobby();
                 LobbyChange::Solo
             }
@@ -204,9 +205,16 @@ impl Client {
         self.show_screen();
     }
 
-    /// The table refused a change of its lobby: the lobby says so, as the web's does.
+    /// The table refused a change of its lobby: the lobby says so, as the web's does. A refusal
+    /// of the 'Solo table' press, before any lobby has arrived, is a table that did not open:
+    /// the start screen says so and stays, as the web's `TableEntries` does.
     pub(super) fn lobby_refused(&mut self, _: &TableRefused) {
-        self.manual.lobby.error = Some("Could not update the lobby.");
+        if self.screen == Screen::Lobby && self.manual.lobby.view.is_none() {
+            self.start.solo_failed = true;
+            self.screen = Screen::Start;
+        } else {
+            self.manual.lobby.error = Some("Could not update the lobby.");
+        }
         self.show_screen();
     }
 }

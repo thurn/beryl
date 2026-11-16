@@ -76,8 +76,9 @@ pub enum Press {
     /// Open the viewer of a pile's cards, as a press on a pile does.
     View(Viewed),
     /// Give the manual table's command at this index of `manual::commands::COMMANDS` to what
-    /// the pointer is on, as a key of the table does.
-    Command(u16),
+    /// the pointer is on, as a key of the table does. The flag is whether Shift made the key's
+    /// token face down.
+    Command(u16, bool),
     /// Something the manual table shows over itself: its command list, ask prompt, token
     /// search, library order tray or log.
     Table(crate::manual::TablePress),

@@ -280,7 +280,7 @@ impl Client {
             // A table command's key acts once for each press, not again as it repeats. While a
             // context menu is open it does nothing, and the menu's own keys move through its
             // rows.
-            let table_key = matches!(press, Press::Command(_));
+            let table_key = matches!(press, Press::Command(..));
             let free = self.manual.menu.is_none() && !self.manual.overlay_open();
             if !table_key || (first && free) {
                 return Some(press);

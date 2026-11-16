@@ -45,7 +45,23 @@ pub fn table(input: &ScreenIn) -> Element {
             continue;
         }
         for key in input.settings.bindings.keys(command) {
-            screen = screen.shortcut(key, Press::Command(index));
+            screen = screen.shortcut(key, Press::Command(index, false));
+        }
+    }
+    // With Shift held and no binding of its own, a token command's key makes its token face
+    // down (`listenTableKeys` in `ui/src/table/keyboard.ts`). The unshifted bindings come
+    // first, so a command bound to the shifted chord keeps it.
+    for (index, command) in COMMANDS.iter().enumerate() {
+        let Ok(index) = u16::try_from(index) else {
+            break;
+        };
+        if command.scope != Scope::Table || !command.id.starts_with("token.") {
+            continue;
+        }
+        for key in input.settings.bindings.keys(command) {
+            if !key.split('+').any(|part| part == "Shift") {
+                screen = screen.shortcut(&format!("Shift+{key}"), Press::Command(index, true));
+            }
         }
     }
     let state = input.table;

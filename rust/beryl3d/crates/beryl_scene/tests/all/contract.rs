@@ -207,6 +207,7 @@ mod milestone_three {
                 agent: None,
                 fair: false,
                 confirming: false,
+                solo_failed: false,
             },
             gallery: screens::GalleryState::default(),
             recordings: &[],

@@ -239,7 +239,7 @@ impl Client {
             return;
         };
         let command = &COMMANDS[usize::from(row.command)];
-        let act = menus::act(command, row.target, view, &self.table_context());
+        let act = menus::act(command, row.target, view, &self.table_context(), shift);
         self.give(act, row.target, shift);
         self.show_screen();
     }
