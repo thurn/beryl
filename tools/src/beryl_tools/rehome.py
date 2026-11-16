@@ -20,6 +20,7 @@ Standard library only, like warm.py.
 
 from __future__ import annotations
 
+import json
 import os
 import struct
 from contextlib import suppress
@@ -119,4 +120,45 @@ def rehome(target: Path, checkout: Path) -> int:
                 if text is not None:
                     rewrite(output, text.encode())
                     count += 1
+    return count
+
+
+def restore_sources(checkout: Path, target: Path) -> int:
+    """Gives each file of `checkout` whose content is the one [`warm.SOURCES`] in the freshly
+    cloned `target` records, and each folder whose names are the ones it records, the
+    modification time recorded for it, so that cargo rebuilds only the crates whose files differ from the
+    build it cloned; returns how many files it set. A file whose content differs, or a folder
+    whose names differ, keeps its new time, so cargo rebuilds what reads it. A time only moves
+    back: Beryl 3D's clone (beryl3d/cli.py) restores the same rust/crates files from its own
+    record, and the earlier time is older than both builds, so neither rebuilds."""
+    from .warm import SOURCES, folders_of, listing, log, unchanged_files
+
+    try:
+        record = json.loads((target / SOURCES).read_text())
+    except (OSError, ValueError):
+        return 0
+    saved_files = record.get("files") if isinstance(record, dict) else None
+    saved_folders = record.get("folders") if isinstance(record, dict) else None
+    if not isinstance(saved_files, dict) or not isinstance(saved_folders, dict):
+        return 0
+    files = unchanged_files(checkout)
+
+    def restore(path: Path, saved: object, key: str) -> bool:
+        if not (isinstance(saved, list) and len(saved) == 2 and saved[0] == key):
+            return False
+        with suppress(OSError, TypeError, ValueError):
+            when = int(saved[1])
+            if when < path.stat().st_mtime_ns:
+                os.utime(path, ns=(when, when))
+            return True
+        return False
+
+    count = sum(
+        restore(checkout / path, saved_files.get(path), blob)
+        for path, blob in files.items()
+    )
+    for path in folders_of(files):
+        with suppress(OSError):
+            restore(checkout / path, saved_folders.get(path), listing(checkout / path))
+    log(f"gave {count} unchanged files the times of the build it cloned")
     return count
