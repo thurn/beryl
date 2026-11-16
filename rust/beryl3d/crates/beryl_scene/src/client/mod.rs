@@ -463,14 +463,17 @@ impl Client {
             seat: self.seat,
             fields: &self.fields,
             inspected: None,
-            faces: None,
+            faces: Some(self.show.faces().list()),
         };
         // Until the sheets are built, an open sheet takes the screen's place in the flat layer.
-        // Until the game screen shows anything besides the open prompt, it shows nothing while
-        // no prompt is open, so that no empty panel is drawn over the table.
+        // The game screen shows nothing while no prompt is open and the game goes on, so that no
+        // empty panel is drawn over the table (and none is built); once the game has ended it
+        // shows the result.
+        let ended =
+            view.is_some_and(|view| matches!(view.status, Status::Over { .. } | Status::Stopped));
         let shown = match self.sheet {
             Some(sheet) => Some(screens::sheet(sheet, &input)),
-            None if self.screen == Screen::Game && input.prompt.is_none() => None,
+            None if self.screen == Screen::Game && input.prompt.is_none() && !ended => None,
             None => Some(screens::screen(self.screen, &input)),
         };
         let music = screens::music(self.screen, view);

@@ -19,7 +19,9 @@ pub fn game(input: &ScreenIn) -> Element {
         .and_then(|prompt| prompts::screen(prompt, input));
     let pieces: Vec<Element> = [
         opening::opening(input),
+        game_over::scrim(input),
         game_over::game_over(input),
+        game_over::buttons(input),
         players::players(input),
         steps::steps(input),
         log::log(input),

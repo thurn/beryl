@@ -169,3 +169,4 @@ fn the_start_screen_passes_the_checks_at_1440_by_900() {
     let mut page = no_game("random");
     page.check();
 }
+||||||| parent of 2a9041053 (feat: b3d game over screen)
