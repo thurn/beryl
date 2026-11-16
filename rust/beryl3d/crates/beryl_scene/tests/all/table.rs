@@ -1,7 +1,7 @@
 //! The table at rest: the camera's fit, and where each zone's cards are placed.
 
 use beryl_protocol::protocol::{
-    CardType, ObjectId, PlayerView, RowName, Side, StackItem, ZoneName,
+    CardType, ObjectId, PlayerView, RowName, Side, StackItem, TargetRef, ZoneName,
 };
 use beryl_protocol::script::Reset;
 use beryl_scene::agent::checks::{duplicates, reachable};
@@ -113,6 +113,95 @@ fn placement_is_the_same_for_the_same_view_and_window() {
     let first = place(&view, &[], &DESKTOP, &camera, &Default::default());
     let again = place(&view, &[], &DESKTOP, &camera, &Default::default());
     assert_eq!(first, again);
+}
+
+#[test]
+fn plain_twins_pile_in_an_uncrowded_row_with_the_lowest_slot_on_top() {
+    let mut builder = ViewBuilder::new();
+    let top = builder.card(ZoneName::Battlefield, Side::You, "Map Token");
+    top.token = true;
+    let top = top.slot;
+    let copy = builder.card(ZoneName::Battlefield, Side::You, "Map Token");
+    copy.token = true;
+    let copy = copy.slot;
+    let frame = frame_of(&mut client(), &builder);
+    let tree = tree(&frame, &TreeOptions::default()).unwrap();
+    assert!(
+        tree.lines()
+            .any(|line| line.contains("Map Token") && line.contains("pile(2)"))
+    );
+    let mut view = builder.build();
+    view.battlefield.reverse();
+    let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
+    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
+    let top = placement.get(top).unwrap();
+    let copy = placement.get(copy).unwrap();
+    assert_eq!((top.copies, copy.copies), (2, 0));
+    assert!(top.pose.position.z > copy.pose.position.z);
+}
+
+#[test]
+fn tapped_and_untapped_twins_stand_apart() {
+    let mut builder = ViewBuilder::new();
+    let untapped = builder.card(ZoneName::Battlefield, Side::You, "Map Token");
+    untapped.token = true;
+    let untapped = untapped.slot;
+    let tapped = builder.card(ZoneName::Battlefield, Side::You, "Map Token");
+    tapped.token = true;
+    tapped.tapped = true;
+    let tapped = tapped.slot;
+    let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
+    let placement = place(
+        &builder.build(),
+        &[],
+        &DESKTOP,
+        &camera,
+        &Default::default(),
+    );
+    assert_eq!(placement.get(tapped).unwrap().copies, 1);
+    assert_eq!(placement.get(untapped).unwrap().copies, 1);
+}
+
+#[test]
+fn the_lands_row_piles_at_seven_lands_including_lands_in_other_rows() {
+    let mut builder = ViewBuilder::new();
+    for name in ["Island", "Island", "Plains", "Swamp", "Mountain", "Forest"] {
+        builder.card(ZoneName::Battlefield, Side::You, name).types = vec![CardType::Land];
+    }
+    builder
+        .card(ZoneName::Battlefield, Side::Opponent, "Forest")
+        .types = vec![CardType::Land];
+    let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
+    let sizes = |view: &PlayerView| {
+        let placement = place(view, &[], &DESKTOP, &camera, &Default::default());
+        [ObjectId(0), ObjectId(1)].map(|slot| placement.get(slot).unwrap().copies)
+    };
+    assert_eq!(sizes(&builder.build()), [1, 1]);
+    builder
+        .card(ZoneName::Battlefield, Side::You, "Dryad Arbor")
+        .types = vec![CardType::Creature, CardType::Land];
+    assert_eq!(sizes(&builder.build()), [2, 0]);
+}
+
+#[test]
+fn a_permanent_targeted_on_the_stack_stands_apart_from_its_twins() {
+    let mut builder = ViewBuilder::new();
+    let first = builder
+        .card(ZoneName::Battlefield, Side::You, "Map Token")
+        .slot;
+    let targeted = builder
+        .card(ZoneName::Battlefield, Side::You, "Map Token")
+        .slot;
+    builder.card(ZoneName::Stack, Side::Opponent, "Disenchant");
+    let mut view = builder.build();
+    let StackItem::Spell { targets, .. } = &mut view.stack[0] else {
+        panic!("expected a spell");
+    };
+    targets.push(TargetRef::Object { slot: targeted });
+    let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
+    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
+    assert_eq!(placement.get(first).unwrap().copies, 1);
+    assert_eq!(placement.get(targeted).unwrap().copies, 1);
 }
 
 /// 255 permanents of different names, a third of them in each of the viewer's rows.

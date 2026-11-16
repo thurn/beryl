@@ -1,13 +1,12 @@
 //! One battlefield row at rest (docs/beryl-3d.md, "Objects and placement"). A row lays its
-//! cards out at full size while they fit its width, then overlaps them down to the layout's
-//! least uncovered strip, then stacks identical permanents into piles, and when even that is too
-//! long, shows as many as fit from a scroll offset and leaves the rest undrawn. The other cards of
-//! a merged permanent, and the cards a permanent holds in exile, peek out from under it, as the
-//! web interface's `tuck` draws the cards a permanent holds (`ui/src/game/battlefield.ts`).
+//! groups out at full size while they fit its width, then overlaps them down to the layout's
+//! least uncovered strip. If that is still too long, it shows the groups in the scroll window.
+//! The other cards of a merged permanent and the cards it holds in exile peek out from under
+//! it, as in the web interface's `tuck` (`ui/src/game/battlefield.ts`).
 
 use std::f32::consts::FRAC_1_SQRT_2;
 
-use beryl_protocol::protocol::{CardType, Facing, ObjectId, ObjectView, ZoneName};
+use beryl_protocol::protocol::{CardType, FaceName, Facing, ObjectId, ObjectView, ZoneName};
 use glam::{Quat, Vec2, Vec3};
 
 use super::place::host_slot;
@@ -195,22 +194,34 @@ impl<'a> Groups<'a, '_> {
 /// laid out.
 pub(super) fn lay_row<'a>(
     (cards, beneath): (&[&'a ObjectView], &Beneath<'a>),
-    (names, ids): (Option<SameName>, Option<&NameIds<'_>>),
+    (names, ids, stack_slots): (Option<SameName>, Option<&NameIds<'_>>, Option<&[ObjectId]>),
     area: RowArea,
     y: f32,
     rules: &RowRules,
     laid: &mut impl FnMut(Laid<'a>),
 ) -> RowWindow {
     let room = area.right - area.left;
-    let groups = if fits_overlapped(cards, room, rules) {
-        Groups::Single(cards)
-    } else {
-        piles(
-            cards,
-            &names.unwrap_or_else(|| SameName::of(cards, ids)),
-            beneath,
-        )
-    };
+    let groups =
+        stack_slots
+            .filter(|_| cards.len() > 1)
+            .map_or(Groups::Single(cards), |stack_slots| {
+                // On a short row, rule out singletons before allocating the name index.
+                if names.is_none()
+                    && cards.len() <= 8
+                    && !cards
+                        .iter()
+                        .enumerate()
+                        .any(|(index, &card)| cards[..index].iter().any(|other| twins(card, other)))
+                {
+                    return Groups::Single(cards);
+                }
+                piles(
+                    cards,
+                    &names.unwrap_or_else(|| SameName::of(cards, ids)),
+                    beneath,
+                    stack_slots,
+                )
+            });
     let widths: Vec<f32> = groups
         .iter()
         .map(|g| group_width(g, beneath, rules))
@@ -353,14 +364,6 @@ fn holds_square(camera: &Camera, (left, right): (f32, f32), y: f32, side: f32) -
 /// bottom.
 const SQUARE_BANDS: u8 = 16;
 
-/// Whether every card, alone, fits the row with at least the least strip of each uncovered.
-fn fits_overlapped(cards: &[&ObjectView], room: f32, rules: &RowRules) -> bool {
-    let Some(&last) = cards.last() else {
-        return true;
-    };
-    gaps(cards.len()) * rules.strip + card_width(last) <= room
-}
-
 /// The number of spaces between `count` things in a line.
 fn gaps(count: usize) -> f32 {
     count.saturating_sub(1) as f32
@@ -496,13 +499,16 @@ fn piles<'a, 'b>(
     cards: &'b [&'a ObjectView],
     names: &SameName,
     beneath: &Beneath,
+    stack_slots: &[ObjectId],
 ) -> Groups<'a, 'b> {
     if !names.repeats() {
         return Groups::Single(cards);
     }
     // The index in `cards` of the first card of each card's pile.
     let mut tops: Vec<usize> = (0..cards.len()).collect();
-    let plain = |card: &ObjectView| plain(card) && !beneath.holds(card.slot);
+    let plain = |card: &ObjectView| {
+        plain(card) && !beneath.holds(card.slot) && stack_slots.binary_search(&card.slot).is_err()
+    };
     for (index, &card) in cards.iter().enumerate() {
         if !plain(card) {
             continue;
@@ -517,6 +523,9 @@ fn piles<'a, 'b>(
             }
             earlier = names.before(other);
         }
+    }
+    if tops.iter().enumerate().all(|(index, &top)| index == top) {
+        return Groups::Single(cards);
     }
     // Each pile's cards as one run, the piles in the order of their first cards: count each
     // pile's cards, then put each card at its pile's next free place.
@@ -743,9 +752,10 @@ fn name_hash(name: Option<&str>) -> u64 {
 }
 
 /// Whether a permanent may share a pile: nothing on it or about it that a pile would hide.
-fn plain(object: &ObjectView) -> bool {
+pub(super) fn plain(object: &ObjectView) -> bool {
     face_up(object)
-        && object.note.is_none()
+        && object.face != FaceName::Down
+        && object.note.as_deref().is_none_or(str::is_empty)
         && !object.doesnt_untap
         && object.named_counters.is_empty()
         && object.counters.is_empty()
@@ -753,18 +763,19 @@ fn plain(object: &ObjectView) -> bool {
         && object.combat.is_none()
         && object.attached_to.is_none()
         && !object.phased_out
-        && object.really.is_none()
-        && object.chosen.is_none()
+        && object.really.as_deref().is_none_or(str::is_empty)
+        && object.chosen.as_deref().is_none_or(str::is_empty)
 }
 
 /// Whether two permanents are alike in everything the table shows of them.
-fn twins(a: &ObjectView, b: &ObjectView) -> bool {
+pub(super) fn twins(a: &ObjectView, b: &ObjectView) -> bool {
     a.slot != b.slot && a.name.is_some() && same_pile_face(a, b)
 }
 
 fn same_pile_face(a: &ObjectView, b: &ObjectView) -> bool {
     a.name == b.name
         && a.facing == b.facing
+        && a.zone == b.zone
         && a.owner == b.owner
         && a.controller == b.controller
         && a.token == b.token

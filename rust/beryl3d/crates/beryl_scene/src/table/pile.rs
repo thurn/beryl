@@ -183,6 +183,7 @@ impl Table {
                     interactive: false,
                     state: StateBits(0),
                     face: None,
+                    copies: 1,
                     really: crate::frame::NameRef::default(),
                 },
             );

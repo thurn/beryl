@@ -10,7 +10,9 @@ use beryl_protocol::protocol::{
 use beryl_protocol::script::{Piles, Table as Played};
 
 mod indexed;
+mod policy;
 pub(crate) use indexed::arrival;
+pub(crate) use policy::PileRules;
 mod row;
 pub(crate) use row::RowFits;
 use row::battlefield_row;
@@ -122,14 +124,9 @@ pub fn place(
 /// Every object's resting place in `zones`, seen through `camera`.
 pub(crate) fn place_zones(zones: &Zones, rules: Rules<'_>) -> Placement {
     let mut placement = Placement::default();
+    let piles = zones.pile_rules();
     for (group, objects) in Group::ALL.into_iter().zip(all_members(zones)) {
-        lay(
-            group,
-            &objects,
-            &zones.stack,
-            (rules, zones.handling.as_ref()),
-            &mut placement,
-        );
+        lay(group, &objects, (zones, &piles, rules), &mut placement);
     }
     placement
 }
@@ -150,11 +147,13 @@ pub(crate) fn place_reusing(
         rows: known.rows,
     };
     let mut laid = 0;
+    let (piles, known_piles) = (zones.pile_rules(), known_zones.pile_rules());
     let groups = Group::ALL.into_iter().zip(all_members(zones));
     for ((group, objects), was) in groups.zip(all_members(known_zones)) {
         let same = objects.len() == was.len()
             && objects.iter().zip(&was).all(|(a, b)| a == b)
-            && (group != Group::Stack || zones.stack == known_zones.stack);
+            && (group != Group::Stack || zones.stack == known_zones.stack)
+            && piles.same_for_row(&known_piles, group, &objects);
         // A group the cards being handled are lifted from is placed again when the cards
         // handled changed, though its objects did not.
         let lifted_from = |handled: Option<&lifted::Handled>| {
@@ -174,23 +173,16 @@ pub(crate) fn place_reusing(
             }
         } else {
             laid += objects.len();
-            lay(
-                group,
-                &objects,
-                &zones.stack,
-                (rules, zones.handling.as_ref()),
-                &mut placement,
-            );
+            lay(group, &objects, (zones, &piles, rules), &mut placement);
         }
     }
     (placement, laid)
 }
 
 /// Places the objects of `group` in `zones` into `placement`, and leaves the slots it placed in
-/// `placed`. Other groups' objects keep their places: no group's resting places depend on
-/// another's objects.
+/// `placed`. The caller places each group affected by the current pile rules.
 pub(crate) fn place_group(
-    zones: &Zones,
+    (zones, piles): (&Zones, &PileRules),
     group: Group,
     rules: Rules,
     placement: &mut Placement,
@@ -199,13 +191,7 @@ pub(crate) fn place_group(
     let objects = members(zones, group);
     placed.clear();
     placed.extend(objects.iter().map(|object| object.slot));
-    lay(
-        group,
-        &objects,
-        &zones.stack,
-        (rules, zones.handling.as_ref()),
-        placement,
-    );
+    lay(group, &objects, (zones, piles, rules), placement);
 }
 
 /// What placement follows besides the objects: the layout, the camera, the rows' scroll offsets
@@ -223,9 +209,8 @@ pub(crate) type Rules<'r> = (
 pub(crate) const NO_GROUP: u8 = u8::MAX;
 
 /// A part of the table whose objects are placed together and apart from every other part: a
-/// pile, a hand, a battlefield row or the stack. Where an object rests depends only on the
-/// objects of its own group, so an act changes the resting places of the groups that held or
-/// now hold the objects it names, and no others.
+/// pile, a hand, a battlefield row or the stack. Rows also read the pile rules, since the
+/// stack names some permanents and lands in other rows count toward the land threshold.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Group {
     /// A library, graveyard or exile pile.
@@ -401,6 +386,8 @@ pub(crate) struct Zones<'a> {
     battlefield: &'a [ObjectId],
     /// The spells and numbered abilities on the stack, bottom first.
     stack: Cow<'a, [OnStack]>,
+    /// The stack items that may name a battlefield permanent.
+    stack_items: policy::StackItems<'a>,
     /// Each side's library and graveyard, bottom first: the viewer's and then the opponent's.
     piles: [[&'a [ObjectId]; 2]; 2],
     /// The cards the opponent is handling, which rest lifted off their pile (`lifted`).
@@ -448,6 +435,7 @@ impl<'a> Zones<'a> {
             tucked: None,
             battlefield: &view.battlefield,
             stack: Cow::Owned(stack),
+            stack_items: policy::StackItems::View(&view.stack),
             piles: [player(&view.players.you), player(&view.players.opponent)],
             handling: None,
             arrival: None,
@@ -475,6 +463,7 @@ impl<'a> Zones<'a> {
                 &[],
                 stack_slots(table.objects.values()),
             )),
+            stack_items: policy::StackItems::Played(&table.stack),
             piles: [piles(&table.you), piles(&table.opponent)],
             handling: None,
             arrival: None,
@@ -632,8 +621,7 @@ fn all_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
 fn lay(
     group: Group,
     objects: &[&ObjectView],
-    stack: &[OnStack],
-    (rules, handled): (Rules, Option<&lifted::Handled>),
+    (zones, piles, rules): (&Zones, &PileRules, Rules),
     placement: &mut Placement,
 ) {
     let (layout, camera, scroll, fits, ids) = rules;
@@ -662,12 +650,18 @@ fn lay(
                 (side, row),
                 (layout, fits.get(side, row)),
                 offset,
-                ids,
+                (ids, piles.for_group(group)),
             );
         }
-        Group::Stack => place_stack(placement, objects, stack, (&layout.stack, camera)),
+        Group::Stack => place_stack(placement, objects, &zones.stack, (&layout.stack, camera)),
     }
-    lifted::lay(handled, group, objects, (layout, camera), placement);
+    lifted::lay(
+        zones.handling.as_ref(),
+        group,
+        objects,
+        (layout, camera),
+        placement,
+    );
 }
 
 /// Whose side of the table an object is on: a permanent's controller's, and otherwise the

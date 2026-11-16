@@ -107,9 +107,12 @@ impl<'a> Motion<'a> {
                 }
             }
         }
+        if !self.touched.is_empty() || dirty[Group::Stack.index()] {
+            self.piles.update(&zones, &mut dirty);
+        }
         for (group, next) in Group::ALL.into_iter().zip(&mut self.next) {
             if dirty[group.index()] {
-                let zones = (&zones, &self.names);
+                let zones = (&zones, &self.names, &self.piles);
                 self.table.place_group(zones, group, &mut self.fresh, next);
             }
         }

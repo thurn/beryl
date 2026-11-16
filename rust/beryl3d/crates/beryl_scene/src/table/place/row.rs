@@ -46,7 +46,7 @@ pub(super) fn battlefield_row(
     (side, row): (Side, RowName),
     (layout, fit): (&Layout, RowFit),
     offset: usize,
-    ids: Option<&NameIds<'_>>,
+    (ids, stack_slots): (Option<&NameIds<'_>>, Option<&[ObjectId]>),
 ) {
     let RowFit { area, y, strip } = fit;
     // The cards that lie under permanents, which `members` lists after the row's permanents. A
@@ -96,8 +96,14 @@ pub(super) fn battlefield_row(
         );
     };
     let beneath = Beneath::new(under, cards);
-    placement.rows[side_index(side)][row_index(row)] =
-        lay_row((cards, &beneath), (names, ids), area, y, &rules, &mut set);
+    placement.rows[side_index(side)][row_index(row)] = lay_row(
+        (cards, &beneath),
+        (names, ids, stack_slots),
+        area,
+        y,
+        &rules,
+        &mut set,
+    );
 }
 
 /// A lands row's cards in the order they stand: untapped first, and each name together, in the

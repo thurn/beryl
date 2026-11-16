@@ -65,7 +65,7 @@ impl Table {
             };
             let id = ElementId(REVEALED_FACE + u32::from(slot.0));
             let name = shown.name.as_deref().unwrap_or("");
-            self.write_look(name, (id, Role::Card), place, &look, back, builder);
+            self.write_look(name, (id, Role::Card, 1), place, &look, back, builder);
         }
     }
 }

@@ -7,12 +7,12 @@
 //! - a cut: `... <count> more in <place> (--within <place>)`;
 //! - an element: `<role> ["<name>"] #<id> [<place>] <x>,<y> <width>x<height> [<state>...]`,
 //!   where a name escapes `"` and `\` with a backslash and a state is a word of the closed list,
-//!   `moving`, `covered` and `faded` taking a parenthesised value.
+//!   `moving`, `pile`, `covered` and `faded` taking a parenthesised value.
 
 use beryl_scene::frame::Role;
 
 /// The words a state may be.
-const STATES: [&str; 13] = [
+const STATES: [&str; 14] = [
     "interactive",
     "tapped",
     "face-down",
@@ -24,6 +24,7 @@ const STATES: [&str; 13] = [
     "target",
     "disabled",
     "focused",
+    "pile",
     "covered",
     "faded",
 ];
@@ -182,12 +183,18 @@ fn states(text: &str) -> Result<Vec<String>, String> {
         let mut state = word.to_owned();
         rest = &rest[end..];
         if let Some(value) = rest.strip_prefix('(') {
-            if !matches!(word, "moving" | "covered" | "faded") {
+            if !matches!(word, "moving" | "pile" | "covered" | "faded") {
                 return Err(format!("the state '{word}' takes no value"));
             }
             let close = value.find(')').ok_or("a state's value is not closed")?;
             let inner = &value[..close];
-            if !inner.ends_with('%') {
+            if word == "pile" {
+                if !inner.parse::<u16>().is_ok_and(|count| count > 1) {
+                    return Err(format!(
+                        "'{word}({inner})' needs a pile size of two or more"
+                    ));
+                }
+            } else if !inner.ends_with('%') {
                 return Err(format!("'{word}({inner})' is not a percentage"));
             }
             state = format!("{word}({inner})");

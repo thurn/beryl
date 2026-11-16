@@ -11,7 +11,7 @@ use beryl_protocol::script::Verb;
 use glam::{Quat, Vec2};
 
 use super::fault::Rule;
-use super::hit::{bounds, covered};
+use super::hit::{bounds, covered, hit};
 use crate::data::audit;
 use crate::frame::{Frame, Place, Role};
 use crate::input::{Rect, Size};
@@ -333,11 +333,25 @@ pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size) -> Option<Sample> 
         let point = Vec2::new(rect.x + rect.width * x, rect.y + rect.height * y);
         point.x >= 0.0 && point.y >= 0.0 && point.x <= size.width && point.y <= size.height
     });
+    // A buried copy is shown by the pile when its visible top covers the copy's centre.
+    // The web stage audit also counts a card under its twin as shown.
+    let shown_by_pile = element.copies == 0
+        && hit(
+            frame,
+            Vec2::new(rect.x + 0.5 * rect.width, rect.y + 0.5 * rect.height),
+        )
+        .is_some_and(|top| {
+            let top = &frame.resolved[top as usize];
+            top.copies > 1
+                && top.place == element.place
+                && top.opacity > audit::TRANSPARENT
+                && frame.name(top.name) == frame.name(element.name)
+        });
     let hidden = if !inside {
         Some("outside the window")
     } else if element.opacity <= audit::TRANSPARENT {
         Some("transparent")
-    } else if covered(frame, index) > 1.0 - audit::SEEN {
+    } else if !shown_by_pile && covered(frame, index) > 1.0 - audit::SEEN {
         Some("covered")
     } else {
         None

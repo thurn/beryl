@@ -24,7 +24,7 @@ use crate::motion::Track;
 use crate::notice::NoticeRun;
 use crate::pose::{Curve, Pose};
 use crate::sound::{SoundRun, Sounds};
-use crate::table::{Objects, Table, Turn};
+use crate::table::{Objects, PileCount, Table, Turn};
 use crate::verbs::{self, Interval};
 
 /// A script laid out in time, ready to start.
@@ -77,6 +77,7 @@ pub(crate) struct Compiled {
     pub sounds: Vec<SoundRun>,
     /// When cards show the record the script leads to, where a step says, ordered by time.
     pub turns: Vec<Turn>,
+    pub pile_counts: Vec<PileCount>,
     /// When each of its steps plays, in order, as its beats were laid out; empty when it has no
     /// steps to play (no script, or timings that do not match its steps).
     pub laid: Vec<Laid>,
@@ -245,6 +246,12 @@ pub(crate) fn compile<'a>(
     let numbers = numbers_of(fallback.as_ref().unwrap_or(&motion.played));
     let placement = motion.placement_of(after, &numbers);
     compiled.finals = Table::objects_for(after, numbers, &placement);
+    let played = take_motion(&mut compiled, motion);
+    (compiled, fallback.unwrap_or(played))
+}
+
+/// Transfers a script's compiled tracks and step effects into its playback record.
+fn take_motion(compiled: &mut Compiled, motion: Motion<'_>) -> Played {
     compiled.tracks = motion.tracks;
     compiled.ability_tracks = motion.ability_tracks;
     compiled.segments = motion.segments;
@@ -261,7 +268,9 @@ pub(crate) fn compile<'a>(
     compiled.counts.sort_by_key(|change| change.at);
     compiled.turns = motion.written.turns;
     compiled.turns.sort_by_key(|turn| turn.at);
-    (compiled, fallback.unwrap_or(motion.played))
+    compiled.pile_counts = motion.written.pile_counts;
+    compiled.pile_counts.sort_unstable_by_key(PileCount::order);
+    motion.played
 }
 
 /// The table `script`, which came with `after`, ends with when it is not played step by step:

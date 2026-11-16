@@ -1205,11 +1205,12 @@ flight start exactly where the card was.
   function** gives every object the pose it rests in. There is one function per
   zone: battlefield rows, hands, the stack, each pile, and the places cards are
   held up to be read.
-- **The battlefield fits what it holds.** A row lays its cards out at full size
-  until they would pass the row's width, then overlaps them, then stacks
-  identical permanents into piles with a count, as the web interface does. A
-  board at the engine's capacity is therefore still a bounded number of quads
-  inside a bounded area.
+- **The battlefield fits what it holds.** Each row groups plain identical
+  permanents into piles and shows the count on the lowest-slot card, as the web
+  interface does. Sources and targets on the stack stand alone. The lands row
+  starts piling once its controller has seven lands across the battlefield. A
+  row lays its groups out at full size while they fit, then overlaps them down
+  to the least uncovered strip and scrolls if needed.
 - **Rows stand as the web interface's do.** The creatures' row is centred; the
   lands run from the table's edge inward and the other permanents from the
   middle outward, so a permanent that leaves one of those rows moves only the
@@ -2432,8 +2433,9 @@ game
 - **States** are words from a closed list: `interactive`, `tapped`, `face-down`,
   `moving(<verb> <percent>)` (`moving` alone until an element carries its verb),
   `hovered`, `held`, `eligible`, `selected`, `target`, `disabled`, `focused`,
-  `phased-out`, `picked`, `copy("<name>")` (the card a copy really is),
-  `covered(<percent>)` and `faded(<percent>)`.
+  `phased-out`, `picked`, `pile(<count>)` (on the top card of a battlefield
+  pile), `copy("<name>")` (the card a copy really is), `covered(<percent>)` and
+  `faded(<percent>)`.
 - **`covered(<percent>)`** is how much of the element other elements hide, and
   **`faded(<percent>)`** how far its opacity is below 1. Neither is printed
   under 1%.

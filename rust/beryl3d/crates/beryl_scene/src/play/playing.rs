@@ -55,6 +55,7 @@ impl Playing {
             finals: &self.compiled.finals,
             view: &update.view,
             turns: &self.compiled.turns,
+            pile_counts: &self.compiled.pile_counts,
         })
     }
 

@@ -4,7 +4,7 @@ use beryl_protocol::protocol::{ObjectId, PlayerView};
 
 use super::Table;
 use crate::table::place::{
-    Group, Placement, Rules, Zones, place_group, place_reusing, place_zones,
+    Group, PileRules, Placement, Rules, Zones, place_group, place_reusing, place_zones,
 };
 use crate::table::rows::NameIds;
 
@@ -50,13 +50,13 @@ impl Table {
     /// slots it placed in `placed`. `ids` numbers the names of `zones`' objects.
     pub(crate) fn place_group(
         &self,
-        (zones, ids): (&Zones, &NameIds<'_>),
+        (zones, ids, piles): (&Zones, &NameIds<'_>, &PileRules),
         group: Group,
         placement: &mut Placement,
         placed: &mut Vec<ObjectId>,
     ) {
         let rules = self.placement_rules(Some(ids));
-        place_group(zones, group, rules, placement, placed);
+        place_group((zones, piles), group, rules, placement, placed);
         self.placed.add(placed.len());
     }
 }

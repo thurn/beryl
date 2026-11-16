@@ -33,6 +33,7 @@ mod objects;
 mod placement;
 mod scroll;
 
+pub(crate) use motion::PileCount;
 pub use motion::{Motion, Turn};
 
 /// How large the table cloth is, in millimetres: past every edge of any window.
@@ -379,7 +380,9 @@ impl Table {
         builder: &mut FrameBuilder,
     ) -> Option<(SceneObject, &'v PlayerView, bool)> {
         let resting = self.objects.cards.get(slot).copied().flatten();
-        // When this card first shows the record the script leads to, if a step says.
+        let copies = motion
+            .and_then(|motion| motion.copies(slot))
+            .unwrap_or_else(|| resting.map_or(1, |object| object.copies));
         let turn = motion.and_then(|motion| {
             let at = motion
                 .turns
@@ -404,11 +407,12 @@ impl Table {
                     pose: resting.pose,
                     visible: resting.visible,
                     tapped: resting.tapped,
+                    copies,
                     ..last
                 };
                 return Some((object, motion.view, false));
             }
-            return Some((resting, view, false));
+            return Some((SceneObject { copies, ..resting }, view, false));
         };
         let last = motion.finals.cards.get(slot).copied().flatten();
         // A card a row has scrolled out of view rests undrawn at the row's end, above the last
@@ -449,13 +453,9 @@ impl Table {
         // more than half of its quarter turn, from the middle of its step.
         let tapped = [resting, last].iter().flatten().any(|object| object.tapped)
             && pose.rotation.angle_between(Quat::IDENTITY) > FRAC_PI_4;
-        // Until its track first moves it, a card stands where it rested: a copy beneath a pile's
-        // top only if it rested as one, and out of the pointer's reach if it rested in a pile.
-        let (place, copies) = match resting.filter(|_| !begun) {
-            Some(a) if !pointer::takes_pointer(a.place) => (a.place, a.copies),
-            Some(a) => (object.place, a.copies),
-            None => (object.place, object.copies),
-        };
+        let place = resting
+            .filter(|rest| !begun && !pointer::takes_pointer(rest.place))
+            .map_or(object.place, |rest| rest.place);
         let object = SceneObject {
             pose,
             visible: pose.opacity > 0.0,
@@ -541,6 +541,7 @@ impl Table {
             (
                 ElementId(u32::try_from(slot).expect("slots are u16")),
                 Role::Card,
+                object.copies,
             ),
             object.place,
             &look,
@@ -550,8 +551,6 @@ impl Table {
         if let Some(really) = shown.really.as_deref() {
             builder.really(at, really);
         }
-        // Marks on a card lying on the table are drawn with the table's marks, and on one in
-        // flight with the raised marks.
         let on = badges::On {
             pose: look.pose,
             band: if under_way {
@@ -572,7 +571,7 @@ impl Table {
     pub(super) fn write_look(
         &self,
         name: &str,
-        (id, role): (ElementId, Role),
+        (id, role, copies): (ElementId, Role, u16),
         place: Place,
         look: &Look,
         back: u16,
@@ -594,6 +593,7 @@ impl Table {
                 interactive: look.interactive,
                 state: StateBits(look.state),
                 face: look.face,
+                copies,
                 really: crate::frame::NameRef::default(),
             },
         );
@@ -744,7 +744,7 @@ impl Table {
         self.write_shadow((None, object.place), &look.pose, under_way, builder);
         self.write_look(
             name,
-            (ElementId(ABILITY_IDS + id % ABILITY_IDS), Role::Ability),
+            (ElementId(ABILITY_IDS + id % ABILITY_IDS), Role::Ability, 1),
             object.place,
             &look,
             back,

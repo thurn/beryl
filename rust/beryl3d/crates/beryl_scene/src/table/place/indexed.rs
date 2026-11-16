@@ -38,6 +38,7 @@ impl<'a> Zones<'a> {
             tucked: Some(tucked),
             battlefield: &table.battlefield,
             stack: Cow::Borrowed(stack),
+            stack_items: super::policy::StackItems::Played(&table.stack),
             piles: [piles(&table.you), piles(&table.opponent)],
             handling: None,
             arrival: None,

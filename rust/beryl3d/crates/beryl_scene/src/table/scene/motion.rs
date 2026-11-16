@@ -20,6 +20,7 @@ pub struct Motion<'a> {
     /// When cards show the record the script leads to, where a step says (`Turn`), sorted by
     /// time.
     pub turns: &'a [Turn],
+    pub(crate) pile_counts: &'a [PileCount],
 }
 
 /// The card in `slot` shows the record the script leads to from `at` on the script's clock,
@@ -33,4 +34,32 @@ pub struct Turn {
     pub slot: usize,
     pub at: u64,
     pub step: usize,
+}
+
+/// A new pile count for a card once a step has finished changing its placement.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PileCount {
+    pub slot: usize,
+    pub at: u64,
+    pub step: usize,
+    pub copies: u16,
+}
+
+impl PileCount {
+    pub fn order(&self) -> (usize, u64, usize) {
+        (self.slot, self.at, self.step)
+    }
+}
+
+impl Motion<'_> {
+    /// The last pile count this script applied to the card in `slot`.
+    pub(super) fn copies(&self, slot: usize) -> Option<u16> {
+        let end = self
+            .pile_counts
+            .partition_point(|change| (change.slot, change.at) <= (slot, self.t));
+        self.pile_counts[..end]
+            .last()
+            .filter(|change| change.slot == slot)
+            .map(|change| change.copies)
+    }
 }

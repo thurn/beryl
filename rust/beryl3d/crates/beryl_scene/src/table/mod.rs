@@ -26,13 +26,13 @@ use glam::Vec2;
 pub use camera::{Camera, CameraData};
 pub use look::{Dress, Look};
 pub use pile::{PILE_IDS, PileShown, pile_name};
-pub(crate) use place::{Group, NO_GROUP, Zones, arrival, host_slot};
+pub(crate) use place::{Group, NO_GROUP, PileRules, Zones, arrival, host_slot};
 pub use place::{Placement, ROWS, Rest, Rows, Scroll, place};
 pub(crate) use place::{names_host, stack_slots};
 pub use rows::RowWindow;
 pub(crate) use rows::{NameIds, RowChange};
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
-pub(crate) use scene::{Objects, ability_track};
+pub(crate) use scene::{Objects, PileCount, ability_track};
 pub(crate) use stack::{OnStack, on_stack, row_area};
 pub use tray::{Held, TraySpace, landing, tray, tray_boxes, tray_with_rooms};
 

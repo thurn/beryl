@@ -134,6 +134,7 @@ impl Layer {
                     && look.clip.is_none_or(|(clip, _)| overlaps(clip, rect)),
                 state,
                 face: None,
+                copies: 1,
                 really: crate::frame::NameRef::default(),
             },
         );

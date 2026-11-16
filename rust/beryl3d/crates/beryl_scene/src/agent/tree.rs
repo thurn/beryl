@@ -324,6 +324,9 @@ fn states(frame: &Frame, index: u32, element: &Resolved, out: &mut String) {
             out.push_str(word);
         }
     }
+    if element.copies > 1 {
+        let _ = write!(out, " pile({})", element.copies);
+    }
     let really = frame.name(element.really);
     if !really.is_empty() {
         let _ = write!(

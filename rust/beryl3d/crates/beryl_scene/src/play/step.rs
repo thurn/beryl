@@ -12,7 +12,7 @@ use crate::beat::Laid;
 use crate::motion::Track;
 use crate::pose::{Curve, Pose, Segment};
 use crate::table::lifted::Look;
-use crate::table::{Group, NameIds, Placement, Rest, Table, Zones};
+use crate::table::{Group, NameIds, PileRules, Placement, Rest, Table, Zones};
 use crate::verbs::{self, Interval};
 
 mod abilities;
@@ -81,7 +81,6 @@ pub(crate) struct Motion<'a> {
     /// Whether the next step places every group, not only the ones its act changed: the step
     /// after one the table could not take, which may have changed part of it.
     whole: bool,
-    /// How many steps the table could not take.
     pub unplaced: usize,
     /// Whether the next step is the first, which also places the groups that lay their objects
     /// out in the order the table lists them (`Group::in_object_order`): `rests` then holds the
@@ -96,6 +95,7 @@ pub(crate) struct Motion<'a> {
     next: [Vec<ObjectId>; Group::ALL.len()],
     /// The slots the step's act named.
     touched: Vec<ObjectId>,
+    piles: PileRules,
     /// The numbers of the names of `played`'s objects.
     names: NameIds<'a>,
     /// A bit set by slot that `affected` marks slots in, kept between steps.
@@ -167,6 +167,7 @@ impl<'a> Motion<'a> {
             fresh: Placement::default(),
             next: [const { Vec::new() }; Group::ALL.len()],
             touched: Vec::new(),
+            piles: PileRules::of_view(before),
             marks: Vec::new(),
             affected: Vec::new(),
             tracks,
@@ -332,10 +333,9 @@ impl<'a> Motion<'a> {
         let Some(dirty) = self.place(&step.act, room.duration() > 0 || own.duration() > 0) else {
             return;
         };
-        let verb = step.act.verb();
         // A streak may carry a new record for its target. If that changes the target's
         // resting place, it slides with the other cards the new placement moved.
-        let subject = if verb == Verb::Streak {
+        let subject = if step.act.verb() == Verb::Streak {
             None
         } else {
             subject_of(step)
@@ -343,7 +343,7 @@ impl<'a> Motion<'a> {
         // A `set` moves nothing: what it places again, a library it reorders, is at its new
         // place as the step begins. Only the cards that stay in a hand regroup round one it
         // takes out of the fan or puts back, as on the web stage (`carried` in `tracks.ts`).
-        let still = verb == Verb::Set;
+        let still = matches!(step.act, Act::Set { .. });
         self.mark_affected(&dirty, subject);
         let affected = std::mem::take(&mut self.affected);
         // A step that moves no card of its own (a player's, an ability's, a span's) has its verb
@@ -373,6 +373,7 @@ impl<'a> Motion<'a> {
             {
                 continue;
             }
+            self.pile_count((slot, number), &dirty, (own, still));
             if Some(slot) == subject {
                 let from = self.pose(slot, own.from);
                 let to = match self.now(slot, &dirty) {

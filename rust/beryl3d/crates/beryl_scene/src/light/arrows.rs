@@ -151,6 +151,7 @@ impl Drawn {
                 interactive: false,
                 state: StateBits(if self.moving { StateBits::MOVING } else { 0 }),
                 face: None,
+                copies: 1,
                 really: crate::frame::NameRef::default(),
             },
         );

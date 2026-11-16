@@ -52,6 +52,8 @@ pub struct Resolved {
     /// For a card, the layer of the face-texture array its face is drawn from, or `None` when
     /// it has no face of its own yet and is drawn blank. `None` for every other role.
     pub face: Option<u16>,
+    /// The size of a battlefield pile on its top card, zero on buried copies, and one elsewhere.
+    pub copies: u16,
     /// For a card that is a copy of another card, the name of the card it really is in
     /// `Frame::names` ([CR 707.2]), while `name` is the copied card's. Empty for every other
     /// element.
