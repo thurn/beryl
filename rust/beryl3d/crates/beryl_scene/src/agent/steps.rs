@@ -287,6 +287,11 @@ pub fn crowded(script: &ScriptRecord) -> Vec<Found> {
     found
 }
 
+/// Where on a card `sample` looks for it on screen, as shares of its box's width and height
+/// (`points` in `ui/scripts/audit.mjs`).
+const ON_SCREEN_POINTS: [(f32, f32); 5] =
+    [(0.5, 0.5), (0.2, 0.2), (0.8, 0.2), (0.2, 0.8), (0.8, 0.8)];
+
 /// The scene object in `slot` as one frame shows it, for "every step shown".
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sample {
@@ -321,9 +326,13 @@ pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size) -> Option<Sample> 
     let index = card_of(frame, slot)?;
     let element = &frame.resolved[index as usize];
     let rect = bounds(element);
-    let centre = Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
-    let inside =
-        centre.x >= 0.0 && centre.y >= 0.0 && centre.x <= size.width && centre.y <= size.height;
+    // On screen when any of five points of it is, as the web interface's audit measures it: its
+    // centre and the points a fifth of the way in from each corner. A card held partly past an
+    // edge of the window, as the opponent's hand is, is on screen.
+    let inside = ON_SCREEN_POINTS.iter().any(|&(x, y)| {
+        let point = Vec2::new(rect.x + rect.width * x, rect.y + rect.height * y);
+        point.x >= 0.0 && point.y >= 0.0 && point.x <= size.width && point.y <= size.height
+    });
     let hidden = if !inside {
         Some("outside the window")
     } else if element.opacity <= audit::TRANSPARENT {

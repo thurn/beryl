@@ -2529,8 +2529,9 @@ screen, so they cover every card spec that is ever generated.
 - **Verb values.** Each verb's measured duration, delay and stagger equal its
   data entry.
 - **Every step shown.** Each step of each script is played, and what it concerns
-  is on screen while it plays: inside the window, at least half uncovered and
-  not transparent. A step whose verb gives its subject time to travel moves it
+  is on screen while it plays: inside the window (its centre, or one of the
+  points a fifth of the way in from its corners, as the web interface measures
+  it), at least half uncovered and not transparent. A step whose verb gives its subject time to travel moves it
   at least 4 logical points over at least 150 milliseconds; a subject that jumps
   instead is a fault.
 - **Not crowded.** No more than 3 different moves begin at once in one beat.

@@ -5,11 +5,11 @@
 //! banner ends, and a spell left to be read is drawn focused for its step.
 
 use beryl_protocol::GameUpdate;
-use beryl_protocol::protocol::{Side, StackItem, Why, ZoneName};
+use beryl_protocol::protocol::{ObjectId, Side, StackItem, Why, ZoneName};
 use beryl_protocol::script::{Act, Notice, Subject, Table as Played, time_script};
 use beryl_scene::agent::checks::{duplicates, overlap};
 use beryl_scene::agent::{Context, Layout};
-use beryl_scene::frame::{Frame, Role, StateBits};
+use beryl_scene::frame::{Frame, Role, StateBits, Wake};
 use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::{Client, Config};
@@ -148,6 +148,30 @@ fn the_turn_banner_stands_centred_for_its_step_and_then_goes() {
 
 #[test]
 fn the_banner_stands_while_the_next_beat_draws_a_card() {
+    let (updates, top) = banner_then_draw();
+    let (mut client, steps) = client(updates);
+    let (banner_from, banner_to) = steps[0];
+    let (fly_from, fly_to) = steps[1];
+    assert!(
+        fly_from < banner_to,
+        "the draw begins while the banner stands: {fly_from} before {banner_to}"
+    );
+    let now = fly_from + (fly_to.min(banner_to) - fly_from) / 2;
+    assert!(now > banner_from);
+    let frame = client.frame(now);
+    assert!(
+        text_box(frame, "Opponent's Turn").is_some(),
+        "the banner stands"
+    );
+    let card = (frame.resolved.iter())
+        .find(|element| element.role == Role::Card && element.id.0 == u32::from(top.0))
+        .expect("the drawn card");
+    assert!(card.state.has(StateBits::MOVING), "the card flies under it");
+}
+
+/// The opponent's turn banner, then a beat in which you draw the top card of your library, with
+/// the slot of the card drawn.
+fn banner_then_draw() -> ([GameUpdate; 2], ObjectId) {
     let sample = ViewBuilder::sample().update();
     let top = *sample.view.players.you.library.last().expect("a library");
     let mut card = (sample.view.objects.iter())
@@ -171,24 +195,29 @@ fn the_banner_stands_while_the_next_beat_draws_a_card() {
             *object = drawn;
         }
     });
-    let (mut client, steps) = client(updates);
-    let (banner_from, banner_to) = steps[0];
-    let (fly_from, fly_to) = steps[1];
+    (updates, top)
+}
+
+/// The recorded reply to a view is due a fixed time after the table rests, so the table must
+/// rest at the same time however its frames fall. A banner that outlasted its script kept the
+/// table awake, but the rest was taken from the script's end, so a frame that first found the
+/// banner gone gave the reply at once: checking every tick gave replies at other times than
+/// checking at the check times, and the two disagreed about the steps that followed.
+#[test]
+fn the_table_rests_as_a_banner_that_outlasts_its_script_ends_however_the_frames_fall() {
+    let (_, steps) = client(banner_then_draw().0);
+    let (_, banner_to) = steps[0];
+    let rest = steps.iter().map(|&(_, to)| to).max().expect("two steps");
     assert!(
-        fly_from < banner_to,
-        "the draw begins while the banner stands: {fly_from} before {banner_to}"
+        rest == banner_to,
+        "the banner ends last: {banner_to} of {rest}"
     );
-    let now = fly_from + (fly_to.min(banner_to) - fly_from) / 2;
-    assert!(now > banner_from);
-    let frame = client.frame(now);
-    assert!(
-        text_box(frame, "Opponent's Turn").is_some(),
-        "the banner stands"
-    );
-    let card = (frame.resolved.iter())
-        .find(|element| element.role == Role::Card && element.id.0 == u32::from(top.0))
-        .expect("the drawn card");
-    assert!(card.state.has(StateBits::MOVING), "the card flies under it");
+    for late in [0, 1, 17 * MS, 500 * MS] {
+        let (mut client, _) = client(banner_then_draw().0);
+        client.frame(banner_to + late);
+        assert_eq!(client.wake(), Wake::Never, "drawn {late} ns late");
+        assert_eq!(client.rested(), banner_to, "drawn {late} ns late");
+    }
 }
 
 #[test]

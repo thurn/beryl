@@ -86,8 +86,8 @@ pub struct Show {
     reported: u32,
     /// How many scripts the show has been given.
     given: usize,
-    /// When the last script to end ended, or the last effect run to end after it did, in
-    /// nanoseconds since the client started.
+    /// When the last script to end ended, or the last effect run or notice to end after it did,
+    /// in nanoseconds since the client started.
     rested: u64,
     /// A record of every script given since `record` was called, in order.
     history: Option<Vec<ScriptRecord>>,
@@ -534,8 +534,16 @@ impl Show {
             }
             end > now
         });
+        // A notice keeps the table from resting too (`wake`), so one that outlasts its script and
+        // its effects moves `rested` to its end: a reply due after the rest is then given at the
+        // same time however often frames are drawn.
+        self.notices.retain(|announced| {
+            if announced.over.to <= now {
+                rested = rested.max(announced.over.to);
+            }
+            announced.over.to > now
+        });
         self.rested = rested;
-        self.notices.retain(|announced| announced.over.to > now);
         let Some(shown) = self.shown.as_ref().map(|update| &update.view) else {
             return;
         };
