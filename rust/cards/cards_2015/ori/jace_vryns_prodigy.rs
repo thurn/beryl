@@ -74,7 +74,7 @@ pub static CARD: CardDef = card(
                 )),
             Ability::loyalty(-3)
                 .target(&TargetSpec::graveyard_card(Filter::All(&[
-                    Filter::Types(Types::INSTANT.union(Types::SORCERY)),
+                    instant_or_sorcery(),
                     Filter::Whose(&Players::You),
                 ])))
                 .effect(&permit_cast(

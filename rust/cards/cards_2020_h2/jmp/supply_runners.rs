@@ -15,7 +15,7 @@ use crate::prelude::*;
 ///
 /// [CR 109.1]: https://yawgatog.com/resources/magic-rules/#R1091
 pub static CARD: CardDef = Printed::SupplyRunners
-    .abilities(&[Ability::triggered(&Trigger::ENTERS).effect(&add_counters(
+    .abilities(&[when_enters(&add_counters(
         Objects::Other(&Objects::All {
             zone: Zone::Battlefield,
             filter: Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),

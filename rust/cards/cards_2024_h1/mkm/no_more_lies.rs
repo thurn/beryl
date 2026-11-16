@@ -16,13 +16,9 @@ use crate::prelude::*;
 /// [CR 118.12a]: https://yawgatog.com/resources/magic-rules/#R11812a
 /// [CR 608.2c]: https://yawgatog.com/resources/magic-rules/#R6082c
 pub static CARD: CardDef = Printed::NoMoreLies
-    .abilities(&[Ability::spell()
-        .target(&TargetSpec::spell())
-        .effect(&unless_pays(
-            &counter_and_exile(target()),
-            its_controller(),
-            ManaCost::generic(3),
-        ))])
+    .abilities(&[Ability::spell().target(&TargetSpec::spell()).effect(
+        &unless_its_controller_pays(&counter_and_exile(target()), ManaCost::generic(3)),
+    )])
     .card();
 
 #[cfg(feature = "scenarios")]

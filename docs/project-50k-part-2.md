@@ -99,7 +99,7 @@ testing the result. The card workflow below attacks those two costs.
 | P6  | The `by-bajq` cards are audited with a rulings ledger, which a check holds complete, and with fuzzing and exhaustive search over a pool of only those cards.                                                                                                         | Rulings are a bounded list of what each card must do (about 500 statements). Lockstep games against the oracles would need a decision bridge that is fragile on exactly these cards. |
 | P7  | The compiler refuses the bug classes it can: no wildcard match arm over an enum, no lossy integer cast, no walk over a set in slot order outside the kernel, and object references typed by what they point at. Every scenario also plays in both state layouts.     | The table under "From the bug log to guards".                                                                                                                                        |
 | P8  | Each engine module declares the Comprehensive Rules it implements. A check holds a file's citations to that range and reports rules no module owns. The engine is reorganised once to match. The 800-line limit stays.                                               | About 30 files were cut at the limit instead of at a boundary. The same data is a coverage map of the rules.                                                                         |
-| P9  | Helpers shared by cards are a phrase library: named compositions of vocabulary entries, each documented with the exact Oracle wording it renders to. The brief drafts every sentence it recognises, card writers may add phrases, and a set planner sorts a set.     | For a typical card all but one sentence has been written before. A wording is a key that makes a duplicate helper a check failure.                                                   |
+| P9  | Shared card helpers are prelude functions that compose vocabulary. Pass card-specific inputs as arguments and keep straightforward builder calls inline. The brief drafts definitions, and a set planner sorts a set.                                                | Reusable builders give a name to a composition and can cover many cards with a single function.                                                                                      |
 | P10 | The engine reads the shape of a game from one `Format` value. Only two-player constructed exists. No other mode is built.                                                                                                                                            | Subgames and restarts need it anyway, and Commander, Planechase, Archenemy, Two-Headed Giant and DanDân are other values of it.                                                      |
 | P11 | Each engine module gets one pass that moves it to its rule-owned place, converts it to typed references and simplifies it, as three commits. Lines before and after are recorded. No line count is a gate.                                                           | Learning a module is most of what a session costs, so three trips would cost three times. A line target invites dense code.                                                          |
 | P12 | Compile and check time is measured per crate and kept as a series. The largest costs are fixed from the measurement. An engine change tests the deck cards, the keystones and a sample fixed by the commit; the whole pool runs in the nightly.                      | Nobody has per-crate numbers. Per-card tests cost about 0.1 CPU-seconds a card, which is over an hour at 50,000.                                                                     |
@@ -443,40 +443,34 @@ hand-picked witnesses. Twenty-seven abilities are listed as unreachable
 
 `UNREACHED` and `EQUIVALENT` may only shrink.
 
-**E4. The phrase library.** `beryl_card/src/phrases/` holds named compositions
-of vocabulary entries. A phrase's doc comment starts with the exact Oracle
-wording it renders to, with holes for what varies:
+**E4. Shared prelude functions.** A builder in `beryl_card/src/phrases.rs`
+composes existing vocabulary where a named operation makes the card definition
+easier to read. Accept arguments for details that vary by card:
 
 ```rust
-/// "target nonland permanent"
-pub const NONLAND_PERMANENT: TargetSpec = TargetSpec::permanent(nonland());
-
-/// "At the beginning of your upkeep, {effect}"
-pub const fn at_your_upkeep(effect: &'static Effect) -> Ability { .. }
+/// When this permanent enters, do `effect`.
+pub const fn when_enters(effect: &'static Effect) -> Ability {
+    Ability::triggered(&Trigger::ENTERS).effect(effect)
+}
 ```
 
-- The `phrases` check renders each phrase and compares the result with its
-  wording, so the library is a table from Oracle wording to an expression that
-  is known to produce it.
-- Two phrases with one wording fail the check, which is how fifty writers
-  working at once do not write fifty helpers for one clause.
-- A phrase is pure composition. It adds no variant, no interpreter arm and no
-  rules code, so a card writer may add one. A clause that needs a new variant is
-  an escalation, as now.
-- The library is seeded from sub-expressions that two or more of the 121 card
-  files repeat, and from the long forms the builders force today
-  (`Filter::Not(&Filter::Types(Types::LAND))`).
-- Tokens several cards create and the scenario props stay in
-  `beryl_card_shared`.
+- Keep simple expressions such as `draw(you(), 3)` inline. Use documented
+  functions such as `instant_or_sorcery()` for common compositions.
+- The brief's vocabulary search reads the builder's doc comment. The `card-text`
+  check verifies the definitions that use it.
+- Card writers may add a helper that combines existing vocabulary. Escalate
+  clauses that need a new variant or interpreter arm.
+- Shared tokens and scenario props stay in `beryl_card_shared`.
 
 **E5. A brief that drafts.** `just card brief` prints a draft of the definition,
 and `just card new` writes it into the file. The draft comes first from
 [phase.rs](https://github.com/phase-rs/phase)'s published typed parse of every
 card (`card-data.json`, MIT/Apache-2.0), translated node by node into vocabulary
-entries and phrases by a table in `tools/src/beryl_tools/phase_draft.py`. For a
-sentence that table cannot translate, the brief matches the normalised sentence
-against the phrase wordings and the renderings of whole abilities of implemented
-cards, or prints `// no phrase renders this sentence:` with the nearest three.
+entries and prelude functions by a table in
+`tools/src/beryl_tools/phase_draft.py`. For a sentence that table cannot
+translate, the brief looks for a matching rendered ability from an implemented
+card. If it finds none, it prints the unresolved sentence and the three nearest
+examples.
 
 - **Nothing of Phase is built.** Python reads the JSON from `$BERYL_CACHE` at
   authoring time, pinned by a hash in `data/phase-data.json`. There is no Phase
@@ -508,7 +502,7 @@ in a set. `just set plan <code>` sorts them:
 | ------------ | ------------------------------------------------------------------------------------ | -------------------------------------- |
 | `store`      | Complete from the card store (keyword-only creatures)                                | Nobody                                 |
 | `drafted`    | Every sentence drafted by the brief                                                  | A `tier:haiku` writer checks the draft |
-| `composed`   | Some sentence has no phrase, but every keyword and layout it needs exists            | A `tier:sonnet` writer                 |
+| `composed`   | Some sentence has no complete draft, but every keyword and layout it needs exists    | A `tier:sonnet` writer                 |
 | `vocabulary` | A sentence needs a vocabulary entry; grouped by the missing clause, most cards first | One `tier:opus` bead a group           |
 | `mechanism`  | A keyword, layout or rule the engine lacks                                           | A design bead                          |
 
@@ -518,7 +512,7 @@ unblocks every card in its group.
 
 **E7. The skill.** The `card-writing` skill is rewritten around the draft: run
 the brief, check the draft against the Oracle text and the rulings, compose what
-it could not draft (adding a phrase where the clause will recur), run
+it could not draft using the existing vocabulary and builders, run
 `just card check`, add a scenario only for a surviving mutant or a ruling, and
 list the card in the rulings ledger when it has rulings worth holding. It keeps
 its rules that a writer never edits the vocabulary's variants, the engine or
@@ -852,7 +846,8 @@ The whole epic waits for `by-bajq` to close.
 2. **The keystone audit** runs beside everything, since it touches card files:
    the ledger tool, then the 49 cards in eight lanes, then the keystone pool.
 3. **The card workflow** runs beside the module passes: mutants, the bar, the
-   generator, the phrase library, the brief, the planner, the skill, the proof.
+   generator, the prelude functions, the brief, the planner, the skill, the
+   proof.
 4. **The module passes**, after the contracts and the sweeps: about fifteen
    beads, one a module group, in parallel, each with a Warden for its area.
 5. **A Mason** audits the kernel and rules contracts after the passes.
@@ -874,12 +869,12 @@ The whole epic waits for `by-bajq` to close.
   proof that is checked where it was once assumed is a branch. Only the count
   shows it, and each pass reports it.
 - **The generator cannot reach "every mutant" for most cards.** Then P2 covers
-  few cards and the workflow's gain is the draft and the phrase library alone.
-  The conversion of the existing cards (E8) measures the share before the dozen
-  new cards are written.
-- **Phrase wordings drift from the renderer.** A phrase's wording is checked by
-  rendering it, so a renderer change fails the phrases it changes, in the same
-  push.
+  few cards and the workflow's gain comes from the draft and the prelude
+  functions. The conversion of the existing cards (E8) measures the share before
+  the dozen new cards are written.
+- **A helper changes what its callers render.** Card text checks the complete
+  definition against its Oracle text, including the composed effects and
+  targets.
 - **A cast inside a resolution changes the replay model.** The replay
   differential test (inline answers against replayed ones) is extended to a
   resolution that casts before any card depends on it.

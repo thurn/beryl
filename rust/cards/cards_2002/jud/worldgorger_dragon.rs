@@ -34,7 +34,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::WorldgorgerDragon
     .keywords(Keywords::FLYING.union(Keywords::TRAMPLE))
     .abilities(&[
-        Ability::triggered(&Trigger::ENTERS).effect(&exile_linked(Objects::Other(&Objects::All {
+        when_enters(&exile_linked(Objects::Other(&Objects::All {
             zone: Zone::Battlefield,
             filter: Filter::Whose(&Players::You),
         }))),

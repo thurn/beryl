@@ -28,7 +28,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::DressDown
     .keywords(Keywords::FLASH)
     .abilities(&[
-        Ability::triggered(&Trigger::ENTERS).effect(&draw(you(), 1)),
+        when_enters(&draw(you(), 1)),
         Ability::static_ability(&LayerSpec {
             affected: Objects::All {
                 zone: Zone::Battlefield,

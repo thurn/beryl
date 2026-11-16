@@ -184,8 +184,10 @@ means `python3 ~/enact/scripts/enact.py`.
   state representation, which has room to grow.
 - State that a card creates goes in a store, not in a new field on `Player`,
   `Object` or `State` (K4 in `docs/engine-architecture.md`).
-- Helpers used by two or more cards go in the shared library, not in a card
-  file.
+- Put reusable card compositions that clarify their callers in documented
+  prelude functions. Pass details that vary by card as arguments and keep
+  straightforward builder calls inline. Shared tokens and scenario props go in
+  `beryl_card_shared`.
 - A card definition implements every clause of its Oracle text, including one
   that no card in the decks makes happen yet. A clause the vocabulary can't say
   is escalated in `data/card-escalations.json`, never left out with a comment.

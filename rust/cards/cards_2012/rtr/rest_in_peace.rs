@@ -21,7 +21,7 @@ use crate::prelude::*;
 /// [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
 pub static CARD: CardDef = Printed::RestInPeace
     .abilities(&[
-        Ability::triggered(&Trigger::ENTERS).effect(&exile(Objects::All {
+        when_enters(&exile(Objects::All {
             zone: Zone::Graveyard,
             filter: Filter::Any,
         })),
