@@ -53,7 +53,7 @@ fn a_fault_over_its_entry_or_not_listed_fails_and_one_under_it_is_too_high() {
     let fewer = [outcome("a", &[Rule::Jump])];
     let compared = list.compare(&fewer, true, "just b3d test --update");
     assert!(compared.over.is_empty());
-    assert!(compared.high[0].contains("`just b3d test --update`"));
+    assert!(compared.high[0].1.contains("`just b3d test --update`"));
     // Only the tests that ran are held to their entries, unless they are all the tests.
     assert!(list.compare(&[], false, "u").high.is_empty());
     assert_eq!(list.compare(&[], true, "u").high.len(), 1);

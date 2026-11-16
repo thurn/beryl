@@ -31,8 +31,8 @@ pub struct Listed {
 pub struct Comparison {
     /// Each fault count over its entry or not listed at all: the test's name, then a sentence.
     pub over: Vec<(String, String)>,
-    /// Each entry that is now too high, one sentence each.
-    pub high: Vec<String>,
+    /// Each entry that is now too high: the test's name, then a sentence.
+    pub high: Vec<(String, String)>,
 }
 
 /// What an update did.
@@ -61,9 +61,16 @@ pub fn counts(faults: &[Fault]) -> Counts {
     counts
 }
 
-/// The path of `data/beryl3d/test-faults.json`.
+/// The environment variable that names another list than `data/beryl3d/test-faults.json`, for
+/// the tests of `test` itself.
+pub const PATH_VARIABLE: &str = "BERYL_TEST_FAULTS";
+
+/// The path of `data/beryl3d/test-faults.json`, or of the list [`PATH_VARIABLE`] names.
 #[must_use]
 pub fn path() -> PathBuf {
+    if let Some(path) = std::env::var_os(PATH_VARIABLE) {
+        return PathBuf::from(path);
+    }
     recordings::root().join("data/beryl3d/test-faults.json")
 }
 
@@ -142,9 +149,12 @@ impl Listed {
             for (rule, &listed) in entry {
                 let n = found.get(rule).copied().unwrap_or(0);
                 if n < listed {
-                    comparison.high.push(format!(
-                        "{name} has {n} `{rule}` faults, under the {listed} listed; \
-                         lower the entry with `{update}`"
+                    comparison.high.push((
+                        name.clone(),
+                        format!(
+                            "{name} has {n} `{rule}` faults, under the {listed} listed; \
+                             lower the entry with `{update}`"
+                        ),
                     ));
                 }
             }
@@ -152,10 +162,13 @@ impl Listed {
         if every_test {
             for (name, entry) in &self.tests {
                 if !outcomes.iter().any(|o| o.test.name() == *name) {
-                    comparison.high.push(format!(
-                        "{name} is listed with {} faults but is not a test; remove the entry \
-                         with `{update}`",
-                        entry.values().sum::<usize>()
+                    comparison.high.push((
+                        name.clone(),
+                        format!(
+                            "{name} is listed with {} faults but is not a test; remove the \
+                             entry with `{update}`",
+                            entry.values().sum::<usize>()
+                        ),
                     ));
                 }
             }

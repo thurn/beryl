@@ -1,6 +1,7 @@
 //! `just b3d test` and the interface test runner behind it (docs/beryl-3d.md, "Test speed").
 
 use beryl_inspect::cli::{Ran, main};
+use beryl_inspect::faults::{Listed, PATH_VARIABLE};
 use beryl_inspect::runner::{self, Limits, Outcome, Test};
 use beryl_protocol::protocol::Side;
 use beryl_scene::input::Size;
@@ -126,4 +127,76 @@ fn the_frame_limits_name_what_is_over_them() {
     // A prefix's tests are held to the most, not the median.
     assert_eq!(limits.over(&outcomes, false).len(), 1);
     assert!(limits.over(&outcomes[..1], true).is_empty());
+}
+
+/// The verdict the run log gets for `name` when `b3d test` runs it against an allowance of
+/// `allowed` `rule` faults (none when `allowed` is `None`), and the exit status.
+fn logged_verdict(name: &str, rule: &str, allowed: Option<usize>, label: &str) -> (String, i32) {
+    let dir = std::env::temp_dir().join(format!("beryl-results-{}-{label}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("a directory");
+    let list = dir.join("test-faults.json");
+    let tests = allowed.map_or_else(
+        || serde_json::json!({}),
+        |n| serde_json::json!({ name: { rule: n } }),
+    );
+    std::fs::write(&list, serde_json::json!({ "tests": tests }).to_string()).expect("a list");
+    let results = dir.join("results.jsonl");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_b3d"))
+        .args(["test", name])
+        .env(PATH_VARIABLE, &list)
+        .env("BERYL_CHECK_RESULTS", &results)
+        .output()
+        .expect("b3d runs")
+        .status
+        .code()
+        .unwrap_or(-1);
+    let text = std::fs::read_to_string(&results).expect("the run log");
+    let _ = std::fs::remove_dir_all(&dir);
+    let lines: Vec<Value> = text
+        .lines()
+        .map(|l| serde_json::from_str(l).expect("JSON"))
+        .collect();
+    assert_eq!(lines.len(), 1, "{text}");
+    assert_eq!(lines[0]["check"], name);
+    (
+        lines[0]["outcome"].as_str().unwrap_or_default().to_owned(),
+        status,
+    )
+}
+
+/// A test with faults the real list allows, and how many of one rule.
+fn a_test_with_listed_faults() -> (String, String, usize) {
+    let listed = Listed::read().expect("the list");
+    let (name, counts) = listed
+        .tests
+        .iter()
+        .find(|(name, counts)| {
+            name.contains("/you/") && counts.len() == 1 && counts.values().all(|&n| n > 1)
+        })
+        .expect("a listed test");
+    let (rule, &n) = counts.iter().next().expect("a rule");
+    (name.clone(), rule.clone(), n)
+}
+
+/// The run log's verdict is the one the exit status gives: faults that match their allowance
+/// pass, and a new, excess or stale count fails the test that has it.
+#[test]
+fn the_run_log_agrees_with_the_allowance_comparison() {
+    let (name, rule, n) = a_test_with_listed_faults();
+    assert_eq!(
+        logged_verdict(&name, &rule, Some(n), "same"),
+        ("pass".into(), 0)
+    );
+    assert_eq!(
+        logged_verdict(&name, &rule, None, "new"),
+        ("fail".into(), 1)
+    );
+    assert_eq!(
+        logged_verdict(&name, &rule, Some(n - 1), "excess"),
+        ("fail".into(), 1)
+    );
+    assert_eq!(
+        logged_verdict(&name, &rule, Some(n + 1), "stale"),
+        ("fail".into(), 1)
+    );
 }

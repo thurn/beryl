@@ -1,6 +1,7 @@
 //! `test`: every interface test whose name starts with a prefix, at the check times or on every
 //! tick (docs/beryl-3d.md, "Test speed"). The tests themselves are in [`crate::runner`].
 
+use std::collections::BTreeSet;
 use std::fmt::Write;
 use std::io::Write as _;
 use std::time::Instant;
@@ -84,7 +85,6 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
     let started = Instant::now();
     let outcomes = runner::run(&tests, mode);
     let seconds = started.elapsed().as_secs_f64();
-    log(&outcomes);
     // The median is only held over the whole run: a prefix picks tests that are not typical.
     let every_test = prefix.is_empty();
     let over = limits.map_or_else(Vec::new, |limits| limits.over(&outcomes, every_test));
@@ -127,6 +127,7 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
             tests.dedup();
             tests.len()
         });
+    log(&outcomes, &failing(&shown, comparison.as_ref()));
     let report = Report {
         command: options.command_line(),
         found: grouped(&shown),
@@ -201,7 +202,7 @@ impl Report<'_> {
             }).collect::<Vec<_>>(),
             "over_limits": self.over,
             "over_listed": self.comparison.over.iter().map(|(_, why)| why).collect::<Vec<_>>(),
-            "listed_too_high": self.comparison.high,
+            "listed_too_high": self.comparison.high.iter().map(|(_, why)| why).collect::<Vec<_>>(),
             "listed_tests": self.summary.as_ref().map(|(tests, _)| *tests),
             "listed_rules": self.summary.as_ref().map(|(_, rules)| {
                 rules.iter().map(|(rule, n)| json!({ "rule": rule, "faults": n })).collect::<Vec<_>>()
@@ -246,7 +247,7 @@ impl Report<'_> {
         for (_, line) in self.comparison.over.iter().take(MOST_FAULTS) {
             let _ = writeln!(out, "OVER {line}");
         }
-        for line in self.comparison.high.iter().take(MOST_FAULTS) {
+        for (_, line) in self.comparison.high.iter().take(MOST_FAULTS) {
             let _ = writeln!(out, "TOO HIGH {line}");
         }
         if let Some(c) = &self.changes {
@@ -355,9 +356,24 @@ fn context(test: &Test) -> Context {
     }
 }
 
+/// The names of the tests that fail: those that errored or have a fault the list does not
+/// allow (`shown`), a count over its entry, or an entry that is now too high.
+fn failing(shown: &[Outcome], comparison: Option<&Comparison>) -> BTreeSet<String> {
+    let mut failing: BTreeSet<String> = shown
+        .iter()
+        .filter(|o| !o.passed())
+        .map(|o| o.test.name())
+        .collect();
+    if let Some(comparison) = comparison {
+        failing.extend(comparison.over.iter().map(|(name, _)| name.clone()));
+        failing.extend(comparison.high.iter().map(|(name, _)| name.clone()));
+    }
+    failing
+}
+
 /// Gives each test's result to the run log, through the file `$BERYL_CHECK_RESULTS` names,
 /// when a run of the checks asked for results. Logging never fails the tests.
-fn log(outcomes: &[Outcome]) {
+fn log(outcomes: &[Outcome], failing: &BTreeSet<String>) {
     let Some(path) = std::env::var_os("BERYL_CHECK_RESULTS") else {
         return;
     };
@@ -365,7 +381,7 @@ fn log(outcomes: &[Outcome]) {
         .create(true)
         .append(true)
         .open(&path)
-        .and_then(|mut file| file.write_all(runner::results(outcomes).as_bytes()));
+        .and_then(|mut file| file.write_all(runner::results(outcomes, failing).as_bytes()));
     if let Err(e) = logged {
         eprintln!("run log: not written: {e}");
     }

@@ -6,6 +6,7 @@
 //! renderer and no process per test. The recordings come from the pack ([`crate::recordings`]),
 //! so the engine runs only when the pack for the present sources is missing.
 
+use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Mutex;
@@ -305,14 +306,16 @@ impl Frames {
 }
 
 /// The lines the run log is given for `outcomes`, one JSON object each: the test's name,
-/// whether it passed, and the seconds it took (runlog.py's results file).
+/// whether it passed, and the seconds it took (runlog.py's results file). A test passes when it
+/// is not among the names in `failing`, which the caller derives from the same comparison that
+/// decides its exit status, so a fault the list allows is not a failure.
 #[must_use]
-pub fn results(outcomes: &[Outcome]) -> String {
+pub fn results(outcomes: &[Outcome], failing: &BTreeSet<String>) -> String {
     let mut lines = String::new();
     for outcome in outcomes {
         let line = serde_json::json!({
             "check": outcome.test.name(),
-            "outcome": if outcome.passed() { "pass" } else { "fail" },
+            "outcome": if failing.contains(&outcome.test.name()) { "fail" } else { "pass" },
             "seconds": (outcome.seconds * 1000.0).round() / 1000.0,
         });
         let _ = writeln!(lines, "{line}");
