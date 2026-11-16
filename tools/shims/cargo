@@ -5,7 +5,14 @@ here=$(cd "$(dirname "$0")" && pwd)
 real=""
 old_ifs=$IFS
 IFS=:
+# Every Beryl checkout has a shim directory, and a session started in the main checkout puts its
+# own on PATH while `by` in a worktree puts the worktree's first. Skipping only this directory
+# made each shim take the other for the real cargo, and cargo then ran neither, starting one
+# shim from the other forever. So any directory ending in `tools/shims` is skipped.
 for dir in $PATH; do
+    case "$dir" in
+        */tools/shims | */tools/shims/) continue ;;
+    esac
     if [ "$dir" != "$here" ] && [ -x "$dir/cargo" ]; then
         real="$dir/cargo"
         break

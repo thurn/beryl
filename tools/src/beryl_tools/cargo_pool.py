@@ -141,9 +141,19 @@ def lease_env(lease: tokens.Lease, jobserver: Jobserver) -> dict[str, str]:
     return env
 
 
+def is_shim(path: str) -> bool:
+    """Whether `path` is a Beryl checkout's cargo shim rather than cargo itself."""
+    return Path(path).parent.parts[-2:] == ("tools", "shims")
+
+
 def run(argv: list[str], pool: tokens.Pool | None = None) -> int:
     """Runs the real cargo with `argv` inside a lease (of `klass`) that grows while it runs."""
-    command = [os.environ.get(REAL_ENV) or "cargo", *argv]
+    real = os.environ.get(REAL_ENV) or "cargo"
+    if is_shim(real):
+        # Running another checkout's shim as cargo would start this one again, without end.
+        print(f"cargo shim: {real} is a shim, not cargo", file=sys.stderr)
+        return 127
+    command = [real, *argv]
     if (
         not needs_lease(argv)
         or os.environ.get(tokens.LEASE_ENV, "").isdigit()

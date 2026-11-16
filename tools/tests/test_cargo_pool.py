@@ -183,3 +183,38 @@ def test_a_check_step_names_the_class_its_cargo_takes(
         for line in (pool.root / tokens.LEASE_LOG).read_text().splitlines()
     ]
     assert [line["class"] for line in log] == ["push"]
+
+
+def test_the_shim_skips_another_checkouts_shim(tmp_path: Path) -> None:
+    """A session started in the main checkout puts that checkout's shim directory on PATH, and
+    `by` in a worktree puts the worktree's first. Each shim took the other for cargo, and
+    cargo never ran: the two started each other forever."""
+    other = tmp_path / "main" / "tools" / "shims"
+    other.mkdir(parents=True)
+    (other / "cargo").write_text((cargo_pool.SHIM_DIR / "cargo").read_text())
+    (other / "cargo").chmod(0o755)
+    cargo, out = fake_cargo(tmp_path / "bin")
+    env = {
+        **os.environ,
+        "PATH": os.pathsep.join(
+            [
+                str(cargo_pool.SHIM_DIR),
+                str(other),
+                str(cargo.parent),
+                "/usr/bin",
+                "/bin",
+            ]
+        ),
+        tokens.LEASE_ENV: "3",
+    }
+    subprocess.run(
+        [str(cargo_pool.SHIM_DIR / "cargo"), "build"], env=env, check=True, timeout=30
+    )
+    assert json.loads(out.read_text())["argv"] == ["build"]
+
+
+def test_a_shim_named_as_the_real_cargo_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(cargo_pool.REAL_ENV, "/somewhere/beryl/tools/shims/cargo")
+    assert cargo_pool.run(["fmt"]) == 127
