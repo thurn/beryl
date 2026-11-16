@@ -57,7 +57,7 @@ pub(crate) fn castable<L: Layout>(table: &Table<'_, L>, viewer: Seat, then: &Sta
     let after = then.zone(ZoneKey::Of(viewer, Zone::Hand));
     let mut scratch = Scratch::new();
     let obs = observe(then, t, &mut scratch, viewer);
-    (shown.in_candidate_order(held))
+    (crate::protocol::slots_by_id(held))
         .filter(|&slot| {
             after.contains(slot)
                 && !shown.definition(slot).face(t).types.intersects(Types::LAND)

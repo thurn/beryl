@@ -180,7 +180,8 @@ fn forced(d: &Decision) -> bool {
 fn position(t: &GameTable, s: &State, seed: u64) -> Scenario {
     let names = |p, zone| -> &'static [&'static str] {
         // The names of a hand, which has no order.
-        s.in_candidate_order(s.zone(ZoneKey::Of(p, zone)))
+        beryl_engine::Slot::all()
+            .filter(|&slot| (s.zone(ZoneKey::Of(p, zone))).contains(slot))
             .map(|slot| s.name(t, slot))
             .collect::<Vec<_>>()
             .leak()
@@ -310,7 +311,8 @@ fn seen(t: &GameTable, s: &State, d: &Decision) -> String {
     );
     let hands = Seat::BOTH.map(|p| {
         names(
-            s.in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Hand)))
+            beryl_engine::Slot::all()
+                .filter(|&slot| (s.zone(ZoneKey::Of(p, Zone::Hand))).contains(slot))
                 .map(|slot| s.name(t, slot).to_owned())
                 .collect(),
         )

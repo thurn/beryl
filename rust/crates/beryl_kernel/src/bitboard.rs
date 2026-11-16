@@ -13,9 +13,9 @@ use crate::ids::{Slot, SlotId};
 /// put cards in slots at random, architecture §14). What a caller may ask is whatever the
 /// answer to cannot depend on the order the members are met in: membership, the set algebra,
 /// [`Bitboard::count`], [`Bitboard::any`], [`Bitboard::all`], [`Bitboard::at_least`],
-/// [`Bitboard::filter`], [`Bitboard::sum`] and [`Bitboard::sole`]. Each takes a `Fn`, which
-/// cannot keep what it saw from one member to the next. A sequence is asked of the state by
-/// the name of its order (the crate's contract, "Sets and orders").
+/// [`Bitboard::filter`], [`Bitboard::fold`], [`Bitboard::sum`] and [`Bitboard::sole`].
+/// A fold uses a combination independent of traversal order. A sequence is asked of the
+/// state by the name of its order (the crate's contract, "Sets and orders").
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Bitboard<S: SlotId = Slot>(pub(crate) S::Words);
 
@@ -87,6 +87,44 @@ impl<S: SlotId> Bitboard<S> {
         self.iter().map(f).sum()
     }
 
+    /// Combines independent contributions from the members. The result must be the same
+    /// in any order, such as a union or the subtraction of each member's mana.
+    #[inline]
+    pub fn fold<T>(self, initial: T, add: impl Fn(T, S) -> T) -> T {
+        self.iter().fold(initial, add)
+    }
+
+    /// Whether a pair of distinct members satisfies the symmetric predicate `matches`.
+    #[inline]
+    pub fn any_pair(self, matches: impl Fn(S, S) -> bool) -> bool {
+        let mut rest = self.iter();
+        while let Some(slot) = rest.next() {
+            if rest.0.any(|other| matches(slot, other)) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// The mapped values in sorted order, retaining repeated values.
+    pub fn sorted<T: Ord>(self, map: impl Fn(S) -> T) -> Vec<T> {
+        let mut values: Vec<_> = self.iter().map(map).collect();
+        values.sort_unstable();
+        values
+    }
+
+    /// The least of the values `key` gives the members, if any.
+    #[inline]
+    pub fn min<T: Ord>(self, key: impl Fn(S) -> T) -> Option<T> {
+        self.iter().map(key).min()
+    }
+
+    /// The greatest of the values `key` gives the members, if any.
+    #[inline]
+    pub fn max<T: Ord>(self, key: impl Fn(S) -> T) -> Option<T> {
+        self.iter().map(key).max()
+    }
+
     /// The one member of a set of one, and nothing for any other set.
     #[inline]
     pub fn sole(self) -> Option<S> {
@@ -101,8 +139,7 @@ impl<S: SlotId> Bitboard<S> {
         self.iter().nth(n)
     }
 
-    /// The slots in ascending order. Other crates reach it as the candidate order
-    /// (`State::in_candidate_order`), which names what it is.
+    /// The slots in ascending order, for kernel use.
     #[inline]
     pub(crate) fn iter(self) -> Slots<S> {
         Slots(self)

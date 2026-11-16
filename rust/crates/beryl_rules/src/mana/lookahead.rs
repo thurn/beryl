@@ -8,7 +8,7 @@ use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
 use crate::rule_change;
-use crate::state::{State, TurnStep, Zone, ZoneKey};
+use crate::state::{State, TurnStep};
 use crate::table::{GameTable, ManaFace};
 
 use super::solver::{Plan, each_plan};
@@ -37,9 +37,8 @@ pub(super) fn later_costs<L: Layout>(
             later.push_if_room(l); // A heuristic: what a fixed layout has no room for is left.
         }
     };
-    // Each cost is kept once, and `still_payable` reads the list as a set: no order shows.
-    let hand = s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Hand)));
-    for def in hand.filter_map(|slot| s.card_def(t, slot)) {
+    let hand = s.hand_by_definition(player);
+    for def in hand.iter().filter_map(|&slot| s.card_def(t, slot)) {
         for face in def.faces {
             if !face.types.intersects(Types::LAND) {
                 add(Later {
@@ -208,12 +207,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     // The hand by card, not by slot: [`Lookahead::together`]'s search is bounded, so the order
     // it meets the costs in can decide, and the slots are where the game's randomness dealt
     // the cards.
-    let mut hand: L::Queue<L::Slot, 64> = Default::default();
-    for slot in s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Hand))) {
-        hand.push_bounded(slot); // Their own cards: no more than a fixed layout's deck.
-    }
-    hand.as_mut_slice()
-        .sort_by_key(|&slot| s.definition(slot).key());
+    let hand = s.hand_by_definition(player);
     for card in hand.iter().filter_map(|&slot| s.card_behind(slot)) {
         let def = t.def(card);
         for f in def.face_ixs() {

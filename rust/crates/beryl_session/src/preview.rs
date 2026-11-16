@@ -115,8 +115,8 @@ fn targets<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> Vec<Vec<T
                     candidates,
                     ..
                 }) => match candidates {
-                    Candidates::Objects(objects) => copy
-                        .in_candidate_order(objects)
+                    Candidates::Objects(_) => candidates
+                        .objects()
                         .map(|slot| TargetRef::Object {
                             slot: ObjectId(slot.num()),
                         })

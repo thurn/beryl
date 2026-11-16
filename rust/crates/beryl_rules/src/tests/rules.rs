@@ -172,9 +172,7 @@ fn a_shuffle_rebinds_identities_and_clears_knowledge() {
     begin(&t, &mut s);
     let p = s.turn().starting_player();
     // Any order: every card is checked.
-    let hand: Vec<Slot> = s
-        .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Hand)))
-        .collect();
+    let hand: Vec<Slot> = crate::tests::fixture_slots(s.zone(ZoneKey::Of(p, Zone::Hand))).collect();
     for &slot in &hand {
         assert!(s.knows(p, slot));
         s.move_object(

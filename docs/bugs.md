@@ -6,6 +6,30 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Worldgorger Dragon exiled its controller's permanents in slot order.**
+  `linked::exile_instruction` emitted a zone change for each permanent. It
+  visited the set by slot number, which changed which land the player saw leave
+  first when the same position used different slot numbers. Linked exile now
+  follows battlefield order. The three-numbering scenario
+  `linked_exile_reports_permanents_in_battlefield_order` checks the actual
+  events. Making `State::in_candidate_order` kernel-private also prevents a
+  rules function from using this traversal for a batch of mutations.
+
+- **Some batches inherited slot order at another visible step.** Spell removal
+  reported stack positions in slot order, and top-or-bottom effects asked about
+  cards in slot order. These paths now use stack order and game order. The same
+  traversal guard applies to them.
+
+- **Payment substitution could treat a restricted mana source as spare.** The
+  payability check ruled out unrestricted mana sources before choosing which
+  objects could pay generic mana in their place. A restricted-only source
+  counted as spare even when it could make colored mana for that spell. Which
+  candidates were excluded from the mana check then depended on slot order.
+  `Funds::sources_for` now includes the sources whose restrictions accept the
+  spell, and the substitute check needs only the number of spare objects. The
+  restricted-mana fixture checks both an eligible spell and an unrestricted
+  payment.
+
 - **Mutating over a face-down creature left the merged permanent unknown to the
   opponent.** The nightly fuzz panicked with "a public card unknown": a player
   cast Gemrazer for its mutate cost over a creature that Abhorrent Oculus had

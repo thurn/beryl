@@ -90,6 +90,14 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
         self.game.state
     }
 
+    /// A snapshot of the objects in game order, for instructions that act on each separately.
+    pub(crate) fn in_game_order(
+        &self,
+        objects: Bitboard<L::Slot>,
+    ) -> Result<L::Queue<L::Slot, 128>, Full> {
+        self.game.state.in_game_order(self.game.table, objects)
+    }
+
     /// What the ability's expressions are read against, as the game is now.
     pub(crate) fn scene(&self) -> Scene<'_, L> {
         let entry = &self.resolving.entry;
@@ -318,7 +326,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 terms,
             } => casting::permit_instruction(self, player, cards, duration, terms)?,
             Effect::MayCast { player, card, free } => {
-                casting::may_cast_instruction(self, player, card, free)
+                casting::may_cast_instruction(self, player, card, free)?
             }
             Effect::UntapUpTo {
                 player,

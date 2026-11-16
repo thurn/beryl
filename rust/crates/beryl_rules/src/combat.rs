@@ -126,10 +126,9 @@ pub(crate) fn attack_decision<L: Layout>(
             .copied()
             .filter(|&slot| may_attack(s, t, restricted, slot))
             .collect();
-        // Candidates are listed in the candidate order, which a `Choice` counts in.
-        for slot in s.in_candidate_order(collapse(s, able)) {
-            list.push(Opt::Attack(slot))?;
-        }
+        Candidates::<L>::extend_options(&mut list, collapse(s, able), |out, slot| {
+            out.push(Opt::Attack(slot))
+        })?;
         (s.turn().active(), DecisionKind::Attacker, Part::Pick)
     } else {
         list = attack_targets(s)?;
@@ -397,10 +396,9 @@ pub(crate) fn block_decision<L: Layout>(
         .copied()
         .filter(|&slot| may_block(s, t, slot))
         .collect();
-    // Candidates are listed in the candidate order, which a `Choice` counts in.
-    for slot in s.in_candidate_order(collapse(s, able)) {
-        list.push(Opt::Block(slot))?;
-    }
+    Candidates::<L>::extend_options(&mut list, collapse(s, able), |out, slot| {
+        out.push(Opt::Block(slot))
+    })?;
     Ok(Decision {
         player,
         decider: player,

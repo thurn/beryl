@@ -576,13 +576,12 @@ impl Expert<'_> {
             return 0;
         }
         self.obs()
-            .in_candidate_order(self.obs().zone(ZoneKey::Of(
+            .zone(ZoneKey::Of(
                 self.obs().controller(slot).opponent(),
                 Zone::Exile,
-            )))
-            .filter(|&s| self.obs().memos(s).exiled_until() == Some(slot))
-            .map(|s| self.value(s))
-            .sum()
+            ))
+            .filter(|s| self.obs().memos(s).exiled_until() == Some(slot))
+            .sum(|s| self.value(s))
     }
 
     /// A card to take from a look at the opponent's hand, as Elite Spellbinder's: by its
@@ -593,9 +592,7 @@ impl Expert<'_> {
         let (player, zone) = match d.prompt.purpose {
             // The cards looked at lie in their owner's library or hand.
             Purpose::Look => {
-                let card = self
-                    .obs()
-                    .object(self.obs().in_candidate_order(d.about).next()?);
+                let card = self.obs().object(d.about.min(|slot| slot)?);
                 (card.owner(), card.zone())
             }
             Purpose::Scry => (self.me(), Zone::Library),
@@ -661,17 +658,10 @@ impl Expert<'_> {
         self.hand(self.me()).any(|s| self.is(s, name))
     }
 
-    /// The counterspells in our hand.
-    fn counters_in_hand(&self) -> impl Iterator<Item = Slot> + '_ {
-        self.obs()
-            .in_candidate_order(self.hand(self.me()))
-            .filter(|&s| self.counter_cost(s).is_some())
-    }
-
     /// The mana each counterspell in hand worth holding up costs: one our untapped sources
     /// have the colors for (they stay as they are through the opponent's turn), and Mana
     /// Tithe, which a player with a mana to spare pays, only when it is the only one.
-    fn counter_mana(&self) -> impl Iterator<Item = i32> + '_ {
+    fn least_counter_mana(&self, available: i32) -> Option<i32> {
         let (white, blue) = self.colors_up(self.me());
         let castable = move |s: Slot| {
             self.obs().card(s).is_some_and(|c| {
@@ -679,12 +669,14 @@ impl Expert<'_> {
                 i32::from(cost.symbols[0]) <= white && i32::from(cost.symbols[1]) <= blue
             })
         };
-        let others = self
-            .counters_in_hand()
-            .any(|s| castable(s) && !self.is(s, names::MANA_TITHE));
-        self.counters_in_hand()
-            .filter(move |&s| castable(s) && (!others || !self.is(s, names::MANA_TITHE)))
-            .filter_map(|s| self.counter_cost(s))
+        let counters = self
+            .hand(self.me())
+            .filter(|slot| self.counter_cost(slot).is_some());
+        let others = counters.any(|slot| castable(slot) && !self.is(slot, names::MANA_TITHE));
+        counters
+            .filter(|slot| castable(slot) && (!others || !self.is(slot, names::MANA_TITHE)))
+            .min(|slot| self.counter_cost(slot).expect("a counterspell"))
+            .filter(|&cost| cost <= available)
     }
 
     /// The mana a counterspell in hand costs; `None` for any other card.
@@ -785,7 +777,9 @@ impl Expert<'_> {
     /// face `face`, by counterspell discipline; 0 when it is no counter or not worth it.
     fn counter_score(&self, top: &StackEntry, slot: Slot, face: FaceIx) -> i32 {
         let threat = self.threat(top);
-        let spare = self.counters_in_hand().count() >= 2;
+        let spare = self
+            .hand(self.me())
+            .at_least(2, |slot| self.counter_cost(slot).is_some());
         let last_card = self.hand(self.opp()).count() <= 1;
         let min = if spare || last_card {
             COUNTER_SPARE
@@ -912,11 +906,9 @@ impl Expert<'_> {
         // Elite Spellbinder takes the best nonland card from our hand, the counterspell too.
         if def.name == names::ELITE_SPELLBINDER {
             v += self
-                .obs()
-                .in_candidate_order(self.hand(self.me()))
-                .filter(|&s| !self.p.is_land(s))
-                .map(|s| self.value(s))
-                .max()
+                .hand(self.me())
+                .filter(|s| !self.p.is_land(s))
+                .max(|s| self.value(s))
                 .unwrap_or(0)
                 / 2;
         }
@@ -1427,7 +1419,7 @@ impl Expert<'_> {
         {
             return v;
         }
-        let Some(keep) = self.counter_mana().min() else {
+        let Some(keep) = self.least_counter_mana(i32::MAX) else {
             return v;
         };
         let cost = i32::from(self.p.t.def(card).front().cost.mana_value());
@@ -1453,23 +1445,24 @@ impl Expert<'_> {
     /// Whether spending `cost` leaves the mana for the cheapest counterspell or flash threat
     /// in hand, if any: what we hold mana up for on the opponent's turn.
     fn keeps_counter_mana(&self, cost: i32) -> bool {
-        let flash = self
-            .obs()
-            .in_candidate_order(self.hand(self.me()))
-            .filter_map(|s| match self.name(s)? {
-                names::THE_WANDERING_EMPEROR | names::SPHINX_OF_FALSE_CONCLUSIONS => Some(4),
-                names::MALCOLM_ALLURING_SCOUNDREL => Some(2),
-                _ => None,
-            });
-        // Only what our mana could cast at all is worth keeping it for, and nothing under
-        // their Teferi, which keeps us from casting it on their turn.
+        // Only what our mana can cast is worth keeping it for. Teferi can prevent us
+        // casting any spell during their turn.
         if self.sorcery_only() {
             return true;
         }
         let mana = self.mana(self.me());
-        self.counter_mana()
+        let flash_cost = |slot| match self.name(slot) {
+            Some(names::THE_WANDERING_EMPEROR | names::SPHINX_OF_FALSE_CONCLUSIONS) => 4,
+            Some(names::MALCOLM_ALLURING_SCOUNDREL) => 2,
+            _ => i32::MAX,
+        };
+        let flash = self
+            .hand(self.me())
+            .min(flash_cost)
+            .filter(|&value| value <= mana);
+        self.least_counter_mana(mana)
+            .into_iter()
             .chain(flash)
-            .filter(|&keep| keep <= mana)
             .min()
             .is_none_or(|keep| mana - cost >= keep)
     }
@@ -1798,17 +1791,16 @@ impl Expert<'_> {
                 }
             })
             .count();
-        let mut costs: Vec<i32> = self
-            .obs()
-            .in_candidate_order(self.hand(self.me()))
-            .filter(|&s| {
-                self.name(s)
-                    .is_some_and(|n| n != names::OUST && REMOVAL.contains(&n))
+        let costs = self
+            .hand(self.me())
+            .filter(|slot| {
+                self.name(slot)
+                    .is_some_and(|name| name != names::OUST && REMOVAL.contains(&name))
             })
-            .filter_map(|s| self.obs().card(s))
-            .map(|c| i32::from(self.p.t.def(c).front().cost.mana_value()))
-            .collect();
-        costs.sort_unstable();
+            .sorted(|slot| {
+                let card = self.obs().card(slot).expect("the named card in our hand");
+                i32::from(self.p.t.def(card).front().cost.mana_value())
+            });
         let mut mana = self.mana(self.me());
         let spells = costs
             .iter()
@@ -2336,22 +2328,23 @@ impl Expert<'_> {
             }
         }
         let total = w + u + both + c;
-        let mut v = 3 * total;
-        for slot in self.obs().in_candidate_order(self.hand(me)) {
-            let Some(card) = self.obs().card(slot) else {
-                continue;
-            };
-            let f = self.p.t.def(card).front();
-            if f.types.intersects(Types::LAND) {
-                continue;
-            }
-            let (need_w, need_u) = (i32::from(f.cost.symbols[0]), i32::from(f.cost.symbols[1]));
-            let short = (need_w - w).max(0) + (need_u - u).max(0);
-            if short <= both && i32::from(f.cost.mana_value()) <= total {
-                v += self.value(slot);
-            }
-        }
-        v
+        3 * total
+            + self.hand(me).sum(|slot| {
+                let Some(card) = self.obs().card(slot) else {
+                    return 0;
+                };
+                let f = self.p.t.def(card).front();
+                if f.types.intersects(Types::LAND) {
+                    return 0;
+                }
+                let (need_w, need_u) = (i32::from(f.cost.symbols[0]), i32::from(f.cost.symbols[1]));
+                let short = (need_w - w).max(0) + (need_u - u).max(0);
+                if short <= both && i32::from(f.cost.mana_value()) <= total {
+                    self.value(slot)
+                } else {
+                    0
+                }
+            })
     }
 
     /// What returning a permanent of the opponent's to its owner's hand is worth: what it
@@ -2723,10 +2716,7 @@ impl Expert<'_> {
     fn yes_no(&self, d: &Decision) -> Option<Choice> {
         let player = match d.prompt.purpose {
             // The card looked at is the top of its owner's library.
-            Purpose::Fateseal => self
-                .obs()
-                .object(self.obs().in_candidate_order(d.about).next()?)
-                .owner(),
+            Purpose::Fateseal => self.obs().object(d.about.min(|slot| slot)?).owner(),
             Purpose::Explore => self.me(),
             _ => return None,
         };

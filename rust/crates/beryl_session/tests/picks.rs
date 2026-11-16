@@ -190,9 +190,10 @@ fn a_pick_of_cards_for_any_purpose_is_answered_by_clicks() {
             let view = asked(&table, &state, &d);
             let mut held = Held::opening(&view, &state, &table, Some(&d))
                 .unwrap_or_else(|| panic!("the session does not hold a pick for {purpose:?}"));
-            let offered: Vec<Subject> = (state.in_candidate_order(among))
-                .map(|slot| card(ObjectId(slot.num())))
-                .collect();
+            let offered: Vec<Subject> = (beryl_engine::Slot::all()
+                .filter(|&slot| (among).contains(slot)))
+            .map(|slot| card(ObjectId(slot.num())))
+            .collect();
             assert_eq!(offered.len(), 2);
             // Each card offered is marked, as one to pick or as one a prompt opens with.
             let marked = |held: &Held, on: Subject| {

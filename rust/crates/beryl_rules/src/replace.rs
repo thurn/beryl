@@ -24,7 +24,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, AbilityKind, ObjectAbility, Replaced, Replacement, Rewrite, Types,
 };
-use crate::decision::{Choice, Decision, DecisionKind, OPTIONS, Opt};
+use crate::decision::{Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt};
 use crate::event::{Entry, Reason, ReplacementKind, Sink};
 use crate::filter::Evaluate;
 use crate::fixed::{Fixed, Full};
@@ -507,11 +507,13 @@ fn copy_to_enter<L: Layout>(
     let words = crate::card::Words::NONE;
     let mut options = <L::Queue<Opt<L>, OPTIONS>>::default();
     options.push(Opt::Done)?;
-    for p in s.in_candidate_order(s.battlefield().iter().copied().collect()) {
-        if p != slot && of.matches(s, t, p, player, &words) {
-            options.push(Opt::Object(p))?;
-        }
-    }
+    let eligible = s
+        .battlefield()
+        .iter()
+        .copied()
+        .filter(|&p| p != slot && of.matches(s, t, p, player, &words))
+        .collect();
+    Candidates::<L>::extend_options(&mut options, eligible, |out, p| out.push(Opt::Object(p)))?;
     let d = Decision::options(
         player,
         DecisionKind::ChooseUpTo,
@@ -666,9 +668,8 @@ fn dredge_of<L: Layout>(
 /// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
 pub(crate) fn dredges<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
     let library = s.library(player).len();
-    s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Graveyard)))
-        .filter(|&slot| dredge_of(s, t, slot).is_some_and(|(_, n)| library >= usize::from(n)))
-        .collect()
+    s.zone(ZoneKey::Of(player, Zone::Graveyard))
+        .filter(|slot| dredge_of(s, t, slot).is_some_and(|(_, n)| library >= usize::from(n)))
 }
 
 /// Offers `player` the dredge abilities that could replace their next draw, if any
@@ -689,9 +690,7 @@ pub(crate) fn dredge<L: Layout>(game: &mut Game<'_, L>, player: Seat) -> Result<
     }
     let mut options = <L::Queue<Opt<L>, OPTIONS>>::default();
     options.push(Opt::Done)?;
-    for slot in game.state.in_candidate_order(cards) {
-        options.push(Opt::Object(slot))?;
-    }
+    Candidates::<L>::extend_options(&mut options, cards, |out, slot| out.push(Opt::Object(slot)))?;
     let d = Decision::options(
         player,
         DecisionKind::ChooseUpTo,

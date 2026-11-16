@@ -112,8 +112,7 @@ fn any_player_untaps_up_to_n_of_the_tapped_permanents_named() {
 fn any_card_is_manifested_for_any_player() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
-    let card = s
-        .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Hand)))
+    let card = crate::tests::fixture_slots(s.zone(ZoneKey::Of(p, Zone::Hand)))
         .next()
         .expect("a card in hand");
     let mut game = Game::new(&mut s, &t, &mut x.events);
@@ -181,8 +180,7 @@ fn any_object_is_put_into_its_owners_library_at_any_position() {
         Reason::Effect,
     )
     .unwrap();
-    let held = s
-        .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Hand)))
+    let held = crate::tests::fixture_slots(s.zone(ZoneKey::Of(p, Zone::Hand)))
         .next()
         .expect("a card in hand");
     let top = *s.library(p).last().unwrap();
@@ -261,7 +259,7 @@ fn any_tokens_enter_attacking_one_of_the_defending_players_given() {
     let created = created.unwrap();
     assert!(question.is_none());
     assert_eq!(created.count(), 2);
-    for token in s.in_candidate_order(created) {
+    for token in crate::tests::fixture_slots(created) {
         assert_eq!(flags(&s, token), (true, true));
         assert_eq!(s.object(token).attacked_planeswalker(), Some(walker));
         assert_eq!(s.controller(token), Seat::P0);

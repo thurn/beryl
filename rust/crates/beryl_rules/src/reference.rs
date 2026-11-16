@@ -17,7 +17,7 @@ use crate::invariants::{At, Violation};
 use crate::layers;
 use crate::layout::{Layout, Queue, Table};
 use crate::mana::{self, Funds, Paying};
-use crate::state::{State, Zone, ZoneKey};
+use crate::state::State;
 use crate::table::{Capability, GameTable};
 use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::mana_memory::RememberedMana;
@@ -117,10 +117,10 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
         return Ok(());
     };
     let at = Some(At::Player(player));
-    // Every cost is checked, so the order only decides which disagreement is reported.
-    let hand = s
-        .in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Hand)))
-        .filter_map(|slot| s.card_def(t, slot))
+    let hand = s.hand_by_definition(player);
+    let hand = hand
+        .iter()
+        .filter_map(|&slot| s.card_def(t, slot))
         .flat_map(|def| def.faces.iter().map(|f| f.cost));
     let abilities = s
         .battlefield()
@@ -194,8 +194,7 @@ fn check_spell_payments<L: Layout>(
     }
     let at = Some(At::Player(player));
     let none = Bitboard::EMPTY;
-    // Every card is checked, so the order only decides which disagreement is reported.
-    for slot in s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Hand))) {
+    for &slot in s.hand_by_definition(player).iter() {
         let Some(def) = s.card_def(t, slot) else {
             continue;
         };

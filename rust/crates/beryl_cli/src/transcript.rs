@@ -125,8 +125,8 @@ impl Transcript {
         for p in Seat::BOTH {
             let player = s.player(p);
             // A hand has no order; a transcript lists it in the candidate order.
-            let hand: Vec<String> = s
-                .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Hand)))
+            let hand: Vec<String> = Slot::all()
+                .filter(|&slot| (s.zone(ZoneKey::Of(p, Zone::Hand))).contains(slot))
                 .map(|slot| name(t, s, slot))
                 .collect();
             let board: Vec<String> = s
@@ -226,8 +226,8 @@ impl Transcript {
                 }
                 Event::Attack { player, attackers } => {
                     // Attackers are declared together; listed in the candidate order.
-                    let names: Vec<String> = s
-                        .in_candidate_order(attackers)
+                    let names: Vec<String> = Slot::all()
+                        .filter(|&slot| (attackers).contains(slot))
                         .map(|a| self.called(t, s, s.object_ref(a)))
                         .collect();
                     Some(format!(

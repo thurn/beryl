@@ -93,6 +93,23 @@ fn mana_that_remembers_pays_only_what_its_restriction_accepts() {
         index_of(&d, chosen).unwrap(),
     );
 
+    // The untapped source can make mana for the Goblin even though none of its mana is
+    // unrestricted. A generic-mana substitute must account for that mana before it taps.
+    let funds = mana::Funds::of(&s, &t, p).unwrap();
+    let for_goblin = Paying::casting(&s, &t, goblin, FaceIx::FRONT);
+    assert!(
+        funds
+            .sources_for(&s, &t, for_goblin)
+            .unwrap()
+            .contains(cavern)
+    );
+    assert!(
+        !funds
+            .sources_for(&s, &t, Paying::NOTHING)
+            .unwrap()
+            .contains(cavern)
+    );
+
     // Tapped at priority for {R}, as a player may (CR 605.3a).
     mana::activate(&mut s, &t, &mut Sink::off(), cavern, ManaColor::Red).unwrap();
     assert!(s.object(cavern).is_tapped());

@@ -54,15 +54,14 @@ pub(crate) fn face_up_options<L: Layout>(
         .copied()
         .filter(|&slot| s.object(slot).face() == FaceIx::DOWN && s.controller(slot) == player)
         .collect();
-    // Candidates are listed in the candidate order, which a `Choice` counts in.
-    for slot in s.in_candidate_order(collapse(s, face_down)) {
+    Candidates::<L>::extend_options(out, collapse(s, face_down), |out, slot| {
         if let Some(cost) = face_up_cost(s, t, slot)
             && mana::payable(s, t, player, cost, Bitboard::EMPTY, mana::Paying::NOTHING)?
         {
             out.push(Opt::TurnFaceUp(slot))?;
         }
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Begins turning the face-down permanent in `slot` face up: pays its mana cost by the one

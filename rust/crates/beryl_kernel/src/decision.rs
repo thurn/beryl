@@ -1,7 +1,12 @@
 //! Decisions and their answers (architecture §3, §7.1, decision D6), and how a game ends
 //! (§12.2).
 
+mod collapse;
+
+pub use collapse::{collapse, collapse_in_order, interchangeable};
+
 use crate::bitboard::{Bitboard, Slots};
+use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
 use crate::observation::Observation;
@@ -159,6 +164,20 @@ pub enum Candidates<L: Layout = Small> {
 impl Copy for Candidates<Small> {}
 
 impl<L: Layout> Candidates<L> {
+    /// Appends the options for each object in the order a recorded [`Choice`] expects.
+    /// The callback may append several options for one object, such as its casting modes.
+    #[inline]
+    pub fn extend_options(
+        out: &mut L::Queue<Opt<L>, OPTIONS>,
+        objects: Bitboard<L::Slot>,
+        add: impl Fn(&mut L::Queue<Opt<L>, OPTIONS>, L::Slot) -> Result<(), Full>,
+    ) -> Result<(), Full> {
+        for slot in objects.iter() {
+            add(out, slot)?;
+        }
+        Ok(())
+    }
+
     pub fn len(&self) -> usize {
         match self {
             Candidates::Objects(b) => b.count() as usize,
@@ -170,8 +189,7 @@ impl<L: Layout> Candidates<L> {
         self.len() == 0
     }
 
-    /// The objects offered, in the order a [`Choice`] counts them (the candidate order,
-    /// [`State::in_candidate_order`]): none for option candidates.
+    /// The objects offered, in the order a [`Choice`] counts them. Empty for option candidates.
     #[inline]
     pub fn objects(&self) -> Slots<L::Slot> {
         match self {

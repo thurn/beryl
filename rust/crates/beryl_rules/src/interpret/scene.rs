@@ -342,17 +342,17 @@ impl<L: Layout> Scene<'_, L> {
             // effect moved is known as it last was, and so is one of `Those` the instruction
             // moved ([`Scene::controller`]). What any other name names is read where it is.
             Players::ControllerOf(objects) => {
-                let mut who = PlayerSet::NOBODY;
                 let moved = objects == Objects::Those;
-                // The candidate order, here and for the owners: a set is built, whose order
-                // is nothing.
-                for slot in self.s.in_candidate_order(self.objects(objects)) {
-                    who.insert(if moved {
-                        self.controller(slot)
-                    } else {
-                        self.s.controller(slot)
+                let mut who = self
+                    .objects(objects)
+                    .fold(PlayerSet::NOBODY, |mut who, slot| {
+                        who.insert(if moved {
+                            self.controller(slot)
+                        } else {
+                            self.s.controller(slot)
+                        });
+                        who
                     });
-                }
                 for known in self.moved(objects) {
                     who.insert(known.controller);
                 }
@@ -361,10 +361,12 @@ impl<L: Layout> Scene<'_, L> {
             // CR 108.3: "The owner of a card in the game is the player who started the game
             // with it in their deck." A slot keeps its owner through every move.
             Players::OwnerOf(objects) => {
-                let mut who = PlayerSet::NOBODY;
-                for slot in self.s.in_candidate_order(self.objects(objects)) {
-                    who.insert(self.s.object(slot).owner());
-                }
+                let mut who = self
+                    .objects(objects)
+                    .fold(PlayerSet::NOBODY, |mut who, slot| {
+                        who.insert(self.s.object(slot).owner());
+                        who
+                    });
                 if let Objects::Target(spec) = objects {
                     for object in self.targets(spec).filter_map(|(_, t)| t.as_object()) {
                         who.insert(self.s.object(object.slot).owner());
@@ -482,8 +484,9 @@ impl<L: Layout> Scene<'_, L> {
             // CR 300.1: each card type once, among the cards: a token is none (CR 108.2).
             // A union of types, the same in any order the cards are read.
             Amount::CardTypesAmong(objects) => {
-                let types = (self.s.in_candidate_order(self.objects(*objects)))
-                    .filter(|&slot| !self.s.object(slot).is_token())
+                let types = self
+                    .objects(*objects)
+                    .filter(|slot| !self.s.object(slot).is_token())
                     .fold(Types::NONE, |types, slot| {
                         types.union(self.s.types(self.t, slot))
                     });

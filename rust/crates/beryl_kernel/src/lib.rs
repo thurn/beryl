@@ -559,27 +559,27 @@
 //!
 //! Outside the kernel a [`Bitboard`] is a set: union, intersection, difference, `contains`,
 //! `count`, `is_empty`, [`Bitboard::any`], [`Bitboard::all`], [`Bitboard::at_least`],
-//! [`Bitboard::filter`], [`Bitboard::sum`] and [`Bitboard::sole`], its one member. It does
-//! not iterate, it has no first member and its words are the crate's. Each of those takes a
-//! `Fn`, which cannot carry what it saw from one member to the next, so its answer is the
-//! same in any order. [`PlayerSet`] is the same for players. A caller that needs a sequence
-//! asks for an order by name:
+//! [`Bitboard::filter`], [`Bitboard::sum`], [`Bitboard::fold`], [`Bitboard::min`],
+//! [`Bitboard::max`], [`Bitboard::any_pair`], [`Bitboard::sorted`] and [`Bitboard::sole`] give
+//! order-independent answers. A fold uses an order-independent operation such as union.
+//! The kernel owns iteration by slot. Ask for a game order by name:
 //!
 //! | Order | Query |
 //! | --- | --- |
 //! | the battlefield, as permanents entered it | [`State::battlefield`] |
 //! | a library, top first | [`State::library_from_top`] |
+//! | the stack, from the top or bottom | [`State::stack`] |
 //! | a graveyard, as cards were put there (CR 404.2) | [`State::graveyard`] |
 //! | players in turn order (CR 101.4) | [`State::players_in_turn_order`] and the others under "Players" |
 //! | a batch, in an order no seed decides: permanents as they entered, then library cards top first, then the rest by name | [`State::in_game_order`] |
-//! | a decision's candidates, by ascending slot | [`State::in_candidate_order`], [`Observation::in_candidate_order`], [`decision::Candidates::objects`] |
+//! | a hand, by card definition | [`State::hand_by_definition`] |
 //!
-//! The last is not a rules order, since the deal and every shuffle put cards in slots at
-//! random. A `Choice` is an index into candidates listed that way, so saves and
-//! `rollouts_never_change` depend on it. It lists candidates. Anything else that walks it
-//! says in a comment why its result is the same in any order: it builds a set or a sum, it
-//! sorts next, or it does to each member something no event shows. A walk whose order an
-//! event, a queue or a zone would show takes a rules order instead.
+//! Per-object mutations take a game order. [`State::in_game_order`] returns [`fixed::Full`]
+//! if the batch exceeds the queue. [`SlotId::all`] enumerates storage and [`SlotId::pool`]
+//! locates free storage for tokens and spell copies. Ascending slot order still indexes a
+//! recorded [`decision::Choice`]. [`decision::Candidates::extend_options`] builds options in
+//! that order, [`decision::Candidates::objects`] reads them for object candidates, and
+//! [`decision::collapse()`] chooses a representative of interchangeable objects.
 //!
 //! A stack entry's targets are named the same way: a [`state::TargetPlace`] is a target's
 //! place in the entry's list, a [`state::TargetPlaces`] is a set of them with `insert`,

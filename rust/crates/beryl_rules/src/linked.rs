@@ -8,7 +8,7 @@ use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::state::{Memo, ObjectRef, State, Zone};
 use crate::zones;
 
@@ -55,7 +55,7 @@ pub(crate) fn exile_instruction<L: Layout>(
     let cards = run.elsewhere_than(cards, Zone::Exile);
     run.remember(cards)?;
     let source = run.resolution().source();
-    for slot in run.state().in_candidate_order(cards) {
+    for &slot in run.in_game_order(cards)?.iter() {
         let card = run.state().object_ref(slot);
         exile_linked(run.game(), card, source)?;
     }

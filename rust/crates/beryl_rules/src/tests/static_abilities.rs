@@ -443,7 +443,7 @@ fn a_rule_change_of_a_permanents_own_applies_as_long_as_its_condition_holds() {
         hand(&s, Seat::P0) == 0,
         rule_change::loyalty_as_instant(&s, &t, regent)
     );
-    for card in s.in_candidate_order(s.zone(ZoneKey::Of(Seat::P0, Zone::Hand))) {
+    for card in crate::tests::fixture_slots(s.zone(ZoneKey::Of(Seat::P0, Zone::Hand))) {
         s.board().place(card, Zone::Graveyard).unwrap();
     }
     assert!(rule_change::loyalty_as_instant(&s, &t, regent));

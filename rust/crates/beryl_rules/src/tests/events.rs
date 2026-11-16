@@ -493,8 +493,7 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
     begin(&t, &mut s);
     for player in Seat::BOTH {
         // Any of the copies does.
-        let land = s
-            .in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Library)))
+        let land = crate::tests::fixture_slots(s.zone(ZoneKey::Of(player, Zone::Library)))
             .find(|&slot| s.definition_name(&t, slot) == "Test Land")
             .unwrap();
         s.move_object(&mut crate::event::Sink::off(), land, Zone::Hand, Place::Top)
@@ -509,7 +508,7 @@ pub(super) fn find<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &
     // Copies of a card are alike, so any of them does.
     let cards =
         s.zone(ZoneKey::Of(player, Zone::Library)) | s.zone(ZoneKey::Of(player, Zone::Hand));
-    s.in_candidate_order(cards)
+    crate::tests::fixture_slots(cards)
         .find(|&slot| s.definition_name(t, slot) == name)
         .unwrap_or_else(|| panic!("no {name}"))
 }
@@ -614,8 +613,7 @@ fn a_copy_in_hand_the_opponent_knows_is_offered_apart_from_one_they_do_not() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     // Any two of the copies do.
-    let lands: Vec<Slot> = s
-        .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Library)))
+    let lands: Vec<Slot> = crate::tests::fixture_slots(s.zone(ZoneKey::Of(p, Zone::Library)))
         .filter(|&slot| s.definition_name(&t, slot) == "Test Land")
         .take(2)
         .collect();
@@ -867,7 +865,7 @@ fn attack_triggers_fire_per_attacker_and_whenever_you_attack_once() {
     let adeline = put(&t, &mut s, &mut x, p, "Test Adeline");
     let attackers: Bitboard = [a, b, adeline].into_iter().collect();
     // Each pick of the declaration is marked on its own, with no event.
-    for slot in s.in_candidate_order(attackers) {
+    for slot in crate::tests::fixture_slots(attackers) {
         s.declare_attacker(slot, p.opponent());
     }
     event::settle(
@@ -1716,8 +1714,7 @@ fn an_effect_keeps_its_source_card_once_the_source_is_hidden_again() {
     )
     .unwrap();
     // Any card of another name does.
-    let other = s
-        .in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Library)))
+    let other = crate::tests::fixture_slots(s.zone(ZoneKey::Of(p, Zone::Library)))
         .find(|&slot| s.card_behind(slot) != s.card_behind(mine))
         .unwrap();
     s.board().swap_cards(mine, other);

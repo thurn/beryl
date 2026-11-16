@@ -22,8 +22,8 @@ pub(crate) fn prompt_view<L: Layout>(
     asker: Option<&str>,
 ) -> PromptView {
     // The card the question is about, and the first of the cards the prompt shows.
-    let about = obs.in_candidate_order(d.about).next();
-    let shown = shown(obs, d).map(|slot| obs.object(slot));
+    let about = d.about.min(|slot| slot);
+    let shown = shown(d).map(|slot| obs.object(slot));
     let cost = (d.prompt.cost != ManaCost::default()).then(|| mana_text(d.prompt.cost));
     let holes = Holes {
         count: d.prompt.count,
@@ -34,7 +34,7 @@ pub(crate) fn prompt_view<L: Layout>(
         from: about.map(|slot| obs.object(slot).zone()),
     };
     PromptView {
-        about: slots(obs.in_candidate_order(d.about)),
+        about: slots(crate::protocol::slots_by_id(d.about)),
         from: shown.map(|card| Lies {
             player: side(obs, card.owner()),
             zone: card.zone().into(),

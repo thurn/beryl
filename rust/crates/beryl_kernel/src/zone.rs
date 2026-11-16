@@ -280,6 +280,23 @@ impl<L: Layout> State<L> {
             .shuffle(self.zones.library[p].as_mut_slice());
     }
 
+    /// Shuffles a player's opening hand back into their library as one mulligan operation.
+    /// The moves are reported in card definition order. The shuffle takes the returned
+    /// slots in number order to reproduce its historical seeded permutation. [CR 103.5]:
+    /// "To take a mulligan, a player shuffles the cards in their hand back into their library,
+    /// draws a new hand of cards equal to their starting hand size".
+    ///
+    /// [CR 103.5]: https://yawgatog.com/resources/magic-rules/#R1035
+    pub fn shuffle_opening_hand(&mut self, sink: &mut Sink<L>, player: Seat) -> Result<(), Full> {
+        let previous_top = self.library(player).len();
+        for &slot in self.hand_by_definition(player).iter() {
+            self.move_object(sink, slot, Zone::Library, Place::Top)?;
+        }
+        self.zones.library[player.index()].as_mut_slice()[previous_top..].sort_unstable();
+        self.shuffle_library(player);
+        Ok(())
+    }
+
     /// Deals the identities of the cards in `slots`, all in one library, anew among those slots
     /// at random, as cards put there in a random order are: `rebind` with the game's stream
     /// for everything but shuffles.
@@ -332,6 +349,14 @@ impl<L: Layout> State<L> {
         self.forget_links_to(slot);
         for k in self.knowledge.as_mut_slice() {
             k.remove(slot);
+        }
+    }
+
+    /// Returns expired tokens and spell copies to the pool. The removals emit no events,
+    /// and each slot gets its own new incarnation ([`State::cease_to_exist`], CR 704.5d–e).
+    pub fn reclaim_tokens(&mut self, tokens: Bitboard<L::Slot>) {
+        for slot in tokens.iter() {
+            self.cease_to_exist(slot);
         }
     }
 

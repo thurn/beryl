@@ -38,9 +38,10 @@ const STAGED: Scenario = Scenario::new("Thespian's Stage copies its controller's
 
 /// The names of the cards `owner` has in `zone`, by the card each really is.
 fn names_in(t: &GameTable, s: &State, owner: Seat, zone: Zone) -> Vec<&'static str> {
-    let mut names: Vec<_> = (s.in_candidate_order(s.zone(ZoneKey::Of(owner, zone))))
-        .map(|slot| s.definition_name(t, slot))
-        .collect();
+    let mut names: Vec<_> = (beryl_engine::Slot::all()
+        .filter(|&slot| (s.zone(ZoneKey::Of(owner, zone))).contains(slot)))
+    .map(|slot| s.definition_name(t, slot))
+    .collect();
     names.sort_unstable();
     names
 }

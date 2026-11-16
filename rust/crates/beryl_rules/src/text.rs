@@ -11,7 +11,7 @@ use crate::choices;
 use crate::continuous::lasting;
 use crate::interpret::{Outcome, Run};
 use crate::layers;
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::state::Continuous;
 
 /// [`Effect::ChangeText`](beryl_card::Effect::ChangeText): "change the text of [objects] by
@@ -54,7 +54,7 @@ pub(crate) fn instruction<L: Layout>(
     let keep = |n| TextWord::of_number(n).and_then(|to| from.to(to)).is_some();
     let to = choices::catalog_among(game, resolution, you, ChosenKind::Word, prompt, named, keep)?;
     let change = (to.word().and_then(|to| from.to(to))).expect("a new word of the same kind");
-    for slot in game.state.in_candidate_order(named) {
+    for &slot in game.state.in_game_order(game.table, named)?.iter() {
         let effect = Continuous::Text(game.state.object_ref(slot), change);
         (game.state).start_effect(resolution.entry.card(), effect, duration)?;
     }

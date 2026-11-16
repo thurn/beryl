@@ -14,7 +14,7 @@ use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run, no_primitive};
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
 use crate::state::{
     Continuous, CostChange, Duration, MoveReplacement, ObjectRef, Permission, Permitted, State,
@@ -128,16 +128,19 @@ pub(crate) fn may_cast_instruction<L: Layout>(
     player: Players,
     card: Objects,
     free: bool,
-) -> Outcome<L> {
+) -> Result<Outcome<L>, Full> {
     let cards = run.scene().objects(card);
-    let s = run.state();
-    let (Some(player), Some(slot)) = (run.one(player), s.in_candidate_order(cards).next()) else {
-        return Outcome::NOTHING;
+    let Some(player) = run.one(player) else {
+        return Ok(Outcome::NOTHING);
     };
-    let card = s.object_ref(slot);
+    let ordered = run.in_game_order(cards)?;
+    let Some(&slot) = ordered.as_slice().first() else {
+        return Ok(Outcome::NOTHING);
+    };
+    let card = run.state().object_ref(slot);
     let (_, resolution) = run.resolving();
     offer(resolution, card, player, free);
-    Outcome::acted_on(Bitboard::single(slot))
+    Ok(Outcome::acted_on(Bitboard::single(slot)))
 }
 
 /// [`Effect::PermitCast`](beryl_card::Effect::PermitCast): "[Player] may cast [cards]
@@ -159,8 +162,7 @@ pub(crate) fn permit_instruction<L: Layout>(
         beryl_card::Duration::Indefinite => false,
         beryl_card::Duration::UntilYourNextTurn => no_primitive(&duration),
     };
-    // Each permission is an entry of its own card, so the order they start in is nothing.
-    for slot in run.state().in_candidate_order(cards) {
+    for &slot in run.in_game_order(cards)?.iter() {
         let card = run.state().object_ref(slot);
         // CR 701.18b: "To play a card means to play that card as a land or to cast that card
         // as a spell, whichever is appropriate." Only casting is permitted here.

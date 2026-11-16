@@ -130,11 +130,7 @@ fn advance_mulligans<L: Layout>(
                 continue;
             }
             any = true;
-            // The shuffle that follows loses the order they went in.
-            for slot in s.in_candidate_order(turn::hand(s, p)) {
-                s.move_object(sink, slot, Zone::Library, Place::Top)?;
-            }
-            s.shuffle_library(p);
+            s.shuffle_opening_hand(sink, p)?;
             s.draw_n(sink, p, STARTING_HAND)?;
             s.count_mulligan(p);
         }

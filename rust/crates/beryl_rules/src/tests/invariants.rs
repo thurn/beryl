@@ -17,7 +17,7 @@ fn the_invariants_hold_in_play_and_fail_on_corruption() {
     let p = s.turn().active();
     // Any card in hand does.
     let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
-    let hand = s.in_candidate_order(hand).next().unwrap();
+    let hand = crate::tests::fixture_slots(hand).next().unwrap();
     let corruptions: [(&str, Corruption); 6] = [
         ("zone bitboards disagree", |s, _, slot| {
             s.board().corrupt(slot, Break::Zone(Zone::Library));
@@ -59,7 +59,7 @@ fn the_engine_panics_on_a_broken_invariant() {
     let p = s.turn().active();
     // Any card in hand does.
     let hand = s.zone(ZoneKey::Of(p, Zone::Hand));
-    let hand = s.in_candidate_order(hand).next().unwrap();
+    let hand = crate::tests::fixture_slots(hand).next().unwrap();
     s.board().corrupt(hand, Break::Tapped);
     let message = |run: &mut dyn FnMut(&mut State)| {
         let mut bad = s;

@@ -73,7 +73,7 @@ pub fn player_view<L: Layout>(
         }
         // Unordered zones: their objects say where they are.
         for slots in [Zone::Hand, Zone::Exile].map(|zone| obs.zone(ZoneKey::Of(p, zone))) {
-            let slots = obs.in_candidate_order(slots);
+            let slots = slots_by_id(slots);
             objects.extend(slots.map(|slot| object_view(t, obs, slot)));
         }
         state
@@ -144,7 +144,7 @@ pub fn player_view<L: Layout>(
     PlayerView {
         status,
         handling,
-        pending_attackers: pending_attackers(obs, moment),
+        pending_attackers: pending_attackers(moment),
         turn: TurnView {
             number: turn.number(),
             own_number: own_number(turn.number()),
@@ -208,16 +208,13 @@ fn add_battlefield_objects<L: Layout>(
     // permanent is treated as though it does not exist".
     //
     // [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
-    let phased_out = obs.in_candidate_order(obs.phased_out());
+    let phased_out = slots_by_id(obs.phased_out());
     let phased_out: Vec<L::Slot> = phased_out.collect();
     objects.extend(phased_out.iter().map(|&s| object_view(t, obs, s)));
     phased_out
 }
 
-pub(super) fn pending_attackers<L: Layout>(
-    obs: Observation<'_, L>,
-    moment: Moment<'_, L>,
-) -> Option<Vec<ObjectId>> {
+pub(super) fn pending_attackers<L: Layout>(moment: Moment<'_, L>) -> Option<Vec<ObjectId>> {
     let decision = match moment {
         Moment::Deciding(_, d, _)
         | Moment::Thinking {
@@ -228,7 +225,7 @@ pub(super) fn pending_attackers<L: Layout>(
     // The aim of an attack names the creatures being aimed.
     decision
         .filter(|d| d.prompt.purpose == Purpose::Attack && d.prompt.part == Part::Aim)
-        .map(|d| slots(obs.in_candidate_order(d.about)))
+        .map(|d| slots(slots_by_id(d.about)))
 }
 
 fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> PlayerState {
@@ -267,8 +264,8 @@ fn player_state<L: Layout>(t: &GameTable, obs: Observation<'_, L>, p: Seat) -> P
 /// The first of the cards `d`'s prompt shows: a card of its object set, or else an object it
 /// offers. The cards shown share an owner and a zone, so the first in candidate order says
 /// whose they are and where they lie.
-pub(crate) fn shown<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<L::Slot> {
-    let about = obs.in_candidate_order(d.about).next();
+pub(crate) fn shown<L: Layout>(d: &Decision<L>) -> Option<L::Slot> {
+    let about = d.about.min(|slot| slot);
     about.or_else(|| match &d.candidates {
         Candidates::Objects(_) => d.candidates.objects().next(),
         Candidates::Options(opts) => opts.iter().find_map(|&o| match o {
@@ -309,7 +306,7 @@ fn card_handling<L: Layout>(obs: Observation<'_, L>, d: &Decision<L>) -> Option<
     {
         return None;
     }
-    let card = obs.object(shown(obs, d)?);
+    let card = obs.object(shown(d)?);
     let player = card.owner();
     match card.zone() {
         Zone::Library => {
@@ -337,6 +334,13 @@ pub(crate) fn side<L: Layout>(obs: Observation<'_, L>, p: Seat) -> Side {
     } else {
         Side::Opponent
     }
+}
+
+/// The members of an unordered object set, in the protocol's object ID order.
+pub(crate) fn slots_by_id<S: SlotId>(
+    objects: beryl_engine::Bitboard<S>,
+) -> impl Iterator<Item = S> {
+    S::all().filter(move |&slot| objects.contains(slot))
 }
 
 /// Slots as the protocol numbers them. A set of objects is sent in the candidate order.

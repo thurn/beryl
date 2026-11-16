@@ -54,9 +54,13 @@ pub(crate) fn check<L: Layout>(
         s.end_game(Outcome::Stalled(StallReason::StateBasedIterations));
         return Ok(true);
     }
-    // Unattaching has no event, so the order is nothing.
-    for slot in s.in_candidate_order(loose) {
-        s.unattach(slot);
+    if !loose.is_empty() {
+        for index in 0..s.battlefield().len() {
+            let slot = s.battlefield()[index];
+            if loose.contains(slot) {
+                s.unattach(slot);
+            }
+        }
     }
     if graveyard.is_empty() && tokens.is_empty() {
         if legends {
@@ -78,10 +82,7 @@ pub(crate) fn check<L: Layout>(
     }
     // "As a single event": the one batch below is every action of this check that has an
     // event, and a batch's events are kept as one group (`event::move_batch`).
-    // Each token ceases to exist on its own, with no event, so the order is nothing.
-    for slot in s.in_candidate_order(tokens) {
-        s.cease_to_exist(slot);
-    }
+    s.reclaim_tokens(tokens);
     event::move_batch(
         s,
         t,
@@ -359,16 +360,9 @@ fn same_name<L: Layout>(s: &State<L>, t: &GameTable, a: L::Slot, b: L::Slot) -> 
 /// Whether some player controls two legendary permanents of `legendary` with the same name:
 /// whether any legend-rule group exists, kept or not.
 fn any_group<L: Layout>(s: &State<L>, t: &GameTable, legendary: &Legendary<L>) -> bool {
-    // Each pair is compared once, and whether one matches is the same in any order: the
-    // candidate order saves the half of the comparisons that `any` within `any` would repeat,
-    // in a check the engine makes after every action.
-    legendary.iter().any(|&mine| {
-        let mut rest = mine;
-        s.in_candidate_order(mine).any(|a| {
-            rest.remove(a);
-            rest.any(|b| same_name(s, t, a, b))
-        })
-    })
+    legendary
+        .iter()
+        .any(|&mine| mine.any_pair(|a, b| same_name(s, t, a, b)))
 }
 
 /// The legendary permanents with the same controller and name as the one in `slot`, of

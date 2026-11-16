@@ -7,7 +7,7 @@ use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
 use crate::state::{Duration, MoveReplacement, ObjectRef, Permission, State};
 
@@ -50,8 +50,7 @@ pub(crate) fn instruction<L: Layout>(
     cards: Objects,
 ) -> Result<Outcome<L>, Full> {
     let cards = run.scene().objects(cards);
-    // Each permission is an entry of its own card, so the order they start in is nothing.
-    for slot in run.state().in_candidate_order(cards) {
+    for &slot in run.in_game_order(cards)?.iter() {
         let (card, owner) = (
             run.state().object_ref(slot),
             run.state().object(slot).owner(),

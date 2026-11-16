@@ -7,7 +7,7 @@ use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::state::{ObjectRef, StackEntry, State, Zone};
 use crate::table::GameTable;
 use crate::zones;
@@ -40,12 +40,45 @@ pub(crate) fn unstack<L: Layout>(
     objects: Bitboard<L::Slot>,
     to: Zone,
 ) -> Result<Bitboard<L::Slot>, Full> {
+    if (objects & cast::spells(game.state)).is_empty() {
+        return Ok(objects);
+    }
+    let flashback = remove_spells(game, objects, to)?;
+    if !flashback.is_empty() {
+        zones::move_all(game, flashback, Zone::Exile, Reason::Effect)?;
+    }
+    Ok(objects & !flashback)
+}
+
+/// Removes the spells in `objects` and returns the ones that go to exile instead. For
+/// example, [CR 702.34a] says "If the flashback cost was paid, exile this card instead of
+/// putting it anywhere else any time it would leave the stack."
+///
+/// [CR 702.34a]: https://yawgatog.com/resources/magic-rules/#R70234a
+#[cold]
+#[inline(never)]
+fn remove_spells<L: Layout>(
+    game: &mut Game<'_, L>,
+    objects: Bitboard<L::Slot>,
+    to: Zone,
+) -> Result<Bitboard<L::Slot>, Full> {
     let mut flashback = Bitboard::EMPTY;
-    let spells = objects & cast::spells(game.state);
-    // Each spell's entry comes off on its own, and the spells left on the stack keep their
-    // order, so the order these come off in is nothing.
-    for slot in game.state.in_candidate_order(spells) {
-        let spell = game.state.object_ref(slot);
+    let mut spells: L::Queue<ObjectRef<L>, 128> = Default::default();
+    // Removing a spell reports its current position on the stack. Visit from the top of
+    // the stack down so unrelated slot numbers cannot change those events.
+    for spell in game
+        .state
+        .stack()
+        .iter()
+        .rev()
+        .filter_map(StackEntry::spell)
+    {
+        if objects.contains(spell.slot) {
+            spells.push(spell)?;
+        }
+    }
+    for &spell in spells.iter() {
+        let slot = spell.slot;
         let taken = (game.state)
             .take_off_stack(game.table, game.sink, spell)?
             .is_some();
@@ -53,8 +86,5 @@ pub(crate) fn unstack<L: Layout>(
             flashback.insert(slot);
         }
     }
-    if !flashback.is_empty() {
-        zones::move_all(game, flashback, Zone::Exile, Reason::Effect)?;
-    }
-    Ok(objects & !flashback)
+    Ok(flashback)
 }

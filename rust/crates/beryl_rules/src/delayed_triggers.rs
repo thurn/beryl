@@ -7,7 +7,7 @@ use crate::card::{AbilityIx, TriggerEvent};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
 use crate::state::{
     AbilityRef, ObjectRef, PendingTrigger, State, TriggerInfo, TriggeredAbility, Zone,
@@ -63,11 +63,14 @@ pub(crate) fn instruction<L: Layout>(
     object: Option<Objects>,
 ) -> Result<Outcome<L>, Full> {
     let amount = carrying.map_or(0, |carrying| run.scene().amount(carrying));
-    let object = object.and_then(|object| {
-        let s = run.state();
-        let slot = s.in_candidate_order(run.scene().objects(object)).next()?;
-        Some(s.object_ref(slot))
-    });
+    let object = if let Some(objects) = object {
+        run.in_game_order(run.scene().objects(objects))?
+            .as_slice()
+            .first()
+            .map(|&slot| run.state().object_ref(slot))
+    } else {
+        None
+    };
     let (game, resolution) = run.resolving();
     create(game, resolution, ability, amount, object)?;
     Ok(Outcome::NOTHING)

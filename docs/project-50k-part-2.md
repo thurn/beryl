@@ -189,25 +189,25 @@ same three crates, the same way. A discriminant read is a `const fn` on the enum
 `layout::index::<L>`, which panics out of range; a count that must fit a byte
 saturates and says so. Most of the 158 casts are discriminants.
 
-**B3. Sets without an order.** `Bitboard::iter` is already private to the
-kernel. The remaining way for slot order to reach something a player or a save
-can see is `State::in_candidate_order`, which returns the same iterator and is
-called at 58 places in the rules. It stops being an iterator a caller can loop
-over while mutating:
+**B3. Sets without an order.** The kernel owns `Bitboard::iter`. The public
+`State` and `Observation` expose zone membership as sets and the order a zone
+keeps.
 
-- An order-free read is a fold that takes `Fn`, as `Bitboard::any`, `filter` and
-  `sum` already are.
-- Building a decision's candidates is `Candidates::extend(set)`, the one place
-  slot order is meant to go, because `engine::collapse` and the candidate
-  signature make candidate order independent of slots.
-- Anything done to members one at a time takes `State::in_game_order`, the
-  battlefield, library or graveyard order, or a turn order.
+- Reads combine independent contributions with queries such as `Bitboard::any`,
+  `filter`, `fold` and `sum`.
+- `Candidates::extend_options` builds an option list from an object set in the
+  recorded choice order. Its callback can append several options for one card,
+  as casting needs. `Candidates::objects` reads an existing decision and the
+  kernel selects representatives of interchangeable objects.
+- A per-object action takes `State::in_game_order` or a zone's order, such as
+  battlefield entry order or the top of the stack. `SlotId::pool` still locates
+  free storage for new tokens and spell copies. The seeded mulligan shuffle uses
+  its historical input order inside the kernel, after reporting the hand's moves
+  in card definition order. Automatic mana payments still choose between copies
+  of one definition by slot. The kernel keeps that compatibility ordering in
+  `State::mana_payment_sources`, since changing it moves the pinned rollouts.
 
-`State::in_candidate_order` and `Observation::in_candidate_order` become
-`pub(crate)`, and `Candidates::objects` stays for readers outside the rules
-(search and the session read a decision's candidates, which is the point of
-them). The three slot numberings every scenario already plays under remain the
-test.
+The three slot numberings every scenario already plays under remain the test.
 
 **B4. Both layouts.** The scenario runner plays on `State<Small>` only, and one
 test compares the layouts on two seeds. `beryl_scenario` gains

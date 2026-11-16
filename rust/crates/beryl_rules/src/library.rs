@@ -243,8 +243,7 @@ fn put_at_owners_choice<L: Layout>(
     run.remember(objects)?;
     let top_or_bottom =
         Prompt::new(Purpose::TopOrBottom).places(prompt::Place::Top, prompt::Place::Bottom);
-    // Candidate order: an order the game fixes, which is all a run of questions needs.
-    for slot in run.state().in_candidate_order(objects) {
+    for &slot in run.in_game_order(objects)?.iter() {
         let (game, resolution) = run.resolving();
         let (object, owner) = (game.state.object_ref(slot), game.state.object(slot).owner());
         let about = Bitboard::single(slot);

@@ -351,7 +351,7 @@ fn targeted<L: Layout>(s: &mut State<L>, t: &GameTable) -> Result<(), Full> {
         .filter(|&object| s.is_current(object))
         .map(|object| object.slot)
         .collect();
-    for slot in s.in_candidate_order(objects) {
+    for &slot in s.in_game_order(t, objects)?.iter() {
         let object = s.object_ref(slot);
         trigger::match_event(s, t, &Event::Targeted { object, controller })?;
     }
@@ -472,9 +472,9 @@ pub(crate) fn decision<L: Layout>(
                     unlisted &= !(1 << place);
                     list.push(Opt::Ability(index::<L>(place)))?;
                 }
-                for slot in s.in_candidate_order(collapse(s, objects)) {
-                    list.push(Opt::Object(slot))?;
-                }
+                Candidates::<L>::extend_options(&mut list, collapse(s, objects), |out, slot| {
+                    out.push(Opt::Object(slot))
+                })?;
                 options(
                     DecisionKind::Target,
                     list,

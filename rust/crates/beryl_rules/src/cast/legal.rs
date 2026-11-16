@@ -9,7 +9,7 @@ use crate::card::{
     ObjectAbility, Timing, Types,
 };
 use crate::casting;
-use crate::decision::{OPTIONS, Opt, Refusal};
+use crate::decision::{Candidates, OPTIONS, Opt, Refusal};
 use crate::engine::collapse;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
@@ -381,12 +381,10 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
             })
         })
     });
-    // Candidates are listed in the candidate order, which a `Choice` counts in.
-    let with_def = |slot| Some((slot, s.card_def(t, slot)?));
-    for (slot, def) in s
-        .in_candidate_order(collapse(s, cards))
-        .filter_map(with_def)
-    {
+    Candidates::<L>::extend_options(out, collapse(s, cards), |out, slot| {
+        let Some(def) = s.card_def(t, slot) else {
+            return Ok(());
+        };
         let ways = Ways::of(s, t, player, slot, from);
         for f in def.face_ixs() {
             let face = def.face(f);
@@ -408,8 +406,8 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
                 escape_options(s, t, now, slot, f, from, out)?;
             }
         }
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Appends the casts of face `face` of the card in `slot` with the escape an effect grants it
@@ -590,8 +588,7 @@ fn activation_options<L: Layout, const TARGETS: bool>(
     } else {
         rule_change::unprohibited(s, t, prohibited, player, objects)
     };
-    // Candidates are listed in the candidate order, which a `Choice` counts in.
-    for slot in s.in_candidate_order(collapse(s, objects)) {
+    Candidates::<L>::extend_options(out, collapse(s, objects), |out, slot| {
         // Of its own abilities, only the activated ones can be activated (CR 602.1), so the
         // rest are not checked; granted ones and those of the cards under a merged permanent
         // are checked whatever they are. One it has lost
@@ -611,8 +608,8 @@ fn activation_options<L: Layout, const TARGETS: bool>(
                 out.push(Opt::Activate { slot, ability })?;
             }
         }
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 /// The abilities other objects granted the object in `slot`, and those of the cards under it

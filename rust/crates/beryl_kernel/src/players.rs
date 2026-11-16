@@ -87,7 +87,7 @@ impl<L: Layout> State<L> {
 
     /// `players` by seat, the order a decision lists players in and a record keeps them in.
     ///
-    /// It is no order of the rules, as [`State::in_candidate_order`] is none for objects: a
+    /// As with object candidates ([`crate::decision::Candidates`]), a
     /// `Choice` is an index into candidates listed this way, and the events of one
     /// simultaneous happening are written in it, so saves and recorded rollouts depend on
     /// it. Use it to list players, and otherwise only where the result is the same whatever

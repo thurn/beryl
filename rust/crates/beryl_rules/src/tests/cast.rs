@@ -643,7 +643,7 @@ impl Game {
         let me = s.turn().starting_player();
         for p in Seat::BOTH {
             // Any order: the test puts what it needs back on top.
-            for slot in s.in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Hand))) {
+            for slot in crate::tests::fixture_slots(s.zone(ZoneKey::Of(p, Zone::Hand))) {
                 s.move_object(
                     &mut crate::event::Sink::off(),
                     slot,

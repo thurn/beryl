@@ -114,7 +114,7 @@ fn game() -> (GameTable, State, Seat) {
 
 /// Moves a copy of `name` from `player`'s library to their hand.
 pub(super) fn to_hand(t: &GameTable, s: &mut State, player: Seat, name: &str) -> Slot {
-    let slot = (s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Library))))
+    let slot = (crate::tests::fixture_slots(s.zone(ZoneKey::Of(player, Zone::Library))))
         .find(|&slot| s.definition_name(t, slot) == name)
         .unwrap();
     s.move_object(&mut crate::event::Sink::off(), slot, Zone::Hand, Place::Top)

@@ -124,9 +124,10 @@ fn asked(deck: &'static Decklist, card: &str) -> (GameTable, State, Decision) {
         d = decide(&t, &mut s, &mut x);
     }
     let p = s.turn().starting_player();
-    let slot = (s.in_candidate_order(s.zone(ZoneKey::Of(p, Zone::Library))))
-        .find(|&slot| s.definition_name(&t, slot) == card)
-        .unwrap();
+    let slot = (beryl_engine::Slot::all()
+        .filter(|&slot| (s.zone(ZoneKey::Of(p, Zone::Library))).contains(slot)))
+    .find(|&slot| s.definition_name(&t, slot) == card)
+    .unwrap();
     s.move_object(&mut Sink::off(), slot, Zone::Hand, Place::Top)
         .unwrap();
     let d = decide(&t, &mut s, &mut x);

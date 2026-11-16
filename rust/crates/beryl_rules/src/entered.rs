@@ -95,9 +95,8 @@ pub(crate) fn pick<L: Layout>(
     let (_, theirs) = next_to_order(s, group);
     let mut order: L::Queue<L::Slot, 128> = Default::default();
     order.push(picked)?;
-    // Sorted by timestamp just below, so the order listed here is no order of the rules.
-    for slot in s.in_candidate_order(theirs) {
-        if slot != picked {
+    for &slot in s.battlefield() {
+        if slot != picked && theirs.contains(slot) {
             order.push(slot)?;
         }
     }

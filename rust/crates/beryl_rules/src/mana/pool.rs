@@ -77,14 +77,17 @@ impl<L: Layout> Funds<L> {
         if excluded.is_empty() {
             return self.all.pays(cost);
         }
-        let mut u = self.units;
-        // Each source's units come off its own count, so the order is nothing.
-        for slot in s.in_candidate_order(excluded) {
+        self.without_sources(s, t, excluded).pays(cost)
+    }
+
+    #[inline]
+    fn without_sources(&self, s: &State<L>, t: &GameTable, excluded: Bitboard<L::Slot>) -> Units {
+        excluded.fold(self.units, |mut units, slot| {
             let (kinds, amount, _, _) =
                 source(s, t, self.player, slot, s.derived(slot)).expect("a source");
-            u.take(kinds, u16::from(amount));
-        }
-        u.pays(cost)
+            units.take(kinds, u16::from(amount));
+            units
+        })
     }
 
     /// Whether the player can pay `cost` with none of `exclude` for what `paying` is for:
@@ -117,12 +120,7 @@ impl<L: Layout> Funds<L> {
         exclude: Bitboard<L::Slot>,
         paying: Paying<L>,
     ) -> bool {
-        let mut u = self.units;
-        for slot in s.in_candidate_order(exclude & self.slots) {
-            let (kinds, amount, _, _) =
-                source(s, t, self.player, slot, s.derived(slot)).expect("a source");
-            u.take(kinds, u16::from(amount));
-        }
+        let mut u = self.without_sources(s, t, exclude & self.slots);
         // More sources of restricted mana than a [`Small`] payment holds: say it may be paid,
         // so that the payment's own scan finds the layout `Full` and the game goes on in
         // `Large`.
@@ -154,9 +152,28 @@ impl<L: Layout> Funds<L> {
         self.restricted
     }
 
-    /// The untapped sources but those in `exclude`.
-    pub(crate) fn sources(&self, exclude: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
-        self.slots & !exclude
+    /// The untapped sources that can pay for `paying`, including sources without an
+    /// unrestricted mana ability. The same source cannot make mana and pay in its place
+    /// ([CR 701.67a]): "you may tap an untapped artifact or creature you control rather than
+    /// pay that mana."
+    ///
+    /// [CR 701.67a]: https://yawgatog.com/resources/magic-rules/#R70167a
+    #[inline]
+    pub(crate) fn sources_for(
+        &self,
+        s: &State<L>,
+        t: &GameTable,
+        paying: Paying<L>,
+    ) -> Result<Bitboard<L::Slot>, Full> {
+        let mut sources = self.slots;
+        if paying.reads_restrictions(t) {
+            for source in remembered::restricted_sources(s, t, self.player)?.iter() {
+                if paying.accepts(t, source.restriction, source.chosen_type) {
+                    sources.insert(source.slot);
+                }
+            }
+        }
+        Ok(sources)
     }
 }
 

@@ -23,6 +23,8 @@ mod knowledge;
 mod mutation;
 mod props;
 mod render;
+mod slot_order;
+
 mod store;
 mod text;
 mod vocabulary;

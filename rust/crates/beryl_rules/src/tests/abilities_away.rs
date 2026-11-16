@@ -211,7 +211,7 @@ fn a_spell_triggers_on_its_own_cast_from_the_stack() {
 
 /// Empties `player`'s hand into their graveyard.
 fn empty_hand(s: &mut State, player: Seat) {
-    for slot in s.in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Hand))) {
+    for slot in crate::tests::fixture_slots(s.zone(ZoneKey::Of(player, Zone::Hand))) {
         place(s, slot, Zone::Graveyard);
     }
 }

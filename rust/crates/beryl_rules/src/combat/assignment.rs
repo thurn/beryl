@@ -143,10 +143,9 @@ pub(crate) fn division_decision<L: Layout>(
         list.push(Opt::Done)?;
     }
     let more = (blockers & !chosen).filter(|b| u32::from(lethal(s, b)) <= left);
-    // Candidates are listed in the candidate order, which a `Choice` counts in.
-    for b in s.in_candidate_order(collapse(s, more)) {
-        list.push(Opt::Lethal(b))?;
-    }
+    Candidates::<L>::extend_options(&mut list, collapse(s, more), |out, slot| {
+        out.push(Opt::Lethal(slot))
+    })?;
     Ok(Decision {
         player: s.turn().active(),
         decider: s.turn().active(),

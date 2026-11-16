@@ -472,7 +472,7 @@ fn match_states_out_of_line<L: Layout>(s: &mut State<L>, t: &GameTable) -> Resul
         }
     }
     if t.listens_away().hears(kind) {
-        for slot in s.in_candidate_order(away(s, t)) {
+        for &slot in s.in_game_order(t, away(s, t))?.iter() {
             let zone = s.object(slot).zone();
             let (card, face) = s.definition(slot).record(t);
             for l in t.away_listeners(card, face, kind) {

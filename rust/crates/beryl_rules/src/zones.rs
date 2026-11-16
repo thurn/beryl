@@ -11,7 +11,7 @@ use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::stack;
 use crate::state::{CounterKind, Memo, ObjectRef, Zone};
 use crate::zone::Place;
@@ -173,7 +173,7 @@ pub(crate) fn put_onto_instruction<L: Layout>(
     )?;
     let outcome = run.now_in(objects, Zone::Battlefield);
     if onto.linked && run.state().is_current(source) {
-        for slot in run.state().in_candidate_order(outcome.objects) {
+        for &slot in run.in_game_order(outcome.objects)?.iter() {
             (run.game().state).remember(slot, Memo::PutOntoBattlefieldWith(source.slot))?;
         }
     }
@@ -243,7 +243,7 @@ pub(crate) fn put_into_graveyard_instruction<L: Layout>(
     // instead has moved already.
     let rest = stack::unstack(run.game(), objects, Zone::Graveyard)?;
     let mut moved = objects & !rest;
-    for slot in run.state().in_candidate_order(rest) {
+    for &slot in run.in_game_order(rest)?.iter() {
         let object = run.state().object_ref(slot);
         move_to(run.game(), object, Zone::Graveyard, Reason::Effect)?;
         if !run.state().is_current(object) {

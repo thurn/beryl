@@ -73,7 +73,7 @@ pub fn create<L: Layout>(
     let mut face = FaceIx::FRONT;
     // Each token is made in its own slot, with no event; they enter together below, in the
     // batch's order.
-    for slot in s.in_candidate_order(tokens) {
+    for slot in L::Slot::pool().filter(|&slot| tokens.contains(slot)) {
         face = s.make_token(t, slot, controller, what)?;
     }
     let entry = Entry {
@@ -143,8 +143,7 @@ pub fn create_attacking<L: Layout>(
             unreachable!("a defender")
         };
         if let Some(walker) = walker {
-            // Each token is told what it attacks, with no event: the order is nothing.
-            for slot in game.state.in_candidate_order(tokens) {
+            for &slot in game.state.in_game_order(game.table, tokens)?.iter() {
                 game.state
                     .choose_attacked(slot, AttackTarget::Planeswalker(walker));
             }

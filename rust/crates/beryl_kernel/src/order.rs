@@ -5,7 +5,7 @@
 
 use beryl_card::Zone;
 
-use crate::bitboard::{Bitboard, Slots};
+use crate::bitboard::Bitboard;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
@@ -13,18 +13,6 @@ use crate::state::{State, ZoneKey};
 use crate::table::GameTable;
 
 impl<L: Layout> State<L> {
-    /// `objects` by ascending slot, the order a decision lists its candidates in.
-    ///
-    /// It is no order of the rules: the deal and every shuffle put cards in slots at random
-    /// (architecture §14). A `Choice` is an index into candidates listed this way, so saves
-    /// and recorded rollouts depend on it. Use it to list candidates, and otherwise only
-    /// where the result is the same whatever order the members come in, with a comment that
-    /// says why.
-    #[inline]
-    pub fn in_candidate_order(&self, objects: Bitboard<L::Slot>) -> Slots<L::Slot> {
-        objects.iter()
-    }
-
     /// A player's library, top card first
     /// ([CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012)): "Each library must
     /// be kept in a single face-down pile."
@@ -34,6 +22,24 @@ impl<L: Layout> State<L> {
         player: Seat,
     ) -> impl DoubleEndedIterator<Item = L::Slot> + ExactSizeIterator + '_ {
         self.library(player).iter().rev().copied()
+    }
+
+    /// The cards in a hand by definition key. Each card belongs to the owner of the hand,
+    /// so a queue with room for their deck holds them all. [CR 400.3]: "If an object would
+    /// go to any library, graveyard, or hand other than its owner's, it goes to its owner's
+    /// corresponding zone."
+    ///
+    /// [CR 400.3]: https://yawgatog.com/resources/magic-rules/#R4003
+    pub fn hand_by_definition(&self, player: Seat) -> L::Queue<L::Slot, 64> {
+        let mut hand: L::Queue<L::Slot, 64> = Default::default();
+        for slot in self.zone(ZoneKey::Of(player, Zone::Hand)).iter() {
+            if self.card_behind(slot).is_some() {
+                hand.push_bounded(slot); // One player's deck in either layout.
+            }
+        }
+        hand.as_mut_slice()
+            .sort_by_key(|&slot| self.definition(slot).key());
+        hand
     }
 
     /// `objects` in an order that depends on the game alone: permanents in the order they
@@ -86,5 +92,36 @@ impl<L: Layout> State<L> {
             ordered.as_mut_slice()[first..].sort_by_key(|&slot| self.definition_name(t, slot));
         }
         Ok(ordered)
+    }
+
+    /// The sources of a mana payment, by definition. Within each definition the payment
+    /// keeps the slot order used by recorded games and rollout fingerprints. [CR 601.2g]
+    /// says "If the total cost includes a mana payment, the player then has a chance
+    /// to activate mana abilities."
+    ///
+    /// [CR 601.2g]: https://yawgatog.com/resources/magic-rules/#R6012g
+    pub fn mana_payment_sources(
+        &self,
+        members: Bitboard<L::Slot>,
+        count: u8,
+    ) -> Result<L::Queue<L::Slot, 64>, Full> {
+        let mut sources: L::Queue<L::Slot, 64> = Default::default();
+        let key = |slot| self.definition(slot).key();
+        let first = members.iter().next().map(key);
+        let count = usize::from(count);
+        if members.all(|slot| Some(key(slot)) == first) {
+            for slot in members.iter().take(count) {
+                sources.push(slot)?;
+            }
+            return Ok(sources);
+        }
+        for slot in members.iter() {
+            sources.push(slot)?;
+        }
+        sources.as_mut_slice().sort_by_key(|&slot| key(slot));
+        while sources.len() > count {
+            sources.pop();
+        }
+        Ok(sources)
     }
 }

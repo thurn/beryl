@@ -153,10 +153,9 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
     list.push(Opt::Pass)?;
     if turn::may_play_land(s, player) {
         let lands = turn::hand(s, player).filter(|slot| land_face(s, t, slot).is_some());
-        // Candidates are listed in the candidate order, which a `Choice` counts in.
-        for slot in s.in_candidate_order(collapse(s, lands)) {
-            list.push(Opt::PlayLand(slot))?;
-        }
+        Candidates::<L>::extend_options(list, collapse(s, lands), |out, slot| {
+            out.push(Opt::PlayLand(slot))
+        })?;
     }
     cast::priority_options(s, t, player, list)?;
     mana::instant_options(s, t, player, list)?;

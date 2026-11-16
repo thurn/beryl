@@ -558,8 +558,10 @@ impl Runner {
             Zone::Stack => (s.stack().iter())
                 .filter_map(|entry| entry.spell().map(|spell| spell.slot))
                 .find(|&slot| s.controller(slot) == player && self.name(slot) == card),
-            _ => (s.in_candidate_order(s.zone(ZoneKey::Of(player, zone))))
-                .find(|&slot| self.name(slot) == card),
+            _ => s
+                .zone(ZoneKey::Of(player, zone))
+                .filter(|slot| self.name(slot) == card)
+                .min(|slot| slot),
         };
         found.ok_or_else(|| format!("player {player} has no {card} in {zone:?}"))
     }

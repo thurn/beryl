@@ -306,18 +306,17 @@ pub(super) fn payable_with_substitutes<L: Layout>(
     mut cost: ManaCost,
     most: u8,
     objects: Bitboard<L::Slot>,
-    mut exclude: Bitboard<L::Slot>,
+    exclude: Bitboard<L::Slot>,
     paying: mana::Paying<L>,
 ) -> bool {
-    let free = objects & !exclude & !funds.sources(exclude);
-    // Any of them do: each pays one generic mana, and none is a source the funds count.
-    for slot in s
-        .in_candidate_order(free)
-        .take(usize::from(most.min(cost.generic)))
-    {
-        cost.generic -= 1;
-        exclude.insert(slot);
-    }
+    let Ok(sources) = funds.sources_for(s, t, paying) else {
+        // The payment scan will widen the game if it needs more restricted sources.
+        return true;
+    };
+    let free = objects & !exclude & !sources;
+    // None of these objects is a mana source. Only how many pay generic mana matters.
+    let free = u8::try_from(free.count()).unwrap_or(u8::MAX);
+    cost.generic -= most.min(cost.generic).min(free);
     funds.pays_for(s, t, cost, exclude, paying)
 }
 
@@ -479,8 +478,7 @@ fn substitute_options<L: Layout>(
         } else {
             (collapse(s, able), None)
         };
-        // Candidates are listed in the candidate order, which a `Choice` counts in.
-        for slot in s.in_candidate_order(offered) {
+        Candidates::<L>::extend_options(&mut objects, offered, |out, slot| {
             let rest = Bitboard::single(slot);
             let later = match above {
                 Some(order) => {
@@ -498,9 +496,10 @@ fn substitute_options<L: Layout>(
             };
             let paying = mana::Paying::entry(t, entry);
             if payable_with_substitutes(s, t, &funds, fewer, left - 1, later, rest, paying) {
-                objects.push(Opt::Object(slot))?;
+                out.push(Opt::Object(slot))?;
             }
-        }
+            Ok(())
+        })?;
     }
     // With only generic symbols, activating a mana source keeps at least as much payment
     // available as it did untapped. Activate before tapping any permanent to pay. Delve's

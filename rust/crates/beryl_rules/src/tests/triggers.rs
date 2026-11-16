@@ -150,8 +150,7 @@ fn game() -> (GameTable, State, Seat) {
     let mut s = State::new(&t, 7, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     for player in Seat::BOTH {
-        let land = s
-            .in_candidate_order(s.zone(ZoneKey::Of(player, Zone::Library)))
+        let land = crate::tests::fixture_slots(s.zone(ZoneKey::Of(player, Zone::Library)))
             .find(|&slot| s.definition_name(&t, slot) == "Test Land")
             .unwrap();
         s.move_object(&mut event::Sink::off(), land, Zone::Hand, Place::Top)

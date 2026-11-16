@@ -41,7 +41,8 @@ fn slots(s: &State, owner: Seat, zone: Zone) -> Vec<Slot> {
     if zone == Zone::Library {
         s.library_from_top(owner).collect()
     } else {
-        s.in_candidate_order(s.zone(ZoneKey::Of(owner, zone)))
+        beryl_engine::Slot::all()
+            .filter(|&slot| (s.zone(ZoneKey::Of(owner, zone))).contains(slot))
             .collect()
     }
 }

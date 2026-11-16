@@ -7,7 +7,7 @@ use super::{ability, about, away, enqueue, fires, times};
 use crate::card::FaceAbility;
 use crate::event::{Event, EventKind};
 use crate::fixed::Full;
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::state::{Flag, State, TriggerInfo, TriggeredAbility, Zone};
 use crate::table::GameTable;
 use beryl_kernel::listener;
@@ -149,7 +149,7 @@ pub(super) fn match_away<L: Layout>(
     k: EventKind,
     e: &Event<L>,
 ) -> Result<(), Full> {
-    for slot in s.in_candidate_order(away(s, t)) {
+    for &slot in s.in_game_order(t, away(s, t))?.iter() {
         let zone = s.object(slot).zone();
         let source = s.object_ref(slot);
         let controller = s.controller(slot);
@@ -179,11 +179,11 @@ pub(super) fn look_back_away<L: Layout>(
     t: &GameTable,
     leaving: impl Iterator<Item = (L::Slot, Zone)>,
 ) -> Result<(), Full> {
-    let away = away(s, t);
+    let away = s.in_game_order(t, away(s, t))?;
     for (left, to) in leaving {
         let object = s.object_ref(left);
         let waiting = s.triggers().len();
-        for slot in s.in_candidate_order(away) {
+        for &slot in away.iter() {
             let zone = s.object(slot).zone();
             let source = s.object_ref(slot);
             let controller = s.controller(slot);

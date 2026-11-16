@@ -328,9 +328,8 @@ impl Policy<'_> {
         let mut kept = self.obs.zone(ZoneKey::Of(self.me, Zone::Hand));
         for _ in 0..self.obs.player(self.me).mulligans() {
             // Of the least wanted alike, the first in candidate order goes: the policy's pick.
-            let least = self.obs.in_candidate_order(kept);
-            match least.min_by_key(|&slot| self.in_hand(slot)) {
-                Some(least) => kept.remove(least),
+            match kept.min(|slot| (self.in_hand(slot), slot)) {
+                Some((_, least)) => kept.remove(least),
                 None => break,
             }
         }

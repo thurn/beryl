@@ -84,7 +84,7 @@ pub(super) fn decision_view<L: Layout>(
 /// The cards in the viewer's hand they may neither cast nor play as a land at their priority
 /// ([`DecisionView::refused`]).
 pub(super) fn refused<L: Layout>(t: &GameTable, obs: Observation<'_, L>) -> Vec<Refused> {
-    obs.in_candidate_order(obs.zone(ZoneKey::Of(obs.viewer(), Zone::Hand)))
+    crate::protocol::slots_by_id(obs.zone(ZoneKey::Of(obs.viewer(), Zone::Hand)))
         .filter_map(|slot| {
             let reason = match refusal(obs, t, slot)? {
                 Refusal::Timing { by } => RefusalView::Timing {

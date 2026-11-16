@@ -10,7 +10,7 @@ use crate::event::{self, Entry, Reason};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::state::{ObjectRef, Zone};
 use crate::zones;
 
@@ -79,7 +79,7 @@ pub(crate) fn return_instruction<L: Layout>(
     cards: Objects,
 ) -> Result<Outcome<L>, Full> {
     let cards = run.elsewhere_than(cards, Zone::Battlefield);
-    for slot in run.state().in_candidate_order(cards) {
+    for &slot in run.in_game_order(cards)?.iter() {
         let card = run.state().object_ref(slot);
         return_transformed(run.game(), card)?;
     }

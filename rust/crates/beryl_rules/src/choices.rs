@@ -44,8 +44,8 @@
 //! - **Ask in an order the game fixes.** Which question comes next, who is asked and among
 //!   what may depend on the game and on the answers before, and on nothing else. Go through
 //!   players in turn order and objects in an order the game keeps
-//!   ([`State::in_candidate_order`](crate::state::State::in_candidate_order), the order
-//!   permanents entered); these functions order their own candidates.
+//!   ([`State::in_game_order`](crate::state::State::in_game_order), for instance); these
+//!   functions order their own candidates.
 //! - **Do, then ask.** Carry out what an answer decides before asking the next question: a
 //!   card picked for the bottom of a library goes there, and then the next is picked. The
 //!   player answers looking at the game as it stands at their question, and the run after
@@ -229,16 +229,15 @@ pub fn pick_or_end<L: Layout>(
         "{prompt:?} has no pick that may end"
     );
     let left = crate::engine::collapse(game.state, candidates);
-    // Candidates are listed in the candidate order, which a `Choice` counts in.
-    let left = game.state.in_candidate_order(left).map(Opt::Object);
-    let opts = core::iter::once(Opt::Done).chain(left);
-    let (kind, none) = (DecisionKind::ChooseUpTo, Bitboard::EMPTY);
-    Ok(
-        match option(game, resolution, player, kind, opts, prompt, none)? {
-            Opt::Object(slot) => Some(slot),
-            _ => None,
-        },
-    )
+    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
+    list.push(Opt::Done)?;
+    Candidates::<L>::extend_options(&mut list, left, |out, slot| out.push(Opt::Object(slot)))?;
+    let d = Decision::options(player, DecisionKind::ChooseUpTo, list, prompt);
+    let answer = resolution.answer(game, &d)?;
+    Ok(match d.candidates.option(answer) {
+        Some(Opt::Object(slot)) => Some(slot),
+        _ => None,
+    })
 }
 
 /// Asks `player` to choose up to `n` of `candidates`, one [`pick_or_end`] at a time, each a
@@ -308,9 +307,11 @@ pub(crate) fn retarget<L: Layout>(
         unlisted &= !(1 << place);
         opts.push(Opt::Ability(crate::layout::index::<L>(place)))?;
     }
-    for slot in s.in_candidate_order(crate::engine::collapse(s, others.objects)) {
-        opts.push(Opt::Object(slot))?;
-    }
+    Candidates::<L>::extend_options(
+        &mut opts,
+        crate::engine::collapse(s, others.objects),
+        |out, slot| out.push(Opt::Object(slot)),
+    )?;
     let opts = opts.as_slice().iter().copied().enumerate();
     // The target kept is never listed twice.
     let opts = opts
@@ -435,9 +436,9 @@ pub fn hidden_pick<L: Layout>(
     let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     list.push(Opt::Done)?;
     let candidates = crate::engine::collapse(game.state, candidates);
-    for slot in game.state.in_candidate_order(candidates) {
-        list.push(Opt::Object(slot))?;
-    }
+    Candidates::<L>::extend_options(&mut list, candidates, |out, slot| {
+        out.push(Opt::Object(slot))
+    })?;
     let d = Decision {
         player,
         decider: player,

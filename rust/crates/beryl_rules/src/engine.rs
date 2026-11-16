@@ -15,13 +15,12 @@ use crate::state::{Pending, State, TurnStep};
 use crate::table::GameTable;
 use crate::{cast, combat, entered, face_down, layers, mana, resolve, sba, start, trigger, turn};
 
-mod collapse;
 mod land;
 mod paused_step;
 mod questions;
 
-pub use collapse::interchangeable;
-pub(crate) use collapse::{collapse, collapse_in_order};
+pub use crate::decision::interchangeable;
+pub(crate) use crate::decision::{collapse, collapse_in_order};
 use land::{enter_from_hand, enter_or_choose, play_land};
 pub use questions::refusal;
 pub(crate) use questions::{controlled, decision};

@@ -207,7 +207,7 @@ fn candidates<L: Layout>(
                             None => Change::PreventAll,
                         },
                         at: shield.at,
-                        shown: shown(s, shield),
+                        shown: shown(s, t, shield)?,
                     })?;
                 }
             }
@@ -346,15 +346,19 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
 
 /// The object a player choosing an order is shown for a shield: its card, while that card is
 /// in a public zone.
-fn shown<L: Layout>(s: &State<L>, shield: ShieldAt<L>) -> Option<L::Slot> {
+fn shown<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    shield: ShieldAt<L>,
+) -> Result<Option<L::Slot>, Full> {
     let mut public = s.zone(ZoneKey::Stack);
     for player in s.players_in_seat_order(s.players()) {
         for zone in [Zone::Battlefield, Zone::Graveyard, Zone::Exile] {
             public |= s.zone(ZoneKey::Of(player, zone));
         }
     }
-    s.in_candidate_order(public)
-        .find(|&slot| s.card_behind(slot) == Some(shield.source))
+    let copies = public.filter(|slot| s.card_behind(slot) == Some(shield.source));
+    Ok(s.in_game_order(t, copies)?.as_slice().first().copied())
 }
 
 /// What a shield on the recipient is on.

@@ -11,7 +11,7 @@ use crate::filter::{Evaluate, Filter};
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
-use crate::layout::Layout;
+use crate::layout::{Layout, Queue};
 use crate::resolution::Resolution;
 use crate::state::{Zone, ZoneKey};
 use crate::zones;
@@ -78,10 +78,8 @@ pub(crate) fn instruction<L: Layout>(
         let (game, resolution) = run.resolving();
         let cards = search_library_up_to(game, resolution, player, filter, count)?;
         match found {
-            // Candidate order: each card is revealed and moved alone, and with one card to
-            // find, which is all a card of the pool searches for, there is no order.
             Found::RevealToHand => {
-                for slot in game.state.in_candidate_order(cards) {
+                for &slot in game.state.in_game_order(game.table, cards)?.iter() {
                     reveal::reveal(game, player, slot);
                     let card = game.state.object_ref(slot);
                     zones::move_to(game, card, Zone::Hand, Reason::Effect)?;

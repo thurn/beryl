@@ -39,9 +39,7 @@ impl Runner {
         for player in Seat::BOTH {
             for zone in [Zone::Hand, Zone::Graveyard, Zone::Exile, Zone::Library] {
                 let cards = s.zone(ZoneKey::Of(player, zone));
-                // Counts by name, true in any order: the candidate order only arranges them.
-                let names = s.in_candidate_order(cards).map(|slot| self.name(slot));
-                let names: Vec<&'static str> = names.collect();
+                let names = cards.sorted(|slot| self.name(slot));
                 out.push(Assertion::Count {
                     player,
                     zone,

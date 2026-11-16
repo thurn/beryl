@@ -232,7 +232,7 @@ impl Game {
         // Copies of a card are alike, so any order of them does.
         let cards = self.s.zone(ZoneKey::Of(player, Zone::Library))
             | self.s.zone(ZoneKey::Of(player, Zone::Hand));
-        (self.s.in_candidate_order(cards))
+        (crate::tests::fixture_slots(cards))
             .filter(|&slot| self.s.definition_name(&self.t, slot) == name)
             .collect()
     }

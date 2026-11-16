@@ -47,6 +47,12 @@ use crate::{
     Replay, Scratch, State, Step, apply, next,
 };
 
+fn fixture_slots<S: crate::ids::SlotId>(
+    set: crate::bitboard::Bitboard<S>,
+) -> impl Iterator<Item = S> {
+    S::all().filter(move |&slot| set.contains(slot))
+}
+
 pub(crate) static LAND: CardDef = CardDef {
     name: "Test Land",
     faces: &[Face {

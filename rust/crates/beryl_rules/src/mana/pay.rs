@@ -5,7 +5,7 @@ use crate::card::{
     Ability, AbilityIx, ChosenKind, CostAction, FaceIx, INTRINSIC_MANA, ManaColor, ManaCost,
     ObjectAbility, Types,
 };
-use crate::decision::{OPTIONS, Opt};
+use crate::decision::{Candidates, OPTIONS, Opt};
 use crate::event::{self, Sink};
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
@@ -99,7 +99,7 @@ fn pay_whole<L: Layout>(
         let tapped: L::Queue<L::Slot, 64> = if human {
             human_taps(s, c, plan.taps[i])?
         } else {
-            by_card(s, c, plan.taps[i])?
+            s.mana_payment_sources(c.members, plan.taps[i])?
         };
         if c.amount == 1 {
             for &slot in tapped.iter() {
@@ -177,7 +177,7 @@ fn pay_with_memory<L: Layout>(
         let tapped: L::Queue<L::Slot, 64> = if human {
             human_taps(s, c, plan.taps[i])?
         } else {
-            by_card(s, c, plan.taps[i])?
+            s.mana_payment_sources(c.members, plan.taps[i])?
         };
         let how = if c.restricted {
             From::Restricted
@@ -231,36 +231,12 @@ fn pay_with_memory<L: Layout>(
     Ok(())
 }
 
-/// The first `n` members of class `c` in the order a payment taps them: by card, so which of
-/// a class's cards it taps never depends on their slots, which the game's randomness chose as
-/// it dealt the cards to them; copies of one card are alike to it.
-fn by_card<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L::Slot, 64>, Full> {
-    let mut v: L::Queue<L::Slot, 64> = Default::default();
-    let first = s.in_candidate_order(c.members).next();
-    let first = first.map(|m| s.definition(m).key());
-    if c.members.all(|m| Some(s.definition(m).key()) == first) {
-        for slot in s.in_candidate_order(c.members).take(usize::from(n)) {
-            v.push(slot)?;
-        }
-        return Ok(v);
-    }
-    for slot in s.in_candidate_order(c.members) {
-        v.push(slot)?;
-    }
-    v.as_mut_slice()
-        .sort_by_key(|&slot| s.definition(slot).key());
-    while v.len() > usize::from(n) {
-        v.pop();
-    }
-    Ok(v)
-}
-
 /// The `n` members of class `c` the human's payment taps: its creatures last, free to attack
 /// or block as long as they can ([`Outlook`]).
 #[cold]
 #[inline(never)]
 fn human_taps<L: Layout>(s: &State<L>, c: &Class<L>, n: u8) -> Result<L::Queue<L::Slot, 64>, Full> {
-    let mut v = by_card(s, c, c.count())?;
+    let mut v = s.mana_payment_sources(c.members, c.count())?;
     v.as_mut_slice()
         .sort_by_key(|&m| s.derived(m).types.intersects(Types::CREATURE));
     while v.len() > usize::from(n) {
@@ -505,9 +481,8 @@ pub(crate) fn manual_options<L: Layout>(
         }
     }
     for (i, c) in sources.classes().iter().enumerate() {
-        // A class's members are alike to a payment: its first in candidate order names it.
-        let mut members = s.in_candidate_order(c.members);
-        let slot = members.next().expect("a class has a member");
+        // A class's manual option keeps its existing representative for recorded choices.
+        let slot = c.members.min(|slot| slot).expect("a class has a member");
         let mut taps: Taps<L> = Table::filled(0);
         taps[i] = 1;
         for kind in (0..KINDS).filter(|&k| c.kinds & (1 << k) != 0) {
@@ -646,13 +621,12 @@ fn list_instant_options<L: Layout>(
     let objects: Bitboard<L::Slot> = (s.battlefield().iter().copied())
         .filter(|&slot| s.controller(slot) == player && instant(slot).next().is_some())
         .collect();
-    // Candidates are listed in the candidate order, which a `Choice` counts in.
-    for slot in s.in_candidate_order(crate::engine::collapse(s, objects)) {
+    Candidates::<L>::extend_options(out, crate::engine::collapse(s, objects), |out, slot| {
         for (ability, _) in instant(slot) {
             out.push(Opt::Activate { slot, ability })?;
         }
-    }
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Activates the mana ability `ability` of the permanent in `slot`, one activated only as an
@@ -737,25 +711,24 @@ fn add_activations<L: Layout>(
     out: &mut L::Queue<Opt<L>, OPTIONS>,
     sources: Bitboard<L::Slot>,
 ) {
-    // Candidates are listed in the candidate order, which a `Choice` counts in.
     let restricted = remembered::restricted_sources(s, t, player).unwrap_or_default();
-    for slot in s.in_candidate_order(sources) {
+    // Tapping ahead is optional, so a full list keeps the options it already holds.
+    let _full = Candidates::<L>::extend_options(out, sources, |out, slot| {
         // Its restricted mana too: the mana remembers what it may be spent on.
         let more = (restricted.iter().find(|r| r.slot == slot)).map_or(0, |r| r.kinds);
         let Some(kinds) = source(s, t, player, slot, s.derived(slot))
             .map(|(kinds, ..)| kinds | more)
             .or((more != 0).then_some(more))
         else {
-            continue;
+            return Ok(());
         };
         for kind in (0..KINDS).filter(|&k| kinds & (1 << k) != 0) {
             let option = Opt::Mana {
                 slot,
                 color: ManaColor::ALL[kind],
             };
-            if out.push(option).is_err() {
-                return;
-            }
+            out.push(option)?;
         }
-    }
+        Ok(())
+    });
 }

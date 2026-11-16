@@ -4,13 +4,13 @@
 use std::cell::OnceCell;
 
 use crate::bitboard::Bitboard;
-use crate::card::FaceIx;
 use crate::layout::Layout;
 use crate::state::{State, Zone};
+use beryl_card::FaceIx;
 
 /// Collapses interchangeable objects to one candidate each, the lowest slot (§7.2): objects
 /// that differ only in their incarnation and timestamp lead to the same game. Everything
-/// else counts: the face up, the owner (a stolen Mana Crypt goes to another graveyard than
+/// else counts: the face up, the owner (a stolen permanent goes to another graveyard than
 /// your own), copy, link and chosen value as much as card, counters and flags. An object
 /// another record of the state names ([`State::named`]: a target on the stack, a blocked
 /// attacker, what a card is exiled with) is never collapsed with another, since its
@@ -30,10 +30,7 @@ use crate::state::{State, Zone};
 /// Inlined, so the common set of fewer than two candidates returns at once; the comparison
 /// is out of line, where it saved its registers on every call before that test.
 #[inline]
-pub(crate) fn collapse<L: Layout>(
-    s: &State<L>,
-    candidates: Bitboard<L::Slot>,
-) -> Bitboard<L::Slot> {
+pub fn collapse<L: Layout>(s: &State<L>, candidates: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
     if candidates.count() < 2 {
         return candidates;
     }
@@ -44,7 +41,7 @@ pub(crate) fn collapse<L: Layout>(
 #[inline(never)]
 fn collapse_several<L: Layout>(s: &State<L>, candidates: Bitboard<L::Slot>) -> Bitboard<L::Slot> {
     // Of interchangeable objects the candidate is the first in candidate order.
-    collapse_ordered(s, s.in_candidate_order(candidates))
+    collapse_ordered(s, candidates.iter())
 }
 
 /// Whether two object slots are represented by one candidate (architecture §7.2). Read-only
@@ -55,7 +52,7 @@ pub fn interchangeable<L: Layout>(s: &State<L>, a: L::Slot, b: L::Slot) -> bool 
 
 /// [`collapse`] keeping the first of interchangeable objects in the order of `slots`
 /// rather than the lowest slot.
-pub(crate) fn collapse_in_order<L: Layout>(
+pub fn collapse_in_order<L: Layout>(
     s: &State<L>,
     slots: impl Iterator<Item = L::Slot>,
 ) -> Bitboard<L::Slot> {
