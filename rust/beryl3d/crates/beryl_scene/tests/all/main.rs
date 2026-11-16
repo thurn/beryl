@@ -23,6 +23,7 @@ mod game_over;
 mod hud;
 mod inspect;
 mod light;
+mod manual;
 mod motion;
 mod notices;
 mod object_states;

@@ -20,6 +20,7 @@ use beryl_scene::input::Input;
 use beryl_session::ai::AgentMove;
 use beryl_session::{Seat, Sessions, StartGame, StopsSetting};
 use beryl_shell::Dirs;
+use beryl_table_session::connections::TableConnections;
 
 use crate::bugs::Job;
 
@@ -130,6 +131,9 @@ enum Work {
 /// The real session. Its views go to the host's inbox as they are emitted.
 pub struct Live {
     sessions: Sessions,
+    /// The manual table, which numbers its sessions in the same sequence as `sessions` and
+    /// sends its views to the same inbox, as the web app's `table_*` commands share one.
+    tables: TableConnections,
     /// The host's inbox, which `begin` sends the agents to.
     inbox: Inbox,
     /// The game `--agent` asked for, and the agent that answers for the viewer in it.
@@ -138,19 +142,35 @@ pub struct Live {
 
 impl Live {
     /// Sessions that keep their replays and ledger in the data folder of `dirs`, the web app's,
-    /// or keep none without it, and send every view to `inbox`.
+    /// or keep none without it, and send every view to `inbox`. The manual table keeps its
+    /// saves and settings in the same folder, or in the system's temporary folder without it.
     #[must_use]
     pub fn new(dirs: Option<Dirs>, inbox: Inbox) -> Self {
         let views = inbox.clone();
         let emit = move |update| {
             views.send(Input::Update(Box::new(update)));
         };
+        let data = dirs.as_ref().map_or_else(
+            || std::env::temp_dir().join("beryl3d-tables"),
+            |dirs| dirs.data.clone(),
+        );
         let sessions = match dirs {
             Some(dirs) => beryl_shell::sessions(&dirs, emit),
             None => Sessions::new(None, emit),
         };
+        let table_views = inbox.clone();
+        // The table's events are its lobby's and its link's, which no screen shows yet.
+        let tables = TableConnections::new(
+            sessions.session_ids(),
+            data,
+            move |update| {
+                table_views.send(Input::Update(Box::new(update)));
+            },
+            |_| {},
+        );
         Self {
             sessions,
+            tables,
             inbox,
             played_by: None,
         }
@@ -261,6 +281,11 @@ impl Session for Live {
                 Reply::Done(sessions.set_stops(session, stops))
             }
             SessionCommand::Concede(session) => Reply::Done(sessions.concede(session)),
+            SessionCommand::TableSolo(request) => Reply::TableSolo(self.tables.solo(request)),
+            SessionCommand::TableAct(action) => Reply::TableAct(self.tables.act(action)),
+            SessionCommand::TableLeave => {
+                Reply::TableLeave(self.tables.leave().map_err(|error| error.reason))
+            }
         }
     }
 
@@ -268,9 +293,11 @@ impl Session for Live {
         job.write(Some(&self.sessions))
     }
 
+    /// Shuts the manual table down so that it can be resumed, as the web app does on quit.
     /// With `--agent`, prints what the opponent's searches did (`search_report`), over the
     /// latest of its decisions the session keeps (200).
     fn end(&mut self) {
+        self.tables.shutdown();
         if self.played_by.is_none() {
             return;
         }

@@ -28,6 +28,7 @@ use crate::faces::FaceList;
 use crate::frame::ElementId;
 use crate::inspect::inspector::Inspected;
 use crate::inspect::revealed::RevealedFace;
+use crate::manual::menus::OpenMenu;
 use crate::settings::Settings;
 use crate::table::Window;
 use crate::widgets::Fields;
@@ -127,6 +128,8 @@ pub struct ScreenIn<'a> {
     pub viewing: Option<Viewed>,
     /// The faces of the Revealed Cards pile, the first revealed first, which its viewer lists.
     pub revealed: &'a [RevealedFace],
+    /// The manual table's open context menu, if any (`manual::menus`).
+    pub table_menu: Option<&'a OpenMenu>,
 }
 
 /// What the flat layer shows on `screen`.

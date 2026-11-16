@@ -67,6 +67,7 @@ impl Client {
             faces: Some(self.show.faces().list()),
             viewing: self.viewing.open,
             revealed: &self.viewing.revealed,
+            table_menu: self.manual.menu.as_ref(),
         };
         let element = inspector::inspector(&input);
         let place = inspector::place(&input);

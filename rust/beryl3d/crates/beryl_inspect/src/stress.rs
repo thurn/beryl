@@ -610,8 +610,13 @@ pub(crate) fn pointer_moves(
 /// Gives every stress board's cards placeholder faces of their own, one per name, so that no
 /// card is drawn face up with no face.
 pub(crate) fn card_records(board: &Stress) -> CardRecords {
+    placeholder_records(&board.views)
+}
+
+/// Placeholder faces for the cards of `views`, one per name.
+pub(crate) fn placeholder_records(views: &[PlayerView]) -> CardRecords {
     let mut records = CardRecords::none();
-    for object in board.views.iter().flat_map(|view| &view.objects) {
+    for object in views.iter().flat_map(|view| &view.objects) {
         let Some(name) = &object.name else { continue };
         let entries = if object.token {
             &mut records.tokens

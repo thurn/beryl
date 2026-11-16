@@ -180,6 +180,7 @@ dependencies = [
  "beryl_scene",
  "beryl_session",
  "beryl_shell",
+ "beryl_table_session",
  "cc",
  "glam",
  "jni-sys 0.3.1",

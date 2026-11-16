@@ -75,6 +75,9 @@ pub enum Press {
     Dismiss(Dismiss),
     /// Open the viewer of a pile's cards, as a press on a pile does.
     View(Viewed),
+    /// Give the manual table's command at this index of `manual::commands::COMMANDS` to what
+    /// the pointer is on, as a key of the table does.
+    Command(u16),
     /// One of the bug report's controls.
     Bug(BugPress),
 }

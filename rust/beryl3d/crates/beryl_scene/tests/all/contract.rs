@@ -214,6 +214,7 @@ mod milestone_three {
             faces: None,
             viewing: None,
             revealed: &[],
+            table_menu: None,
         }
     }
 

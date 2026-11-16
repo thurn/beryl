@@ -37,6 +37,7 @@ impl Client {
             faces: Some(self.faces()),
             viewing: self.viewing.open,
             revealed: &self.viewing.revealed,
+            table_menu: self.manual.menu.as_ref(),
         };
         let full = crate::prompts::faces(&input);
         // Until the sheets are built, the settings sheet takes the screen's place in the flat

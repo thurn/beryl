@@ -1,6 +1,8 @@
 //! Screen recordings: a client put on a screen, or a sheet opened over one, with no engine and
 //! an empty view, as the stress boards are made (`crate::stress`). Each is named
-//! `screen/<name>`, and `data/beryl3d/screens.json` lists them for the parity list.
+//! `screen/<name>`, and `data/beryl3d/screens.json` lists them for the parity list. The manual
+//! table's is a view of a solo table built by hand, with a few cards in each zone, which opens
+//! the table screen itself.
 
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, LIST_AGENTS};
@@ -53,7 +55,7 @@ fn agents() -> Vec<AgentView> {
 
 /// The messages of the screen recording `name`, or none for any other name: the records of no
 /// cards, the agents a person may play, the event that opens the screen or sheet (over the
-/// start screen), and one empty view.
+/// start screen), and one view: empty, or the hand-built table's.
 #[must_use]
 pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
     if !NAMES.contains(&name) {
@@ -62,16 +64,30 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
     let opened = name.strip_prefix(PREFIX)?;
     let opens = match opened {
         "settings" | "bug-report" => vec!["start", opened],
+        // A table's view opens the table screen; the start screen's press would start a table.
+        "table" => Vec::new(),
         _ => vec![opened],
     };
-    let mut view = PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20));
+    let mut view = if opened == "table" {
+        let mut view = testing::ViewBuilder::sample().build();
+        view.table = Some(testing::table(&view));
+        view
+    } else {
+        PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20))
+    };
     view.script = Some(testing::script(
         Some(Reset::default()),
         Vec::new(),
         Vec::new(),
     ));
+    // The table's cards have placeholder faces, as a stress board's do.
+    let records = if opened == "table" {
+        crate::stress::placeholder_records(std::slice::from_ref(&view))
+    } else {
+        CardRecords::none()
+    };
     let mut messages = vec![
-        FixtureMessage::response(CARD_RECORDS, &CardRecords::none()),
+        FixtureMessage::response(CARD_RECORDS, &records),
         FixtureMessage::response(LIST_AGENTS, &agents()),
     ];
     if opened == "testing" {

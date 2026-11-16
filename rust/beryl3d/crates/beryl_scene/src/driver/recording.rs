@@ -301,5 +301,13 @@ fn wire(command: &SessionCommand) -> (&'static str, Option<Value>) {
             (ipc::SET_STOPS, value(&SetStopsRequest { session, stops }))
         }
         &SessionCommand::Concede(session) => (ipc::CONCEDE, value(&ConcedeRequest { session })),
+        SessionCommand::TableSolo(request) => (ipc::TABLE_SOLO, value(request)),
+        SessionCommand::TableAct(action) => (
+            ipc::TABLE_ACT,
+            value(&ipc::TableActRequest {
+                action: action.clone(),
+            }),
+        ),
+        SessionCommand::TableLeave => (ipc::TABLE_LEAVE, None),
     }
 }

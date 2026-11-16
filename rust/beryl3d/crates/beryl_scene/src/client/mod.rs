@@ -35,6 +35,7 @@ use crate::widgets::Fields;
 
 mod input;
 mod inspect;
+mod manual;
 mod own;
 mod screen;
 mod stops;
@@ -171,6 +172,8 @@ pub struct Client {
     viewing: Viewing,
     /// The bug report and the table's clock, which it freezes (`bug`).
     bug: bug::Bug,
+    /// The manual table's open context menu (`manual`).
+    manual: manual::Manual,
 }
 
 /// Whether the pointer is on the open prompt's button that shows what it would tap
@@ -232,6 +235,7 @@ impl Client {
             inspector: Inspector::default(),
             viewing: Viewing::default(),
             bug: bug::Bug::default(),
+            manual: manual::Manual::default(),
         }
     }
 
@@ -255,7 +259,7 @@ impl Client {
                     self.screen = screen;
                 }
                 self.views += 1;
-                self.session = Some(update.session);
+                self.take_session(&update);
                 self.set_source(&update.view.status);
                 self.set_prompt(match &update.view.status {
                     Status::Deciding { decision } => {
@@ -377,12 +381,18 @@ impl Client {
         self.show.faces_mut().low_memory();
     }
 
+    /// Whether the hud's floats (the life totals, pools, pile counts and notices) show: on the
+    /// game screen and the manual table, with no sheet over them but a bug report capturing the
+    /// table (`table_shown`).
+    fn hud_shown(&self) -> bool {
+        matches!(self.screen, Screen::Game | Screen::Table) && self.table_shown()
+    }
+
     /// The frame at `now`, in nanoseconds since the client started.
     pub fn frame(&mut self, now: u64) -> &Frame {
         self.now = now;
         // The table plays on its own clock, which the bug report stops (`bug`).
         let table_now = self.bug_frame(now);
-        let table_shown = self.screen == Screen::Game && self.table_shown();
         let reporting = self.bug_open();
         self.inputs.clear();
         self.own(table_now);
@@ -393,6 +403,7 @@ impl Client {
         self.show.advance_slide(table_now);
         self.inspect();
         self.write_pill(self.screen == Screen::Game && self.sheet.is_none());
+        let visible = self.hud_shown();
         let mut builder = FrameBuilder::new(&mut self.frame);
         self.show.frame(table_now, &mut builder);
         // Elements anchored to a card, an ability or a player stand where the table drew it.
@@ -407,9 +418,8 @@ impl Client {
             table_now,
             self.show.table().layout(),
             self.window.size,
-            (table_shown, targets),
+            (visible, targets),
         );
-        let visible = table_shown;
         (self.piles).write(&mut self.layer, self.show.table(), visible);
         (self.notices).write(
             &mut self.layer,
@@ -496,6 +506,7 @@ impl Client {
         match *press {
             Press::Button(button) => self.click(Click::Button { button }),
             Press::Prompt(click) => self.click(click),
+            Press::Open(Screen::Table) => self.start_table(),
             Press::Open(screen) => {
                 self.first_view_opens = None;
                 self.screen = screen;
@@ -553,12 +564,15 @@ impl Client {
                 self.gallery.query = query;
                 self.show_screen();
             }
+            Press::Menu(crate::manual::menus::MENU, row) => self.press_table_menu(row),
             Press::Menu(..) => {}
             Press::Dismiss(Dismiss::Menu) => {
                 if self.gallery.menu.take().is_some() {
                     self.show_screen();
                 }
+                self.close_table_menu();
             }
+            Press::Command(index) => self.table_key(index),
         }
     }
 

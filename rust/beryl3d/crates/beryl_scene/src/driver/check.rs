@@ -258,6 +258,9 @@ impl Page {
     pub fn plant(&mut self, kind: Planted, at: u64) -> Result<(), DriverError> {
         let (played, _) = self.played();
         let history = played.client.history();
+        // A step can run past its script's end (an announcement that moves nothing), and
+        // `steps` gives it its whole span, so a script also plays at a time one of its steps
+        // does.
         let script = history.iter().enumerate().rev().find(|(_, script)| {
             // A step may outlive its script's end (an announcement that moves nothing), so the
             // script is found by its steps, not by its own span.

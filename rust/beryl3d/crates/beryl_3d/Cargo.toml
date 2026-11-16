@@ -40,6 +40,9 @@ beryl_cards = { path = "../../../crates/beryl_cards" }
 glam = "0.34.3"
 # The game the app plays: `Sessions` on the session thread.
 beryl_session = { path = "../../../crates/beryl_session" }
+# The manual table's session: `TableConnections` on the session thread, as the web app's
+# `table_*` commands call it. It replaces nothing.
+beryl_table_session = { path = "../../../crates/beryl_table_session" }
 # The web app's data folders, so that both apps share replays, the ledger and bug reports.
 beryl_shell = { path = "../../../crates/beryl_shell" }
 # Receives wgpu's warnings on a phone, which shows no standard error, and writes them to a file

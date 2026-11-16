@@ -204,6 +204,30 @@ pub enum KeyCode {
     ArrowRight,
     Home,
     End,
+    /// The function keys F1 to F12, which the manual table binds (F11 and F12 change a life
+    /// total, for one).
+    F1,
+    F2,
+    F3,
+    F4,
+    F5,
+    F6,
+    F7,
+    F8,
+    F9,
+    F10,
+    F11,
+    F12,
+    /// The punctuation keys the manual table binds, by the physical key, as the web's
+    /// `KeyboardEvent.code` names them.
+    Minus,
+    Equal,
+    Comma,
+    Period,
+    Slash,
+    BracketLeft,
+    BracketRight,
+    Backslash,
     Back,
 }
 

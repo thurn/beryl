@@ -1,7 +1,8 @@
 //! The frame thread never waits for the session: while the session thread is inside a call
 //! that does not return until the test lets it, the frame loop draws a frame on every tick and
 //! the commands sent meanwhile queue up. Each reply then reaches the host's inbox, in order.
-//! And what `--agent` reports of the opponent's searches.
+//! And what `--agent` reports of the opponent's searches, and that the live session starts a
+//! solo manual table and sends its view back.
 
 use std::sync::mpsc::{Receiver, channel};
 
@@ -110,4 +111,39 @@ fn the_search_report_rates_rollouts_and_engine_steps_over_the_time_searched() {
         )
     );
     assert_eq!(session::search_report(&[]), None);
+}
+
+#[test]
+fn the_live_session_starts_a_solo_table_and_sends_its_view() {
+    let (sender, inbox) = channel();
+    let commands = session::spawn(
+        Class::Utility,
+        {
+            let inbox = Inbox::new(sender.clone(), || true);
+            move || session::Live::new(None, inbox)
+        },
+        Inbox::new(sender, || true),
+    );
+    let request = beryl_scene::manual::solo_request();
+    assert!(
+        request
+            .deck
+            .main
+            .iter()
+            .any(|(name, _)| name == "Counterspell"),
+        "the solo table starts with the WU Control deck"
+    );
+    commands.send(SessionCommand::TableSolo(request));
+    let (mut started, mut viewed) = (false, false);
+    while !(started && viewed) {
+        match inbox.recv().expect("the session thread answers") {
+            Input::Reply(Reply::TableSolo(result)) => {
+                result.expect("the solo table starts");
+                started = true;
+            }
+            Input::Update(update) if update.view.table.is_some() => viewed = true,
+            _ => {}
+        }
+    }
+    commands.close();
 }

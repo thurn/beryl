@@ -48,7 +48,7 @@ impl Client {
             self.press(&Press::Dismiss(Dismiss::Menu));
             return;
         }
-        if self.scroll_layer(&pointer) {
+        if self.scroll_layer(&pointer) || self.open_table_menu(&pointer) {
             return;
         }
         if !self.slide(&pointer) {
@@ -263,7 +263,14 @@ impl Client {
         let mac = self.platform == Platform::Mac;
         let first = key.phase == KeyPhase::Down;
         if let Some(press) = self.layer.shortcut(&key, mac) {
-            return Some(press);
+            // A table command's key acts once for each press, not again as it repeats. While a
+            // context menu is open it does nothing, and the menu's own keys move through its
+            // rows.
+            let table_key = matches!(press, Press::Command(_));
+            if !table_key || (first && self.manual.menu.is_none()) {
+                return Some(press);
+            }
+            self.manual.menu.as_ref()?;
         }
         if key.code == KeyCode::Tab {
             self.layer.move_focus(!key.modifiers.shift);

@@ -3,8 +3,8 @@
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{
-    CardType, Declaration, ManaPool, ObjectId, ObjectView, PlayerState, PlayerView, SessionId,
-    Side, StackItem, ZoneName,
+    AssistsView, CardType, Declaration, LinkState, ManaPool, ManualOrders, ObjectId, ObjectView,
+    PlayerState, PlayerView, SessionId, Side, StackItem, TablePhase, TableView, ZoneName,
 };
 use beryl_protocol::script::{Act, Curve, Reset, Room, Script, Step, StepTiming};
 
@@ -203,5 +203,73 @@ pub fn timing(duration: f64) -> StepTiming {
         room: Room::Step,
         phases: Vec::new(),
         effects: Vec::new(),
+    }
+}
+
+/// What a solo manual table adds to `view` for the viewer at seat 0: every assist off, the
+/// first main phase, the order of each side's hand and exile as `view`'s objects stand, and a
+/// reference to each object, named for its slot, in the zone it lies in, so that every card
+/// can be acted on.
+///
+/// # Panics
+///
+/// Never: the view and references are built from values a table view holds.
+#[must_use]
+pub fn table(view: &PlayerView) -> TableView {
+    let seat = |side: Side| u8::from(side == Side::Opponent);
+    let mut orders = ManualOrders::default();
+    for object in &view.objects {
+        let piles = match object.owner {
+            Side::You => &mut orders.you,
+            Side::Opponent => &mut orders.opponent,
+        };
+        match object.zone {
+            ZoneName::Hand => piles.hand.push(object.slot),
+            ZoneName::Exile => piles.exile.push(object.slot),
+            _ => {}
+        }
+    }
+    let object_actions = (view.objects.iter())
+        .map(|object| {
+            let owner = seat(object.owner);
+            let zone = match object.zone {
+                ZoneName::Library => serde_json::json!({ "library": owner }),
+                ZoneName::Hand => serde_json::json!({ "hand": owner }),
+                ZoneName::Graveyard => serde_json::json!({ "graveyard": owner }),
+                ZoneName::Exile => serde_json::json!({ "exile": owner }),
+                ZoneName::Stack => serde_json::json!("stack"),
+                _ => serde_json::json!("battlefield"),
+            };
+            serde_json::from_value(serde_json::json!({
+                "subject": { "kind": "object", "slot": object.slot.0 },
+                "reference": { "view": "hand-built", "handle": object.slot.0 },
+                "zone": zone,
+            }))
+            .expect("a hand-built object action")
+        })
+        .collect();
+    TableView {
+        log: Vec::new(),
+        proposals: Vec::new(),
+        labels: Vec::new(),
+        assists: AssistsView::default(),
+        phase: TablePhase::FirstMain,
+        seats: 1,
+        seat: Some(0),
+        orders,
+        acting: Vec::new(),
+        object_actions,
+        card_commands: std::collections::BTreeMap::new(),
+        top_revealed: false,
+        top_known: false,
+        manual_stats: Vec::new(),
+        last_draw: None,
+        deck_tokens: Vec::new(),
+        prompt: None,
+        choosing_first: false,
+        arrows: Vec::new(),
+        link: LinkState::Alone,
+        peer_name: None,
+        proposal_marks: None,
     }
 }

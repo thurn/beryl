@@ -804,8 +804,8 @@ pub enum Input {
 }
 
 /// What the client asks of the session: one variant for each function of
-/// `beryl_session::Sessions` that a player's action calls. Each carries that
-/// function's own argument types.
+/// `beryl_session::Sessions`, or of the manual table's `TableConnections`, that
+/// a player's action calls. Each carries that function's own argument types.
 pub enum SessionCommand {
     Start(StartRequest),
     Resume,
@@ -816,6 +816,9 @@ pub enum SessionCommand {
     PassOn(DecisionId),
     SetStops(SessionId, StopsSetting),
     Concede(SessionId),
+    TableSolo(TableSoloRequest),             // start a solo manual table
+    TableAct(TableAction),                   // change the manual table
+    TableLeave,                              // close the manual table
 }
 
 /// The session's answer. `Sessions::click` returns the prompt's next state
@@ -823,6 +826,9 @@ pub enum SessionCommand {
 pub enum Reply {
     Click(Result<ClickReply, SessionError>),
     Done(Result<(), SessionError>),
+    TableSolo(Result<SessionId, TableRefused>),
+    TableAct(TableActReply),
+    TableLeave(Result<(), String>),          // the reason the table gave
 }
 
 impl Client {

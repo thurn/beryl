@@ -3,9 +3,9 @@
 
 use std::path::PathBuf;
 
-use beryl_protocol::ipc::ChooseRequest;
+use beryl_protocol::ipc::{ChooseRequest, TableActReply, TableRefused, TableSoloRequest};
 use beryl_protocol::prompt::{ClickReply, ClickRequest};
-use beryl_protocol::protocol::Side;
+use beryl_protocol::protocol::{Side, TableAction};
 use beryl_protocol::{DecisionId, SessionError, SessionId, StartRequest, StopsSetting};
 
 use crate::frame::ElementId;
@@ -27,6 +27,12 @@ pub enum SessionCommand {
     PassOn(DecisionId),
     SetStops(SessionId, StopsSetting),
     Concede(SessionId),
+    /// Start a solo manual table with this deck (`TableConnections::solo`).
+    TableSolo(TableSoloRequest),
+    /// Change the manual table (`TableConnections::act`).
+    TableAct(TableAction),
+    /// Close the manual table (`TableConnections::leave`).
+    TableLeave,
 }
 
 /// The session's answer to a `SessionCommand`. `Sessions::click` returns the prompt's next
@@ -35,6 +41,12 @@ pub enum SessionCommand {
 pub enum Reply {
     Click(Result<ClickReply, SessionError>),
     Done(Result<(), SessionError>),
+    /// The session a solo table started, or why it did not start.
+    TableSolo(Result<SessionId, TableRefused>),
+    /// Whether the table took an action, or why it refused it.
+    TableAct(TableActReply),
+    /// Whether the table closed, or the reason it gave for not closing.
+    TableLeave(Result<(), String>),
 }
 
 /// What the client asks of the platform.

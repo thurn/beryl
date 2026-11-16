@@ -33,8 +33,23 @@ impl Chord {
             };
             *flag = true;
         }
+        // `+`, `<`, `>` and `?` are typed with Shift on the key that also types `=`, `,`, `.`
+        // and `/` (`shiftedPunctuation` in shortcuts.ts).
+        let shifted = match name {
+            "+" => Some(KeyCode::Equal),
+            "<" => Some(KeyCode::Comma),
+            ">" => Some(KeyCode::Period),
+            "?" => Some(KeyCode::Slash),
+            _ => None,
+        };
+        if shifted.is_some() {
+            modifiers.shift = true;
+        }
         Some(Self {
-            key: key_named(name, mac)?,
+            key: match shifted {
+                Some(key) => key,
+                None => key_named(name, mac)?,
+            },
             modifiers,
         })
     }
@@ -133,6 +148,27 @@ fn key_named(name: &str, mac: bool) -> Option<KeyCode> {
         "ArrowRight" => ArrowRight,
         "Home" => KeyCode::Home,
         "End" => KeyCode::End,
+        "F1" => KeyCode::F1,
+        "F2" => KeyCode::F2,
+        "F3" => KeyCode::F3,
+        "F4" => KeyCode::F4,
+        "F5" => KeyCode::F5,
+        "F6" => KeyCode::F6,
+        "F7" => KeyCode::F7,
+        "F8" => KeyCode::F8,
+        "F9" => KeyCode::F9,
+        "F10" => KeyCode::F10,
+        "F11" => KeyCode::F11,
+        "F12" => KeyCode::F12,
+        // The web writes the minus key as `−` (U+2212) in a binding and reads `-` too.
+        "−" | "-" => KeyCode::Minus,
+        "=" => KeyCode::Equal,
+        "," => KeyCode::Comma,
+        "." => KeyCode::Period,
+        "/" => KeyCode::Slash,
+        "[" => KeyCode::BracketLeft,
+        "]" => KeyCode::BracketRight,
+        "\\" => KeyCode::Backslash,
         _ => return None,
     })
 }
