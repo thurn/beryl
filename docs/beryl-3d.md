@@ -917,21 +917,61 @@ thresholds are `frame_rate` in `data/beryl3d/space.json`.
   call the same rule and change `CADisplayLink`'s preferred frame rate range and
   Android's `Surface.setFrameRate`.
 
-The C functions the phone hosts call:
+The C functions the phone hosts call, as `include/beryl3d.h` in `beryl_3d`
+declares them. Every enumerated value is a `uint32_t` with named constants, and
+a value no constant names is dropped, so that no value from C can be an invalid
+Rust enum:
 
 ```c
+typedef struct {
+    const char *fixture;   /* the recording to replay; NULL plays a live game */
+    const char *data_dir;  /* recordings, frame logs, replays and the ledger */
+    const char *stand_in;  /* debug builds: an agent that plays for the person */
+    float display_hz;      /* the display's highest refresh rate */
+    void (*wake)(void *context); /* any thread: ask for a frame soon; may be NULL */
+    void *context;
+} BerylConfig;
+
+typedef struct { float top, right, bottom, left; } BerylInsets;
+/* kind: BERYL_WAKE_NOW, AT or NEVER; hz: the rate to ask the display for. */
+typedef struct { uint32_t kind; uint64_t at; float hz; } BerylWake;
+
+typedef struct {
+    uint32_t id;           /* 0 for the mouse, then one per finger; at most 255 */
+    uint32_t kind;         /* BERYL_POINTER_MOUSE, TOUCH, PEN */
+    uint32_t phase;        /* BERYL_PHASE_DOWN, MOVE, UP, CANCEL, LEAVE, WHEEL */
+    float x, y;            /* points from the surface's top left */
+    uint32_t button;       /* BERYL_BUTTON_PRIMARY, SECONDARY, MIDDLE, NONE */
+    float wheel_x, wheel_y;
+    uint32_t modifiers;    /* BERYL_SHIFT 1, CONTROL 2, ALT 4, COMMAND 8 */
+} BerylPointer;
+
+/* code: BERYL_KEY_A = 0 to BERYL_KEY_BACK = 46, in the order of `KeyCode`;
+ * phase: BERYL_KEY_DOWN, REPEAT, UP. */
+typedef struct { uint32_t code; uint32_t phase; uint32_t modifiers; } BerylKey;
+
+typedef struct {
+    uint32_t kind;     /* BERYL_REQUEST_BEGIN_TEXT_ENTRY, END_TEXT_ENTRY, SHARE,
+                        * HAPTIC, OPEN_URL */
+    uint32_t haptic;   /* BERYL_HAPTIC_LIGHT, MEDIUM */
+    float x, y, width, height; /* the edited field, in points */
+    const char *text;  /* the field's text, the path or the URL, else NULL; valid
+                        * until the next beryl3d_next_request or beryl3d_frame */
+} BerylRequest;
+
 Beryl3d *beryl3d_new(const BerylConfig *config);
 void beryl3d_surface(Beryl3d *, void *native_surface,
-                          uint32_t width, uint32_t height, float scale,
-                          BerylInsets safe_area);
+                     uint32_t width, uint32_t height, float scale,
+                     BerylInsets safe_area);
 void beryl3d_surface_lost(Beryl3d *);
 void beryl3d_pointer(Beryl3d *, BerylPointer event);
 void beryl3d_key(Beryl3d *, BerylKey event);
 void beryl3d_text(Beryl3d *, const char *utf8);
-void beryl3d_lifecycle(Beryl3d *, BerylLifecycle event);
+void beryl3d_lifecycle(Beryl3d *, uint32_t event); /* BERYL_SUSPENDED, RESUMED,
+                                                    * LOW_MEMORY */
 /* Draws one frame. Returns when the next is needed: now, at a time, never. */
 BerylWake beryl3d_frame(Beryl3d *, uint64_t now_nanoseconds);
-/* The next thing the client asks of the platform, or none. */
+/* The next thing the client asks of the platform, or false for none. */
 bool beryl3d_next_request(Beryl3d *, BerylRequest *out);
 ```
 
@@ -943,19 +983,28 @@ bool beryl3d_next_request(Beryl3d *, BerylRequest *out);
 - **Requests are polled.** After each frame the host calls
   `beryl3d_next_request` until it returns false.
 
-What exists so far is a spike that replays one recording on a phone, built to
-find problems with the graphics paths and the build before milestone 4 builds
-the real hosts on it:
+What exists so far is the library's side of the hosts. The Swift and Kotlin apps
+are still the spike's, which replays one recording, built to find problems with
+the graphics paths and the build before milestone 4 builds the real hosts on it:
 
-- **Five functions.** `beryl_3d` exports `beryl3d_new`, `beryl3d_surface`,
-  `beryl3d_surface_lost`, `beryl3d_lifecycle` and `beryl3d_frame` (`src/ffi`,
-  declared by hand in `include/beryl3d.h`). `BerylConfig` names a recording and
-  the app's writable folder. The app reads `<recording>.json` from that folder
-  and writes its frame log and its error log (`beryl3d.log`) there.
-  `BerylLifecycle` and the wake's kind are `uint32_t` values with named
-  constants, so that no value from C can be an invalid Rust enum. Android's
-  Kotlin host calls JNI functions that turn its strings into UTF-8 and its
-  `Surface` into an `ANativeWindow`, then call the same code.
+- **The functions.** `beryl_3d` exports every function above (`src/ffi`,
+  declared by hand in `include/beryl3d.h`). With a recording named, the app
+  reads `<recording>.json` from its data folder. With none, it plays a live game
+  on the session thread, as the desktop app does, and keeps its replays and its
+  ledger of games in the data folder. In a debug build, `stand_in` names an
+  agent that answers the person's decisions in a fresh game, for unattended
+  runs. The app writes its frame log and its error log (`beryl3d.log`) in the
+  data folder. The frame log has a line for each pointer, key, text, surface and
+  lifecycle input, so that a smoke test can see its events arrive. The client's
+  requests to save settings and play sound never cross: the app will carry them
+  out itself. Android's Kotlin host calls JNI functions that turn its strings
+  into UTF-8 and its `Surface` into an `ANativeWindow`, then call the same code.
+  Its wake is an object whose `wake()` the library calls after attaching the
+  calling thread to the JVM.
+- **The header's test.** `tests/c/header.c` calls every function of the header
+  from C, with an offscreen target in place of a native surface
+  (`beryl3d_offscreen`, which only test builds export), and `tests/all/ffi.rs`
+  checks the frame log it leaves.
 - **The hosts** are `ios/` (Swift, an xcodegen spec, iOS 15) and `android/`
   (Kotlin, built with the Tauri app's Gradle wrapper, API 24) beside the crate.
   Their bundle and application ids are `ca.thurn.beryl3d`, so both apps can be
@@ -2291,7 +2340,8 @@ just b3d smoke
   asked for more, and how long frames waited for a drawable (the median, the
   95th percentile, the worst and the total). Its first line records the window,
   the display's rate, the load average and any drive script, busy threads and
-  slowed frames. `just b3d frames [path]` prints a log's summary and its worst
+  slowed frames. Each pointer, key, text, surface and lifecycle input has a line
+  of its own. `just b3d frames [path]` prints a log's summary and its worst
   frames. With no path it reads the newest log of a run started from the same
   checkout.
 - **`live`** speaks to a running debug build over a local socket named for that

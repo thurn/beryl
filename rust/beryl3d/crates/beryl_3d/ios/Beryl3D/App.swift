@@ -43,7 +43,10 @@ final class TableController: UIViewController {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         app = fixture.withCString { fixture in
             documents.path.withCString { dir in
-                var config = BerylConfig(fixture: fixture, data_dir: dir)
+                var config = BerylConfig(
+                    fixture: fixture, data_dir: dir, stand_in: nil,
+                    display_hz: Float(UIScreen.main.maximumFramesPerSecond), wake: nil,
+                    context: nil)
                 return beryl3d_new(&config)
             }
         }

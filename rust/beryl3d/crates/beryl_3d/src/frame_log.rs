@@ -1,7 +1,8 @@
 //! The frame log (docs/beryl-3d.md, "Driving the running app"): every run of the app writes a
 //! file of its own, `$BERYL_CACHE/b3d/frames/<start time>-<process id>.jsonl`, that an agent
 //! reads with `just b3d frames`. Its first line describes the run, then one line follows for
-//! each late frame, and the last line is the run's summary.
+//! each late frame and for each pointer, key, text, surface and lifecycle input, and the last
+//! line is the run's summary.
 //!
 //! A frame is late when more than one and a half intervals of the rate the host asked for
 //! passed since the frame before it while the ticks ran (decision C18). When the host asked
@@ -22,6 +23,7 @@ use std::time::Instant;
 
 use beryl_host::Ticked;
 use beryl_host::rate::Step;
+use beryl_scene::input::{Input, Modifiers, TextChange};
 use serde::{Deserialize, Serialize};
 
 /// A sixtieth of a second, in nanoseconds.
@@ -170,6 +172,98 @@ pub enum Line {
     Run(Run),
     Late(Late),
     Summary(Summary),
+    Input(InputLine),
+}
+
+/// An input a host handed the client, as a line `{"input": {"<kind>": {...}}}`. The phone
+/// hosts' smoke tests read these to prove their events arrived. Enumerated values are written
+/// as their Rust names.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InputLine {
+    Pointer {
+        id: u8,
+        kind: String,
+        phase: String,
+        /// Logical points from the surface's top left.
+        x: f32,
+        y: f32,
+        button: String,
+        wheel_x: f32,
+        wheel_y: f32,
+        modifiers: Vec<String>,
+    },
+    Key {
+        code: String,
+        phase: String,
+        modifiers: Vec<String>,
+    },
+    /// The edited field's new contents, as their length in characters: the text itself may be
+    /// private.
+    Text {
+        length: usize,
+    },
+    /// The surface's size in logical points, and its pixels per point.
+    Surface {
+        width: f32,
+        height: f32,
+        scale: f32,
+    },
+    Lifecycle {
+        event: String,
+    },
+}
+
+impl InputLine {
+    /// The line for `input`, or `None` for an input the log does not record (views, assets,
+    /// replies).
+    #[must_use]
+    pub fn of(input: &Input) -> Option<Self> {
+        Some(match input {
+            Input::Pointer(pointer) => Self::Pointer {
+                id: pointer.id,
+                kind: format!("{:?}", pointer.kind),
+                phase: format!("{:?}", pointer.phase),
+                x: pointer.position.x,
+                y: pointer.position.y,
+                button: format!("{:?}", pointer.button),
+                wheel_x: pointer.wheel.x,
+                wheel_y: pointer.wheel.y,
+                modifiers: modifier_names(pointer.modifiers),
+            },
+            Input::Key(key) => Self::Key {
+                code: format!("{:?}", key.code),
+                phase: format!("{:?}", key.phase),
+                modifiers: modifier_names(key.modifiers),
+            },
+            Input::Text(TextChange(text)) => Self::Text {
+                length: text.chars().count(),
+            },
+            Input::Surface { size, scale, .. } => Self::Surface {
+                width: size.width,
+                height: size.height,
+                scale: *scale,
+            },
+            Input::Lifecycle(lifecycle) => Self::Lifecycle {
+                event: format!("{lifecycle:?}"),
+            },
+            _ => return None,
+        })
+    }
+}
+
+/// The names of the modifier keys held.
+fn modifier_names(modifiers: Modifiers) -> Vec<String> {
+    [
+        (modifiers.shift, "Shift"),
+        (modifiers.control, "Control"),
+        (modifiers.alt, "Alt"),
+        (modifiers.command, "Command"),
+    ]
+    .into_iter()
+    .filter(|(held, _)| *held)
+    .map(|(_, name)| name.to_owned())
+    .collect()
 }
 
 /// A log as `read` found it.
@@ -177,6 +271,8 @@ pub enum Line {
 pub struct Log {
     pub run: Run,
     pub late: Vec<Late>,
+    /// The inputs the host handed the client, in order.
+    pub inputs: Vec<InputLine>,
     /// None when the run ended without writing one (it was killed, say).
     pub summary: Option<Summary>,
 }
@@ -322,6 +418,12 @@ impl FrameLog {
         let _ = self.lines.send(Line::Late(late));
     }
 
+    /// Sends a line for an input the host handed the client.
+    pub fn input(&mut self, line: InputLine) {
+        // The writer ends only with the log, so a failed send has nowhere to go.
+        let _ = self.lines.send(Line::Input(line));
+    }
+
     /// Notes a verb the client played as an instant change.
     pub fn unbuilt(&mut self, verb: &str) {
         self.summary.unbuilt.push(verb.to_owned());
@@ -400,6 +502,7 @@ pub fn read(path: &Path) -> Result<Log, String> {
     let mut log = Log {
         run,
         late: Vec::new(),
+        inputs: Vec::new(),
         summary: None,
     };
     for line in lines {
@@ -407,6 +510,7 @@ pub fn read(path: &Path) -> Result<Log, String> {
             Line::Run(_) => return Err(format!("{}: a second run line", path.display())),
             Line::Late(late) => log.late.push(late),
             Line::Summary(summary) => log.summary = Some(summary),
+            Line::Input(input) => log.inputs.push(input),
         }
     }
     Ok(log)

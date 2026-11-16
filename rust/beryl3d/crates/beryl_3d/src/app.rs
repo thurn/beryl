@@ -17,7 +17,7 @@ use beryl_session::protocol::Status;
 use beryl_session::script::Verb;
 
 use crate::fixture::Fixture;
-use crate::frame_log::{FrameLog, Run, Summary};
+use crate::frame_log::{FrameLog, InputLine, Run, Summary};
 use crate::options::{Options, Window};
 use crate::session::{self, Commands, Live};
 
@@ -120,6 +120,21 @@ impl AppFeed {
     }
 }
 
+impl Drop for AppFeed {
+    /// A phone's app, which nothing else holds the log of, finishes its log when it ends, and
+    /// waits until it is written. The desktop's `run` holds the log too, and finishes it itself.
+    fn drop(&mut self) {
+        if Rc::strong_count(&self.log) > 1 {
+            return;
+        }
+        if let Some(Ok(log)) = self.log.borrow_mut().take()
+            && let Err(error) = log.finish()
+        {
+            eprintln!("beryl3d: the frame log could not be written: {error}");
+        }
+    }
+}
+
 impl Feed for AppFeed {
     fn opened(&mut self, opened: &Opened) {
         self.run.display_hz = opened.display_hz;
@@ -130,6 +145,11 @@ impl Feed for AppFeed {
     }
 
     fn input(&mut self, input: &Input) {
+        if let Some(line) = InputLine::of(input)
+            && let Some(Ok(log)) = self.log.borrow_mut().as_mut()
+        {
+            log.input(line);
+        }
         if let Input::Update(update) = input {
             self.searching = matches!(update.view.status, Status::Thinking);
             // A replayed recording ends when its last script has played, not at its game's end.
@@ -213,11 +233,53 @@ impl Feed for AppFeed {
 /// The feed of a phone's app (`beryl_3d`'s C functions): it replays `fixture`, the recording
 /// `name`, writes its frame log in `log_dir`, and finishes the log when the replay ends.
 pub(crate) fn phone_feed(name: &str, fixture: Fixture, log_dir: PathBuf) -> Box<dyn Feed> {
+    phone_app(
+        Source::Fixture(fixture),
+        Some(name.to_owned()),
+        log_dir,
+        Finish::AtFixtureEnd,
+    )
+}
+
+/// The feed of a phone's app that plays a live game: the session thread keeps its replays and
+/// its ledger of games in `data_dir`, where the frame log is written too, and sends its views
+/// to `inbox`. With `stand_in`, that agent answers the person's decisions in a fresh game.
+pub(crate) fn phone_live_feed(
+    data_dir: PathBuf,
+    stand_in: Option<String>,
+    inbox: Inbox,
+) -> Box<dyn Feed> {
+    let data = data_dir.clone();
+    let commands = session::spawn(
+        beryl_host::Class::Default,
+        {
+            let inbox = inbox.clone();
+            move || {
+                let live = Live::new(Some(data), inbox);
+                match stand_in {
+                    Some(name) => live.with_stand_in(&name),
+                    None => live,
+                }
+            }
+        },
+        inbox,
+    );
+    // A phone's app never exits by itself, so its live game's log is never finished.
+    phone_app(Source::Live(commands), None, data_dir, Finish::AtExit)
+}
+
+/// A phone's app feed of `source`, writing its frame log in `log_dir`.
+fn phone_app(
+    source: Source,
+    fixture: Option<String>,
+    log_dir: PathBuf,
+    finish: Finish,
+) -> Box<dyn Feed> {
     Box::new(AppFeed {
-        source: Some(Source::Fixture(fixture)),
+        source: Some(source),
         log: Rc::new(RefCell::new(None)),
         log_dir,
-        finish: Finish::AtFixtureEnd,
+        finish,
         ended: false,
         run: Run {
             checkout: checkout(),
@@ -227,7 +289,7 @@ pub(crate) fn phone_feed(name: &str, fixture: Fixture, log_dir: PathBuf) -> Box<
             display_hz: 0.0,
             adapter: String::new(),
             load: None,
-            fixture: Some(name.to_owned()),
+            fixture,
             pause_at_ms: None,
             drive: None,
             load_threads: None,

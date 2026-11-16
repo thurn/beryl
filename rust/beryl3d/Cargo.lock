@@ -140,6 +140,8 @@ dependencies = [
  "beryl_render",
  "beryl_scene",
  "beryl_session",
+ "cc",
+ "glam",
  "jni-sys 0.3.1",
  "log",
  "ndk-sys",

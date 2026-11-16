@@ -35,6 +35,9 @@ beryl_scene = { path = "../beryl_scene", features = ["driver"] }
 # The decklist of a game `--agent` starts, as the web app's session deals it. The session
 # already depends on it.
 beryl_cards = { path = "../../../crates/beryl_cards" }
+# The position of a pointer event from a phone's host, as the client's vectors. The release
+# beryl_scene already depends on.
+glam = "0.34.3"
 # The game the app plays: `Sessions` on the session thread.
 beryl_session = { path = "../../../crates/beryl_session" }
 # Receives wgpu's warnings on a phone, which shows no standard error, and writes them to a file
@@ -49,6 +52,11 @@ serde_json = "1.0.154"
 [target.'cfg(target_os = "android")'.dependencies]
 jni-sys = "0.3.1"
 ndk-sys = "0.6.0"
+
+[build-dependencies]
+# Compiles tests/c/header.c, the C program that tests include/beryl3d.h, for the test targets
+# only, in place of invoking the system's C compiler by hand. The release already in Cargo.lock.
+cc = "1.11.2"
 
 [dev-dependencies]
 # The crate itself with `tools`, so that its tests and the binary they run can replay fixtures.

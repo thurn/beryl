@@ -4,6 +4,7 @@
 
 mod app;
 mod drive;
+mod ffi;
 mod fixture;
 mod frame_log;
 mod session;
