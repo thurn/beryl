@@ -384,7 +384,10 @@ def test_metrics_lists_and_draws_its_series(
     assert isinstance(days, list)
     # A bead is dated by when it began; these beads have no start, so by their creation.
     assert [(d["day"], d["count"]) for d in days] == [("2026-11-01", 3)]
-    assert series["marks"] == []
+    # Marks come from the checkout's own data/efficiency-changes.json, so only their metric is fixed.
+    marks = series["marks"]
+    assert isinstance(marks, list)
+    assert all(m["metric"] == "bead.dollars" for m in marks)
     assert cli.main(["metrics", "no.such", "--no-ingest"]) == 1
 
 

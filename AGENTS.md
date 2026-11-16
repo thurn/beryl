@@ -132,8 +132,9 @@ means `python3 ~/enact/scripts/enact.py`.
   filing, so either land what it depends on in `staging` first or block it with
   a dependency.
 - Every session has to spend time learning the code it touches, so each bead
-  should name the files, helpers and tests it needs. Label mechanical beads
-  (wiring, renames, boilerplate tests) `tier:light` so they run on Sonnet.
+  should name the files, helpers and tests it needs by path, so that its session
+  can read them all in its first message. Label mechanical beads (wiring,
+  renames, boilerplate tests) `tier:light` so they run on Sonnet.
 - A lane is a group of beads that one session works through in order, so it
   learns their code once. Give two to four beads the same `lane:<name>` label
   when they touch the same code and have the same tier. A lane's session keeps
@@ -291,6 +292,11 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
 
 ## Workflow
 
+- Send reads together. Every request reads the whole conversation again, so
+  three requests that each read one file cost about three times as much as one
+  request that reads all three. Before reading, work out every file and search
+  you need and send them in one message as parallel tool calls, or as one shell
+  command.
 - When launching more than one subagent at a time, always use Sonnet.
 - On-screen UI text uses Arena's wording exactly. Where Arena shows no label,
   cut your first draft of the label to half as many words. (This applies to

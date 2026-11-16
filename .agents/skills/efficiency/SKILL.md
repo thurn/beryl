@@ -74,6 +74,10 @@ just efficiency sql "select count(*) from requests where model like 'claude-opus
 `never-caught` and `flake-cost`; `just efficiency findings --help` lists them
 all. Each item names its evidence query and example beads.
 
+`tier-gap` (move beads to a cheaper model) is not a useful finding to report:
+the user already knows it is an option. When asked for savings, leave it out
+and recommend from the other rules.
+
 `sql` is read-only and is for questions no named query answers. The main tables
 are `beads`, `labels`, `sessions`, `windows`, `requests`, `tool_calls`,
 `tool_results`, `window_time`, `window_dollars`, `checks`, `lane_runs`, `cpu`,
