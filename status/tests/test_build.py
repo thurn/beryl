@@ -35,13 +35,33 @@ def test_writes_every_page(tmp_path: Path) -> None:
 
 def test_home_page_shows_each_category(tmp_path: Path) -> None:
     home = (made(tmp_path)[0] / "index.html").read_text()
-    for anchor in ("epics", "beads", "automatic", "bug-reports", "deferred"):
+    # Each part and category has an anchor, and the table of contents links to it.
+    for anchor in (
+        "active",
+        "all",
+        "epics",
+        "beads",
+        "automatic",
+        "bug-reports",
+        "deferred",
+    ):
         assert f'id="{anchor}"' in home and f'href="#{anchor}"' in home
     for bead in ("by-free", "by-epic", "by-ci", "by-bug", "by-later"):
         assert f'href="beads/{bead}"' in home
     assert "Flaky checks" in home
-    assert "by-epic.1" not in home and "by-old" not in home
+    assert "by-old" not in home
     assert "1/3" in home  # The epic's closed children over all of them.
+    assert "c-stat" not in home  # The table of contents replaced the counts.
+
+
+def test_home_page_active_part_shows_beads_in_progress(tmp_path: Path) -> None:
+    home = (made(tmp_path)[0] / "index.html").read_text()
+    active, everything = home.split('id="all"')
+    # A child of an epic is in progress: it shows under Active, though All leaves it
+    # to its epic's page.
+    assert 'href="beads/by-epic.1"' in active
+    assert 'href="beads/by-epic.1"' not in everything
+    assert 'href="beads/by-free"' not in active
 
 
 def test_bead_page_shows_every_part(tmp_path: Path) -> None:
@@ -53,6 +73,22 @@ def test_bead_page_shows_every_part(tmp_path: Path) -> None:
     assert 'data-hovercard="hc-by-free"' in page  # A mention, with a hovercard.
     assert "A <em>note</em>" in page  # The comment.
     assert 'data-include="../changelog/by-epic.1.html"' in page  # No current changelog.
+
+
+def test_bead_page_contents_link_to_its_sections(tmp_path: Path) -> None:
+    site, _ = made(tmp_path)
+    page = (site / "beads" / "by-epic.1.html").read_text()
+    for anchor in ("description", "comments", "changelog"):
+        assert f'id="{anchor}"' in page and f'href="#{anchor}"' in page
+    # The epic's subtasks have an anchor, though with only Subtasks and Changelog its
+    # page is too short for contents.
+    epic = (site / "beads" / "by-epic.html").read_text()
+    assert 'id="subtasks"' in epic and "c-toc" not in epic
+
+
+def test_short_bead_page_has_no_contents(tmp_path: Path) -> None:
+    page = (made(tmp_path)[0] / "beads" / "by-later.html").read_text()
+    assert "c-toc" not in page
 
 
 def test_blockers_and_subtasks(tmp_path: Path) -> None:

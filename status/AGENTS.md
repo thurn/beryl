@@ -1,14 +1,15 @@
 # The bead status site
 
 This directory is a standalone Python project, `beryl_status`, that shows the
-beads as a website: a home page of cards for the open beads in five sections
-(epics, beads people filed, beads the tools filed by themselves in groups by
-label, bug reports, and deferred beads), and a page per bead at `beads/<id>`
-with its status, priority, assignee, epic, labels, description, blockers, the
-beads it blocks, subtasks, comments and changelog. It is read only.
-`just status` serves it on http://127.0.0.1:8766, and `just status publish`
-pushes it to GitHub Pages. The project also holds **cirrus**, the design system
-the site is built from, in `src/cirrus/`.
+beads as a website: a home page of cards in two parts, Active (every bead in
+progress) and All (the open beads in five sections: epics, beads people filed,
+beads the tools filed by themselves in groups by label, bug reports, and
+deferred beads), beside a table of contents that follows the reader's scrolling,
+and a page per bead at `beads/<id>` with its status, priority, assignee, epic,
+labels, description, blockers, the beads it blocks, subtasks, comments and
+changelog. It is read only. `just status` serves it on http://127.0.0.1:8766,
+and `just status publish` pushes it to GitHub Pages. The project also holds
+**cirrus**, the design system the site is built from, in `src/cirrus/`.
 
 ## Priorities
 
@@ -80,12 +81,14 @@ Every change here serves two priorities, in this order.
 ## Cirrus
 
 - `components.py`: functions that return HTML strings: `page` (the document,
-  with the header and `<main>` that navigation swaps), `title`, `stats`,
-  `section`, `grid` and `card`, `rows` and `row`, `layout` and `meta` (a reading
-  column with a property rail), `chip`, `dot`, `progress`, `tip` (a tooltip),
-  `link` with a `template` (a hovercard), `disclosure`, `timeline`, `comment`,
-  `time` (a relative time), `skeleton`, `include` (a fragment loaded after the
-  page), `empty` and `prose`. Every text passes through `esc`.
+  with the header and `<main>` that navigation swaps), `title`, `part` (a
+  top-level division holding sections), `section`, `toc` and `with_toc` (a table
+  of contents, a sticky rail on a wide screen and a sticky row of links on a
+  narrow one), `grid` and `card`, `rows` and `row`, `layout` and `meta` (a
+  reading column with a property rail), `chip`, `dot`, `progress`, `tip` (a
+  tooltip), `link` with a `template` (a hovercard), `disclosure`, `timeline`,
+  `comment`, `time` (a relative time), `skeleton`, `include` (a fragment loaded
+  after the page), `empty` and `prose`. Every text passes through `esc`.
 - `markdown.py`: a safe subset of Markdown that escapes everything it does not
   write itself, with an `autolink` hook (the site links bead ids with it).
 - `assets.py`: writes the static files under content-hashed names. `static/css/`
@@ -93,8 +96,8 @@ Every change here serves two priorities, in this order.
   and type scales, easing and durations), layout, components, motion. They are
   joined into one `cirrus.css`.
 - `static/cirrus.js`: navigation, prefetching, popovers, fragments, relative
-  times and freshness. Every page works without it. `static/sw.js` is the
-  service worker.
+  times, freshness and the table of contents' mark. Every page works without it.
+  `static/sw.js` is the service worker.
 - Colour is for meaning only: the tones (`neutral`, `accent`, `red`, `orange`,
   `amber`, `green`, `blue`, `violet`, `muted`) mark status and priority. Use a
   token, never a literal colour, outside `1-tokens.css`.

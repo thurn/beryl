@@ -28,6 +28,7 @@ AUTOMATIC: tuple[tuple[str, frozenset[str]], ...] = (
     ("Count gate", frozenset({"count-creep", "count-lower"})),
     ("Check verdicts", frozenset({"ci-check"})),
 )
+IN_PROGRESS = "in_progress"
 DEFERRED = "deferred"
 CLOSED = "closed"
 # The order statuses are shown in, most active first; any other status sorts after them.
@@ -184,11 +185,14 @@ def automatic_group(bead: Bead) -> str | None:
 
 @dataclass
 class Home:
-    """The home page's categories. Each open bead is in at most one, checked in this order:
+    """The home page's beads. `active` holds every bead in progress, wherever it sits, and
+    those beads also show in their category below it. Each open bead is in at most one
+    category, checked in this order:
     deferred beads, bug reports and the automatic groups wherever they sit (a fix run often
     gathers them under an epic), then epics and the remaining beads outside any epic. A bead
     inside an epic shows on its epic's page instead."""
 
+    active: list[Bead] = field(default_factory=list)
     epics: list[Bead] = field(default_factory=list)
     beads: list[Bead] = field(default_factory=list)
     automatic: list[tuple[str, list[Bead]]] = field(default_factory=list)
@@ -256,6 +260,8 @@ class Index:
         ):
             top = bead.id not in self.parent
             group = automatic_group(bead)
+            if bead.status == IN_PROGRESS:
+                found.active.append(bead)
             if bead.status == DEFERRED:
                 found.deferred.append(bead)
             elif BUG_REPORT in bead.labels:

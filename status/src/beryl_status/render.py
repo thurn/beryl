@@ -186,13 +186,15 @@ def mentions(bead: Bead, log: Changelog | None) -> frozenset[str]:
 # ---- The home page --------------------------------------------------------------
 
 
-def home_card(bead: Bead, index: Index, kind_shown: bool = True) -> str:
+def home_card(
+    bead: Bead, index: Index, kind_shown: bool = True, state_shown: bool = True
+) -> str:
     """A bead's card. `kind_shown` False leaves out the Epic chip, in the Epics section,
-    where every card would carry it."""
+    and `state_shown` False the status, in Active, where every card would carry it."""
     epic = bead.issue_type == "epic" and kind_shown
     kind = c.chip("Epic", "violet") if epic else ""
     # Open is the usual state, so only the other states earn a dot.
-    state = status_dot(bead.status) if bead.status != "open" else ""
+    state = status_dot(bead.status) if bead.status != "open" and state_shown else ""
     foot = [
         state,
         kind,
@@ -208,14 +210,19 @@ def home_card(bead: Bead, index: Index, kind_shown: bool = True) -> str:
     )
 
 
-def cards(beads: list[Bead], index: Index, kind_shown: bool = True) -> str:
-    return c.grid(home_card(b, index, kind_shown) for b in beads)
+def cards(
+    beads: list[Bead], index: Index, kind_shown: bool = True, state_shown: bool = True
+) -> str:
+    return c.grid(home_card(b, index, kind_shown, state_shown) for b in beads)
 
 
 def home(index: Index, assets: Assets) -> str:
+    """Two parts: Active, every bead in progress, and All, the open beads by category. A
+    bead in progress shows in both. A sticky table of contents beside them leads to each
+    part and category."""
     found = index.home()
     automatic = sum(len(beads) for _, beads in found.automatic)
-    # (heading, anchor, count, body) for each category, in the page's order.
+    # (heading, anchor, count, body) for each category of All, in the page's order.
     parts: list[tuple[str, str, int, str]] = [
         ("Epics", "epics", len(found.epics), cards(found.epics, index, False)),
         ("Beads", "beads", len(found.beads), cards(found.beads, index)),
@@ -224,7 +231,7 @@ def home(index: Index, assets: Assets) -> str:
             "automatic",
             automatic,
             "".join(
-                c.subsection(name, cards(beads, index), count=len(beads))
+                c.subsection(name, cards(beads, index), count=len(beads), level=4)
                 for name, beads in found.automatic
             ),
         ),
@@ -237,19 +244,38 @@ def home(index: Index, assets: Assets) -> str:
         ("Deferred", "deferred", len(found.deferred), cards(found.deferred, index)),
     ]
     shown = [p for p in parts if p[2]]
-    head = c.title("Beads", sub="Everything open, by where it came from.") + c.stats(
+    total = sum(count for _, _, count, _ in shown)
+    active = c.part(
+        "Active",
+        (
+            cards(found.active, index, state_shown=False)
+            if found.active
+            else c.empty("Nothing is in progress.")
+        ),
+        "active",
+        count=len(found.active),
+    )
+    everything = c.part(
+        "All",
+        "".join(
+            c.section(heading, body, count=count, id_=anchor, level=3)
+            for heading, anchor, count, body in shown
+        )
+        or c.empty("No open beads."),
+        "all",
+        count=total,
+    )
+    nav = c.toc(
         [
-            (heading.lower(), str(count), f"#{anchor}")
-            for heading, anchor, count, _ in shown
+            ("Active", "active", len(found.active), 0),
+            ("All", "all", total, 0),
+            *((heading, anchor, count, 1) for heading, anchor, count, _ in shown),
         ]
     )
-    sections = "".join(
-        c.section(heading, body, count=count, id_=anchor)
-        for heading, anchor, count, body in shown
-    ) or c.empty("No open beads.")
+    head = c.title("Beads", sub="What is in progress, and everything open.")
     return c.page(
         title="Beads · Beryl",
-        body=f"{head}{sections}",
+        body=head + c.with_toc(nav, active + everything),
         root="",
         assets=assets,
         crumbs=[("Beads", None)],
@@ -272,7 +298,12 @@ def bead_row(bead: Bead, index: Index, link: Linker) -> str:
 
 
 def related_section(
-    heading: str, ids: list[str], index: Index, link: Linker, show_done: bool = True
+    heading: str,
+    ids: list[str],
+    index: Index,
+    link: Linker,
+    show_done: bool = True,
+    id_: str | None = None,
 ) -> str:
     if not ids:
         return ""
@@ -286,7 +317,7 @@ def related_section(
             body += c.disclosure(f"{len(closed)} closed", rows)
         else:
             body += rows
-    return c.section(heading, body, count=len(beads))
+    return c.section(heading, body, count=len(beads), id_=id_)
 
 
 def describe(event: Event, link: Linker) -> tuple[str, str]:
@@ -421,6 +452,15 @@ def properties(bead: Bead, index: Index, link: Linker) -> str:
     return c.meta(items)
 
 
+# The fewest sections a bead's page has before it shows a table of contents.
+TOC_MINIMUM = 3
+
+
+def anchor(heading: str) -> str:
+    """A section's id from its heading: "Blocked by" is `blocked-by`."""
+    return heading.lower().replace(" ", "-")
+
+
 def details(bead: Bead) -> str:
     """The bead's bookkeeping, one click away: who made it, and Enact's metadata."""
     items: list[tuple[str, str]] = []
@@ -454,8 +494,22 @@ def bead_page(
     )
     head = c.title(bead.title, eyebrow=eyebrow)
     main: list[str] = []
+    # (label, anchor, count, depth) for the table of contents, one per section shown.
+    entries: list[tuple[str, str, int | None, int]] = []
+
+    def add(heading: str, html: str, count: int | None = None) -> None:
+        if not html:
+            return
+        main.append(html)
+        entries.append((heading, anchor(heading), count, 0))
+
     if bead.closed and bead.close_reason:
-        main.append(c.section("Close reason", render(bead.close_reason)))
+        add(
+            "Close reason",
+            c.section(
+                "Close reason", render(bead.close_reason), id_=anchor("Close reason")
+            ),
+        )
     for heading, source in (
         ("Description", bead.description),
         ("Acceptance criteria", bead.acceptance_criteria),
@@ -463,19 +517,22 @@ def bead_page(
         ("Notes", bead.notes),
     ):
         if source.strip():
-            main.append(c.section(heading, render(source)))
-    main.append(
-        related_section("Subtasks", index.children.get(bead.id, []), index, link)
-    )
-    main.append(
-        related_section("Blocked by", index.blocked_by.get(bead.id, []), index, link)
-    )
-    main.append(
-        related_section("Blocking", index.blocking.get(bead.id, []), index, link)
-    )
-    main.append(related_section("Related", index.related.get(bead.id, []), index, link))
+            add(heading, c.section(heading, render(source), id_=anchor(heading)))
+    for heading, table in (
+        ("Subtasks", index.children),
+        ("Blocked by", index.blocked_by),
+        ("Blocking", index.blocking),
+        ("Related", index.related),
+    ):
+        ids = table.get(bead.id, [])
+        add(
+            heading,
+            related_section(heading, ids, index, link, id_=anchor(heading)),
+            len(ids),
+        )
     if bead.comments:
-        main.append(
+        add(
+            "Comments",
             c.section(
                 "Comments",
                 "".join(
@@ -488,9 +545,12 @@ def bead_page(
                     for x in bead.comments
                 ),
                 count=len(bead.comments),
-            )
+                id_="comments",
+            ),
+            len(bead.comments),
         )
-    main.append(
+    add(
+        "Changelog",
         c.section(
             "Changelog",
             (
@@ -501,7 +561,7 @@ def bead_page(
                 )
             ),
             id_="changelog",
-        )
+        ),
     )
     main.append(details(bead))
     crumbs: list[tuple[str, str | None]] = [("Beads", "../")]
@@ -512,7 +572,11 @@ def bead_page(
         epic = index.epic(epic.id)
     crumbs += [(e.id, e.id) for e in chain]
     crumbs.append((bead.id, None))
-    body = head + c.layout("".join(main), properties(bead, index, link))
+    content = c.layout("".join(main), properties(bead, index, link))
+    # A short page has nothing to jump between, so contents show only from three sections.
+    if len(entries) >= TOC_MINIMUM:
+        content = c.with_toc(c.toc(entries), content)
+    body = head + content
     body += link.templates()
     return c.page(
         title=f"{bead.title} · {bead.id}",

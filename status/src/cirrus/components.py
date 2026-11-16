@@ -152,24 +152,42 @@ def template(id_: str, body: str) -> str:
     return f'<template id="{esc(id_)}">{body}</template>'
 
 
+def part(heading: str, body: str, id_: str, count: int | None = None) -> str:
+    """One of a page's few top-level divisions, under a large heading, holding sections
+    (whose headings it then passes `level=3`)."""
+    number = f'<span class="c-count">{count}</span>' if count is not None else ""
+    return (
+        f'<section class="c-part"{attrs(id=id_)}><h2 class="c-part-title">'
+        f"{esc(heading)}{number}</h2>{body}</section>"
+    )
+
+
 def section(
-    heading: str, body: str, count: int | None = None, id_: str | None = None
+    heading: str,
+    body: str,
+    count: int | None = None,
+    id_: str | None = None,
+    level: int = 2,
 ) -> str:
     """A titled group. Space and a small heading separate it from the next; there is no rule
-    or box (principle 3)."""
+    or box (principle 3). `level` is its heading's level, 3 inside a `part`."""
     number = f'<span class="c-count">{count}</span>' if count is not None else ""
     title_html = (
-        f'<h2 class="c-section-title">{esc(heading)}{number}</h2>' if heading else ""
+        f'<h{level} class="c-section-title">{esc(heading)}{number}</h{level}>'
+        if heading
+        else ""
     )
     return f'<section class="c-section"{attrs(id=id_)}>{title_html}{body}</section>'
 
 
-def subsection(heading: str, body: str, count: int | None = None) -> str:
+def subsection(
+    heading: str, body: str, count: int | None = None, level: int = 3
+) -> str:
     """A group inside a section, under a quieter heading, separated by space."""
     number = f'<span class="c-count">{count}</span>' if count is not None else ""
     return (
-        f'<div class="c-subsection"><h3 class="c-subsection-title">{esc(heading)}'
-        f"{number}</h3>{body}</div>"
+        f'<div class="c-subsection"><h{level} class="c-subsection-title">{esc(heading)}'
+        f"{number}</h{level}>{body}</div>"
     )
 
 
@@ -288,14 +306,24 @@ def comment(author: str, shown: str, when: str, body: str) -> str:
     )
 
 
-def stats(items: Sequence[tuple[str, str, str | None]]) -> str:
-    """A row of large numbers with small labels, for a summary under a page's title. Each is
-    (label, value, href); a stat with an href links to what it counts, such as a section's
-    anchor."""
-    body = "".join(
-        f'<{"a" if href else "div"} class="c-stat"{attrs(href=href)}>'
-        f'<span class="c-stat-value">{esc(value)}</span>'
-        f'<span class="c-stat-label">{esc(label)}</span></{"a" if href else "div"}>'
-        for label, value, href in items
+def toc(entries: Sequence[tuple[str, str, int | None, int]]) -> str:
+    """A page's table of contents: (label, anchor, count, depth) for each entry, depth 0 for
+    a `part` and 1 for a section in it. cirrus.js marks the entry for the part of the page
+    in view as the reader scrolls (`aria-current`)."""
+    items = "".join(
+        f'<li class="c-toc-item c-toc-depth-{depth}"><a class="c-toc-link" '
+        f'href="#{esc(anchor)}"><span class="c-toc-label">{esc(label)}</span>'
+        + ("" if count is None else f'<span class="c-toc-count">{count}</span>')
+        + "</a></li>"
+        for label, anchor, count, depth in entries
     )
-    return f'<div class="c-stats">{body}</div>'
+    return f'<nav class="c-toc" aria-label="On this page"><ul>{items}</ul></nav>'
+
+
+def with_toc(nav: str, body: str) -> str:
+    """Content beside a `toc` that stays in view as the page scrolls; on a narrow screen
+    the contents become a row of links above the content."""
+    return (
+        f'<div class="c-toc-layout"><div class="c-toc-rail">{nav}</div>'
+        f'<div class="c-toc-main">{body}</div></div>'
+    )

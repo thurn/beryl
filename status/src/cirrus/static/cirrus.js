@@ -431,11 +431,110 @@
         }
     }
 
+    // ---- Table of contents -------------------------------------------------
+    //
+    // The entry for the part of the page in view carries aria-current, and the
+    // top-level entry above it data-within; both follow the reader's scrolling.
+    // A click scrolls smoothly to its section and marks it at once.
+
+    // How far below the viewport's top a section's heading counts as in view:
+    // the sticky header (and, on a narrow screen, the contents row) plus slack.
+    const wide = matchMedia("(min-width: 960px)");
+    const tocLine = () =>
+        (document
+            .querySelector(wide.matches ? ".c-header" : ".c-toc-rail")
+            ?.getBoundingClientRect().bottom ?? 0) + 24;
+    let tocFrame = 0;
+    // Until when a click's mark stays put while its scroll runs, in ms; the
+    // scroll's scrollend releases it sooner.
+    let tocHeld = 0;
+
+    function tocEntries() {
+        return [...document.querySelectorAll(".c-toc-link")]
+            .map((a) => ({
+                a,
+                target: document.getElementById(
+                    decodeURIComponent(a.hash.slice(1))
+                ),
+            }))
+            .filter((e) => e.target);
+    }
+
+    function markToc(current) {
+        const links = [...document.querySelectorAll(".c-toc-link")];
+        // The top-level entry at or above the current one.
+        const top = links
+            .slice(0, links.indexOf(current) + 1)
+            .reverse()
+            .find((x) => x.closest(".c-toc-depth-0"));
+        for (const a of links) {
+            if (a === current) a.setAttribute("aria-current", "location");
+            else a.removeAttribute("aria-current");
+            if (a === top && a !== current) a.dataset.within = "";
+            else delete a.dataset.within;
+        }
+        // On a narrow screen the contents scroll sideways: keep the mark in view.
+        const row = current?.closest("ul");
+        if (row && row.scrollWidth > row.clientWidth) {
+            const left =
+                current.offsetLeft - (row.clientWidth - current.offsetWidth) / 2;
+            row.scrollTo({ left, behavior: reducedMotion() ? "auto" : "smooth" });
+        }
+    }
+
+    function spyToc() {
+        tocFrame = 0;
+        if (performance.now() < tocHeld) return;
+        const entries = tocEntries();
+        if (!entries.length) return;
+        const line = tocLine();
+        let current = entries[0].a;
+        for (const { a, target } of entries) {
+            if (target.getBoundingClientRect().top <= line) current = a;
+        }
+        const end =
+            innerHeight + scrollY >= document.documentElement.scrollHeight - 2;
+        if (end) current = entries[entries.length - 1].a;
+        if (current.getAttribute("aria-current") === null) markToc(current);
+    }
+
+    addEventListener(
+        "scroll",
+        () => {
+            if (!tocFrame) tocFrame = requestAnimationFrame(spyToc);
+        },
+        { passive: true }
+    );
+    // The scroll a click started has ended: from here the reader's scrolling
+    // moves the mark again.
+    addEventListener("scrollend", () => {
+        tocHeld = 0;
+    });
+
+    document.addEventListener("click", (e) => {
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+        const a = e.target.closest?.(".c-toc-link");
+        const target =
+            a && document.getElementById(decodeURIComponent(a.hash.slice(1)));
+        if (!target) return;
+        e.preventDefault();
+        history.replaceState(history.state, "", a.hash);
+        markToc(a);
+        // A short way glides; a long way jumps, since a glide over several
+        // screens of cards only delays the reader.
+        const far =
+            Math.abs(target.getBoundingClientRect().top) > 2 * innerHeight;
+        const glide = !far && !reducedMotion();
+        tocHeld = performance.now() + 3000;
+        target.scrollIntoView({ behavior: glide ? "smooth" : "auto" });
+    });
+
     // ---- Wiring --------------------------------------------------------------
 
     function enhance(scope) {
         times(scope);
         includes(scope);
+        requestAnimationFrame(spyToc);
         if (watcher) {
             for (const a of scope.querySelectorAll("a[data-prefetch]"))
                 watcher.observe(a);

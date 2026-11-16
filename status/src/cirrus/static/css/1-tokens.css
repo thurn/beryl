@@ -31,6 +31,9 @@
   --text-xl: 22px;
   --text-2xl: 32px;
 
+  /* The sticky header's height: its padding and one line of small text. */
+  --c-header-height: 52px;
+
   --radius-sm: 6px;
   --radius: 12px;
   --radius-lg: 16px;

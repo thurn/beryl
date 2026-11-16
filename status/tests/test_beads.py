@@ -42,6 +42,8 @@ def ids(beads: list[Bead]) -> list[str]:
 
 def test_home_sorts_open_beads_into_categories() -> None:
     home = index().home()
+    # Every bead in progress, inside an epic or not; it also keeps its category.
+    assert ids(home.active) == ["by-epic.1"]
     assert ids(home.epics) == ["by-epic"]
     # Outside any epic and filed by a person; children of the epic show on its page.
     assert ids(home.beads) == ["by-free"]
