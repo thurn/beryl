@@ -125,6 +125,8 @@ opportunities, in answers about velocity or in findings:
   while a run is paused or stopped.
 - An "always-on worker pool" or dispatcher that drains `bd ready` without a
   run.
+- Sessions stopped by a usage limit (the weekly limit or a model's limit), and
+  advice to avoid hitting one.
 
 When asked about velocity (wall-clock time to shipped beads), measure only work
 the user has scheduled, usually the beads of active Enact runs, and only the
