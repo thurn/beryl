@@ -98,5 +98,10 @@
     "label": "Beryl 3D trees clone the cached build directory once, and sweep and coverage trees reuse one path",
     "metric": "machine.saturation",
     "expect": "down"
+  },
+  {
+    "label": "Lima VMs hold CPU tokens for their cores, run in the background for low-priority work, and stop after 15 idle minutes",
+    "metric": "machine.saturation",
+    "expect": "down"
   }
 ]

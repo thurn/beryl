@@ -45,6 +45,7 @@ import json
 import os
 import platform
 import re
+import subprocess
 import sys
 import time
 from collections.abc import Callable, Iterable, Mapping
@@ -65,6 +66,7 @@ from . import (
     sweep,
     system,
     verdicts,
+    vm_host,
 )
 from .beryl3d import paths as beryl3d_paths
 from .beryl3d import sweep as b3d_sweep
@@ -607,6 +609,13 @@ def slow(args: argparse.Namespace) -> int:
     if not args.lanes and commit:
         for line in start_sweeps():
             print(f"ci: {line}")
+        # Slow CI runs every few minutes while staging moves, so it also stops the virtual
+        # machines left idle, which gives their memory back to macOS (vm_host.py).
+        try:
+            for vm in vm_host.stop_idle():
+                print(f"ci: stopped the idle {vm} virtual machine")
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"ci: could not stop idle virtual machines: {e}")
     return code
 
 

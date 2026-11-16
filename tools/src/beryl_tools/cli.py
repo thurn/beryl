@@ -45,6 +45,7 @@ from . import (
     ui_counts,
     verdicts,
     video,
+    vm_host,
     warm,
 )
 from .beryl3d import cli as beryl3d_cli
@@ -105,6 +106,7 @@ MODULES: tuple[ModuleType, ...] = (
     ui_counts,
     verdicts,
     video,
+    vm_host,
     warm,
 )
 

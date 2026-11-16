@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import count_trend, paths, system, warm
+from . import count_trend, paths, system, vm_host, warm
 
 if TYPE_CHECKING:
     from .checks import Lane
@@ -432,6 +432,9 @@ def vm_ensure(vm: str = VM, cpus: int = 4, memory_gib: int = 4) -> int:
     if not output("which", "limactl").strip():
         log("Lima is missing: brew install lima")
         return 2
+    # This command uses the machine until it exits: its CPUs count against the pool, and it is
+    # not stopped as idle meanwhile (vm_host.py).
+    vm_host.join(vm, cpus)
     status = vm_status(vm)
     checkout = paths.main_checkout() or paths.REPO
     size = [f"--cpus={cpus}", f"--memory={memory_gib}"]
@@ -450,6 +453,8 @@ def vm_ensure(vm: str = VM, cpus: int = 4, memory_gib: int = 4) -> int:
         code = subprocess.run(["limactl", "start", "--tty=false", vm]).returncode
     else:
         code = 0
+    if code == 0:
+        vm_host.prioritize(vm)
     return code
 
 
