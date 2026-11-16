@@ -1,7 +1,7 @@
 //! `just b3d test` and the interface test runner behind it (docs/beryl-3d.md, "Test speed").
 
 use beryl_inspect::cli::{Ran, main};
-use beryl_inspect::faults::{Listed, PATH_VARIABLE};
+use beryl_inspect::faults::PATH_VARIABLE;
 use beryl_inspect::runner::{self, Limits, Outcome, Test};
 use beryl_protocol::protocol::Side;
 use beryl_scene::input::Size;
@@ -170,39 +170,18 @@ fn logged_verdict(name: &str, rule: &str, allowed: Option<usize>, label: &str) -
     )
 }
 
-/// A test with faults the real list allows, and how many of one rule.
-fn a_test_with_listed_faults() -> (String, String, usize) {
-    let listed = Listed::read().expect("the list");
-    let (name, counts) = listed
-        .tests
-        .iter()
-        .find(|(name, counts)| {
-            name.contains("/you/") && counts.len() == 1 && counts.values().all(|&n| n > 1)
-        })
-        .expect("a listed test");
-    let (rule, &n) = counts.iter().next().expect("a rule");
-    (name.clone(), rule.clone(), n)
-}
-
-/// The run log's verdict is the one the exit status gives: faults that match their allowance
-/// pass, and a new, excess or stale count fails the test that has it.
+/// The run log's verdict is the one the exit status gives: a test whose faults match their
+/// allowance passes, and a stale count fails it. Every interface test is free of faults today,
+/// so this runs one with none; `faults.rs` covers the new and excess counts on made-up outcomes.
 #[test]
 fn the_run_log_agrees_with_the_allowance_comparison() {
-    let (name, rule, n) = a_test_with_listed_faults();
+    let name = "b3d:verbs-piles/you/1440x900";
     assert_eq!(
-        logged_verdict(&name, &rule, Some(n), "same"),
+        logged_verdict(name, "step-shown", None, "same"),
         ("pass".into(), 0)
     );
     assert_eq!(
-        logged_verdict(&name, &rule, None, "new"),
-        ("fail".into(), 1)
-    );
-    assert_eq!(
-        logged_verdict(&name, &rule, Some(n - 1), "excess"),
-        ("fail".into(), 1)
-    );
-    assert_eq!(
-        logged_verdict(&name, &rule, Some(n + 1), "stale"),
+        logged_verdict(name, "step-shown", Some(1), "stale"),
         ("fail".into(), 1)
     );
 }
