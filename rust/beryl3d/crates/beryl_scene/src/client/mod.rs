@@ -360,8 +360,8 @@ impl Client {
         self.now = now;
         self.inputs.clear();
         self.own(now);
-        let (aim, targets) = (self.aim(), self.targets(self.open));
-        self.show.lit_mut().set_aim(aim);
+        self.set_aims(self.open);
+        let targets = self.targets(self.open);
         let transitioning = self.layer.tick(now);
         self.show.pointer_mut().advance(now);
         self.show.advance_slide(now);

@@ -83,10 +83,12 @@ pub struct Open {
     pub ends: Option<Interval>,
 }
 
-/// The arrow a choice of targets draws from the spell or ability that asks to the pointer,
-/// until as many targets are picked as it takes (UI Conventions, "An arrow to the pointer"), as
-/// the web interface's `Aim` (`ui/src/stage/Aim.tsx`) draws it. It is the pointer's trace, not
-/// a span: it has no step and no fade.
+/// An arrow or line to the pointer, as the web interface's `Aim` (`ui/src/stage/Aim.tsx`) draws
+/// it: a choice of targets draws one from the spell or ability that asks, until as many
+/// targets are picked as it takes (UI Conventions, "An arrow to the pointer"), and a
+/// declaration one from each creature declared that awaits what it is aimed at (UI
+/// Conventions, "Attacking a planeswalker"). It is the pointer's trace, not a span: it has no
+/// step and no fade.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Aim {
     pub arrow: Arrow,
@@ -100,7 +102,8 @@ pub struct Aim {
 pub struct Lit {
     open: Vec<Open>,
     streaks: Vec<StreakRun>,
-    aim: Option<Aim>,
+    /// The arrows to the pointer drawn now (`Aim`).
+    aims: Vec<Aim>,
 }
 
 impl Lit {
@@ -111,19 +114,21 @@ impl Lit {
         Self {
             open: Vec::with_capacity(capacity),
             streaks: Vec::with_capacity(capacity),
-            aim: None,
+            aims: Vec::with_capacity(capacity),
         }
     }
 
-    /// The arrow to the pointer, if one is drawn.
+    /// The arrows to the pointer drawn now.
     #[must_use]
-    pub fn aim(&self) -> Option<Aim> {
-        self.aim
+    pub fn aims(&self) -> &[Aim] {
+        &self.aims
     }
 
-    /// Draws the arrow to the pointer, or none.
-    pub fn set_aim(&mut self, aim: Option<Aim>) {
-        self.aim = aim;
+    /// Draws `aims` to the pointer in place of those drawn before. Allocates only when there
+    /// are more of them than the capacity `Lit` was made with.
+    pub fn set_aims(&mut self, aims: impl IntoIterator<Item = Aim>) {
+        self.aims.clear();
+        self.aims.extend(aims);
     }
 
     /// `span` begins to appear, standing whole once `over` is done. A revealed face joins the

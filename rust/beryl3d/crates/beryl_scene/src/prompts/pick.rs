@@ -15,9 +15,9 @@
 
 use beryl_protocol::prompt::{PromptView, ShapeBody};
 use beryl_protocol::protocol::{ObjectId, ZoneName};
-use beryl_protocol::script::{Arrow, Mark, OwnStep, Subject, Verb};
+use beryl_protocol::script::{Arrow, Mark, OwnStep, Subject};
 
-use super::{Shown, Steps, prompt_bar};
+use super::{Shown, Steps, begin_spans, end_spans, mark_spans, prompt_bar};
 use crate::element::Element;
 use crate::light::{ArrowSpan, MarkSpan, Span};
 use crate::screens::ScreenIn;
@@ -37,14 +37,7 @@ pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
 /// drew and `shown` does not end, then the tray lifts the cards of `shown` or lets those of
 /// `was` go, then the spans new in `shown` begin. Allocates nothing.
 pub(super) fn own(shown: Option<Shown>, was: Option<Shown>, steps: &mut Steps) {
-    for span in spans(was).filter(|span| !spans(shown).any(|now| now == *span)) {
-        let (step, verb) = match span {
-            Span::Arrow(_) => (OwnStep::ArrowEnds, Verb::Point),
-            _ => (OwnStep::MarkEnds, Verb::Mark),
-        };
-        let over = steps.next(step, verb, Some(&span));
-        steps.lit.end(&span, over);
-    }
+    end_spans(spans, shown, was, steps);
     let (now, then) = (tray(shown), tray(was));
     if now != then {
         steps.tray(if now.is_empty() {
@@ -55,15 +48,7 @@ pub(super) fn own(shown: Option<Shown>, was: Option<Shown>, steps: &mut Steps) {
             }
         });
     }
-    for span in spans(shown).filter(|span| !spans(was).any(|then| then == *span)) {
-        let (step, verb) = match span {
-            Span::Arrow(ArrowSpan { arrow, .. }) => (OwnStep::ArrowBegins { arrow }, Verb::Point),
-            Span::Mark(MarkSpan { mark, .. }) => (OwnStep::MarkBegins { mark }, Verb::Mark),
-            _ => continue,
-        };
-        let over = steps.next(step, verb, None);
-        steps.lit.begin(span, over);
-    }
+    begin_spans(spans, shown, was, steps);
 }
 
 /// The cards `prompt`'s tray holds up, in order: none for a prompt that picks where they lie.
@@ -83,12 +68,7 @@ pub(crate) fn tray(prompt: Option<Shown<'_>>) -> &[ObjectId] {
 fn spans(prompt: Option<Shown<'_>>) -> impl Iterator<Item = Span> + '_ {
     let shown = prompt.filter(|shown| matches!(shown.prompt.body, ShapeBody::Pick { .. }));
     shown.into_iter().flat_map(|shown| {
-        let marks = shown.prompt.marks.iter().map(|marked| {
-            Span::Mark(MarkSpan {
-                mark: marked.mark,
-                on: marked.on,
-            })
-        });
+        let marks = mark_spans(shown.prompt);
         let source = shown.source.filter(|&slot| shown.zone_of(slot).is_some());
         let arrows = shown.prompt.marks.iter().filter_map(move |marked| {
             let arrow = match marked.mark {

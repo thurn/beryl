@@ -20,7 +20,7 @@ use beryl_protocol::script::{Mark, OwnStep, OwnTimings, StepTiming, Verb};
 pub use bar::prompt_bar;
 
 use crate::element::Element;
-use crate::light::{Lit, MarkSpan, Span};
+use crate::light::{ArrowSpan, Lit, MarkSpan, Span};
 use crate::pose::Curve;
 use crate::screens::ScreenIn;
 use crate::verbs::Interval;
@@ -133,6 +133,54 @@ fn marks(
         let over = steps.next(step, Verb::Mark, None);
         steps.lit.begin(Span::Mark(span), over);
     }
+}
+
+/// Ends each span that `spans` gives for `was` and not for `shown`, an arrow by `ArrowEnds` and
+/// anything else by `MarkEnds`, one after another in the beat of `steps`, as the web
+/// interface's `#mark` in `ui/src/stage/prompt.ts` ends them. Allocates nothing.
+fn end_spans<'a, I: Iterator<Item = Span>>(
+    spans: impl Fn(Option<Shown<'a>>) -> I,
+    shown: Option<Shown<'a>>,
+    was: Option<Shown<'a>>,
+    steps: &mut Steps,
+) {
+    for span in spans(was).filter(|span| !spans(shown).any(|now| now == *span)) {
+        let (step, verb) = match span {
+            Span::Arrow(_) => (OwnStep::ArrowEnds, Verb::Point),
+            _ => (OwnStep::MarkEnds, Verb::Mark),
+        };
+        let over = steps.next(step, verb, Some(&span));
+        steps.lit.end(&span, over);
+    }
+}
+
+/// Begins each arrow and mark that `spans` gives for `shown` and not for `was`, one after
+/// another in the beat of `steps`, as `#mark` begins them. Allocates nothing.
+fn begin_spans<'a, I: Iterator<Item = Span>>(
+    spans: impl Fn(Option<Shown<'a>>) -> I,
+    shown: Option<Shown<'a>>,
+    was: Option<Shown<'a>>,
+    steps: &mut Steps,
+) {
+    for span in spans(shown).filter(|span| !spans(was).any(|then| then == *span)) {
+        let (step, verb) = match span {
+            Span::Arrow(ArrowSpan { arrow, .. }) => (OwnStep::ArrowBegins { arrow }, Verb::Point),
+            Span::Mark(MarkSpan { mark, .. }) => (OwnStep::MarkBegins { mark }, Verb::Mark),
+            _ => continue,
+        };
+        let over = steps.next(step, verb, None);
+        steps.lit.begin(span, over);
+    }
+}
+
+/// Each of `prompt`'s marks as a span.
+fn mark_spans(prompt: &PromptView) -> impl Iterator<Item = Span> + '_ {
+    prompt.marks.iter().map(|marked| {
+        Span::Mark(MarkSpan {
+            mark: marked.mark,
+            on: marked.on,
+        })
+    })
 }
 
 /// The marks the table draws for `prompt`'s, by `look`.

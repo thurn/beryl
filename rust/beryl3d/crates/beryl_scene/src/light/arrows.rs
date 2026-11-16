@@ -42,11 +42,12 @@ enum Cut {
     Beam,
 }
 
-/// The element id of the arrow to the pointer (`Lit::aim`): past every open span's arrow.
+/// The element id of the first arrow to the pointer (`Lit::aims`), past every open span's
+/// arrow: each one's id is this plus its index among them.
 pub const AIM_ID: u32 = ARROW_IDS + (1 << 16);
 
-/// Writes the records of the arrows and lines in `lit` as they are at `now`, and the arrow to
-/// the pointer, if one is drawn.
+/// Writes the records of the arrows and lines in `lit` as they are at `now`, and the arrows to
+/// the pointer.
 pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
     for (index, open) in lit.open().iter().enumerate() {
         let Span::Arrow(arrow) = open.span else {
@@ -75,9 +76,10 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         };
         drawn.write(scene, builder);
     }
-    if let Some(aim) = lit.aim()
-        && let Some(from) = scene.reach(aim.from)
-    {
+    for (index, aim) in lit.aims().iter().enumerate() {
+        let Some(from) = scene.reach(aim.from) else {
+            continue;
+        };
         let start = End {
             toward: scene.toward(aim.from),
             ..on_screen(scene, from)
@@ -87,6 +89,10 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             half: Vec2::ZERO,
             toward: 0.0,
         };
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "far fewer arrows to the pointer than element ids"
+        )]
         let drawn = Drawn {
             arrow: aim.arrow,
             ends: [start, pointer],
@@ -94,7 +100,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             reaches: [from, from],
             opacity: 1.0,
             moving: true,
-            id: AIM_ID,
+            id: AIM_ID + index as u32,
         };
         drawn.write(scene, builder);
     }

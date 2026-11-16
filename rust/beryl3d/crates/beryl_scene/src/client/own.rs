@@ -211,27 +211,47 @@ impl Client {
         self.owned.rests = self.show.zone_rests();
     }
 
-    /// The arrow to the pointer the open prompt draws, if it draws one: while a choice of
-    /// targets is open and drawn and has fewer targets picked than it takes, from the spell or
-    /// ability that asks to the mouse, as the web interface's `Aim` (`ui/src/stage/Aim.tsx`)
-    /// has it. A touch has no pointer to follow, and nothing follows the pointer while a tray
-    /// holds cards up over the table.
-    pub(super) fn aim(&self) -> Option<Aim> {
-        let (_, prompt) = self.prompt.as_ref().filter(|_| self.open)?;
-        let ShapeBody::Pick {
-            tray, most, picked, ..
-        } = &prompt.body
-        else {
-            return None;
+    /// Draws the arrows to the pointer the open prompt draws, if it is `open`, as the web
+    /// interface's `Aim` (`ui/src/stage/Aim.tsx`) draws them: while a choice of targets has
+    /// fewer targets picked than it takes, one from the spell or ability that asks; and while
+    /// creatures declared await what they are aimed at, a line from each, in the look of the
+    /// line their aim will draw. A touch has no pointer to follow, and nothing follows the
+    /// pointer while a tray holds cards up over the table. Allocates nothing.
+    pub(super) fn set_aims(&mut self, open: bool) {
+        let prompt = (self.prompt.as_ref())
+            .filter(|_| open)
+            .map(|(_, prompt)| prompt);
+        let (target, arrow, aiming): (_, _, &[ObjectId]) = match prompt.map(|p| (p, &p.body)) {
+            Some((
+                prompt,
+                ShapeBody::Pick {
+                    tray, most, picked, ..
+                },
+            )) => {
+                let seeks = prompt.is(Purpose::Target)
+                    && tray.is_empty()
+                    && picked.len() < usize::from(*most);
+                (
+                    self.owned.source.filter(|_| seeks),
+                    Arrow::HostileTarget,
+                    &[],
+                )
+            }
+            Some((_, ShapeBody::Declare { arrow, aiming, .. })) => (None, *arrow, aiming),
+            _ => (None, Arrow::HostileTarget, &[]),
         };
-        let seeks =
-            prompt.is(Purpose::Target) && tray.is_empty() && picked.len() < usize::from(*most);
-        let from = self.owned.source.filter(|_| seeks)?;
-        Some(Aim {
-            arrow: Arrow::HostileTarget,
-            from: Subject::Object { slot: from },
-            to: self.owned.mouse?,
-        })
+        let aims = self.owned.mouse.into_iter().flat_map(|to| {
+            let aim = move |arrow, slot| Aim {
+                arrow,
+                from: Subject::Object { slot },
+                to,
+            };
+            let target = target.map(move |slot| aim(Arrow::HostileTarget, slot));
+            target
+                .into_iter()
+                .chain(aiming.iter().map(move |&slot| aim(arrow, slot)))
+        });
+        self.show.lit_mut().set_aims(aims);
     }
 
     /// Which players, the viewer first, the open prompt marks, and so picks by a press on their
