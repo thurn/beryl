@@ -32,6 +32,16 @@ for each (`give_back`). Cargo then runs fewer jobs, and a push that starts durin
 build gets the cores within seconds instead of after the build. `cargo test`, `nextest` and `run`
 are left out, because the tests or the program they run take as many threads as the lease had
 when it started, which the jobserver does not control.
+
+A lease that would start short of what it wants while lower classes hold elastic tokens waits up
+to `tokens.RECLAIM_SECONDS` for them. For an agent's incremental build that held its lease for
+under 2 s, that wait was 8 to 12 s: after a one-line edit, `just b3d tree` took 11 to 13 s against
+its 3 s target on 2026-11-16. So a command that compiles only, of a class below `push`
+(`STARTS_SHORT`), starts at once on the tokens that are free, and for the first
+`RECLAIM_SECONDS` keeps a waiter's file beside its lease (`wait_beside`), so that the
+lower classes give their elastic tokens back, which the lease then takes through its jobserver.
+A push's and the queue's builds still wait: their check steps run against a time limit and want
+every core they can get from the start.
 """
 
 from __future__ import annotations
@@ -42,9 +52,10 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
-from . import paths, tokens
+from . import paths, system, tokens
 
 # The directory holding the `cargo` shim, put first on PATH by `install`.
 SHIM_DIR: Path = paths.REPO / "tools" / "shims"
@@ -85,6 +96,12 @@ SHRINK_SECONDS = 0.25
 # Cargo commands that only compile, whose parallelism the jobserver controls throughout, so they
 # can give tokens back while they run.
 SHRINKS: frozenset[str] = frozenset({"build", "check", "clippy", "rustc", "doc"})
+
+# The classes whose compile-only commands start on the tokens that are free instead of waiting
+# for lower classes to give theirs back, and grow as they do.
+STARTS_SHORT: frozenset[str] = frozenset(
+    k for k in tokens.CLASSES if tokens.CLASSES.index(k) > tokens.CLASSES.index("push")
+)
 
 
 def install() -> None:
@@ -178,15 +195,20 @@ def run(argv: list[str], pool: tokens.Pool | None = None) -> int:
     pool = pool or tokens.Pool()
     want = tokens.largest(pool.size)
     shrinks = subcommand(argv) in SHRINKS
+    klass = tokens.named_class()
+    short = shrinks and klass in STARTS_SHORT
     lease = pool.acquire(
-        tokens.named_class(),
+        klass,
         want,
         command=f"cargo {subcommand(argv)}",
         elastic_from=1 if shrinks else None,
+        hold_out=not short,
     )
     assert lease is not None
     extra: list[tokens.Lease] = []
     jobserver = Jobserver(lease.size)
+    waiting = wait_beside(pool, klass) if short and lease.size < want else None
+    deadline = time.monotonic() + tokens.RECLAIM_SECONDS
     try:
         child: subprocess.Popen[bytes] = subprocess.Popen(
             command, env=lease_env(lease, jobserver)
@@ -220,12 +242,31 @@ def run(argv: list[str], pool: tokens.Pool | None = None) -> int:
                     held += more.size
                     # The pool's log records the most tokens the command held.
                     lease.size = max(lease.size, held)
+            if waiting and (held >= want or time.monotonic() > deadline):
+                waiting.unlink(missing_ok=True)
+                waiting = None
         return code
     finally:
+        if waiting:
+            waiting.unlink(missing_ok=True)
         jobserver.close()
         for more in extra:
             more.release()
         lease.release()
+
+
+def wait_beside(pool: tokens.Pool, klass: str) -> Path | None:
+    """For a running lease of `klass` that is short of what it wants and grows (`Pool.top_up`):
+    a waiter's file, written when lower classes hold elastic tokens, so that they give those back
+    and take no more, as they would for a lease waiting to start (`Pool.acquire`). The caller
+    removes it once the lease has grown or `tokens.RECLAIM_SECONDS` have passed. None when nothing
+    below `klass` would give tokens back."""
+    me = pool.waiter(klass)
+    with tokens.THREADS, system.file_lock(pool.root / "lock"):
+        if not tokens.reclaimable(pool.holders(), tokens.CLASSES.index(klass)):
+            return None
+        me.write_text(f"{os.getpid()} {klass}")
+    return me
 
 
 def give_back(

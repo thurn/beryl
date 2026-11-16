@@ -181,7 +181,7 @@ HEAVY_STEPS: frozenset[str] = frozenset(
 
 # The threads of one process (a check's lanes) take leases at once. The file lock orders
 # processes, and this orders the threads that share a pid, whichever `Pool` they use.
-_THREADS = threading.Lock()
+THREADS = threading.Lock()
 
 
 def pool_size() -> int:
@@ -278,7 +278,7 @@ class Lease:
         if not self.files or log is None:
             self._return_files()
             return
-        with _THREADS, system.file_lock(log.parent / "lock"):
+        with THREADS, system.file_lock(log.parent / "lock"):
             self._return_files()
             self._write_log(log)
 
@@ -502,12 +502,12 @@ class Pool:
     def higher_waiting(self, klass: str) -> bool:
         """Whether a lease of a class above `klass` waits for tokens. Takes the lock."""
         rank = CLASSES.index(klass)
-        with _THREADS, system.file_lock(self.root / "lock"):
+        with THREADS, system.file_lock(self.root / "lock"):
             return any(CLASSES.index(w.klass) < rank for _, w in self.waiters())
 
     def give_back(self, lease: Lease, n: int) -> int:
         """Returns up to `n` of `lease`'s elastic tokens to the pool at once, and how many."""
-        with _THREADS, system.file_lock(self.root / "lock"):
+        with THREADS, system.file_lock(self.root / "lock"):
             mine = [f for f in lease.files if _is_elastic(f)][:n]
             for f in mine:
                 lease.files.remove(f)
@@ -521,13 +521,14 @@ class Pool:
         give_up: Callable[[], bool] = lambda: False,
         command: str = "",
         elastic_from: int | None = None,
+        hold_out: bool = True,
     ) -> Lease | None:
-        """A lease of between one and `want` tokens of `klass`, waiting while none is free, and
-        for up to `RECLAIM_SECONDS` while lower classes would give back enough elastic tokens to
-        make up `want`; None if `give_up` turns true first. Inside another lease (`LEASE_ENV`),
-        that lease. Its release writes a line naming `command` to the pool's log (`LEASE_LOG`).
-        Its tokens from index `elastic_from` on are elastic: the caller gives them back
-        (`give_back`) while a higher class waits.
+        """A lease of between one and `want` tokens of `klass`, waiting while none is free, and,
+        with `hold_out`, for up to `RECLAIM_SECONDS` while lower classes would give back enough
+        elastic tokens to make up `want`; None if `give_up` turns true first. Inside another
+        lease (`LEASE_ENV`), that lease. Its release writes a line naming `command` to the
+        pool's log (`LEASE_LOG`). Its tokens from index `elastic_from` on are elastic: the
+        caller gives them back (`give_back`) while a higher class waits.
         """
         inherited = os.environ.get(LEASE_ENV, "")
         if inherited.isdigit() and int(inherited) > 0:
@@ -536,14 +537,14 @@ class Pool:
             return Lease(max(1, want), [])
         want = max(1, min(want, self.size))
         # One file per waiting lease: the threads of one process wait apart.
-        me = self.root / f"wait-{os.getpid()}-{threading.get_ident()}-{klass}"
+        me = self.waiter(klass)
         info = self.root / f"{WAIT_INFO}-{os.getpid()}-{threading.get_ident()}-{klass}"
         started = time.monotonic()
         try:
             while True:
-                with _THREADS, system.file_lock(self.root / "lock"):
-                    hold_out = time.monotonic() - started < RECLAIM_SECONDS
-                    files = self.grant(klass, want, me, elastic_from, hold_out)
+                with THREADS, system.file_lock(self.root / "lock"):
+                    holding = hold_out and time.monotonic() - started < RECLAIM_SECONDS
+                    files = self.grant(klass, want, me, elastic_from, holding)
                     if files:
                         now = time.monotonic()
                         return Lease(
@@ -564,13 +565,17 @@ class Pool:
                         # Its time is when the wait was last alive (`_log_wait`).
                         _touch(info)
                 if give_up():
-                    with _THREADS, system.file_lock(self.root / "lock"):
+                    with THREADS, system.file_lock(self.root / "lock"):
                         _log_wait(info, "gave_up")
                     return None
                 time.sleep(0.2 + random.random() * 0.2)
         finally:
             me.unlink(missing_ok=True)
             info.unlink(missing_ok=True)
+
+    def waiter(self, klass: str) -> Path:
+        """This thread's waiter file for `klass`, which `grant` counts as its own."""
+        return self.root / f"wait-{os.getpid()}-{threading.get_ident()}-{klass}"
 
     def top_up(self, klass: str, held: int, want: int, elastic: bool = False) -> Lease:
         """The tokens of `klass` free now, without waiting, that bring a lease of `held` up to
@@ -580,10 +585,9 @@ class Pool:
         extra = min(want, self.size) - held
         if extra < 1:
             return Lease(0, [])
-        # A waiter's file this call never writes, so `grant` counts no waiter as its own.
-        me = self.root / f"wait-{os.getpid()}-{threading.get_ident()}-{klass}"
-        with _THREADS, system.file_lock(self.root / "lock"):
-            files = self.grant(klass, extra, me, 0 if elastic else None)
+        # The file cargo_pool.wait_beside writes, which `grant` must not count as a rival.
+        with THREADS, system.file_lock(self.root / "lock"):
+            files = self.grant(klass, extra, self.waiter(klass), 0 if elastic else None)
         return Lease(len(files), files, klass=klass)
 
 

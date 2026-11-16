@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import cargo_pool, tokens
+from beryl_tools import cargo_pool, system, tokens
 from beryl_tools.tokens import Pool
 
 pytestmark: pytest.MarkDecorator = pytest.mark.skipif(
@@ -175,6 +175,69 @@ def test_a_build_gives_tokens_back_while_a_push_waits(
     assert seen["slots"] <= 2
     granted.release()
     assert not pool.holders()
+
+
+def test_an_agent_build_starts_on_free_tokens_while_ci_gives_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release: Path = tmp_path / "release"
+    cargo, out = fake_cargo(tmp_path / "bin", release)
+    monkeypatch.setenv(cargo_pool.REAL_ENV, str(cargo))
+    monkeypatch.setattr(cargo_pool, "GROW_SECONDS", 0.05)
+    # Long enough that a build holding out for the rest would not have started by the time
+    # slow CI gives its tokens back.
+    monkeypatch.setattr(tokens, "RECLAIM_SECONDS", 3600.0)
+    pool: Pool = Pool(tmp_path / "pool", 9)
+    # Slow CI holds five tokens, four of them elastic, which leaves agents two of their seven.
+    ci: tokens.Lease | None = pool.acquire("ci", 5, elastic_from=1)
+    assert ci is not None and ci.size == 5
+    waiters: list[str] = []
+
+    def slow_ci() -> None:
+        # Slow CI's own shim gives its elastic tokens back while an agent's lease waits.
+        while not (found := [w.klass for _, w in pool_waiters()]):
+            time.sleep(0.01)
+        waiters.extend(found)
+        assert ci is not None
+        assert pool.give_back(ci, 4) == 4
+        release.touch()
+
+    def pool_waiters() -> list[tuple[Path, tokens.Holder]]:
+        with system.file_lock(pool.root / "lock"):
+            return pool.waiters()
+
+    thread = threading.Thread(target=slow_ci)
+    thread.start()
+    assert cargo_pool.run(["build"], pool) == 0
+    thread.join(5)
+    assert waiters == ["agent"]
+    seen = json.loads(out.read_text())
+    # It started on the two free tokens instead of waiting for six...
+    assert seen["tokens"] == "2"
+    # ...and grew to six through its jobserver once slow CI gave four back.
+    assert seen["slots"] == 5
+    assert not pool_waiters()
+    ci.release()
+    assert not pool.holders()
+
+
+def test_a_push_build_still_waits_for_lower_classes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cargo, out = fake_cargo(tmp_path / "bin")
+    monkeypatch.setenv(cargo_pool.REAL_ENV, str(cargo))
+    monkeypatch.setenv(tokens.CLASS_ENV, "push")
+    monkeypatch.setattr(tokens, "RECLAIM_SECONDS", 0.3)
+    pool = Pool(tmp_path / "pool", 9)
+    ci = pool.acquire("ci", 5, elastic_from=1)
+    assert ci is not None
+    # Nothing gives the elastic tokens back here, so the push waits out the reclaim time
+    # before it takes the three that are free.
+    assert cargo_pool.run(["build"], pool) == 0
+    assert json.loads(out.read_text())["tokens"] == "3"
+    line = json.loads((pool.root / tokens.LEASE_LOG).read_text().splitlines()[-1])
+    assert line["class"] == "push" and line["waited_s"] >= 0.3
+    ci.release()
 
 
 def test_a_test_run_keeps_its_tokens(
