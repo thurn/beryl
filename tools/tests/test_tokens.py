@@ -492,3 +492,30 @@ def test_a_program_lease_grows_only_when_asked(
     assert done.stdout.strip() == "None"
     line = json.loads((root / tokens.LEASE_LOG).read_text().splitlines()[-1])
     assert "grown_to" not in line
+
+
+def test_a_single_threaded_program_takes_one_token_without_waiting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Another agent and a sweep leave one token under the agents' ceiling of six, and the
+    # sweep's are elastic, so a lease that wanted more than one would wait up to
+    # `RECLAIM_SECONDS` for them to come back.
+    root = tmp_path / "pool"
+    monkeypatch.setattr(tokens, "Pool", lambda: Pool(root, 8))
+    monkeypatch.setattr(tokens, "pool_size", lambda: 8)
+    monkeypatch.setenv(tokens.CLASS_ENV, "agent")
+    sweep = Pool(root, 8).acquire("sweep", 2, never, elastic_from=0)
+    other = Pool(root, 8).acquire("agent", 3, never)
+    assert sweep is not None and other is not None
+    started = time.monotonic()
+    done = tokens.run_program(
+        [sys.executable, "-c", f"import os; print(os.environ['{tokens.LEASE_ENV}'])"],
+        want=1,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    sweep.release()
+    other.release()
+    assert done.stdout.strip() == "1"
+    assert time.monotonic() - started < tokens.RECLAIM_SECONDS / 2

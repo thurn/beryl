@@ -636,14 +636,17 @@ def named_class() -> str:
 
 
 def run_program(
-    command: list[str], grow: bool = False, **kwargs: Any
+    command: list[str], grow: bool = False, want: int = 0, **kwargs: Any
 ) -> subprocess.CompletedProcess[Any]:
     """Runs `command`, a program that spreads its work over as many threads as its lease has
     tokens (`LEASE_ENV`), inside a lease of [`named_class`], or inside the lease its parent
     already holds. With `grow`, a lease that started short of what it wanted takes more tokens
     while the program runs (`run_growing`); only a program that reads [`GRANT_FILE_ENV`] and
-    adds threads may ask for that, or the extra tokens would sit idle."""
-    lease = acquire(named_class(), largest(pool_size()), command=Path(command[0]).name)
+    adds threads may ask for that, or the extra tokens would sit idle. `want` is the most tokens
+    the program can use, `largest` by default; a single-threaded program passes 1, so that it
+    never waits out `RECLAIM_SECONDS` for tokens it would leave idle."""
+    wanted = want or largest(pool_size())
+    lease = acquire(named_class(), wanted, command=Path(command[0]).name)
     assert lease is not None
     with lease:
         env = {**(kwargs.pop("env", None) or os.environ), **lease.env()}

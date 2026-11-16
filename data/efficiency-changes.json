@@ -178,5 +178,10 @@
     "label": "Beryl 3D's fast-check cargo-test runs only the tests that fit the time left",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Single-threaded b3d commands take one CPU token instead of twelve",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

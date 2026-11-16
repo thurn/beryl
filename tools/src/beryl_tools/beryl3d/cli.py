@@ -226,31 +226,40 @@ def linked(name: str) -> Path:
 
 
 def run_program(
-    name: str, arguments: list[str], binary: Path | None = None, grow: bool = False
+    name: str,
+    arguments: list[str],
+    binary: Path | None = None,
+    grow: bool = False,
+    want: int = 0,
 ) -> int:
     """Runs the built program `name` (the file `binary`, or else `linked(name)`) with
     `arguments`, inside a lease of CPU tokens, since its checks spread over as many threads as
     the lease allows (`beryl_inspect::runner::threads`). With `grow`, for a command whose work
     goes through `runner::spread`, the lease grows while it runs (`tokens.run_program`). When
-    it says the recordings pack is missing, builds the pack and runs it again."""
+    it says the recordings pack is missing, builds the pack and runs it again. `want` caps the
+    lease (`tokens.run_program`)."""
     line = [str(binary or linked(name)), *arguments]
-    code = tokens.run_program(line, grow=grow, check=False).returncode
+    code = tokens.run_program(line, grow=grow, want=want, check=False).returncode
     if code != MISSING_PACK:
         return code
     recorded = record()
     if recorded != 0:
         return recorded
-    return tokens.run_program(line, grow=grow, check=False).returncode
+    return tokens.run_program(line, grow=grow, want=want, check=False).returncode
 
 
-def run_b3d(command: str) -> Callable[[argparse.Namespace], int]:
-    """Builds the `b3d` program of `beryl_inspect` and runs its `command` with the arguments."""
+def run_b3d(command: str, single: bool = False) -> Callable[[argparse.Namespace], int]:
+    """Builds the `b3d` program of `beryl_inspect` and runs its `command` with the arguments.
+    A `single` command runs on one thread and takes one CPU token. Asking for the usual
+    twelve, `just b3d tree`, which works for under a second, waited 10 s for them at load 20
+    on 2026-11-16 (the pool's `RECLAIM_SECONDS`), so after a one-line edit it took 15 to 24 s
+    against its 3 s target."""
 
     def run(args: argparse.Namespace) -> int:
         built = build(["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"])
         if built != 0:
             return built
-        return run_program("b3d", [command, *args.arguments])
+        return run_program("b3d", [command, *args.arguments], want=1 if single else 0)
 
     return run
 
@@ -276,12 +285,15 @@ def run_shared_b3d(command: str) -> Callable[[argparse.Namespace], int]:
     return run
 
 
-def b3d_command(name: str, summary: str, shared: bool = False) -> Command:
+def b3d_command(
+    name: str, summary: str, shared: bool = False, single: bool = False
+) -> Command:
     """A text command of the `b3d` program, which reads its own options and prints its own
     `--help` (`cli` in `beryl_inspect`). It runs the `b3d` that `shared_build` built when
     `shared` is set, and otherwise builds `b3d` alone, which relinks fastest after an edit.
+    A `single` command does its work on one thread (`run_b3d`).
     """
-    run = run_shared_b3d(name) if shared else run_b3d(name)
+    run = run_shared_b3d(name) if shared else run_b3d(name, single)
     return Command(name, summary, (), run, passthrough=True)
 
 
@@ -327,18 +339,22 @@ COMMANDS: tuple[Command, ...] = (
     b3d_command(
         "list",
         "every recording whose name starts with a prefix, with its length and views",
+        single=True,
     ),
     b3d_command(
         "info",
         "a recording's moments: views, script steps and prompts with their buttons",
+        single=True,
     ),
     b3d_command(
         "tree",
         "the elements on screen at one moment of a recording, as an indented tree",
+        single=True,
     ),
     b3d_command(
         "diff",
         "the elements that appeared, left, moved or changed state between two moments",
+        single=True,
     ),
     b3d_command(
         "check",
