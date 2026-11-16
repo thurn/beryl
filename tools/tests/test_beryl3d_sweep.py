@@ -4,7 +4,9 @@ pays for it nor fails with it."""
 from __future__ import annotations
 
 import json
+import os
 import re
+import time
 from datetime import datetime, timezone
 from collections.abc import Callable
 from pathlib import Path
@@ -377,3 +379,20 @@ def test_saving_the_build_directory_drops_incremental_caches(tmp_path: Path) -> 
     assert not (cached / "debug" / "incremental").exists()
     assert not (cached / "stale").exists()
     assert not sweep.save_target(tmp_path / "missing", cached)
+
+
+def test_saving_the_build_directory_drops_artifacts_no_build_uses(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "target"
+    deps = target / "debug" / "deps"
+    deps.mkdir(parents=True)
+    stale = deps / "libberyl_scene-0123456789abcdef.rlib"
+    current = deps / "libberyl_scene-fedcba9876543210.rlib"
+    stale.write_bytes(b"old")
+    current.write_bytes(b"new")
+    month_ago = time.time() - 30 * 86400
+    os.utime(stale, (month_ago, month_ago))
+    cached = paths.cache() / "target"
+    assert sweep.save_target(target, cached)
+    assert [p.name for p in (cached / "debug" / "deps").iterdir()] == [current.name]

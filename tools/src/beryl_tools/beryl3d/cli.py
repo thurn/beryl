@@ -19,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import system, tokens, warm
+from .. import caches, system, tokens, warm
 from . import app, camera, gate, lane, paths, phone, sweep, timeline, vm
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
@@ -49,18 +49,23 @@ def run_lane(_args: argparse.Namespace) -> int:
 
 
 def warm_target() -> None:
-    """Before a worktree's first cargo command, clones `$BERYL_CACHE/b3d/target` into the
-    workspace's `target` when the cache holds one and the workspace has none."""
+    """Before each cargo command, clones `$BERYL_CACHE/b3d/target` into the workspace's
+    `target` when the cache holds one and the workspace has none, or else prunes the workspace's
+    `target` when it is crowded (caches.tidy_target): a worktree that lives long held every
+    artifact of every build it ran, 46-53 GB in each of five worktrees on 2026-11-16."""
     target = paths.WORKSPACE / "target"
     cached = paths.cache() / "target"
     if target.exists():
+        caches.tidy_target(target)
         return
     with system.file_lock(paths.target_lock()):
         # Again under the lock: the sweep's steps start together, and each one that found no
         # target before the first clone landed cloned all 133,575 files again and threw the
         # copy away (five clones for one sweep on 2026-11-15).
-        if cached.is_dir() and not target.exists():
-            warm.clone_into(cached, target)
+        if cached.is_dir() and not target.exists() and warm.clone_into(cached, target):
+            # So that the builds' reads of units they do not rebuild count as uses, and
+            # `warm.prune` keeps those units (`warm.mark_unread`).
+            warm.mark_unread(target)
 
 
 def cargo(arguments: list[str]) -> int:

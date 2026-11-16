@@ -80,9 +80,10 @@ def crowded(target: Path) -> bool:
     return False
 
 
-def tidy_target(checkout: Path) -> bool:
-    """Prunes the checkout's `rust/target` (warm.py, `prune`) when it is [`crowded`], unless a
-    cargo build holds its lock; whether it pruned.
+def tidy_target(target: Path) -> bool:
+    """Prunes the build directory `target`, such as a checkout's `rust/target` or
+    `rust/beryl3d/target`, (warm.py, `prune`) when it is [`crowded`], unless a cargo build
+    holds its lock; whether it pruned.
 
     `warm.prune` otherwise runs only when Enact removes a worktree, and a tree that is never
     removed kept everything its builds left: on 2026-11-14 the merge queue's tree
@@ -94,7 +95,6 @@ def tidy_target(checkout: Path) -> bool:
     mode ([`prune_bisections`]) and are covered here too.
     Cargo takes an exclusive lock on `<profile>/.cargo-lock` for a build (flock on Unix), so
     holding it keeps a pruning from deleting files a build is writing or linking."""
-    target = checkout / "rust" / "target"
     lock = target / "debug" / ".cargo-lock"
     if not lock.parent.is_dir() or not crowded(target):
         return False

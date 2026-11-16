@@ -408,7 +408,7 @@ def run_all(
     limits = hang.Limits(script)
     cold = bool(warm.ensure()) if any(lane.warm for lane in lanes) else False
     if any(lane.warm for lane in lanes):
-        caches.tidy_target(paths.REPO)
+        caches.tidy_target(paths.REPO / "rust" / "target")
     env = {**os.environ, **(extra_env or {})}
     run = runlog.Run.start(script)
     run.chosen = chosen

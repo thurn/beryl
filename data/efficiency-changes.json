@@ -103,5 +103,10 @@
     "label": "Lima VMs hold CPU tokens for their cores, run in the background for low-priority work, and stop after 15 idle minutes",
     "metric": "machine.saturation",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D's saved build cache and worktree build directories are held to the 15 GB budget, so each clone copies one build instead of every earlier one",
+    "metric": "machine.saturation",
+    "expect": "down"
   }
 ]

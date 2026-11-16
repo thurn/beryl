@@ -586,6 +586,11 @@ def save_target(target: Path, cached: Path) -> bool:
     """Replaces `cached` with a clone of the build directory `target`, less its incremental
     caches: rustc keys each to the absolute path of the tree that built it and discards it
     anywhere else (caches.save_kept). Under the lock `just b3d` clones the cache with.
+
+    The clone is held to the main cache's budget (warm.py, `prune`) before it replaces the
+    cache. Without that, every saved cache kept every artifact of every earlier build, and every
+    new worktree cloned them all: on 2026-11-16 the cache was 44 GB, with 77,077 files in
+    debug/deps and nine copies of `libberyl_scene-*.rlib`, and free disk fell 174 GB in two days.
     """
     if not target.is_dir():
         return False
@@ -597,6 +602,7 @@ def save_target(target: Path, cached: Path) -> bool:
             return False
         for incremental in caches.incremental_folders(copy):
             shutil.rmtree(incremental, ignore_errors=True)
+        warm.prune(copy)
         if cached.exists():
             cached.rename(old)
         copy.rename(cached)
