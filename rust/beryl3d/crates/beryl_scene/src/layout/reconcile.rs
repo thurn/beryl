@@ -67,6 +67,8 @@ impl Layer {
             scroll: glam::Vec2::ZERO,
             fitted: None,
             motion: None,
+            placed: None,
+            shown: false,
         }
     }
 

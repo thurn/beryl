@@ -12,7 +12,7 @@ use beryl_protocol::protocol::Step;
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
-pub use keys::{Chord, Shortcuts};
+pub use keys::{Chord, Shortcuts, describe};
 pub use style::{Align, Direction, Display, Justify, Overflow, Position, Style, TextAlign, Track};
 
 use crate::frame::{ElementId, Role};
@@ -78,6 +78,19 @@ pub enum Anchor {
     Point(Vec2, Vec2),
     /// The centre of a scene object as the camera projects it.
     Object(Subject, Vec2),
+    /// A point of the window where a menu opens, in logical points, as `Menu.tsx` places one:
+    /// its top left corner stands at the point, or its right or bottom edge does where the menu
+    /// would otherwise pass the window's edge, and it is kept `flat.menu_edge` points inside the
+    /// window (`layout::menu`).
+    Menu(Vec2),
+    /// Beside the menu its parent row is in, as a submenu stands: on the menu's right if it
+    /// fits there and on its left if not, level with its row, and inside the window. It is shown
+    /// only while its row is open, under the pointer or opened by the right arrow key.
+    Submenu,
+    /// Beside the element a tooltip explains, as `tips.css` places a tip: centred above it,
+    /// or below it where there is no room above. It is shown only once the pointer has rested
+    /// on that element for `flat.tooltip_delay` milliseconds (`layout::tip`).
+    Tip,
 }
 
 /// What an element shows in its box besides its text and children.

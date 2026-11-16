@@ -322,6 +322,34 @@
         },
         "line_height": 1,
         "note": "A button's label: `--button-font`, 24 points at weight 700, line height 1."
+      },
+      "MENU": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 14,
+        "line_height": 1.4,
+        "note": "A menu row's label: `.table-menu`'s 14 points at line height 1.4 in `ui/src/table/menu.css`."
+      },
+      "MENU_TITLE": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 20,
+        "line_height": 1.2,
+        "note": "A menu's title: `.table-menu-title strong`, bold 20 points at line height 1.2."
+      },
+      "MENU_HINT": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 12,
+        "line_height": 1.4,
+        "note": "The key hint at a menu row's end: `.table-menu-hint`, 12 points."
+      },
+      "TIP": {
+        "font": "OpenSans",
+        "weight": 600,
+        "size": 12.5,
+        "line_height": 1.25,
+        "note": "A tooltip's words: `.tip` in `ui/src/design/components/tips.css`, 12.5 points at weight 600, line height 1.25."
       }
     },
     "size": {
@@ -368,6 +396,82 @@
       "SLIDER_THUMB": {
         "value": 16,
         "note": "The side of a slider's round thumb."
+      },
+      "MENU_MIN_WIDTH": {
+        "value": 236,
+        "note": "The narrowest a menu is: `.table-menu`'s `min-width`."
+      },
+      "MENU_MAX_WIDTH": {
+        "value": 320,
+        "note": "The widest a menu is: `.table-menu`'s `max-width`."
+      },
+      "MENU_PADDING": {
+        "value": 5,
+        "note": "The padding inside a menu's border: `.table-menu`'s `padding`."
+      },
+      "MENU_RADIUS": {
+        "value": 7,
+        "note": "The radius of a menu's corners."
+      },
+      "MENU_ROW_HEIGHT": {
+        "value": 28,
+        "note": "The least height of a menu row: `.table-menu-row`'s `min-height`."
+      },
+      "MENU_ROW_RADIUS": {
+        "value": 4,
+        "note": "The radius of the highlight behind a menu row."
+      },
+      "MENU_CHECK": {
+        "value": 14,
+        "note": "The column at a menu row's start that holds its check mark."
+      },
+      "TIP_RADIUS": {
+        "value": 5,
+        "note": "The radius of a tooltip's corners: `.tip`'s `border-radius`."
+      },
+      "MENU_BORDER": {
+        "value": 1,
+        "note": "The width of a menu's, a highlighted menu row's and a tooltip's border."
+      },
+      "MENU_TITLE_PADDING_TOP": {
+        "value": 7,
+        "note": "The padding above a menu's title: `.table-menu-title`'s `padding` of 7, 10 and 9 points."
+      },
+      "MENU_TITLE_PADDING_BOTTOM": {
+        "value": 9,
+        "note": "The padding below a menu's title."
+      },
+      "MENU_TITLE_PADDING_SIDE": {
+        "value": 10,
+        "note": "The padding either side of a menu's title."
+      },
+      "MENU_GROUP_GAP": {
+        "value": 4,
+        "note": "The room above and below the line over each group of a menu's rows: `.table-menu-group`'s `padding-top` and the `margin-top` between groups."
+      },
+      "MENU_ROW_PADDING_Y": {
+        "value": 3,
+        "note": "The padding above and below a menu row's words: `.table-menu-row`'s `padding: 3px 8px 3px 6px`."
+      },
+      "MENU_ROW_PADDING_START": {
+        "value": 6,
+        "note": "The padding before a menu row's check mark."
+      },
+      "MENU_ROW_PADDING_END": {
+        "value": 8,
+        "note": "The padding after a menu row's key hint."
+      },
+      "MENU_ROW_GAP": {
+        "value": 5,
+        "note": "The room between a menu row's check mark, words and key hint: `.table-menu-row`'s `gap`."
+      },
+      "TIP_PADDING_Y": {
+        "value": 4,
+        "note": "The padding above and below a tooltip's words: `.tip`'s `padding: 4px 9px`."
+      },
+      "TIP_PADDING_X": {
+        "value": 9,
+        "note": "The padding either side of a tooltip's words."
       }
     },
     "color": {
@@ -431,6 +535,14 @@
       "SLIDER_TRACK": {
         "value": "rgb(242 236 225 / 22%)",
         "note": "The unfilled part of a slider's track, behind the `--gold` fill the web's `accent-color` gives a range input (`.sound-level input` in `ui/src/screens/styles/settings.css`)."
+      },
+      "MENU_ACTIVE": {
+        "value": "#3e3322",
+        "note": "The highlighted menu row: `.table-menu-row[data-active]`'s `--gold` mixed 15% into `--surface`."
+      },
+      "TIP": {
+        "value": "rgb(24 21 19 / 94%)",
+        "note": "A tooltip's face: the `background` of `.tip`."
       }
     },
     "mana": {

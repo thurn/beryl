@@ -232,6 +232,18 @@ pub enum Wake {
     Never,
 }
 
+impl Wake {
+    /// The earlier of this wake and one at `at`, if there is one.
+    #[must_use]
+    pub fn or_at(self, at: Option<u64>) -> Self {
+        match (self, at) {
+            (Self::At(wake), Some(at)) => Self::At(wake.min(at)),
+            (Self::Never, Some(at)) => Self::At(at),
+            (wake, _) => wake,
+        }
+    }
+}
+
 /// A group of records drawn together. The opaque pass comes first, then the seven blended
 /// bands in this order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

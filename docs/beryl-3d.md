@@ -1560,6 +1560,33 @@ fn prompt_bar(prompt: &PromptView) -> Element {
   scene object, so a game object still has exactly one. Until the full-size face
   arrives, the board-size face is drawn enlarged.
 
+### Widgets
+
+Screens build themselves from the widgets in `beryl_scene::widgets`, one
+function each, so a widget looks and behaves the same everywhere. Besides
+buttons, icon buttons, toggles and sliders there are:
+
+- **`list(name, rows)`**: a column with role `List` that scrolls when its rows
+  pass its box. While it or one of its rows has the focus, up and down highlight
+  the next or previous row, going round, and Return presses it. The highlighted
+  row is the focused element, so it is drawn by its `FOCUSED` state. A row
+  scrolled out of the box takes no presses.
+- **`menu(id, title, groups)`** and **`context_menu(at, menu)`**: the look and
+  placement of the web interface's `Menu.tsx`. A menu is a list whose rows are
+  `MenuItem` elements named by their labels, in groups under a line, each with a
+  check mark and the key that does the same (`element::describe` writes it as
+  `shortcuts.ts` does). A row sends `Press::Menu(id, n)`, counting the menu's
+  rows from 0 over all its groups and then its submenus' rows. A context menu
+  (`Anchor::Menu`) opens at a point and is kept `flat.menu_edge` points inside
+  the window, highlighting its first row. A submenu (`Anchor::Submenu`) opens
+  beside its row on the pointer or the right arrow, on the menu's left when
+  there is no room on its right. A press outside the menu, or Escape, sends
+  `Press::Dismiss(Dismiss::Menu)`.
+- **`tooltip(text, of)`**: a dark label (`Anchor::Tip`) that stands centred
+  above the element named `of`, or below it where there is no room above, once
+  the pointer has rested on that element for `flat.tooltip_delay` milliseconds.
+  The client asks for a frame at that time. It never takes a press.
+
 ### Floats
 
 A **float** is a small element placed at a point of the window instead of in a

@@ -76,7 +76,8 @@ impl Node {
 impl Layer {
     /// Stamps the transitions found since the last frame with `now`, and works out where every
     /// node of the screen stands and how opaque it is at `now`. Returns whether any transition
-    /// is still under way. The client calls it at the start of every frame. Allocates nothing.
+    /// is still under way. A tooltip whose wait is over shows (`tip`). The client calls it at
+    /// the start of every frame. Allocates nothing.
     pub fn tick(&mut self, now: u64) -> bool {
         fn visit(node: &mut Node, now: u64) -> bool {
             let mut moving = false;
@@ -100,6 +101,7 @@ impl Layer {
             }
             moving
         }
+        self.tick_tip(now);
         self.screen.as_mut().is_some_and(|node| visit(node, now))
     }
 }

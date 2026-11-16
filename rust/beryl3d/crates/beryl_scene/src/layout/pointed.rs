@@ -75,7 +75,7 @@ fn slider(node: &Node) -> Option<Press> {
 impl Node {
     /// Its box on the window, with its tree's top left corner at `origin`, moved by its
     /// transition.
-    fn rect_at(&self, origin: Vec2) -> Rect {
+    pub(super) fn rect_at(&self, origin: Vec2) -> Rect {
         moved(self.rect, origin + self.offset())
     }
 }

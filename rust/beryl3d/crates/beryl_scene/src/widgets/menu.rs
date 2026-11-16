@@ -1,9 +1,16 @@
-//! Menus: a titled panel of rows in groups, and a context menu opened at a point.
+//! Menus, with the look and placement of the web interface's `Menu` (`ui/src/table/Menu.tsx`
+//! and `menu.css`): a dark panel under a thin metal rim holding a title and then rows in
+//! groups, each group under a line. A row shows a check mark if it is checked, its label, and
+//! at its end the key that does the same, or a chevron if it opens a submenu. The highlighted
+//! row is the focused one, drawn on a gold tint (`layout::write`); the keys and the pointer
+//! move it (`layout::menu`). A context menu opens at a point and stays inside the window, and
+//! a submenu opens beside its row.
 
 use glam::Vec2;
 
-use crate::element::{Anchor, Element, column, text};
+use crate::element::{Align, Anchor, Element, Press, column, row, text};
 use crate::frame::Role;
+use crate::tokens::{color, size, type_style};
 
 /// Which menu is open, so that a press on a row (`Press::Menu`) says whose row it was.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -19,34 +26,145 @@ pub struct MenuGroup {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MenuRow {
     pub label: String,
-    /// The key that does the same, shown at the row's end.
+    /// The words of the key that does the same, shown at the row's end, as
+    /// `element::describe` writes a binding for the host's platform.
     pub key: Option<String>,
     /// Whether the row shows a check mark.
     pub checked: bool,
     /// Whether a press on the row does anything now.
     pub enabled: bool,
+    /// The rows of the submenu it opens, if any. A row with a submenu sends no press of its
+    /// own: it opens the submenu.
+    pub submenu: Vec<MenuRow>,
 }
 
-/// The menu `id` titled `title`, with its rows in `groups`, each row a menu item named by its
-/// label. Pressing a row is not wired until the widgets track builds menus.
+impl MenuRow {
+    /// An enabled row showing `label`, with no key, check mark or submenu.
+    #[must_use]
+    pub fn new(label: &str) -> Self {
+        Self {
+            label: label.to_owned(),
+            key: None,
+            checked: false,
+            enabled: true,
+            submenu: Vec::new(),
+        }
+    }
+}
+
+/// The menu `id` titled `title`, with its rows in `groups`: a list named by its title whose
+/// rows are menu items named by their labels. A press on a row sends `Press::Menu(id, n)`,
+/// where `n` counts the menu's rows from 0 over all its groups, and then the rows of its
+/// submenus, in order, after the last of them.
 #[must_use]
 pub fn menu(id: MenuId, title: &str, groups: &[MenuGroup]) -> Element {
-    let _ = id;
-    column()
-        .name(title)
-        .children(groups.iter().flat_map(|group| {
-            group.rows.iter().map(|row| {
-                let mut item = text(&row.label).enabled(row.enabled);
-                item.role = Role::MenuItem;
-                item
-            })
-        }))
+    let rows = groups.iter().map(|group| group.rows.len()).sum::<usize>();
+    let mut next = 0;
+    let mut next_nested = u16::try_from(rows).unwrap_or(u16::MAX);
+    let mut heading = text(title).style(type_style::MENU_TITLE).color(color::TEXT);
+    heading.style.padding = [
+        size::MENU_TITLE_PADDING_TOP,
+        size::MENU_TITLE_PADDING_SIDE,
+        size::MENU_TITLE_PADDING_BOTTOM,
+        size::MENU_TITLE_PADDING_SIDE,
+    ];
+    let mut panel = panel(title).child(heading);
+    for (index, group) in groups.iter().enumerate() {
+        let gap = size::MENU_GROUP_GAP;
+        panel = panel.child(
+            row()
+                .name(&format!("group {index}"))
+                .height(size::MENU_BORDER)
+                .background(color::METAL)
+                .margin([if index == 0 { 0.0 } else { gap }, 0.0, gap, 0.0]),
+        );
+        for row in &group.rows {
+            panel = panel.child(menu_row(id, row, &mut next, &mut next_nested));
+        }
+    }
+    panel
 }
 
-/// `menu` opened with its top left corner at `at`, a point of the window in logical points.
+/// `menu` opened at `at`, a point of the window in logical points, as a context menu opens
+/// where the pointer was (`Anchor::Menu`).
 #[must_use]
 pub fn context_menu(at: Vec2, menu: Element) -> Element {
     let mut menu = menu;
-    menu.anchor = Some(Anchor::Point(at, Vec2::ZERO));
+    menu.anchor = Some(Anchor::Menu(at));
     menu
+}
+
+/// A menu's panel, a list named `name`, as wide as its rows within the menu's least and most
+/// widths.
+fn panel(name: &str) -> Element {
+    let mut panel = column()
+        .name(name)
+        .min_width(size::MENU_MIN_WIDTH)
+        .max_width(size::MENU_MAX_WIDTH)
+        .padding(size::MENU_PADDING)
+        .background(color::SURFACE)
+        .border((color::METAL, size::MENU_BORDER))
+        .radius(size::MENU_RADIUS);
+    panel.role = Role::List;
+    panel
+}
+
+/// The menu item for `row`. A row without a submenu presses `Press::Menu(id, *next)`, taking
+/// that number; a row with one opens it, whose rows take numbers from `*nested` on.
+fn menu_row(id: MenuId, row_view: &MenuRow, next: &mut u16, nested: &mut u16) -> Element {
+    let enabled = row_view.enabled;
+    let hint = if row_view.submenu.is_empty() {
+        row_view.key.clone()
+    } else {
+        Some("›".to_owned())
+    };
+    let check = row().name("check").width(size::MENU_CHECK).children(
+        row_view
+            .checked
+            .then(|| text("✓").style(type_style::MENU).color(color::GOLD)),
+    );
+    let mut item = Element::new(Role::MenuItem)
+        .name(&row_view.label)
+        .enabled(enabled)
+        .min_height(size::MENU_ROW_HEIGHT)
+        .align_items(Align::Center)
+        .gap(size::MENU_ROW_GAP)
+        .child(check)
+        .child(
+            text(&row_view.label)
+                .style(type_style::MENU)
+                .enabled(enabled)
+                .grow(1.0),
+        )
+        .children(hint.map(|hint| {
+            text(&hint)
+                .name("key")
+                .style(type_style::MENU_HINT)
+                .color(color::TEXT_DIM)
+                .enabled(enabled)
+        }));
+    item.style.padding = [
+        size::MENU_ROW_PADDING_Y,
+        size::MENU_ROW_PADDING_END,
+        size::MENU_ROW_PADDING_Y,
+        size::MENU_ROW_PADDING_START,
+    ];
+    // A press on a row highlights it, and a row with a submenu, which has no press, can still
+    // be highlighted by the keys.
+    item.focus = true;
+    if row_view.submenu.is_empty() {
+        item = item.on_press(Press::Menu(id, *next));
+    } else {
+        // A submenu has no submenus of its own (`Menu.tsx` opens one level), so the numbers a
+        // row of it would give a deeper one are not kept.
+        let mut deeper = u16::MAX;
+        let mut submenu = panel(&row_view.label);
+        for child in &row_view.submenu {
+            submenu = submenu.child(menu_row(id, child, nested, &mut deeper));
+        }
+        submenu.anchor = Some(Anchor::Submenu);
+        item = item.child(submenu);
+    }
+    *next += 1;
+    item
 }

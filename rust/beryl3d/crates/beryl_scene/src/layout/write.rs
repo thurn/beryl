@@ -137,7 +137,10 @@ impl Layer {
                 really: crate::frame::NameRef::default(),
             },
         );
-        if let Some(panel) = panel(node, top, state) {
+        // A menu row is drawn highlighted while it has the focus or its submenu is open.
+        let active = element.role == Role::MenuItem
+            && (state.has(StateBits::FOCUSED) || self.submenu == Some(node.id));
+        if let Some(panel) = panel(node, top, state, active) {
             let mut draw = Draw::panel(
                 camera.layer_transform(rect),
                 fade(panel.tint),
@@ -370,8 +373,17 @@ struct Panel {
 /// The widgets' states change it as `buttons.css` and `icon-button.css` do: a disabled button
 /// is flat stone under a dim rim whatever its style says; under the pointer a button is 10%
 /// brighter (`filter: brightness(1.1)`), while an icon button's rim brightens instead, and
-/// an icon button held down darkens.
-fn panel(node: &Node, top: bool, state: StateBits) -> Option<Panel> {
+/// an icon button held down darkens. A highlighted menu row, `active`, is drawn on the gold
+/// tint of `.table-menu-row[data-active]` under a soft gold rim.
+fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> Option<Panel> {
+    if active {
+        return Some(Panel {
+            tint: color::MENU_ACTIVE,
+            edge: color::GOLD_SOFT,
+            radius: size::MENU_ROW_RADIUS,
+            border: size::MENU_BORDER,
+        });
+    }
     let style = &node.element.style;
     let usual = has_panel(node.element.role, top);
     if !usual && style.background.is_none() && style.border.is_none() {

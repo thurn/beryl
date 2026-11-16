@@ -390,7 +390,8 @@ impl Client {
         self.wake = if transitioning || own_due || self.hovered_slot() != self.inspector.judged {
             Wake::Now
         } else {
-            self.show.wake(now)
+            // A tooltip waiting for the pointer to rest shows at its time.
+            self.show.wake(now).or_at(self.layer.tip_due())
         };
         &self.frame
     }
@@ -595,8 +596,8 @@ impl Client {
             }
             Press::Focus(id) => self.layer.focus(Some(id)),
             Press::Field(id, ref text) => self.keep_field(id, text),
-            // No menu or viewer is built yet, so there is nothing for these to act on: the
-            // widgets and game screen tracks give them their arms.
+            // No screen opens a menu or a viewer yet, so there is nothing for these to act on:
+            // the screens that open them give them their arms.
             Press::Menu(..) | Press::Dismiss(_) => {}
         }
     }

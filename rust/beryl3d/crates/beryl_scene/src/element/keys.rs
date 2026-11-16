@@ -20,11 +20,7 @@ impl Chord {
     /// modifier shortcuts.ts does not know, or a key Beryl 3D's input does not carry.
     #[must_use]
     pub fn parse(binding: &str, mac: bool) -> Option<Self> {
-        // The key's name is everything after the last `+`, or `+` itself.
-        let (prefix, name) = match binding.strip_suffix('+') {
-            Some(rest) if rest.is_empty() || rest.ends_with('+') => (rest, "+"),
-            _ => binding.rsplit_once('+').unwrap_or(("", binding)),
-        };
+        let (prefix, name) = split(binding);
         let mut modifiers = Modifiers::default();
         for modifier in prefix.split('+').filter(|part| !part.is_empty()) {
             let flag = match modifier {
@@ -50,6 +46,51 @@ impl Chord {
             key: key.code,
             modifiers: key.modifiers,
         }
+    }
+}
+
+/// The words that show `binding` beside a command, such as a menu row's key hint, on the Mac
+/// if `mac`, by `describe` in shortcuts.ts: the modifiers in the order Control, Option, Shift,
+/// Command, then the key's name, as `⌃⌥⇧⌘Z` on the Mac and `Ctrl+Shift+Z` elsewhere. Empty for
+/// a binding shortcuts.ts cannot read.
+#[must_use]
+pub fn describe(binding: &str, mac: bool) -> String {
+    let (prefix, name) = split(binding);
+    let (mut control, mut option, mut shift, mut meta) = (false, false, false, false);
+    for modifier in prefix.split('+').filter(|part| !part.is_empty()) {
+        let flag = match modifier {
+            "Cmd" if mac => &mut meta,
+            "Cmd" | "Ctrl" => &mut control,
+            "Option" | "Alt" => &mut option,
+            "Shift" => &mut shift,
+            "Meta" => &mut meta,
+            _ => return String::new(),
+        };
+        *flag = true;
+    }
+    if name.is_empty() {
+        return String::new();
+    }
+    let labels = [
+        (control, if mac { "⌃" } else { "Ctrl" }),
+        (option, if mac { "⌥" } else { "Alt" }),
+        (shift, if mac { "⇧" } else { "Shift" }),
+        (meta, if mac { "⌘" } else { "Meta" }),
+        (true, name),
+    ];
+    let shown = labels
+        .iter()
+        .filter(|(held, _)| *held)
+        .map(|(_, label)| *label);
+    shown.collect::<Vec<_>>().join(if mac { "" } else { "+" })
+}
+
+/// A binding's modifiers, everything before the last `+`, and its key's name, everything
+/// after it, or `+` itself.
+fn split(binding: &str) -> (&str, &str) {
+    match binding.strip_suffix('+') {
+        Some(rest) if rest.is_empty() || rest.ends_with('+') => (rest, "+"),
+        _ => binding.rsplit_once('+').unwrap_or(("", binding)),
     }
 }
 

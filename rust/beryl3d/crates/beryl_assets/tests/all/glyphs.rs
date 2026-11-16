@@ -127,8 +127,8 @@ fn latin_glyphs_cover_every_type_style() {
     let printable = usize::from(b'~' - b' ') + 1;
     assert_eq!(
         keys.len(),
-        3 * printable,
-        "each bundled text font has all of ASCII"
+        beryl_scene::tokens::type_style::ALL.len() * printable,
+        "each bundled text font has all of ASCII, at every type style's size"
     );
     let title = beryl_scene::tokens::type_style::TITLE;
     assert!(

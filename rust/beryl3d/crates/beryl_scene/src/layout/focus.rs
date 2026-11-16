@@ -83,8 +83,9 @@ impl Layer {
             .flatten()
     }
 
-    /// The press of the last enabled element named `close` on the screen, which Escape sends:
-    /// the close button of the sheet or menu drawn over the rest.
+    /// The press Escape sends: one that closes the open context menu, or else the press of the
+    /// last enabled element named `close` on the screen, the close button of the sheet drawn
+    /// over the rest.
     #[must_use]
     pub fn close_press(&self) -> Option<Press> {
         fn search(node: &Node) -> Option<Press> {
@@ -98,7 +99,7 @@ impl Layer {
                     .flatten()
             })
         }
-        self.screen.as_ref().and_then(search)
+        (self.menu_close_press()).or_else(|| self.screen.as_ref().and_then(search))
     }
 
     /// The press the screen's top element gives `key` as a shortcut, on the Mac if `mac`.
@@ -110,20 +111,14 @@ impl Layer {
 
     /// The screen's node `id`.
     pub(super) fn find(&self, id: ElementId) -> Option<&Node> {
-        fn search(node: &Node, id: ElementId) -> Option<&Node> {
-            if node.id == id {
-                return Some(node);
-            }
-            node.children.iter().find_map(|child| search(child, id))
-        }
-        self.screen.as_ref().and_then(|node| search(node, id))
+        self.screen.as_ref().and_then(|node| node.find(id))
     }
 }
 
 impl Node {
     /// Whether Tab may give this node the focus: it takes keys, or a press on it does something
     /// now, as a browser's tab order holds fields and enabled buttons.
-    fn focusable(&self) -> bool {
+    pub(super) fn focusable(&self) -> bool {
         let element = &self.element;
         element.focus || (element.press.is_some() && element.enabled)
     }

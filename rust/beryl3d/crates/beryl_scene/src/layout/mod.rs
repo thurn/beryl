@@ -12,11 +12,13 @@ mod edit;
 mod fit;
 mod float;
 mod focus;
+mod menu;
 mod motion;
 mod pointed;
 mod reconcile;
 mod scroll;
 mod style;
+mod tip;
 mod write;
 
 use taffy::{
@@ -27,6 +29,8 @@ use taffy::{
 pub use anchor::centre_of;
 pub use edit::{Edit, Edited};
 pub use float::FloatLook;
+pub use menu::Navigation;
+pub use tip::TIP_PREFIX;
 
 use float::{Float, Prepared};
 
@@ -87,6 +91,11 @@ struct Node {
     fitted: Option<f32>,
     /// The move or fade it is making, if any (`motion`).
     motion: Option<motion::Motion>,
+    /// For a menu, a submenu or a tooltip, where its top left corner stands on the window, once
+    /// it has been placed (`menu`, `tip`).
+    placed: Option<glam::Vec2>,
+    /// Whether a submenu or a tooltip is shown now.
+    shown: bool,
 }
 
 /// The flat layer.
@@ -119,6 +128,12 @@ pub struct Layer {
     /// Whether the tree being matched and laid out is the screen's, whose changes transition
     /// (`motion`); floats' do not.
     animating: bool,
+    /// The menu row whose submenu is open (`menu`).
+    submenu: Option<ElementId>,
+    /// The menu row the pointer is on, which it highlighted when it came onto it (`tip`).
+    pointed: Option<ElementId>,
+    /// The tooltip the pointer is resting toward, if any (`tip`).
+    tip: Option<tip::Resting>,
 }
 
 impl Default for Layer {
@@ -156,6 +171,9 @@ impl Layer {
             pressed: None,
             editing: None,
             animating: false,
+            submenu: None,
+            pointed: None,
+            tip: None,
         }
     }
 
@@ -204,6 +222,7 @@ impl Layer {
         }
         self.relayout();
         self.animating = false;
+        self.menus_shown();
         self.follow_focus();
     }
 
@@ -258,34 +277,37 @@ impl Layer {
         want: impl Fn(&Node, glam::Vec2) -> Option<T>,
     ) -> Option<T> {
         /// The value at `point` in `node`'s tree, whose top left corner stands at `origin`.
+        /// `reach` says whether `point` is inside every element `node` is in: an element
+        /// outside one of them is not at `point`, but an anchored element under it, such as a
+        /// submenu beside its menu, stands in a tree of its own and still may be.
         fn find<T>(
             node: &Node,
             point: glam::Vec2,
             origin: glam::Vec2,
+            reach: bool,
             want: &impl Fn(&Node, glam::Vec2) -> Option<T>,
         ) -> Option<T> {
-            if node.element.style.display == element::Display::None
-                || !contains(node.rect, point - origin - node.offset())
-            {
+            if node.element.style.display == element::Display::None {
                 return None;
             }
+            let here = reach && contains(node.rect, point - origin - node.offset());
             let inside = origin - node.scroll;
             (node.children.iter().rev())
                 .find_map(|child| match child.element.anchor {
                     // An anchored child's tree is laid out from (0, 0), and stands at its corner.
-                    Some(_) => find(child, point, child.corner()?, want),
-                    None => find(child, point, inside, want),
+                    Some(_) => find(child, point, child.corner()?, true, want),
+                    None => find(child, point, inside, here, want),
                 })
-                .or_else(|| want(node, origin))
+                .or_else(|| here.then(|| want(node, origin)).flatten())
         }
         (self.floats.iter().rev())
-            .find_map(|float| find(&float.node, point, float.corner(), &want))
+            .find_map(|float| find(&float.node, point, float.corner(), true, &want))
             .or_else(|| {
                 (self.screen.as_ref())
                     .filter(|_| open)
                     .and_then(|node| match node.element.anchor {
-                        Some(_) => find(node, point, node.corner()?, &want),
-                        None => find(node, point, glam::Vec2::ZERO, &want),
+                        Some(_) => find(node, point, node.corner()?, true, &want),
+                        None => find(node, point, glam::Vec2::ZERO, true, &want),
                     })
             })
     }
@@ -336,6 +358,8 @@ impl Layer {
                 }
                 compute_anchored(&mut self.taffy, &mut self.text, &node);
                 self.place(&mut node, glam::Vec2::ZERO);
+                let tree = node.corner().unwrap_or(glam::Vec2::ZERO);
+                menu::place_menus(&mut node, tree, None, self.window.size);
                 self.screen = Some(node);
             }
         }
@@ -466,6 +490,26 @@ impl Layer {
         for node in self.screen.iter().chain(floats).chain(prepared) {
             want_node(node, self.window.scale, &mut self.glyphs);
         }
+    }
+}
+
+impl Node {
+    /// The node `id` at or under this one.
+    fn find(&self, id: ElementId) -> Option<&Node> {
+        if self.id == id {
+            return Some(self);
+        }
+        self.children.iter().find_map(|child| child.find(id))
+    }
+
+    /// The node `id` at or under this one, to change.
+    fn find_mut(&mut self, id: ElementId) -> Option<&mut Node> {
+        if self.id == id {
+            return Some(self);
+        }
+        self.children
+            .iter_mut()
+            .find_map(|child| child.find_mut(id))
     }
 }
 

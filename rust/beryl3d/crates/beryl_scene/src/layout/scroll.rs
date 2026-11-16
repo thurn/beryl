@@ -22,13 +22,7 @@ impl Layer {
     /// Scrolls the element `id` by `delta` points, clamped to its content. Returns whether its
     /// offset changed.
     pub fn scroll(&mut self, id: ElementId, delta: Vec2) -> bool {
-        fn find(node: &mut Node, id: ElementId) -> Option<&mut Node> {
-            if node.id == id {
-                return Some(node);
-            }
-            node.children.iter_mut().find_map(|child| find(child, id))
-        }
-        let Some(node) = self.screen.as_mut().and_then(|node| find(node, id)) else {
+        let Some(node) = self.screen.as_mut().and_then(|node| node.find_mut(id)) else {
             return false;
         };
         let scroll = (node.scroll + delta).clamp(Vec2::ZERO, node.most_scroll());

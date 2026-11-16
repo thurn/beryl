@@ -36,13 +36,16 @@ impl Layer {
 
 impl Node {
     /// Where the top left corner of this anchored node's box stands on the window, or `None`
-    /// when it is anchored to an object the table does not show. A node that is not anchored
+    /// when it is anchored to an object the table does not show, or is a submenu or a tooltip
+    /// not shown now. A node that is not anchored
     /// has no corner of its own: it stands where its parent's layout put it.
     pub(super) fn corner(&self) -> Option<Vec2> {
         let size = Vec2::new(self.rect.width, self.rect.height);
         match self.element.anchor? {
             Anchor::Point(point, at) => Some(point - at * size),
             Anchor::Object(_, at) => self.followed.map(|centre| centre - at * size),
+            Anchor::Menu(_) => self.placed,
+            Anchor::Submenu | Anchor::Tip => self.placed.filter(|_| self.shown),
         }
     }
 }

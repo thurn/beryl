@@ -4,10 +4,10 @@
 
 use super::{Client, Platform};
 use crate::agent::hit;
-use crate::element::{Chord, Press};
+use crate::element::{Chord, Dismiss, Press};
 use crate::frame::Role;
 use crate::input::{Button, Input, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
-use crate::layout::Edit;
+use crate::layout::{Edit, Navigation};
 use crate::prompts;
 use crate::screens::{Screen, Sheet};
 use crate::widgets::{STEP, level_at};
@@ -21,6 +21,15 @@ impl Client {
     /// press under the pointer would reach and which one is held down, which it draws so.
     pub(super) fn point(&mut self, pointer: Pointer) {
         self.show.pointer_mut().handle(&pointer);
+        // A press outside an open context menu closes it and means nothing else.
+        if pointer.phase == PointerPhase::Down
+            && pointer.button == Button::Primary
+            && self.layer.outside_menu(pointer.position, self.open)
+        {
+            self.pressed = None;
+            self.press(&Press::Dismiss(Dismiss::Menu));
+            return;
+        }
         if self.scroll_layer(&pointer) {
             return;
         }
@@ -42,6 +51,8 @@ impl Client {
         self.suggest(suggesting);
         let hovered = hovered.map(|(id, ..)| id);
         (self.layer).point_at(hovered, self.pressed.or(self.slider));
+        let at = (!gone).then_some(pointer.position);
+        self.layer.hover(at, self.open);
     }
 
     /// Sets the level of the slider the primary pointer goes down on, and of the one it drags,
@@ -173,12 +184,13 @@ impl Client {
         }
     }
 
-    /// A key goes to the screen's shortcuts first, then moves the focus (Tab), presses the
-    /// focused element (Return) or closes the sheet or menu on top (Escape), and otherwise
-    /// opens the bug report on its chord: Cmd+B, or Cmd+Shift+B while the manual table is
-    /// shown, where Cmd+B is the table's own (`isBugReportShortcut` in
-    /// `ui/src/components/bugReportKeys.ts`). A key that means none of these waits for the next
-    /// frame, as before.
+    /// A key goes to the screen's shortcuts first, then moves the focus (Tab), moves through
+    /// or presses a row of the focused list or menu (`Layer::navigate`), moves a focused
+    /// slider (left and right), presses the focused element (Return) or closes the menu or
+    /// sheet on top (Escape), and otherwise opens the bug report on its chord: Cmd+B, or
+    /// Cmd+Shift+B while the manual table is shown, where Cmd+B is the table's own
+    /// (`isBugReportShortcut` in `ui/src/components/bugReportKeys.ts`). A key that means none
+    /// of these waits for the next frame, as before.
     pub(super) fn key(&mut self, key: Key) {
         if key.phase == KeyPhase::Up {
             return;
@@ -186,41 +198,55 @@ impl Client {
         if self.layer.edited_id().is_some() && self.field_key(key) {
             return;
         }
+        if let Some(press) = self.key_press(key) {
+            self.press(&press);
+        }
+    }
+
+    /// What `key` presses, in the order `key` describes, after it has moved the focus or the
+    /// highlighted row of a list or menu if it does that instead; a key that means none of
+    /// these is kept for the next frame.
+    fn key_press(&mut self, key: Key) -> Option<Press> {
+        let mac = self.platform == Platform::Mac;
         let first = key.phase == KeyPhase::Down;
+        if let Some(press) = self.layer.shortcut(&key, mac) {
+            return Some(press);
+        }
+        if key.code == KeyCode::Tab {
+            self.layer.move_focus(!key.modifiers.shift);
+            return None;
+        }
+        match self.layer.navigate(&key) {
+            Navigation::Press(press) => return Some(press),
+            Navigation::Moved => return None,
+            Navigation::Ignored => {}
+        }
         let arrow = match key.code {
             KeyCode::ArrowLeft => Some(false),
             KeyCode::ArrowRight => Some(true),
             _ => None,
         };
+        if let Some(up) = arrow
+            && let Some(press) = self.nudge(up)
+        {
+            return Some(press);
+        }
+        if first && key.code == KeyCode::Enter {
+            return self.layer.focused_press();
+        }
+        if first && key.code == KeyCode::Escape {
+            return self.layer.close_press();
+        }
         let bug_report = if self.screen == Screen::Table {
             "Cmd+Shift+B"
         } else {
             "Cmd+B"
         };
-        let press = if let Some(press) = self.layer.shortcut(&key, self.platform == Platform::Mac) {
-            Some(press)
-        } else if key.code == KeyCode::Tab {
-            self.layer.move_focus(!key.modifiers.shift);
-            None
-        } else if let Some(up) = arrow
-            && let Some(press) = self.nudge(up)
-        {
-            Some(press)
-        } else if first && key.code == KeyCode::Enter {
-            self.layer.focused_press()
-        } else if first && key.code == KeyCode::Escape {
-            self.layer.close_press()
-        } else if first
-            && Chord::parse(bug_report, self.platform == Platform::Mac) == Some(Chord::of(&key))
-        {
-            Some(Press::Sheet(Some(Sheet::BugReport)))
-        } else {
-            self.inputs.push(Input::Key(key));
-            None
-        };
-        if let Some(press) = press {
-            self.press(&press);
+        if first && Chord::parse(bug_report, mac) == Some(Chord::of(&key)) {
+            return Some(Press::Sheet(Some(Sheet::BugReport)));
         }
+        self.inputs.push(Input::Key(key));
+        None
     }
 
     /// The press that moves the focused slider's level up a step, or down one if not `up`,

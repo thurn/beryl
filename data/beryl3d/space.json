@@ -590,7 +590,10 @@
   "flat": {
     "transition": {
       "ms": 180
-    }
+    },
+    "tooltip_delay": 500,
+    "tooltip_gap": 8,
+    "menu_edge": 8
   },
   "notices": {
     "turn": {
