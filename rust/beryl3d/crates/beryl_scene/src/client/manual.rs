@@ -33,6 +33,9 @@ const PENDING: usize = 64;
 pub(super) struct Manual {
     pub(super) state: TableState,
     hold: Option<Hold>,
+    /// Whether Cmd (Control off the Mac) was held at the last press of the pointer, which
+    /// makes a click on a card add it to the selection or take it out.
+    pub(super) meta: bool,
     pub(super) lobby: Lobby,
 }
 
@@ -85,6 +88,12 @@ impl Client {
         self.session = Some(update.session);
         if update.view.table.is_none() {
             return;
+        }
+        crate::manual::selection::keep(&mut self.manual.state.selection, &update.view);
+        if (self.manual.picking)
+            .is_some_and(|pick| !crate::manual::selection::actionable(&update.view, pick.from))
+        {
+            self.manual.picking = None;
         }
         self.manual.menu = None;
         self.manual.close_overlay();
@@ -175,7 +184,8 @@ impl Client {
         if view.table.is_none() {
             return false;
         }
-        let target = manual::target_at(&self.frame, at);
+        let target =
+            (self.viewer_card_at(at)).unwrap_or_else(|| manual::target_at(&self.frame, at));
         let menu = menus::open(target, view, at, &self.table_context());
         self.manual.menu = Some(menu);
         self.show_screen();
@@ -239,6 +249,7 @@ impl Client {
             mac: self.platform == Platform::Mac,
             bindings: &self.settings.bindings,
             last_token: self.manual.last_token.as_ref(),
+            selected: &self.manual.state.selection,
         }
     }
 
@@ -299,6 +310,8 @@ impl Client {
             Act::Tokens(index) => self.open_tokens(index, shift),
             Act::Palette => self.open_palette(target, false),
             Act::Shortcuts => self.open_palette(target, true),
+            Act::View(viewed) => self.view(Some(viewed)),
+            Act::Pick(index) => self.start_pick(index, target),
             Act::Leave => self.leave_table(),
             Act::Nothing => {}
         }
@@ -308,6 +321,8 @@ impl Client {
     pub(super) fn leave_table(&mut self) {
         self.manual.menu = None;
         self.manual.close_overlay();
+        self.manual.state.selection.clear();
+        self.manual.picking = None;
         self.manual.lobby = Lobby::new();
         self.commands.push_back(SessionCommand::TableLeave);
         self.screen = Screen::Start;

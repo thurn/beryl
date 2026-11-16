@@ -52,7 +52,8 @@ impl Client {
             return;
         }
         self.follow_hold(&pointer);
-        if self.scroll_layer(&pointer)
+        if self.table_pointer(&pointer)
+            || self.scroll_layer(&pointer)
             || self.open_table_menu(&pointer)
             || self.carry_item(&pointer)
         {
@@ -272,6 +273,9 @@ impl Client {
     fn key_press(&mut self, key: Key) -> Option<Press> {
         let mac = self.platform == Platform::Mac;
         let first = key.phase == KeyPhase::Down;
+        if first && key.code == KeyCode::Escape && self.table_escape() {
+            return None;
+        }
         if let Some(press) = self.layer.shortcut(&key, mac) {
             // A table command's key acts once for each press, not again as it repeats. While a
             // context menu is open it does nothing, and the menu's own keys move through its
@@ -342,6 +346,9 @@ impl Client {
     /// prompt marks, once the prompt is drawn, in the viewer's hand or held up in a tray of two
     /// piles. This is the web interface's `#lifts` in `ui/src/stage/prompt.ts`.
     pub(super) fn holdable(&self, slot: usize, place: Place) -> bool {
+        if let Some(holdable) = self.table_holdable(slot, place) {
+            return holdable;
+        }
         let Some((_, prompt)) = self.prompt.as_ref().filter(|_| self.open) else {
             return false;
         };

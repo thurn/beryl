@@ -113,7 +113,8 @@ impl Client {
             into: timing(OwnStep::TrayLifts { sorted: false }),
             back: timing(OwnStep::TrayLetGo),
         };
-        let covered = self.viewing.open.is_some() && self.screen == Screen::Game;
+        let covered =
+            self.viewing.open.is_some() && matches!(self.screen, Screen::Game | Screen::Table);
         self.show.show_in(&self.viewing.boxes, moves, covered);
     }
 
@@ -158,17 +159,26 @@ impl Client {
     }
 
     /// Whether a press on a card resting at `place` opens a pile's viewer instead: a
-    /// card in a library, graveyard or exile pile on the game screen, as the web interface's
+    /// card in a library, graveyard or exile pile on the game screen, or in a graveyard or exile
+    /// pile on the manual table (`manual::viewers::opens_on_press`), as the web interface's
     /// button over each pile opens it (`PileButton` in `ui/src/game/Piles.tsx`).
     pub(super) fn pile_at(&self, place: Place) -> Option<Viewed> {
         let Place::Card { zone, side, .. } = place else {
             return None;
         };
-        let pile = matches!(
-            zone,
-            ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile
-        );
-        (pile && self.screen == Screen::Game && self.sheet.is_none())
-            .then_some(Viewed::Pile(side, zone))
+        let pile = match self.screen {
+            Screen::Game => matches!(
+                zone,
+                ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile
+            ),
+            Screen::Table => crate::manual::viewers::opens_on_press(zone),
+            _ => false,
+        };
+        (pile && self.sheet.is_none()).then_some(Viewed::Pile(side, zone))
+    }
+
+    /// Whether the open viewer shows the card in `slot` in one of its boxes.
+    pub(super) fn viewer_shows(&self, slot: ObjectId) -> bool {
+        (self.viewing.boxes.iter()).any(|(shown, ..)| *shown == slot)
     }
 }

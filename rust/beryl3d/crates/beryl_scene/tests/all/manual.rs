@@ -6,7 +6,8 @@
 use beryl_card_records::{TokenMakers, card_records_among};
 use beryl_protocol::ipc::decks::{CardSearchHit, CardTokenLink};
 use beryl_protocol::ipc::{TableActReply, TableRefusalReason, TableRefused};
-use beryl_protocol::protocol::{LogLine, Side, TableAction, ZoneName};
+use beryl_protocol::protocol::{LogLine, ObjectId, Side, TableAction, TableArrow, ZoneName};
+use beryl_protocol::script::{Act, Arrow, Span as Edge, Step, Subject};
 use beryl_scene::command::{Reply, Request, SessionCommand};
 use beryl_scene::frame::{Frame, Role, StateBits, Wake};
 use beryl_scene::input::{
@@ -16,7 +17,7 @@ use beryl_scene::input::{
 use beryl_scene::manual::bindings::Bindings;
 use beryl_scene::manual::commands::{AppliesTo, commands_for};
 use beryl_scene::manual::{Context, Target, target_at};
-use beryl_scene::testing::{ScriptBuilder, ViewBuilder, table};
+use beryl_scene::testing::{ScriptBuilder, ViewBuilder, script, table, timing};
 use beryl_scene::{Client, Config};
 use glam::Vec2;
 
@@ -283,6 +284,15 @@ fn a_touch_that_moves_before_the_hold_time_opens_no_menu() {
     assert!(
         menu_rows(&frame).is_empty(),
         "a moved touch opened the menu"
+    );
+    // The moved touch picked the card up. Once it is let go and has fallen back, nothing waits
+    // for a hold to open a menu.
+    client.handle(touch(PointerPhase::Up, angel + Vec2::new(8.0, 0.0)));
+    client.frame(10 * MS + 3 * LONG_PRESS);
+    let frame = client.frame(10 * MS + 6 * LONG_PRESS).clone();
+    assert!(
+        menu_rows(&frame).is_empty(),
+        "lifting the finger opened the menu"
     );
     assert_eq!(client.wake(), Wake::Never);
 }
@@ -797,4 +807,302 @@ fn the_log_stays_folded_to_a_button_until_opened() {
         .collect();
     assert!(names.contains(&"Show log"), "{names:?}");
     assert!(!names.contains(&"line 1"));
+}
+
+/// The slot of the card named `name` in `side`'s `zone` of `view`, the first one if several.
+fn slot_of(view: &beryl_protocol::PlayerView, zone: ZoneName, side: Side, name: &str) -> ObjectId {
+    (view.objects.iter())
+        .find(|object| {
+            object.zone == zone && object.controller == side && object.name.as_deref() == Some(name)
+        })
+        .unwrap_or_else(|| panic!("no {name:?} in {side:?}'s {zone:?}"))
+        .slot
+}
+
+/// The corners of the card element of `slot` in `frame`.
+fn corners_of(frame: &Frame, slot: ObjectId) -> [Vec2; 4] {
+    (frame.resolved.iter())
+        .find(|element| element.role == Role::Card && element.id.0 == u32::from(slot.0))
+        .unwrap_or_else(|| panic!("no card element for slot {}", slot.0))
+        .corners
+}
+
+/// The table actions as JSON, for reading their fields.
+fn json(actions: &[TableAction]) -> Vec<serde_json::Value> {
+    (actions.iter())
+        .map(|action| serde_json::to_value(action).unwrap())
+        .collect()
+}
+
+/// A mouse drag from `from` to `to` with the primary button, in eight steps with a frame after
+/// each, ending with a frame at `now` that takes the release.
+fn drag(client: &mut Client, from: Vec2, to: Vec2, now: u64) {
+    client.handle(pointer(PointerPhase::Down, from, Button::Primary));
+    client.frame(now);
+    for step in 1..=8_u64 {
+        let at = from.lerp(to, f32::from(u8::try_from(step).unwrap()) / 8.0);
+        client.handle(pointer(PointerPhase::Move, at, Button::None));
+        client.frame(now + step * 16 * MS);
+    }
+    client.handle(pointer(PointerPhase::Up, to, Button::Primary));
+    client.frame(now + 9 * 16 * MS);
+}
+
+#[test]
+fn a_rectangle_over_three_permanents_selects_them_and_tap_acts_on_all_three() {
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let lands: Vec<ObjectId> = (view.objects.iter())
+        .filter(|object| {
+            object.zone == ZoneName::Battlefield
+                && object.controller == Side::You
+                && matches!(object.name.as_deref(), Some("Island" | "Plains"))
+        })
+        .map(|object| object.slot)
+        .collect();
+    assert_eq!(lands.len(), 3);
+    let corners: Vec<Vec2> = lands
+        .iter()
+        .flat_map(|&slot| corners_of(&frame, slot))
+        .collect();
+    let low = corners
+        .iter()
+        .fold(Vec2::INFINITY, |low, &corner| low.min(corner));
+    let high = (corners.iter()).fold(Vec2::NEG_INFINITY, |high, &corner| high.max(corner));
+    let margin = Vec2::splat(4.0);
+    let start = low - margin;
+    assert_eq!(
+        target_at(&frame, start),
+        Target::Table,
+        "the sweep starts on a card"
+    );
+    drag(&mut client, start, high + margin, MS);
+
+    // Each land wears the selected mark, and nothing else does.
+    let frame = client.frame(500 * MS).clone();
+    let selected: Vec<u32> = (frame.resolved.iter())
+        .filter(|element| element.role == Role::Card && element.state.0 & StateBits::SELECTED != 0)
+        .map(|element| element.id.0)
+        .collect();
+    let mut expected: Vec<u32> = lands.iter().map(|slot| u32::from(slot.0)).collect();
+    let mut found = selected.clone();
+    expected.sort_unstable();
+    found.sort_unstable();
+    assert_eq!(found, expected, "the sweep selected {selected:?}");
+
+    // Tap on one of them taps all three in one action.
+    let island = middle(&frame, Role::Card, "Island");
+    client.handle(pointer(PointerPhase::Down, island, Button::Secondary));
+    let frame = client.frame(600 * MS).clone();
+    let tap = middle(&frame, Role::MenuItem, "Tap");
+    client.handle(pointer(PointerPhase::Down, tap, Button::Primary));
+    client.handle(pointer(PointerPhase::Up, tap, Button::Primary));
+    let sent = json(&acts(&mut client));
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    assert_eq!(sent[0]["tap"]["objects"].as_array().map(Vec::len), Some(3));
+
+    // Escape empties the selection.
+    client.frame(700 * MS);
+    client.handle(key(KeyCode::Escape, Modifiers::default()));
+    let frame = client.frame(800 * MS).clone();
+    assert!(
+        (frame.resolved.iter()).all(|element| element.state.0 & StateBits::SELECTED == 0),
+        "Escape left a card selected"
+    );
+}
+
+#[test]
+fn a_cmd_click_adds_a_card_to_the_selection() {
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let angel = middle(&frame, Role::Card, "Serra Angel");
+    let cmd = Modifiers {
+        command: true,
+        ..Modifiers::default()
+    };
+    let down = |phase| {
+        Input::Pointer(Pointer {
+            id: 0,
+            kind: PointerKind::Mouse,
+            phase,
+            position: angel,
+            button: Button::Primary,
+            wheel: Vec2::ZERO,
+            modifiers: cmd,
+        })
+    };
+    client.handle(down(PointerPhase::Down));
+    client.handle(down(PointerPhase::Up));
+    client.frame(MS);
+    let frame = client.frame(100 * MS).clone();
+    let slot = slot_of(&view, ZoneName::Battlefield, Side::You, "Serra Angel");
+    let element = (frame.resolved.iter())
+        .find(|element| element.role == Role::Card && element.id.0 == u32::from(slot.0))
+        .unwrap();
+    assert_ne!(
+        element.state.0 & StateBits::SELECTED,
+        0,
+        "the card is not selected"
+    );
+}
+
+#[test]
+fn dropping_a_hand_card_on_the_graveyard_sends_the_move() {
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let counterspell = slot_of(&view, ZoneName::Hand, Side::You, "Counterspell");
+    let from = corners_of(&frame, counterspell).iter().sum::<Vec2>() / 4.0;
+    let graveyard = slot_of(&view, ZoneName::Graveyard, Side::You, "Brainstorm");
+    let to = corners_of(&frame, graveyard).iter().sum::<Vec2>() / 4.0;
+    drag(&mut client, from, to, MS);
+    let sent = json(&acts(&mut client));
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    let moved = &sent[0]["move"];
+    assert_eq!(
+        moved["to"],
+        serde_json::json!({ "graveyard": 0 }),
+        "{sent:?}"
+    );
+    assert_eq!(moved["in"], serde_json::json!({ "hand": 0 }));
+    assert_eq!(moved["objects"].as_array().map(Vec::len), Some(1));
+}
+
+#[test]
+fn the_graveyard_viewer_lists_its_cards_with_their_commands() {
+    let mut builder = ViewBuilder::sample();
+    builder.card(ZoneName::Graveyard, Side::You, "Counterspell");
+    builder.script(ScriptBuilder::reset().build());
+    let mut view = builder.build();
+    view.table = Some(table(&view));
+    let (mut client, frame) = client_at_table(&view);
+    let brainstorm = slot_of(&view, ZoneName::Graveyard, Side::You, "Brainstorm");
+    let pile = corners_of(&frame, brainstorm).iter().sum::<Vec2>() / 4.0;
+    assert_eq!(
+        target_at(&frame, pile),
+        Target::Pile(Side::You, ZoneName::Graveyard)
+    );
+    client.handle(pointer(PointerPhase::Down, pile, Button::Secondary));
+    let frame = client.frame(MS).clone();
+    let row = middle(&frame, Role::MenuItem, "View graveyard");
+    client.handle(pointer(PointerPhase::Down, row, Button::Primary));
+    client.handle(pointer(PointerPhase::Up, row, Button::Primary));
+    client.frame(2 * MS);
+    // The cards fly into the viewer's boxes.
+    let frame = client.frame(2_000 * MS).clone();
+    for name in ["Brainstorm", "Counterspell"] {
+        assert!(
+            (frame.resolved.iter()).any(|element| element.role == Role::Card
+                && frame.name(element.name).starts_with(name)
+                && element.corners.iter().all(|corner| corner.y < 800.0)),
+            "the viewer does not show {name}"
+        );
+    }
+
+    // A right click on a card in the viewer opens that card's menu.
+    let card = corners_of(&frame, brainstorm).iter().sum::<Vec2>() / 4.0;
+    client.handle(pointer(PointerPhase::Down, card, Button::Secondary));
+    let frame = client.frame(2_100 * MS).clone();
+    assert!(
+        (frame.resolved.iter())
+            .any(|element| element.role == Role::List && frame.name(element.name) == "Brainstorm"),
+        "the menu is not titled for the card"
+    );
+    let rows = menu_rows(&frame);
+    for entry in commands_for(
+        AppliesTo::PileCard,
+        &view,
+        &Context::new(true, &Bindings::new()),
+    ) {
+        let Some(placement) = entry.menu else {
+            continue;
+        };
+        let row = placement.submenu.unwrap_or(entry.command.label);
+        assert!(rows.contains(&row), "no row {row:?} in {rows:?}");
+    }
+}
+
+#[test]
+fn an_arrow_of_the_view_is_drawn_between_its_two_objects() {
+    let view = table_view();
+    let (mut client, _) = client_at_table(&view);
+    let from = slot_of(&view, ZoneName::Battlefield, Side::You, "Serra Angel");
+    let to = slot_of(&view, ZoneName::Battlefield, Side::Opponent, "Serra Angel");
+    let (from_subject, to_subject) = (Subject::Object { slot: from }, Subject::Object { slot: to });
+    let mut next = view.clone();
+    if let Some(table) = &mut next.table {
+        table.arrows.push(TableArrow {
+            arrow: Arrow::HostileTarget,
+            from: from_subject,
+            to: to_subject,
+            own: true,
+        });
+    }
+    let point = Act::Point {
+        span: Edge::Begin,
+        arrow: Arrow::HostileTarget,
+        from: from_subject,
+        to: to_subject,
+    };
+    next.script = Some(script(
+        None,
+        vec![vec![Step {
+            act: point,
+            cause: None,
+        }]],
+        vec![timing(200.0)],
+    ));
+    client.handle(Input::Update(Box::new(beryl_protocol::GameUpdate {
+        session: beryl_protocol::SessionId(1),
+        view: next,
+    })));
+    client.frame(MS);
+    let frame = client.frame(1_000 * MS).clone();
+    let arrow = (frame.resolved.iter())
+        .find(|element| element.role == Role::Arrow)
+        .expect("no arrow is drawn");
+    let near = |point: Vec2, slot| {
+        let corners = corners_of(&frame, slot);
+        let centre = corners.iter().sum::<Vec2>() / 4.0;
+        point.distance(centre) <= corners[0].distance(corners[2])
+    };
+    assert!(
+        near(arrow.corners[0], from),
+        "the arrow does not leave its source"
+    );
+    assert!(
+        near(arrow.corners[3], to),
+        "the arrow does not reach its target"
+    );
+}
+
+#[test]
+fn the_arrow_command_sends_an_arrow_to_the_card_clicked_next() {
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let angel = middle(&frame, Role::Card, "Serra Angel");
+    let theirs = slot_of(&view, ZoneName::Battlefield, Side::Opponent, "Serra Angel");
+    let target = corners_of(&frame, theirs).iter().sum::<Vec2>() / 4.0;
+    client.handle(pointer(PointerPhase::Move, angel, Button::None));
+    let alt = Modifiers {
+        alt: true,
+        ..Modifiers::default()
+    };
+    client.handle(key(KeyCode::A, alt));
+    client.frame(MS);
+    // An arrow runs from the card to the mouse while the command waits.
+    client.handle(pointer(PointerPhase::Move, target, Button::None));
+    let frame = client.frame(2 * MS).clone();
+    assert!(
+        (frame.resolved.iter()).any(|element| element.role == Role::Arrow),
+        "no arrow follows the mouse"
+    );
+    client.handle(pointer(PointerPhase::Down, target, Button::Primary));
+    client.handle(pointer(PointerPhase::Up, target, Button::Primary));
+    let sent = json(&acts(&mut client));
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    assert_eq!(
+        sent[0]["arrow"]["to"]["object"]["id"]["handle"],
+        serde_json::json!(theirs.0),
+        "{sent:?}"
+    );
 }

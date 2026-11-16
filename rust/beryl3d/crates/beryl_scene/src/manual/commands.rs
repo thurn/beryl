@@ -342,6 +342,20 @@ pub fn actions_with(
     view: &PlayerView,
     values: &Values,
 ) -> Vec<TableAction> {
+    actions_for(command, target, &[], view, values)
+}
+
+/// The table actions `command` makes for `target` at `view`, as `actions_with` makes them,
+/// except that a card target among the `selected` cards stands for all of them, as the web's
+/// commands act on the whole selection when the card they are given is in it.
+#[must_use]
+pub fn actions_for(
+    command: &Command,
+    target: Target,
+    selected: &[ObjectId],
+    view: &PlayerView,
+    values: &Values,
+) -> Vec<TableAction> {
     if matches!(command.id, "table.untap_all" | "phase.untap_active") {
         return vec![untap(view)];
     }
@@ -363,6 +377,10 @@ pub fn actions_with(
     let side = target.side().unwrap_or(Side::You);
     let seat = seat_of(view, side);
     let mut cards: Vec<Card> = match target {
+        Target::Card(slot) if selected.contains(&slot) => selected
+            .iter()
+            .filter_map(|&slot| card(view, slot))
+            .collect(),
         Target::Card(slot) => card(view, slot).into_iter().collect(),
         _ => Vec::new(),
     };

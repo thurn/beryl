@@ -649,7 +649,9 @@
     "table": {
       "edge": 24,
       "palette": { "width": 560, "top": 96, "height": 420 },
-      "log": { "width": 320, "top": 96, "height": 460 }
+      "log": { "width": 320, "top": 96, "height": 460 },
+      "drop": { "opponent_hand": 0.0533, "rim": 2, "radius": 6 },
+      "sweep": { "rim": 1 }
     }
   },
   "notices": {

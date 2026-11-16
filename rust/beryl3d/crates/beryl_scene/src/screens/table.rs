@@ -2,21 +2,24 @@
 //! with the life totals and piles of the hud, and the flat layer holds the table's keys, the
 //! log at its left, and whatever the table shows over itself: the context menu a right click or
 //! a long press opens, which on a phone is a bottom sheet, the command list, the ask prompt in
-//! the dock, the token search or the library order tray. Only the solo table is built: the web
-//! interface's host and join screens come later.
+//! the dock, the token search or the library order tray; the viewer of a pile; the rectangle a
+//! sweep draws; and the outline of where a held card would land. Only the solo table is built:
+//! the web interface's host and join screens come later.
 
 use beryl_protocol::protocol::Facing;
 use glam::Vec2;
 
 use super::ScreenIn;
 use crate::data::space::flat::{MENU_EDGE, sheet};
+use crate::data::space::pointer::DRAG_THRESHOLD_POINTS;
 use crate::element::{Align, Element, Overflow, Press, Shown, column};
 use crate::frame::Role;
 use crate::input::{FaceId, FaceSize};
+use crate::inspect::viewer::viewer;
 use crate::manual::Target;
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::menus::{MENU, OpenMenu};
-use crate::manual::{TableState, ask, log, order, palette, tokens};
+use crate::manual::{TableState, ask, drop, log, order, palette, selection, tokens};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::widgets::{context_menu, menu, sheet_menu};
 
@@ -58,8 +61,15 @@ pub fn table(input: &ScreenIn) -> Element {
             context_menu(open.at, menu(MENU, &open.title, &open.groups))
         }
     });
+    let sweep = (state.sweep)
+        .filter(|(from, to)| from.distance(*to) >= DRAG_THRESHOLD_POINTS)
+        .map(|(from, to)| selection::rectangle(selection::sweep_box(from, to)));
+    let landing = state.landing.as_ref().map(drop::target);
     screen
         .children(log)
+        .children(sweep)
+        .children(landing)
+        .children(viewer(input))
         .children(open)
         .children(over(state, input))
 }

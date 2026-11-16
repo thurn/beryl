@@ -58,6 +58,9 @@ pub struct Pointer {
     let_go: Option<(Grip, bool)>,
     /// The card let go last, falling back to where it rests.
     fall: Option<Fall>,
+    /// Whether a held card let go anywhere is dropped where it was let go (`LetGo::Dropped`),
+    /// as on the manual table, where the client finds the place it lands.
+    drops_anywhere: bool,
 }
 
 /// One hand card easing from `from` to `to` (0 in the fan, 1 raised) since the time `since`.
@@ -121,7 +124,14 @@ impl Pointer {
         lean: Lean::FLAT,
         let_go: None,
         fall: None,
+        drops_anywhere: false,
     };
+
+    /// Makes a held card let go anywhere be dropped where it was let go (`LetGo::Dropped`), or
+    /// clicked as on the game screen if not `anywhere`.
+    pub fn drop_anywhere(&mut self, anywhere: bool) {
+        self.drops_anywhere = anywhere;
+    }
 
     /// Takes a pointer event: where the mouse is, or that it has left the window.
     pub fn handle(&mut self, pointer: &input::Pointer) {
@@ -394,7 +404,7 @@ fn let_go(
         from: held::pose(camera, grip.at, pointer.lean.tilt()),
         since: now,
     });
-    if in_tray(grip.slot) {
+    if in_tray(grip.slot) || pointer.drops_anywhere {
         return (!cancelled).then_some(LetGo::Dropped {
             slot: grip.slot,
             at: grip.at,

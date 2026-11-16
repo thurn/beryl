@@ -779,6 +779,22 @@
         "value": "rgb(242 236 225 / 22%)",
         "note": "The unfilled part of a slider's track, behind the `--gold` fill the web's `accent-color` gives a range input (`.sound-level input` in `ui/src/screens/styles/settings.css`)."
       },
+      "SWEEP": {
+        "value": "rgb(255 205 96 / 14%)",
+        "note": "The wash inside the rectangle a sweep over the manual table draws: `.selection-rectangle`'s `background` in `ui/src/table/selection.css`."
+      },
+      "SWEEP_RIM": {
+        "value": "rgb(255 205 96 / 90%)",
+        "note": "The line round a sweep's rectangle: `.selection-rectangle`'s `border`."
+      },
+      "DROP_HALF": {
+        "value": "rgb(19 16 13 / 88%)",
+        "note": "A half of a library's drop outline not under the pointer: `.table-library-half`'s `background` in `ui/src/table/drag.css`."
+      },
+      "DROP_HALF_INK": {
+        "value": "#19130d",
+        "note": "The label of the half of a library's drop outline under the pointer: `.table-library-half[data-over]`'s `color`."
+      },
       "MENU_ACTIVE": {
         "value": "#3e3322",
         "note": "The highlighted menu row: `.table-menu-row[data-active]`'s `--gold` mixed 15% into `--surface`."

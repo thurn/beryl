@@ -4,17 +4,22 @@
 //! (`target_at`), which a menu or a key acts on, and what the table shows over itself: the
 //! command list (`palette`) with the keys the player bound (`bindings`), the ask prompt
 //! (`ask`), the token search and custom token form (`tokens`), the library order tray (`order`)
-//! and the log (`log`).
+//! and the log (`log`); the pile viewers (`viewers`), the selection (`selection`), dropping
+//! held cards (`drop`) and the arrows a player draws (`arrows`).
 
+pub mod arrows;
 pub mod ask;
 pub mod bindings;
 pub mod commands;
+pub mod drop;
 pub mod lobby;
 pub mod log;
 pub mod menus;
 pub mod order;
 pub mod palette;
+pub mod selection;
 pub mod tokens;
+pub mod viewers;
 
 use beryl_protocol::PlayerView;
 use beryl_protocol::ipc::TableSoloRequest;
@@ -29,13 +34,14 @@ use tokens::TokenChoice;
 
 /// What the client knows beyond the table's view that decides which commands it offers and
 /// what they show: whether it runs on the Mac, which writes keys its own way; the keys the
-/// player bound (`bindings`); and the last token the player made, which Create another token
-/// makes again.
+/// player bound (`bindings`); the last token the player made, which Create another token
+/// makes again; and the selected cards, for each of which a command given to one of them acts.
 #[derive(Clone, Copy, Debug)]
 pub struct Context<'a> {
     pub mac: bool,
     pub bindings: &'a Bindings,
     pub last_token: Option<&'a TokenChoice>,
+    pub selected: &'a [ObjectId],
 }
 
 impl<'a> Context<'a> {
@@ -46,6 +52,7 @@ impl<'a> Context<'a> {
             mac,
             bindings,
             last_token: None,
+            selected: &[],
         }
     }
 
@@ -92,7 +99,9 @@ pub enum TablePress {
 /// prompt, token search, custom token form and library order tray, each if any (at most one of
 /// the last five is open), whether the log is open, the log lines that stopped the last undo,
 /// the last token made, the table actions sent and not yet answered, and whether Shift was held
-/// at the last press of the pointer, which runs a command list row's shifted form.
+/// at the last press of the pointer, which runs a command list row's shifted form. Also the selected
+/// cards, the rectangle a sweep has drawn so far (from where it began to the pointer), the
+/// command waiting for the object or player it acts toward, and where the held card would land.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TableState {
     pub menu: Option<menus::OpenMenu>,
@@ -112,6 +121,10 @@ pub struct TableState {
     /// with the table's answer to it.
     pub pending: std::collections::VecDeque<Sent>,
     pub shift: bool,
+    pub selection: Vec<ObjectId>,
+    pub sweep: Option<(Vec2, Vec2)>,
+    pub picking: Option<arrows::Pick>,
+    pub landing: Option<drop::Destination>,
 }
 
 /// What a table action the client sent asks of the table's answer to it: to remember the
@@ -140,6 +153,10 @@ impl TableState {
             last_token: None,
             pending: std::collections::VecDeque::new(),
             shift: false,
+            selection: Vec::new(),
+            sweep: None,
+            picking: None,
+            landing: None,
         }
     }
 

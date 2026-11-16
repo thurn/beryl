@@ -8,7 +8,8 @@ use beryl_protocol::protocol::{Side, TableAction, ZoneName};
 use glam::Vec2;
 
 use super::commands::{self, Asks, Command, Entry, Values};
-use super::{Context, Target};
+use super::{Context, Target, viewers};
+use crate::element::Viewed;
 use crate::widgets::{MenuGroup, MenuId, MenuRow};
 
 /// The id of the table's context menu, which its rows' presses (`Press::Menu`) carry.
@@ -17,8 +18,10 @@ pub const MENU: MenuId = MenuId(1);
 /// What giving a command does: send these table actions, leave the table, open the ask prompt
 /// for the command at this index of `COMMANDS` (`super::ask`), open the token search for it
 /// (`super::tokens`), open the command list (`super::palette`), open it with the row that
-/// resets the keys at its top (Shortcuts), or nothing yet (a command whose viewer, selection
-/// or arrow the client has not built, or one that makes no action for this target).
+/// resets the keys at its top (Shortcuts), open a pile's viewer (`super::viewers`), wait for a
+/// click on the object or player the command at this index acts toward (`super::arrows`), or
+/// nothing yet (a command the client has not built, or one that makes no action for this
+/// target).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Act {
     Actions(Vec<TableAction>),
@@ -27,19 +30,25 @@ pub enum Act {
     Tokens(u16),
     Palette,
     Shortcuts,
+    View(Viewed),
+    Pick(u16),
     Nothing,
 }
 
 /// What `command` does for `target` at `view`, with what the client knows (`context`): Create
 /// another token makes the last token made again, with its note (`tokenChoice` in
-/// `ui/src/table/commandActions.ts`).
+/// `ui/src/table/commandActions.ts`). A card target among the selected cards (`context.selected`)
+/// stands for all of them (`commands::actions_for`).
 #[must_use]
 pub fn act(command: &Command, target: Target, view: &PlayerView, context: &Context) -> Act {
     match command.client {
         Some("leave_table") => return Act::Leave,
         Some("open_command_list") => return Act::Palette,
         Some("open_shortcuts") => return Act::Shortcuts,
-        _ => {}
+        Some(client) => {
+            return viewers::opens(client, target).map_or(Act::Nothing, Act::View);
+        }
+        None => {}
     }
     if command.id == "token.repeat" {
         let Some(last) = context.last_token else {
@@ -60,10 +69,16 @@ pub fn act(command: &Command, target: Target, view: &PlayerView, context: &Conte
             return Act::Ask(commands::index_of(command));
         }
         Asks::Token => return Act::Tokens(commands::index_of(command)),
-        Asks::Target => return Act::Nothing,
+        Asks::Target => {
+            return if matches!(target, Target::Card(_)) {
+                Act::Pick(commands::index_of(command))
+            } else {
+                Act::Nothing
+            };
+        }
         Asks::None => {}
     }
-    let actions = commands::actions(command, target, view);
+    let actions = commands::actions_for(command, target, context.selected, view, &Values::new());
     if actions.is_empty() {
         Act::Nothing
     } else {

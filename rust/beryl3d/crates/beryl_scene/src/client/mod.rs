@@ -44,6 +44,7 @@ mod manual_overlays;
 mod own;
 mod screen;
 mod stops;
+mod table_pointer;
 mod testing;
 mod viewing;
 
@@ -414,6 +415,7 @@ impl Client {
         self.hold_table_menu(now);
         self.own(table_now);
         self.set_aims(self.table_open());
+        self.table_frame(table_now);
         let covers = self.table_open()
             && (self.prompt.as_ref()).is_some_and(|(_, prompt)| prompts::covers_table(prompt));
         self.show.cover_table(covers);
@@ -470,12 +472,17 @@ impl Client {
         // one held up in a tray and carried is dropped where it was let go.
         match self.show.point(&mut self.frame, table_now) {
             Some(LetGo::Click(slot)) => {
-                if let Ok(slot) = u16::try_from(slot) {
+                if let Ok(slot) = u16::try_from(slot)
+                    && !self.table_click(ObjectId(slot))
+                {
                     let on = Subject::Object {
                         slot: ObjectId(slot),
                     };
                     self.click(Click::On { on });
                 }
+            }
+            Some(LetGo::Dropped { slot, at }) if self.screen == Screen::Table => {
+                self.table_drop(slot, at);
             }
             Some(LetGo::Dropped { slot, at }) => self.drop_held(slot, at),
             None => {}
