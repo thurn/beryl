@@ -33,7 +33,10 @@ pub static CARD: CardDef = Printed::AdelineResplendentCathar
             condition: None,
             modifications: &[Modification::SetPower(&Amount::Count(&Objects::All {
                 zone: Zone::Battlefield,
-                filter: Filter::All(&[Filter::Types(Types::CREATURE), YOU_CONTROL]),
+                filter: Filter::All(&[
+                    Filter::Types(Types::CREATURE),
+                    Filter::Whose(&Players::You),
+                ]),
             }))],
         }),
         // "Whenever you attack"

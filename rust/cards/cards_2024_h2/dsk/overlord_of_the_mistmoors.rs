@@ -33,8 +33,10 @@ pub static CARD: CardDef = Printed::OverlordOfTheMistmoors
     .abilities(&[
         Ability::impending(),
         Ability::impending_countdown(),
-        when_enters(&TWO_INSECTS),
-        whenever_attacks(&TWO_INSECTS).in_paragraph_before(),
+        Ability::triggered(&Trigger::ENTERS).effect(&TWO_INSECTS),
+        Ability::triggered(&Trigger::ATTACKS)
+            .effect(&TWO_INSECTS)
+            .in_paragraph_before(),
     ])
     .casting(&[CastingOption::Impending {
         cost: mana("{2}{W}{W}"),

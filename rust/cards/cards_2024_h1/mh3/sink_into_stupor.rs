@@ -27,7 +27,13 @@ pub static CARD: CardDef = card(
     Card::SinkIntoStupor,
     &[
         Printed::SinkIntoStupor.abilities(&[Ability::spell()
-            .target(&TARGET_OPPONENT_SPELL_OR_NONLAND_PERMANENT)
+            .target(&TargetSpec::one(
+                TargetKind::SpellOrPermanent,
+                Filter::All(&[
+                    Filter::Whose(&Players::EachOpponent),
+                    Filter::Not(&Filter::Types(Types::LAND)),
+                ]),
+            ))
             .effect(&return_to_hand(target()))]),
         Printed::SoporificSprings.abilities(&[
             Ability::replacing(&Replacement::enters_tapped_unless_pay_life(3)),

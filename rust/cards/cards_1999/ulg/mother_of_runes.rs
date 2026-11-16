@@ -20,7 +20,10 @@ use crate::prelude::*;
 /// [CR 702.16]: https://yawgatog.com/resources/magic-rules/#R70216
 pub static CARD: CardDef = Printed::MotherOfRunes
     .abilities(&[Ability::activated(Cost::TAP)
-        .target(&TARGET_CREATURE_YOU_CONTROL)
+        .target(&TargetSpec::permanent(Filter::All(&[
+            Filter::Types(Types::CREATURE),
+            Filter::Whose(&Players::You),
+        ])))
         .effect(&modify(
             target(),
             &[Modification::AddProtection(Protection::ChosenColor)],

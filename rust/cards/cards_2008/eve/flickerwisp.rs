@@ -31,9 +31,10 @@ pub static CARD: CardDef = Printed::Flickerwisp
     .keywords(Keywords::FLYING)
     .abilities(&[
         Ability::triggered(&Trigger::ENTERS)
-            .target(&ANOTHER_TARGET_PERMANENT)
+            .target(&TargetSpec::permanent(Filter::Any).other())
             .effect(&sequence(&[exile(target()), delay_with(1, those())])),
-        Ability::triggered(&NEXT_END_STEP).effect(&return_to_battlefield(carried_object())),
+        Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next())
+            .effect(&return_to_battlefield(carried_object())),
     ])
     .card();
 

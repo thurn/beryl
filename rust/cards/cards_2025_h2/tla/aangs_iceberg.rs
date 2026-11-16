@@ -19,7 +19,11 @@ pub static CARD: CardDef = Printed::AangsIceberg
         // If the Iceberg has already left by the time this resolves, the permanent isn't
         // exiled ([CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b)).
         Ability::triggered(&Trigger::ENTERS)
-            .target(&NONLAND_PERMANENT.optional().other())
+            .target(
+                &TargetSpec::permanent(Filter::Not(&Filter::Types(Types::LAND)))
+                    .optional()
+                    .other(),
+            )
             .effect(&exile_until_this_leaves(target())),
         // "Sacrifice this enchantment. If you do, scry 2." Its controller can sacrifice
         // it only if it is still on the battlefield

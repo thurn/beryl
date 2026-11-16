@@ -33,19 +33,23 @@ const UNTAP: u8 = 3;
 /// [CR 400.3]: https://yawgatog.com/resources/magic-rules/#R4003
 pub static CARD: CardDef = Printed::TeferiHeroOfDominaria
     .abilities(&[
-        Ability::loyalty(1).effect(&sequence(&[DRAW_A_CARD, delay(UNTAP)])),
+        Ability::loyalty(1).effect(&sequence(&[draw(you(), 1), delay(UNTAP)])),
         Ability::loyalty(-3)
-            .target(&NONLAND_PERMANENT)
+            .target(&TargetSpec::permanent(Filter::Not(&Filter::Types(
+                Types::LAND,
+            ))))
             .effect(&put_into_library(target(), LibraryPosition::FromTop(3))),
         Ability::loyalty(-8).effect(&get_emblem(you(), &EMBLEM)),
-        Ability::triggered(&NEXT_END_STEP).effect(&untap_up_to(
-            you(),
-            2,
-            Objects::All {
-                zone: Zone::Battlefield,
-                filter: Filter::Types(Types::LAND),
-            },
-        )),
+        Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer).next()).effect(
+            &untap_up_to(
+                you(),
+                2,
+                Objects::All {
+                    zone: Zone::Battlefield,
+                    filter: Filter::Types(Types::LAND),
+                },
+            ),
+        ),
     ])
     .card()
     .creating(&[&EMBLEM]);

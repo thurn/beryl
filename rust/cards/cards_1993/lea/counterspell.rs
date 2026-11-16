@@ -10,7 +10,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::Counterspell
     .abilities(&[Ability::spell()
         .target(&TargetSpec::spell())
-        .effect(&COUNTER_TARGET_SPELL)])
+        .effect(&counter(target()))])
     .card();
 
 #[cfg(feature = "scenarios")]

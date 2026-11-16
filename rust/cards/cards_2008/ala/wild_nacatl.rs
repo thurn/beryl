@@ -25,7 +25,10 @@ pub static CARD: CardDef = Printed::WildNacatl
             affected: Objects::This,
             condition: Some(exists(&Objects::All {
                 zone: Zone::Battlefield,
-                filter: Filter::All(&[Filter::Subtype(Subtype::Mountain), YOU_CONTROL]),
+                filter: Filter::All(&[
+                    Filter::Subtype(Subtype::Mountain),
+                    Filter::Whose(&Players::You),
+                ]),
             })),
             modifications: &[Modification::ModifyPt(1, 1)],
         }),
@@ -33,7 +36,10 @@ pub static CARD: CardDef = Printed::WildNacatl
             affected: Objects::This,
             condition: Some(exists(&Objects::All {
                 zone: Zone::Battlefield,
-                filter: Filter::All(&[Filter::Subtype(Subtype::Plains), YOU_CONTROL]),
+                filter: Filter::All(&[
+                    Filter::Subtype(Subtype::Plains),
+                    Filter::Whose(&Players::You),
+                ]),
             })),
             modifications: &[Modification::ModifyPt(1, 1)],
         }),

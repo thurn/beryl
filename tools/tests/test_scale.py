@@ -24,8 +24,7 @@ def test_a_clone_renames_only_its_own_card_and_faces() -> None:
     assert "Printed::Counterspell7" in text
     assert not re.search(r"(Card|Printed)::Counterspell\b", text)
     assert "Prop::Artifact" in text  # the other cards stay what they are
-    effect = next(line for line in counterspell.text.splitlines() if ".effect(" in line)
-    assert effect in text  # its body and scenarios come along
+    assert ".effect(&counter(target()))" in text  # its body and scenarios come along
     record = scale_workspace.clone_record(counterspell, 7, "z00001")
     assert record["name"] == "Counterspell 7" and record["first_set"] == "z00001"
 

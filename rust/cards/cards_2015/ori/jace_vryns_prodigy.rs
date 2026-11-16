@@ -50,8 +50,8 @@ pub static CARD: CardDef = card(
     Card::JaceVrynsProdigy,
     &[
         Printed::JaceVrynsProdigy.abilities(&[Ability::activated(Cost::TAP).effect(&sequence(&[
-            DRAW_A_CARD,
-            DISCARD_A_CARD,
+            draw(you(), 1),
+            discard(you(), 1),
             if_then(
                 Condition::Compare(
                     Amount::Count(&Objects::All {
@@ -66,14 +66,17 @@ pub static CARD: CardDef = card(
         ]))]),
         Printed::JaceTelepathUnbound.abilities(&[
             Ability::loyalty(1)
-                .target(&UP_TO_ONE_TARGET_CREATURE)
+                .target(&TargetSpec::creature().optional())
                 .effect(&modify(
                     target(),
                     &[Modification::ModifyPt(-2, 0)],
                     Duration::UntilYourNextTurn,
                 )),
             Ability::loyalty(-3)
-                .target(&TARGET_YOUR_INSTANT_OR_SORCERY_CARD)
+                .target(&TargetSpec::graveyard_card(Filter::All(&[
+                    Filter::Types(Types::INSTANT.union(Types::SORCERY)),
+                    Filter::Whose(&Players::You),
+                ])))
                 .effect(&permit_cast(
                     you(),
                     target(),

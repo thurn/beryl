@@ -46,9 +46,9 @@ pub static CARD: CardDef = Printed::JaceWielderOfMysteries
             .effect(&YOU_WIN),
         Ability::loyalty(1)
             .target(&TargetSpec::player())
-            .effect(&sequence(&[mill(target_player(), 2), DRAW_A_CARD])),
+            .effect(&sequence(&[mill(target_player(), 2), draw(you(), 1)])),
         Ability::loyalty(-8).effect(&sequence(&[
-            DRAW_SEVEN_CARDS,
+            draw(you(), 7),
             if_then(LIBRARY_IS_EMPTY, &YOU_WIN),
         ])),
     ])

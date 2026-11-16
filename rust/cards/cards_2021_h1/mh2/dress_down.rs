@@ -28,7 +28,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::DressDown
     .keywords(Keywords::FLASH)
     .abilities(&[
-        when_enters(&DRAW_A_CARD),
+        Ability::triggered(&Trigger::ENTERS).effect(&draw(you(), 1)),
         Ability::static_ability(&LayerSpec {
             affected: Objects::All {
                 zone: Zone::Battlefield,
@@ -37,7 +37,8 @@ pub static CARD: CardDef = Printed::DressDown
             condition: None,
             modifications: &[Modification::LoseAllAbilities],
         }),
-        Ability::triggered(&EACH_END_STEP).effect(&sacrifice(this())),
+        Ability::triggered(&Trigger::step(TurnStep::End, Players::EachPlayer))
+            .effect(&sacrifice(this())),
     ])
     .card();
 

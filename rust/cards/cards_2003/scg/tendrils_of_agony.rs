@@ -17,7 +17,10 @@ pub static CARD: CardDef = Printed::TendrilsOfAgony
     .abilities(&[
         Ability::spell()
             .target(&TargetSpec::player())
-            .effect(&sequence(&[lose_life(target_player(), 2), GAIN_TWO_LIFE])),
+            .effect(&sequence(&[
+                lose_life(target_player(), 2),
+                gain_life(you(), 2),
+            ])),
         Ability::storm(),
     ])
     .card();

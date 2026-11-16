@@ -20,7 +20,7 @@ use crate::prelude::*;
 /// [CR 701.24a]: https://yawgatog.com/resources/magic-rules/#R70124a
 /// [CR 701.20a]: https://yawgatog.com/resources/magic-rules/#R70120a
 pub static CARD: CardDef = Printed::TrinketMage
-    .abilities(&[when_enters(&may(
+    .abilities(&[Ability::triggered(&Trigger::ENTERS).effect(&may(
         you(),
         &search(
             you(),

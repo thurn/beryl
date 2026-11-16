@@ -40,7 +40,7 @@ pub static CARD: CardDef = Printed::JaceTheMindSculptor
         Ability::loyalty(2)
             .target(&TargetSpec::player())
             .effect(&fateseal(you(), target_player())),
-        Ability::loyalty(0).effect(&sequence(&[DRAW_THREE_CARDS, put_back(you(), 2)])),
+        Ability::loyalty(0).effect(&sequence(&[draw(you(), 3), put_back(you(), 2)])),
         Ability::loyalty(-1)
             .target(&TargetSpec::creature())
             .effect(&return_to_hand(target())),

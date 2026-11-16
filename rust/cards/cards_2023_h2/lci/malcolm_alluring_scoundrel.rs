@@ -27,8 +27,8 @@ pub static CARD: CardDef = Printed::MalcolmAlluringScoundrel
     .abilities(&[
         Ability::triggered(&Trigger::DEALS_COMBAT_DAMAGE_TO_A_PLAYER).effect(&sequence(&[
             add_counters(this(), CounterKind::Chorus, 1),
-            DRAW_A_CARD,
-            DISCARD_A_CARD,
+            draw(you(), 1),
+            discard(you(), 1),
             if_then(
                 Condition::Compare(
                     Amount::Counters(this(), CounterKind::Chorus),

@@ -17,7 +17,7 @@ pub static CARD: CardDef = Printed::RekiTheHistoryOfKamigawa
         Players::You,
         Filter::Supertypes(Supertypes::LEGENDARY),
     ))
-    .effect(&DRAW_A_CARD)])
+    .effect(&draw(you(), 1))])
     .card();
 
 #[cfg(feature = "scenarios")]

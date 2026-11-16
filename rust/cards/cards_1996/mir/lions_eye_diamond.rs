@@ -25,7 +25,11 @@ use crate::prelude::*;
 /// [CR 605.3b]: https://yawgatog.com/resources/magic-rules/#R6053b
 /// [CR 605.3a]: https://yawgatog.com/resources/magic-rules/#R6053a
 pub static CARD: CardDef = Printed::LionsEyeDiamond
-    .abilities(&[Ability::mana(DISCARD_HAND_AND_SACRIFICE, ManaSet::any_color(3)).as_an_instant()])
+    .abilities(&[Ability::mana(
+        Cost::of_parts(&[CostPart::DiscardHand, CostPart::SACRIFICE]),
+        ManaSet::any_color(3),
+    )
+    .as_an_instant()])
     .card();
 
 #[cfg(feature = "scenarios")]

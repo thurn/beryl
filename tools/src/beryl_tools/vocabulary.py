@@ -42,7 +42,6 @@ class Entry:
     path: Path
     line: int
     doc: str
-    wording: str | None = None
 
     def words(self) -> set[str]:
         """The words of what it says a card says: its doc comment less the rules it cites, and
@@ -64,12 +63,11 @@ def code(line: str) -> str:
 
 
 def entries_of(path: Path, root: Path) -> list[Entry]:
-    """The entries in one source file, in order. Phrases also expose their Oracle template."""
+    """The entries in one source file, in order."""
     out: list[Entry] = []
     # The enums and impls open at this point: kind, name and the depth inside them.
     scopes: list[tuple[str, str, int]] = []
     depth = 0
-    phrase_file = path.relative_to(root).parts[0] == "phrases"
     doc: list[str] = []
     for number, line in enumerate(path.read_text().splitlines(), start=1):
         stripped = line.strip()
@@ -90,14 +88,9 @@ def entries_of(path: Path, root: Path) -> list[Entry]:
                 name = f"{scope[1]}::{variant.group(1)}"
             elif found := FUNCTION.match(line) or CONSTANT.match(line):
                 owner = scope[1] if scope is not None else module(path, root)
-                if phrase_file and scope is None:
-                    owner = "phrases"
                 name = f"{owner}::{found.group(1)}"
         if name is not None:
-            wording = None
-            if phrase_file and doc[0].startswith('"') and doc[0].endswith('"'):
-                wording = doc[0][1:-1]
-            out.append(Entry(name, path, number, "\n".join(doc), wording))
+            out.append(Entry(name, path, number, "\n".join(doc)))
         doc = []
         text = code(line)
         opened = depth + text.count("{") - text.count("}")

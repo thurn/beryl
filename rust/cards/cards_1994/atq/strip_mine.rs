@@ -16,8 +16,8 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::StripMine
     .abilities(&[
         Ability::tap_for_mana(ManaSet::one(ManaColor::Colorless)),
-        Ability::activated(TAP_AND_SACRIFICE)
-            .target(&TARGET_LAND)
+        Ability::activated(Cost::of_parts(&[CostPart::TAP, CostPart::SACRIFICE]))
+            .target(&TargetSpec::permanent(Filter::Types(Types::LAND)))
             .effect(&destroy(target())),
     ])
     .card();

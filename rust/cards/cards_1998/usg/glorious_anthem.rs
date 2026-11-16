@@ -22,7 +22,7 @@ pub static CARD: CardDef = Printed::GloriousAnthem
     .abilities(&[Ability::static_ability(&LayerSpec {
         affected: Objects::All {
             zone: Zone::Battlefield,
-            filter: CREATURES_YOU_CONTROL,
+            filter: Filter::All(&[Filter::Types(Types::CREATURE), Filter::Whose(&Players::You)]),
         },
         condition: None,
         modifications: &[Modification::ModifyPt(1, 1)],

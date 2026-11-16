@@ -28,12 +28,12 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::Subtlety
     .keywords(Keywords::FLASH.union(Keywords::FLYING))
     .abilities(&[
-        when_enters(&put_into_library(target(), LibraryPosition::TopOrBottom)).target(
-            &TargetSpec::up_to_one(
+        Ability::triggered(&Trigger::ENTERS)
+            .effect(&put_into_library(target(), LibraryPosition::TopOrBottom))
+            .target(&TargetSpec::up_to_one(
                 TargetKind::Spell,
                 Filter::Types(Types::CREATURE.union(Types::PLANESWALKER)),
-            ),
-        ),
+            )),
         Ability::evoke(),
     ])
     .casting(&[CastingOption::Evoke {

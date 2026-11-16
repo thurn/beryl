@@ -23,7 +23,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::Reprieve
     .abilities(&[Ability::spell()
         .target(&TargetSpec::spell())
-        .effect(&sequence(&[return_to_hand(target()), DRAW_A_CARD]))])
+        .effect(&sequence(&[return_to_hand(target()), draw(you(), 1)]))])
     .card();
 
 #[cfg(feature = "scenarios")]

@@ -13,9 +13,13 @@ use crate::prelude::*;
 ///
 /// [CR 118.12a]: https://yawgatog.com/resources/magic-rules/#R11812a
 pub static CARD: CardDef = Printed::ManaTithe
-    .abilities(&[Ability::spell().target(&TargetSpec::spell()).effect(
-        &unless_its_controller_pays(&COUNTER_TARGET_SPELL, ManaCost::generic(1)),
-    )])
+    .abilities(&[Ability::spell()
+        .target(&TargetSpec::spell())
+        .effect(&unless_pays(
+            &counter(target()),
+            its_controller(),
+            ManaCost::generic(1),
+        ))])
     .card();
 
 #[cfg(feature = "scenarios")]

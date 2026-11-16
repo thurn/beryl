@@ -23,7 +23,7 @@ pub static CARD: CardDef =
             Ability::spell()
                 .target(&TargetSpec::spell())
                 .effect(&sequence(&[
-                    COUNTER_TARGET_SPELL,
+                    counter(target()),
                     delay_carrying(1, Amount::ManaValue(target())),
                 ])),
             // CR 106.4: "When an effect instructs a player to add mana, that mana goes into
