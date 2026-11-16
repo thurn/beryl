@@ -28,7 +28,6 @@ use beryl_protocol::{AgentView, PlayerView};
 
 use crate::element::{Element, Viewed};
 use crate::faces::FaceList;
-use crate::frame::ElementId;
 use crate::hud::log::LogEntry;
 use crate::inspect::inspector::Inspected;
 use crate::inspect::revealed::RevealedFace;
@@ -111,8 +110,6 @@ pub struct ScreenIn<'a> {
     /// The open prompt, if any.
     pub prompt: Option<&'a PromptView>,
     pub settings: &'a Settings,
-    /// The element the pointer is over, if any.
-    pub hovered: Option<ElementId>,
     /// The sheet open over the screen, if any.
     pub sheet: Option<Sheet>,
     /// The agents a person may play, in the order the host listed them.

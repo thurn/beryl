@@ -19,33 +19,7 @@ impl Client {
         self.inspector.due = true;
         self.log.folded = self.permanent_over_log();
         let view = self.show.latest().map(|update| &update.view);
-        let input = ScreenIn {
-            screen: self.screen,
-            window: self.window,
-            view,
-            prompt: self.prompt.as_ref().map(|(_, prompt)| prompt),
-            settings: &self.settings,
-            hovered: None,
-            sheet: self.sheet,
-            agents: &self.agents,
-            start: &self.start,
-            gallery: self.gallery,
-            recordings: &self.recordings,
-            seat: self.seat,
-            bug: &self.bug.form,
-            fields: &self.fields,
-            inspected: None,
-            faces: Some(self.faces()),
-            viewing: self.viewing.open,
-            revealed: &self.viewing.revealed,
-            table: &self.manual.state,
-            carried: self.carried_item.map(|carry| carry.on),
-            lobby: &self.manual.lobby,
-            log: self.log.logged.entries(),
-            log_folded: self.log.folded,
-            log_open: self.log.open,
-            concede: self.concede,
-        };
+        let input = self.screen_in();
         let mut full = crate::prompts::faces(&input);
         full.extend(screens::sheet_face(&input));
         // Until the sheets are built, the settings sheet takes the screen's place in the flat
@@ -76,6 +50,37 @@ impl Client {
         if music != self.music {
             self.music = music;
             self.requests.push_back(Request::Music(music));
+        }
+    }
+
+    /// Everything the screen functions read, from what the client holds now. The inspector sets
+    /// `inspected` on it; nothing else differs between the screen and the inspector.
+    pub(super) fn screen_in(&self) -> ScreenIn<'_> {
+        ScreenIn {
+            screen: self.screen,
+            window: self.window,
+            view: self.show.latest().map(|update| &update.view),
+            prompt: self.prompt.as_ref().map(|(_, prompt)| prompt),
+            settings: &self.settings,
+            sheet: self.sheet,
+            agents: &self.agents,
+            start: &self.start,
+            gallery: self.gallery,
+            recordings: &self.recordings,
+            seat: self.seat,
+            bug: &self.bug.form,
+            fields: &self.fields,
+            inspected: None,
+            faces: Some(self.faces()),
+            viewing: self.viewing.open,
+            revealed: &self.viewing.revealed,
+            table: &self.manual.state,
+            carried: self.carried_item.map(|carry| carry.on),
+            lobby: &self.manual.lobby,
+            log: self.log.logged.entries(),
+            log_folded: self.log.folded,
+            log_open: self.log.open,
+            concede: self.concede,
         }
     }
 

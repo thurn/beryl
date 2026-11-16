@@ -200,7 +200,6 @@ mod milestone_three {
             view: None,
             prompt,
             settings,
-            hovered: None,
             sheet: None,
             agents: &[],
             start: &StartForm {

@@ -46,34 +46,9 @@ impl Client {
         if !was_shown && self.inspector.shown.is_none() {
             return;
         }
-        let view = self.show.latest().map(|update| &update.view);
         let input = ScreenIn {
-            screen: self.screen,
-            window: self.window,
-            view,
-            prompt: self.prompt.as_ref().map(|(_, prompt)| prompt),
-            settings: &self.settings,
-            hovered: (self.inspector.shown.as_ref())
-                .map(|inspected| ElementId(u32::from(inspected.slot.0))),
-            sheet: self.sheet,
-            agents: &self.agents,
-            start: &self.start,
-            gallery: self.gallery,
-            recordings: &self.recordings,
-            seat: self.seat,
-            bug: &self.bug.form,
-            fields: &self.fields,
             inspected: self.inspector.shown.as_ref(),
-            faces: Some(self.show.faces().list()),
-            viewing: self.viewing.open,
-            revealed: &self.viewing.revealed,
-            table: &self.manual.state,
-            carried: None,
-            lobby: &self.manual.lobby,
-            log: self.log.logged.entries(),
-            log_folded: self.log.folded,
-            log_open: self.log.open,
-            concede: self.concede,
+            ..self.screen_in()
         };
         let element = inspector::inspector(&input);
         let place = inspector::place(&input);
