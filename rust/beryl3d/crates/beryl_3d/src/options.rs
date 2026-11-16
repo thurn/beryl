@@ -71,6 +71,9 @@ pub struct Options {
     /// The scheduling class the session thread, and through it the AI's search threads, run
     /// in (`--search-class`): default, as in the web app, unless a run compares another.
     pub search_class: Class,
+    /// Agents the start screen offers after the session's own list, by name (`--offer`, given
+    /// once for each): a retired agent such as `expert`, which `just b3d stand-in` plays.
+    pub offer: Vec<String>,
 }
 
 /// The agent across the table in a game `--agent` starts: the searching agent the prototype
@@ -80,7 +83,8 @@ pub const OPPONENT: &str = "mcts-hidden";
 pub const SEED: u64 = 20_261_114;
 
 /// Whether this build has the options only a debug build has (`--fixture`, `--pause-at`,
-/// `--drive`, `--load`, `--slow-gpu`, `--agent`, `--opponent`, `--seed` and `--search-class`).
+/// `--drive`, `--load`, `--slow-gpu`, `--agent`, `--opponent`, `--seed`, `--search-class` and
+/// `--offer`).
 pub const TOOLS: bool = cfg!(feature = "tools");
 
 impl Options {
@@ -104,6 +108,7 @@ impl Options {
             opponent: OPPONENT.to_owned(),
             seed: SEED,
             search_class: Class::Default,
+            offer: Vec::new(),
         };
         let mut rest = arguments.iter();
         while let Some(option) = rest.next() {
@@ -132,6 +137,13 @@ impl Options {
                     options.search_class = Class::from_word(&word).ok_or_else(|| {
                         format!("--search-class {word}: a class is utility, default, initiated or interactive")
                     })?;
+                }
+                "--offer" if tools => {
+                    let name = value()?;
+                    if beryl_search::agent(&name).is_none() {
+                        return Err(format!("--offer {name}: no agent has that name"));
+                    }
+                    options.offer.push(name);
                 }
                 "--for" => options.run_for = Some(duration(&value()?)?),
                 "--window" => {
@@ -182,6 +194,9 @@ pub fn usage(tools: bool) -> String {
         lines.push("  --seed <number>                                  --agent's game's seed");
         lines.push(
             "  --search-class <class>                           the AI's threads' class (default)",
+        );
+        lines.push(
+            "  --offer <agent>                                  add an agent to the start screen",
         );
     }
     lines.join("\n")

@@ -38,6 +38,9 @@ beryl_cards = { path = "../../../crates/beryl_cards" }
 # The position of a pointer event from a phone's host, as the client's vectors. The release
 # beryl_scene already depends on.
 glam = "0.34.3"
+# The agents `--offer` adds to the start screen's list, which the session's list leaves out
+# (`expert` is retired from it). It replaces nothing: beryl_session already depends on it.
+beryl_search = { path = "../../../crates/beryl_search" }
 # The game the app plays: `Sessions` on the session thread.
 beryl_session = { path = "../../../crates/beryl_session" }
 # The manual table's session: `TableConnections` on the session thread, as the web app's

@@ -243,6 +243,16 @@ impl Drive {
                 }
             }
             Action::Move(point) => self.pointer(at, PointerPhase::Move, *point, Button::None),
+            Action::Wheel(locator, by) => {
+                let point = point(locator)?;
+                self.pending.push_back((
+                    at,
+                    Input::Pointer(Pointer {
+                        wheel: *by,
+                        ..mouse(PointerPhase::Wheel, point, Button::None)
+                    }),
+                ));
+            }
             Action::Step(duration) => self.cursor = at + duration.nanos(),
             Action::Still => self.waiting_still = true,
         }
@@ -250,16 +260,21 @@ impl Drive {
     }
 
     fn pointer(&mut self, at: u64, phase: PointerPhase, position: Vec2, button: Button) {
-        let pointer = Pointer {
-            id: 0,
-            kind: PointerKind::Mouse,
-            phase,
-            position,
-            button,
-            wheel: Vec2::ZERO,
-            modifiers: Modifiers::default(),
-        };
+        let pointer = mouse(phase, position, button);
         self.pending.push_back((at, Input::Pointer(pointer)));
+    }
+}
+
+/// The mouse's event of `phase` at `position`, with no wheel turned and no modifier held.
+fn mouse(phase: PointerPhase, position: Vec2, button: Button) -> Pointer {
+    Pointer {
+        id: 0,
+        kind: PointerKind::Mouse,
+        phase,
+        position,
+        button,
+        wheel: Vec2::ZERO,
+        modifiers: Modifiers::default(),
     }
 }
 

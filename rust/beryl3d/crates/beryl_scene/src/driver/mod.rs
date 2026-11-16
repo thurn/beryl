@@ -363,6 +363,7 @@ impl Page {
                 vec![locator]
             }
             Action::Drag(from, to) => vec![from, to],
+            Action::Wheel(locator, _) => vec![locator],
             Action::Key(_) | Action::Move(_) | Action::Step(_) | Action::Still => Vec::new(),
         };
         for locator in locators {
@@ -396,6 +397,10 @@ impl Page {
             Action::Type(locator, text) => self.type_text(locator, text),
             Action::Key(chord) => self.key_chord(*chord),
             Action::Move(point) => self.move_to(*point),
+            Action::Wheel(locator, by) => {
+                let point = self.point(locator);
+                self.wheel(point, *by);
+            }
             Action::Step(duration) => self.step(*duration),
             Action::Still => self.still(),
         }

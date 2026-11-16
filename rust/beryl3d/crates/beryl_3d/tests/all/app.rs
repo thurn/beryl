@@ -82,4 +82,9 @@ fn a_release_build_has_no_fixture_option() {
         "the AI searches in the web app's class unless a run compares another"
     );
     assert!(agent(&["--search-class", "idle"], true).is_err());
+    let offered = agent(&["--offer", "expert", "--offer", "random"], true)
+        .expect("a debug build offers retired agents");
+    assert_eq!(offered.offer, ["expert", "random"]);
+    assert!(agent(&["--offer", "expert"], false).is_err());
+    assert!(agent(&["--offer", "nobody"], true).is_err_and(|error| error.contains("nobody")));
 }

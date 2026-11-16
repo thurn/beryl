@@ -12,7 +12,7 @@
 use beryl_scene::frame::Role;
 
 /// The words a state may be.
-const STATES: [&str; 14] = [
+const STATES: [&str; 17] = [
     "interactive",
     "tapped",
     "face-down",
@@ -24,6 +24,9 @@ const STATES: [&str; 14] = [
     "target",
     "disabled",
     "focused",
+    "phased-out",
+    "picked",
+    "primary",
     "pile",
     "covered",
     "faded",

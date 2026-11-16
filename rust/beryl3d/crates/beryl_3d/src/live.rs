@@ -2,11 +2,11 @@
 //! `$TMPDIR/beryl3d-<process id>.sock` that `just b3d live` speaks to. Only a build with the
 //! `tools` feature has it.
 //!
-//! A client connects, sends one line (`tree`, `png` or `do <action>`) and reads the answer to
-//! the end of the connection. The answer's first line is `ok` or `error`, and the rest is the
-//! tree, the picture's path, or what went wrong. The server thread only parses and queues; the
-//! frame loop answers on the frame thread (`Live::before` hands over what is queued, and the
-//! app's feed answers after the frame it draws).
+//! A client connects, sends one line (`tree`, `png`, `do <action>` or `quit`) and reads the
+//! answer to the end of the connection. The answer's first line is `ok` or `error`, and the
+//! rest is the tree, the picture's path, or what went wrong. The server thread only parses and
+//! queues; the frame loop answers on the frame thread (`Live::before` hands over what is
+//! queued, and the app's feed answers after the frame it draws).
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
@@ -30,6 +30,9 @@ enum Request {
     Png(Sender<Answer>),
     /// An action, parsed as a one-line drive script.
     Do(Drive, Sender<Answer>),
+    /// Ends the run as closing the window does, so that the frame log gets its summary and a
+    /// live game stays saved to be resumed.
+    Quit(Sender<Answer>),
 }
 
 /// The folder a socket is made in: `$TMPDIR`, or `/tmp`.
@@ -60,6 +63,8 @@ pub struct Live {
     /// Pictures asked for and not yet drawn, then groups of askers waiting for one picture.
     pictures_asked: Vec<Sender<Answer>>,
     pictures_waiting: VecDeque<Vec<Sender<Answer>>>,
+    /// Whether a `quit` request has been taken up.
+    quit: bool,
 }
 
 impl Live {
@@ -101,6 +106,7 @@ impl Live {
             trees: Vec::new(),
             pictures_asked: Vec::new(),
             pictures_waiting: VecDeque::new(),
+            quit: false,
         })
     }
 
@@ -126,8 +132,18 @@ impl Live {
                     self.new_scripts.push((self.next_script, script));
                     self.scripts.push((self.next_script, reply));
                 }
+                Request::Quit(reply) => {
+                    self.quit = true;
+                    let _ = reply.send(Ok(String::new()));
+                }
             }
         }
+    }
+
+    /// Whether a `quit` request asked the run to end.
+    #[must_use]
+    pub fn quit(&self) -> bool {
+        self.quit
     }
 
     /// The scripts to start on this tick.
@@ -172,13 +188,16 @@ impl Live {
         }
     }
 
-    /// Answers the `tree` requests with the client's frame at `clock`.
+    /// Answers the `tree` requests with the client's frame at `clock`, after a first line that
+    /// gives the clock as `just b3d tree`'s first line does (`t=1500ms`), so that a driver can
+    /// time how long a prompt has been open on the app's own clock.
     pub fn trees(&mut self, client: &mut Client, clock: u64) {
         if self.trees.is_empty() {
             return;
         }
-        let printed =
-            tree(client.frame(clock), &TreeOptions::default()).map_err(|error| error.to_string());
+        let printed = tree(client.frame(clock), &TreeOptions::default())
+            .map(|printed| format!("t={}ms\n{printed}", clock / 1_000_000))
+            .map_err(|error| error.to_string());
         for asker in self.trees.drain(..) {
             let _ = asker.send(printed.clone());
         }
@@ -218,12 +237,13 @@ fn parse(line: &str, reply: Sender<Answer>) -> Result<Request, String> {
     match line.split_once(' ').unwrap_or((line, "")) {
         ("tree", "") => Ok(Request::Tree(reply)),
         ("png", "") => Ok(Request::Png(reply)),
+        ("quit", "") => Ok(Request::Quit(reply)),
         ("do", action) if !action.trim().is_empty() => {
             // An action that gives no time starts when the script does.
             Drive::parse("live", action.trim()).map(|script| Request::Do(script, reply))
         }
         _ => Err(format!(
-            "'{line}' is not a request: send tree, png or do <action>"
+            "'{line}' is not a request: send tree, png, do <action> or quit"
         )),
     }
 }

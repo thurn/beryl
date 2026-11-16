@@ -76,6 +76,8 @@ fn a_running_app_answers_tree_do_and_png() {
     let (status, tree) = ask(&path, "tree");
     assert_eq!(status, "ok", "{tree}");
     assert!(tree.contains(CARD), "{tree}");
+    let clock = tree.lines().next().unwrap_or_default();
+    assert!(clock.starts_with("t=") && clock.ends_with("ms"), "{tree}");
 
     let (status, picture) = ask(&path, "png");
     assert_eq!(status, "ok", "{picture}");
@@ -94,7 +96,18 @@ fn a_running_app_answers_tree_do_and_png() {
 
     let (status, why) = ask(&path, "jump");
     assert_eq!(status, "error");
-    assert!(why.contains("tree, png or do"), "{why}");
+    assert!(why.contains("tree, png, do <action> or quit"), "{why}");
+
+    // Quit ends the run as closing the window does, which removes the socket.
+    let (status, body) = ask(&path, "quit");
+    assert_eq!(status, "ok", "{body}");
+    let mut app = app;
+    let ended = app.0.wait().expect("the app ends after quit");
+    assert!(ended.success(), "{ended}");
+    assert!(
+        !std::path::Path::new(&path).exists(),
+        "the socket is removed"
+    );
     drop(app);
     let _ = std::fs::remove_dir_all(&folder);
 }

@@ -179,6 +179,7 @@ dependencies = [
  "beryl_protocol",
  "beryl_render",
  "beryl_scene",
+ "beryl_search",
  "beryl_session",
  "beryl_shell",
  "beryl_table_session",

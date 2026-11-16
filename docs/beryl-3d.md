@@ -2460,9 +2460,11 @@ These four are written one way everywhere.
   it.
 - **An action** is one line: `press <locator>`, `hover <locator>`,
   `drag <locator> to <locator>`, `type <locator> "<text>"`, `key <name>`,
-  `move <x>,<y>`, `step <duration>` or `still` (run the clock until nothing
-  moves). `--do` takes one action. A drive script is a file of them. The running
-  app's socket reads them. The test driver's methods have the same names.
+  `move <x>,<y>`, `wheel <locator> <x>,<y>` (turn the mouse wheel over an
+  element by that many points; a negative `y` scrolls toward the end),
+  `step <duration>` or `still` (run the clock until nothing moves). `--do` takes
+  one action. A drive script is a file of them. The running app's socket reads
+  them. The test driver's methods have the same names.
 
 ### What is printed
 
@@ -2495,9 +2497,9 @@ game
 - **States** are words from a closed list: `interactive`, `tapped`, `face-down`,
   `moving(<verb> <percent>)` (`moving` alone until an element carries its verb),
   `hovered`, `held`, `eligible`, `selected`, `target`, `disabled`, `focused`,
-  `phased-out`, `picked`, `pile(<count>)` (on the top card of a battlefield
-  pile), `copy("<name>")` (the card a copy really is), `covered(<percent>)` and
-  `faded(<percent>)`.
+  `phased-out`, `picked`, `primary` (the button a prompt expects, drawn amber),
+  `pile(<count>)` (on the top card of a battlefield pile), `copy("<name>")` (the
+  card a copy really is), `covered(<percent>)` and `faded(<percent>)`.
 - **`covered(<percent>)`** is how much of the element other elements hide, and
   **`faded(<percent>)`** how far its opacity is below 1. Neither is printed
   under 1%.
@@ -2608,6 +2610,8 @@ just b3d smoke
   frames drawn while the AI searched: how many, how many late, and the worst
   client and encode times among them. The game keeps no replay, so neither app
   resumes it.
+- **`--offer <agent>`** adds an agent to the start screen's opponents after the
+  session's own list, such as `expert`, which that list no longer offers.
 - **`--window`** says what is opened. `none` is the windowless host, which
   measures everything up to presentation, and is what an agent gets when it
   gives no `--window`. `background` is a window that never takes focus and opens
@@ -2637,18 +2641,29 @@ just b3d smoke
   checkout.
 - **`live`** speaks to a running debug build over a local socket,
   `$TMPDIR/beryl3d-<process id>.sock`, which the app announces on its first
-  lines: `live tree`, `live png` and `live do '<action>'`. When several apps are
-  running it takes `--app <process id>`, and with none it says how to start one.
-  Each request has 10 seconds. The frame loop answers on the frame thread:
-  `tree` prints the frame as `just b3d tree` does, `png` prints the path of a
-  picture of the frame under `$BERYL_CACHE/b3d/out/live-<pid>-<n>.png`, drawn
-  again offscreen at the window's size and read back without waiting on the
-  frame thread, and `do` gives the action's inputs on the next display ticks, as
-  a drive script's line is given, and answers when they are done or a locator
-  found nothing. `just b3d release-socket`, a step of the sweep, builds release
-  and fails if its binary holds the socket's file name, `beryl3d-{pid}.sock`.
-- **`smoke`** starts the app with no window, waits for its first presented frame
-  and exits.
+  lines: `live tree`, `live png`, `live do '<action>'` and `live quit`. When
+  several apps are running it takes `--app <process id>`, and with none it says
+  how to start one; a socket whose app has died is deleted and not counted. Each
+  request has 10 seconds. The frame loop answers on the frame thread: `tree`
+  prints the frame as `just b3d tree` does, after a first line with the app's
+  clock (`t=1500ms`), `png` prints the path of a picture of the frame under
+  `$BERYL_CACHE/b3d/out/live-<pid>-<n>.png`, drawn again offscreen at the
+  window's size and read back without waiting on the frame thread, and `do`
+  gives the action's inputs on the next display ticks, as a drive script's line
+  is given, and answers when they are done or a locator found nothing.
+  `just b3d release-socket`, a step of the sweep, builds release and fails if
+  its binary holds the socket's file name, `beryl3d-{pid}.sock`.
+- **`smoke`** starts the app with no window under a profile of its own, waits
+  for its first presented frame and for `live tree` to show the start screen (a
+  region named `start`), and quits it.
+- **`stand-in`** plays a whole game against `expert` (offered with `--offer`) in
+  the windowless app, answering every prompt through `live` by a fixed rule: the
+  primary button when it is enabled, else the first enabled button, else the
+  first eligible element. After 20 prompts it quits the app, starts it again and
+  checks that the game resumed with the same board, then plays to the game over
+  screen and prints the prompts answered, the outcome and the sounds the frame
+  logs counted. It fails when a prompt stays open for 60 seconds of the app's
+  clock, a `live` request fails or the game never ends.
 
 Release builds contain neither the socket nor the options that replay, drive,
 load, slow or play the app for the viewer.

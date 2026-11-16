@@ -14,6 +14,7 @@
 //! The frame thread does no file I/O (docs/beryl-3d.md, "Threads"): it counts frames itself
 //! and sends each line to a thread of the log's own, which writes it.
 
+use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -23,7 +24,9 @@ use std::time::Instant;
 
 use beryl_host::Ticked;
 use beryl_host::rate::Step;
+use beryl_scene::frame::SoundId;
 use beryl_scene::input::{Input, Lifecycle, Modifiers, TextChange};
+use beryl_scene::sound::NAMES;
 use serde::{Deserialize, Serialize};
 
 /// A sixtieth of a second, in nanoseconds.
@@ -152,6 +155,10 @@ pub struct Summary {
     /// The frames drawn while the latest view said the AI was searching.
     #[serde(default)]
     pub searching: Searching,
+    /// How many times each sound was sent to the audio thread, by its name in
+    /// `ui/src/audio/manifest.json`. A run with no window sends them to a silent output.
+    #[serde(default)]
+    pub sounds: BTreeMap<String, u32>,
 }
 
 /// The frames drawn while the AI searched: whether its search threads delayed drawing
@@ -329,6 +336,9 @@ pub struct FrameLog {
     /// How many shown frames waited for a drawable for each tenth of a millisecond, made once
     /// so that counting a frame allocates nothing.
     waits: Box<[u32; WAIT_BUCKETS]>,
+    /// How many times each sound was played, by its id, made once so that counting a sound
+    /// allocates nothing.
+    sounds: Box<[u32]>,
 }
 
 impl FrameLog {
@@ -367,6 +377,7 @@ impl FrameLog {
             presentation_lifecycle: None,
             last_frame: None,
             waits: Box::new([0; WAIT_BUCKETS]),
+            sounds: vec![0; NAMES.len()].into_boxed_slice(),
         })
     }
 
@@ -486,6 +497,13 @@ impl FrameLog {
         }
     }
 
+    /// Notes a sound the client asked for in a frame.
+    pub fn sound(&mut self, id: SoundId) {
+        if let Some(count) = self.sounds.get_mut(usize::from(id.0)) {
+            *count += 1;
+        }
+    }
+
     /// Notes a verb the client played as an instant change.
     pub fn unbuilt(&mut self, verb: &str) {
         self.summary.unbuilt.push(verb.to_owned());
@@ -507,6 +525,10 @@ impl FrameLog {
         let worst = self.summary.worst_wait_ms;
         self.summary.median_wait_ms = percentile(&self.waits[..], 0.5).min(worst);
         self.summary.p95_wait_ms = percentile(&self.waits[..], 0.95).min(worst);
+        self.summary.sounds = (NAMES.iter().zip(&self.sounds))
+            .filter(|(_, count)| **count > 0)
+            .map(|(name, count)| ((*name).to_owned(), *count))
+            .collect();
         self.summary.clone()
     }
 
@@ -684,6 +706,12 @@ impl Summary {
                 "played as instant changes, not built yet: {}",
                 self.unbuilt.join(", ")
             ));
+        }
+        if !self.sounds.is_empty() {
+            let played: Vec<String> = (self.sounds.iter())
+                .map(|(name, count)| format!("{name} {count}"))
+                .collect();
+            lines.push(format!("sounds played: {}", played.join(", ")));
         }
         if self.unplaced > 0 {
             lines.push(format!(

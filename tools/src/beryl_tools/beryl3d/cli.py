@@ -31,6 +31,7 @@ from . import (
     paths,
     phone,
     phone_search,
+    stand_in,
     sweep,
     test_fit,
     timeline,
@@ -533,10 +534,23 @@ COMMANDS: tuple[Command, ...] = (
         live.run_release_socket,
     ),
     Command(
-        "smoke",
-        "starts the app with no window on verbs-zones and waits for its first frame",
+        "stand-in",
+        "plays a whole game against expert in the windowless app through its live socket",
         (
-            ("just b3d smoke", "build the app and see its first frame"),
+            (
+                "just b3d stand-in",
+                "build the app, play a game, quit and resume it mid-game",
+            ),
+            ("just b3d stand-in --no-build", "the app as last built"),
+        ),
+        stand_in.run_stand_in,
+        stand_in.stand_in_arguments,
+    ),
+    Command(
+        "smoke",
+        "starts the app with no window and waits for its first frame and its start screen",
+        (
+            ("just b3d smoke", "build the app and see its start screen"),
             ("just b3d smoke --no-build", "the app as last built"),
         ),
         app.run_smoke,

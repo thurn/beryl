@@ -167,6 +167,8 @@ impl StateBits {
     /// A flat-layer element the pointer goes through (`Style::passes`), which never catches a
     /// press. The tree printout leaves it out.
     pub const PASSES: u16 = 1 << 12;
+    /// The button a prompt or screen expects to be pressed, drawn amber.
+    pub const PRIMARY: u16 = 1 << 13;
 
     /// Whether every bit of `bits` is set.
     #[must_use]

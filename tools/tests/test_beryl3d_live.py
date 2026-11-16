@@ -9,6 +9,10 @@ import pytest
 from beryl_tools.beryl3d import live
 
 
+def running(_pid: int) -> bool:
+    return True
+
+
 def make(folder: Path, pid: int) -> Path:
     path = folder / f"beryl3d-{pid}.sock"
     path.touch()
@@ -17,14 +21,14 @@ def make(folder: Path, pid: int) -> Path:
 
 def test_with_no_socket_the_error_says_how_to_start_an_app(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="just b3d app --fixture pay-default"):
-        live.choose(tmp_path, None)
+        live.choose(tmp_path, None, running)
 
 
 def test_the_only_socket_is_chosen_without_a_process_id(tmp_path: Path) -> None:
     only = make(tmp_path, 123)
     (tmp_path / "unrelated.sock").touch()
-    assert live.choose(tmp_path, None) == only
-    assert live.choose(tmp_path, 123) == only
+    assert live.choose(tmp_path, None, running) == only
+    assert live.choose(tmp_path, 123, running) == only
 
 
 def test_with_two_sockets_a_process_id_is_needed_and_the_error_lists_them(
@@ -32,11 +36,19 @@ def test_with_two_sockets_a_process_id_is_needed_and_the_error_lists_them(
 ) -> None:
     first, second = make(tmp_path, 123), make(tmp_path, 456)
     with pytest.raises(ValueError, match=r"123, 456.*--app"):
-        live.choose(tmp_path, None)
-    assert live.choose(tmp_path, 456) == second
+        live.choose(tmp_path, None, running)
+    assert live.choose(tmp_path, 456, running) == second
     with pytest.raises(ValueError, match="no app with process id 789.*123, 456"):
-        live.choose(tmp_path, 789)
+        live.choose(tmp_path, 789, running)
     assert first != second
+
+
+def test_a_socket_whose_app_has_ended_is_removed_and_not_chosen(
+    tmp_path: Path,
+) -> None:
+    ended, live_one = make(tmp_path, 123), make(tmp_path, 456)
+    assert live.choose(tmp_path, None, lambda pid: pid == 456) == live_one
+    assert not ended.exists()
 
 
 def serve(path: Path, answer: bytes, asked: list[str]) -> threading.Thread:

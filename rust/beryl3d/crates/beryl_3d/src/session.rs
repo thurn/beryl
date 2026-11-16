@@ -15,6 +15,7 @@ use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
 
 use beryl_host::{Class, Inbox};
+use beryl_protocol::AgentView;
 use beryl_protocol::ipc::TableLobbyRequest;
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::input::Input;
@@ -145,6 +146,8 @@ pub struct Live {
     inbox: Inbox,
     /// The game `--agent` asked for, and the agent that answers for the viewer in it.
     played_by: Option<(StartGame, String)>,
+    /// The agents `--offer` adds after the session's own on the start screen.
+    offered: Vec<AgentView>,
 }
 
 impl Live {
@@ -189,7 +192,23 @@ impl Live {
             decks,
             inbox,
             played_by: None,
+            offered: Vec::new(),
         }
+    }
+
+    /// The same sessions, whose start screen also offers the agents `names`, after the
+    /// session's own list. A name no agent has is left out.
+    #[must_use]
+    pub fn offering(mut self, names: &[String]) -> Self {
+        self.offered = (names.iter())
+            .filter_map(|name| beryl_search::agent(name))
+            .map(|agent| AgentView {
+                name: agent.name.to_owned(),
+                title: agent.title.to_owned(),
+                description: agent.description.to_owned(),
+            })
+            .collect();
+        self
     }
 
     /// The same sessions, which start a fresh game of the web app's decks between `opponent`
@@ -277,7 +296,9 @@ impl Session for Live {
         } else {
             beryl_shell::resume_latest(&self.sessions);
         }
-        self.inbox.send(Input::Agents(beryl_session::agents()));
+        let mut agents = beryl_session::agents();
+        agents.extend(self.offered.iter().cloned());
+        self.inbox.send(Input::Agents(agents));
     }
 
     fn run(&mut self, command: SessionCommand) -> Reply {

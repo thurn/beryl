@@ -198,7 +198,7 @@ fn hovering_a_tree_line_changes_that_elements_states() {
         .lines()
         .find(|line| line.trim_start().starts_with(locator))
         .unwrap();
-    assert!(hovered.ends_with(" hovered"), "{after}");
+    assert!(hovered.contains(" hovered"), "{after}");
     // The printed command carries the action, so it prints the same tree again.
     assert!(
         after

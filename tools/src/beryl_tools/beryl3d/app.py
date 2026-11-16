@@ -1,31 +1,38 @@
 """The running app (docs/beryl-3d.md, 'Driving the running app'): `just b3d app` runs
-`beryl3d`, `just b3d smoke` starts it with no window and waits for its first frame, and
+`beryl3d`, `just b3d smoke` starts it with no window and waits for its start screen, and
 `just b3d frames` prints a frame log's summary and its worst frames.
 
 The app is built with cargo's `test` profile, as the workspace's tests are: optimized enough to
 measure frames, it shares the dependencies `just b3d cargo-test` built, and the `tools` feature
-gives it `--fixture`, `--pause-at`, `--drive`, `--load`, `--slow-gpu` and `--agent` with its
-`--opponent`, `--seed` and `--search-class`, which a release build leaves off.
+gives it `--fixture`, `--pause-at`, `--drive`, `--load`, `--slow-gpu`, `--offer` and `--agent`
+with its `--opponent`, `--seed` and `--search-class`, which a release build leaves off.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
 
 from .. import checks, paths as repo_paths, system
-from . import paths
+from . import live, paths
 
 BINARY: Path = system.exe(paths.WORKSPACE / "target" / "debug" / "beryl3d")
 # What the app prints when its first frame is shown (`FIRST_SHOWN` in beryl_3d's app.rs).
 FIRST_SHOWN = "beryl3d: first frame shown"
+# What it prints, followed by the path, when its live socket listens (`LIVE_SOCKET`).
+LIVE_SOCKET = "beryl3d: live socket"
+# What it prints, followed by the folder, about where a live game is saved (`data_dirs`).
+DATA_IN = "beryl3d: data in "
 # How long `smoke` lets the app run before it ends itself: a bound on a hang, never reached by
-# a healthy start, which shows a frame within a second of the recordings pack being read.
+# a healthy start, which shows the start screen within a few seconds.
 SMOKE_LIMIT_S = 120
 # The status the app exits with when the recordings pack its `--fixture` reads is missing
 # (`beryl_inspect::recordings::MISSING_STATUS`, `cli.MISSING_PACK`).
@@ -94,6 +101,12 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
         help="the scheduling class of the AI's threads (default)",
     )
     parser.add_argument(
+        "--offer",
+        action="append",
+        default=[],
+        help="add this agent to the start screen's opponents (expert); repeatable",
+    )
+    parser.add_argument(
         "--window",
         choices=WINDOWS,
         help="none for an agent and fullscreen for a person, unless given",
@@ -124,6 +137,8 @@ def run_app(args: argparse.Namespace) -> int:
     ):
         if value is not None:
             command += [option, value]
+    for name in args.offer:
+        command += ["--offer", name]
     code = subprocess.run(command, check=False).returncode
     if code != MISSING_PACK or record() != 0:
         return code
@@ -135,53 +150,86 @@ def smoke_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run_smoke(args: argparse.Namespace) -> int:
-    """Starts the app with no window on `verbs-zones`, waits for its first shown frame and ends
-    it. The app ends itself after `SMOKE_LIMIT_S` if it hangs before then. When the app says
-    the recordings pack for the present sources is missing, which it is after any change to
-    the recorded sources until something builds it, builds the pack and starts it again.
+    """Starts the app with no window under a profile of its own, which has no game to resume,
+    waits for its first shown frame and for its live socket's tree to show the start screen (a
+    region named `start`), and quits it. The app ends itself after `SMOKE_LIMIT_S` if it hangs
+    before then.
     """
     if not args.no_build and build() != 0:
         return checks.CANNOT_RUN
     started = time.monotonic()
-    shown, code = first_frame()
-    if shown is None and code == MISSING_PACK:
-        if record() != 0:
-            return checks.CANNOT_RUN
-        shown, code = first_frame()
-    if shown is None:
-        print(f"smoke: FAILED: the app showed no frame (exit {code})")
+    try:
+        shown = start_screen()
+    except SmokeError as error:
+        print(f"smoke: FAILED: {error}")
         return 1
-    print(f"{shown}; {time.monotonic() - started:.1f} s from start")
+    print(f"{shown}; the start screen {time.monotonic() - started:.1f} s from start")
     print("smoke: passed")
     return 0
 
 
-def first_frame() -> tuple[str | None, int | None]:
-    """Starts the app with no window on `verbs-zones` and ends it once it prints that its
-    first frame is shown. Gives that line, or None when it ended without one, and its exit
-    status."""
-    command = [str(BINARY), "--window", "none", "--fixture", "verbs-zones"]
+class SmokeError(Exception):
+    """Why the smoke failed."""
+
+
+def start_screen() -> str:
+    """Runs the app until its tree shows the start screen, then quits it and deletes its
+    profile's folder. Gives the line saying the first frame was shown."""
+    profile = f"b3d-smoke-{os.getpid()}"
+    command = [str(BINARY), "--window", "none", "--for", f"{SMOKE_LIMIT_S}s"]
     process = subprocess.Popen(
-        [*command, "--for", f"{SMOKE_LIMIT_S}s"],
+        command,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
+        env={**os.environ, "BERYL_PROFILE": profile},
     )
     output = process.stdout
     if output is None:
         raise RuntimeError("the app's output is not a pipe")
-    shown = None
-    for line in output:
-        if line.startswith(FIRST_SHOWN):
-            shown = line.strip()
-            break
-    process.terminate()
+    seen: list[str] = []
+    socket_path, shown, data = None, None, None
     try:
+        for line in output:
+            seen.append(line.rstrip("\n"))
+            if line.startswith(f"{LIVE_SOCKET} "):
+                socket_path = Path(line.strip().removeprefix(f"{LIVE_SOCKET} "))
+            elif line.startswith(DATA_IN):
+                data = Path(line.strip().removeprefix(DATA_IN))
+            elif line.startswith(FIRST_SHOWN):
+                shown = line.strip()
+                break
+        if shown is None or socket_path is None:
+            raise SmokeError(
+                f"the app showed no frame (exit {process.poll()}):\n" + "\n".join(seen)
+            )
+        # Read on, so that the app never blocks on a full pipe.
+        threading.Thread(target=output.read, daemon=True).start()
+        wait_for_start(socket_path)
+        live.request(socket_path, "quit")
         process.wait(timeout=30)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
-    return shown, process.returncode
+        return shown
+    except OSError as error:
+        raise SmokeError(f"the live socket did not answer: {error}") from error
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        if data is not None and data.name == profile:
+            shutil.rmtree(data, ignore_errors=True)
+
+
+def wait_for_start(socket_path: Path) -> None:
+    """Asks for the tree until it has a region named `start`."""
+    deadline = time.monotonic() + SMOKE_LIMIT_S
+    tree = ""
+    while time.monotonic() < deadline:
+        accepted, tree = live.request(socket_path, "tree")
+        if accepted and 'region "start" #' in tree:
+            return
+        time.sleep(0.1)
+    raise SmokeError(f"the tree never showed the start screen:\n{tree}")
 
 
 def first_line(path: Path) -> dict[str, object] | None:

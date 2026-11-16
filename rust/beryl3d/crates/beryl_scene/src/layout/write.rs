@@ -489,7 +489,7 @@ fn ink(node: &Node, state: StateBits, tint: Option<[u8; 4]>) -> [u8; 4] {
 
 impl Layer {
     /// The state `node` is drawn in and its resolved element has: disabled, focused, selected,
-    /// under the pointer and held down by a press.
+    /// primary, under the pointer and held down by a press.
     fn state(&self, node: &Node) -> StateBits {
         let element = &node.element;
         let mut state = 0;
@@ -501,6 +501,9 @@ impl Layer {
         }
         if element.selected {
             state |= StateBits::SELECTED;
+        }
+        if element.primary {
+            state |= StateBits::PRIMARY;
         }
         if self.hovered == Some(node.id) {
             state |= StateBits::HOVERED;

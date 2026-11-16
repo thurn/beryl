@@ -32,8 +32,10 @@ pub fn button(label: &str) -> Element {
 /// with light type.
 #[must_use]
 pub fn primary(label: &str) -> Element {
-    button(label)
+    let mut element = button(label)
         .background(color::PRIMARY)
         .border((color::PRIMARY_RIM, size::BORDER))
-        .color(color::PRIMARY_INK)
+        .color(color::PRIMARY_INK);
+    element.primary = true;
+    element
 }

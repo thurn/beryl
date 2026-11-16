@@ -318,6 +318,7 @@ fn states(frame: &Frame, index: u32, element: &Resolved, out: &mut String) {
         (StateBits::FOCUSED, "focused"),
         (StateBits::PHASED_OUT, "phased-out"),
         (StateBits::PICKED, "picked"),
+        (StateBits::PRIMARY, "primary"),
     ] {
         if element.state.has(bit) {
             out.push(' ');

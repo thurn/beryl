@@ -206,6 +206,10 @@ pub struct Span {
 
 /// A node of the flat layer's tree.
 #[derive(Clone, Debug, PartialEq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "one flag for each state a builder sets, as `StateBits` holds them resolved"
+)]
 pub struct Element {
     pub role: Role,
     /// What locators and the tree printout call it. A text or a button is named by its words
@@ -224,6 +228,9 @@ pub struct Element {
     /// Whether it is on or chosen, as a toggle that is on is. It is drawn so, and its resolved
     /// element has the `SELECTED` state.
     pub selected: bool,
+    /// Whether it is the button a prompt or screen expects to be pressed (`widgets::primary`).
+    /// Its resolved element has the `PRIMARY` state, so that the tree names it.
+    pub primary: bool,
     /// Where it stands if it is placed at a point of the window or on a scene object rather
     /// than in its parent's layout. It is laid out at its content's size (`layout::anchor`).
     pub anchor: Option<Anchor>,
@@ -251,6 +258,7 @@ impl Element {
             enabled: true,
             focus: false,
             selected: false,
+            primary: false,
             anchor: None,
             shows: None,
             shortcuts: Shortcuts::default(),
@@ -271,6 +279,7 @@ impl Element {
             && self.enabled == other.enabled
             && self.focus == other.focus
             && self.selected == other.selected
+            && self.primary == other.primary
             && self.anchor == other.anchor
             && self.shows == other.shows
             && self.shortcuts == other.shortcuts

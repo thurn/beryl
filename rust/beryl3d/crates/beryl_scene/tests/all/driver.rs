@@ -300,6 +300,10 @@ fn every_action_name_is_a_line_run_accepts() {
             }),
         ),
         ("move 400,300", Action::Move(Vec2::new(400.0, 300.0))),
+        (
+            "wheel list \"Opponent\" 0,-400",
+            Action::Wheel("list \"Opponent\"".to_owned(), Vec2::new(0.0, -400.0)),
+        ),
         ("step 1.25s", Action::Step(ms(1250))),
         ("still", Action::Still),
     ] {

@@ -69,6 +69,10 @@ fn no_game(agent: &str) -> Page {
 fn pressing_start_with_the_second_agent_chosen_starts_against_it() {
     let mut page = no_game("greedy");
     assert!(
+        page.find(START).states().has(StateBits::PRIMARY),
+        "the tree marks Start as the button the screen expects"
+    );
+    assert!(
         page.find("toggle \"RANDOM\"")
             .states()
             .has(StateBits::SELECTED)
@@ -276,4 +280,34 @@ fn examples_open_their_menu_and_command_preview() {
     page.press("button \"No matches\"");
     scroll_gallery(&mut page, 10_000.0);
     page.find("text \"No matching commands\"");
+}
+
+#[test]
+fn the_wheel_scrolls_a_long_opponent_list_to_its_last_agent() {
+    // The host offers a dozen agents, more than the list has room for at 1600 by 900.
+    let many: Vec<AgentView> = (0..12)
+        .map(|at| AgentView {
+            name: format!("agent-{at}"),
+            title: format!("Agent {at}"),
+            description: format!("The agent numbered {at}"),
+        })
+        .collect();
+    let size = Size {
+        width: 1600.0,
+        height: 900.0,
+    };
+    let mut page = page_at(vec![FixtureMessage::response(LIST_AGENTS, &many)], size);
+    let last = page.try_act(&"press toggle \"Agent 11\"".parse().unwrap());
+    assert!(
+        last.is_err(),
+        "the last agent is out of sight before the list scrolls"
+    );
+    page.run("wheel list \"Opponent\" 0,-2000\nstill");
+    page.press("toggle \"Agent 11\"");
+    page.still();
+    assert!(
+        page.find("toggle \"Agent 11\"")
+            .states()
+            .has(StateBits::SELECTED)
+    );
 }

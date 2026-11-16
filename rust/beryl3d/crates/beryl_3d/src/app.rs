@@ -198,9 +198,12 @@ impl Feed for AppFeed {
 
     fn after(&mut self, client: &mut Client, ticked: &Ticked) {
         self.bugs.after(client);
-        if let Some(audio) = &self.audio {
-            for sound in client.sounds() {
+        for sound in client.sounds() {
+            if let Some(audio) = &self.audio {
                 audio.play(*sound);
+            }
+            if let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
+                log.sound(sound.id);
             }
         }
         #[cfg(all(feature = "tools", unix))]
@@ -341,6 +344,10 @@ impl Feed for AppFeed {
     }
 
     fn ended(&self) -> bool {
+        #[cfg(all(feature = "tools", unix))]
+        if self.live.as_ref().is_some_and(crate::live::Live::quit) {
+            return true;
+        }
         self.finish == Finish::GameOver && self.ended
     }
 }
@@ -568,12 +575,13 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
         ),
         None => (data_dirs(), None),
     };
+    let offer = options.offer.clone();
     Ok(Source::Live(session::spawn(
         options.search_class,
         {
             let inbox = inbox.clone();
             move || {
-                let live = Live::new(data, inbox);
+                let live = Live::new(data, inbox).offering(&offer);
                 match played_by {
                     Some((agent, opponent, seed)) => live.played_by(&agent, &opponent, seed),
                     None => live,

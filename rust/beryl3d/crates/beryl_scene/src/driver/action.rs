@@ -21,6 +21,10 @@ pub enum Action {
     Key(KeyChord),
     /// `move <x>,<y>`
     Move(Vec2),
+    /// `wheel <locator> <x>,<y>`: turns the mouse wheel over the element by that many logical
+    /// points, as a host gives it. Positive moves the content right and down, as a wheel turned
+    /// up does, so `wheel list "Opponent" 0,-400` scrolls a list toward its end.
+    Wheel(String, Vec2),
     /// `step <duration>`
     Step(Duration),
     /// `still`
@@ -93,8 +97,8 @@ impl std::str::FromStr for Action {
     fn from_str(line: &str) -> Result<Self, ParseError> {
         let line = line.trim();
         let actions = "The actions are press <locator>, hover <locator>, drag <locator> to \
-                       <locator>, type <locator> \"<text>\", key <name>, move <x>,<y>, step \
-                       <duration> and still";
+                       <locator>, type <locator> \"<text>\", key <name>, move <x>,<y>, wheel \
+                       <locator> <x>,<y>, step <duration> and still";
         let expected =
             |why: &str| ParseError(format!("'{line}' is not an action: {why}. {actions}"));
         let (verb, rest) = line.split_once(' ').unwrap_or((line, ""));
@@ -128,14 +132,20 @@ impl std::str::FromStr for Action {
                     "'{rest}' is not a key's name, with Cmd+, Ctrl+, Alt+ or Shift+ before it"
                 ))
             }),
-            "move" => {
-                let point = rest.split_once(',').and_then(|(x, y)| {
-                    Some(Vec2::new(x.trim().parse().ok()?, y.trim().parse().ok()?))
-                });
-                point
-                    .map(Self::Move)
-                    .ok_or_else(|| expected("move needs a point, as in move 400,300"))
-            }
+            "move" => point(rest)
+                .map(Self::Move)
+                .ok_or_else(|| expected("move needs a point, as in move 400,300")),
+            "wheel" => rest
+                .rsplit_once(' ')
+                .and_then(|(locator, by)| Some((locator.trim(), point(by)?)))
+                .filter(|(locator, _)| !locator.is_empty())
+                .map(|(locator, by)| Self::Wheel(locator.to_owned(), by))
+                .ok_or_else(|| {
+                    expected(
+                        "wheel needs a locator and then a distance, as in \
+                         wheel list \"Opponent\" 0,-400",
+                    )
+                }),
             "step" => rest
                 .parse()
                 .map(Self::Step)
@@ -147,6 +157,12 @@ impl std::str::FromStr for Action {
             ))),
         }
     }
+}
+
+/// The point `<x>,<y>` that `text` writes, in logical points.
+fn point(text: &str) -> Option<Vec2> {
+    let (x, y) = text.split_once(',')?;
+    Some(Vec2::new(x.trim().parse().ok()?, y.trim().parse().ok()?))
 }
 
 /// The quoted string that ends `text`, unescaped, and where its opening quote is.
