@@ -26,6 +26,12 @@ use crate::widgets::{button, primary};
 /// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
 #[must_use]
 pub fn prompt_bar(prompt: &PromptView, input: &ScreenIn) -> Element {
+    bar(prompt, input, None)
+}
+
+/// The prompt bar for `prompt`, as `prompt_bar` draws it, with `after` written in brackets
+/// after what it asks, as the web's `Asks` writes how much of a cost is still to pay.
+pub(super) fn bar(prompt: &PromptView, input: &ScreenIn, after: Option<&str>) -> Element {
     let acting_for = input.view.is_some_and(|view| {
         matches!(&view.status, Status::Deciding { decision } if decision.acting_for.is_some())
     });
@@ -33,6 +39,10 @@ pub fn prompt_bar(prompt: &PromptView, input: &ScreenIn) -> Element {
         (false, _) => Cow::Borrowed(&prompt.title),
         (true, true) => Cow::Borrowed("For opponent"),
         (true, false) => Cow::Owned(format!("For opponent: {}", prompt.title)),
+    };
+    let asks = match after {
+        Some(after) => Cow::Owned(format!("{asks} ({after})")),
+        None => asks,
     };
     let title = (!asks.is_empty()).then(|| text(&asks).style(type_style::TITLE).grow(1.0));
     row()

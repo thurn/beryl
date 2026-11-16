@@ -50,7 +50,7 @@ fn line(name: &str, seat: Side, step: &TimelineStep) -> String {
         .collect();
     format!(
         "{{\"recording\":{},\"seat\":{},\"view\":{},\"beat\":{},\"step\":{},\"verb\":{},\
-         \"case\":{case},\"start\":{},\"end\":{},\"effects\":[{}]}}",
+         \"case\":{case},\"start\":{},\"end\":{},\"effects\":[{}]{own}}}",
         string(name),
         string(seat_word(seat)),
         step.view,
@@ -59,7 +59,8 @@ fn line(name: &str, seat: Side, step: &TimelineStep) -> String {
         string(step.verb.name()),
         ms(step.from),
         ms(step.to),
-        effects.join(",")
+        effects.join(","),
+        own = if step.own { ",\"own\":true" } else { "" },
     )
 }
 

@@ -8,6 +8,7 @@ use crate::element::{Chord, Press};
 use crate::frame::Role;
 use crate::input::{Button, Input, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
 use crate::layout::Edit;
+use crate::prompts;
 use crate::screens::{Screen, Sheet};
 use crate::widgets::{STEP, level_at};
 
@@ -30,8 +31,16 @@ impl Client {
             || (pointer.kind == PointerKind::Touch && pointer.phase == PointerPhase::Up);
         let hovered = (!gone)
             .then(|| self.layer.press_at(pointer.position, self.open))
-            .flatten()
-            .map(|(id, ..)| id);
+            .flatten();
+        // The pointer on a payment's Auto Pay, or a touch held on it, marks what it would tap.
+        let suggesting = match (&self.prompt, &hovered) {
+            (Some((_, prompt)), Some((_, Press::Button(button), true))) => {
+                prompts::shows(prompt, *button)
+            }
+            _ => false,
+        };
+        self.suggest(suggesting);
+        let hovered = hovered.map(|(id, ..)| id);
         (self.layer).point_at(hovered, self.pressed.or(self.slider));
     }
 

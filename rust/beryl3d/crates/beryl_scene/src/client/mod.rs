@@ -104,8 +104,13 @@ pub struct Client {
     /// The prompt's state before its latest change, and whether the next `frame` still has to
     /// call `prompts::own` for that change at its `now`. Kept here, not cloned in `frame`, so
     /// that a frame allocates nothing.
-    was: Option<PromptView>,
+    was: Option<(DecisionId, PromptView)>,
     own_due: bool,
+    suggesting: Suggesting,
+    /// How many views the client has been given, and, once `record` is called, every step the
+    /// prompts have made themselves since.
+    views: usize,
+    own_record: Option<Vec<prompts::OwnRecord>>,
     /// Whether the prompt bar is drawn and takes presses. The bar of the latest view is laid out
     /// as the view arrives, because layout runs in `handle`, but it opens only once that view's
     /// script and every script before it have played out (`Show::settled`), as the web
@@ -141,6 +146,14 @@ pub struct Client {
     inspector: Inspector,
 }
 
+/// Whether the pointer is on the open prompt's button that shows what it would tap
+/// (`prompts::shows`), and whether it was when `prompts::own` last ran, beside `Client::was`.
+#[derive(Clone, Copy, Debug, Default)]
+struct Suggesting {
+    now: bool,
+    was: bool,
+}
+
 impl Client {
     #[must_use]
     pub fn new(config: Config) -> Self {
@@ -165,6 +178,9 @@ impl Client {
             prompt: None,
             was: None,
             own_due: false,
+            suggesting: Suggesting::default(),
+            views: 0,
+            own_record: None,
             open: false,
             pressed: None,
             scroll_drag: None,
@@ -197,6 +213,7 @@ impl Client {
     pub fn handle(&mut self, input: Input) {
         match input {
             Input::Update(update) => {
+                self.views += 1;
                 self.session = Some(update.session);
                 self.set_prompt(match &update.view.status {
                     Status::Deciding { decision } => {
@@ -318,13 +335,7 @@ impl Client {
     pub fn frame(&mut self, now: u64) -> &Frame {
         self.now = now;
         self.inputs.clear();
-        if self.own_due {
-            self.own_due = false;
-            if let Some((_, prompt)) = &self.prompt {
-                let lit = self.show.lit_mut();
-                prompts::own(prompt, self.was.as_ref(), lit, &self.own_timings, now);
-            }
-        }
+        self.own(now);
         let transitioning = self.layer.tick(now);
         self.show.pointer_mut().advance(now);
         self.show.advance_slide(now);
@@ -373,13 +384,21 @@ impl Client {
             };
             self.click(Click::On { on });
         }
-        // The inspector follows the card just found under the pointer in the next frame.
-        self.wake = if transitioning || self.hovered_slot() != self.inspector.judged {
+        // The inspector follows the card just found under the pointer in the next frame, and a
+        // prompt whose view has just played out draws its marks in the next frame.
+        let own_due = self.own_due && self.show.settled();
+        self.wake = if transitioning || own_due || self.hovered_slot() != self.inspector.judged {
             Wake::Now
         } else {
             self.show.wake(now)
         };
         &self.frame
+    }
+
+    /// The spans and streaks the table shows.
+    #[must_use]
+    pub fn lit(&self) -> &crate::light::Lit {
+        self.show.lit()
     }
 
     /// The spans and streaks the table shows, for the marks and arrows a prompt begins and ends
@@ -388,21 +407,79 @@ impl Client {
         self.show.lit_mut()
     }
 
+    /// Calls `prompts::own` for the change of prompt not yet passed to it, if there is one. The
+    /// marks of a prompt that closed go at once, even while the script of the view that
+    /// answered it plays; the marks of the open prompt come up once its view's script has
+    /// played out, as its bar does.
+    fn own(&mut self, now: u64) {
+        if !self.own_due {
+            return;
+        }
+        let decision = self.prompt.as_ref().map(|(decision, _)| *decision);
+        if let Some((_, closed)) = self.was.take_if(|(was, _)| Some(*was) != decision) {
+            let was = prompts::Shown {
+                prompt: &closed,
+                suggesting: self.suggesting.was,
+            };
+            let record = (self.own_record.as_mut()).map(|record| (self.views, record));
+            let lit = self.show.lit_mut();
+            let mut steps = prompts::Steps::new(lit, &self.own_timings, now, record);
+            prompts::own(None, Some(was), &mut steps);
+        }
+        if self.prompt.is_some() && !self.show.settled() {
+            return;
+        }
+        self.own_due = false;
+        let shown = self.prompt.as_ref().map(|(_, prompt)| prompts::Shown {
+            prompt,
+            suggesting: self.suggesting.now,
+        });
+        let was = self.was.as_ref().map(|(_, prompt)| prompts::Shown {
+            prompt,
+            suggesting: self.suggesting.was,
+        });
+        let record = (self.own_record.as_mut()).map(|record| (self.views, record));
+        let lit = self.show.lit_mut();
+        let mut steps = prompts::Steps::new(lit, &self.own_timings, now, record);
+        prompts::own(shown, was, &mut steps);
+    }
+
     /// Takes `prompt` as the open prompt. If it differs from the one open before, the next
-    /// `frame` calls `prompts::own` for the change. A prompt closing makes no call, because
-    /// `prompts::own` is given the open prompt.
+    /// `frame` calls `prompts::own` for the change, a prompt closing included. A prompt with no
+    /// button that shows what it would tap stops the pointer's showing it, as the web's
+    /// `usePaying` does: a button that goes while the pointer is on it never says the pointer
+    /// left.
     fn set_prompt(&mut self, prompt: Option<(DecisionId, PromptView)>) {
         let changed = self.prompt.as_ref().map(|(_, prompt)| prompt)
             != prompt.as_ref().map(|(_, prompt)| prompt);
         let was = std::mem::replace(&mut self.prompt, prompt);
         if changed {
-            // A change the next frame has not yet passed to `prompts::own` keeps the state
-            // before it, which is the last one `prompts::own` saw.
-            if !self.own_due {
-                self.was = was.map(|(_, prompt)| prompt);
-            }
-            self.own_due = self.prompt.is_some();
+            let suggesting = self.suggesting.now
+                && self.prompt.as_ref().is_some_and(|(_, prompt)| {
+                    (prompt.buttons.iter()).any(|button| prompts::shows(prompt, button.id))
+                });
+            self.changed_prompt(was, suggesting);
         }
+    }
+
+    /// The pointer went onto or off the open prompt's button that shows what it would tap.
+    pub(super) fn suggest(&mut self, suggesting: bool) {
+        if suggesting != self.suggesting.now {
+            let was = self.prompt.clone();
+            self.changed_prompt(was, suggesting);
+        }
+    }
+
+    /// The prompt as the table shows it changed from `was` to the open prompt with `suggesting`.
+    /// A change the next frame has not yet passed to `prompts::own` keeps the state before it,
+    /// which is the last one `prompts::own` saw.
+    fn changed_prompt(&mut self, was: Option<(DecisionId, PromptView)>, suggesting: bool) {
+        if !self.own_due {
+            self.was = was;
+            self.suggesting.was = self.suggesting.now;
+        }
+        self.suggesting.now = suggesting;
+        self.own_due = true;
     }
 
     /// Rebuilds the flat layer's screen, or the sheet open over it, from what the client holds
@@ -577,6 +654,13 @@ impl Client {
     /// checks (`Show::record`).
     pub fn record(&mut self) {
         self.show.record();
+        self.own_record.get_or_insert_default();
+    }
+
+    /// Every step the prompts have made themselves since `record` was called, in order.
+    #[must_use]
+    pub fn own_history(&self) -> &[prompts::OwnRecord] {
+        self.own_record.as_deref().unwrap_or_default()
     }
 
     /// The record of every script given since `record` was called, in order.

@@ -56,11 +56,11 @@
     },
     "verbs-zones": {
       "worst_frame_elements": 521,
-      "total_elements": 471986,
+      "total_elements": 473869,
       "worst_frame_segments": 23,
       "total_segments": 16838,
       "worst_frame_records": 92,
-      "total_records": 68118,
+      "total_records": 68392,
       "worst_frame_layout_nodes": 11,
       "total_layout_nodes": 57,
       "worst_frame_text_runs": 20,
@@ -208,7 +208,7 @@
     }
   },
   "tests": {
-    "median_frames": 131,
+    "median_frames": 132,
     "most_frames": 5472
   },
   "scaling": {

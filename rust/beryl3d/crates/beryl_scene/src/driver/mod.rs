@@ -296,6 +296,12 @@ impl Page {
         panic!("{}", self.error(&printed.join("\n")));
     }
 
+    /// The spans and streaks the table shows now: the marks and arrows among them.
+    #[must_use]
+    pub fn lit(&self) -> &crate::light::Lit {
+        self.client.lit()
+    }
+
     /// Presses and releases the primary button where `locator`'s element is uncovered.
     pub fn press(&mut self, locator: &str) {
         let point = self.point(locator);

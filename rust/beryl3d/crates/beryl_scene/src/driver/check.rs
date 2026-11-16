@@ -53,6 +53,10 @@ pub struct TimelineStep {
     /// Each of the step's `StepTiming::effects`, as its name, the edge it begins at and how far
     /// through the step it begins when that is not an edge.
     pub effects: Vec<(String, Edge, Option<f64>)>,
+    /// Whether the client made the step itself while a prompt was open (`prompts::own`),
+    /// rather than the session sending it in a script. Its `view` is then the number of views
+    /// given when it played, its `beat` 0, and its times are on the clock of that one beat.
+    pub own: bool,
 }
 
 /// Which frames `check_all` evaluates.
@@ -312,7 +316,8 @@ impl Page {
     }
 
     /// Every step of every script the recording plays with no action taken, in the order the
-    /// scripts are given, with the timing the same view's script gives it entry by entry.
+    /// scripts are given, with the timing the same view's script gives it entry by entry; then
+    /// every step the client made itself while a prompt was open, in the order it made them.
     pub fn timeline(&mut self) -> Vec<TimelineStep> {
         let (played, _) = self.played();
         let mut out = Vec::new();
@@ -354,9 +359,28 @@ impl Page {
                             .map(|effect| (effect.name.clone(), effect.when, effect.into))
                             .collect()
                     }),
+                    own: false,
                 });
             }
         }
+        out.extend(played.client.own_history().iter().map(|step| {
+            let timing = step.timing.as_ref();
+            TimelineStep {
+                view: step.view,
+                beat: 0,
+                index: step.index,
+                verb: step.verb,
+                case: timing.and_then(|timing| timing.case.clone()),
+                from: step.from,
+                to: step.to,
+                effects: timing.map_or_else(Vec::new, |timing| {
+                    (timing.effects.iter())
+                        .map(|effect| (effect.name.clone(), effect.when, effect.into))
+                        .collect()
+                }),
+                own: true,
+            }
+        }));
         out
     }
 
