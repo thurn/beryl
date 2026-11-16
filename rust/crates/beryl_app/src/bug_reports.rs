@@ -1,7 +1,7 @@
 //! Report export and sharing. The report folder is the durable record even if filing fails.
 
 use beryl_session::SessionError;
-#[cfg(any(mobile, desktop))]
+#[cfg(desktop)]
 use beryl_session::bugs;
 #[cfg(desktop)]
 use beryl_session::journal;
@@ -54,29 +54,6 @@ pub fn export_bugs() -> Result<Option<u32>, SessionError> {
     })
 }
 
-/// Keeps a requested report inside the bugs root, including when a caller supplies a symlink.
-#[cfg(any(mobile, test))]
-fn report_folder(root: &std::path::Path, id: &str) -> Result<std::path::PathBuf, SessionError> {
-    if id.is_empty()
-        || !id
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
-    {
-        return Err(SessionError::Io {
-            reason: "Invalid report ID.".to_owned(),
-        });
-    }
-    let folder = root.join(id);
-    let valid = folder.symlink_metadata().is_ok_and(|meta| meta.is_dir())
-        && folder.join("report.md").is_file();
-    if !valid {
-        return Err(SessionError::Io {
-            reason: "The report was not found.".to_owned(),
-        });
-    }
-    Ok(folder)
-}
-
 #[cfg(mobile)]
 #[tauri::command]
 pub async fn share_bug(
@@ -85,27 +62,17 @@ pub async fn share_bug(
 ) -> Result<(), SessionError> {
     use tauri::Manager;
 
-    let folder = report_folder(&app.state::<crate::BugDirectory>().0, &request.id)?;
-    let directory = app
+    let root = app.state::<crate::BugDirectory>().0.clone();
+    let share = app
         .path()
         .app_cache_dir()
         .map_err(share_error)?
         .join("share");
-    let destination = directory.join(format!("{}.zip", request.id));
     let path = tauri::async_runtime::spawn_blocking(move || {
-        std::fs::create_dir_all(&directory)?;
-        for entry in std::fs::read_dir(&directory)? {
-            let entry = entry?;
-            if entry.file_type()?.is_file() {
-                std::fs::remove_file(entry.path())?;
-            }
-        }
-        bugs::archive::save(&[folder], &destination)?;
-        Ok::<_, std::io::Error>(destination)
+        beryl_shell::reports::share_archive(&root, &request.id, &share)
     })
     .await
-    .map_err(share_error)?
-    .map_err(share_error)?;
+    .map_err(share_error)??;
     app.state::<beryl_mobile::Mobile<tauri::Wry>>()
         .share(path)
         .await
@@ -140,19 +107,5 @@ mod tests {
         })
         .unwrap_err();
         assert!(error.to_string().contains("Share is available on a phone."));
-    }
-
-    #[test]
-    fn share_only_accepts_a_saved_report_below_the_root() {
-        let temp = tempfile::tempdir().unwrap();
-        let root = temp.path();
-        let id = "20261113-102030-test";
-        let folder = root.join(id);
-        std::fs::create_dir(&folder).unwrap();
-        std::fs::write(folder.join("report.md"), "report").unwrap();
-        assert_eq!(report_folder(root, id).unwrap(), folder);
-        for bad in ["", "..", "../report", "/tmp/report", "x/y", "missing"] {
-            assert!(report_folder(root, bad).is_err(), "{bad}");
-        }
     }
 }

@@ -234,6 +234,7 @@ dependencies = [
  "beryl_art",
  "beryl_search",
  "beryl_session",
+ "beryl_shell",
  "beryl_table",
  "beryl_table_session",
  "block2",
@@ -500,6 +501,16 @@ dependencies = [
  "ts-rs",
  "uuid",
  "zip",
+]
+
+[[package]]
+name = "beryl_shell"
+version = "0.1.0"
+dependencies = [
+ "beryl_cards",
+ "beryl_session",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

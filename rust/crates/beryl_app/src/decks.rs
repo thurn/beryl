@@ -9,8 +9,8 @@ use beryl_table_session::decks::{self, Decks};
 use tauri::AppHandle;
 
 pub(crate) fn library(app: &AppHandle) -> Result<Decks, SessionError> {
-    let path = crate::profile::data_dir(app).map_err(io_error)?;
-    Ok(Decks::new(path.join("decks")))
+    let dirs = crate::profile::dirs(app).map_err(io_error)?;
+    Ok(Decks::new(dirs.data.join("decks")))
 }
 
 fn io_error(error: impl std::fmt::Display) -> SessionError {

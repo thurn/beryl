@@ -274,15 +274,16 @@ Beryl 3D, the native client in its own Cargo workspace, has checks of its own
 ### The Beryl 3D sweep
 
 `just b3d sweep` (`tools/src/beryl_tools/beryl3d/sweep.py`) finds what isolation
-hides: a change to the session, the fixture recorder, the image cache or a data
-file Beryl 3D reads can land without Beryl 3D's checks and leave it broken.
+hides: a change to the session, the fixture recorder, the image cache, the data
+folders both apps share or a data file Beryl 3D reads can land without Beryl
+3D's checks and leave it broken.
 
 - Slow CI starts it in the background after each run, on both machines, when
   staging holds a commit since the last sweep that changes a Beryl 3D path, its
-  tools, `rust/Cargo.toml`, `beryl_session`, `beryl_cli` or `beryl_art` (with
-  every crate they depend on by path), `data/ui-conventions.json`,
-  `data/card-store.tsv` or `ui/fixtures.json`. It skips when the load is over 8
-  times the cores or another sweep runs.
+  tools, `rust/Cargo.toml`, `beryl_session`, `beryl_cli`, `beryl_art` or
+  `beryl_shell` (with every crate they depend on by path),
+  `data/ui-conventions.json`, `data/card-store.tsv` or `ui/fixtures.json`. It
+  skips when the load is over 8 times the cores or another sweep runs.
 - In a detached worktree of the staging tip it runs every step of the Beryl 3D
   lanes in full, then the sweep's own steps, each as a lane of its own
   (`b3d-<step>`), taking `sweep` tokens as the browser sweep does. Its checks

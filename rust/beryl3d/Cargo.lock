@@ -162,6 +162,7 @@ dependencies = [
  "beryl_render",
  "beryl_scene",
  "beryl_session",
+ "beryl_shell",
  "cc",
  "glam",
  "jni-sys 0.3.1",
@@ -486,6 +487,14 @@ dependencies = [
  "ts-rs",
  "uuid",
  "zip",
+]
+
+[[package]]
+name = "beryl_shell"
+version = "0.1.0"
+dependencies = [
+ "beryl_session",
+ "serde_json",
 ]
 
 [[package]]

@@ -287,22 +287,27 @@ pub(crate) fn phone_feed(
 }
 
 /// The feed of a phone's app that plays a live game: the session thread keeps its replays and
-/// its ledger of games in `data_dir`, where the frame log is written too, and sends its views
-/// to `inbox`. With `stand_in`, that agent answers the person's decisions in a fresh game. The
-/// log names `display_hz`, as `phone_feed`'s does.
+/// its ledger of games in `data_dir`, as the web app keeps them in its data folder on a phone,
+/// where the frame log is written too, and sends its views to `inbox`. With `stand_in`, that
+/// agent answers the person's decisions in a fresh game. The log names `display_hz`, as
+/// `phone_feed`'s does.
 pub(crate) fn phone_live_feed(
     data_dir: PathBuf,
     stand_in: Option<String>,
     display_hz: f32,
     inbox: Inbox,
 ) -> Box<dyn Feed> {
-    let data = data_dir.clone();
+    let dirs = beryl_shell::Dirs::new(
+        &data_dir,
+        data_dir.join("logs"),
+        beryl_shell::Profile::current(),
+    );
     let commands = session::spawn(
         beryl_host::Class::Default,
         {
             let inbox = inbox.clone();
             move || {
-                let live = Live::new(Some(data), inbox);
+                let live = Live::new(Some(dirs), inbox);
                 match stand_in {
                     Some(name) => live.with_stand_in(&name),
                     None => live,
@@ -453,8 +458,8 @@ pub fn run(options: &Options) -> Result<Finished, String> {
 }
 
 /// The session thread, or with `--fixture` the recording. With `--agent`, the session starts a
-/// fresh game that the agent plays for the viewer, and keeps no replay or ledger, so that the
-/// web app and a later run of this one have no unfinished game of it to resume.
+/// fresh game that the agent plays for the viewer, and keeps no replay or ledger, so that
+/// neither app has an unfinished game of it to resume.
 // Only the recording can fail to start, and only a build with `tools` has one.
 #[cfg_attr(not(feature = "tools"), expect(clippy::unnecessary_wraps))]
 fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
@@ -469,7 +474,7 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
             None,
             Some((agent.clone(), options.opponent.clone(), options.seed)),
         ),
-        None => (data_dir(), None),
+        None => (data_dirs(), None),
     };
     Ok(Source::Live(session::spawn(
         options.search_class,
@@ -538,7 +543,9 @@ fn player_settings(options: &Options) -> (Option<beryl_scene::settings::Settings
     if options.agent.is_some() {
         return (None, None);
     }
-    let Some(dir) = data_dir() else {
+    let Some(dir) =
+        beryl_shell::Dirs::desktop(beryl_shell::Profile::current()).map(|dirs| dirs.data)
+    else {
         return (None, None);
     };
     let settings = settings::load(&dir).unwrap_or_else(|error| {
@@ -546,6 +553,18 @@ fn player_settings(options: &Options) -> (Option<beryl_scene::settings::Settings
         None
     });
     (settings, Some(Saver::start(dir)))
+}
+
+/// The web app's folders for the profile `BERYL_PROFILE` names, so that the two apps share
+/// replays, the games ledger and bug reports, and a game saved by either resumes in the
+/// other. Prints the data folder.
+fn data_dirs() -> Option<beryl_shell::Dirs> {
+    let dirs = beryl_shell::Dirs::desktop(beryl_shell::Profile::current());
+    match &dirs {
+        Some(dirs) => eprintln!("beryl3d: data in {}", dirs.data.display()),
+        None => eprintln!("beryl3d: no home folder, so no game is saved"),
+    }
+    dirs
 }
 
 /// The drive script `name` names: a file in `rust/beryl3d/drive` named `<name>.drive`, or a
@@ -621,22 +640,6 @@ fn frames_dir() -> PathBuf {
         PathBuf::from,
     );
     cache.join("b3d").join("frames")
-}
-
-/// Where the app keeps its replays and ledger: its own folder beside the web app's, so that
-/// neither resumes a game the other is playing. `~/Library/Application Support/beryl3d`, or on
-/// Windows `%APPDATA%\beryl3d`.
-fn data_dir() -> Option<PathBuf> {
-    if cfg!(windows) {
-        std::env::var_os("APPDATA").map(|dir| PathBuf::from(dir).join("beryl3d"))
-    } else {
-        std::env::var_os("HOME").map(|home| {
-            PathBuf::from(home)
-                .join("Library")
-                .join("Application Support")
-                .join("beryl3d")
-        })
-    }
 }
 
 fn home() -> PathBuf {

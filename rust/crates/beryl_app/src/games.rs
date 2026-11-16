@@ -6,21 +6,15 @@ use beryl_session::ipc::{
 };
 use beryl_session::prompt::{ClickReply, ClickRequest};
 use beryl_session::{AgentView, GameUpdate, SessionError, SessionId, Sessions, StartRequest, ipc};
+use beryl_shell::Dirs;
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::profile;
-
-/// The sessions, writing replays into the app's data directory and emitting views to the UI.
-pub fn sessions(app: &AppHandle) -> Sessions {
-    let data = profile::data_dir(app).ok();
-    let replays = data.as_ref().map(|dir| dir.join("replays"));
+/// The sessions, writing replays and the ledger into the profile's data folder and emitting
+/// views to the UI.
+pub fn sessions(app: &AppHandle, dirs: &Dirs) -> Sessions {
     let app = app.clone();
-    let sessions = Sessions::new(replays, move |update| emit_update(&app, update));
-    match data {
-        Some(dir) => sessions.with_ledger(dir.join("games.jsonl")),
-        None => sessions,
-    }
+    beryl_shell::sessions(dirs, move |update| emit_update(&app, update))
 }
 
 pub(super) fn emit_update(app: &AppHandle, update: GameUpdate) {
@@ -99,7 +93,7 @@ pub fn current_game(sessions: State<'_, Sessions>) -> Option<GameUpdate> {
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 pub fn resume_game(sessions: State<'_, Sessions>) -> Option<SessionId> {
-    sessions.resume_latest()
+    beryl_shell::resume_latest(&sessions)
 }
 
 #[tauri::command]

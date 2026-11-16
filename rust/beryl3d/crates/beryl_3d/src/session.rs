@@ -9,7 +9,6 @@
 //! search, and as fast as the web app's session, which runs in the same class.
 //! `--search-class` puts it in another class, to compare them.
 
-use std::path::PathBuf;
 use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
 
@@ -18,6 +17,7 @@ use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::input::Input;
 use beryl_session::ai::AgentMove;
 use beryl_session::{Seat, Sessions, StartGame, StartRequest, StopsSetting};
+use beryl_shell::Dirs;
 
 /// What answers the frame thread's commands: `Sessions`, or a test's stand-in.
 pub trait Session {
@@ -105,17 +105,16 @@ pub struct Live {
 }
 
 impl Live {
-    /// Sessions that keep their replays and ledger in `data`, as the web app keeps them in its
-    /// data directory, and send every view to `inbox`.
+    /// Sessions that keep their replays and ledger in the data folder of `dirs`, the web app's,
+    /// or keep none without it, and send every view to `inbox`.
     #[must_use]
-    pub fn new(data: Option<PathBuf>, inbox: Inbox) -> Self {
-        let replays = data.as_ref().map(|data| data.join("replays"));
-        let sessions = Sessions::new(replays, move |update| {
+    pub fn new(dirs: Option<Dirs>, inbox: Inbox) -> Self {
+        let emit = move |update| {
             inbox.send(Input::Update(Box::new(update)));
-        });
-        let sessions = match data {
-            Some(data) => sessions.with_ledger(data.join("games.jsonl")),
-            None => sessions,
+        };
+        let sessions = match dirs {
+            Some(dirs) => beryl_shell::sessions(&dirs, emit),
+            None => Sessions::new(None, emit),
         };
         Self {
             sessions,
@@ -204,7 +203,7 @@ impl Session for Live {
             }
             return;
         }
-        if self.sessions.resume_latest().is_some() {
+        if beryl_shell::resume_latest(&self.sessions).is_some() {
             return;
         }
         let Some(agent) = beryl_session::agents().into_iter().next() else {
@@ -227,7 +226,7 @@ impl Session for Live {
             SessionCommand::Click(request) => Reply::Click(sessions.click(request)),
             SessionCommand::Start(request) => Reply::Done(sessions.start(&request).map(|_| ())),
             SessionCommand::Resume => {
-                sessions.resume_latest();
+                beryl_shell::resume_latest(sessions);
                 Reply::Done(Ok(()))
             }
             SessionCommand::Choose(request) => Reply::Done(sessions.choose_request(request)),

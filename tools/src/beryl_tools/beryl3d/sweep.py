@@ -103,8 +103,9 @@ WINDOWS = "win32"
 # The machines that run slow CI, and so start sweeps: this Mac and Cygnus.
 EVERY_MACHINE: tuple[str, ...] = (MAC, WINDOWS)
 # The main workspace's crates whose changes can break Beryl 3D, with every crate they depend
-# on by path ([`inputs`]): the session, the fixture recorder and the image cache.
-LINKED: tuple[str, ...] = ("beryl_session", "beryl_cli", "beryl_art")
+# on by path ([`inputs`]): the session, the fixture recorder, the image cache and the data
+# folders both apps share.
+LINKED: tuple[str, ...] = ("beryl_session", "beryl_cli", "beryl_art", "beryl_shell")
 # The steps whose passing means the workspace built, so its build directory is worth saving.
 BUILDS: tuple[str, ...] = ("clippy", "cargo-test")
 # The two parts of a sweep, in the order they run.

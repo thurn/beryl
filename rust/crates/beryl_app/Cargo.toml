@@ -30,6 +30,8 @@ tauri-build = { version = "2", features = [] }
 crossbeam-utils = "0.8.23"
 tauri = { version = "2", features = [] }
 beryl_session = { path = "../beryl_session" }
+# Profiles, data folders, bug report storage and resuming, shared with Beryl 3D.
+beryl_shell = { path = "../beryl_shell" }
 # Runs the manual table and projects it onto the shared game-update event.
 beryl_table_session = { path = "../beryl_table_session" }
 # The manual-table actions used to deal the debug localhost pair.
@@ -66,7 +68,7 @@ webview2-com = "0.39"
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage"] }
 
 [dev-dependencies]
-# Isolated report folders for the share path test.
+# Isolated folders for the art cache, deck library and pairing tests.
 tempfile = "3"
 
 [lints]

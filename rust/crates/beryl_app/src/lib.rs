@@ -77,7 +77,7 @@ async fn app_info(app: tauri::AppHandle) -> AppInfo {
             .device
             .is_some_and(|device| device.simulator),
         wire: beryl_session::wire_hash(&[]),
-        profile: profile::name().map(str::to_owned),
+        profile: beryl_shell::Profile::current().name().map(str::to_owned),
     }
 }
 
@@ -353,21 +353,21 @@ pub fn run() {
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "macos")]
     table_keys::mac::setup(app.handle())?;
-    let bug_dir = profile::setup(app.handle())?;
+    let dirs = profile::setup(app.handle())?;
     journal::info(
         "app",
         "started",
-        json!({ "smoke": smoke_seconds().is_some(), "bugs": bug_dir }),
+        json!({ "smoke": smoke_seconds().is_some(), "bugs": dirs.bugs }),
     );
-    let games = games::sessions(app.handle());
+    let games = games::sessions(app.handle(), &dirs);
     app.manage(tables::sessions(
         app.handle(),
         games.session_ids(),
-        profile::data_dir(app.handle())?,
+        dirs.data.clone(),
     ));
     app.manage(games);
     app.manage(Snapshots::default());
-    app.manage(BugDirectory(bug_dir));
+    app.manage(BugDirectory(dirs.bugs));
     let dir = app.path().app_cache_dir()?.join("art");
     app.manage(ArtCache::new(dir, beryl_art::SCRYFALL));
     // The iOS Simulator needs the webview shown even in smoke mode to load the UI.

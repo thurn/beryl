@@ -1,0 +1,20 @@
+[package]
+name = "beryl_shell"
+version = "0.1.0"
+description = "What both app shells share: profiles, data folders, bug report storage and resuming"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+beryl_session = { path = "../beryl_session" }
+serde_json = "1.0.154"
+
+[dev-dependencies]
+# Isolated data and report folders for the tests.
+tempfile = "3"
+# The decklist the resume test starts a game with.
+beryl_cards = { path = "../beryl_cards" }
+
+[lints]
+workspace = true

@@ -3277,6 +3277,10 @@ What keeps the two apart:
   `..ObjectView::neutral(..)` or `..Script::empty()`, in `beryl_scene::testing`,
   so a field added to those types with a default does not break its build. They
   change no wire type.
+- **Code both shells use.** What the Tauri shell and Beryl 3D both need and that
+  names no Tauri type moves out of the Tauri shell into a crate of the main
+  workspace: the image download queue and disk cache in `beryl_art`, and
+  profiles, data folders, bug report storage and resuming in `beryl_shell`.
 - **Tools of its own.** Everything behind `just b3d` is one Python package,
   which the main tools import in one place. Adding a check to Beryl 3D edits
   that package and nothing else, so no other lane's record of its own tools
@@ -3315,9 +3319,9 @@ What runs, and when:
 What isolation costs, and who pays:
 
 - **A change elsewhere can break Beryl 3D unseen.** Beryl 3D links the session,
-  the fixture recorder and the image cache. A change to one of them is checked
-  without Beryl 3D, so it can land and leave Beryl 3D not compiling, or playing
-  a script wrongly.
+  the fixture recorder, the image cache and the shared shell crate. A change to
+  one of them is checked without Beryl 3D, so it can land and leave Beryl 3D not
+  compiling, or playing a script wrongly.
 - **The sweep finds it, and Beryl 3D's own work fixes it.** The sweep's task
   names the commit that broke it. Whoever is working on Beryl 3D takes that task
   first, and a session whose own check fails on such a break fixes the break in
@@ -3429,9 +3433,13 @@ change there and a small change in each client.
 - **The image download queue and disk cache**, moved out of the Tauri shell into
   `beryl_art`, a crate of the main workspace.
 - **Bug report storage, profiles and resuming the newest game**, moved out of
-  the Tauri shell into a crate both shells use. Settings are not shared: the web
-  interface keeps its settings in the browser's storage, and Beryl 3D in a file
-  of its own in the same data folder.
+  the Tauri shell into `beryl_shell`, a crate of the main workspace that both
+  shells use. Beryl 3D keeps its replays and games ledger in the web app's data
+  folder (`~/Library/Application Support/ca.thurn.beryl`, or
+  `%APPDATA%\ca.thurn.beryl` on Windows, under `profiles/<name>` for a named
+  `BERYL_PROFILE`), so a game saved by either app resumes in the other. Settings
+  are not shared: the web interface keeps its settings in the browser's storage,
+  and Beryl 3D in a file of its own in the same data folder.
 
 What they do not share is placement. The web interface draws the table on a 1600
 by 900 surface and imitates perspective by shrinking and tilting each card.
