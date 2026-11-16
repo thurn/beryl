@@ -1,7 +1,7 @@
 """Ingest: reads what was added to each source since the last ingest into the store
 (docs/efficiency-dashboard.md, "The store").
 
-A source is one of three kinds:
+A source is one of four kinds:
 
 - A `LineSource` is a set of files of lines, such as transcripts or the run log. Each file is
   read from the byte offset recorded in the `sources` table. A file whose first bytes no longer
@@ -11,6 +11,9 @@ A source is one of three kinds:
   time, and when its digest matches the last one it writes nothing and counts no bytes read.
 - A `FileSource` is a set of small files that are rewritten in place, such as the desktop
   app's session records. A file is read whole when its size or modification time changed.
+
+- A `CursorSource` reads command output in pages after the sequence number already
+  in the store. It commits the rows and cursor together, keeping events past retention.
 
 Each kind turns its input into rows, `(table, {column: value})`, written with
 `INSERT OR REPLACE` so that reading the same bytes twice changes nothing. A `LineSource` may
@@ -141,7 +144,20 @@ class SnapshotSource(ABC):
         """The rows of the output, and how many records in it were malformed."""
 
 
-Source = LineSource | FileSource | SnapshotSource
+class CursorSource(ABC):
+    """A paginated event stream with increasing integer cursors."""
+
+    name: str = ""
+
+    @abstractmethod
+    def page(self, after: int) -> tuple[bytes, int, list[Row], int]:
+        """Bytes read, the new cursor, rows and skipped records. An unchanged cursor ends the stream."""
+
+    def save(self, db: sqlite3.Connection, rows: list[Row]) -> int:
+        return write(db, rows)
+
+
+Source = LineSource | FileSource | SnapshotSource | CursorSource
 
 
 def now() -> str:
@@ -388,6 +404,24 @@ def read_snapshot(db: sqlite3.Connection, source: SnapshotSource, tally: Tally) 
     tally.skipped += skipped
 
 
+def read_cursor(db: sqlite3.Connection, source: CursorSource, tally: Tally) -> None:
+    after, _ = position(db, source.name, "")
+    while True:
+        try:
+            data, cursor, rows, skipped = source.page(after)
+        except SourceError as e:
+            tally.error = str(e)
+            return
+        if cursor == after:
+            return
+        with db:
+            tally.rows += source.save(db, rows)
+            record_position(db, source.name, "", cursor, "", skipped)
+        tally.bytes_read += len(data)
+        tally.skipped += skipped
+        after = cursor
+
+
 def ingest(db: sqlite3.Connection, sources: Sequence[Source], host: str) -> Summary:
     """Reads every source into `db` and records the ingest's own cost."""
     summary = Summary(now())
@@ -399,6 +433,8 @@ def ingest(db: sqlite3.Connection, sources: Sequence[Source], host: str) -> Summ
             read_lines(db, source, tally)
         elif isinstance(source, FileSource):
             read_files(db, source, tally)
+        elif isinstance(source, CursorSource):
+            read_cursor(db, source, tally)
         else:
             read_snapshot(db, source, tally)
     summary.wall_seconds = time.monotonic() - wall

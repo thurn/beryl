@@ -17,14 +17,13 @@ Windows are derived again, whole, for each transcript that gained lines in an in
 
 from __future__ import annotations
 
-import re
 import sqlite3
 from collections import Counter
 from dataclasses import dataclass
 
+from . import ticket_ids
+
 Connection = sqlite3.Connection
-# A bead id, as in `claude.BEAD`; a worktree named like one names the bead it is for.
-BEAD_ID: re.Pattern[str] = re.compile(r"[a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)*")
 
 
 @dataclass
@@ -70,7 +69,8 @@ def bead_spans(events: list[Event], last: str) -> tuple[list[Window], int]:
     stray = 0
     for event in ordered:
         named = event.verb == "close" or (
-            event.verb == "worktree" and BEAD_ID.fullmatch(event.bead) is not None
+            event.verb == "worktree"
+            and ticket_ids.WORKTREE_TICKET.fullmatch(event.bead) is not None
         )
         if current is None and unclaimed is not None and named:
             current = Window(unclaimed, last, event.bead, "bead")
@@ -144,7 +144,7 @@ def orchestrated_epic(db: Connection, transcript: str, session: str) -> str | No
     """The epic of the beads that name this session or transcript as their vizier: each one's
     run epic, else its parent, whichever is most common."""
     epics = Counter(
-        str(r[0])
+        ticket_ids.stored(db, str(r[0]))
         for r in db.execute(
             """SELECT coalesce(json_extract(enact, '$.enact_run'), parent) FROM beads
             WHERE json_extract(enact, '$.enact_vizier') IN (?, ?)""",
@@ -171,9 +171,35 @@ def windows_of(
         WHERE e.host = ? AND e.provider = ? AND e.transcript = ?""",
         (host, provider, transcript),
     ).fetchall()
-    events = [Event(str(r[0]), str(r[1]), str(r[2]), str(r[3])) for r in rows]
-    worktrees = sorted((e.time, e.bead) for e in events if e.verb == "worktree")
+    events = [
+        Event(
+            str(time),
+            str(call),
+            str(verb),
+            (
+                ticket_ids.stored(db, str(ticket))
+                if verb != "worktree"
+                or ticket_ids.WORKTREE_TICKET.fullmatch(str(ticket))
+                else str(ticket)
+            ),
+        )
+        for time, call, verb, ticket in rows
+    ]
+    worktrees = sorted(
+        (str(time), str(ticket)) for time, _, verb, ticket in rows if verb == "worktree"
+    )
     label = worktrees[0][1] if worktrees else None
+    # Transcript commands give the local boundary, including time spent running start and
+    # close. The feed also covers commands the transcript could not parse or did not record.
+    seen = {(e.verb, e.bead) for e in events}
+    for time, seq, verb, ticket in db.execute(
+        """SELECT time, seq, verb, ticket FROM ticket_session_events
+        WHERE session IN (?, ?) AND time BETWEEN ? AND ? ORDER BY seq""",
+        (session, transcript, first, last),
+    ):
+        owner = ticket_ids.stored(db, str(ticket))
+        if (str(verb), owner) not in seen:
+            events.append(Event(str(time), f"ticket:{seq}", str(verb), owner))
     spans, stray = bead_spans(events, last)
     epic = None if spans else orchestrated_epic(db, transcript, session)
     whole = (

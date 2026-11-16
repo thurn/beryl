@@ -246,8 +246,7 @@ drill-down, because a few very large beads dominate any mean.
 
 ## Sources
 
-Each source is listed with what is read from it. None of the nine costs agents
-anything, because other tools already write them.
+The sources use data that other tools already record.
 
 - **Claude Code transcripts** (`~/.claude/projects/<project>/<id>.jsonl`, and
   `<id>/subagents/*.jsonl` for subagents). Each assistant message carries a
@@ -266,6 +265,13 @@ anything, because other tools already write them.
   timestamped.
 - **Beads**, read with `bd list --all -n 0 --json`: ids, parents, labels,
   creation, start and close times, and the Enact metadata named above.
+- **Native Enact tickets**, when the main checkout's `.enact.toml` selects the
+  ticket backend. `enact backend` follows the project's cutover state and
+  provides the managed `tk` executable. One `tk export` supplies tickets,
+  aliases, and verdict comments. `tk events --since` supplies session starts and
+  closes and slow-CI results, with the last sequence saved in SQLite. The local
+  store keeps these results after the server expires them. Unconfigured projects
+  and configured projects before cutover read from Beads.
 - **Git history** of `staging` and `master`: each commit's time, subject and
   changed paths.
 - **The run log** (the hour files in `ci/runs/` in the cache, and the old single
@@ -1063,8 +1069,14 @@ run log, the CPU sampler and git, which are the machine's own.
   category, kind and part, and of its dollars by class, source, purpose and
   model. Every query adds these up, so they are derived again when the command
   kinds or the price table change.
-- **beads** and **labels**: the latest state of each bead, with its Enact
-  metadata, and its labels.
+- **beads** and **labels**: the latest state of each bead or ticket, with its
+  Enact metadata and labels. **ticket_aliases** resolves the native and prefixed
+  spellings, preserving the existing identifier for migrated tickets and their
+  historical records. Either spelling works in `bead` and `epic` queries and the
+  `--epic` filter.
+- **ticket_session_events** and **ticket_ci_events**: session boundaries and
+  slow-CI results from Enact. Transcript commands supply session boundaries when
+  available, and events supply missing boundaries and CI results.
 - **commits**: each commit on `staging` and `master`, its parents, subject,
   changed paths and added paths. The bead that landed it is read from the beads'
   `enact_commits` at query time.

@@ -482,6 +482,30 @@ MIGRATIONS: tuple[str, ...] = (
     );
     CREATE INDEX lock_waits_call ON lock_waits (host, provider, transcript, call);
     """,
+    """
+    CREATE TABLE ticket_aliases (
+        alias TEXT PRIMARY KEY,
+        bead TEXT NOT NULL
+    );
+    CREATE INDEX ticket_aliases_bead ON ticket_aliases (bead);
+    CREATE TABLE ticket_session_events (
+        seq INTEGER PRIMARY KEY,
+        time TEXT NOT NULL,
+        session TEXT NOT NULL,
+        verb TEXT NOT NULL,
+        ticket TEXT NOT NULL
+    );
+    CREATE INDEX ticket_session_events_session ON ticket_session_events (session, time);
+    CREATE INDEX ticket_session_events_ticket ON ticket_session_events (ticket, verb, time);
+    CREATE TABLE ticket_ci_events (
+        seq INTEGER PRIMARY KEY,
+        time TEXT NOT NULL,
+        host TEXT NOT NULL,
+        tip TEXT NOT NULL,
+        passed INTEGER NOT NULL,
+        ticket TEXT
+    );
+    """,
 )
 
 

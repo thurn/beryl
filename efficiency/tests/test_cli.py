@@ -40,6 +40,9 @@ TABLES = {
     "window_dollars",
     "transcripts",
     "enact_events",
+    "ticket_aliases",
+    "ticket_session_events",
+    "ticket_ci_events",
     "tool_results",
 }
 

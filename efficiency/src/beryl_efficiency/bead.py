@@ -10,7 +10,7 @@ import statistics
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 
-from . import timing
+from . import ticket_ids, timing
 from .facts import Facts, Window, load, minutes, money, total
 from .pushes import Push, push_line, pushes
 from .render import Result, describe, table, wrap
@@ -219,6 +219,7 @@ def report(db: sqlite3.Connection, bead: str, scope: Scope | None = None) -> Res
 def report_from(
     db: sqlite3.Connection, facts: Facts, scope: Scope, bead: str
 ) -> Result:
+    bead = ticket_ids.stored(db, bead)
     found = facts.beads.get(bead)
     windows = [w for w in facts.chosen(scope) if w.bead == bead]
     sums = ", ".join(f"coalesce(sum({c}), 0)" for c in TOKENS)

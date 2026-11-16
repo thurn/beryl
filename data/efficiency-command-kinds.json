@@ -1,4 +1,5 @@
 [
+  {"kind": "enact lease wait", "pattern": "^\"?(?:\\S*[/\\\\])?tk(?:\\.exe)?\"?(?:\\s+--(?:json|project\\s+\\S+|actor\\s+\\S+|retry-for\\s+\\S+))*\\s+wait\\s+lease\\b", "heavy": true},
   {"kind": "push", "pattern": "^(?:\\S*enact(?:\\.py|\\.sh)?\"?|\"?\\S*python\\S*\"? \"?\\S*enact\\.py\"?|\"?\\$\\{?\\w+\\}?\"?) push\\b", "heavy": true},
   {"kind": "slow CI wait", "pattern": "^(?:\\S*enact(?:\\.py|\\.sh)?\"?|\"?\\S*python\\S*\"? \"?\\S*enact\\.py\"?|\"?\\$\\{?\\w+\\}?\"?) ci\\b.*--wait", "heavy": true},
   {"kind": "orchestration wait", "pattern": "^(?:\\S*enact(?:\\.py|\\.sh)?\"?|\"?\\S*python\\S*\"? \"?\\S*enact\\.py\"?|\"?\\$\\{?\\w+\\}?\"?) (next|wait)\\b", "heavy": true},

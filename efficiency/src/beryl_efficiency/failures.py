@@ -33,6 +33,7 @@ import sqlite3
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 
+from . import ticket_ids
 from .ci import ratios
 from .cilog import iso, utc
 from .facts import Facts, minutes, money, total
@@ -52,6 +53,7 @@ class CiRun:
     commit: str
     end: str
     failed: bool
+    steward: str | None = None
 
 
 @dataclass(frozen=True)
@@ -141,11 +143,15 @@ def cost_of(
     runs: list[CiRun],
     bisect: list[BisectRun],
     in_range: set[str],
+    steward: str | None = None,
 ) -> tuple[str, str | None, float, float | None]:
     """When one failure happened and on which host, its bisection's CPU seconds, and the
     minutes `master` stayed behind; `runs` are slow CI's runs in time order."""
     last = spec.partition("..")[2]
-    failing = next((r for r in runs if r.failed and same_commit(r.commit, last)), None)
+    failures = [r for r in runs if r.failed and same_commit(r.commit, last)]
+    failing = next((r for r in failures if r.steward == steward), None)
+    if failing is None:
+        failing = next((r for r in failures if r.steward is None), None)
     passed = (
         next((r for r in runs if not r.failed and r.end > failing.end), None)
         if failing
@@ -187,7 +193,9 @@ def failure(
     paid: StewardCost,
 ) -> Failure:
     """One failure's costs: the Steward bead's, bisection's CPU and the time behind."""
-    failed_at, host, bisect_cpu, behind = cost_of(spec, created, runs, bisect, in_range)
+    failed_at, host, bisect_cpu, behind = cost_of(
+        spec, created, runs, bisect, in_range, steward
+    )
     bisect_minutes = bisect_cpu / 60
     return Failure(
         steward,
@@ -209,16 +217,26 @@ def failure(
 
 def ci_runs(db: sqlite3.Connection) -> list[CiRun]:
     """Slow CI's runs, one per host and commit, in the order they ended."""
-    return sorted(
-        (
-            CiRun(str(host), str(commit), str(end), int(fails) > 0)
-            for host, commit, end, fails in db.execute(
-                """SELECT host, "commit", max(end), sum(fails) FROM lane_runs
-                WHERE script = 'ci' GROUP BY host, "commit\""""
+    runs = {
+        (str(host), str(commit), int(fails) > 0): CiRun(
+            str(host), str(commit), str(end), int(fails) > 0
+        )
+        for host, commit, end, fails in db.execute(
+            """SELECT host, "commit", max(end), sum(fails) FROM lane_runs
+            WHERE script = 'ci' GROUP BY host, "commit\""""
+        )
+    }
+    for time, host, tip, passed, ticket in db.execute(
+        "SELECT time, host, tip, passed, ticket FROM ticket_ci_events ORDER BY seq"
+    ):
+        key = (str(host), str(tip), not passed)
+        logged = runs.get(key)
+        steward = ticket_ids.stored(db, str(ticket)) if ticket is not None else None
+        if logged is None or (steward is not None and logged.steward is None):
+            runs[key] = CiRun(
+                key[0], key[1], logged.end if logged else str(time), key[2], steward
             )
-        ),
-        key=lambda r: r.end,
-    )
+    return sorted(runs.values(), key=lambda r: r.end)
 
 
 def bisect_runs(db: sqlite3.Connection) -> list[BisectRun]:

@@ -503,6 +503,7 @@ class Epic:
 def epic(facts: Facts, scope: Scope, epic_id: str) -> Result:
     """The epic's beads, each with its agent minutes and dollars in the range, and the
     orchestration charged to it."""
+    epic_id = facts.resolve(epic_id)
     within = Scope(scope.range, scope.labels, epic_id, scope.host, scope.provider)
     windows = facts.chosen(within)
     closed = facts.closed(within)

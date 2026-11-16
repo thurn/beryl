@@ -33,8 +33,12 @@ store" and "Isolation" before changing anything here.
   output, written only when its digest changed. Malformed lines are skipped and
   counted. Every ingest records its own wall and CPU seconds in the `ingests`
   table.
-- `beads.py`: the beads source, from `bd list --all -n 0 --json` run in the main
-  checkout.
+- `beads.py`: the legacy source, from `bd list --all -n 0 --json` in the main
+  checkout. When `.enact.toml` configures tickets, `tickets.py` asks
+  `enact backend` which store is active. Ticket mode reads one `tk export` for
+  tickets and verdicts and resumes `tk events --since` from the local store's
+  cursor. `ticket_ids.py` resolves both forms of a ticket ID and keeps old Beads
+  IDs for imported tickets.
 - `claude.py`: Claude Code transcripts (requests, tool calls, their results and
   the Enact commands a session ran) and the desktop app's session records.
   `windows.py` derives bead windows from those commands and sets the `bead` of

@@ -18,7 +18,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
-from . import commits, cpu, rework
+from . import commits, cpu, rework, ticket_ids
 from .scope import Range, Scope
 from .timing import AGENT_CATEGORIES
 
@@ -310,10 +310,13 @@ class Facts:
             return None
         return current
 
+    def resolve(self, value: str) -> str:
+        return ticket_ids.stored(self.db, value) if self.db is not None else value
+
     def under(self, epic: str) -> set[str]:
         """The epic and every bead under it."""
         found: set[str] = set()
-        stack = [epic]
+        stack = [self.resolve(epic)]
         while stack:
             current = stack.pop()
             if current not in found:
@@ -398,10 +401,10 @@ def load(db: sqlite3.Connection) -> Facts:
             frozenset(labels.get(str(r[0]), set())),
             json.loads(r[8]) if r[8] else {},
         )
-        for r in db.execute(
-            "SELECT id, title, parent, issue_type, status, created_at, started_at, "
-            "closed_at, enact FROM beads"
-        )
+        for r in db.execute("""SELECT id, title, parent, issue_type, status, created_at,
+                coalesce(started_at, (SELECT min(e.time) FROM ticket_aliases AS a
+                    JOIN ticket_session_events AS e ON e.ticket = a.alias AND e.verb = 'open'
+                    WHERE a.bead = beads.id)), closed_at, enact FROM beads""")
     }
     windows: dict[tuple[str, str, str, str], Window] = {}
     for r in db.execute(

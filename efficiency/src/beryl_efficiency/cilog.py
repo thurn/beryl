@@ -27,7 +27,7 @@ query shows: script, check lane, family, check.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -186,7 +186,9 @@ class RunLog(LineSource):
         ]
 
 
-def verdict_rows(issue: dict[str, object]) -> list[Row]:
+def verdict_rows(
+    issue: dict[str, object], comment_aliases: Mapping[str, str] | None = None
+) -> list[Row]:
     """The `verdicts` rows of one `ci-check` bead, each corrected by any later comment that
     names it, as verdicts.py's `entries` reads them; comments that are not verdicts are
     left out."""
@@ -207,7 +209,10 @@ def verdict_rows(issue: dict[str, object]) -> list[Row]:
         if not isinstance(entry, dict) or not isinstance(entry.get("verdict"), str):
             continue
         if "corrects" in entry:
-            corrected = found.get(str(entry["corrects"]))
+            key = str(entry["corrects"])
+            if comment_aliases is not None:
+                key = comment_aliases.get(key, key)
+            corrected = found.get(key)
             if corrected is not None:
                 corrected["verdict"] = entry["verdict"]
             continue

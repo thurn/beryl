@@ -30,7 +30,7 @@ from dataclasses import asdict, dataclass
 from datetime import timedelta
 from pathlib import Path
 
-from . import claude, kinds, timing
+from . import claude, kinds, ticket_ids, timing
 from .timing import LOCK_WAIT, SYNC
 from .cpu import GIVE_UP, LONGEST_CALL, SLACK, iso, parse
 from .facts import Facts
@@ -39,8 +39,6 @@ from .ingest import LineSource, Row
 from .render import Result, describe, table, wrap
 from .scope import Scope
 
-# A word that names a bead or epic, such as `by-ig5e` or `by-ig5e.22`.
-BEAD: re.Pattern[str] = re.compile(r"^[a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)*$")
 # How a holder's command reads when the wait was too short to look.
 UNSEEN = "(not seen)"
 
@@ -56,7 +54,20 @@ def words(command: str) -> tuple[str, str | None] | None:
     parts = command.split()
     for number, part in enumerate(parts):
         if part.endswith("enact.py") and number + 1 < len(parts):
-            bead = next((w for w in parts[number + 2 :] if BEAD.match(w)), None)
+            arguments = parts[number + 2 :]
+            # Prefer a prefixed ID anywhere, as legacy lock records can have flags
+            # before it. A bare ID is unambiguous as the first argument or after --bead.
+            bead = next(
+                (w for w in arguments if re.fullmatch(ticket_ids.LEGACY, w)), None
+            )
+            if bead is None and arguments:
+                candidate = arguments[0]
+                if "--bead" in arguments and arguments.index("--bead") + 1 < len(
+                    arguments
+                ):
+                    candidate = arguments[arguments.index("--bead") + 1]
+                if ticket_ids.WORKTREE_TICKET.fullmatch(candidate):
+                    bead = candidate
             return parts[number + 1], bead
     return None
 
@@ -162,8 +173,8 @@ def join(db: sqlite3.Connection, host: str) -> set[tuple[str, str]]:
         end = start + timedelta(seconds=float(length))
         found = None
         best = (False, False, "")
-        for provider, transcript, call, call_start, command in db.execute(
-            """SELECT c.provider, c.transcript, c.call, c.start, c.command
+        for provider, transcript, call, call_start, command, owner in db.execute(
+            """SELECT c.provider, c.transcript, c.call, c.start, c.command, c.bead
             FROM tool_calls AS c JOIN transcripts AS t ON t.host = c.host
                 AND t.provider = c.provider AND t.transcript = c.transcript
             WHERE c.host = ? AND t.parent IS NULL AND c.command LIKE '%enact%'
@@ -178,7 +189,14 @@ def join(db: sqlite3.Connection, host: str) -> set[tuple[str, str]]:
             shown = runs(str(command), str(sub))
             if not shown and len(str(command)) < claude.COMMAND_CHARACTERS:
                 continue
-            named = bead is not None and str(bead) in str(command)
+            named = bead is not None and (
+                str(bead) in str(command)
+                or (
+                    owner is not None
+                    and ticket_ids.stored(db, str(bead))
+                    == ticket_ids.stored(db, str(owner))
+                )
+            )
             rank = (shown, named, str(call_start))
             if found is None or rank > best:
                 found, best = (str(provider), str(transcript), str(call)), rank

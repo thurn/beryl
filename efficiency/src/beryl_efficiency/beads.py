@@ -35,6 +35,11 @@ def main_checkout(start: Path) -> Path:
 
 def run_bd(cwd: Path, command: list[str] = COMMAND) -> bytes:
     """`command`'s output, run in `cwd`; `bd list` by default."""
+    return run_command(cwd, command)
+
+
+def run_command(cwd: Path, command: list[str]) -> bytes:
+    """Read stdout, reporting command failures through ingest's source tally."""
     try:
         done = subprocess.run(command, cwd=cwd, capture_output=True, check=False)
     except OSError as e:
@@ -95,7 +100,7 @@ def rows_of(record: object) -> list[Row]:
 
 class Beads(SnapshotSource):
     name = "beads"
-    owns = ("beads", "labels")
+    owns = ("beads", "labels", "ticket_aliases")
 
     def __init__(self, read: Callable[[], bytes]) -> None:
         self._read = read

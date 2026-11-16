@@ -23,14 +23,12 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import paths, timing, tokens, windows
+from . import paths, ticket_ids, timing, tokens, windows
 from .ingest import FileSource, LineSource, Row
 
 PROVIDER = "claude"
 # How many characters of a command the store keeps.
 COMMAND_CHARACTERS = 300
-# A bead id as Enact prints it, such as `by-ig5e.2`.
-BEAD = r"[a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)*"
 # An Enact command at the start of a shell command or after `&&`, `;`, `|` or `(`, maybe after
 # `eval`, `timeout <n>` or `NAME=value`, run through the `enact` alias, `python enact.py` or a
 # shell variable holding either (sessions often write `E='python3 enact.py'; eval $E start`).
@@ -39,14 +37,14 @@ ENACT: re.Pattern[str] = re.compile(
     r"(?:^|[;&|(\n])\s*(?:(?:eval|timeout\s+\S+|[A-Za-z_]+=\S*)\s+)*"
     r"(?:\"?\S*python[0-9.]*\"?\s+)?"
     r"(?:\"?(?:\S*/)?enact(?:\.py)?\"?|\"?\$\{?[A-Za-z_]+\}?\"?)\s+"
-    r"(?:(?P<verb>start|claim|close)\s+(?P<bead>" + BEAD + r")"
+    r"(?:(?P<verb>start|claim|close)\s+(?P<bead>" + ticket_ids.ID + r")(?=$|[\s;&|])"
     r"|worktree\s+create\s+(?P<name>[\w.-]+))"
 )
 # The bead `enact close --continue` claimed, in its printed result: the first `"id"` key in
 # its `"next"` object, which may follow other keys. A quote inside a JSON string is escaped,
 # so text in a description cannot match.
 NEXT: re.Pattern[str] = re.compile(
-    r'"next":\s*\{.*?"id":\s*"(' + BEAD + r')"', re.DOTALL
+    r'"next":\s*\{.*?"id":\s*"(' + ticket_ids.ID + r')"', re.DOTALL
 )
 # Cargo's line when a build ends, `Finished `test` profile [...] target(s) in 1m 02s` (or
 # `in 42.10s`): the minutes and seconds the build took.

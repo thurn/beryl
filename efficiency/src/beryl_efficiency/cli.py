@@ -38,8 +38,9 @@ from . import (
     rollups,
     session,
     store,
+    tickets,
 )
-from .beads import Beads, main_checkout
+from .beads import main_checkout
 from .metrics import Mark
 from .render import Result, table, text
 from .scope import Scope, add_arguments, from_arguments, parse_since
@@ -55,16 +56,21 @@ def sources() -> list[ingest.Source]:
     calls."""
     checkout = main_checkout(Path.cwd())
     host = paths.host()
-    return [
-        Beads.here(checkout),
+    records, verdicts, events = tickets.sources(checkout)
+    found: list[ingest.Source] = [
+        records,
         claude.Sessions(paths.claude_sessions(), checkout, host),
+    ]
+    if events is not None:
+        found.append(events)
+    return found + [
         claude.Transcripts(paths.claude_projects(), checkout, host),
         codex.Rollouts(paths.codex_sessions(), checkout, host),
         cpu.Samples(cpu.samples_path(paths.cache_root()), host),
         cpu.Leases(cpu.leases_path(paths.cache_root()), host),
         locks.LockLog(locks.folder(checkout), host),
         cilog.RunLog(cilog.runlog_path(paths.cache_root())),
-        cilog.Verdicts.here(checkout),
+        verdicts,
         commits.Commits.here(checkout),
     ]
 
