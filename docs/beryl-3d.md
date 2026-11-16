@@ -1148,6 +1148,13 @@ streaks and notices (`StepOut`).
   (decision C17).
 - **A step ends when its animation ends.** A script's beats play in order, the
   steps of one beat together, on the time passed to `frame`.
+- **A notice outlives its beat.** `announce` moves nothing: it writes a
+  `NoticeRun`, which the show keeps in real time from when its script starts
+  until it ends, and the client shows it as a float (the turn banner, a scry's
+  pill, a coin's flip). A notice whose step `passes` goes on standing while the
+  table plays on under it, across scripts, and `Show::passed` says when the last
+  such notice is over. `dwell` moves nothing either: it begins a `Span::Focus`
+  on its subject for the step, so the card is drawn `focused`.
 - **Objects come to rest where placement puts them.** When a script has
   finished, every object's pose equals what its placement function gives for the
   new view. A check holds this on every fixture, so animation code cannot leave
@@ -1363,7 +1370,9 @@ shows or removes one, and its ids are in `element::floats`.
   in during a frame with no layout and no allocation. The life totals, the
   amount a total changed by and the mana pools are prepared this way, for every
   value the scripts still to play will set (`hud::counts`), so a total changes
-  as its `count` step begins without the frame laying anything out.
+  as its `count` step begins without the frame laying anything out. The notices
+  of `announce` steps are prepared the same way, one for each notice of each
+  script to play, keyed by its script and step (`hud::notices`).
 - **Floats are drawn whether a prompt is open or not**, after the screen and in
   order of their ids. The top element of a float is drawn on a panel, as a
   screen's top element is. A float with a press takes presses at any time.

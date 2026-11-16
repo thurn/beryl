@@ -62,12 +62,17 @@ fn marks_on(lit: &Lit, on: Subject) -> impl Iterator<Item = (Mark, &Open)> {
     })
 }
 
-/// Changes how the card `on` is drawn at `now` for the marks on it in `lit`: the state bits of
-/// the marks it wears, and for `paying` a quarter turn toward tapped as the mark comes up
-/// (`ui/src/stage/tracks.ts`, `paying`), drawn a little above the cards it now reaches across.
+/// Changes how the card `on` is drawn at `now` for the marks on it in `lit`: `focused` while a
+/// `dwell` step leaves it to be read (`Span::Focus`), the state bits of the marks it wears, and
+/// for `paying` a quarter turn toward tapped as the mark comes up (`ui/src/stage/tracks.ts`,
+/// `paying`), drawn a little above the cards it now reaches across.
 /// A permanent the script has already tapped under the mark lies turned as it rests, and does
 /// not turn again.
 pub fn look(lit: &Lit, on: Subject, now: u64, look: &mut Look) {
+    let read = |open: &Open| open.span == Span::Focus(on) && stands(open, now);
+    if lit.open().iter().any(read) {
+        look.state |= StateBits::FOCUSED;
+    }
     for (mark, open) in marks_on(lit, on) {
         if !stands(open, now) {
             continue;

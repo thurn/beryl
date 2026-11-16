@@ -97,7 +97,7 @@ impl Counts {
 }
 
 /// The index of `side` in pairs that put the viewer first.
-const fn index(side: Side) -> usize {
+pub(crate) const fn index(side: Side) -> usize {
     match side {
         Side::You => 0,
         Side::Opponent => 1,
@@ -266,7 +266,7 @@ impl CountFloats {
 
 /// How far a life total's text reaches above and below its middle, in logical points, with a
 /// small gap: where the amount it changed by starts.
-const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_height / 2.0;
+pub(crate) const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_height / 2.0;
 
 /// The look of the amount a life total at `life` changed by, as the `loss` or `gain` `run`
 /// stands at `now`: from beside the total, it sinks below it for a loss, or rises above it for
@@ -374,7 +374,7 @@ fn mana(pool: ManaPool) -> String {
 }
 
 /// A point in normalized device coordinates as logical points of a window of `size`.
-fn points(ndc: Vec2, size: Size) -> Vec2 {
+pub(crate) fn points(ndc: Vec2, size: Size) -> Vec2 {
     Vec2::new(
         f32::midpoint(ndc.x, 1.0) * size.width,
         f32::midpoint(1.0, -ndc.y) * size.height,

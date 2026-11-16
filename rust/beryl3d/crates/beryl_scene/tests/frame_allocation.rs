@@ -1,8 +1,9 @@
 //! `Client::frame` allocates nothing once a prompt bar has been laid out, nor while a life total
-//! falls and the amount it fell by sinks away, nor while 255 marks are drawn, nor with 255
-//! attackers wearing their wedges, nor on a table of 255 permanents that each wear badges, and
-//! neither does moving a float of the flat layer and writing it (docs/beryl-3d.md, "The frame":
-//! no allocation). This binary counts every heap allocation, so it holds one test.
+//! falls and the amount it fell by sinks away, nor while the turn banner fades in, stands and
+//! fades out, nor while 255 marks are drawn, nor with 255 attackers wearing their wedges, nor on
+//! a table of 255 permanents that each wear badges, nor while a hand card rises under the mouse,
+//! and neither does moving a float of the flat layer and writing it (docs/beryl-3d.md, "The
+//! frame": no allocation). This binary counts every heap allocation, so it holds one test.
 
 mod common;
 
@@ -16,7 +17,7 @@ use beryl_protocol::protocol::{
     CardType, Combat, Counter, CounterView, DecisionId, DecisionView, Kind, ObjectId,
     PowerToughness, SessionId, Side, Status, ZoneName,
 };
-use beryl_protocol::script::{Act, Mark, Subject, Tally};
+use beryl_protocol::script::{Act, Mark, Notice, Subject, Tally};
 use beryl_scene::element::{floats, text};
 use beryl_scene::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
 use beryl_scene::input::{
@@ -196,35 +197,39 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
         assert_eq!(after - before, 0, "allocations in a frame with 255 marks");
     }
 
+    the_turn_banner_allocates_nothing();
     a_frame_of_255_attackers_allocates_nothing();
 
     tables_allocate_nothing();
 
-    // A float moved and faded by a new look, then written into a frame.
-    let mut layer = Layer::new();
-    layer.float(floats::LIFE[0], Some(text("20")));
-    let mut frame = Frame::with_capacity(64, 256, 1024);
-    let table = Table::default();
-    let before = ALLOCATIONS.load(Ordering::Relaxed);
-    layer.set_float_look(
-        floats::LIFE[0],
-        FloatLook {
-            point: Vec2::new(100.0, 50.0),
-            anchor: Vec2::new(0.5, 0.5),
-            opacity: 0.5,
-            tint: Some([255, 0, 0, 255]),
+    a_moved_float_allocates_nothing();
+}
+
+/// The frames of the turn banner: the one that shows it, those that fade it in and out, and
+/// the one that hides it.
+fn the_turn_banner_allocates_nothing() {
+    let (mut client, steps) = common::counting(vec![Act::Announce {
+        notice: Notice::Turn {
+            active: Side::Opponent,
         },
-    );
-    let mut builder = FrameBuilder::new(&mut frame);
-    layer.write(&mut builder, table.camera(), false);
-    let elements = builder.finish().resolved.len();
-    let after = ALLOCATIONS.load(Ordering::Relaxed);
-    assert_eq!(elements, 1, "the frame holds the float");
-    assert_eq!(
-        after - before,
-        0,
-        "allocations setting a float's look and writing it"
-    );
+    }]);
+    let (from, to) = steps[0];
+    for now in [
+        from,
+        from + (to - from) / 10,
+        from + (to - from) / 2,
+        to - 1,
+        to,
+    ] {
+        let before = ALLOCATIONS.load(Ordering::Relaxed);
+        client.frame(now);
+        let after = ALLOCATIONS.load(Ordering::Relaxed);
+        assert_eq!(
+            after - before,
+            0,
+            "allocations in the frame at {now} during the turn banner"
+        );
+    }
 }
 
 /// A battlefield of 255 attackers, each wearing its wedge as it fades in.
@@ -412,4 +417,32 @@ fn a_rising_hand_card_allocates_nothing() {
             );
         }
     }
+}
+
+/// A float moved and faded by a new look, then written into a frame.
+fn a_moved_float_allocates_nothing() {
+    let mut layer = Layer::new();
+    layer.float(floats::LIFE[0], Some(text("20")));
+    let mut frame = Frame::with_capacity(64, 256, 1024);
+    let table = Table::default();
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    layer.set_float_look(
+        floats::LIFE[0],
+        FloatLook {
+            point: Vec2::new(100.0, 50.0),
+            anchor: Vec2::new(0.5, 0.5),
+            opacity: 0.5,
+            tint: Some([255, 0, 0, 255]),
+        },
+    );
+    let mut builder = FrameBuilder::new(&mut frame);
+    layer.write(&mut builder, table.camera(), false);
+    let elements = builder.finish().resolved.len();
+    let after = ALLOCATIONS.load(Ordering::Relaxed);
+    assert_eq!(elements, 1, "the frame holds the float");
+    assert_eq!(
+        after - before,
+        0,
+        "allocations setting a float's look and writing it"
+    );
 }

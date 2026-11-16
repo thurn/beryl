@@ -18,6 +18,7 @@ mod faces;
 mod flat_layer;
 mod light;
 mod motion;
+mod notices;
 mod own;
 mod piles;
 mod play;

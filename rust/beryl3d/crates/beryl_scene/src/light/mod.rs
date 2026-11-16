@@ -45,6 +45,9 @@ pub enum Span {
         slot: ObjectId,
         cause: Option<Subject>,
     },
+    /// The spell, ability or player a `dwell` step leaves to be read, for as long as the step
+    /// plays: drawn `focused`.
+    Focus(Subject),
 }
 
 /// A span begins or ends, fading over `over` on the script's clock. `step` is the number of the

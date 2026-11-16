@@ -4,7 +4,7 @@
 
 use super::{ScreenIn, game_over, opening};
 use crate::element::{Element, row};
-use crate::hud::{banner, log, players, steps};
+use crate::hud::{log, players, steps};
 use crate::inspect::{inspector, revealed, viewer};
 use crate::prompts;
 
@@ -21,7 +21,6 @@ pub fn game(input: &ScreenIn) -> Element {
         game_over::game_over(input),
         players::players(input),
         steps::steps(input),
-        banner::banner(input),
         log::log(input),
         inspector::inspector(input),
         viewer::viewer(input),

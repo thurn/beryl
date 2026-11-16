@@ -57,19 +57,19 @@
     },
     "verbs-zones": {
       "worst_frame_elements": 521,
-      "total_elements": 443889,
+      "total_elements": 444129,
       "worst_frame_segments": 22,
       "total_segments": 15230,
       "worst_frame_records": 81,
-      "total_records": 51885,
+      "total_records": 52005,
       "worst_frame_layout_nodes": 11,
-      "total_layout_nodes": 53,
+      "total_layout_nodes": 57,
       "worst_frame_text_runs": 20,
-      "total_text_runs": 41,
+      "total_text_runs": 43,
       "worst_frame_draw_calls": 4,
       "worst_frame_upload_bytes": 6480,
       "worst_frame_blended_area": 0.0914,
-      "handle_allocations": 8860,
+      "handle_allocations": 8978,
       "frame_allocations": 0,
       "worst_frame_instructions": 2238027,
       "total_instructions": 109935271,
@@ -142,6 +142,6 @@
   },
   "tests": {
     "median_frames": 131,
-    "most_frames": 5444
+    "most_frames": 5446
   }
 }

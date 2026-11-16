@@ -15,6 +15,7 @@ use crate::element::Press;
 use crate::faces::{FaceList, Faces};
 use crate::frame::{self, ElementId, Frame, FrameBuilder, Wake};
 use crate::hud::counts::CountFloats;
+use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
 use crate::input::{AssetReady, Button, GlyphKey, Input, Pointer, PointerPhase};
 use crate::layout::Layer;
@@ -60,6 +61,8 @@ pub struct Client {
     counts: CountFloats,
     /// The floats that show how many cards each pile holds.
     piles: PileCounts,
+    /// The floats that show the notices `announce` steps make.
+    notices: NoticeFloats,
     /// The screen the flat layer shows. A recording or a game is fed to the client on the game
     /// screen, which it starts on.
     screen: Screen,
@@ -105,6 +108,7 @@ impl Client {
             layer: Layer::new(),
             counts: CountFloats::default(),
             piles: PileCounts::default(),
+            notices: NoticeFloats::default(),
             screen: Screen::Game,
             sheet: None,
             settings: Settings::default(),
@@ -157,6 +161,12 @@ impl Client {
                     &mut self.layer,
                     self.show.counts(),
                     self.show.coming_counts(),
+                );
+                // And so is every notice they will show.
+                NoticeFloats::prepare(
+                    &mut self.layer,
+                    self.show.coming_notices(),
+                    self.show.notices(),
                 );
                 if !self.show.badges_mut().shaped() {
                     let (text, glyphs) = self.layer.text_and_glyphs();
@@ -243,6 +253,13 @@ impl Client {
         );
         let visible = self.screen == Screen::Game && self.sheet.is_none();
         (self.piles).write(&mut self.layer, self.show.table(), visible);
+        (self.notices).write(
+            &mut self.layer,
+            self.show.notices(),
+            now,
+            (self.show.table().layout(), self.window.size),
+            visible,
+        );
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
         builder.placement_work(self.show.table().take_placed());
