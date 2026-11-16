@@ -1,7 +1,6 @@
-//! What a card's scenarios may name: their own card, its tokens, basic
-//! lands and the designated props ([`crate::props`]), so one card's change cannot break another
-//! card's tests. A scenario about two cards in particular says so with
-//! `Scenario::interaction`.
+//! A scenario needs an interaction declaration to name another handwritten card, its faces or
+//! its tokens, except for basic lands and designated props ([`crate::props`]). Every declared
+//! interaction must appear in the scenario, including interactions with cards from the store.
 
 use std::collections::BTreeSet;
 
@@ -33,8 +32,8 @@ fn card(name: &str) -> &'static CardDef {
         .unwrap_or_else(|| panic!("{name} is not a card"))
 }
 
-/// Every card name any card's scenario could write: the cards, their faces and their tokens.
-fn every_name() -> BTreeSet<&'static str> {
+/// The names of handwritten cards, their faces and their tokens.
+fn handwritten_names() -> BTreeSet<&'static str> {
     let mut all = BTreeSet::new();
     for &def in CARDS.cards() {
         names_of(def, &mut all);
@@ -42,22 +41,22 @@ fn every_name() -> BTreeSet<&'static str> {
     all
 }
 
-/// The card names `scenario` writes anywhere: in its setup, its actions or its assertions.
-fn named(scenario: &Scenario, known: &BTreeSet<&'static str>) -> BTreeSet<String> {
-    fn walk(value: &Value, known: &BTreeSet<&'static str>, into: &mut BTreeSet<String>) {
+/// The strings in a scenario's setup, actions and assertions.
+fn scenario_strings(scenario: &Scenario) -> BTreeSet<String> {
+    fn walk(value: &Value, into: &mut BTreeSet<String>) {
         match value {
-            Value::String(s) if known.contains(s.as_str()) => {
+            Value::String(s) => {
                 into.insert(s.clone());
             }
-            Value::Array(items) => items.iter().for_each(|v| walk(v, known, into)),
-            Value::Object(fields) => fields.values().for_each(|v| walk(v, known, into)),
+            Value::Array(items) => items.iter().for_each(|v| walk(v, into)),
+            Value::Object(fields) => fields.values().for_each(|v| walk(v, into)),
             _ => {}
         }
     }
     let json = serde_json::to_value(beryl_scenario::Json(scenario)).expect("a scenario serializes");
     let mut into = BTreeSet::new();
-    walk(&json["setup"], known, &mut into);
-    walk(&json["actions"], known, &mut into);
+    walk(&json["setup"], &mut into);
+    walk(&json["actions"], &mut into);
     into
 }
 
@@ -77,7 +76,7 @@ fn shared() -> BTreeSet<&'static str> {
 
 #[test]
 fn scenarios_name_only_their_card_its_tokens_basic_lands_and_props() {
-    let known = every_name();
+    let handwritten = handwritten_names();
     let shared = shared();
     let mut failures = Vec::new();
     let generated = crate::derive::all().iter().copied();
@@ -94,16 +93,16 @@ fn scenarios_name_only_their_card_its_tokens_basic_lands_and_props() {
             for &other in scenario.interaction {
                 names_of(card(other), &mut allowed);
             }
-            let named = named(scenario, &known);
-            let strays: Vec<_> = named
+            let strings = scenario_strings(scenario);
+            let strays: Vec<_> = strings
                 .iter()
-                .filter(|n| !allowed.contains(n.as_str()))
+                .filter(|n| handwritten.contains(n.as_str()) && !allowed.contains(n.as_str()))
                 .collect();
             if !strays.is_empty() {
                 failures.push(format!("{name}: \"{}\" names {strays:?}", scenario.name));
             }
             for &other in scenario.interaction {
-                if !named.contains(other) {
+                if !strings.contains(other) {
                     failures.push(format!(
                         "{name}: \"{}\" is marked as an interaction with {other}, which it \
                          never names",
