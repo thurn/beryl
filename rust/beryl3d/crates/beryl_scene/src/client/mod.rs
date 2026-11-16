@@ -386,6 +386,7 @@ impl Client {
         let table_now = self.bug_frame(now);
         let reporting = self.bug_open();
         self.inputs.clear();
+        self.hold_table_menu(now);
         self.own(table_now);
         self.set_aims(self.table_open());
         let covers = self.table_open()
@@ -457,8 +458,9 @@ impl Client {
         self.wake = if transitioning || own_due || self.hovered_slot() != self.inspector.judged {
             Wake::Now
         } else {
-            // A tooltip waiting for the pointer to rest shows at its time.
-            self.bug_wake(table_now).or_at(self.layer.tip_due())
+            // A tooltip waiting for the pointer to rest shows at its time, and a touch held
+            // still on the manual table opens its menu at its time.
+            (self.bug_wake(table_now).or_at(self.layer.tip_due())).or_at(self.manual.hold_due())
         };
         &self.frame
     }

@@ -261,6 +261,7 @@
     "damping_ratio": 0.42,
     "lean_degrees": 20,
     "drag_threshold_points": 6,
+    "long_press_ms": 500,
     "grip_points_per_second_squared": 60000,
     "drag_per_second": 5,
     "smooth_velocity_ms": 35,
@@ -621,6 +622,10 @@
     "tooltip_delay": 500,
     "tooltip_gap": 8,
     "menu_edge": 8,
+    "sheet": {
+      "max_width": 430,
+      "preview_width": 144
+    },
     "gallery": {
       "width": 1380,
       "chip": 76,

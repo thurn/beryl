@@ -193,7 +193,7 @@ fn paid_word(cost: PaidCost) -> &'static str {
 #[must_use]
 pub fn place(input: &ScreenIn) -> Option<Placed> {
     let inspected = input.inspected?;
-    if phone(input.window) {
+    if input.window.phone() {
         return None;
     }
     let taken =
@@ -211,12 +211,6 @@ pub fn place(input: &ScreenIn) -> Option<Placed> {
 pub struct Placed {
     pub corner: Vec2,
     pub width: f32,
-}
-
-/// Whether `window` takes the phone layout: its shorter side is under 500 points
-/// (docs/beryl-3d.md, "Sizes").
-fn phone(window: Window) -> bool {
-    window.size.width.min(window.size.height) < 500.0
 }
 
 /// A place on the web's stage: its left edge, top and width in stage pixels.

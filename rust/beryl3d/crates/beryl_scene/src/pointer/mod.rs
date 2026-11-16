@@ -138,9 +138,7 @@ impl Pointer {
                     self.let_go = Some((grip, false));
                 }
             }
-            PointerPhase::Cancel | PointerPhase::Leave => {
-                self.let_go = self.grip.take().map(|grip| (grip, true));
-            }
+            PointerPhase::Cancel | PointerPhase::Leave => self.cancel(),
             _ => {}
         }
         if pointer.kind != PointerKind::Mouse {
@@ -164,6 +162,12 @@ impl Pointer {
             held: false,
         });
         self.lean = Lean::FLAT;
+    }
+
+    /// Ends the press as a cancelled one: a card it holds falls back where it lay, and it
+    /// clicks nothing. The client calls this when a touch held still opens a context menu.
+    pub fn cancel(&mut self) {
+        self.let_go = self.grip.take().map(|grip| (grip, true));
     }
 
     /// The slot of the card the pointer holds, if it holds one.

@@ -18,6 +18,7 @@ pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
 pub use start::{SEED, StartForm, in_progress, seed};
 
 pub use settings::{GEAR_INSET, gear};
+pub use table::sheet_face;
 
 use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};

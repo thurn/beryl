@@ -100,7 +100,7 @@ pub fn steps(input: &ScreenIn) -> Option<Element> {
     let view = input.view?;
     // A pile's viewer stands over the table and its controls, and its own buttons sit where
     // the stops beside the viewer's own orb stand.
-    if phone(input.window) || input.viewing.is_some() {
+    if input.window.phone() || input.viewing.is_some() {
         return None;
     }
     let stops = &input.settings.stops;
@@ -108,12 +108,6 @@ pub fn steps(input: &ScreenIn) -> Option<Element> {
         rows(view, Side::You, stops.yours, input.window),
         rows(view, Side::Opponent, stops.theirs, input.window),
     ]))
-}
-
-/// Whether `window` takes the phone layout: its shorter side is under 500 points
-/// (docs/beryl-3d.md, "Sizes").
-fn phone(window: Window) -> bool {
-    window.size.width.min(window.size.height) < 500.0
 }
 
 /// `side`'s twelve icons about their orb, with `set` the steps of their turns that stop.

@@ -40,7 +40,8 @@ impl Client {
             table_menu: self.manual.menu.as_ref(),
             carried: self.carried_item.map(|carry| carry.on),
         };
-        let full = crate::prompts::faces(&input);
+        let mut full = crate::prompts::faces(&input);
+        full.extend(screens::sheet_face(&input));
         // Until the sheets are built, the settings sheet takes the screen's place in the flat
         // layer; the bug report is drawn over the screen. Before a game has a view and with no
         // prompt open, the game screen shows nothing, so that no empty panel is drawn over the
