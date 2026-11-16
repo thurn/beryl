@@ -68,7 +68,7 @@ pub fn segment_checks(history: &[ScriptRecord]) -> Vec<Found> {
 /// still drawn as instant changes, `set` (which moves nothing) and the verbs that place an object
 /// with no path (`appear`, `vanish`) may.
 fn travels(verb: Verb) -> bool {
-    verb == Verb::Fly
+    matches!(verb, Verb::Fly | Verb::Emerge)
 }
 
 /// No jumps: where one of an object's segments begins, the object is where the segments before
@@ -177,7 +177,10 @@ pub fn step_times(script: &ScriptRecord) -> Vec<Found> {
                 ),
             });
         }
-        if !matches!(step.verb, Verb::Fly | Verb::Appear) {
+        if !matches!(
+            step.verb,
+            Verb::Fly | Verb::Appear | Verb::Vanish | Verb::Emerge
+        ) {
             continue;
         }
         for record in script
@@ -316,8 +319,9 @@ pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size) -> Option<Sample> 
 /// subject time to travel moves it at least `audit.step_points` over at least `audit.step_ms`,
 /// or half the step if that is shorter; a subject that jumps instead is a fault. `from` and `to`
 /// are when the step begins and ends, in real time, and `samples` its subject in each frame
-/// evaluated from `from` until (not including) `audit.step_ms` after `to`, in order. Only `fly` and `appear` are
-/// judged: the other verbs are drawn as instant changes, or move no card.
+/// evaluated from `from` until (not including) `audit.step_ms` after `to`, in order. Only `fly`,
+/// `emerge` and `appear` are judged: the other verbs place their subject with no path, are
+/// drawn as instant changes, or move no card.
 #[must_use]
 pub fn step_shown(step: &StepRecord, from: u64, to: u64, samples: &[Sample]) -> Option<String> {
     step.subject?;
@@ -340,7 +344,7 @@ pub fn step_shown(step: &StepRecord, from: u64, to: u64, samples: &[Sample]) -> 
                 .unwrap_or("nowhere");
             Some(format!("came to be {why} in {}", step.describe()))
         }
-        Verb::Fly => {
+        Verb::Fly | Verb::Emerge => {
             if took == 0 {
                 return None;
             }

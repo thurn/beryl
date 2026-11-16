@@ -110,9 +110,9 @@ impl Segment {
     }
 
     /// The pose it gives at `t`: its start pose before it begins, its end pose once it has
-    /// ended, and in between each part of the pose eased along its curve. The path rises
-    /// `arc` millimetres above the straight line (toward the camera, `z`) at the middle of
-    /// its time, along half a sine wave.
+    /// ended, and in between as its `shape` says. Along a `Shape::Line` each part of the pose
+    /// is eased along its curve, and the path rises `arc` millimetres above the straight line
+    /// (toward the camera, `z`) at the middle of its time, along half a sine wave.
     #[must_use]
     pub fn pose_at(&self, t: u64) -> Pose {
         if t <= self.start && self.duration > 0 {
@@ -132,17 +132,19 @@ impl Segment {
         let elapsed = ((t - self.start) as f64 / self.duration as f64) as f32;
         let u = self.curve.ease(elapsed);
         let (from, to) = (&self.from, &self.to);
-        let position = match self.shape {
-            Shape::Line => {
-                from.position.lerp(to.position, u) + Vec3::Z * self.arc * (PI * elapsed).sin()
-            }
-        };
-        Pose {
-            position,
-            rotation: from.rotation.slerp(to.rotation, u),
-            scale: from.scale + (to.scale - from.scale) * u,
-            opacity: from.opacity + (to.opacity - from.opacity) * u,
-            turn: from.turn + (to.turn - from.turn) * u,
+        match self.shape {
+            Shape::Line => Pose {
+                position: from.position.lerp(to.position, u)
+                    + Vec3::Z * self.arc * (PI * elapsed).sin(),
+                rotation: from.rotation.slerp(to.rotation, u),
+                scale: from.scale + (to.scale - from.scale) * u,
+                opacity: from.opacity + (to.opacity - from.opacity) * u,
+                turn: from.turn + (to.turn - from.turn) * u,
+            },
+            Shape::Fading => Pose {
+                opacity: from.opacity * (1.0 - u * u),
+                ..*from
+            },
         }
     }
 }
@@ -167,6 +169,17 @@ impl Segment {
         )]
         let elapsed = ((t - self.start) as f64 / self.duration as f64) as f32;
         let u = self.curve.ease(elapsed);
+        if self.shape == Shape::Fading {
+            // It stands where it was all the way, only fading, so it starts where it is now.
+            let left = 1.0 - u * u;
+            if left >= 1e-4 {
+                self.from = Pose {
+                    opacity: pose.opacity / left,
+                    ..pose
+                };
+            }
+            return;
+        }
         let rest = 1.0 - u;
         if rest < 1e-4 {
             return;

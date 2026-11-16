@@ -667,7 +667,7 @@ pub struct Segment {
     pub from: Pose,
     pub to: Pose,
     pub arc: f32,          // how far the path rises above the straight line
-    pub shape: Shape,      // the path: `Shape::Line`, or a verb's own
+    pub shape: Shape,      // the path: `Shape::Line`, `Shape::Fading`, or a verb's own
 }
 
 impl Segment {

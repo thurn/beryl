@@ -279,20 +279,20 @@
     },
     "b3d:choice-trigger-order/opponent/1440x900": {
       "no-jumps": 80,
-      "step-shown": 26
+      "step-shown": 28
     },
     "b3d:choice-trigger-order/opponent/1600x900": {
       "no-jumps": 80,
-      "step-shown": 28
+      "step-shown": 30
     },
     "b3d:choice-trigger-order/opponent/1920x1080": {
       "no-jumps": 80,
-      "step-shown": 28
+      "step-shown": 30
     },
     "b3d:choice-trigger-order/opponent/2560x1080": {
       "no-jumps": 80,
       "rest-placement": 1,
-      "step-shown": 37
+      "step-shown": 39
     },
     "b3d:choice-trigger-order/you/1440x900": {
       "no-jumps": 80,

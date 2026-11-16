@@ -21,7 +21,15 @@ use beryl_scene::{Client, Config};
 const SEATS: [Side; 2] = [Side::You, Side::Opponent];
 
 /// The verbs that have motion of their own; every other verb is drawn as an instant change.
-const BUILT: [Verb; 3] = [Verb::Fly, Verb::Appear, Verb::Set];
+const BUILT: [Verb; 7] = [
+    Verb::Fly,
+    Verb::Appear,
+    Verb::Vanish,
+    Verb::Emerge,
+    Verb::Strike,
+    Verb::Count,
+    Verb::Set,
+];
 
 #[test]
 fn verbs_zones_plays_to_its_end_from_both_seats() {

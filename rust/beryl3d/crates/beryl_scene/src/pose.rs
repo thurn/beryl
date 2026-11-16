@@ -65,6 +65,10 @@ pub enum Shape {
     /// A straight line, rising `Segment::arc` millimetres above it at the middle of its time.
     #[default]
     Line,
+    /// The object stays at `from` and fades as it goes, its opacity `from.opacity` times
+    /// 1 - (eased progress)², as the web interface's `dissolve` (`ui/src/stage/tracks.ts`);
+    /// once the segment has ended it is at `to`, with no path between the two.
+    Fading,
 }
 
 /// One stretch of animation between two poses. Code outside this file makes one with

@@ -105,8 +105,8 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
     let (resolved, resolve_timings) = resolve(&emerged, 5);
     show.push(Box::new(emerged), timings);
     // The emerge plays from 1000 to 1200 ms, putting the ability on the stack at its start, and
-    // the ability rests there after it. The resolution arrives then and plays from 1400 ms;
-    // the ability is gone from its start.
+    // the ability rests there after it. The resolution arrives then and plays from 1400 to
+    // 1600 ms, the ability fading where it stands, and it is gone after.
     for now in [1_000 * MS, 1_100 * MS, 1_300 * MS, 1_400 * MS, 1_700 * MS] {
         if now == 1_400 * MS {
             show.push(Box::new(resolved.clone()), resolve_timings.clone());
@@ -126,7 +126,7 @@ fn a_frame_that_starts_a_script_allocates_nothing() {
             "allocations in the frame at {} ms",
             now / MS
         );
-        let shown = now < 1_400 * MS;
+        let shown = now <= 1_400 * MS;
         assert_eq!(ability, shown, "the ability is drawn at {} ms", now / MS);
     }
 
