@@ -132,6 +132,50 @@ When asked about velocity (wall-clock time to shipped beads), measure only work
 the user has scheduled, usually the beads of active Enact runs, and only the
 time while their run was going.
 
+## Cross-checking findings against fixes
+
+The store looks back over days, and the code changes faster than that. A finding
+built on last week's data may already be fixed, or already have a bead. Check
+each finding before reporting it:
+
+1. **Date the evidence.** Note when the waits, runs or commands behind the
+   finding happened, by their earliest and latest timestamps. The store keeps
+   UTC. `git log` prints the committer's local time unless you pass
+   `--date=iso-strict`, so convert before you compare.
+2. **Look for fixes since then.** Run `git fetch` first, then
+   `git log origin/staging --since=<earliest evidence> -- <paths>` over the code
+   behind the finding: the tool, check or script the waits ran. Also grep the
+   subjects and bodies (`-i --grep=<term>`). Read the body of each likely fix.
+   It says what someone saw and what changed, so you can tell whether it covers
+   this finding or only a nearby one.
+3. **Look for beads.** Search the open and in-progress beads, descriptions as
+   well as titles:
+   `bd list --status open,in_progress --json -n 0`, filtered for the tool's
+   name, the command and the symptom. A finding can also come from a bead's own
+   text: for example, the acceptance criteria that a tool writes into the beads
+   it files can send workers to run a slow command.
+4. **Read the code as it is now** (`git show origin/staging:<path>`), not the
+   main checkout, which may lag behind. Confirm that the cause you inferred
+   still exists, such as a lock, a priority class or a retry loop.
+5. **Re-measure only with enough data.** If a fix landed, compare the same
+   query before and after it, and say how many hours or cases the "after" side
+   holds. A few hours of data is not enough to call a fix a success or a
+   failure. Say so, and report the finding as "fixed, not yet measured".
+
+Report each finding as one of: **fixed** (name the commit), **covered** (name
+the bead and say what it leaves out), or **open** (no fix or bead). Only an open
+finding is a new opportunity. Offer to file a bead for it.
+
+### Pitfalls found while cross-checking
+
+- A command run in the background ends, in `tool_calls`, when it was launched.
+  Its real end is the session's `notifications` row for that call, or the next
+  `prompts` row of kind `background` that names it.
+- Vizier sessions can appear inside bead windows. Before blaming workers, drop
+  sessions whose commands include `enact.py next --epic`.
+- `just efficiency sql` ingests first unless given `--no-ingest`, which can take
+  minutes on a loaded machine.
+
 ## Reading the numbers
 
 - **"no data"**: beads that ran on another host or provider whose rows aren't in
