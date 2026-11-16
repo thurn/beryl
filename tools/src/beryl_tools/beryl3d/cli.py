@@ -32,6 +32,7 @@ from . import (
     phone,
     phone_search,
     sweep,
+    test_fit,
     timeline,
     vm,
 )
@@ -138,11 +139,17 @@ def test_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run_cargo_test(args: argparse.Namespace) -> int:
+    nextest = shutil.which("cargo-nextest") is not None
+    # Every test of the workspace runs through test_fit.py, which logs each one's time and,
+    # inside a fast check, runs only those that fit; its records are read while the tests build.
+    whole = nextest and not args.package and not args.filter
+    known = test_fit.known() if whole else None
     # The tests read recordings, which only the `record` program can build.
     recorded = record()
     if recorded != 0:
         return recorded
-    nextest = shutil.which("cargo-nextest") is not None
+    if whole:
+        return test_fit.run(known)
     return cargo(test_command(args.package, args.filter, nextest))
 
 

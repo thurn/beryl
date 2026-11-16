@@ -271,6 +271,11 @@ Beryl 3D, the native client in its own Cargo workspace, has checks of its own
   python lane, as any change to `tools/` does, and not the `beryl3d` lane.
 - A step of a Beryl 3D lane that the fast check cuts off at its 180 s hard limit
   is left to the Beryl 3D sweep, not to slow CI.
+- In the fast check, `cargo-test` runs only the workspace tests that fit the
+  time left, chosen as the Rust lane's tests are (untimed tests first), and
+  names the rest as deferred to the sweep
+  (`tools/src/beryl_tools/beryl3d/test_fit.py`). Each test's time goes to the
+  run log as `b3d-test:<binary>::<test>`.
 
 ### The Beryl 3D sweep
 

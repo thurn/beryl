@@ -173,5 +173,10 @@
     "label": "Beryl 3D reuses placement lookups while compiling scripts and visits fewer effects for each card",
     "metric": "machine.saturation",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D's fast-check cargo-test runs only the tests that fit the time left",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]

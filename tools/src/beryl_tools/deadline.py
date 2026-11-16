@@ -65,6 +65,16 @@ def left(now: float | None = None) -> float | None:
     return wall - ((time.time() if now is None else now) - begun)
 
 
+def until_hard_limit(now: float | None = None) -> float | None:
+    """The wall seconds left until [`HARD_LIMIT`] kills the run's steps; None outside a fast
+    check. A step that would rather finish late than skip work plans against this, as long as
+    it never starts what the limit would kill (beryl3d/test_fit.py)."""
+    begun = started()
+    if begun is None:
+        return None
+    return HARD_LIMIT - ((time.time() if now is None else now) - begun)
+
+
 def env() -> dict[str, str]:
     """The variable that starts the contract's clock for the steps of a fast check."""
     return {STARTED_ENV: repr(time.time())}

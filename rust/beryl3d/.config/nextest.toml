@@ -1,0 +1,4 @@
+# The fast check's `cargo-test` step (tools/src/beryl_tools/beryl3d/test_fit.py): each test's
+# outcome and time as JUnit XML, which the run log reads, as the main workspace's profile does.
+[profile.check.junit]
+path = "junit.xml"

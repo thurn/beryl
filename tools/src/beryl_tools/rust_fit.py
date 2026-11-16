@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Mapping
+from pathlib import Path
 
 from . import paths, selection
 
@@ -26,16 +27,23 @@ from . import paths, selection
 MARGIN = 5.0
 
 
-def listed(scope: list[str], expression: str) -> list[str] | None:
-    """The tests the built binaries hold that match the nextest filterset `expression`, each as
-    `<binary> <test>` (rust_tests.nextest_filter), or None when nextest cannot list them.
+def listed(
+    scope: list[str],
+    expression: str,
+    cwd: Path = paths.RUST,
+    env: Mapping[str, str] | None = None,
+) -> list[str] | None:
+    """The tests the built binaries of the workspace at `cwd` hold that match the nextest
+    filterset `expression`, each as `<binary> <test>` (rust_tests.nextest_filter), or None when
+    nextest cannot list them. Beryl 3D's workspace (beryl3d/test_fit.py) lists its own.
     """
     done = subprocess.run(
         [
             *["cargo", "nextest", "list", "--locked", *scope, "--cargo-quiet"],
             *["--message-format", "json", "-E", expression],
         ],
-        cwd=paths.RUST,
+        cwd=cwd,
+        env=None if env is None else dict(env),
         capture_output=True,
         text=True,
         errors="replace",
@@ -55,10 +63,11 @@ def listed(scope: list[str], expression: str) -> list[str] | None:
     return sorted(found)
 
 
-def check_id(test: str) -> str:
-    """The run-log check of a `<binary> <test>` (rust_tests.junit_results)."""
+def check_id(test: str, prefix: str = "rust") -> str:
+    """The run-log check of a `<binary> <test>` (rust_tests.junit_results), `rust:` for the main
+    workspace's tests and another `prefix` for another workspace's."""
     binary, name = test.split(" ", 1)
-    return f"rust:{binary}::{name}"
+    return f"{prefix}:{binary}::{name}"
 
 
 def plan(
@@ -67,11 +76,13 @@ def plan(
     known: Mapping[str, selection.Record],
     left: float,
     threads: int,
+    prefix: str = "rust",
 ) -> tuple[list[str], list[str], list[str]]:
     """The `tests` (`<binary> <test>`) and `beside` checks (`rust:doctests`, `rust:allocations`)
-    that fit `left` seconds on `threads` threads, and the run-log checks of those cut.
+    that fit `left` seconds on `threads` threads, and the run-log checks of those cut. Each
+    test's check is named with `prefix` (`check_id`).
     """
-    ids = {check_id(t): t for t in tests}
+    ids = {check_id(t, prefix): t for t in tests}
     candidates = [*ids, *beside]
     new = [c for c in candidates if c not in known]
     ordered = new + selection.order([c for c in candidates if c in known], known)
