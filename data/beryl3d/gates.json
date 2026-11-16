@@ -29,7 +29,6 @@
       "frame_allocations": 0,
       "worst_frame_instructions": 3577801,
       "total_instructions": 101195666,
-      "tolerance_percent": 1.0,
       "worst_frame_placed": 2550,
       "total_placed": 2805
     },
@@ -51,7 +50,6 @@
       "frame_allocations": 0,
       "worst_frame_instructions": 11780866,
       "total_instructions": 213923862,
-      "tolerance_percent": 1.0,
       "worst_frame_placed": 10240,
       "total_placed": 11264
     },
@@ -73,7 +71,6 @@
       "frame_allocations": 0,
       "worst_frame_instructions": 2919075,
       "total_instructions": 171319030,
-      "tolerance_percent": 1.0,
       "worst_frame_placed": 761,
       "total_placed": 1814
     },
@@ -95,7 +92,6 @@
       "frame_allocations": 0,
       "worst_frame_instructions": 925109,
       "total_instructions": 7556050,
-      "tolerance_percent": 1.0,
       "worst_frame_placed": 23,
       "total_placed": 34
     },
@@ -118,8 +114,7 @@
       "handle_allocations": 2499,
       "frame_allocations": 0,
       "worst_frame_instructions": 4131479,
-      "total_instructions": 85360669,
-      "tolerance_percent": 1.0
+      "total_instructions": 85360669
     },
     "stress-hand": {
       "worst_frame_elements": 63,
@@ -140,8 +135,7 @@
       "handle_allocations": 605,
       "frame_allocations": 0,
       "worst_frame_instructions": 927483,
-      "total_instructions": 55693968,
-      "tolerance_percent": 1.0
+      "total_instructions": 55693968
     },
     "stress-stack": {
       "worst_frame_elements": 103,
@@ -162,8 +156,7 @@
       "handle_allocations": 2023,
       "frame_allocations": 0,
       "worst_frame_instructions": 3854216,
-      "total_instructions": 284400186,
-      "tolerance_percent": 1.0
+      "total_instructions": 284400186
     }
   },
   "tiers": {
@@ -216,5 +209,12 @@
   "tests": {
     "median_frames": 131,
     "most_frames": 5461
+  },
+  "scaling": {
+    "stress-1024": {
+      "over": "stress-255",
+      "worst_frame_instructions": 3.85,
+      "total_instructions": 2.44
+    }
   }
 }

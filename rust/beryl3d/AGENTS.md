@@ -159,28 +159,33 @@ project, and selects the main lanes.
   Under `frames.<board>` are the limits `just b3d gate` holds each gated board's
   work counters, load and allocations to (docs/beryl-3d.md, "Finding the worst
   frame"). `just b3d gate --update` lowers them to what was measured.
-  `worst_frame_instructions`, `total_instructions` and `tolerance_percent` are
-  the instruction-count gate's, counted under Callgrind in `beryl3d-bench` by
-  `just b3d gate --counts` (a step of the sweep, the `b3d-frame-counts` program
-  in `beryl_inspect`), and `--counts --update` lowers them. Never wait for the
-  count gate before pushing: check a change's frame cost with `just b3d gate`
-  and `frame_abba` on the Mac, and leave the counts to the sweep, which files a
-  bead when one moves past its tolerance. A bead may ask for `--counts` only
-  when instruction counts are what it is about, and it takes a few minutes. A
-  `--gpu` or `--counts` run that a session starts goes ahead of the sweep's runs
-  on `beryl3d-bench`, though it still waits for one that has started. To fix a
-  bead the sweep filed, run the failed step's own command in your worktree;
-  `just b3d sweep --step <step>` replays it in a tree of its own without waiting
-  for a running sweep. A count may pass its limit by the tolerance, 1%, which
-  absorbs inlining and layout shifts from unrelated changes; the work counters'
-  limits have none. A count below its limit (past the tolerance, for
-  instructions) fails too, so that no room is left for a later change to add
-  work back unseen: a change that cuts the work lowers the native limits in the
-  same commit, and the sweep's bead lowers the instruction limits. A limit rises
-  only when the work itself changed (a new verb, a new element on every screen)
-  or a compiler or dependency upgrade moved the count with no change to Beryl's
-  code, and the commit that raises it gives the old and new numbers. It needs
-  nobody's approval.
+  `worst_frame_instructions` and `total_instructions` are the instruction-count
+  gate's, counted under Callgrind in `beryl3d-bench` by `just b3d gate --counts`
+  (a step of the sweep, the `b3d-frame-counts` program in `beryl_inspect`), and
+  `--counts --update` lowers them. Never wait for the count gate before pushing:
+  check a change's frame cost with `just b3d gate` and `frame_abba` on the Mac,
+  and leave the counts to the sweep, which files a bead when one moves past its
+  tolerance. A bead may ask for `--counts` only when instruction counts are what
+  it is about, and it takes a few minutes. A `--gpu` or `--counts` run that a
+  session starts goes ahead of the sweep's runs on `beryl3d-bench`, though it
+  still waits for one that has started. To fix a bead the sweep filed, run the
+  failed step's own command in your worktree; `just b3d sweep --step <step>`
+  replays it in a tree of its own without waiting for a running sweep. A count
+  may pass its limit by the tolerance, 1%, which absorbs inlining and layout
+  shifts from unrelated changes; the work counters' limits have none. A count
+  below its limit (past the tolerance, for instructions) fails too, so that no
+  room is left for a later change to add work back unseen: a change that cuts
+  the work lowers the native limits in the same commit, and the sweep's bead
+  lowers the instruction limits. During the build-out (`BUILD_OUT` in
+  `tools/src/beryl_tools/beryl3d/build_out.py`) the instruction tolerance is 20%
+  and a count below its limit passes, fragments over a board's limit only warn
+  unless they pass the 1.75-screen target, and `scaling` holds `stress-1024`'s
+  counts to at most a fixed multiple of `stress-255`'s, which fails work that
+  grows faster than the board (docs/beryl-3d.md, "During the build-out"). A
+  limit rises only when the work itself changed (a new verb, a new element on
+  every screen) or a compiler or dependency upgrade moved the count with no
+  change to Beryl's code, and the commit that raises it gives the old and new
+  numbers. It needs nobody's approval.
 
   A rebase does not stop on gates.json when two branches both raised the same
   limits. The repository's `.gitattributes` gives the file to a merge driver,

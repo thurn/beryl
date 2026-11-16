@@ -2792,8 +2792,9 @@ beryl_render's `shader_cost` test counts each material and holds it to
 tests run it too. beryl_render's `fragments` example draws the 8 frames of each
 gated board that `rank` picks in the virtual machine, twice, and the gate fails
 if the two counts differ or the worst frame's count, in screens, is over
-`tiers.baseline.fragments.<board>`. Only Vulkan and DirectX 12 offer the
-pipeline statistics query in `wgpu`, so the count cannot be taken on Metal.
+`tiers.baseline.fragments.<board>` (during the build-out, only over the target
+of 1.75 screens; see "During the build-out"). Only Vulkan and DirectX 12 offer
+the pipeline statistics query in `wgpu`, so the count cannot be taken on Metal.
 
 ### What it is held to
 
@@ -2826,8 +2827,7 @@ after it:
     "stress-255": {
       "worst_frame_instructions": 2000000,
       "total_instructions": 1450000000,
-      "frame_allocations": 0,
-      "tolerance_percent": 1.0
+      "frame_allocations": 0
     },
     "stress-1024": { "worst_frame_instructions": 4000000 }
   }
@@ -2865,6 +2865,46 @@ them, and after that the rule is the engine count gate's:
 - **No limit waits for anyone.** Neither kind of rise needs the owner's
   approval. The commit that raises a limit states its reason, and that is the
   record.
+
+#### During the build-out
+
+While Beryl 3D gains a verb or a screen every hour or so, a 1% tolerance cannot
+tell new work from a regression, so every verb failed the sweep. From 14 to 16
+November 2026 the sweep filed 21 failure tasks for Beryl 3D; the `gpu` step
+failed all 11 of its runs, each settled by raising a limit, and
+`data/beryl3d/gates.json` had 43 commits, most of them raises for a new verb. In
+one failure, text and layout added by new verbs raised the counts by 5 to 66%,
+while a search over every card for every moving card, quadratic in the board,
+raised them several times more. Both looked alike, and the commit that
+recalibrated the limits took the quadratic search in with the new verbs:
+`stress-1024`'s total went from 80.7 to 761.5 million instructions and
+`stress-255`'s from 39.7 to 225.5 million.
+
+So, until `BUILD_OUT` in `tools/src/beryl_tools/beryl3d/build_out.py` is set to
+`False`, the sweep's count gates fail only on what a feature cannot explain:
+
+- **Instruction counts may pass their limits by 20%**, one constant for every
+  board, and a count below its limit passes, or every cut would file a task too.
+  `--counts --update` still lowers the limits.
+- **Fragments over a board's limit are a warning.** Only a frame over the
+  Baseline target of 1.75 screens fails.
+- **The scaling check holds at every velocity.** `stress-1024` is `stress-255`
+  with four times the cards, so the ratio of its instruction counts to
+  `stress-255`'s, under `scaling` in `gates.json`, may not pass a bound set 15%
+  over the ratio measured once the work was linear. Because both boards share a
+  fixed cost (the interface, text and layout), linear work gives a ratio well
+  under four. The quadratic search above gave 3.4 for the totals where the bound
+  is 2.4, so it fails however many verbs land beside it. A verb that adds work
+  for each card raises the ratio a little; its commit may raise the bound with
+  the old and new ratios, and the native `elements` and `placed` counters, which
+  grow with the cards, show whether the new work is per card.
+- **The native gate is unchanged.** Its work counters are exact and cheap, and
+  the commit that raises one explains it.
+
+`BUILD_OUT` goes back to `False` when feature work slows down, and at the latest
+when the owner switches the default client to Beryl 3D (C11). The same commit
+lowers every limit with `--counts --update` and `--gpu --update`, so that the 1%
+tolerance and the fragment limits start from what is measured.
 
 ### Finding the worst frame
 

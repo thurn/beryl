@@ -10,7 +10,9 @@ limits in `data/beryl3d/gates.json`:
   gated board's 8 ranked frames shades, in screens (fragments divided by the target's pixels).
   beryl_render's `fragments` example draws the frames in the `beryl3d-bench` virtual machine on
   Mesa's software Vulkan driver and reads the driver's count with a pipeline statistics query.
-  It is exact, so the gate draws every frame twice and fails if the two counts differ.
+  It is exact, so the gate draws every frame twice and fails if the two counts differ. During
+  the build-out (build_out.py) a board over its limit is a warning, and only a board over
+  [`TARGET_SCREENS`] fails.
 
 `--update` lowers each limit to what was measured and sets a missing one; it never raises one.
 """
@@ -28,7 +30,7 @@ from typing import Any
 
 from .. import bench
 from .. import paths as repo_paths
-from . import paths, source, vm
+from . import build_out, paths, source, vm
 
 # The Baseline tier's target: no gated frame shades more than this many screens.
 TARGET_SCREENS = 1.75
@@ -101,24 +103,34 @@ def parse_materials(text: str) -> dict[str, dict[str, int]]:
     }
 
 
-def fragment_failures(boards: list[BoardCount], limits: dict[str, float]) -> list[str]:
-    lines: list[str] = []
+def fragment_failures(
+    boards: list[BoardCount], limits: dict[str, float], *, warn_within_target: bool
+) -> tuple[list[str], list[str]]:
+    """The failures and the warnings for each board's fragments. A board over its limit fails,
+    or with `warn_within_target` (the build-out) is only a warning unless it is over
+    [`TARGET_SCREENS`] too."""
+    failed: list[str] = []
+    warned: list[str] = []
     for board in boards:
         worst = board.worst()
         shown = board.screens()
         where = f"{board.name} frame {worst.frame} ({worst.ms} ms, {worst.phase})"
         limit = limits.get(board.name)
         if limit is None:
-            lines.append(
+            failed.append(
                 f"{where}: fragments is {shown} screens with no limit under"
                 f" tiers.baseline.fragments; `just b3d gate --gpu --update` sets it"
             )
         elif shown > limit:
-            lines.append(
+            line = (
                 f"{where}: fragments is {shown} screens ({worst.fragments}), over its limit"
                 f" {limit}"
             )
-    return lines
+            if warn_within_target and shown <= TARGET_SCREENS:
+                warned.append(f"{line}, within the target {TARGET_SCREENS}")
+            else:
+                failed.append(line)
+    return failed, warned
 
 
 def lowered_fragments(
@@ -250,7 +262,12 @@ def run_gpu(names: list[str], update: bool, gates: dict[str, Any]) -> int:
             f" {worst.frame}, {worst.fragments} fragments, {board.screens()} screens"
             f" (target {TARGET_SCREENS})"
         )
-    lines += fragment_failures(boards, baseline.get("fragments", {}))
+    failed, warned = fragment_failures(
+        boards, baseline.get("fragments", {}), warn_within_target=build_out.BUILD_OUT
+    )
+    lines += failed
+    for line in warned:
+        print(f"WARN {line}")
     for line in lines:
         print(f"FAIL {line}", file=sys.stderr)
     return 1 if lines else 0

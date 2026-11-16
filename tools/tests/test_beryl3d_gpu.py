@@ -24,15 +24,35 @@ def test_the_worst_frame_is_held_in_screens_rounded_up() -> None:
 
 def test_a_board_over_its_limit_names_the_frame() -> None:
     boards = gpu.parse_boards(output([1000, 1800]))
-    [line] = gpu.fragment_failures(boards, {"stress-255": 1.75})
-    assert "stress-255 frame 31" in line
-    assert "1.8 screens (1800), over its limit 1.75" in line
-    assert gpu.fragment_failures(boards, {"stress-255": 1.8}) == []
+    for loose in (False, True):
+        # 1.8 screens is over the target, so it fails during the build-out too.
+        [line], _ = gpu.fragment_failures(
+            boards, {"stress-255": 1.75}, warn_within_target=loose
+        )
+        assert "stress-255 frame 31" in line
+        assert "1.8 screens (1800), over its limit 1.75" in line
+    assert gpu.fragment_failures(
+        boards, {"stress-255": 1.8}, warn_within_target=False
+    ) == ([], [])
+
+
+def test_during_the_build_out_a_board_within_the_target_only_warns() -> None:
+    boards = gpu.parse_boards(output([1000, 1100]))
+    failed, warned = gpu.fragment_failures(
+        boards, {"stress-255": 1.05}, warn_within_target=True
+    )
+    assert failed == []
+    [line] = warned
+    assert "1.1 screens (1100), over its limit 1.05, within the target 1.75" in line
+    failed, _ = gpu.fragment_failures(
+        boards, {"stress-255": 1.05}, warn_within_target=False
+    )
+    assert len(failed) == 1
 
 
 def test_a_board_with_no_limit_fails() -> None:
     boards = gpu.parse_boards(output([1000]))
-    [line] = gpu.fragment_failures(boards, {})
+    [line], _ = gpu.fragment_failures(boards, {}, warn_within_target=True)
     assert "no limit" in line
 
 
