@@ -32,6 +32,7 @@ mod motion;
 mod notices;
 mod object_states;
 mod own;
+mod particles;
 mod piles;
 mod play;
 mod pointer;

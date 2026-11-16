@@ -306,7 +306,9 @@
     "verbs.lift.library.columns",
     "verbs.lift.hand.columns",
     "layout.desktop.tray.put_back.deck_backs",
-    "flat.phone.opening.per_row"
+    "flat.phone.opening.per_row",
+    "enhanced.particles.ash.count",
+    "enhanced.particles.vortex.count"
   ],
   "card": {
     "width": 63,
@@ -671,6 +673,23 @@
       "frames": 4.2,
       "wide": 0.55,
       "least": 0.5
+    }
+  },
+  "enhanced": {
+    "particles": {
+      "ash": {
+        "count": 96,
+        "life": 0.35,
+        "size": [1.2, 2.4],
+        "fall": 18,
+        "drift": 6
+      },
+      "vortex": {
+        "count": 128,
+        "life": 0.5,
+        "size": [1.0, 2.0],
+        "turns": 1.5
+      }
     }
   },
   "hand": {

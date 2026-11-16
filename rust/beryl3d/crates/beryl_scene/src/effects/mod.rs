@@ -1,10 +1,12 @@
 //! Effects: the 14 named looks of `effects` in `data/ui-conventions.json` that a step plays on a
 //! card, a player or the whole table (docs/beryl-3d.md, "Effects"). A verb writes each as an
 //! `EffectRun` when its script is compiled; `card` changes how a card is drawn for the runs on
-//! it, `light` draws the runs that are light of their own, and `shake` moves the whole picture.
+//! it, `light` draws the runs that are light of their own, `particles` draws the Enhanced tier's
+//! ash and vortex for `vanish`, and `shake` moves the whole picture.
 
 pub mod card;
 pub mod light;
+pub mod particles;
 pub mod shake;
 
 use beryl_protocol::script::Subject;

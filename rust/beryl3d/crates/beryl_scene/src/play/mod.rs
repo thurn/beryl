@@ -620,6 +620,7 @@ impl Show {
         light::marks::write(&self.lit, now, &scene, builder);
         light::streaks::write(&self.lit, now, &scene, builder);
         effects::light::write(&self.active_effects, now, &scene, builder);
+        effects::particles::write(&self.active_effects, now, &scene, builder);
         let scale = self.table.camera().window.scale;
         builder.shake(effects::shake::offset(&self.active_effects, now, scale));
     }

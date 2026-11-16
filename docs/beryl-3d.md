@@ -2116,7 +2116,13 @@ It changes only how pixels are shaded.
 - **Bloom** on glows and streaks, from a half-resolution blur.
 - **Particles** for the looks of `vanish` (a destroyed permanent falling to ash,
   an exiled one drawn into a vortex), drawn as instanced quads with seeded
-  motion.
+  motion. `effects::particles` writes them: ash leaves each row of a dissolving
+  card as its breaking edge passes and falls down the card's face, and the
+  vortex spirals from the face of a blanching card into its centre. Each
+  particle is a pure function of its run, its index and the frame's time, its
+  randomness an integer hash of the object's id and the step, and a frame holds
+  at most `PARTICLES` of them, shared equally among its runs. Their counts,
+  lives and sizes are `enhanced.particles` in `data/beryl3d/space.json`.
 - **Multisampling**, four samples, with a depth buffer.
 
 The rule that keeps the tiers in step: **a tier never changes where anything is,
