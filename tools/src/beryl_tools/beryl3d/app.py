@@ -27,9 +27,18 @@ FIRST_SHOWN = "beryl3d: first frame shown"
 # How long `smoke` lets the app run before it ends itself: a bound on a hang, never reached by
 # a healthy start, which shows a frame within a second of the recordings pack being read.
 SMOKE_LIMIT_S = 120
+# The status the app exits with when the recordings pack its `--fixture` reads is missing
+# (`beryl_inspect::recordings::MISSING_STATUS`, `cli.MISSING_PACK`).
+MISSING_PACK = 3
 # How many of a log's late frames `frames` prints.
 WORST = 10
 WINDOWS = ("none", "background", "foreground", "fullscreen")
+
+
+def record() -> int:
+    from .cli import record  # cli imports this module.
+
+    return record()
 
 
 def build() -> int:
@@ -115,6 +124,9 @@ def run_app(args: argparse.Namespace) -> int:
     ):
         if value is not None:
             command += [option, value]
+    code = subprocess.run(command, check=False).returncode
+    if code != MISSING_PACK or record() != 0:
+        return code
     return subprocess.run(command, check=False).returncode
 
 
@@ -124,10 +136,30 @@ def smoke_arguments(parser: argparse.ArgumentParser) -> None:
 
 def run_smoke(args: argparse.Namespace) -> int:
     """Starts the app with no window on `verbs-zones`, waits for its first shown frame and ends
-    it. The app ends itself after `SMOKE_LIMIT_S` if it hangs before then."""
+    it. The app ends itself after `SMOKE_LIMIT_S` if it hangs before then. When the app says
+    the recordings pack for the present sources is missing, which it is after any change to
+    the recorded sources until something builds it, builds the pack and starts it again.
+    """
     if not args.no_build and build() != 0:
         return checks.CANNOT_RUN
     started = time.monotonic()
+    shown, code = first_frame()
+    if shown is None and code == MISSING_PACK:
+        if record() != 0:
+            return checks.CANNOT_RUN
+        shown, code = first_frame()
+    if shown is None:
+        print(f"smoke: FAILED: the app showed no frame (exit {code})")
+        return 1
+    print(f"{shown}; {time.monotonic() - started:.1f} s from start")
+    print("smoke: passed")
+    return 0
+
+
+def first_frame() -> tuple[str | None, int | None]:
+    """Starts the app with no window on `verbs-zones` and ends it once it prints that its
+    first frame is shown. Gives that line, or None when it ended without one, and its exit
+    status."""
     command = [str(BINARY), "--window", "none", "--fixture", "verbs-zones"]
     process = subprocess.Popen(
         [*command, "--for", f"{SMOKE_LIMIT_S}s"],
@@ -148,12 +180,8 @@ def run_smoke(args: argparse.Namespace) -> int:
         process.wait(timeout=30)
     except subprocess.TimeoutExpired:
         process.kill()
-    if shown is None:
-        print(f"smoke: FAILED: the app showed no frame (exit {process.returncode})")
-        return 1
-    print(f"{shown}; {time.monotonic() - started:.1f} s from start")
-    print("smoke: passed")
-    return 0
+        process.wait()
+    return shown, process.returncode
 
 
 def first_line(path: Path) -> dict[str, object] | None:

@@ -27,10 +27,7 @@ fn main() -> ExitCode {
         };
         return match beryl_3d::fixture::write(name, std::path::Path::new(path)) {
             Ok(()) => ExitCode::SUCCESS,
-            Err(error) => {
-                eprintln!("beryl3d: {error}");
-                ExitCode::FAILURE
-            }
+            Err(error) => failed(&error),
         };
     }
     match app::run(&options) {
@@ -39,9 +36,19 @@ fn main() -> ExitCode {
             println!("frame log: {}", finished.path.display());
             ExitCode::SUCCESS
         }
-        Err(error) => {
-            eprintln!("beryl3d: {error}");
-            ExitCode::FAILURE
-        }
+        Err(error) => failed(&error),
     }
+}
+
+/// Prints `error` and gives the status to exit with: `beryl_inspect`'s
+/// `recordings::MISSING_STATUS` when the recordings pack a `--fixture` reads is missing, so
+/// that `just b3d app` and `just b3d smoke` build the pack and start the app again, and 1
+/// otherwise.
+fn failed(error: &str) -> ExitCode {
+    eprintln!("beryl3d: {error}");
+    #[cfg(feature = "tools")]
+    let status = beryl_inspect::recordings::status(error, 1);
+    #[cfg(not(feature = "tools"))]
+    let status = 1;
+    ExitCode::from(status)
 }
