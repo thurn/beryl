@@ -474,9 +474,8 @@ score of it, in place of UCB1's equal bonus.
   of the policy's scores at `ROLLOUT_TEMPERATURE`, the same weights a rollout
   draws from. A candidate the policy does not score takes an equal share. The
   first visit goes to the child with the highest `P`.
-- **Why.** A node's mean is then close to the value of the position under
-  sensible play by both players, which is what its parent needs. The tree stops
-  rating an attack by the opponent's worst blocks.
+- **Why.** Weighting exploration aims to make a node's mean reflect sensible
+  play by both players. An attack's score should depend less on weak blocks.
 - **`C`.** The build bead tries three values of `C` on `just why --tree` at the
   four clear-lead entries and takes the one whose tree lead is closest to the
   paired rollouts' lead.
@@ -485,6 +484,11 @@ score of it, in place of UCB1's equal bonus.
   tree's lead for the attack is under 0.02.
 - **Claims:** none.
 - **Measure:** the tree, 3M, `stronger`.
+
+`prior` was dropped after scoring 23.3% over 60 games at 3M against the champion
+(−174 Elo, 95% interval −309 to −73). The suite gained 18 passes to reach 369 of
+400\. It fixed the missed Teferi +1 and the main-phase Subtlety cast, while the
+targetless Subtlety evoke fell from 17 to 9 of 20.
 
 ### 6.6 Rung 5: `waste`
 
