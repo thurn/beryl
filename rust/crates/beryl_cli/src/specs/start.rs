@@ -92,10 +92,10 @@ pub(super) fn start_guarded(
             // the app holds the opponent's play. The spell or ability whose resolution asked
             // stays on the stack they watch, on top, where the decision kept it for the one
             // deciding (`DecisionView::resolving`): a view that only plays on has no other
-            // word of it, and what draws the table would take it for gone.
-            if let Some(resolving) = decision.resolving.clone()
-                && !update.view.stack.contains(&resolving)
-            {
+            // word of it, and what draws the table would take it for gone. A decision's view
+            // never lists it on the stack (`Table::of`), so it goes on top even when an entry
+            // there reads the same: a second trigger of one ability.
+            if let Some(resolving) = decision.resolving.clone() {
                 update.view.stack.push(resolving);
             }
             update.view.status = Status::Playing;

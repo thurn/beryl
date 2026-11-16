@@ -5,7 +5,7 @@
 //! scripts before gave them, and the spans they left open.
 
 use super::check::{carried, timed};
-use super::replay::replay;
+use super::replay::{check, replay};
 use super::{Open, Reset, Script, Table, spans};
 use crate::protocol::{PlayerView, StackItem};
 
@@ -21,8 +21,10 @@ impl Follow {
     ///
     /// # Errors
     ///
-    /// When the script has other than one timing for each step, cannot be played there or
-    /// breaks a rule invariant, or does not reset with nothing played before it. Nothing is then followed until a script that resets.
+    /// When the script has other than one timing for each step, cannot be played there, plays to
+    /// a table other than the view's ([`super::replay::check`]) or breaks a rule invariant, or
+    /// does not reset with nothing played before it. Nothing is then followed until a script
+    /// that resets.
     pub fn play(&mut self, view: &PlayerView) -> Result<(), String> {
         let shown = self.shown.take();
         let script = view.script.as_ref().ok_or("the view has no script")?;
@@ -32,6 +34,9 @@ impl Follow {
             (None, Some(shown)) => shown,
             (None, None) => return Err("no script that resets came before the view".to_owned()),
         };
+        if let Some(failure) = check(table.clone(), script, &Table::of(view)) {
+            return Err(failure);
+        }
         let open = carried(table.clone(), &open, script)?;
         self.shown = Some((replay(table, script)?, open));
         Ok(())

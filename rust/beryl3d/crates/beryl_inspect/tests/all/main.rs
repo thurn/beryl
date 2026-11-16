@@ -12,6 +12,7 @@ mod gate;
 mod pack;
 mod pointer_held;
 mod recorded;
+mod replay;
 mod runner;
 mod screens;
 mod specs;
