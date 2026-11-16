@@ -21,11 +21,11 @@ from . import paths
 
 # How long a request may take before it gives up, in seconds.
 LIMIT_S = 10.0
-SOCKET = re.compile(r"beryl3d-(\d+)\.sock")
+SOCKET: re.Pattern[str] = re.compile(r"beryl3d-(\d+)\.sock")
 # What a release binary must not contain: the start of the socket's file name (live.rs). The
 # binary's debug info names its own object files and compilation unit, `deps/beryl3d-<16 hex
 # digits>.<crate>...` and `beryl3d-<16 hex digits>`, which are not sockets.
-SOCKET_NAME = re.compile(rb"beryl3d-(?![0-9a-f]{16}[.\x00])")
+SOCKET_NAME: re.Pattern[bytes] = re.compile(rb"beryl3d-(?![0-9a-f]{16}[.\x00])")
 
 
 def socket_dir() -> Path:

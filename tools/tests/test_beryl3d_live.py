@@ -40,7 +40,7 @@ def test_with_two_sockets_a_process_id_is_needed_and_the_error_lists_them(
 
 
 def serve(path: Path, answer: bytes, asked: list[str]) -> threading.Thread:
-    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    listener: socket.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     listener.bind(str(path))
     listener.listen(1)
 
