@@ -534,10 +534,6 @@ COMMANDS: tuple[Command, ...] = (
         (
             ("just b3d ios-smoke", "build, install and replay verbs-zones"),
             (
-                "just b3d ios-smoke --fixture stress-255",
-                "replay the 255-card stress board",
-            ),
-            (
                 "just b3d ios-smoke --touch",
                 "touch, rotate and idle a live game through a UI test",
             ),
