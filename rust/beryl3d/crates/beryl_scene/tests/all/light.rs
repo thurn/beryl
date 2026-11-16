@@ -76,8 +76,8 @@ fn a_span_stands_whole_until_it_ends_and_is_forgotten_once_gone() {
     });
     lit.begin(mark(1), over(0, 100));
     lit.begin(arrow, over(50, 150));
-    assert_eq!(lit.whole_since(&mark(1)), Some(100 * MS));
-    assert_eq!(lit.whole_since(&arrow), Some(150 * MS));
+    assert_eq!(lit.whole_since(&mark(1)), Some(100e6));
+    assert_eq!(lit.whole_since(&arrow), Some(150e6));
     assert_eq!(lit.whole_since(&mark(2)), None, "a span never begun");
 
     lit.end(&mark(1), over(200, 300));
@@ -117,7 +117,7 @@ fn a_span_a_step_begins_reaches_the_table_at_the_steps_real_time() {
     assert_eq!(open.len(), 1);
     assert_eq!(open[0].span, token);
     assert_eq!(open[0].begins, over(420, 720));
-    assert_eq!(show.lit().whole_since(&token), Some(720 * MS));
+    assert_eq!(show.lit().whole_since(&token), Some(720e6));
     frame(&mut show, &mut buffer, 2000 * MS);
     assert_eq!(
         show.lit().open().len(),

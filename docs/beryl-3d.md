@@ -1562,6 +1562,17 @@ What the session does and what a client still does:
   script's first beat with a step about a card the tray held (or its first
   beat), at that beat's turn on the script's clock (`Show::place_let_go`). Until
   then the cards stay where the tray held them.
+- **A client may play scripts faster to catch up.** When many updates arrive at
+  once, as when a recording or a reconnection delivers a dozen views together,
+  Beryl 3D plays each script that starts with more than `catch_up.double`
+  updates waiting at twice real time, and with more than `catch_up.quadruple`
+  waiting at four times (`data/beryl3d/space.json`, `play::Show::frame`). The
+  web interface has no catch-up. Holds are measured in script time, as the web
+  interface measures them: `light::Lit` keeps a script clock that runs at each
+  script's rate while it plays and at real time between scripts, and a span
+  records when it stood whole on that clock. So an arrow that stood whole while
+  a script played at twice real time has stood, when a later script ends it, the
+  script time that passed, not the shorter real time.
 - **Segments are made from the laid-out beat.** Each step becomes segments, at
   absolute times, on the scene objects it concerns.
 - **Reduced motion** is a client's choice: it plays every step with no duration,

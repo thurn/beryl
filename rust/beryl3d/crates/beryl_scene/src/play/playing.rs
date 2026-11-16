@@ -103,7 +103,9 @@ impl Playing {
                 break;
             }
             match change.end {
-                script::Span::Begin => lit.begin(change.span, over),
+                script::Span::Begin => {
+                    lit.begin_in_script(change.span, over, self.start, change.over.to);
+                }
                 script::Span::End => lit.end(&change.span, over),
             }
             self.spans_given += 1;

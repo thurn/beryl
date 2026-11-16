@@ -81,6 +81,8 @@ pub struct Open {
     pub span: Span,
     pub begins: Interval,
     pub ends: Option<Interval>,
+    /// When it stood whole on the script clock (`Lit::ahead`), from which a hold is measured.
+    whole: u64,
 }
 
 /// An arrow or line to the pointer, as the web interface's `Aim` (`ui/src/stage/Aim.tsx`) draws
@@ -98,12 +100,23 @@ pub struct Aim {
 }
 
 /// Every span and streak the table shows.
+///
+/// A step that ends a span may wait until the span has stood whole for its `hold`, and the web
+/// interface measures that hold in script time. Beryl 3D plays scripts faster than real time
+/// when updates pile up (`catch_up` in `data/beryl3d/space.json`), so `Lit` keeps a script
+/// clock beside real time: it runs as fast as each script played, and at real time between
+/// scripts. `ahead` is how far the script clock is ahead of real time once the last script
+/// ended, and each span records when it stood whole on that clock.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Lit {
     open: Vec<Open>,
     streaks: Vec<StreakRun>,
     /// The arrows to the pointer drawn now (`Aim`).
     aims: Vec<Aim>,
+    /// How many nanoseconds the script clock is ahead of real time between scripts: the sum,
+    /// over every script played so far, of how much shorter it took in real time than on its
+    /// own clock.
+    ahead: u64,
 }
 
 impl Lit {
@@ -115,6 +128,7 @@ impl Lit {
             open: Vec::with_capacity(capacity),
             streaks: Vec::with_capacity(capacity),
             aims: Vec::with_capacity(capacity),
+            ahead: 0,
         }
     }
 
@@ -136,6 +150,24 @@ impl Lit {
     /// showed there before, leave the pile as it begins, as the web interface's `heldUp`
     /// (`ui/src/stage/table.ts`) has it.
     pub fn begin(&mut self, span: Span, over: Interval) {
+        self.open_span(span, over, over.to + self.ahead);
+    }
+
+    /// `span` begins to appear over `over`, in nanoseconds since the client started, as a step
+    /// of the script that started at `start` writes it, standing whole at `whole` on that
+    /// script's clock. The script runs faster than real time while it catches up, and the
+    /// span's hold is measured on the script's clock (`whole_since`).
+    pub fn begin_in_script(&mut self, span: Span, over: Interval, start: u64, whole: u64) {
+        self.open_span(span, over, start + self.ahead + whole);
+    }
+
+    /// A script that played `ran` nanoseconds on its own clock has ended, after `took`
+    /// nanoseconds of real time: the script clock is ahead of real time by the difference more.
+    pub fn script_ended(&mut self, ran: u64, took: u64) {
+        self.ahead += ran.saturating_sub(took);
+    }
+
+    fn open_span(&mut self, span: Span, over: Interval, whole: u64) {
         if let Span::Revealed { slot, cause } = span {
             for open in &mut self.open {
                 if let Span::Revealed {
@@ -156,6 +188,7 @@ impl Lit {
             span,
             begins: over,
             ends: None,
+            whole,
         });
     }
 
@@ -177,14 +210,22 @@ impl Lit {
         &self.open
     }
 
-    /// Since when `span` has stood whole, for `beat`'s `whole`: the end of its appearing, while
-    /// it is open and not going.
+    /// Since when `span` has stood whole, while it is open and not going, for a step that ends
+    /// it after a hold: in nanoseconds of the real time between scripts, as if every script
+    /// before had played at real time. A step that plays between scripts, or at the start of
+    /// a script, waits until this time plus its hold, whatever rate the scripts that played
+    /// since the span stood whole ran at. It is below zero for a span that stood whole on the
+    /// script clock less time after the client started than the clock has since gained.
     #[must_use]
-    pub fn whole_since(&self, span: &Span) -> Option<u64> {
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a client runs for hours, far below f64's exact range in nanoseconds"
+    )]
+    pub fn whole_since(&self, span: &Span) -> Option<f64> {
         self.open
             .iter()
             .find(|open| open.ends.is_none() && open.span == *span)
-            .map(|open| open.begins.to)
+            .map(|open| open.whole as f64 - self.ahead as f64)
     }
 
     /// A streak begins, over `run.over` in nanoseconds since the client started.

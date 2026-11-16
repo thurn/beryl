@@ -102,6 +102,16 @@ impl Starting<'_> {
     fn clock(&self, real: u64) -> f64 {
         (real as f64 - self.start as f64) * self.rate as f64 / 1e6
     }
+
+    /// How long before the script starts `since`, in the real time between scripts
+    /// (`Lit::whole_since`), is, in milliseconds on the script clock: below zero.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a client runs for hours, far below f64's exact range in nanoseconds"
+    )]
+    fn since_start(&self, since: f64) -> f64 {
+        (since - self.start as f64) / 1e6
+    }
 }
 
 /// The span `act` begins or ends and which, for an arrow or a mark: the spans the web
@@ -189,10 +199,13 @@ fn again(
             match latest {
                 Some((script::Span::Begin, whole)) => Some(whole),
                 Some((script::Span::End, _)) => None,
+                // `whole_since` is on the clock of the real time between scripts, so the time
+                // from it to this script's start is script time, whatever rate the scripts
+                // played at since the span stood whole.
                 None => starting
                     .lit
                     .whole_since(&span)
-                    .map(|since| starting.clock(since)),
+                    .map(|since| starting.since_start(since)),
             }
         };
         let passed =

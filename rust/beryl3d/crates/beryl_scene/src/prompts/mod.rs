@@ -406,7 +406,6 @@ impl<'a> Steps<'a> {
     /// When the next step, of the shape `step`, plays, in nanoseconds since the client started;
     /// `ends` is the span it ends, if it ends one.
     #[expect(
-        clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "times are positive and far below 2^52 nanoseconds"
@@ -419,9 +418,7 @@ impl<'a> Steps<'a> {
             let held = timing
                 .hold
                 .zip(ends.and_then(|span| self.lit.whole_since(span)))
-                .map_or(f64::NEG_INFINITY, |(hold, since)| {
-                    since as f64 / NS_PER_MS + hold
-                });
+                .map_or(f64::NEG_INFINITY, |(hold, since)| since / NS_PER_MS + hold);
             self.from = self.from.max(self.turn.max(held) + timing.delay);
             self.turn += timing.stagger;
             Interval {

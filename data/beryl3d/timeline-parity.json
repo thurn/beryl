@@ -6,7 +6,6 @@
     "combat-declare/you": 2,
     "late-game/opponent": 1,
     "late-game/you": 1,
-    "no-more-lies/declining-to-pay-exiles-the-spell/opponent": 4,
     "shape-declare/opponent": 2,
     "shape-declare/you": 2,
     "stack-bounce/you": 1,
@@ -15,7 +14,6 @@
     "verbs-cast-theirs-stops/opponent": 2,
     "verbs-cast-theirs-stops/you": 2,
     "verbs-cast-theirs/opponent": 2,
-    "verbs-cast-theirs/you": 2,
-    "verbs-place-theirs/you": 3
+    "verbs-cast-theirs/you": 2
   }
 }

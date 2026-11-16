@@ -568,6 +568,7 @@ impl Show {
                 self.rested = real;
                 if let Some(playing) = &mut self.playing {
                     playing.give(real, (&mut self.lit, &mut self.counts), builder);
+                    self.lit.script_ended(end, real - playing.start);
                 }
                 self.finish();
             }

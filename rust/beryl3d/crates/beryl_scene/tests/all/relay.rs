@@ -152,6 +152,53 @@ fn a_span_ended_in_a_later_script_waits_until_it_has_stood_whole_for_its_hold() 
 }
 
 #[test]
+fn a_hold_after_a_script_that_caught_up_counts_the_script_time_it_played() {
+    // The mark on the Angel stands whole 200 ms into its script, which then marks the Island
+    // for 400 ms more. So many updates wait behind it (more than `catch_up.double`) that it
+    // plays at twice real time: the 400 ms after the mark stood whole pass in 200 real ms. The
+    // web interface measures holds in script time, so when the next script ends the mark the
+    // mark has stood 400 ms, past its 290 ms hold, and the end waits for nothing.
+    let (start, cards) = before();
+    let mark = |span, on| Act::Mark {
+        span,
+        mark: Mark::Selected,
+        on: card(on),
+    };
+    let begun = scripted(
+        &start,
+        &[
+            vec![mark(Edge::Begin, cards.angel)],
+            vec![mark(Edge::Begin, cards.island)],
+        ],
+        None,
+    );
+    let ended = scripted(&begun, &[vec![mark(Edge::End, cards.angel)]], None);
+    let mut updates = vec![
+        (0, start, Vec::new()),
+        (10, begun.clone(), vec![timing(200.0), timing(400.0)]),
+    ];
+    // Scripts with no steps, which take no time, so that more than `catch_up.double` updates
+    // wait as the marks' script starts.
+    let filler = scripted(&begun, &[], None);
+    updates.extend((0..10).map(|_| (10, filler.clone(), Vec::new())));
+    updates.push((10, ended, vec![held(150.0)]));
+    let show = play(updates, 1_000);
+    let last = show.history().len() - 1;
+    assert_eq!(script(&show, 1).rate, 2, "the marks' script catches up");
+    assert_eq!(script(&show, last).rate, 1);
+    assert_eq!(
+        script(&show, last).start,
+        Some(310 * MS),
+        "the marks' 600 ms of script time took 300 real ms"
+    );
+    assert_eq!(
+        starts(script(&show, last)),
+        [0],
+        "the end waits for nothing"
+    );
+}
+
+#[test]
 fn an_arrow_begun_and_ended_in_one_script_waits_from_its_own_begin() {
     let (start, cards) = before();
     let point = |span| Act::Point {
