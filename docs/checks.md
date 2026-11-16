@@ -268,7 +268,10 @@ Beryl 3D, the native client in its own Cargo workspace, has checks of its own
 - `just b3d lane` runs the lanes by hand, and `just b3d` lists Beryl 3D's other
   commands.
 - A change to Beryl 3D's tools, under `tools/src/beryl_tools/beryl3d/`, runs the
-  python lane, as any change to `tools/` does, and not the `beryl3d` lane.
+  python lane and not the `beryl3d` lane. When every path outside Beryl 3D's own
+  is under those tools or is one of their tests
+  (`tools/tests/test_beryl3d*.py`), the lane runs black on the changed files,
+  pyre, and only those tests; any other change to `tools/` runs it whole.
 - A step of a Beryl 3D lane that the fast check cuts off at its 180 s hard limit
   is left to the Beryl 3D sweep, not to slow CI.
 - In the fast check, `cargo-test` runs only the workspace tests that fit the

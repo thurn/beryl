@@ -3,6 +3,7 @@ the lanes the fast check and slow CI choose from."""
 
 from __future__ import annotations
 
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -78,16 +79,37 @@ def repo_lane() -> Lane:
     )
 
 
-def python_lane() -> Lane:
-    lane = Lane("python").step(
-        "black", [sys.executable, "-m", "black", "--check", "--quiet", "tools"]
-    )
+# Beryl 3D's tools and the tests of them: a change confined to these (and Beryl 3D's own paths)
+# runs only these tests in the python lane (`python_lane(only=...)`).
+BERYL3D_TOOLS = r"^tools/src/beryl_tools/beryl3d/"
+BERYL3D_TOOL_TESTS = r"^tools/tests/test_beryl3d(_[^/]*)?\.py$"
+
+
+def python_lane(only: list[str] | None = None) -> Lane:
+    """The python lane. With `only`, the repository-relative paths of a change confined to
+    Beryl 3D's tools, black checks just those files and pytest runs only Beryl 3D's tool tests
+    (tools/tests/test_beryl3d*.py); pyre still checks the whole project, as it cannot check
+    a part."""
+    black = ["tools"]
+    tests: list[str] = []
+    if only is not None:
+        black = [p for p in only if p.endswith(".py") and (paths.REPO / p).exists()]
+        tests = sorted(
+            f"tests/{f.name}"
+            for f in (paths.TOOLS / "tests").glob("test_beryl3d*.py")
+            if re.match(BERYL3D_TOOL_TESTS, f"tools/tests/{f.name}")
+        )
+    lane = Lane("python")
+    if black:
+        lane.step(
+            "black", [sys.executable, "-m", "black", "--check", "--quiet", *black]
+        )
     # Pyre has no Windows build: macOS checks the types.
     if not system.WINDOWS:
         lane.step("pyre", ["pyre", "--noninteractive", "check"], paths.TOOLS)
     return lane.step(
         "pytest",
-        [sys.executable, "-m", "beryl_tools.checks", "pytest"],
+        [sys.executable, "-m", "beryl_tools.checks", "pytest", *tests],
         rerun=failed_pytests,
     )
 

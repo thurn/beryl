@@ -416,6 +416,24 @@ def test_a_change_under_tools_runs_the_python_lane_and_the_scale_tests_once(
     assert scale_tests_run(lanes) == 0
 
 
+def test_a_change_confined_to_beryl3d_tools_runs_only_their_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = "tools/src/beryl_tools/beryl3d/paths.py"
+    lanes = lanes_for(monkeypatch, [tool, "rust/beryl3d/src/lib.rs"])
+    pytest_cmd = lanes["python"][-1]
+    assert pytest_cmd[-2] != "pytest"
+    tests = pytest_cmd[pytest_cmd.index("pytest") + 1 :]
+    assert tests and all(t.startswith("tests/test_beryl3d") for t in tests)
+    assert "tests/test_beryl3d_cli.py" in tests
+    black = lanes["python"][0]
+    assert black[-1] == tool
+    # A path elsewhere under tools/ runs the whole suite.
+    whole_lane = lanes_for(monkeypatch, [tool, "tools/src/beryl_tools/scale.py"])
+    assert whole_lane["python"][-1][-2:] == ["beryl_tools.checks", "pytest"]
+    assert whole_lane["python"][0][-1] == "tools"
+
+
 def test_the_script_checks_run_for_a_change_to_a_crate_a_script_comes_from(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

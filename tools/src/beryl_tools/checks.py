@@ -96,6 +96,8 @@ from .lanes import (
     Lane,
     Step,
     app_lane,
+    BERYL3D_TOOL_TESTS,
+    BERYL3D_TOOLS,
     card_oracle_lane,
     names_lane,
     oracle_lane,
@@ -539,7 +541,7 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
 
     lanes = [repo_lane()]
     if touched(r"^tools/") or touched(CARD_STORE):
-        lanes.append(python_lane())
+        lanes.append(python_lane(beryl3d_tools_only(changed, rest)))
     elif touched(CARD_FILES):
         lanes.append(scale_lane())  # The python lane runs these tests whole.
     if touched(r"^rust/") or touched(CARD_STORE):
@@ -585,6 +587,16 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
         if every or project.name in projects:
             lanes.append(project.lane())
     return lanes
+
+
+def beryl3d_tools_only(changed: list[str] | None, rest: list[str]) -> list[str] | None:
+    """The paths of a change whose every path outside Beryl 3D's own is under its tools or the
+    tests of them, or None for any other change: the python lane then runs only those tests.
+    """
+    if changed is None or not rest:
+        return None
+    allowed = f"{BERYL3D_TOOLS}|{BERYL3D_TOOL_TESTS}"
+    return rest if all(re.match(allowed, p) for p in rest) else None
 
 
 def changed_cards(changed: list[str] | None) -> list[str] | None:
