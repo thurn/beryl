@@ -35,11 +35,20 @@ impl Client {
         self.show_screen();
     }
 
-    /// Sends the player's stops to the session of the latest view, if there is one.
+    /// Sends the player's stops to the session when the game holds others (`stops_held`) and
+    /// the player has a decision open, as the web's `Game` does. The session takes stops only
+    /// at the player's decision (`GameSession::set_stops` refuses them otherwise), so a change
+    /// made while the opponent acts waits for the next one, and a game resumed or started
+    /// takes up the saved stops at its first decision.
     pub(super) fn send_stops(&mut self) {
-        if let Some(session) = self.session {
-            self.commands
-                .push_back(SessionCommand::SetStops(session, self.settings.stops));
+        let (Some(session), Some(held), Some(_)) = (self.session, self.stops_held, &self.prompt)
+        else {
+            return;
+        };
+        let stops = self.settings.stops;
+        if held != stops {
+            self.stops_held = Some(stops);
+            self.commands.push_back(SessionCommand::SetStops(session, stops));
         }
     }
 }

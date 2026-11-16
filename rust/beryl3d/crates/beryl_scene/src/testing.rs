@@ -22,6 +22,9 @@ impl Default for ViewBuilder {
         view.turn.number = 1;
         view.turn.own_number = 1;
         view.turn.starting = Some(Side::You);
+        // The stops a session starts a game with, which the client's default settings hold, so
+        // that a test's first decision sends no stops.
+        view.stops = beryl_protocol::StopsSetting::SMART;
         Self { view }
     }
 }

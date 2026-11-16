@@ -67,6 +67,75 @@ fn the_damage_icon_sets_both_combat_damage_steps() {
     assert!(stops.yours.has(Step::CombatDamage.into()));
 }
 
+/// The sample table while the opponent acts: the viewer has no decision open.
+fn waiting() -> Input {
+    Input::Update(Box::new(ViewBuilder::sample().update()))
+}
+
+/// Presses the toggle named `name`, as the last frame drew it.
+fn press_toggle(client: &mut beryl_scene::Client, now: u64, name: &str) {
+    let frame = client.frame(now);
+    let at = centre(frame, find(frame, Role::Toggle, name));
+    client.handle(pointer(PointerPhase::Down, at));
+    client.handle(pointer(PointerPhase::Up, at));
+}
+
+/// The stops commands the client has queued.
+fn stops_sent(client: &mut beryl_scene::Client) -> Vec<StopsSetting> {
+    std::iter::from_fn(|| client.next_command())
+        .filter_map(|command| match command {
+            SessionCommand::SetStops(_, stops) => Some(stops),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_stop_set_while_the_opponent_acts_is_sent_at_the_next_decision() {
+    // The session takes stops only at the viewer's decision, and refuses them otherwise.
+    let mut client = client();
+    client.handle(waiting());
+    press_toggle(&mut client, 0, "Opponent's draw");
+    assert_eq!(stops_sent(&mut client), []);
+
+    client.handle(deciding(prompt("Pay {1}{U}")));
+    let sent = stops_sent(&mut client);
+    assert_eq!(sent.len(), 1);
+    assert!(sent[0].theirs.has(Step::Draw.into()));
+    // Sent once: a later view of the same game, still holding the old stops because the
+    // session has not drawn one since, sends them again only at that view.
+    client.frame(1_000_000);
+    assert_eq!(stops_sent(&mut client), []);
+}
+
+#[test]
+fn a_new_game_takes_up_the_saved_stops_at_its_first_decision() {
+    let mut client = client();
+    let mut settings = beryl_scene::settings::Settings::default();
+    settings.stops.full_control = true;
+    client.handle(Input::Settings(settings));
+    assert_eq!(stops_sent(&mut client), []);
+    client.handle(deciding(prompt("Pay {1}{U}")));
+    let sent = stops_sent(&mut client);
+    assert_eq!(sent.len(), 1);
+    assert!(sent[0].full_control);
+}
+
+#[test]
+fn a_stop_set_and_cleared_in_one_decision_sends_both_changes() {
+    // The latest view still holds the stops from before the first press, so the second press,
+    // which matches them, must still be sent: the game holds the first press's.
+    let mut client = client();
+    client.handle(deciding(prompt("Pay {1}{U}")));
+    press_toggle(&mut client, 0, "Opponent's draw");
+    press_toggle(&mut client, 1_000_000, "Opponent's draw");
+    assert_eq!(
+        stops_sent(&mut client).last(),
+        Some(&StopsSetting::SMART),
+        "the game is told the stop is cleared again"
+    );
+}
+
 #[test]
 fn untap_and_cleanup_show_an_icon_but_no_toggle() {
     let mut client = client();

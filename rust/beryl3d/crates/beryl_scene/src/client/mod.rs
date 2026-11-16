@@ -12,7 +12,7 @@ use std::collections::VecDeque;
 use beryl_protocol::prompt::{Click, ClickReply, ClickRequest, PromptView};
 use beryl_protocol::protocol::{DecisionId, ObjectId, SessionId, Side, Status};
 use beryl_protocol::script::{OwnTimings, Subject, Verb, own_timings};
-use beryl_protocol::{AgentView, StartRequest};
+use beryl_protocol::{AgentView, StartRequest, StopsSetting};
 
 use crate::command::{Reply, Request, SessionCommand};
 use crate::element::{Dismiss, Press};
@@ -127,6 +127,9 @@ pub struct Client {
     seat: Side,
     /// The session the latest view came from, which stop and concede commands name.
     session: Option<SessionId>,
+    /// The stops the game holds, as far as the client knows: the latest view's, or those it
+    /// sent since (`send_stops`).
+    stops_held: Option<StopsSetting>,
     /// The music last asked of the host, so that it is asked for again only when it changes.
     music: Option<Music>,
     /// The timing of every step the client makes itself, read once at startup.
@@ -223,6 +226,7 @@ impl Client {
             recordings: Vec::new(),
             seat: Side::You,
             session: None,
+            stops_held: None,
             music: None,
             own_timings: own_timings(),
             prompt: None,
@@ -283,6 +287,8 @@ impl Client {
                     _ => None,
                 });
                 self.prepare_pill(&update.view);
+                self.stops_held = Some(update.view.stops);
+                self.send_stops();
                 // The same view sent again says nothing new happened.
                 let again = self
                     .show
@@ -333,6 +339,7 @@ impl Client {
             Input::Reply(Reply::DeckImport(imported)) => self.take_imported_deck(imported),
             Input::Settings(settings) => {
                 self.settings = settings;
+                self.send_stops();
                 self.show_screen();
             }
             Input::Agents(agents) => self.take_agents(agents),
