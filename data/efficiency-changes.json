@@ -133,5 +133,10 @@
     "label": "Agents send their file reads and searches in one message instead of one request per read, and beads name files by path so a session can read them all at once",
     "metric": "bead.dollars",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D timeline parity reuses the shared build for export and timeline playback",
+    "metric": "machine.saturation",
+    "expect": "down"
   }
 ]

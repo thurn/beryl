@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
+import json
+import subprocess
+from pathlib import Path
 from typing import Any
 
-from beryl_tools.beryl3d import timeline
+import pytest
+from beryl_tools.beryl3d import cli, timeline
 
 
 def step(
@@ -69,3 +74,39 @@ def test_update_lowers_an_entry_and_refuses_to_raise_one() -> None:
     assert refused == ["b/you"]
     entries, refused = timeline.lowered(found, allowed, scope, raise_=True)
     assert entries["b/you"] == 1 and refused == []
+
+
+def test_parity_reuses_the_binary_built_with_the_pack(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    builds: list[list[str]] = []
+    line = json.dumps(step())
+    native: Path = tmp_path / "native.jsonl"
+    native.write_text(line + "\n")
+
+    def build(arguments: list[str]) -> int:
+        builds.append(arguments)
+        return 0
+
+    def run(command: list[str], **_options: Any) -> subprocess.CompletedProcess[str]:
+        if command == [str(tmp_path / "record")]:
+            return subprocess.CompletedProcess[str](command, 0, "recordings.bin\n", "")
+        if command == [str(tmp_path / "b3d"), "export", str(tmp_path)]:
+            (tmp_path / "r.you.json").write_text("{}")
+            return subprocess.CompletedProcess[str](command, 0, "", "")
+        assert command == [str(tmp_path / "b3d"), "timeline", "--all"]
+        return subprocess.CompletedProcess[str](command, 0, f"command\n{native}\n", "")
+
+    monkeypatch.setattr(cli, "build", build)
+    monkeypatch.setattr(cli, "program", lambda name: tmp_path / name)
+    monkeypatch.setattr(cli, "linked", lambda name: tmp_path / name)
+    monkeypatch.setattr(timeline, "out", run)
+    monkeypatch.setattr(timeline.tempfile, "mkdtemp", lambda prefix: str(tmp_path))
+    monkeypatch.setattr(timeline, "web_lines", lambda pack, directory: [line])
+    monkeypatch.setattr(timeline, "load_allowlist", dict)
+
+    assert (
+        timeline.run_parity(argparse.Namespace(prefix="", fixtures=False, update=False))
+        == 0
+    )
+    assert builds == [cli.SHARED_BUILD]

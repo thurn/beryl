@@ -201,14 +201,12 @@ def out(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
 
 
 def b3d(arguments: list[str]) -> str:
-    """The standard output of the `b3d` program run with `arguments`, which is built first.
-    When it says the recordings pack is missing, the pack is built and it runs again."""
+    """Runs the `b3d` binary built by `pack_name` and returns its output.
+    Building `beryl_inspect` on its own resolves a different set of Cargo features and
+    leaves a second build in the sweep's target directory."""
     from . import cli
 
-    built = cli.build(["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"])
-    if built != 0:
-        raise SystemExit(built)
-    line = [str(cli.linked("b3d")), *arguments]
+    line = [str(cli.program("b3d")), *arguments]
     done = out(line)
     if done.returncode == cli.MISSING_PACK:
         if cli.record() != 0:
@@ -221,7 +219,7 @@ def b3d(arguments: list[str]) -> str:
 
 
 def pack_name() -> str:
-    """The name of the recordings pack for the present sources, built if it is missing."""
+    """Builds the shared binaries and returns the recordings pack's name."""
     from . import cli
 
     if cli.shared_build() != 0:
