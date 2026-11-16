@@ -29,6 +29,7 @@ from typing import Any
 from .. import checks, mobile, paths as repo_paths, system
 from . import app, paths
 from .phone_log import (
+    android_lifecycle_faults,
     android_touch_faults,
     lines,
     logged_inputs,
@@ -647,10 +648,16 @@ def android_touch_smoke(
 
 def android_smoke_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--fixture", default=FIXTURE, help="the recording to replay")
-    parser.add_argument(
+    scenario = parser.add_mutually_exclusive_group()
+    scenario.add_argument(
         "--touch",
         action="store_true",
         help="send touch and Back input, rotate the surface, and verify that frames stop when idle",
+    )
+    scenario.add_argument(
+        "--lifecycle",
+        action="store_true",
+        help="suspend with Home, resume on a new surface, and check low memory and platform requests",
     )
     parser.add_argument(
         "--gles",
@@ -660,9 +667,12 @@ def android_smoke_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run_android_smoke(args: argparse.Namespace) -> int:
+    from . import android_lifecycle  # Uses the emulator helpers above.
+
     label = (
         "android-smoke"
         + (" --touch" if args.touch else "")
+        + (" --lifecycle" if args.lifecycle else "")
         + (" --gles" if args.gles else "")
     )
     run = out_dir("phone") / f"{run_name()}-android{'-gles' if args.gles else ''}"
@@ -683,7 +693,7 @@ def run_android_smoke(args: argparse.Namespace) -> int:
             shell: list[str] = ["shell", "run-as", BUNDLE, "sh", "-c"]
             adb(
                 *shell,
-                f"'mkdir -p files && rm -f files/*.jsonl files/{ERRORS} files/{LIBRARY_LOG}'",
+                f"'mkdir -p files && rm -f files/*.jsonl files/{ERRORS} files/{LIBRARY_LOG} files/host.log'",
             )
             adb(*shell, f"'cat > files/{fixture.name}'", stdin=fixture)
 
@@ -700,6 +710,10 @@ def run_android_smoke(args: argparse.Namespace) -> int:
                 text = adb(
                     *shell, f"'test -s files/{ERRORS} && cat {both} 2>/dev/null'"
                 ).stdout
+                if args.lifecycle and not text:
+                    text = adb(
+                        *shell, f"'grep ^ERROR files/{LIBRARY_LOG} 2>/dev/null'"
+                    ).stdout
                 crash = adb("logcat", "-d", "-b", "crash").stdout
                 events = adb("logcat", "-d", "-b", "events", "-s", "am_anr:I").stdout
                 anr = "\n".join(line for line in events.splitlines() if BUNDLE in line)
@@ -714,6 +728,8 @@ def run_android_smoke(args: argparse.Namespace) -> int:
                 )
                 if args.touch:
                     log, faults = android_touch_smoke(read, errors, label)
+                elif args.lifecycle:
+                    log, faults = android_lifecycle.exercise(read, errors, label)
                 else:
                     log, faults = wait_for_log(read, alive, errors, label), []
             png = run / "screen.png"
@@ -727,6 +743,19 @@ def run_android_smoke(args: argparse.Namespace) -> int:
                     check=False,
                 ).stdout
             )
+            if args.lifecycle:
+                if not faults:
+                    fault = android_lifecycle.request("open-url")
+                    if fault:
+                        faults.append(fault)
+                    log = read()
+                host = android_lifecycle.host_log()
+                (run / "host.log").write_text(host, encoding="utf-8")
+                faults.extend(android_lifecycle_faults(log or "", host))
+                if reported := errors():
+                    faults.append(reported)
+                library_log = adb(*shell, f"'cat files/{LIBRARY_LOG}'").stdout
+                (run / LIBRARY_LOG).write_text(library_log, encoding="utf-8")
         finally:
             adb("emu", "kill")
             emulator.wait(timeout=REPLAY_LIMIT_S)

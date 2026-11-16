@@ -550,8 +550,8 @@ COMMANDS: tuple[Command, ...] = (
                 "replay verbs-zones on Vulkan and check touch, Back, rotation and idle",
             ),
             (
-                "just b3d android-smoke --touch --gles",
-                "check the same inputs on OpenGL ES 3.0",
+                "just b3d android-smoke --lifecycle --gles",
+                "check Android lifecycle and requests on OpenGL ES 3.0",
             ),
         ),
         phone.checked(phone.run_android_smoke),

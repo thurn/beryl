@@ -3,6 +3,7 @@
 package ca.thurn.beryl3d
 
 import android.app.Activity
+import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -40,11 +41,13 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
     private var height = 0
     private var insets = SafeInsets()
     private var lastRate = 0f
+    private var resumed = false
     private var framePending = false
     private var frameDelayed = false
     private var traceFrames = false
     private var callbackCount = 0L
     private val rect = FloatArray(4)
+    private lateinit var requests: PlatformRequests
     private val choreographer by lazy { Choreographer.getInstance() }
 
     @Suppress("DEPRECATION") // Keep the window and display calls for API 24.
@@ -76,6 +79,8 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
         }
 
         val view = Touches(this, ::sendTouch)
+        requests = PlatformRequests(this, view)
+        requests.registerTestReceiver(::perform)
         view.holder.addCallback(this)
         view.setOnApplyWindowInsetsListener { _, windowInsets ->
             val next = SafeInsets.from(windowInsets)
@@ -104,7 +109,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
 
     private fun updateSurface() {
         val holder = currentSurface ?: return
-        if (app == 0L) return
+        if (app == 0L || !resumed) return
         val scale = resources.displayMetrics.density
         // A preceding idle callback no longer describes this surface.
         if (traceFrames) Log.d("Beryl3dFrames", "$callbackCount 0")
@@ -118,14 +123,21 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         currentSurface = null
         lastRate = 0f
+        stopFrames()
+        if (app != 0L) {
+            Native.surfaceLost(app)
+            requests.trace("surface-lost")
+        }
+    }
+
+    private fun stopFrames() {
         if (framePending) choreographer.removeFrameCallback(this)
         framePending = false
         frameDelayed = false
-        if (app != 0L) Native.surfaceLost(app)
     }
 
     private fun requestFrame() {
-        if (app == 0L || currentSurface == null || (framePending && !frameDelayed)) return
+        if (!resumed || app == 0L || currentSurface == null || (framePending && !frameDelayed)) return
         if (framePending) choreographer.removeFrameCallback(this)
         framePending = true
         frameDelayed = false
@@ -135,6 +147,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
     override fun doFrame(frameTimeNanos: Long) {
         framePending = false
         frameDelayed = false
+        if (!resumed) return
         val holder = currentSurface ?: return
         val result = Native.frame(app, System.nanoTime())
         val hz = Float.fromBits(result[1].toInt())
@@ -166,13 +179,8 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
         }
     }
 
-    @Suppress("UNUSED_PARAMETER") // These fields will be used when the requests are implemented.
     private fun perform(kind: Int, rect: FloatArray, text: String?) {
-        when (kind) {
-            Native.REQUEST_BEGIN_TEXT_ENTRY, Native.REQUEST_END_TEXT_ENTRY,
-            Native.REQUEST_SHARE, Native.REQUEST_HAPTIC, Native.REQUEST_OPEN_URL ->
-                Log.d("Beryl3d", "Received platform request " + kind)
-        }
+        requests.perform(kind, rect, text)
     }
 
     private fun sendTouch(id: Int, phase: Int, x: Float, y: Float) {
@@ -193,20 +201,43 @@ class MainActivity : Activity(), SurfaceHolder.Callback, Choreographer.FrameCall
 
     override fun onPause() {
         super.onPause()
+        resumed = false
+        stopFrames()
         if (app != 0L) Native.lifecycle(app, Native.SUSPENDED)
     }
 
     override fun onResume() {
         super.onResume()
+        resumed = true
         if (app != 0L) Native.lifecycle(app, Native.RESUMED)
-        requestFrame()
+        updateSurface()
+    }
+
+    @Suppress("DEPRECATION") // These trim levels still reach the app on older Android versions.
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        val threshold = if (resumed) {
+            ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL
+        } else {
+            ComponentCallbacks2.TRIM_MEMORY_COMPLETE
+        }
+        if (level >= threshold) lowMemory()
     }
 
     @Deprecated("Activity.onLowMemory is the call API 24 has")
     override fun onLowMemory() {
         super.onLowMemory()
+        lowMemory()
+    }
+
+    private fun lowMemory() {
         if (app != 0L) Native.lifecycle(app, Native.LOW_MEMORY)
         requestFrame()
+    }
+
+    override fun onDestroy() {
+        requests.unregisterTestReceiver()
+        super.onDestroy()
     }
 }
 

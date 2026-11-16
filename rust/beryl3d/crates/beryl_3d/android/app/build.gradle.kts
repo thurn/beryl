@@ -38,3 +38,8 @@ kotlin {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
+
+dependencies {
+    // FileProvider replaces writing a content provider by hand to share report files.
+    implementation("androidx.core:core:1.13.1")
+}

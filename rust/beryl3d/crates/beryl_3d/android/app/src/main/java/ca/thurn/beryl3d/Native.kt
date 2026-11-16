@@ -78,6 +78,8 @@ object Native {
     const val REQUEST_HAPTIC = 3
     const val REQUEST_OPEN_URL = 4
 
+    const val HAPTIC_MEDIUM = 1
+
     const val SUSPENDED = 0
     const val RESUMED = 1
     const val LOW_MEMORY = 2

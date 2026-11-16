@@ -1059,7 +1059,7 @@ the graphics paths and the build before milestone 4 builds the real hosts on it:
 - **wgpu's Android surface needs a display handle**, even though Android's
   carries nothing: without one, `create_surface_unsafe` refuses the window.
 
-Three behaviors are specified because they differ most between platforms.
+The phone hosts handle the following platform behaviors.
 
 - **Text entry.** On phones the host shows a native text field over the element
   being edited, so the system keyboard, autocorrect, dictation and input methods
@@ -1067,15 +1067,17 @@ Three behaviors are specified because they differ most between platforms.
   field's rectangle and contents, and the host sends a `Text` input for every
   change. On the desktop the field is edited in place, using `parley`'s editing
   support and `winit`'s input-method events.
-- **Losing the surface.** When an app is suspended, Android destroys the GPU
-  surface and iOS forbids GPU work. The host calls `beryl3d_surface_lost`, and
-  the renderer drops the surface but keeps the GPU device and queue: wgpu's
-  `Device` outlives its `Surface` on Metal, Vulkan and OpenGL, so every uploaded
-  face, glyph page and pipeline survives the suspension. On return the host
-  supplies a new surface and the renderer attaches it to the same device
-  (`Renderer::attach`), uploading nothing. The client core's state is untouched,
-  so the table reappears exactly as it was. A lost device, which would need
-  every texture made again from the disk cache, is not handled yet.
+- **Losing the surface.** The Android host stops its frame callbacks on pause
+  and drops the GPU surface before returning from `surfaceDestroyed`. On resume
+  it waits for a valid surface before scheduling a frame. iOS forbids GPU work
+  while suspended. The host calls `beryl3d_surface_lost`, and the renderer drops
+  the surface but keeps the GPU device and queue. wgpu's `Device` outlives its
+  `Surface` on Metal, Vulkan and OpenGL, so every uploaded face, glyph page and
+  pipeline survives the suspension. On return the host supplies a new surface
+  and the renderer attaches it to the same device (`Renderer::attach`),
+  uploading nothing. The client core's state is untouched, so the table
+  reappears exactly as it was. A lost device, which would need every texture
+  made again from the disk cache, is not handled yet.
 - **Low memory.** On a low-memory `Lifecycle` input the host tells the renderer
   directly (`Renderer::low_memory`), beside handing the input to the client. The
   renderer frees the full-size face array and the full-size faces waiting to be
@@ -1084,7 +1086,15 @@ Three behaviors are specified because they differ most between platforms.
   forgets every full-size face's layer, so those cards draw from their
   board-size faces until a full-size face arrives again, and it stays in the
   Baseline tier for the rest of the session, ignoring a later Enhanced tier.
-  Board-size faces and glyph pages are kept.
+  Board-size faces and glyph pages are kept. The Android host forwards
+  `onLowMemory` and critical trim notices, using the foreground or background
+  threshold according to the activity's state.
+- **Android requests.** The host uses Android's haptic feedback, opens links
+  with an `ACTION_VIEW` intent and shares report files through a read-only
+  `FileProvider` URI. `just b3d android-smoke --lifecycle` exercises Home and
+  return, low memory and these requests in a headless emulator. The frame log
+  marks the first presentation after resume and any presentation while
+  suspended. Add `--gles` to exercise the same path on OpenGL ES.
 
 ## The table
 

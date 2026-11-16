@@ -68,3 +68,67 @@ def android_touch_faults(
             f"expected no frame callbacks during 2 s of idle, got {callbacks_after - callbacks_before}"
         )
     return faults
+
+
+def suspension_bounds(log: list[dict[str, Any]]) -> tuple[int, int] | None:
+    """Find the first return from suspension, for both polling and verification."""
+    suspended = None
+    for i, line in enumerate(log):
+        event = line.get("input", {}).get("lifecycle", {}).get("event")
+        if event == "Suspended" and suspended is None:
+            suspended = i
+        if event == "Resumed" and suspended is not None:
+            return suspended, i
+    return None
+
+
+def android_lifecycle_faults(log: str, host: str) -> list[str]:
+    parsed = lines(log)
+    faults = []
+    cycle = suspension_bounds(parsed)
+    if cycle is None:
+        faults.append("no Suspended followed by Resumed")
+    else:
+        suspended, resumed = cycle
+        if any(
+            "lifecycle_shown_ms" in line or "late" in line or "first_shown_ms" in line
+            for line in parsed[suspended + 1 : resumed]
+        ):
+            faults.append("a frame was shown while suspended")
+
+        after = resumed_entries(parsed, resumed)
+        if not any(
+            event["event"] == "LowMemory" for event in logged_inputs(after, "lifecycle")
+        ):
+            faults.append("no LowMemory after Resumed")
+        if not logged_inputs(after, "surface"):
+            faults.append("no surface after Resumed")
+        elif not resumed_surface_was_shown(after):
+            faults.append("no frame shown on the resumed surface")
+
+    if not any("summary" in line for line in parsed):
+        faults.append("the fixture did not finish")
+    for event in ("surface-lost", "haptic", "share", "open-url"):
+        if event not in host.splitlines():
+            faults.append(f"host.log did not record {event}")
+    return faults
+
+
+def resumed_entries(log: list[dict[str, Any]], resumed: int) -> list[dict[str, Any]]:
+    """The entries after a resume until the next suspension."""
+    result = []
+    for line in log[resumed + 1 :]:
+        if line.get("input", {}).get("lifecycle", {}).get("event") == "Suspended":
+            break
+        result.append(line)
+    return result
+
+
+def resumed_surface_was_shown(entries: list[dict[str, Any]]) -> bool:
+    surface = False
+    for line in entries:
+        if "surface" in line.get("input", {}):
+            surface = True
+        if surface and "lifecycle_shown_ms" in line:
+            return True
+    return False

@@ -23,7 +23,7 @@ use std::time::Instant;
 
 use beryl_host::Ticked;
 use beryl_host::rate::Step;
-use beryl_scene::input::{Input, Modifiers, TextChange};
+use beryl_scene::input::{Input, Lifecycle, Modifiers, TextChange};
 use serde::{Deserialize, Serialize};
 
 /// A sixtieth of a second, in nanoseconds.
@@ -172,6 +172,8 @@ pub enum Line {
     Run(Run),
     Late(Late),
     FirstShownMs(f64),
+    /// The first presentation after resume, or any presentation while suspended.
+    LifecycleShownMs(f64),
     Summary(Summary),
     Input(InputLine),
 }
@@ -306,6 +308,8 @@ pub struct FrameLog {
     summary: Summary,
     /// Whether a frame has been drawn at or after the pause.
     reached_pause: bool,
+    /// Suspension, or a resume still waiting for its first presented frame.
+    presentation_lifecycle: Option<Lifecycle>,
     /// How many shown frames waited for a drawable for each tenth of a millisecond, made once
     /// so that counting a frame allocates nothing.
     waits: Box<[u32; WAIT_BUCKETS]>,
@@ -344,6 +348,7 @@ impl FrameLog {
             pause_at: run.pause_at_ms.map(|ms| (ms * 1e6) as u64),
             summary: Summary::default(),
             reached_pause: false,
+            presentation_lifecycle: None,
             waits: Box::new([0; WAIT_BUCKETS]),
         })
     }
@@ -401,6 +406,12 @@ impl FrameLog {
             summary.first_shown_ms = Some(at);
             let _ = self.lines.send(Line::FirstShownMs(at));
         }
+        if self.presentation_lifecycle.is_some() {
+            let _ = self.lines.send(Line::LifecycleShownMs(ms(ticked.tick)));
+            if self.presentation_lifecycle == Some(Lifecycle::Resumed) {
+                self.presentation_lifecycle = None;
+            }
+        }
         let waited = ms(shown.waited);
         let bucket = usize::try_from(shown.waited / WAIT_BUCKET).unwrap_or(usize::MAX);
         self.waits[bucket.min(WAIT_BUCKETS - 1)] += 1;
@@ -439,10 +450,15 @@ impl FrameLog {
         let _ = self.lines.send(Line::Late(late));
     }
 
-    /// Sends a line for an input the host handed the client.
-    pub fn input(&mut self, line: InputLine) {
-        // The writer ends only with the log, so a failed send has nowhere to go.
-        let _ = self.lines.send(Line::Input(line));
+    /// Records an input the host handed the client when it is one the log keeps.
+    pub fn input(&mut self, input: &Input) {
+        if let Input::Lifecycle(event @ (Lifecycle::Suspended | Lifecycle::Resumed)) = input {
+            self.presentation_lifecycle = Some(*event);
+        }
+        if let Some(line) = InputLine::of(input) {
+            // The writer ends only with the log, so a failed send has nowhere to go.
+            let _ = self.lines.send(Line::Input(line));
+        }
     }
 
     /// Notes a verb the client played as an instant change.
@@ -538,7 +554,7 @@ pub fn read(path: &Path) -> Result<Log, String> {
     for line in lines {
         match line? {
             Line::Run(_) => return Err(format!("{}: a second run line", path.display())),
-            Line::FirstShownMs(_) => {}
+            Line::FirstShownMs(_) | Line::LifecycleShownMs(_) => {}
             Line::Late(late) => log.late.push(late),
             Line::Summary(summary) => log.summary = Some(summary),
             Line::Input(input) => log.inputs.push(input),

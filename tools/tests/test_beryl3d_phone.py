@@ -73,3 +73,42 @@ def test_android_touch_log_rejects_missing_input_insets_rotation_or_idle() -> No
     assert phone_log.android_touch_faults(
         touch_log(top=24, returned=True), (400, 800), 0, 0
     )
+
+
+SUSPEND = {"input": {"lifecycle": {"event": "Suspended"}}}
+RESUME = {"input": {"lifecycle": {"event": "Resumed"}}}
+LOW_MEMORY = {"input": {"lifecycle": {"event": "LowMemory"}}}
+SURFACE = {"input": {"surface": {"width": 400, "height": 800}}}
+SHOWN = {"lifecycle_shown_ms": 4000}
+HOST = "surface-lost\nhaptic\nshare\nopen-url\n"
+
+
+def test_android_lifecycle_accepts_surface_recreation_and_platform_requests() -> None:
+    log = "\n".join(
+        [
+            RUN,
+            *(
+                json.dumps(line)
+                for line in (SUSPEND, RESUME, SURFACE, SHOWN, LOW_MEMORY)
+            ),
+            SUMMARY,
+        ]
+    )
+    assert phone_log.android_lifecycle_faults(log, HOST) == []
+
+
+def test_android_lifecycle_rejects_frames_in_the_background_and_events_out_of_order() -> (
+    None
+):
+    entries = (LOW_MEMORY, SUSPEND, SHOWN, RESUME, SHOWN, SURFACE)
+    log = "\n".join([RUN, *(json.dumps(line) for line in entries)])
+    assert phone_log.android_lifecycle_faults(
+        log, "haptic\nshare failed: IOException\nopen-url\n"
+    ) == [
+        "a frame was shown while suspended",
+        "no LowMemory after Resumed",
+        "no frame shown on the resumed surface",
+        "the fixture did not finish",
+        "host.log did not record surface-lost",
+        "host.log did not record share",
+    ]

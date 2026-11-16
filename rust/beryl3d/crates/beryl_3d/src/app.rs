@@ -19,7 +19,7 @@ use beryl_session::script::Verb;
 
 use crate::audio::{Audio, Output};
 use crate::fixture::Fixture;
-use crate::frame_log::{FrameLog, InputLine, Run, Summary};
+use crate::frame_log::{FrameLog, Run, Summary};
 use crate::options::{Options, Window};
 use crate::session::{self, Commands, Live};
 use crate::settings::{self, Saver};
@@ -141,10 +141,8 @@ impl Feed for AppFeed {
     }
 
     fn input(&mut self, input: &Input) {
-        if let Some(line) = InputLine::of(input)
-            && let Some(Ok(log)) = self.log.borrow_mut().as_mut()
-        {
-            log.input(line);
+        if let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
+            log.input(input);
         }
         if let Input::Update(update) = input {
             self.searching = matches!(update.view.status, Status::Thinking);
