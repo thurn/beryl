@@ -15,10 +15,12 @@
 
 use std::f32::consts::FRAC_PI_2;
 
+use beryl_protocol::protocol::Side;
 use beryl_protocol::script::{Curve as Named, Mark, Subject};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{Lit, MarkSpan, Open, Span};
+use crate::art::orb;
 use crate::data::space::light;
 use crate::frame::{Band, Draw, ElementId, FrameBuilder, Ringed, StateBits, sprites};
 use crate::play::Scene;
@@ -142,8 +144,13 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         let alpha = (f32::from(alpha) * shown.clamp(0.0, 1.0)).round() as u8;
         let tint = [red, green, blue, alpha];
         // Just over the face, along the face's own normal, so that a card held up toward the
-        // camera has its mark in front of it too.
-        let position = pose.position + pose.rotation * Vec3::Z * light::LIFT;
+        // camera has its mark in front of it too. A player's mark rings the core of their orb,
+        // which lies a little off the middle of the orb's art, where their anchor is.
+        let face = match on {
+            Subject::Player { player } => player_face_offset(scene, player, pose.scale),
+            Subject::Object { .. } | Subject::Ability { .. } => 0.0,
+        };
+        let position = pose.position + pose.rotation * Vec3::new(0.0, -face, light::LIFT);
         let band = match on {
             Subject::Object { slot } if scene.table().in_tray(usize::from(slot.0)) => {
                 Band::LayerCards
@@ -206,4 +213,17 @@ fn ringed(on: Subject) -> Ringed {
 pub(crate) fn player_half(scene: &Scene<'_>, scale: f32) -> Vec2 {
     let window = scale * CARD_HEIGHT / scene.table().layout().hand.height;
     light::PLAYER_HALF_PIXELS * (window / 900.0)
+}
+
+/// How far below their anchor, in millimetres at the depth of the anchor, whose pose has
+/// `scale`, the middle of `side`'s life total is: the core of their orb lies
+/// `art::orb::face_offset` units of the orb's art below the art's middle, which the anchor
+/// holds (`hud::players::face_centre`).
+fn player_face_offset(scene: &Scene<'_>, side: Side, scale: f32) -> f32 {
+    let table = scene.table();
+    let window = table.camera().window;
+    let points = orb::face_offset(side) * orb::SCALES[usize::from(window.phone())];
+    let millimetres_per_point =
+        scale * CARD_HEIGHT / table.layout().hand.height / window.size.height;
+    points * millimetres_per_point
 }
