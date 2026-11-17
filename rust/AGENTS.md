@@ -88,6 +88,13 @@ wait a moment for cores before it starts. `BERYL_CPU_POOL=0` turns the pool off.
   compare what a scenario reaches, so a part no scenario shows is untested. When
   a scenario needs a card nobody has implemented, implement one, even one in no
   deck (the `card-writing` skill, "Cards for scenarios").
+- `just set list <code>` lists the cards first printed in a set and how each is
+  implemented or escalated. `just set plan <code>` groups unwritten cards by
+  what they need and writes `$BERYL_CACHE/set-plan-<code>.json`. The `drafted`
+  tier records complete drafts; each new definition still goes through render
+  and card checks. The planner reuses the local renderer and census report when
+  available. Add `--beads` to print draft commands for vocabulary groups and
+  batches of drafted or composed cards.
 - `just census` counts which mechanics Forge's card scripts use that
   `beryl_card` has no entry for, and how many cards each one blocks, from the
   mapping in `data/census-coverage.json`. It writes its report to

@@ -47,6 +47,7 @@ def clauses(text: str, context: render_diff.Context) -> tuple[str, ...]:
 class Clause:
     text: str
     reason: str
+    node_kind: str = ""
 
 
 @dataclass(frozen=True)
@@ -101,7 +102,11 @@ def phase_candidates(
                 keywords.add(keyword.lower())
     abilities: list[Candidate] = []
     rejected = [
-        Clause("", f"card.{field}: requires manual review")
+        Clause(
+            "",
+            f"card.{field}: requires manual review",
+            "" if field in {"non_ability_text", "parse_warnings"} else f"card:{field}",
+        )
         for field in (
             "non_ability_text",
             "parse_warnings",
@@ -139,12 +144,16 @@ def phase_candidates(
                 if not isinstance(description, str) or not description:
                     raise Unsupported(f"{field}: missing description")
                 if convert is None:
+                    mode = node.fields.get("mode")
                     raise Unsupported(
-                        f"{field}: unsupported {node.fields.get('mode')!r}"
+                        f"{field}: unsupported {mode!r}",
+                        phase_draft.node_kind("static", mode),
                     )
                 abilities.append(Candidate(description, convert(raw)))
             except Unsupported as error:
-                rejected.append(Clause(str(description or ""), str(error)))
+                rejected.append(
+                    Clause(str(description or ""), str(error), error.node_kind)
+                )
     return PhaseCandidates(tuple(abilities), frozenset(keywords), tuple(rejected))
 
 
@@ -236,6 +245,12 @@ def definition(record: Json, abilities: list[Ability], keywords: list[str]) -> s
     return expression + ".card()"
 
 
+def without_ability_word(sentence: str) -> str:
+    """Phase can omit the ability word when describing a trigger or an effect."""
+    prefix, dash, body = sentence.partition("—")
+    return body if dash and all(word.isalpha() for word in prefix.split()) else sentence
+
+
 def compose(
     record: Json,
     entry: Json | None,
@@ -274,15 +289,21 @@ def compose(
         if match is None:
             match = match_clause(text[index:], fallback(), context, name)
         if match is None:
-            reason = next(
+            plain = without_ability_word(sentence)
+            rejection = next(
                 (
-                    item.reason
+                    item
                     for item in phase.rejected
                     if sentence in clauses(item.text, context)
+                    or plain in clauses(item.text, context)
                 ),
-                "No matching translated or rendered ability",
+                None,
             )
-            unresolved.append(Clause(sentence, reason))
+            unresolved.append(
+                Clause(sentence, rejection.reason, rejection.node_kind)
+                if rejection
+                else Clause(sentence, "No matching translated or rendered ability")
+            )
             index += 1
         else:
             size, ability = match
@@ -290,7 +311,9 @@ def compose(
             index += size
     for rejection in phase.rejected:
         if not rejection.text:
-            unresolved.append(Clause("Unmapped Phase data", rejection.reason))
+            unresolved.append(
+                Clause("Unmapped Phase data", rejection.reason, rejection.node_kind)
+            )
     if oracle.spell:
         spell_abilities = [ability for ability in covered if ability.builder == SPELL]
         if (
@@ -359,7 +382,11 @@ class Drafter:
     def fallback(self) -> tuple[Candidate, ...]:
         return rendered_candidates(self.files, self.sources.store, self.renderer)
 
-    def draft(self, record: Json) -> Draft:
+    def draft(self, record: Json, *, phase_gap: bool = False) -> Draft:
+        if phase_gap:
+            return compose(
+                record, None, lambda: self.fallback, "Phase reports a parse gap."
+            )
         phase = self.phase
         name = str(record["name"])
         if isinstance(phase, str):

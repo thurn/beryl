@@ -43,7 +43,9 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   drafting source. The MIT/Apache-2.0 project publishes the JSON at
   `https://data.phase-rs.dev/card-data.json`. Beryl stores it in
   `$BERYL_CACHE/phase/card-data.json` and verifies it against the pin when
-  loading it.
+  loading it. The same file pins the SHA-256 of Phase's coverage report,
+  published at `https://data.phase-rs.dev/coverage-data.json` and cached in the
+  same directory. `just set plan` uses it to identify cards with parse gaps.
 - `card-printings.csv`: the specific printing chosen for each card.
 - `rules-version.json`: the Comprehensive Rules release that every citation in
   the code is checked against.

@@ -235,6 +235,11 @@ count-gate *args:
 card command *args:
     {{ by }} card "$@"
 
+# List a set's first printings or plan its unwritten cards (plan <code> [--beads])
+[group('data')]
+set command code *args:
+    {{ by }} set "$@"
+
 # Build the card store from Scryfall's bulk data (--refresh)
 [group('data')]
 cards *args:

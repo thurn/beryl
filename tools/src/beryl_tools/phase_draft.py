@@ -17,6 +17,22 @@ Json = card_store.Json
 class Unsupported(ValueError):
     """The Phase node contains something this translator cannot express."""
 
+    def __init__(self, message: str, node_kind: str = "") -> None:
+        super().__init__(message)
+        self.node_kind = node_kind
+
+
+def node_kind(category: str, tag: object) -> str:
+    """A Phase enum tag, ignoring fields carried by a variant."""
+    if isinstance(tag, dict) and len(tag) == 1:
+        tag = next(iter(cast(Json, tag)))
+    return (
+        f"{category}:{tag}"
+        if isinstance(tag, str)
+        and tag not in {"Unknown", "GenericEffect", "Unimplemented"}
+        else ""
+    )
+
 
 class Node:
     def __init__(self, value: object, path: str) -> None:
@@ -31,7 +47,10 @@ class Node:
     def expect(self, key: str, expected: object) -> None:
         actual = self.take(key, expected)
         if actual != expected:
-            raise Unsupported(f"{self.path}.{key}: unsupported value {actual!r}")
+            group = (
+                node_kind(self.path.replace(" ", "_"), actual) if key == "type" else ""
+            )
+            raise Unsupported(f"{self.path}.{key}: unsupported value {actual!r}", group)
 
     def finish(self) -> None:
         if self.fields:
@@ -114,7 +133,9 @@ def target(value: object) -> Target:
     elif kind == "Typed":
         result = typed_target(node)
     else:
-        raise Unsupported(f"target.type: unsupported value {kind!r}")
+        raise Unsupported(
+            f"target.type: unsupported value {kind!r}", node_kind("target", kind)
+        )
     node.finish()
     return result
 
@@ -209,7 +230,9 @@ def cost_parts(value: object) -> tuple[str, list[str]]:
                 mana = child_mana
             parts.extend(child_parts)
     else:
-        raise Unsupported(f"cost.type: unsupported value {kind!r}")
+        raise Unsupported(
+            f"cost.type: unsupported value {kind!r}", node_kind("cost", kind)
+        )
     node.finish()
     return mana, parts
 
@@ -255,7 +278,10 @@ def mana_produced(value: object) -> str:
             else f"ManaSet {{ colors: {mask:#08b}, amount: {count} }}"
         )
     else:
-        raise Unsupported(f"mana produced.type: unsupported value {kind!r}")
+        raise Unsupported(
+            f"mana produced.type: unsupported value {kind!r}",
+            node_kind("mana_produced", kind),
+        )
     node.finish()
     return result
 
@@ -278,10 +304,24 @@ OBJECT_EFFECTS = {
 }
 
 
+EFFECT_KINDS: set[str] = (
+    PLAYER_COUNTS.keys()
+    | OBJECT_EFFECTS.keys()
+    | {
+        "DealDamage",
+        "Pump",
+        "PutCounter",
+        "ChangeZone",
+    }
+)
+
+
 def effect(code: Node, duration: object) -> tuple[str, str]:
     kind = code.take("type")
     if not isinstance(kind, str):
         raise Unsupported(f"effect.type: unsupported value {kind!r}")
+    if kind not in EFFECT_KINDS:
+        raise Unsupported(f"effect.type: unsupported {kind}", node_kind("effect", kind))
     affected = target(code.take("target"))
     if kind not in ("Pump", "ChangeZone") and duration is not None:
         raise Unsupported(f"ability.duration: unsupported on {kind}")
@@ -437,9 +477,21 @@ def ability(value: object, trigger: str = "", parent: bool = False) -> Ability:
     return Ability(builder, (expression, *following.effects), spec or following.target)
 
 
+TRIGGERS: dict[tuple[str, str | None, str | None], str] = {
+    ("ChangesZone", None, "Battlefield"): "ENTERS",
+    ("ChangesZone", "Battlefield", "Graveyard"): "DIES",
+    ("LeavesBattlefield", None, None): "LEAVES",
+    ("Attacks", None, None): "ATTACKS",
+}
+
+
 def triggered(value: object) -> Ability:
     node = Node(value, "trigger")
     mode = node.take("mode")
+    if all(mode != supported for supported, _, _ in TRIGGERS):
+        raise Unsupported(
+            f"trigger.mode: unsupported {mode!r}", node_kind("trigger", mode)
+        )
     valid_card = node.take("valid_card")
     origin = node.take("origin")
     destination = node.take("destination")
@@ -456,12 +508,7 @@ def triggered(value: object) -> Ability:
     node.expect("batched", False)
     builder = ""
     if valid_card == {"type": "SelfRef"}:
-        builder = {
-            ("ChangesZone", None, "Battlefield"): "ENTERS",
-            ("ChangesZone", "Battlefield", "Graveyard"): "DIES",
-            ("LeavesBattlefield", None, None): "LEAVES",
-            ("Attacks", None, None): "ATTACKS",
-        }.get(
+        builder = TRIGGERS.get(
             (
                 str(mode),
                 str(origin) if origin is not None else None,
@@ -480,7 +527,11 @@ def triggered(value: object) -> Ability:
 
 def replacement(value: object) -> Ability:
     node = Node(value, "replacement")
-    node.expect("event", "Moved")
+    event = node.take("event", "Moved")
+    if event != "Moved":
+        raise Unsupported(
+            f"replacement.event: unsupported {event!r}", node_kind("replacement", event)
+        )
     node.expect("mode", {"type": "Mandatory"})
     node.expect("valid_card", {"type": "SelfRef"})
     node.expect("condition", None)

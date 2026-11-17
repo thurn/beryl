@@ -573,17 +573,23 @@ for a `tier:haiku` writer (E7).
 **E6. The set planner.** `just set list <code>` prints the cards first printed
 in a set. `just set plan <code>` sorts them:
 
-| Tier         | Meaning                                                                              | Who writes it                          |
-| ------------ | ------------------------------------------------------------------------------------ | -------------------------------------- |
-| `store`      | Complete from the card store (keyword-only creatures)                                | Nobody                                 |
-| `drafted`    | Every sentence drafted by the brief                                                  | A `tier:haiku` writer checks the draft |
-| `composed`   | Some sentence has no complete draft, but every keyword and layout it needs exists    | A `tier:sonnet` writer                 |
-| `vocabulary` | A sentence needs a vocabulary entry; grouped by the missing clause, most cards first | One `tier:opus` bead a group           |
-| `mechanism`  | A keyword, layout or rule the engine lacks                                           | A design bead                          |
+| Tier         | Meaning                                                                       | Who writes it                          |
+| ------------ | ----------------------------------------------------------------------------- | -------------------------------------- |
+| `store`      | Complete from the card store (keyword-only creatures)                         | Nobody                                 |
+| `drafted`    | Every sentence drafted by the brief                                           | A `tier:haiku` writer checks the draft |
+| `composed`   | The keywords and layout are supported, with clauses to compose by hand        | A `tier:sonnet` writer                 |
+| `vocabulary` | A missing Phase node kind or a clause with distant examples, grouped by cards | One `tier:opus` bead a group           |
+| `mechanism`  | A keyword, layout or rule the engine lacks                                    | A design bead                          |
 
-It writes `$BERYL_CACHE/set-plan-<code>.json` and prints the table. The
-`vocabulary` groups are the planner's real product: one entry written once
-unblocks every card in its group.
+It writes `$BERYL_CACHE/set-plan-<code>.json` and prints the table. A card can
+need several vocabulary groups. Cards with Phase parse gaps go through the
+sentence fallback. The sentence cutoff is the lower quartile of the closest
+matches between clauses on different implemented cards, measured when the
+planner was added. A draft is complete when the drafter covers its clauses. The
+table also reports any prior compile and render audit results for cards in the
+set. Planning reuses the renderer built in the current checkout and the cached
+census when available. `--beads` prints commands for each vocabulary group and
+batches of at most twenty drafted or composed cards.
 
 **E7. The skill.** The `card-writing` skill is rewritten around the draft: run
 the brief, check the draft against the Oracle text and the rulings, compose what
