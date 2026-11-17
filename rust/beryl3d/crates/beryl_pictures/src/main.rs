@@ -221,13 +221,8 @@ fn help(command: &Command) -> String {
 /// renderer made with full limits, which draws the Enhanced tier where the GPU allows it.
 pub(crate) fn open(options: &Options) -> Result<Headless, Error> {
     let page = cli::open(options)?.with_tier(options.tier);
-    Headless::new(
-        page,
-        options.size.width,
-        options.size.height,
-        &Scans::app(),
-    )
-    .map_err(|why| Error::Failed(format!("no GPU to draw with: {why}")))
+    Headless::new(page, options.size.width, options.size.height, &Scans::app())
+        .map_err(|why| Error::Failed(format!("no GPU to draw with: {why}")))
 }
 
 /// The directory pictures are written to, `$BERYL_CACHE/b3d/out`, which is made if needed.

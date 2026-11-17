@@ -110,12 +110,10 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
         (1000..1100).contains(&at),
         "frozen when the script pressed Cmd+B at 1000 ms: {ui}"
     );
-    // The window is the app's 1600 by 900 points at one pixel to a point.
+    // The window is the app's 1600 by 900 points at the scale of a run with no window.
     let window = std::fs::read(folder.join("window.png")).expect("the picture");
-    assert_eq!(
-        &window[16..24],
-        &[0, 0, 6, 64, 0, 0, 3, 132],
-        "a 1600 by 900 PNG"
-    );
+    let scale = u32::from(beryl_3d::options::WINDOWLESS_SCALE);
+    let size = [1600 * scale, 900 * scale].map(u32::to_be_bytes).concat();
+    assert_eq!(&window[16..24], size.as_slice(), "a 1600 by 900 point PNG");
     let _ = std::fs::remove_dir_all(&temp);
 }

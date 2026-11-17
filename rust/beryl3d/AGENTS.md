@@ -85,9 +85,10 @@ through the client with no window or GPU (the `b3d` skill has the details):
 - `just b3d test [prefix]` runs every interface test whose name starts with the
   prefix: each recording from each seat in each desktop window, as
   `b3d:<recording>/<seat>/<width>x<height>`, which `tree` and `check` also take.
-  `--phone-only` runs the three phone windows instead, in the phone layout with
-  a fixed safe area (`pages::PHONE_SAFE_AREA`), and never writes the list of
-  allowed faults.
+  The 1600x900 window plays at a Retina display's scale and its tests are named
+  `<width>x<height>@2` (`pages::RETINA_WINDOWS`). `--phone-only` runs the three
+  phone windows instead, in the phone layout with a fixed safe area
+  (`pages::PHONE_SAFE_AREA`), and never writes the list of allowed faults.
 - `just b3d timeline <name> [--seat <seat>]` prints one JSON line for each step
   of each script of a recording, and `--all` writes every recording and seat to
   a file under `$BERYL_CACHE/b3d/out`.
@@ -102,13 +103,13 @@ through the client with no window or GPU (the `b3d` skill has the details):
   card frame where a scan is missing; neither command downloads one. Set
   `BERYL3D_SCANS` to an empty directory to see every face drawn.
 
-These tools and the windowless app lay the frame out at scale 1, while the
-desktop app on a Retina Mac runs at scale 2, so they miss faults that only
-happen at scale 2. A tree line shows that text was laid out, not that its glyphs
-drew. An executor or Warden closes a bead that changes how something looks only
-after reading a picture of it beside the web interface's at the same moment, and
-names both files on the bead ("What these tools cannot show" in the `b3d`
-skill).
+These tools lay the frame out at scale 1 unless `--scale` gives another, while
+the desktop app on a Retina Mac runs at scale 2, so a picture of a look you
+changed is drawn with `--scale 2` (the windowless app runs at 2 on macOS). A
+tree line shows that text was laid out, not that its glyphs drew. An executor or
+Warden closes a bead that changes how something looks only after reading a
+picture of it beside the web interface's at the same moment, and names both
+files on the bead ("What these tools cannot show" in the `b3d` skill).
 
 The text commands are the `b3d` program in `beryl_inspect` (`src/cli`), and the
 pictures are `b3d-render` in `beryl_pictures` (with `Headless` in `beryl_host`),

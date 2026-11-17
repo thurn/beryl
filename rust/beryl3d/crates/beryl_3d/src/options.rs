@@ -188,12 +188,7 @@ impl Options {
                     });
                 }
                 "--for" => options.run_for = Some(duration(&value()?)?),
-                "--scale" => {
-                    let text = value()?;
-                    options.scale = text.parse().ok().filter(|scale| (1..=4).contains(scale)).ok_or_else(
-                        || format!("--scale {text}: a scale is a whole number from 1 to 4"),
-                    )?;
-                }
+                "--scale" => options.scale = scale(&value()?)?,
                 "--window" => {
                     let word = value()?;
                     options.window = Window::from_word(&word).ok_or_else(|| {
@@ -292,6 +287,14 @@ pub(crate) fn drive_script(name: &str) -> Result<beryl_host::Drive, String> {
         ));
     }
     beryl_host::Drive::load(&path)
+}
+
+/// A scale of a run with no window: a whole number of physical pixels to a point, 1 to 4.
+fn scale(text: &str) -> Result<u8, String> {
+    text.parse()
+        .ok()
+        .filter(|scale| (1..=4).contains(scale))
+        .ok_or_else(|| format!("--scale {text}: a scale is a whole number from 1 to 4"))
 }
 
 /// A duration written as `just b3d` writes one: a number and `ms` or `s` (`850ms`, `1.25s`).

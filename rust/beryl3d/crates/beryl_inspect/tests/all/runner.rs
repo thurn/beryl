@@ -54,11 +54,11 @@ fn a_tests_name_opens_its_recording_in_tree() {
         names,
         [
             "b3d:verbs-zones/you/1440x900",
-            "b3d:verbs-zones/you/1600x900",
+            "b3d:verbs-zones/you/1600x900@2",
             "b3d:verbs-zones/you/1920x1080",
             "b3d:verbs-zones/you/2560x1080",
             "b3d:verbs-zones/opponent/1440x900",
-            "b3d:verbs-zones/opponent/1600x900",
+            "b3d:verbs-zones/opponent/1600x900@2",
             "b3d:verbs-zones/opponent/1920x1080",
             "b3d:verbs-zones/opponent/2560x1080",
         ]
@@ -73,8 +73,8 @@ fn a_tests_name_opens_its_recording_in_tree() {
     assert!(tests.iter().all(|test| test.layout() == Layout::Desktop));
 }
 
-/// The whole matrix is the four desktop windows and the three phone windows, from each seat a
-/// recording is recorded for; the default run plays only the desktop ones and `--phone-only`
+/// The whole matrix is the four desktop windows, one of them at the Retina scale, and the three
+/// phone windows, from each seat a recording is recorded for; the default run plays only the desktop ones and `--phone-only`
 /// only the phone ones.
 #[test]
 fn the_window_matrix_has_seven_sizes_from_each_recorded_seat() {
@@ -84,7 +84,7 @@ fn the_window_matrix_has_seven_sizes_from_each_recorded_seat() {
     };
     let sizes = [
         "1440x900",
-        "1600x900",
+        "1600x900@2",
         "1920x1080",
         "2560x1080",
         "393x759",
@@ -318,4 +318,32 @@ fn the_run_log_agrees_with_the_allowance_comparison() {
         logged_verdict(name, "step-shown", Some(1), "stale"),
         ("fail".into(), 1)
     );
+}
+
+/// The desktop matrix plays a window at the Retina scale, named with `@2` after its size, and
+/// `tree` and `check`, given that name, open the page at the same scale: what the client lays
+/// out and the faults it is checked for are those of the desktop app on a Retina Mac.
+#[test]
+fn a_retina_tests_name_opens_the_same_scale_in_test_tree_and_check() {
+    let tests = runner::tests("pay-default/you/", Windows::Desktop).expect("the tests");
+    let retina: Vec<&Test> = tests.iter().filter(|test| test.scale > 1.0).collect();
+    assert_eq!(retina.len(), pages::RETINA_WINDOWS.len(), "{tests:?}");
+    let test = retina[0];
+    assert_eq!(test.scale.to_bits(), pages::RETINA_SCALE.to_bits());
+    let name = test.name();
+    assert_eq!(name, "b3d:pay-default/you/1600x900@2");
+    let page = test.page().expect("the page opens");
+    assert_eq!(page.scale().to_bits(), 2.0_f32.to_bits());
+    for command in ["tree", "check"] {
+        let spec = Spec {
+            recording: true,
+            ..Spec::default()
+        };
+        let options =
+            Options::parse(command, std::slice::from_ref(&name), spec).expect("a test's name");
+        assert_eq!(
+            (options.name(), options.size, options.scale),
+            ("pay-default", test.size, 2.0)
+        );
+    }
 }

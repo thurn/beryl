@@ -52,8 +52,7 @@ fn written(output: &Output) -> (PathBuf, (u32, u32)) {
 #[test]
 fn the_picture_shows_the_card_the_tree_says_is_in_flight() {
     let page = pages::page("verbs-zones", Side::You, Layout::Desktop, WINDOW).expect("a page");
-    let mut head =
-        Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
+    let mut head = Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
     head.seek(&"1500ms".parse::<Moment>().expect("a moment"))
         .expect("a moment of the recording");
     let frame = head.frame();
@@ -166,8 +165,7 @@ fn cards_show_the_scans_in_the_cache_prepared_on_other_threads() {
 #[test]
 fn the_prompt_bar_draws_text_rasterized_on_another_thread() {
     let page = pages::page("pay-default", Side::You, Layout::Desktop, WINDOW).expect("a page");
-    let mut head =
-        Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
+    let mut head = Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
     head.seek(&"prompt:1".parse::<Moment>().expect("a moment"))
         .expect("a moment of the recording");
     let button = head.page().find(r#"button "Next""#).rect();
@@ -258,4 +256,45 @@ impl SpawnOutput for Command {
             .expect("the program starts");
         Box::new(move || child.wait_with_output().expect("it finishes"))
     }
+}
+
+/// At scale 2 the client gets the scale, so its clips are in physical pixels like the target:
+/// the start screen's opponent list, which sits inside a clip, draws its rows. When the test
+/// driver told the client scale 1 and the host only made its target twice as large, the clip
+/// stayed in scale-1 pixels and the list was drawn empty.
+#[test]
+fn a_picture_at_scale_2_draws_what_its_clips_hold() {
+    let scale = 2.0;
+    let page = pages::page("screen/start", Side::You, Layout::Desktop, WINDOW)
+        .expect("a page")
+        .with_scale(scale);
+    let mut head = Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
+    assert_eq!(head.size(), (3200, 1800));
+    head.seek(&"end".parse::<Moment>().expect("a moment"))
+        .expect("a moment of the recording");
+    let list = head.page().find(r#"list "Opponent""#).rect();
+    let pixels = head.pixels();
+    let width = head.size().0;
+    let (left, top) = ((list.x * scale) as u32, (list.y * scale) as u32);
+    let (right, bottom) = (
+        ((list.x + list.width) * scale) as u32,
+        ((list.y + list.height) * scale) as u32,
+    );
+    let mut counts: HashMap<[u8; 3], u32> = HashMap::new();
+    for y in top..bottom {
+        for x in left..right {
+            let at = ((y * width + x) * 4) as usize;
+            *counts
+                .entry([pixels[at], pixels[at + 1], pixels[at + 2]])
+                .or_default() += 1;
+        }
+    }
+    let total: u32 = counts.values().sum();
+    let background = counts.values().max().copied().unwrap_or(0);
+    // Three rows of text, radio buttons and a selected row's fill cover far more than this.
+    assert!(
+        total - background > total / 10,
+        "the opponent list at {list:?} drew {} of {total} pixels off its background",
+        total - background
+    );
 }

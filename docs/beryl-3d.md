@@ -2519,9 +2519,12 @@ Every command that takes a recording also takes `--seat you|opponent`,
 `--tier baseline|enhanced`, `--at <moment>`, `--do <action>` (which may be
 repeated) and `--json`. Left out, they are `you`, `desktop`, 1600 by 900 (393 by
 759 with `--layout phone`), 1, `baseline` and the recording's start, with no
-action. A test's name, `b3d:<recording>/<seat>/<width>x<height>`, also names a
-recording and sets its seat and window. `diff` runs its actions after `--from`,
-so `--from` and `--to` at the same moment show what an action changes.
+action. A test's name, `b3d:<recording>/<seat>/<width>x<height>[@<scale>]`, also
+names a recording and sets its seat, window and scale. The scale reaches the
+client, which asks for its glyphs and icons at it and gives its clips in
+physical pixels, so a picture at `--scale 2` shows what a Retina display does.
+`diff` runs its actions after `--from`, so `--from` and `--to` at the same
+moment show what an action changes.
 
 `just b3d` is two programs behind one command. The commands that print text are
 `beryl_inspect`'s program, `b3d`, which contains no GPU code. `png` and `film`

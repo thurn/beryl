@@ -50,7 +50,9 @@ just b3d perf verbs-zones --verbs               # frame timing of a fixture play
   with 1 when it finds a fault.
 - **`test [prefix]`** runs every interface test whose name starts with the
   prefix, on every core: each recording from each seat in each of the four
-  desktop windows, named `b3d:<recording>/<seat>/<width>x<height>`, checked at
+  desktop windows, named `b3d:<recording>/<seat>/<width>x<height>`, with `@2`
+  after the size for the window played at a Retina display's scale
+  (`1600x900@2`), checked at
   its check times (`--every-tick` checks every tick). A fault several tests find
   is printed once with a count. Paste a test's name into `tree` or `check` in
   place of a recording to see it from that seat at that size. The whole run
@@ -87,12 +89,14 @@ missing.
 
 ## What these tools cannot show
 
-Every command here lays the frame out at one physical pixel to a point, and so
-does the windowless app (`just b3d app` without a window). `--scale 2` only
-enlarges the picture: the client is still told scale 1, so its glyphs, icons and
-positions are the scale-1 ones, stretched. A Retina Mac runs the desktop app at
-scale 2, and faults that only happen there (letters missing from a word, a mark
-beside its card instead of around it) do not show in any of these pictures.
+Every command here lays the frame out at one physical pixel to a point unless
+`--scale` says otherwise. A Retina Mac runs the desktop app at scale 2, and
+faults that only happen there (letters missing from a word, a list drawn empty
+by its clip) show only at `--scale 2`: the client is then told that scale, asks
+for its glyphs and icons at it and gives its clips in physical pixels, as in the
+desktop app. Draw a look you changed with `png --scale 2`. The windowless app
+(`just b3d app` without a window) runs at scale 2 on macOS unless `--scale`
+gives another, and `just b3d test` plays its 1600x900 window at scale 2.
 
 - A `tree` line with the right string says the text was laid out, not that its
   glyphs drew. Only a picture shows that.
@@ -106,9 +110,9 @@ beside its card instead of around it) do not show in any of these pictures.
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>` (1600x900 by default),
-`--at <moment>`, `--do <action>` (repeatable, run in order after `--at`) and
-`--json`. A test's name, `b3d:verbs-zones/you/1600x900`, works as a recording's
-name and sets the seat and the window.
+`--scale <number>` (1 by default), `--at <moment>`, `--do <action>` (repeatable, run in order after `--at`) and
+`--json`. A test's name, `b3d:verbs-zones/you/1600x900@2`, works as a
+recording's name and sets the seat, the window and the scale.
 
 ## Moments, locators and actions
 
