@@ -88,7 +88,6 @@ fn a_release_build_has_no_fixture_option() {
     assert_eq!(offered.offer, ["expert", "random"]);
     assert!(agent(&["--offer", "expert"], false).is_err());
     assert!(agent(&["--offer", "nobody"], true).is_err_and(|error| error.contains("nobody")));
-
 }
 
 #[test]

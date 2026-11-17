@@ -485,7 +485,11 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         .load
         .map(|(threads, class)| crate::load::start(threads, class));
     #[cfg(feature = "tools")]
-    let drive = options.drive.as_deref().map(crate::options::drive_script).transpose()?;
+    let drive = options
+        .drive
+        .as_deref()
+        .map(crate::options::drive_script)
+        .transpose()?;
     let slow_gpu = options.slow_gpu.unwrap_or_default();
     let (settings, saver) = player_settings(options);
     let audio = start_audio(options.window, &settings.clone().unwrap_or_default());

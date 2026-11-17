@@ -99,8 +99,13 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
     assert_eq!(log["client"], "Beryl 3D", "{ui}");
     assert_eq!(log["recording"], "pay-default", "{ui}");
     assert_eq!(log["seat"], "you", "{ui}");
-    assert_eq!(log["ended"], false, "pay-default plays for longer than 1000 ms: {ui}");
-    let at = log["at"].as_u64().expect("`at` is a whole number of milliseconds");
+    assert_eq!(
+        log["ended"], false,
+        "pay-default plays for longer than 1000 ms: {ui}"
+    );
+    let at = log["at"]
+        .as_u64()
+        .expect("`at` is a whole number of milliseconds");
     assert!(
         (1000..1100).contains(&at),
         "frozen when the script pressed Cmd+B at 1000 ms: {ui}"
