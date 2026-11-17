@@ -317,7 +317,8 @@
     "layout.desktop.tray.put_back.deck_backs",
     "flat.phone.opening.per_row",
     "enhanced.particles.ash.count",
-    "enhanced.particles.vortex.count"
+    "enhanced.particles.vortex.count",
+    "enhanced.bloom.taps"
   ],
   "card": {
     "width": 63,
@@ -694,6 +695,12 @@
     }
   },
   "enhanced": {
+    "bloom": {
+      "scale": 0.5,
+      "taps": 9,
+      "sigma": 3.0,
+      "strength": 0.6
+    },
     "particles": {
       "ash": {
         "count": 96,

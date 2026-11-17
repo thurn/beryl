@@ -17,7 +17,7 @@ use super::render::{
 /// 255.
 const TOLERANCE: u8 = 4;
 
-fn within(found: [u8; 3], expected: [u8; 3], tolerance: u8) -> bool {
+pub(super) fn within(found: [u8; 3], expected: [u8; 3], tolerance: u8) -> bool {
     found
         .iter()
         .zip(expected)
@@ -36,7 +36,7 @@ fn turned(size: Vec2, z: f32, rgb: [u8; 3]) -> Draw {
 }
 
 /// A renderer with full limits, which must draw the Enhanced tier.
-fn enhanced() -> Renderer {
+pub(super) fn enhanced() -> Renderer {
     let renderer = renderer(Limits::Default);
     assert!(
         renderer.enhanced_available(),
@@ -47,7 +47,7 @@ fn enhanced() -> Renderer {
 }
 
 /// `records` drawn in each tier, seen from overhead into a 200 by 200 target.
-fn both_tiers(renderer: &mut Renderer, records: &[(Band, Draw)]) -> [Picture; 2] {
+pub(super) fn both_tiers(renderer: &mut Renderer, records: &[(Band, Draw)]) -> [Picture; 2] {
     [Tier::Baseline, Tier::Enhanced]
         .map(|tier| draw_in(tier, renderer, overhead(), (200, 200), records).0)
 }

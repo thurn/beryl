@@ -139,7 +139,7 @@ impl Enhanced {
             pipelines,
             layout: lit_layout,
             shadow: Shadow::new(device, queue),
-            bloom: Bloom::new(),
+            bloom: Bloom::new(device, format, layout),
             comparison,
             groups: Vec::new(),
             targets: None,
@@ -216,7 +216,7 @@ impl Enhanced {
             pass.set_bind_group(1, group, &[]);
             draw_calls += draws.record(&mut pass, &self.pipelines, |pass| pass != Pass::Layer);
         }
-        draw_calls += self.bloom.apply(encoder, draws, view);
+        draw_calls += self.bloom.apply(device, encoder, draws, view);
         if draws.frame.layer < draws.kept {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("flat layer"),
@@ -275,10 +275,11 @@ impl Enhanced {
         self.targets.as_ref().expect("just made")
     }
 
-    /// Frees the main pass's targets, which the next frame makes again (docs/beryl-3d.md,
-    /// "Hosts": "Low memory").
+    /// Frees the main pass's and bloom's targets, which the next frame makes again
+    /// (docs/beryl-3d.md, "Hosts": "Low memory").
     pub(crate) fn low_memory(&mut self) {
         self.targets = None;
+        self.bloom.low_memory();
     }
 }
 

@@ -31,6 +31,21 @@ const RECORD_ATTRIBUTES: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
     10 => Float32x4,
 ];
 
+/// The vertex buffers every pipeline that draws records reads: the mesh, then the records as
+/// instances.
+pub(crate) const VERTEX_BUFFERS: [Option<wgpu::VertexBufferLayout<'static>>; 2] = [
+    Some(wgpu::VertexBufferLayout {
+        array_stride: size_of::<Vertex>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &MESH_ATTRIBUTES,
+    }),
+    Some(wgpu::VertexBufferLayout {
+        array_stride: RECORD,
+        step_mode: wgpu::VertexStepMode::Instance,
+        attributes: &RECORD_ATTRIBUTES,
+    }),
+];
+
 /// The layout of bind group 0: the uniforms, one texture array and its sampler.
 pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -147,18 +162,7 @@ fn pipeline(
                 constants: &shaken,
                 ..Default::default()
             },
-            buffers: &[
-                Some(wgpu::VertexBufferLayout {
-                    array_stride: size_of::<Vertex>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &MESH_ATTRIBUTES,
-                }),
-                Some(wgpu::VertexBufferLayout {
-                    array_stride: RECORD,
-                    step_mode: wgpu::VertexStepMode::Instance,
-                    attributes: &RECORD_ATTRIBUTES,
-                }),
-            ],
+            buffers: &VERTEX_BUFFERS,
         },
         fragment: Some(wgpu::FragmentState {
             module: shape.shader,

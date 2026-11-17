@@ -2,8 +2,10 @@
 //! to be a binary of its own, and every one of them linked the crate and its dependencies again
 //! after each edit.
 
+mod bloom;
 mod downlevel;
 mod enhanced;
+mod enhanced_boards;
 mod faces;
 mod render;
 mod shader_cost;
