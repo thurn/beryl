@@ -269,5 +269,10 @@
     "label": "Native builds avoid stale LLVM-symbol links and manual cleans by disabling incremental reuse only for dependencies, while native workspace edits remain incremental",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Python tests that run a fake ui-test, shots, script or oracle lane no longer start the real workspace cargo build from inside pytest, where four tests spent 37-59 s each in it, about 190 test-seconds and 500 CPU-seconds per full run in a fresh worktree",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]

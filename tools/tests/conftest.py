@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import caches, tokens
+from beryl_tools import caches, step_runner, tokens
 
 # Where a check wants each test's result, and the lane it belongs to (python_tests.py), read once
 # at import: `own_cache` below removes the variable while each test runs.
@@ -37,6 +37,19 @@ def own_cache(
     monkeypatch.delenv("BERYL_LOW_PRIORITY", raising=False)
     monkeypatch.setattr(caches, "free_space", lambda _: 10 * caches.LOW_DISK)
     return cache
+
+
+@pytest.fixture(autouse=True)
+def no_cli_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A test's run of a fake lane named after a step that runs the CLI (`step_runner.BUILDS_CLI`:
+    ui-test, shots, script, oracle) builds nothing. It used to run the real `paths.CLI_BUILD`,
+    a `cargo build` of the whole workspace in the checkout's rust/target, from inside pytest.
+    In a warm tree that took 0.3 s, but in a tree with changed Rust, or while the rust lane
+    built in the same target directory, each such test waited on Cargo's lock: four tests took
+    37 to 59 s each, 194 of the suite's test-seconds, and test_verdicts flaked when its wait
+    pushed `run_lanes` over its budget. The one test of the shared build (test_checks.py) puts
+    the real method back."""
+    monkeypatch.setattr(step_runner.Steps, "build_cli", lambda _self, _env: None)
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:

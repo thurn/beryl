@@ -697,6 +697,11 @@ def test_a_wait_for_tokens_does_not_count_towards_the_hang_limit(
     assert steps.cut()
 
 
+# The real shared build, read at import, before conftest.py's `no_cli_build` replaces it in
+# each test.
+REAL_BUILD_CLI: Callable[[checks.Steps, dict[str, str]], None] = checks.Steps.build_cli
+
+
 def test_the_steps_that_run_the_cli_share_one_build_that_holds_no_idle_tokens(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -714,6 +719,7 @@ def test_the_steps_that_run_the_cli_share_one_build_that_holds_no_idle_tokens(
         return tokens.Lease(want, [])
 
     monkeypatch.setattr(checks.tokens, "lease", lease)
+    monkeypatch.setattr(checks.Steps, "build_cli", REAL_BUILD_CLI)
     append = f"open({str(builds)!r}, 'a').write('built\\n')"
     monkeypatch.setattr(paths, "CLI_BUILD", [sys.executable, "-c", append])
     for command in ["shots:ui-shots", "oracle:oracle", "rust:clippy"]:
