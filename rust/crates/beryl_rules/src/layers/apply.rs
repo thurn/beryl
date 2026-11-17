@@ -95,7 +95,26 @@ pub(super) fn settle<L: Layout>(
         // nothing the layers change, a permanent's mana value.
         LayerChange::Read { .. } if reads_each::<L>(t, source, change) => change,
         LayerChange::Read { .. } => read(s, t, source, change, by, None),
-        change => change,
+        change @ (LayerChange::Control(_)
+        | LayerChange::AddTypes(_)
+        | LayerChange::RemoveTypes(_)
+        | LayerChange::SetTypes(_)
+        | LayerChange::AddSubtype(_)
+        | LayerChange::SetLandTypes(_)
+        | LayerChange::AddKeywords(_)
+        | LayerChange::Grant(_)
+        | LayerChange::SetColors(_)
+        | LayerChange::AddColors(_)
+        | LayerChange::LoseAllAbilities
+        | LayerChange::LoseAbility(_)
+        | LayerChange::DefinedPower(_)
+        | LayerChange::SetBasePt(..)
+        | LayerChange::ModifyPt(..)
+        | LayerChange::SwitchPt
+        | LayerChange::SetSubtype(_)
+        | LayerChange::DefinedPt(..)
+        | LayerChange::AddProtection(_)
+        | LayerChange::GrantEscape) => change,
     }
 }
 
@@ -140,7 +159,26 @@ fn read<L: Layout>(
         Modification::SetBasePt(power, toughness) => {
             LayerChange::SetBasePt(number(power), number(toughness))
         }
-        _ => unreachable!("the layers read the amounts of a part that has some"),
+        Modification::Control
+        | Modification::AddTypes(_)
+        | Modification::RemoveTypes(_)
+        | Modification::SetTypes(_)
+        | Modification::AddSubtypeWord(_)
+        | Modification::SetSubtypeWord(_)
+        | Modification::SetLandTypeWords(_)
+        | Modification::AddKeywords(_)
+        | Modification::Grant(_)
+        | Modification::ModifyPt(..)
+        | Modification::LoseAllAbilities
+        | Modification::LoseAbility(_)
+        | Modification::SetColorWords(_)
+        | Modification::AddColorWords(_)
+        | Modification::AddChosenColor
+        | Modification::SwitchPt
+        | Modification::AddProtection(_)
+        | Modification::GrantEscape => {
+            unreachable!("the layers read the amounts of a part that has some")
+        }
     }
 }
 
@@ -291,7 +329,26 @@ pub(super) fn apply<L: Layout>(
             d.lost = d.lost.with(ability).ok_or(Full)?;
             return Ok(());
         }
-        _ => {}
+        LayerChange::Control(_)
+        | LayerChange::AddTypes(_)
+        | LayerChange::RemoveTypes(_)
+        | LayerChange::SetTypes(_)
+        | LayerChange::AddSubtype(_)
+        | LayerChange::SetLandTypes(_)
+        | LayerChange::AddKeywords(_)
+        | LayerChange::Grant(_)
+        | LayerChange::SetColors(_)
+        | LayerChange::AddColors(_)
+        | LayerChange::LoseAllAbilities
+        | LayerChange::DefinedPower(_)
+        | LayerChange::SetBasePt(..)
+        | LayerChange::ModifyPt(..)
+        | LayerChange::SwitchPt
+        | LayerChange::Read { .. }
+        | LayerChange::SetSubtype(_)
+        | LayerChange::DefinedPt(..)
+        | LayerChange::AddProtection(_)
+        | LayerChange::GrantEscape => {}
     }
     modify(t, s.results(), i, source, change);
     Ok(())
@@ -455,7 +512,22 @@ fn defined<L: Layout>(
             .filter(|&i| passes(s, t, filter, i, by))
             .count(),
         Amount::CardTypesAmong(_) => s.card_types_in_graveyards(t),
-        _ => unreachable!("the card table refuses an amount the layers cannot read"),
+        Amount::X
+        | Amount::ThatMany
+        | Amount::Carried
+        | Amount::ThoseOf(_)
+        | Amount::Count(_)
+        | Amount::Power(_)
+        | Amount::Toughness(_)
+        | Amount::ManaValue(_)
+        | Amount::Counters(..)
+        | Amount::Life(_)
+        | Amount::Most(..)
+        | Amount::SpellsCast(_)
+        | Amount::CardsDrawn(_)
+        | Amount::SpellsCastBefore => {
+            unreachable!("the card table refuses an amount the layers cannot read")
+        }
     }
 }
 
@@ -541,9 +613,8 @@ pub(super) fn existence_reads(spec: &beryl_card::LayerSpec) -> Characteristics {
     reads
 }
 
-/// The characteristics the amounts of the part at `part` of a static ability read as its
-/// layer applies ([`read`]): those of the permanents an amount counts.
-pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, part: u8) -> Characteristics {
+/// The characteristics a static ability's change reads to get its amounts as the layer applies.
+pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, change: LayerChange) -> Characteristics {
     fn of(amount: &Amount) -> Characteristics {
         match *amount {
             // A number, a permanent's mana value, which no layer changes, or the cards in
@@ -553,11 +624,68 @@ pub(super) fn amount_reads(spec: &beryl_card::LayerSpec, part: u8) -> Characteri
             }
             Amount::Times(_, amount) | Amount::Plus(_, amount) => of(amount),
             Amount::Count(&Objects::All { filter, .. }) => filter_reads(filter),
-            _ => Characteristics::FILTERED,
+            Amount::X
+            | Amount::ThatMany
+            | Amount::Carried
+            | Amount::ThoseOf(_)
+            | Amount::Count(_)
+            | Amount::Power(_)
+            | Amount::Toughness(_)
+            | Amount::ManaValue(_)
+            | Amount::Counters(..)
+            | Amount::Life(_)
+            | Amount::Most(..)
+            | Amount::SpellsCast(_)
+            | Amount::CardsDrawn(_)
+            | Amount::SpellsCastBefore => Characteristics::FILTERED,
         }
     }
+    let part = match change {
+        LayerChange::Read { part, .. } => part,
+        LayerChange::Control(_)
+        | LayerChange::AddTypes(_)
+        | LayerChange::RemoveTypes(_)
+        | LayerChange::SetTypes(_)
+        | LayerChange::AddSubtype(_)
+        | LayerChange::SetLandTypes(_)
+        | LayerChange::AddKeywords(_)
+        | LayerChange::Grant(_)
+        | LayerChange::SetColors(_)
+        | LayerChange::AddColors(_)
+        | LayerChange::LoseAllAbilities
+        | LayerChange::LoseAbility(_)
+        | LayerChange::DefinedPower(_)
+        | LayerChange::SetBasePt(..)
+        | LayerChange::ModifyPt(..)
+        | LayerChange::SwitchPt
+        | LayerChange::SetSubtype(_)
+        | LayerChange::DefinedPt(..)
+        | LayerChange::AddProtection(_)
+        | LayerChange::GrantEscape => return Characteristics::NONE,
+    };
     match static_ability::amounts_of(spec, part) {
         (power, None) => of(power),
         (power, Some(toughness)) => of(power).union(of(toughness)),
+    }
+}
+
+/// Layer 7c's counters ([CR 613.4c]): "Effects and counters that modify power and/or
+/// toughness (but don't set power and/or toughness to a specific number or value) are
+/// applied." Additions commute, so they follow the layer's effects.
+///
+/// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
+#[inline]
+pub(super) fn counters<L: Layout>(s: &mut Rederive<'_, L>) {
+    for i in 0..s.battlefield().len() {
+        let c = s.object(s.battlefield()[i]).counters();
+        let d = &mut s.results()[i];
+        let delta = i16::from(c.plus_one) - i16::from(c.minus_one);
+        let adjust = |value| {
+            let adjusted = i16::from(value) + delta;
+            i8::try_from(adjusted.clamp(i16::from(i8::MIN), i16::from(i8::MAX)))
+                .expect("clamped to i8")
+        };
+        d.power = adjust(d.power);
+        d.toughness = adjust(d.toughness);
     }
 }

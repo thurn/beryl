@@ -7,7 +7,7 @@ use beryl_kernel::derive::Rederive;
 use crate::card::{Ability, GrantIx};
 use crate::fixed::Full;
 use crate::ids::CardId;
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, Queue, index};
 use crate::state::GrantRef;
 use crate::table::GameTable;
 
@@ -67,7 +67,8 @@ pub(super) fn granted_layer_effects<L: Layout>(
     for (i, row) in s.rows().iter().enumerate() {
         for grant in row.granted.into_iter().flatten() {
             if granted_ability(t, grant).layer().is_some() {
-                let at = i as u16;
+                // The layout index names every battlefield position.
+                let at = index::<L>(i).into();
                 found
                     .get_or_insert_with(Default::default)
                     .push(GrantedTo { at, grant })?;

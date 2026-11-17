@@ -81,7 +81,7 @@ fn player_rules_of<L: Layout>(
     rules: &mut PerSeat<Rules>,
 ) {
     let controller = s.rows()[i].controller;
-    for (n, ability) in what.face(t).abilities.iter().enumerate() {
+    for (ability, n) in what.face(t).abilities.iter().zip(0..) {
         let (AbilityKind::Static, Some(rule)) = (ability.kind(), ability.rule()) else {
             continue;
         };
@@ -89,7 +89,7 @@ fn player_rules_of<L: Layout>(
         let has = if merged {
             super::merged::has_so_far(s, i)
         } else {
-            s.has_ability_so_far(i, AbilityIx::new(n as u8))
+            s.has_ability_so_far(i, AbilityIx::new(n))
         };
         if !has {
             continue;

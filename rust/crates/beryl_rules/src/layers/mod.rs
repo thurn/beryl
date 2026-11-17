@@ -65,7 +65,7 @@ enum Target<L: Layout> {
 /// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct Apply<L: Layout> {
-    layer: u8,
+    layer: Layer,
     timestamp: u16,
     /// Static abilities on one object share its timestamp; their order on the card breaks
     /// the tie.
@@ -95,7 +95,7 @@ impl<L: Layout> Apply<L> {
     /// change to each member commutes.
     ///
     /// [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
-    fn key(&self) -> (u8, u16, u8, u8, u16) {
+    fn key(&self) -> (Layer, u16, u8, u8, u16) {
         let position: u16 = match self.target {
             Target::Position(i) | Target::Static(i) => i.into(),
             Target::Set(_) => 0,
@@ -108,7 +108,7 @@ impl<L: Layout> Apply<L> {
 impl<L: Layout> Default for Apply<L> {
     fn default() -> Self {
         Apply {
-            layer: 0,
+            layer: Layer::PtModifying,
             timestamp: 0,
             order: 0,
             part: 0,
@@ -377,14 +377,14 @@ fn apply_layers<L: Layout>(
             let printed = s.results()[i];
             s.results()[i] = s.copy_layer_one(t, slot, printed);
         }
-        for (n, ability) in f.abilities.iter().enumerate() {
+        for (ability, n) in f.abilities.iter().zip(0..) {
             let Some(spec) = ability.layer() else {
                 continue;
             };
             let (source, face) = what.record(t);
             let on = Listed {
                 at: i,
-                order: n as u8,
+                order: n,
                 source,
                 face,
             };
@@ -403,7 +403,7 @@ fn apply_layers<L: Layout>(
         };
         let on = Listed {
             at: usize::from(at),
-            order: GRANTED | grant.grant.index() as u8,
+            order: GRANTED | grant.grant.get(),
             source: grant.card,
             face: FaceIx::FRONT,
         };
@@ -428,11 +428,11 @@ fn apply_layers<L: Layout>(
         Some(list) => {
             list.as_mut_slice().sort_unstable_by_key(Apply::key);
             // The counters of layer 7c apply after its effects and before those of 7d.
-            let split = (list.as_slice()).partition_point(|a| a.layer <= Layer::PtModifying as u8);
+            let split = (list.as_slice()).partition_point(|a| a.layer <= Layer::PtModifying);
             let (to_7c, after) = list.as_slice().split_at(split);
             let mut begun = None;
             let first = apply_in_order(s, t, to_7c, &mut begun, trials);
-            counters(s);
+            apply::counters(s);
             let second = apply_in_order(s, t, after, &mut begun, trials);
             listed = listed.and(first).and(second);
             for a in list.iter() {
@@ -444,7 +444,7 @@ fn apply_layers<L: Layout>(
                 applied.protection |= matches!(a.change, LayerChange::AddProtection(_));
             }
         }
-        None => counters(s),
+        None => apply::counters(s),
     }
     let applying = list.as_ref().map_or(&[][..], |l| l.as_slice());
     listed = listed.and(elsewhere::reach(s, t, applying));
@@ -516,9 +516,10 @@ fn list_static<L: Layout>(
                 .condition
                 .as_ref()
                 .is_none_or(|condition| apply::holds_from_base(s, slot, condition));
-            let target = match spec.affected {
-                Objects::This => Some(i),
-                _ => o.attached_to().and_then(|a| s.battlefield_position(a)),
+            let target = if spec.affected == Objects::This {
+                Some(i)
+            } else {
+                o.attached_to().and_then(|a| s.battlefield_position(a))
             };
             match (applies, target) {
                 (true, Some(target)) => {
@@ -528,7 +529,21 @@ fn list_static<L: Layout>(
                 _ => return Ok(()),
             }
         }
-        _ => Target::Static(index::<L>(i)),
+        Objects::This
+        | Objects::Target(_)
+        | Objects::AttachedTo
+        | Objects::Those
+        | Objects::TriggeredOn
+        | Objects::TriggeredOnIn(_)
+        | Objects::ExiledWithThis
+        | Objects::PutOntoBattlefieldWithThis
+        | Objects::Carried
+        | Objects::All { .. }
+        | Objects::InZoneOf { .. }
+        | Objects::CardsIn { .. }
+        | Objects::Everywhere(_)
+        | Objects::Paid(_)
+        | Objects::Other(_) => Target::Static(index::<L>(i)),
     };
     let you = s.base_controller(slot);
     // CR 612.3: "any abilities that are granted to an object can't be modified by
@@ -548,7 +563,9 @@ fn list_static<L: Layout>(
         .min_by_key(|&part| (layer_of(spec.modifications[part]), part))
         .unwrap_or(0);
     let mut listed = Ok(());
-    for (part, &modification) in spec.modifications.iter().enumerate() {
+    let parts = u8::try_from(spec.modifications.len())
+        .expect("a layer spec has at most MODIFY_PARTS parts");
+    for (&modification, part) in spec.modifications.iter().zip(0..parts) {
         // No static ability of the cards changes control. One that did would name
         // its source's controller as layer 2 has it, not as the permanent entered.
         debug_assert_ne!(modification, Modification::Control);
@@ -560,19 +577,19 @@ fn list_static<L: Layout>(
                 layer: read_layer(modification),
                 face: on.face,
                 ability: AbilityIx::new(on.order & !merged::MERGED),
-                part: part as u8,
+                part,
             }
         });
         let pushed = list.get_or_insert_with(Default::default).push(Apply {
-            layer: change.layer() as u8,
+            layer: change.layer(),
             timestamp: o.timestamp(),
             order: on.order,
-            part: part as u8,
+            part,
             target,
             source: on.source,
             change,
-            from: Some((index::<L>(i), part == first)),
-            parts: spec.modifications.len() as u8,
+            from: Some((index::<L>(i), usize::from(part) == first)),
+            parts,
         });
         listed = listed.and(pushed);
     }
@@ -704,7 +721,7 @@ fn has_so_far<L: Layout>(s: &Rederive<'_, L>, from: L::Index, a: &Apply<L>) -> b
     if a.order & GRANTED == 0 {
         return s.has_ability_so_far(at, AbilityIx::new(a.order));
     }
-    a.layer < Layer::Ability as u8 || { s.rows()[at].granted }.contains(&Some(GrantRef {
+    a.layer < Layer::Ability || { s.rows()[at].granted }.contains(&Some(GrantRef {
         card: a.source,
         grant: GrantIx::new(a.order & !GRANTED),
     }))
@@ -714,22 +731,6 @@ fn has_so_far<L: Layout>(s: &Rederive<'_, L>, from: L::Index, a: &Apply<L>) -> b
 #[inline]
 fn position<L: Layout>(i: L::Index) -> usize {
     i.into()
-}
-
-/// Layer 7c's counters ([CR 613.4c]): "Effects and counters that modify power and/or
-/// toughness (but don't set power and/or toughness to a specific number or value) are
-/// applied." Additions commute, so they follow the layer's effects.
-///
-/// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
-#[inline]
-fn counters<L: Layout>(s: &mut Rederive<'_, L>) {
-    for i in 0..s.battlefield().len() {
-        let c = s.object(s.battlefield()[i]).counters();
-        let d = &mut s.results()[i];
-        let delta = c.plus_one as i8 - c.minus_one as i8;
-        d.power = d.power.saturating_add(delta);
-        d.toughness = d.toughness.saturating_add(delta);
-    }
 }
 
 /// Lists the continuous effects of resolved spells and abilities that change a permanent
@@ -763,7 +764,7 @@ fn resolved_effects<L: Layout>(
             Permanents::Set(set) => Target::Set(set),
         };
         let pushed = list.get_or_insert_with(Default::default).push(Apply {
-            layer: change.layer() as u8,
+            layer: change.layer(),
             timestamp: e.timestamp,
             order: 0,
             part: 0,

@@ -84,17 +84,17 @@ pub(super) fn apply_ordered<L: Layout>(
     let mut applied = Ok(());
     // The effects still to apply, by their place in `segment`, which is timestamp order. A
     // segment is part of the recompute's list, which has as many places as this.
-    let mut pending: L::Queue<u8, 192> = Default::default();
+    let mut pending: L::Queue<usize, 192> = Default::default();
     for i in 0..segment.len() {
-        pending.push_bounded(i as u8);
+        pending.push_bounded(i);
     }
     while !pending.is_empty() {
         // The earliest that depends on none left, or, with every one waiting, the earliest
         // in a loop of dependencies.
         let read = begun.as_ref();
-        let waits = |s: &mut Rederive<'_, L>, k: u8, trials: &mut u64| {
+        let waits = |s: &mut Rederive<'_, L>, k: usize, trials: &mut u64| {
             pending.iter().any(|&p| {
-                let (a, b) = (&segment[usize::from(k)], &segment[usize::from(p)]);
+                let (a, b) = (&segment[k], &segment[p]);
                 depends(s, t, a, b, read, trials)
             })
         };
@@ -111,7 +111,7 @@ pub(super) fn apply_ordered<L: Layout>(
                     .find(|&i| in_loop(s, t, segment, pending.as_slice(), i, read, trials))
             })
             .unwrap_or(0);
-        let a = segment[usize::from(pending.remove(next))];
+        let a = segment[pending.remove(next)];
         applied = applied.and(apply_one(s, t, &a, begun));
     }
     applied
@@ -123,34 +123,32 @@ fn in_loop<L: Layout>(
     s: &mut Rederive<'_, L>,
     t: &GameTable,
     segment: &[Apply<L>],
-    pending: &[u8],
+    pending: &[usize],
     k: usize,
     begun: Read<'_, L>,
     trials: &mut u64,
 ) -> bool {
     let start = pending[k];
     // A bit for each place of `segment` already met.
-    let mut seen = [0u64; 4];
-    let mut stack: L::Queue<u8, 192> = Default::default();
+    let mut seen: L::Queue<u64, 3> = Default::default();
+    for _ in 0..segment.len().div_ceil(64) {
+        // A Small segment has at most 192 effects. A Large queue can grow.
+        seen.push_bounded(0);
+    }
+    let mut stack: L::Queue<usize, 192> = Default::default();
     stack.push_bounded(start);
     while let Some(j) = stack.pop() {
         for &p in pending {
-            if !depends(
-                s,
-                t,
-                &segment[usize::from(j)],
-                &segment[usize::from(p)],
-                begun,
-                trials,
-            ) {
+            if !depends(s, t, &segment[j], &segment[p], begun, trials) {
                 continue;
             }
             if p == start {
                 return true;
             }
-            let (word, bit) = (usize::from(p) / 64, 1u64 << (p % 64));
-            if seen[word] & bit == 0 {
-                seen[word] |= bit;
+            let (word, bit) = (p / 64, 1u64 << (p % 64));
+            let seen = &mut seen.as_mut_slice()[word];
+            if *seen & bit == 0 {
+                *seen |= bit;
                 // Each place is pushed once, and there are no more than the stack holds.
                 stack.push_bounded(p);
             }
@@ -208,7 +206,27 @@ fn what_it_does<L: Layout>(
         LayerChange::Read { .. } if members.is_some() => {
             apply::settle(s, t, a.source, a.change, super::reader(s, a))
         }
-        change => change,
+        change @ (LayerChange::Control(_)
+        | LayerChange::AddTypes(_)
+        | LayerChange::RemoveTypes(_)
+        | LayerChange::SetTypes(_)
+        | LayerChange::AddSubtype(_)
+        | LayerChange::SetLandTypes(_)
+        | LayerChange::AddKeywords(_)
+        | LayerChange::Grant(_)
+        | LayerChange::SetColors(_)
+        | LayerChange::AddColors(_)
+        | LayerChange::LoseAllAbilities
+        | LayerChange::LoseAbility(_)
+        | LayerChange::DefinedPower(_)
+        | LayerChange::SetBasePt(..)
+        | LayerChange::ModifyPt(..)
+        | LayerChange::SwitchPt
+        | LayerChange::Read { .. }
+        | LayerChange::SetSubtype(_)
+        | LayerChange::DefinedPt(..)
+        | LayerChange::AddProtection(_)
+        | LayerChange::GrantEscape) => change,
     };
     (members, change)
 }
@@ -236,10 +254,7 @@ fn reads<L: Layout>(s: &Rederive<'_, L>, t: &GameTable, a: &Apply<L>) -> Charact
     let Some(spec) = ability.layer() else {
         unreachable!("the recompute lists the static abilities that have a layer effect");
     };
-    let mut reads = match a.change {
-        LayerChange::Read { part, .. } => apply::amount_reads(spec, part),
-        _ => Characteristics::NONE,
-    };
+    let mut reads = apply::amount_reads(spec, a.change);
     // A later part applies to the set its first part found ([`Begun`]), whatever its
     // permanent has lost since and whatever its filter would find now.
     if first {

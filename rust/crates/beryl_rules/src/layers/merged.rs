@@ -43,14 +43,14 @@ pub(super) fn list<L: Layout>(
     let mut merged = false;
     for (card, face) in s.copiable(slot).merged_faces(t) {
         merged = true;
-        for (n, ability) in t.def(card).face(face).abilities.iter().enumerate() {
+        for (ability, n) in t.def(card).face(face).abilities.iter().zip(0u8..) {
             let Some(spec) = ability.layer() else {
                 continue;
             };
-            debug_assert!(n < usize::from(MERGED), "a face of fewer than 64 abilities");
+            debug_assert!(n < MERGED, "a face of fewer than 64 abilities");
             let on = Listed {
                 at: i,
-                order: MERGED | n as u8,
+                order: MERGED | n,
                 source: card,
                 face,
             };

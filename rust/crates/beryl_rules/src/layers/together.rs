@@ -77,28 +77,25 @@ fn parts<'a, L: Layout>(
     let words = s.words_of(slot);
     face.abilities
         .iter()
-        .enumerate()
-        .filter_map(|(n, ability)| ability.layer().map(|spec| (n, spec)))
+        .zip(0..)
+        .filter_map(|(ability, n)| ability.layer().map(|spec| (n, spec)))
         .flat_map(move |(n, spec)| {
             let reads = apply::existence_reads(spec);
             spec.modifications
                 .iter()
-                .enumerate()
-                .map(move |(part, &modification)| {
+                .zip(0..)
+                .map(move |(&modification, part)| {
                     // As the layers list it, "the chosen color" read from the permanent, so
                     // that only a part with an amount is left to read as it applies.
                     let change = elsewhere::resolve(s, slot, modification, you, &words).unwrap_or(
                         LayerChange::Read {
                             layer: read_layer(modification),
                             face: face_ix,
-                            ability: AbilityIx::new(n as u8),
-                            part: part as u8,
+                            ability: AbilityIx::new(n),
+                            part,
                         },
                     );
-                    let amount = match change {
-                        LayerChange::Read { .. } => apply::amount_reads(spec, part as u8),
-                        _ => Characteristics::NONE,
-                    };
+                    let amount = apply::amount_reads(spec, change);
                     Part {
                         layer: change.layer(),
                         reads: reads.union(amount),

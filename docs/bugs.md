@@ -6,6 +6,19 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Layer dependencies past the 256th effect could apply the wrong effect.** The
+  pending list stored each effect's position in a byte. It now uses full slice
+  indices, and the loop check sizes its visited set to the segment.
+  `large_layer_orders_dependencies_above_the_byte_limit` covers a dependency on
+  an effect beyond that boundary.
+
+- **A permanent with 200 +1/+1 counters could shrink.** Layer 7c read each
+  unsigned counter total as a signed byte before computing the difference. It
+  adds the full signed difference and clamps the resulting power and toughness
+  to their representation. The cast lint blocks the unchecked cast, and
+  `large_counter_totals_saturate_power_and_toughness_with_the_right_sign` checks
+  both signs.
+
 - **Paying a cost with cards in a large graveyard could revisit earlier cards.**
   The casting cursor was a byte and wrapped after the 255th card. Casting now
   checks the conversion and reads the position from the chosen set when the

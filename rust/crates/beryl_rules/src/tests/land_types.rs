@@ -17,7 +17,7 @@ use crate::event::Sink;
 use crate::event::TokenEntry;
 use crate::filter::Filter;
 use crate::ids::{Seat, Slot};
-use crate::state::{Continuous, Duration, TurnStep, Zone};
+use crate::state::{Continuous, Duration, LayerChange, TurnStep, Zone};
 use crate::{CardTable, GameTable, Profile, State, layers, reference};
 use crate::{Scratch, tokens};
 
@@ -307,6 +307,38 @@ fn an_effect_that_removes_another_s_ability_applies_first_in_either_order() {
         assert_eq!(s.intrinsic_mana(&t, plains), 0);
         assert!(!pays(&t, &s, ManaCost::new(0, [0, 0, 1, 0, 0, 0])));
     }
+}
+
+#[test]
+fn large_layer_orders_dependencies_above_the_byte_limit() {
+    let (t, small) = game();
+    let mut s = small.widen();
+    let [plains, tomb, moon] =
+        ["Test Land", "Test Tomb", "Test Moon"].map(|name| find(&s, &t, Seat::P0, name));
+    s.board().place(plains, Zone::Battlefield).unwrap();
+    s.board().place(tomb, Zone::Battlefield).unwrap();
+
+    // These resolved effects put the Moon's later than a byte can index in layer 4.
+    let source = s.card_behind(tomb).unwrap();
+    let change = Continuous::Layer(s.object_ref(plains), LayerChange::AddTypes(Types::NONE));
+    for _ in 0..256 {
+        s.start_effect(source, change, Duration::Indefinite)
+            .unwrap();
+    }
+    s.board().place(moon, Zone::Battlefield).unwrap();
+    let mut sink = Sink::off();
+    layers::refresh(&mut s, &t, &mut sink).unwrap();
+    assert!(sink.work.dependency_trials > 0);
+    assert!(
+        s.derived(tomb)
+            .subtypes
+            .contains(t.subtypes(), Subtype::Mountain)
+    );
+    assert!(
+        !s.derived(plains)
+            .subtypes
+            .contains(t.subtypes(), Subtype::Swamp)
+    );
 }
 
 /// Two effects that each remove the other's ability form a loop of dependencies, which

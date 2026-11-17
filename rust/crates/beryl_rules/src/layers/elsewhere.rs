@@ -94,6 +94,25 @@ pub(super) fn resolve<L: Layout>(
 ) -> Option<LayerChange> {
     match modification {
         Modification::AddChosenColor => Some(LayerChange::AddColors(s.chosen_color(slot))),
-        _ => LayerChange::resolve(modification, you, words),
+        Modification::Control
+        | Modification::AddTypes(_)
+        | Modification::RemoveTypes(_)
+        | Modification::SetTypes(_)
+        | Modification::AddSubtypeWord(_)
+        | Modification::SetSubtypeWord(_)
+        | Modification::SetLandTypeWords(_)
+        | Modification::AddKeywords(_)
+        | Modification::Grant(_)
+        | Modification::SetPower(_)
+        | Modification::SetPt(..)
+        | Modification::ModifyPt(..)
+        | Modification::LoseAllAbilities
+        | Modification::LoseAbility(_)
+        | Modification::SetColorWords(_)
+        | Modification::AddColorWords(_)
+        | Modification::SetBasePt(..)
+        | Modification::SwitchPt
+        | Modification::AddProtection(_)
+        | Modification::GrantEscape => LayerChange::resolve(modification, you, words),
     }
 }

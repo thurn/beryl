@@ -6,7 +6,7 @@ use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, Subtype, Types};
 use crate::event::{self, Event, Reason};
 use crate::ids::{Seat, SlotId};
-use crate::state::{Continuous, Duration, LayerChange, Zone};
+use crate::state::{Continuous, CounterKind, Duration, LayerChange, Zone};
 use crate::{
     GameTable, Large, Layout, Outcome, Replay, Scratch, StallReason, State, Step, layers, next,
     trigger,
@@ -161,4 +161,22 @@ fn a_trigger_counting_three_hundred_objects_reads_no_wrapped_count() {
         .map(|trigger| trigger.info.amount)
         .collect();
     assert_eq!(amounts, [255, 255]);
+}
+
+#[test]
+fn large_counter_totals_saturate_power_and_toughness_with_the_right_sign() {
+    let (t, mut s, p) = game();
+    let bear = put(&mut s, &t, p, "Test Bear");
+    let object = s.current(s.object_ref(bear)).unwrap();
+    let _ = s
+        .add_counters(object, CounterKind::PlusOne, 200, true)
+        .unwrap();
+    refresh(&mut s, &t);
+    assert_eq!(power_and_toughness(&s, bear), (i8::MAX, i8::MAX));
+    let _ = s.remove_counters(object, CounterKind::PlusOne, 200, true);
+    let _ = s
+        .add_counters(object, CounterKind::MinusOne, 200, true)
+        .unwrap();
+    refresh(&mut s, &t);
+    assert_eq!(power_and_toughness(&s, bear), (i8::MIN, i8::MIN));
 }
