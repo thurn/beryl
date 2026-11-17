@@ -30,7 +30,8 @@ def main_checkout(start: Path) -> Path:
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return start
-    return Path(found).parent
+    common = Path(found)
+    return common.parent if common.name == ".git" else common
 
 
 def run_bd(cwd: Path, command: list[str] = COMMAND) -> bytes:

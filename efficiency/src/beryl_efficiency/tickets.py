@@ -22,7 +22,7 @@ def sources(
 ) -> tuple[SnapshotSource, SnapshotSource, CursorSource | None]:
     """Select the same backend and tk binary as Enact, once per ingest."""
     legacy = (beads.Beads.here(checkout), cilog.Verdicts.here(checkout))
-    config = checkout / ".enact.toml"
+    config = beads.main_checkout(checkout) / ".enact.toml"
     if not config.is_file():
         return (*legacy, None)
     try:

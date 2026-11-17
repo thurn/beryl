@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import functools
 import json
 import subprocess
 import sys
@@ -18,16 +17,16 @@ class TicketError(RuntimeError):
     pass
 
 
-@functools.cache
 def detect(repo: Path) -> str:
-    config = repo / ".enact.toml"
-    if not config.is_file() and (main := paths.main_checkout()) is not None:
-        config = main / ".enact.toml"
+    config = (paths.main_checkout(repo) or repo) / ".enact.toml"
     if not config.is_file():
         return ""
     with config.open("rb") as file:
-        if "tickets" not in tomllib.load(file):
-            return ""
+        settings = tomllib.load(file).get("tickets", {})
+    if not isinstance(settings, dict):
+        raise TicketError("expected a [tickets] table")
+    if not settings.get("project") and settings.get("backend") != "server":
+        return ""
 
     # Enact owns worktree config precedence, cutover waits and the client cache.
     helper = Path.home() / "enact" / "scripts" / "enact.py"

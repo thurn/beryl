@@ -44,16 +44,19 @@ def is_agent() -> bool:
     return any(os.environ.get(name) for name in AGENT_ENV)
 
 
-def main_checkout() -> Path | None:
+def main_checkout(checkout: Path | None = None) -> Path | None:
     """The main checkout this worktree belongs to (itself, outside a worktree)."""
     run = subprocess.run(
         ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
-        cwd=REPO,
+        cwd=checkout or REPO,
         capture_output=True,
         text=True,
         check=False,
     )
-    return Path(run.stdout.strip()).parent if run.returncode == 0 else None
+    if run.returncode:
+        return None
+    common = Path(run.stdout.strip())
+    return common.parent if common.name == ".git" else common
 
 
 def worktree_paths() -> list[Path]:
