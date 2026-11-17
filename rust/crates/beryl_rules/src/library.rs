@@ -50,7 +50,10 @@ pub fn put_into<L: Layout>(
     match game.state.object(object.slot).zone() {
         Zone::Library => return game.state.reorder_library(object.slot, place),
         Zone::Stack => {
-            match cast::unstack(game.state, game.table, game.sink, object, Zone::Library)? {
+            let Some(spell) = game.state.spell(object) else {
+                return Ok(());
+            };
+            match cast::unstack(game.state, game.table, game.sink, spell, Zone::Library)? {
                 Some(Zone::Library) => {}
                 Some(to) => return zones::move_to(game, object, to, Reason::Effect),
                 None => return Ok(()),
@@ -89,7 +92,7 @@ pub fn put_on_bottom_in_random_order<L: Layout>(
                 moved.push(slot)?;
             }
         }
-        s.rebind_at_random(moved.as_slice());
+        s.rebind_at_random(moved.as_slice())?;
     }
     Ok(())
 }

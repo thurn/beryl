@@ -55,7 +55,7 @@ impl CustomBody for DestroyTarget {
         resolution: &mut Resolution<'_, L>,
     ) -> Flow {
         if let Some(target) = resolution.target_object(game, TargetPlace::FIRST) {
-            destroy(game, target)?;
+            destroy(game, game.state().permanent(target).unwrap())?;
         }
         Ok(())
     }

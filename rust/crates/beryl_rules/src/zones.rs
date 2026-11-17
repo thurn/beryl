@@ -2,6 +2,7 @@
 //! one to another, and looking at the cards of a hidden one.
 
 use beryl_card::{Objects, Players, PutOnto, Types};
+use beryl_kernel::reference::{Cards, ZoneMark};
 
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
@@ -27,10 +28,17 @@ pub fn move_to<L: Layout>(
     to: Zone,
     reason: Reason,
 ) -> Result<(), Full> {
-    if !game.state.is_current(object) {
+    let Some(object) = game.state.current(object) else {
         return Ok(());
-    }
-    event::move_one(game.state, game.table, game.sink, object.slot, to, reason)
+    };
+    event::move_one(
+        game.state,
+        game.table,
+        game.sink,
+        object.reference().slot,
+        to,
+        reason,
+    )
 }
 
 /// Moves a set of objects to one zone simultaneously, each to its owner's
@@ -50,16 +58,39 @@ pub fn move_all<L: Layout>(
     )
 }
 
+/// Exiles cards chosen for a cost together. A token does not represent a card
+/// ([CR 111.6]) and cannot enter the payment's checked set.
+///
+/// ```compile_fail,E0308
+/// use beryl_kernel::reference::{Graveyard, Permanents};
+/// use beryl_rules::{Game, zones::exile_cards_for_cost};
+///
+/// fn pay(game: &mut Game<'_>, tokens: Permanents) {
+///     let _ = exile_cards_for_cost::<Graveyard, _>(game, tokens.slots());
+/// }
+/// ```
+///
+/// [CR 111.6]: https://yawgatog.com/resources/magic-rules/#R1116
+#[inline]
+pub fn exile_cards_for_cost<Z: ZoneMark, L: Layout>(
+    game: &mut Game<'_, L>,
+    cards: Cards<Z, L>,
+) -> Result<(), Full> {
+    move_all(game, cards.slots(), Zone::Exile, Reason::Exile)
+}
+
 /// Returns a spell or a permanent to its owner's hand (CR 400.3). A spell leaves the stack
 /// without resolving, or is exiled instead ([`crate::replace::exiled_instead`]).
 pub fn return_to_hand<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Result<(), Full> {
     if !game.state.is_current(object) {
         return Ok(());
     }
-    let to = match game.state.object(object.slot).zone() {
-        Zone::Battlefield => Some(Zone::Hand),
-        Zone::Stack => cast::unstack(game.state, game.table, game.sink, object, Zone::Hand)?,
-        _ => None,
+    let to = if game.state.permanent(object).is_some() {
+        Some(Zone::Hand)
+    } else if let Some(spell) = game.state.spell(object) {
+        cast::unstack(game.state, game.table, game.sink, spell, Zone::Hand)?
+    } else {
+        None
     };
     match to {
         Some(to) => move_to(game, object, to, Reason::Effect),

@@ -9,6 +9,8 @@
 
 use beryl_card::{AbilityIx, Castings, FaceAbility, FaceIx, GrantIx, SpecIx};
 
+use crate::reference::Spell;
+
 use crate::bitboard::Bitboard;
 use crate::event::Sink;
 use crate::fixed::Full;
@@ -639,9 +641,13 @@ impl<L: Layout> State<L> {
         &mut self,
         t: &GameTable,
         sink: &mut Sink<L>,
-        spell: ObjectRef<L>,
+        spell: Spell<L>,
     ) -> Result<Option<StackEntry<L>>, Full> {
-        let Some(i) = self.stack.iter().position(|e| e.spell() == Some(spell)) else {
+        let Some(i) = self
+            .stack
+            .iter()
+            .position(|e| e.spell() == Some(spell.into()))
+        else {
             return Ok(None);
         };
         let entry = self.remove_from_stack(sink, i);

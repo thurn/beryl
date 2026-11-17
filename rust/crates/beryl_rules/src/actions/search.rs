@@ -87,7 +87,7 @@ pub(crate) fn instruction<L: Layout>(
             }
             Found::OntoBattlefieldTapped => zones::put_onto_battlefield_tapped(game, cards)?,
         }
-        shuffle::shuffle(game, player);
+        shuffle::shuffle(game, player)?;
         all |= cards;
     }
     Ok(Outcome::acted_on(all))

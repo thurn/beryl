@@ -77,7 +77,10 @@ fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation>
     if layers::refresh(&mut fresh, t, &mut Sink::default()).is_err() {
         return Ok(());
     }
-    for ((slot, was), (_, now)) in s.permanents().zip(fresh.permanents()) {
+    for ((slot, was), (_, now)) in s
+        .permanents_with_derived()
+        .zip(fresh.permanents_with_derived())
+    {
         check(
             now == was,
             "layer results differ from a fresh recompute",

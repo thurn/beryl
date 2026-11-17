@@ -27,6 +27,9 @@ pub fn counter<L: Layout>(
     if rule_change::cant_be_countered(game.state, game.table, spell) {
         return Ok(false);
     }
+    let Some(spell) = game.state.spell(spell) else {
+        return Ok(false);
+    };
     let Some(entry) = game.state.take_off_stack(game.table, game.sink, spell)? else {
         return Ok(false);
     };

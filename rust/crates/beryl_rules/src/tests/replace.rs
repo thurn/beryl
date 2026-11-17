@@ -145,7 +145,7 @@ fn a_token_that_would_die_is_exiled() {
         let made = tokens::create(game, resolution.controller(), values, 1, how).unwrap();
         token = made.sole();
         let token = game.state.object_ref(token.unwrap());
-        destroy(game, token).unwrap();
+        destroy(game, game.state().permanent(token).unwrap()).unwrap();
     });
     assert_eq!(s.object(token.unwrap()).zone(), Zone::Exile);
 }
@@ -185,7 +185,7 @@ fn replacements_putting_an_object_into_the_same_zone_are_one() {
     with_game(&t, &mut s, &mut x, rest, |game, resolution| {
         let exile = Continuous::Move(bear_ref, MoveReplacement::ExileInsteadOfGraveyard);
         continuous::start(game, resolution, exile, Duration::EndOfTurn).unwrap();
-        destroy(game, bear_ref).unwrap();
+        destroy(game, game.state().permanent(bear_ref).unwrap()).unwrap();
     });
     assert_eq!(s.object(bear).zone(), Zone::Exile);
 }

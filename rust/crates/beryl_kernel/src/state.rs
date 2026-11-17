@@ -478,7 +478,7 @@ impl<L: Layout> State<L> {
     ///
     /// In debug builds, if the layer results are stale.
     #[inline]
-    pub fn permanents(&self) -> impl Iterator<Item = (L::Slot, &Derived<L>)> + '_ {
+    pub fn permanents_with_derived(&self) -> impl Iterator<Item = (L::Slot, &Derived<L>)> + '_ {
         debug_assert!(!self.flags.derived_dirty, "derived read while dirty");
         self.battlefield
             .iter()

@@ -154,10 +154,10 @@ pub(crate) fn instruction<L: Layout>(
         }
     }
     if let Some(objects) = permanents {
-        damaged = run.permanents(objects);
-        let mut left = damaged;
+        let mut left = run.permanents(objects);
+        damaged = left.slots();
         while let Some(permanent) = run.next_permanent(&mut left) {
-            let to = Recipient::Permanent(permanent);
+            let to = Recipient::Permanent(permanent.into());
             dealt += u32::from(deal(run.game(), source, to, amount, false)?);
         }
     }
@@ -227,10 +227,10 @@ pub(crate) fn prevent_instruction<L: Layout>(
     let mut left = shielded;
     while let Some(permanent) = run.next_permanent(&mut left) {
         let (game, resolution) = run.resolving();
-        let effect = Continuous::Prevent(Subject::Object(permanent), shield);
+        let effect = Continuous::Prevent(Subject::Object(permanent.into()), shield);
         continuous::start(game, resolution, effect, Duration::EndOfTurn)?;
     }
-    Ok(Outcome::acted_on(shielded))
+    Ok(Outcome::acted_on(shielded.slots()))
 }
 
 /// The sources of damage `filter` accepts, read for `you` through `words`, that a player may

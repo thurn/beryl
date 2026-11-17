@@ -324,7 +324,7 @@ fn landwalks<L: Layout>(
         .filter(|&&(keyword, _)| walk.contains(keyword))
         .any(|&(_, subtype)| {
             let has = t.subtypes().has(subtype);
-            s.permanents().any(|(_, d)| {
+            s.permanents_with_derived().any(|(_, d)| {
                 d.controller == defending && d.types.contains(Types::LAND) && has.of(d.subtypes)
             })
         })

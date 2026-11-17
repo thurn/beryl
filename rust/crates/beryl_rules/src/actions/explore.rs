@@ -48,8 +48,8 @@ pub fn explore<L: Layout>(
             return Ok(());
         }
     }
-    if game.on_battlefield(object) {
-        counters::add(game, object, CounterKind::PlusOne, 1)?;
+    if let Some(permanent) = game.state().permanent(object) {
+        counters::add(game, permanent, CounterKind::PlusOne, 1)?;
     }
     // The card is revealed, on top of the library: a yes puts it into the graveyard.
     let prompt = Prompt::new(Purpose::Explore)
@@ -75,7 +75,7 @@ pub(crate) fn instruction<L: Layout>(
     let mut left = permanents;
     while let Some(object) = run.next_permanent(&mut left) {
         let (game, resolution) = run.resolving();
-        explore(game, resolution, object)?;
+        explore(game, resolution, object.into())?;
     }
-    Ok(Outcome::acted_on(permanents))
+    Ok(Outcome::acted_on(permanents.slots()))
 }

@@ -188,7 +188,7 @@ fn a_shuffle_rebinds_identities_and_clears_knowledge() {
         .iter()
         .map(|&slot| (slot, card(&s, slot), s.object(slot).incarnation()))
         .collect();
-    s.shuffle_library(p);
+    s.shuffle_library(p).unwrap();
     let after = |slot: Slot| (card(&s, slot), s.object(slot).incarnation());
     let mut cards_before: Vec<CardIx> = before.iter().map(|b| b.1).collect();
     let mut cards_after: Vec<CardIx> = before.iter().map(|b| after(b.0).0).collect();

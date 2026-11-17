@@ -136,7 +136,7 @@ pub(crate) fn instruction<L: Layout>(
         let mut left = permanents;
         while let Some(permanent) = run.next_permanent(&mut left) {
             let (game, resolution) = run.resolving();
-            gain_control(game, resolution, permanent, duration)?;
+            gain_control(game, resolution, permanent.into(), duration)?;
         }
     }
     let mut changes = [LayerChange::SwitchPt; MODIFY_PARTS];
@@ -165,7 +165,7 @@ pub(crate) fn instruction<L: Layout>(
             Modification::AddProtection(Protection::ChosenColor) => {
                 let (game, resolution) = run.resolving();
                 let ChosenValue::Color(color) =
-                    choices::catalog(game, resolution, you, ChosenKind::Color, permanents)?
+                    choices::catalog(game, resolution, you, ChosenKind::Color, permanents.slots())?
                 else {
                     unreachable!("a color is chosen as a color")
                 };
@@ -183,9 +183,15 @@ pub(crate) fn instruction<L: Layout>(
     }
     if parts > 0 {
         let (game, resolution) = run.resolving();
-        start_on_set(game, resolution, permanents, &changes[..parts], duration)?;
+        start_on_set(
+            game,
+            resolution,
+            permanents.slots(),
+            &changes[..parts],
+            duration,
+        )?;
     }
-    Ok(Outcome::acted_on(permanents))
+    Ok(Outcome::acted_on(permanents.slots()))
 }
 
 /// [`Effect::ExchangeControl`](beryl_card::Effect::ExchangeControl): "exchange control of
@@ -211,7 +217,10 @@ pub(crate) fn exchange_instruction<L: Layout>(
     first: Objects,
     second: Objects,
 ) -> Result<Outcome<L>, Full> {
-    let (Some(a), Some(b)) = (run.permanents(first).sole(), run.permanents(second).sole()) else {
+    let (Some(a), Some(b)) = (
+        run.permanents(first).slots().sole(),
+        run.permanents(second).slots().sole(),
+    ) else {
         return Ok(Outcome::NOTHING);
     };
     let (game, resolution) = run.resolving();
@@ -335,7 +344,7 @@ pub(crate) fn become_copy_instruction<L: Layout>(
     };
     let entry = &run.resolution().entry;
     let source = entry.card();
-    let mut values = run.state().copiable(original.slot);
+    let mut values = run.state().copiable(original.slot());
     if let Some(ix) = except {
         // Its color words read through the text changes of the spell or ability (CR 612.1).
         let words = run.state().entry_words(entry);
@@ -345,8 +354,8 @@ pub(crate) fn become_copy_instruction<L: Layout>(
     let mut copies = run.permanents(objects);
     let mut became = Bitboard::EMPTY;
     while let Some(copy) = run.next_permanent(&mut copies) {
-        run.game().state.become_copy(source, copy, values)?;
-        became.insert(copy.slot);
+        run.game().state.become_copy(source, copy.into(), values)?;
+        became.insert(copy.slot());
     }
     let game = run.game();
     layers::refresh(game.state, game.table, game.sink)?;

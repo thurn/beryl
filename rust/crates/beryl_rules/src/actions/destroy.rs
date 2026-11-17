@@ -1,6 +1,7 @@
 //! Destroy ([CR 701.8](https://yawgatog.com/resources/magic-rules/#R7018)).
 
 use beryl_card::{Keywords, Objects, Regeneration};
+use beryl_kernel::reference::{Permanent, Permanents};
 
 use crate::bitboard::Bitboard;
 use crate::event::{self, Entry, Reason};
@@ -9,7 +10,7 @@ use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::replace;
-use crate::state::{ObjectRef, State, Zone};
+use crate::state::{State, Zone};
 
 /// Destroys a permanent ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)):
 /// "To destroy a permanent, move it from the battlefield to its owner's graveyard." One that
@@ -17,9 +18,14 @@ use crate::state::{ObjectRef, State, Zone};
 /// ([`indestructible`]). A regeneration shield on it replaces the destruction
 /// ([`replace::destruction`]).
 #[inline]
-pub fn destroy<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Result<(), Full> {
-    let one = Bitboard::single(object.slot);
-    if !game.on_battlefield(object) || !indestructible(game.state(), one).is_empty() {
+pub fn destroy<L: Layout>(game: &mut Game<'_, L>, object: Permanent<L>) -> Result<(), Full> {
+    let Some(object) = game.state().current(object) else {
+        return Ok(());
+    };
+    let slot = object.reference().slot();
+    let one = Bitboard::single(slot);
+    if !game.state().object(slot).on_battlefield() || !indestructible(game.state(), one).is_empty()
+    {
         return Ok(());
     }
     let allowed = Regeneration::Allowed;
@@ -27,7 +33,7 @@ pub fn destroy<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Resul
         return Ok(());
     }
     let (to, reason) = (Zone::Graveyard, Reason::Destroy);
-    event::move_one(game.state, game.table, game.sink, object.slot, to, reason)
+    event::move_one(game.state, game.table, game.sink, slot, to, reason)
 }
 
 /// Destroys a set of permanents simultaneously (CR 701.8a), as "Destroy each creature"
@@ -38,9 +44,10 @@ pub fn destroy<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Resul
 #[inline]
 pub fn destroy_all<L: Layout>(
     game: &mut Game<'_, L>,
-    permanents: Bitboard<L::Slot>,
+    permanents: Permanents<L>,
     regeneration: Regeneration,
 ) -> Result<(), Full> {
+    let permanents = permanents.slots();
     let permanents = permanents & !indestructible(game.state(), permanents);
     let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
     let permanents = replace::destruction(s, t, sink, permanents, regeneration)?;
@@ -77,7 +84,7 @@ pub(crate) fn instruction<L: Layout>(
     if permanents.is_empty() {
         return Ok(Outcome::NOTHING);
     }
-    run.remember(permanents)?;
+    run.remember(permanents.slots())?;
     destroy_all(run.game(), permanents, regeneration)?;
-    Ok(run.left_the_battlefield(permanents))
+    Ok(run.left_the_battlefield(permanents.slots()))
 }

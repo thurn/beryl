@@ -705,7 +705,7 @@ fn a_dies_trigger_looks_back_and_its_intervening_if_skips_tokens() {
     // The copy is a token: when it dies it triggers nothing, and then ceases to exist.
     let token_ref = s.object_ref(token);
     with_game(&t, &mut s, &mut x, token, |game, _| {
-        destroy(game, token_ref).unwrap();
+        destroy(game, game.state().permanent(token_ref).unwrap()).unwrap();
     });
     assert!(s.triggers().is_empty());
     resolve_all(&t, &mut s, &mut x);
@@ -740,7 +740,7 @@ fn a_token_that_ceases_to_exist_unlinks_the_cards_exiled_with_it() {
     assert_eq!(s.memos(land).exiled_with(), Some(token));
     let token_ref = s.object_ref(token);
     with_game(&t, &mut s, &mut x, token, |game, _| {
-        destroy(game, token_ref).unwrap();
+        destroy(game, game.state().permanent(token_ref).unwrap()).unwrap();
     });
     // The token ceases to exist (CR 704.5d), and nothing links to its freed slot.
     resolve_all(&t, &mut s, &mut x);
@@ -775,7 +775,7 @@ fn an_ability_finds_the_cards_exiled_with_its_source_until_a_new_object_is_there
     // The bear dies with the ability still to resolve: it finds the card (CR 607.2a).
     let bear_ref = s.object_ref(bear);
     with_game(&t, &mut s, &mut x, bear, |game, _| {
-        destroy(game, bear_ref).unwrap();
+        destroy(game, game.state().permanent(bear_ref).unwrap()).unwrap();
     });
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(bear).zone(), Zone::Graveyard);
@@ -1003,7 +1003,13 @@ fn a_player_orders_their_own_triggers_only_when_they_differ() {
     );
     let (p, distinct) = order_decisions(|game, resolution| {
         let source = resolution.source();
-        counters::add(game, source, CounterKind::Story, 1).unwrap();
+        counters::add(
+            game,
+            game.state().permanent(source).unwrap(),
+            CounterKind::Story,
+            1,
+        )
+        .unwrap();
     });
     assert_eq!(distinct, vec![(p, 2)]);
     // Alike in themselves, but one exiled a card until it leaves: which leaves first
@@ -1152,7 +1158,7 @@ fn an_emblem_triggers_from_the_command_zone() {
     assert_eq!(s.player(p).emblems().len(), 1);
     // The emblem stays when its creator leaves.
     with_game(&t, &mut s, &mut x, land, |game, resolution| {
-        destroy(game, resolution.source()).unwrap();
+        destroy(game, game.state().permanent(resolution.source()).unwrap()).unwrap();
     });
     let spell = s.object_ref(find(&s, &t, p, "Test Land"));
     event::settle(
@@ -1289,8 +1295,8 @@ fn exile_instead_of_the_graveyard_replaces_the_move() {
             Duration::EndOfTurn,
         )
         .unwrap();
-        destroy(game, a_ref).unwrap();
-        destroy(game, resolution.source()).unwrap();
+        destroy(game, game.state().permanent(a_ref).unwrap()).unwrap();
+        destroy(game, game.state().permanent(resolution.source()).unwrap()).unwrap();
     });
     assert_eq!(s.object(a).zone(), Zone::Exile);
     assert_eq!(s.object(b).zone(), Zone::Graveyard);
@@ -1310,7 +1316,13 @@ fn impending_counters_and_type_changes_apply_in_layer_four() {
     assert_eq!(types(&s, overlord), Types::ENCHANTMENT, "not a creature");
     let r = s.object_ref(overlord);
     with_game(&t, &mut s, &mut x, land, |game, _| {
-        counters::remove(game, r, CounterKind::Time, 4).unwrap();
+        counters::remove(
+            game,
+            game.state().permanent(r).unwrap(),
+            CounterKind::Time,
+            4,
+        )
+        .unwrap();
     });
     assert_eq!(
         types(&s, overlord),
@@ -1386,7 +1398,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let r = s.object_ref(bear);
     with_game(&t, &mut s, &mut x, aura, |game, _| {
-        destroy(game, r).unwrap();
+        destroy(game, game.state().permanent(r).unwrap()).unwrap();
         let r = game.state().object_ref(bear);
         zones::put_onto_battlefield(game, r, p, FaceIx::FRONT, None).unwrap();
     });
@@ -1412,7 +1424,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let r = s.object_ref(token);
     with_game(&t, &mut s, &mut x, aura, |game, _| {
-        destroy(game, r).unwrap();
+        destroy(game, game.state().permanent(r).unwrap()).unwrap();
     });
     decide_with(&t, &mut s, &mut x);
     assert_eq!(s.object(token).zone(), Zone::Nowhere);
@@ -1431,7 +1443,7 @@ fn a_stolen_creatures_dies_trigger_belongs_to_its_last_controller() {
     let r = s.object_ref(sphinx);
     with_game(&t, &mut s, &mut x, thief, |game, resolution| {
         continuous::gain_control(game, resolution, r, Duration::Indefinite).unwrap();
-        destroy(game, r).unwrap();
+        destroy(game, game.state().permanent(r).unwrap()).unwrap();
     });
     assert_eq!(s.triggers().len(), 1);
     assert_eq!(s.triggers()[0].of.controller, p);
@@ -1452,11 +1464,23 @@ fn removing_a_counter_kind_an_object_lacks_changes_nothing() {
     let staff = put(&t, &mut s, &mut x, p, "Test Staff");
     let r = s.object_ref(staff);
     with_game(&t, &mut s, &mut x, staff, |game, _| {
-        counters::add(game, r, CounterKind::Story, 2).unwrap();
+        counters::add(
+            game,
+            game.state().permanent(r).unwrap(),
+            CounterKind::Story,
+            2,
+        )
+        .unwrap();
     });
     x.events.drain();
     with_game(&t, &mut s, &mut x, staff, |game, _| {
-        counters::remove(game, r, CounterKind::Time, 1).unwrap();
+        counters::remove(
+            game,
+            game.state().permanent(r).unwrap(),
+            CounterKind::Time,
+            1,
+        )
+        .unwrap();
     });
     assert_eq!(s.counters_of(staff, CounterKind::Story), 2);
     assert!(x.events.events().is_empty());
@@ -1471,12 +1495,42 @@ fn a_permanent_has_counters_of_several_kinds_at_once() {
     let staff = put(&t, &mut s, &mut x, p, "Test Staff");
     let r = s.object_ref(staff);
     with_game(&t, &mut s, &mut x, staff, |game, _| {
-        counters::add(game, r, CounterKind::Story, 2).unwrap();
-        counters::add(game, r, CounterKind::Time, 3).unwrap();
-        counters::add(game, r, CounterKind::Loyalty, 1).unwrap();
-        counters::remove(game, r, CounterKind::Story, 1).unwrap();
+        counters::add(
+            game,
+            game.state().permanent(r).unwrap(),
+            CounterKind::Story,
+            2,
+        )
+        .unwrap();
+        counters::add(
+            game,
+            game.state().permanent(r).unwrap(),
+            CounterKind::Time,
+            3,
+        )
+        .unwrap();
+        counters::add(
+            game,
+            game.state().permanent(r).unwrap(),
+            CounterKind::Loyalty,
+            1,
+        )
+        .unwrap();
+        counters::remove(
+            game,
+            game.state().permanent(r).unwrap(),
+            CounterKind::Story,
+            1,
+        )
+        .unwrap();
         // No more than it has (CR 609.3).
-        counters::remove(game, r, CounterKind::Time, 5).unwrap();
+        counters::remove(
+            game,
+            game.state().permanent(r).unwrap(),
+            CounterKind::Time,
+            5,
+        )
+        .unwrap();
     });
     let counts = [CounterKind::Story, CounterKind::Time, CounterKind::Loyalty]
         .map(|kind| s.counters_of(staff, kind));
@@ -1684,7 +1738,7 @@ fn gaining_control_changes_the_controller_until_the_effect_ends() {
     assert!(!s.object(theirs).is_tapped());
     assert_eq!(s.controller(theirs), p, "an indefinite effect lasts");
     with_game(&t, &mut s, &mut x, mine, |game, _| {
-        destroy(game, r).unwrap();
+        destroy(game, game.state().permanent(r).unwrap()).unwrap();
     });
     assert_eq!(s.object(theirs).zone(), Zone::Graveyard);
     assert!(s.zone(ZoneKey::Of(q, Zone::Graveyard)).contains(theirs));
@@ -1755,7 +1809,13 @@ fn granted_keywords_end_at_cleanup_and_until_your_next_turn_lasts_through_theirs
             Duration::UntilYourNextTurn(p),
         )
         .unwrap();
-        counters::add(game, r, CounterKind::PlusOne, 1).unwrap();
+        counters::add(
+            game,
+            game.state().permanent(r).unwrap(),
+            CounterKind::PlusOne,
+            1,
+        )
+        .unwrap();
     });
     let d = s.derived(bear);
     assert!(d.keywords.contains(Keywords::FIRST_STRIKE));
@@ -1810,7 +1870,7 @@ fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
     assert_eq!(s.object(bear).zone(), Zone::Exile);
     let r = s.object_ref(iceberg);
     with_game(&t, &mut s, &mut x, iceberg, |game, _| {
-        destroy(game, r).unwrap();
+        destroy(game, game.state().permanent(r).unwrap()).unwrap();
     });
     assert_eq!(s.object(bear).zone(), Zone::Battlefield);
     assert_eq!(s.controller(bear), q);
@@ -1824,7 +1884,7 @@ fn an_object_exiled_until_its_exiler_leaves_returns_under_its_owners_control() {
     let iceberg = put(&t, &mut s, &mut x, p, "Test Iceberg");
     let r = s.object_ref(iceberg);
     with_game(&t, &mut s, &mut x, iceberg, |game, _| {
-        destroy(game, r).unwrap();
+        destroy(game, game.state().permanent(r).unwrap()).unwrap();
     });
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(bear).zone(), Zone::Battlefield);

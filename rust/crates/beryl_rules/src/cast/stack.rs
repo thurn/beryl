@@ -1,6 +1,8 @@
 //! Offering to cast a card during a resolution (CR 608.2g), and a spell leaving the stack
 //! without resolving.
 
+use beryl_kernel::reference::Spell;
+
 use crate::bitboard::Bitboard;
 use crate::decision::{OPTIONS, Opt};
 use crate::event::{self, Reason, Sink};
@@ -42,13 +44,13 @@ pub(crate) fn unstack<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    spell: ObjectRef<L>,
+    spell: Spell<L>,
     to: Zone,
 ) -> Result<Option<Zone>, Full> {
     if s.take_off_stack(t, sink, spell)?.is_none() {
         return Ok(None);
     }
-    let exiled = crate::replace::exiled_instead(s, spell, to);
+    let exiled = crate::replace::exiled_instead(s, spell.into(), to);
     Ok(Some(if exiled { Zone::Exile } else { to }))
 }
 

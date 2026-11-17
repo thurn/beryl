@@ -29,6 +29,7 @@ use crate::invariants::{At, Violation, check};
 use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
 use crate::observation::Observation;
+use crate::reference::Current;
 use crate::relayout::{Relayout, queue, slot};
 use crate::state::{State, Zone};
 use crate::store::{Duration, Ended, Store};
@@ -367,18 +368,20 @@ impl<L: Layout> State<L> {
 
     /// Puts counters of a kind on an object
     /// ([CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226): "Some spells and
-    /// abilities refer to counters being put on an object."). `layered` says whether the
+    /// abilities refer to counters being put on an object."). Use a fresh
+    /// [`Current`] from [`State::current`]. `layered` says whether the
     /// layers read them, which is the rules' to say, with the card in hand: the layer
     /// results are stale if so. [`Full`] if the kind is the first of its kind on the object
     /// and the table has no room for the row.
     #[inline]
     pub fn add_counters(
         &mut self,
-        object: ObjectRef<L>,
+        object: Current<ObjectRef<L>>,
         kind: CounterKind,
         amount: u8,
         layered: bool,
     ) -> Result<Event<L>, Full> {
+        let object = object.reference();
         debug_assert!(self.is_current(object));
         let n = self.counters_of(object.slot, kind).saturating_add(amount);
         self.set_counters(object.slot, kind, n)?;
@@ -398,11 +401,12 @@ impl<L: Layout> State<L> {
     #[must_use]
     pub fn remove_counters(
         &mut self,
-        object: ObjectRef<L>,
+        object: Current<ObjectRef<L>>,
         kind: CounterKind,
         amount: u8,
         layered: bool,
     ) -> Event<L> {
+        let object = object.reference();
         debug_assert!(self.is_current(object));
         match self.object_mut(object.slot).counters.field_mut(kind) {
             Some(n) => *n -= amount,

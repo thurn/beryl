@@ -6,6 +6,8 @@
 //! cost." A cost's parts are data ([`CostPart`]), and a card table holds only the parts paid
 //! here (`beryl_kernel`'s `payable`), so every other arm is unreachable.
 
+use beryl_kernel::reference::{Graveyard, Hand};
+
 use crate::bitboard::Bitboard;
 use crate::card::{
     Castings, Chosen, CostAction, CostPart, Face, ManaCost, Measure, Prompt, Purpose,
@@ -13,7 +15,7 @@ use crate::card::{
 use crate::counters;
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::{collapse, collapse_in_order};
-use crate::event::{self, Entry, Reason, Sink};
+use crate::event::{self, Reason, Sink};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -337,7 +339,7 @@ fn pay_with_source<L: Layout>(
             event::move_one(s, t, sink, source.slot, Zone::Graveyard, Reason::Discard)
         }
         CostAction::RemoveCounter(kind) => {
-            counters::remove(&mut Game::new(s, t, sink), source, kind, 1)
+            counters::remove_from_object(&mut Game::new(s, t, sink), source, kind, 1)
         }
         CostAction::Exile | CostAction::Reveal => {
             unreachable!("the card table refuses a cost the engine cannot pay")
@@ -370,6 +372,10 @@ pub(super) fn pay<L: Layout>(
                 // CR 606.4: "The cost to activate a loyalty ability of a permanent is to put
                 // on or remove from that permanent a certain number of loyalty counters".
                 let source = top(s).object().expect("an activated ability's source");
+                let Some(source) = s.permanent(source) else {
+                    index += 1;
+                    continue;
+                };
                 let (game, amount) = (&mut Game::new(s, t, sink), n.unsigned_abs());
                 if n > 0 {
                     counters::add(game, source, CounterKind::Loyalty, amount)?;
@@ -660,18 +666,26 @@ fn pay_with_all<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
     action: CostAction,
+    chosen: &Chosen,
+    player: Seat,
     objects: Bitboard<L::Slot>,
 ) -> Result<(), Full> {
-    match action {
-        CostAction::Exile => event::move_batch(
-            s,
-            t,
-            sink,
-            objects,
-            Zone::Exile,
-            Reason::Exile,
-            Entry::default(),
-        ),
+    let mut game = Game::new(s, t, sink);
+    match (action, chosen.zone) {
+        (CostAction::Exile, Zone::Graveyard) => {
+            let cards = game.state().cards_in(player, Graveyard).intersect(objects);
+            assert_eq!(
+                cards.slots(),
+                objects,
+                "every exile pick is a graveyard card"
+            );
+            crate::zones::exile_cards_for_cost(&mut game, cards)
+        }
+        (CostAction::Exile, Zone::Hand) => {
+            let cards = game.state().cards_in(player, Hand).intersect(objects);
+            assert_eq!(cards.slots(), objects, "every exile pick is a card in hand");
+            crate::zones::exile_cards_for_cost(&mut game, cards)
+        }
         _ => unreachable!("the card table refuses a cost the engine cannot pay"),
     }
 }
@@ -686,8 +700,8 @@ fn end_substitutes<L: Layout>(
 ) -> Result<(), Full> {
     let mut paying = step(&c);
     if !paying.chosen.is_empty() {
-        let (action, _) = part_being_paid(t, top(s), &c);
-        pay_with_all(s, t, sink, action, paying.chosen)?;
+        let (action, chosen) = part_being_paid(t, top(s), &c);
+        pay_with_all(s, t, sink, action, chosen, c.player, paying.chosen)?;
         paying.chosen = Bitboard::EMPTY;
         c.step = CastStep::Objects(paying);
     }
@@ -759,7 +773,7 @@ pub(super) fn perform<L: Layout>(
             paying.chosen.insert(slot);
             paying.left -= 1;
             if paying.left == 0 {
-                pay_with_all(s, t, sink, action, paying.chosen)?;
+                pay_with_all(s, t, sink, action, chosen, c.player, paying.chosen)?;
                 paying.chosen = Bitboard::EMPTY;
             }
         }

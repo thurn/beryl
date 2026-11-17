@@ -224,7 +224,7 @@ pub(crate) fn create_copies_instruction<L: Layout>(
         copy(run.game(), Copiable::of_card(card))?;
     }
     while let Some(object) = run.next_permanent(&mut originals) {
-        let what = run.state().copiable(object.slot);
+        let what = run.state().copiable(object.slot());
         copy(run.game(), what)?;
     }
     // A target for each place at most, in the order they were chosen.

@@ -94,32 +94,37 @@
 //!
 //! ## Entities and records
 //!
-//! [`State`], [`state::Object`], [`state::Player`], [`state::Turn`] and [`state::Zones`] are
-//! entities: private fields, read through `#[inline]` getters, written by mutators. An
-//! object has its getters, one for each field and one for each status flag, and so do a
-//! player and the turn, one for each field; their fields are `pub(crate)` for the kernel's own
-//! mutators, and nothing outside the crate can read or write one directly. An
-//! object's definition index and base controller are private already: they are read
-//! through the queries below.
+//! [`State`], [`state::Object`], [`state::Player`], [`state::Turn`] and [`state::Zones`] have
+//! kernel-owned fields, read through getters and written by mutators. Definition indices and
+//! base controllers are read through queries. Rules code builds records such as
+//! [`state::StackEntry`], [`state::PendingTrigger`], [`state::Target`] and [`state::Casting`].
+//! [`state::Derived`] carries layer results into the kernel. [`State::decider`] sets a
+//! [`decision::Decision`]'s answerer for player control (CR 724). [`state::Resolving`] holds the
+//! kernel's record of what each player knew at the start of the resolution. [`beryl_card::SpecIx`],
+//! [`beryl_card::AbilityIx`] and [`beryl_card::GrantIx`] identify entries in separate lists.
 //!
-//! Records stay plain data with `pub` fields. The rules build one and hand it to a mutator;
-//! the kernel stores it and gives it back whole: [`state::StackEntry`],
-//! [`state::PendingTrigger`], [`state::Target`], [`state::TriggerInfo`],
-//! [`state::Casting`] and the other payloads of [`state::Pending`], and a
-//! [`decision::Decision`] with its parts. A decision names its player and who answers it,
-//! who differ only while one player controls another (CR 724): the rules build it for its
-//! player, and `next` sets the answerer from [`State::decider`]. [`state::Derived`] is one
-//! going the other way: the
-//! layers compute it, `rederive` stores it, everyone reads it. No invariant ties a record's
-//! fields to the rest of the state except the references it holds, which
-//! [`State::is_current`] checks; where a record is filed is the mutator's to keep. One field
-//! is not the rules' to build: what each player knew as a resolution began is the crate's
-//! own in [`state::Resolving`], kept as it pauses and given back as it resumes.
+//! ### Object references
 //!
-//! Where a record names an entry of one of a definition's lists, the field has that list's
-//! index type ([`beryl_card::index`]): a target's [`beryl_card::SpecIx`], a trigger's
-//! [`beryl_card::AbilityIx`], a grant's [`beryl_card::GrantIx`]. None is a bare byte, so one
-//! cannot be read as another.
+//! A [`state::ObjectRef`] holds a slot and its incarnation. Zone moves, library rebinds and
+//! returning a token slot to the pool increment it. The increment past 65,535 returns
+//! [`fixed::Full`] in both layouts, so the 65,536th change stalls the game with earlier
+//! references still stale.
+//!
+//! Rules actions take [`reference::Permanent`] for battlefield actions, [`reference::Spell`]
+//! for spell objects and [`reference::CardIn`] or [`reference::Cards`] for cards in one zone.
+//! Ability entries use stack places. At an old caller use
+//! `let Some(permanent) = s.permanent(raw) else { return Ok(()); };`.
+//! Check [`State::current`] immediately before mutating through a stored reference. Phasing
+//! keeps the same incarnation, so battlefield actions also check for phased-in presence.
+//! [`reference::Permanents`] and [`reference::Cards`] select slots for one instruction.
+//! Use `.slots()` for batch events and unconverted calls. For sequential actions on permanents
+//! use [`State::next_permanent`] to read them in battlefield order.
+//!
+//! [`memos::Memo::ExiledWith`] survives its source leaving (see “Duration and expiry”).
+//! A [`memos::Memo::PartOf`] component leaves with its merged permanent. Zone departure
+//! clears attachments and combat references to that slot, including
+//! [`state::AttackTarget::Planeswalker`]. [`effects::Affects::Object`] stores both the slot
+//! and incarnation, exposed together as an [`state::ObjectRef`].
 //!
 //! ## The board door
 //!
@@ -137,20 +142,8 @@
 //! A struct field holds what the Comprehensive Rules give a player, an object or the turn.
 //! What a card creates lives in a store: **Effects**, the continuous effects of
 //! resolved spells and abilities; **Memos**, what an object remembers of how it was cast or
-//! entered; **Trackers**, what happened this turn that a card of the game reads. This is the
-//! design milestone 4 (epic by-w8gv.7) built, each part by the bead named: the shared
-//! core ([`store`]), the Effects store for objects with its layer and zone-change payloads
-//! ([`effects`]) and the capability bits ([`table::Capability`]) (by-w8gv.7.2); a player as
-//! the affected side, the rule-change payload and [`State::rule_applies`] (by-w8gv.7.3);
-//! the permission to cast and the cost change as payloads, and flashback's zone-change
-//! replacement (by-w8gv.7.4); the Memos store ([`memos`]) with what a permanent remembers
-//! of its spell, the costs paid and the value of X, and [`State::signature`]'s comparison
-//! of memos (by-w8gv.7.6); what exiled a card, as memos of the card (by-w8gv.7.7); a
-//! locked-in set of objects as the affected side (by-w8gv.7.5); the Trackers store
-//! ([`trackers`]) with the two facts about a permanent that end with the turn
-//! (by-w8gv.7.8); the table of counters ([`counters`]), where each kind of counter on an
-//! object has its own count (by-w8gv.7.9); the comparison of the effects on two objects
-//! in [`State::signature`] (by-w8gv.7.11, the milestone's review).
+//! entered; **Trackers**, what happened this turn that a card reads. [`State::signature`]
+//! compares the entries a slot holds across those stores and [`counters`].
 //!
 //! ### Where everything goes
 //!
@@ -772,6 +765,7 @@ mod player_set;
 mod players;
 pub mod profile;
 pub mod query;
+pub mod reference;
 pub mod relayout;
 pub mod repeats;
 pub mod replacement;

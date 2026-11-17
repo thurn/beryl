@@ -69,11 +69,8 @@ fn table_kinds() -> (CounterKind, CounterKind) {
     (kinds.next().unwrap(), kinds.next().unwrap())
 }
 
-fn current(s: &State, slot: Slot) -> ObjectRef {
-    ObjectRef {
-        slot,
-        incarnation: s.object(slot).incarnation(),
-    }
+fn current<L: Layout>(s: &State<L>, slot: L::Slot) -> Current<ObjectRef<L>> {
+    s.current(s.object_ref(slot)).unwrap()
 }
 
 /// CR 122.1: counters of different names are different counters, so a permanent has any
@@ -81,13 +78,14 @@ fn current(s: &State, slot: Slot) -> ObjectRef {
 #[test]
 fn an_object_holds_each_kind_with_its_own_count() {
     let (t, mut s, slots) = bears(1);
-    let bear = current(&s, slots[0]);
+    let slot = slots[0];
+    let bear = current(&s, slot);
     let (first, second) = table_kinds();
     derive(&t, &mut s);
     assert_eq!(
         s.add_counters(bear, second, 2, false),
         Ok(Event::CountersAdded {
-            object: bear,
+            object: bear.reference(),
             kind: second,
             amount: 2
         })
@@ -100,17 +98,17 @@ fn an_object_holds_each_kind_with_its_own_count() {
     let _ = s.add_counters(bear, second, 1, false).unwrap();
     assert_eq!(
         (
-            s.counters_of(bear.slot, first),
-            s.counters_of(bear.slot, second),
-            s.counters_of(bear.slot, CounterKind::PlusOne),
-            s.counters_of(bear.slot, CounterKind::Loyalty),
+            s.counters_of(slot, first),
+            s.counters_of(slot, second),
+            s.counters_of(slot, CounterKind::PlusOne),
+            s.counters_of(slot, CounterKind::Loyalty),
         ),
         (3, 3, 1, 0)
     );
     // Listed in the order of the vocabulary's list, not the order they were put on.
     let mut listed = vec![(second, 3), (CounterKind::PlusOne, 1), (first, 3)];
     listed.sort_by_key(|&(kind, _)| kind as usize);
-    assert_eq!(s.counters(bear.slot).iter().collect::<Vec<_>>(), listed);
+    assert_eq!(s.counters(slot).iter().collect::<Vec<_>>(), listed);
     assert_eq!(s.check_stores(&t), Ok(()));
     // A checkpoint of the board records a permanent's counters with it.
     assert_eq!(s.stores_lingering(&t), None);
@@ -118,27 +116,24 @@ fn an_object_holds_each_kind_with_its_own_count() {
     assert_eq!(
         s.remove_counters(bear, first, 2, false),
         Event::CountersRemoved {
-            object: bear,
+            object: bear.reference(),
             kind: first,
             amount: 2
         }
     );
     assert_eq!(
-        (
-            s.counters_of(bear.slot, first),
-            s.counters_of(bear.slot, second)
-        ),
+        (s.counters_of(slot, first), s.counters_of(slot, second)),
         (1, 3)
     );
     // A row ends with its last counter, and the object's place among the keyed slots with
     // its last row.
     let _ = s.remove_counters(bear, first, 1, false);
-    assert_eq!(s.counters_of(bear.slot, first), 0);
-    assert!(s.keyed.contains(bear.slot));
+    assert_eq!(s.counters_of(slot, first), 0);
+    assert!(s.keyed.contains(slot));
     let _ = s.remove_counters(bear, second, 3, false);
     assert_eq!(s.counters, CounterTable::empty());
     assert!(s.keyed.is_empty());
-    assert_eq!(s.counters_of(bear.slot, CounterKind::PlusOne), 1);
+    assert_eq!(s.counters_of(slot, CounterKind::PlusOne), 1);
     assert_eq!(s.check_stores(&t), Ok(()));
 }
 
@@ -238,10 +233,7 @@ fn a_full_table_returns_full_and_a_wide_one_grows() {
         for kind in [first, second] {
             let object = current(&small, slot);
             assert!(small.add_counters(object, kind, 1, false).is_ok());
-            let object = ObjectRef {
-                slot: wide(slot),
-                incarnation: object.incarnation,
-            };
+            let object = current(&large, wide(slot));
             assert!(large.add_counters(object, kind, 1, false).is_ok());
         }
     }
@@ -263,10 +255,7 @@ fn a_full_table_returns_full_and_a_wide_one_grows() {
     );
     assert_eq!(small.check_stores(&t), Ok(()));
 
-    let object = ObjectRef {
-        slot: wide(last),
-        incarnation: object.incarnation,
-    };
+    let object = current(&large, wide(last));
     assert!(large.add_counters(object, first, 1, false).is_ok());
     assert_eq!(large.counters_of(wide(last), first), 1);
     assert_eq!(

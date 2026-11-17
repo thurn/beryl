@@ -323,7 +323,7 @@ impl InTable {
                 found.push((slot, stand_in));
             }
         };
-        for (slot, _) in s.permanents() {
+        for (slot, _) in s.permanents_with_derived() {
             look(slot);
         }
         for entry in s.stack() {
@@ -343,7 +343,7 @@ impl InTable {
         !self.objects(s).is_empty()
             || (self.identity
                 && (!s.phased_out().is_empty()
-                    || s.permanents()
+                    || s.permanents_with_derived()
                         .any(|(slot, _)| s.pile(slot).next().is_some())))
             || s.effects()
                 .iter()

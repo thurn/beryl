@@ -552,9 +552,16 @@ fixed in the same session. Newest first.
   the cast was still pending. Moving mana payment before the exile chooser
   exposed the extra candidate and could let a token pay a card cost. Tokens are
   not cards (CR 111.6), even before state-based actions remove them. Prevention:
-  filter cost eligibility and candidate counts by card identity, rather than
-  assuming every object in a graveyard is a card; the Oculus Treasure scenario
-  covers the interval between payment and state-based actions.
+  check card identity when listing candidates and building the
+  `Cards<Graveyard>` passed to the payment function. Its compile-fail doctest
+  rejects a token's slot set. The Oculus Treasure scenario covers the interval
+  between payment and state-based actions.
+
+- A slot could reuse its first incarnation after 65,536 zone moves, library
+  rebinds or token removals, so a stale reference could name the current object.
+  Each increment now checks for exhaustion and stalls the game at the capacity
+  limit. A kernel test exercises the last valid incarnation and checks that the
+  original reference stays stale.
 
 - A paused resolution's runs disagreed on what was known: each pause kept in the
   committed state what its run had shown, and the next run started from that, so

@@ -38,7 +38,7 @@ pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     objects: Objects,
 ) -> Result<Outcome<L>, Full> {
-    let permanents = run.permanents(objects);
+    let permanents = run.permanents(objects).slots();
     if permanents.is_empty() {
         return Ok(Outcome::NOTHING);
     }

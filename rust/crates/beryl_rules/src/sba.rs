@@ -82,7 +82,7 @@ pub(crate) fn check<L: Layout>(
     }
     // "As a single event": the one batch below is every action of this check that has an
     // event, and a batch's events are kept as one group (`event::move_batch`).
-    s.reclaim_tokens(tokens);
+    s.reclaim_tokens(tokens)?;
     event::move_batch(
         s,
         t,
@@ -142,7 +142,7 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
     let auras = aura.possible();
     let mut graveyard = Bitboard::EMPTY;
     let mut legendary: Legendary<L> = Table::filled(Bitboard::EMPTY);
-    for (slot, d) in s.permanents() {
+    for (slot, d) in s.permanents_with_derived() {
         if d.supertypes.contains(Supertypes::LEGENDARY) {
             legendary[d.controller.index()].insert(slot);
         }
@@ -222,7 +222,7 @@ fn loose_equipment<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> 
 #[inline(never)]
 fn attached_illegally<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> {
     let mut loose = Bitboard::EMPTY;
-    for (slot, d) in s.permanents() {
+    for (slot, d) in s.permanents_with_derived() {
         let Some(host) = s.object(slot).attached_to() else {
             continue;
         };
@@ -342,7 +342,7 @@ fn legendary<L: Layout>(s: &State<L>) -> Legendary<L> {
     let mut by_controller: Legendary<L> = Table::filled(Bitboard::EMPTY);
     // A permanent's derived characteristics, its controller among them, are at its place in
     // the battlefield list.
-    for (slot, d) in s.permanents() {
+    for (slot, d) in s.permanents_with_derived() {
         if d.supertypes.contains(Supertypes::LEGENDARY) {
             by_controller[d.controller.index()].insert(slot);
         }

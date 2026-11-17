@@ -132,8 +132,10 @@ pub(crate) fn instruction<L: Layout>(
     objects: Objects,
     to: Objects,
 ) -> Outcome<L> {
-    let (Some(attached), Some(host)) = (run.permanents(objects).sole(), run.permanents(to).sole())
-    else {
+    let (Some(attached), Some(host)) = (
+        run.permanents(objects).slots().sole(),
+        run.permanents(to).slots().sole(),
+    ) else {
         return Outcome::NOTHING;
     };
     let game = run.game();

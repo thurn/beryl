@@ -79,8 +79,11 @@ fn remove_spells<L: Layout>(
     }
     for &spell in spells.iter() {
         let slot = spell.slot;
+        let Some(stack_spell) = game.state.spell(spell) else {
+            continue;
+        };
         let taken = (game.state)
-            .take_off_stack(game.table, game.sink, spell)?
+            .take_off_stack(game.table, game.sink, stack_spell)?
             .is_some();
         if taken && crate::replace::exiled_instead(game.state, spell, to) {
             flashback.insert(slot);

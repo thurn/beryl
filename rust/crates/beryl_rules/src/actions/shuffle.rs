@@ -16,9 +16,10 @@ use crate::zones;
 /// library or a face-down pile of cards, randomize the cards within it so that no player
 /// knows their order." The order comes from the game's stream for shuffles
 /// ([`crate::chance`]).
-pub fn shuffle<L: Layout>(game: &mut Game<'_, L>, player: Seat) {
-    game.state.shuffle_library(player);
+pub fn shuffle<L: Layout>(game: &mut Game<'_, L>, player: Seat) -> Result<(), Full> {
+    game.state.shuffle_library(player)?;
     game.sink.note(Event::LibraryShuffled { player });
+    Ok(())
 }
 
 /// [`Effect::ShuffleInto`](beryl_card::Effect::ShuffleInto): "[Player] shuffles [cards] into
@@ -38,7 +39,7 @@ pub(crate) fn into_instruction<L: Layout>(
     let cards = run.elsewhere_than(cards, Zone::Library);
     zones::move_all(run.game(), cards, Zone::Library, Reason::Effect)?;
     for player in run.in_turn_order(players) {
-        shuffle(run.game(), player);
+        shuffle(run.game(), player)?;
     }
     Ok(run.now_in(cards, Zone::Library))
 }

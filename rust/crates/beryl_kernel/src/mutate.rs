@@ -266,8 +266,11 @@ impl<L: Layout> State<L> {
         owner: Seat,
         values: Copiable<L>,
     ) -> Result<(), Full> {
-        debug_assert_eq!(self.object(slot).zone, Zone::Nowhere);
         let o = self.object_mut(slot);
+        debug_assert_eq!(o.zone, Zone::Nowhere);
+        if o.incarnation == u16::MAX {
+            return Err(Full);
+        }
         o.card = values.card();
         o.owner = owner;
         o.base_controller = owner;

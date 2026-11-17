@@ -139,7 +139,8 @@ pub(super) fn controlled<L: Layout>(
     s: &State<L>,
     player: Seat,
 ) -> impl Iterator<Item = (L::Slot, &Derived<L>)> + '_ {
-    s.permanents().filter(move |(_, d)| d.controller == player)
+    s.permanents_with_derived()
+        .filter(move |(_, d)| d.controller == player)
 }
 
 /// What an untapped source `player` controls makes, if the permanent in `slot`, whose derived

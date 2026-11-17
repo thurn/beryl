@@ -226,7 +226,7 @@ reference was made:
 ```rust
 /// A permanent: on the battlefield at this incarnation.
 pub struct Permanent<L: Layout = Small>(ObjectRef<L>);
-/// A spell or an ability's stack entry.
+/// A spell's object. Ability entries use stack places.
 pub struct Spell<L: Layout = Small>(ObjectRef<L>);
 /// A card (never a token or a copy) in one zone of one player.
 pub struct CardIn<Z: ZoneMark, L: Layout = Small>(ObjectRef<L>, PhantomData<Z>);
@@ -238,17 +238,21 @@ pub struct Permanents<L: Layout = Small>(Bitboard<L::Slot>);
   returns `Option<Permanent>`, `State::permanents()` returns `Permanents`, and
   `State::cards_in(player, Graveyard)` returns `Cards<Graveyard>` with tokens
   left out.
-- An incarnation changes on every zone move, so a typed reference that is still
-  current is still in its zone. `State::current(Permanent)` is the one staleness
-  test, and it returns the proof the mutators take.
-- Kernel mutators and rules functions take the type they mean: `destroy`,
-  `sacrifice`, `tap`, `counters::add` and `damage::deal` take a `Permanent` or
-  `Permanents`; `counter` takes a `Spell`; a cost that exiles cards from a
-  graveyard takes `Cards<Graveyard>`, which cannot hold a Treasure token on its
-  way out.
-- The interpreter is where a vocabulary `Objects` value becomes a typed set, by
-  what the instruction needs (`Run::permanents` already exists and returns an
-  untyped `Bitboard`).
+- An incarnation changes on every zone move. Trying to increment past 65,535
+  stalls the game in either layout. `State::current(reference)` checks the
+  incarnation and returns the proof the counter mutators take. Phasing keeps the
+  same incarnation and requires a separate check for battlefield presence. Typed
+  sets select slots for one instruction. For actions in sequence,
+  `State::next_permanent` checks battlefield presence in battlefield order.
+- Rule actions take the kind they act on. The first conversion covers
+  destruction, permanent counters, spell removal, and paying exile costs. Kernel
+  counter mutators accept any checked object because an ability can have a
+  counter cost outside the battlefield. Exile payments take `Cards<Graveyard>`
+  or `Cards<Hand>`.
+- The interpreter turns a vocabulary `Objects` value into a typed set based on
+  what the instruction needs. `Run::permanents` returns `Permanents`.
+  `Permanents::slots` adapts it to the batch pipeline and the remaining
+  unconverted callers.
 - The types are transparent wrappers, so `State` does not grow and the count
   gate should not move. `Relayout` maps them like `ObjectRef`.
 - The bare slots that bypass `ObjectRef` today (`Memo::ExiledWith`,

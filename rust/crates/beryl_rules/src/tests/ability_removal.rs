@@ -303,7 +303,7 @@ fn colors_one_lost_ability_and_switching_apply_in_their_layers() {
     start(&t, &mut s, oddity, LayerChange::ModifyPt(2, 0));
     // 1/3, +2/+0 in layer 7c, switched in 7d.
     assert_eq!(pt(&s, oddity), (3, 3));
-    let on = s.object_ref(oddity);
+    let on = s.current(s.object_ref(oddity)).unwrap();
     s.add_counters(on, crate::state::CounterKind::PlusOne, 1, true)
         .unwrap();
     refresh(&t, &mut s);

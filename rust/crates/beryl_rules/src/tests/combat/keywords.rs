@@ -109,7 +109,7 @@ fn indestructible_survives_lethal_damage_and_destruction() {
     g.finish_combat();
     assert!(g.on_battlefield(golem));
     assert_eq!(g.s.object(golem).damage(), 4);
-    let golem_ref = g.s.object_ref(golem);
+    let golem_ref = g.s.permanent(g.s.object_ref(golem)).unwrap();
     destroy(
         &mut crate::game::Game::new(&mut g.s, &g.t, &mut Sink::off()),
         golem_ref,

@@ -11,7 +11,11 @@ fn control_takes_the_family_out() {
         assert!(w.in_table.in_play(s));
         let c = control(s, &w.table, &w.in_table).expect("room to recompute");
         assert!(!w.in_table.in_play(&c));
-        let slots = |s: &State| s.permanents().map(|(slot, _)| slot).collect::<Vec<_>>();
+        let slots = |s: &State| {
+            s.permanents_with_derived()
+                .map(|(slot, _)| slot)
+                .collect::<Vec<_>>()
+        };
         assert_eq!(slots(s), slots(&c));
         assert_eq!(s.stack().len(), c.stack().len());
         assert_eq!(s.turn().number(), c.turn().number());

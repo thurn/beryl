@@ -50,7 +50,7 @@ fn an_equipment_on_a_permanent_that_stops_being_a_creature_comes_off() {
         beryl_scenario::Slots::Dealt,
         |s, _| {
             let scimitar = s
-                .permanents()
+                .permanents_with_derived()
                 .map(|(slot, _)| slot)
                 .find(|&slot| s.definition_name(&t, slot) == props::EQUIPMENT.card);
             let on = scimitar.map(|slot| {

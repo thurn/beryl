@@ -8,6 +8,7 @@
 //! way the events of such an instruction are kept as one group ([`at_once`]).
 
 use beryl_card::{Effect, Objects, Players};
+use beryl_kernel::reference::{Permanent, Permanents};
 
 use crate::actions::{
     attach, copy, counter, destroy, discard, exile, explore, fateseal, manifest_dread, mill,
@@ -23,7 +24,7 @@ use crate::keywords::flashback;
 use crate::layout::{Layout, Queue, Table};
 use crate::resolution::Resolution;
 use crate::state::TriggeredAbility;
-use crate::state::{AbilityRef, ObjectRef, PendingTrigger, StackItem, State, Zone, placed};
+use crate::state::{AbilityRef, PendingTrigger, StackItem, State, Zone, placed};
 use crate::zones;
 use crate::{casting, choices, coins, continuous, costs, counters, damage, drawing, ending};
 use crate::{delayed_triggers, emblems, layers, library, life, linked, mana, one_shot, tokens};
@@ -409,9 +410,8 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// The permanents among the objects `objects` names
     /// ([CR 110.1](https://yawgatog.com/resources/magic-rules/#R1101)): "A permanent is a
     /// card or token on the battlefield."
-    pub(crate) fn permanents(&self, objects: Objects) -> Bitboard<L::Slot> {
-        let s = &*self.game.state;
-        (self.scene().objects(objects)).filter(|slot| s.object(slot).on_battlefield())
+    pub(crate) fn permanents(&self, objects: Objects) -> Permanents<L> {
+        self.state().permanents_in(self.scene().objects(objects))
     }
 
     /// The objects `objects` names that are not in `zone` already.
@@ -460,14 +460,8 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     /// The first of `permanents`, in the order they entered the battlefield, that is still
     /// one, taken out of the set: how an instruction acts on each of several in an order the
     /// game can see, whatever the ones before did.
-    pub(crate) fn next_permanent(
-        &self,
-        permanents: &mut Bitboard<L::Slot>,
-    ) -> Option<ObjectRef<L>> {
-        let s = self.state();
-        let &slot = (s.battlefield().iter()).find(|&&slot| permanents.contains(slot))?;
-        permanents.remove(slot);
-        Some(s.object_ref(slot))
+    pub(crate) fn next_permanent(&self, permanents: &mut Permanents<L>) -> Option<Permanent<L>> {
+        self.state().next_permanent(permanents)
     }
 
     /// The outcome of an instruction that moved `objects` to `zone`: those that are there.

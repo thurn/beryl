@@ -43,7 +43,8 @@ impl<L: Layout> State<L> {
     /// [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): "An object that moves from
     /// one zone to another becomes a new object with no memory of, or relation to, its previous
     /// existence." The slot's incarnation is bumped, everything but its identity and owner is
-    /// reset, and what the stores hold about it ends ([`crate::store`]).
+    /// reset, and what the stores hold about it ends ([`crate::store`]). An exhausted
+    /// incarnation returns [`Full`].
     ///
     /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to any
     /// library, graveyard, or hand other than its owner's, it goes to its owner's corresponding
@@ -55,6 +56,7 @@ impl<L: Layout> State<L> {
         to: Zone,
         place: Place,
     ) -> Result<(), Full> {
+        let incarnation = self.object(slot).incarnation.checked_add(1).ok_or(Full)?;
         // A card about to be seen has its identity settled first, before anything reads it
         // ([`chance`]): CR 400.2 below has every player see a card in a public zone, and CR 402.3
         // its owner see one in their hand.
@@ -92,7 +94,7 @@ impl<L: Layout> State<L> {
         leave(self, slot);
         self.forget_stored(slot);
         let o = self.object_mut(slot);
-        o.incarnation = o.incarnation.wrapping_add(1);
+        o.incarnation = incarnation;
         o.zone = to;
         o.base_controller = o.owner;
         o.flags = o.flags.kept_across_zones();
@@ -269,15 +271,16 @@ impl<L: Layout> State<L> {
     /// [CR 701.20d](https://yawgatog.com/resources/magic-rules/#R70120d): "If cards in a player's
     /// library are shuffled or otherwise reordered, any revealed cards that are reordered stop
     /// being revealed and become new objects."
-    pub fn shuffle_library(&mut self, player: Seat) {
+    pub fn shuffle_library(&mut self, player: Seat) -> Result<(), Full> {
         let p = player.index();
         let library = self.zones.library[p].clone();
         let mut rng = self.rng.shuffle;
-        self.rebind(library.as_slice(), &mut rng);
+        self.rebind(library.as_slice(), &mut rng)?;
         self.rng.shuffle = rng;
         self.rng
             .shuffle
             .shuffle(self.zones.library[p].as_mut_slice());
+        Ok(())
     }
 
     /// Shuffles a player's opening hand back into their library as one mulligan operation.
@@ -293,17 +296,17 @@ impl<L: Layout> State<L> {
             self.move_object(sink, slot, Zone::Library, Place::Top)?;
         }
         self.zones.library[player.index()].as_mut_slice()[previous_top..].sort_unstable();
-        self.shuffle_library(player);
-        Ok(())
+        self.shuffle_library(player)
     }
 
     /// Deals the identities of the cards in `slots`, all in one library, anew among those slots
     /// at random, as cards put there in a random order are: `rebind` with the game's stream
     /// for everything but shuffles.
-    pub fn rebind_at_random(&mut self, slots: &[L::Slot]) {
+    pub fn rebind_at_random(&mut self, slots: &[L::Slot]) -> Result<(), Full> {
         let mut rng = self.rng.other;
-        self.rebind(slots, &mut rng);
+        self.rebind(slots, &mut rng)?;
         self.rng.other = rng;
+        Ok(())
     }
 
     /// Deals the identities of the cards in `slots`, all in one library, anew among those slots
@@ -313,23 +316,29 @@ impl<L: Layout> State<L> {
     /// revealed cards that are reordered stop being revealed and become new objects."
     ///
     /// [CR 701.20d]: https://yawgatog.com/resources/magic-rules/#R70120d
-    pub(crate) fn rebind(&mut self, slots: &[L::Slot], rng: &mut SplitMix64) {
+    pub(crate) fn rebind(&mut self, slots: &[L::Slot], rng: &mut SplitMix64) -> Result<(), Full> {
+        let mut rebound = Bitboard::EMPTY;
         let mut cards: L::Deck<L::Card> = Default::default();
         for &slot in slots {
             // A library never holds more than its owner's deck slots.
-            cards.push_bounded(self.object(slot).card);
+            let object = self.object(slot);
+            if object.incarnation == u16::MAX || rebound.contains(slot) {
+                return Err(Full);
+            }
+            rebound.insert(slot);
+            cards.push_bounded(object.card);
         }
         rng.shuffle(cards.as_mut_slice());
         for (&slot, &card) in slots.iter().zip(cards.iter()) {
             let o = self.object_mut(slot);
             o.card = card;
-            o.incarnation = o.incarnation.wrapping_add(1);
+            o.incarnation += 1;
         }
-        let rebound: Bitboard<L::Slot> = slots.iter().copied().collect();
         self.forget_all_stored(rebound);
         for k in self.knowledge.as_mut_slice() {
             *k &= !rebound;
         }
+        Ok(())
     }
 
     /// A token in a zone other than the battlefield ceases to exist, and its slot returns to the
@@ -338,10 +347,10 @@ impl<L: Layout> State<L> {
     /// slot is reused. The cards exiled with it are exiled with nothing any more.
     ///
     /// [CR 704.5d]: https://yawgatog.com/resources/magic-rules/#R7045d
-    pub fn cease_to_exist(&mut self, slot: L::Slot) {
+    pub fn cease_to_exist(&mut self, slot: L::Slot) -> Result<(), Full> {
+        let incarnation = self.object(slot).incarnation.checked_add(1).ok_or(Full)?;
         leave(self, slot);
         self.forget_stored(slot);
-        let incarnation = self.object(slot).incarnation.wrapping_add(1);
         *self.object_mut(slot) = Object {
             incarnation,
             ..Object::EMPTY
@@ -350,14 +359,16 @@ impl<L: Layout> State<L> {
         for k in self.knowledge.as_mut_slice() {
             k.remove(slot);
         }
+        Ok(())
     }
 
     /// Returns expired tokens and spell copies to the pool. The removals emit no events,
     /// and each slot gets its own new incarnation ([`State::cease_to_exist`], CR 704.5d–e).
-    pub fn reclaim_tokens(&mut self, tokens: Bitboard<L::Slot>) {
+    pub fn reclaim_tokens(&mut self, tokens: Bitboard<L::Slot>) -> Result<(), Full> {
         for slot in tokens.iter() {
-            self.cease_to_exist(slot);
+            self.cease_to_exist(slot)?;
         }
+        Ok(())
     }
 
     /// What makes two objects interchangeable (§7.2): every field but the incarnation, the

@@ -37,14 +37,14 @@ pub(crate) fn instruction<L: Layout>(
     let spell = resolution.source();
     let (face, controller) = (resolution.entry.face(), resolution.controller());
     let over = Prompt::new(Purpose::Mutate).places(prompt::Place::Battlefield, prompt::Place::None);
-    let about = Bitboard::single(spell.slot) | Bitboard::single(onto.slot);
+    let about = Bitboard::single(spell.slot) | Bitboard::single(onto.slot());
     let top = choices::yes_no(game, resolution, controller, over, about)?;
-    game.state.merge(game.sink, spell, face, onto, top)?;
+    game.state.merge(game.sink, spell, face, onto.into(), top)?;
     layers::refresh(game.state, game.table, game.sink)?;
     let mutated = Event::Mutated {
-        object: onto,
+        object: onto.into(),
         controller,
     };
     trigger::match_event(game.state, game.table, &mutated)?;
-    Ok(Outcome::acted_on(Bitboard::single(onto.slot)))
+    Ok(Outcome::acted_on(Bitboard::single(onto.slot())))
 }

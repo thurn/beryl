@@ -244,7 +244,7 @@ fn named_by_a_maker<L: Layout>(
     if name.is_empty() {
         return false;
     }
-    s.permanents().any(|(maker, d)| {
+    s.permanents_with_derived().any(|(maker, d)| {
         let Some(ChosenValue::Name(Some(card))) = s.chosen(maker) else {
             return false;
         };
@@ -330,7 +330,7 @@ fn attack_forbidden<L: Layout>(
         let allowed = unless_defender_controls.is_some_and(|filter| {
             let you = s.controller(slot);
             let words = s.words_of(slot);
-            s.permanents().any(|(permanent, d)| {
+            s.permanents_with_derived().any(|(permanent, d)| {
                 d.controller == defending && filter.matches(s, t, permanent, you, &words)
             })
         });
@@ -520,7 +520,7 @@ fn changed_cost<L: Layout>(
     mut cost: ManaCost,
 ) -> ManaCost {
     let (mut more, mut less, mut floor) = (0u8, 0u8, 0u8);
-    for (slot, d) in s.permanents() {
+    for (slot, d) in s.permanents_with_derived() {
         for id in rules.iter() {
             let rule = t.rule(id);
             let Governed::SpellCosts { spells, change } = rule.what else {
@@ -602,7 +602,7 @@ pub(crate) fn maker<L: Layout>(
     let of_kind = t.rules_of(kind);
     // A permanent's derived characteristics, its controller among them, are at its place
     // in the battlefield list.
-    s.permanents()
+    s.permanents_with_derived()
         .find(|&(slot, d)| {
             let made = player_rules_of(s, t, slot).common(of_kind);
             made.iter().any(|id| {

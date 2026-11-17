@@ -34,14 +34,14 @@ fn a_shield_replaces_one_destruction_and_the_next_destroys() {
     let (t, mut s, mut x, _, bear) = shielded_bear();
     let bear_ref = s.object_ref(bear);
     with_game(&t, &mut s, &mut x, bear, |game, _| {
-        destroy(game, bear_ref).unwrap();
+        destroy(game, game.state().permanent(bear_ref).unwrap()).unwrap();
     });
     // CR 701.19a: "instead remove all damage marked on it and its controller taps it."
     assert_eq!(s.object(bear).zone(), Zone::Battlefield);
     assert!(s.object(bear).is_tapped());
     assert!(!s.is_shielded(bear_ref));
     with_game(&t, &mut s, &mut x, bear, |game, _| {
-        destroy(game, bear_ref).unwrap();
+        destroy(game, game.state().permanent(bear_ref).unwrap()).unwrap();
     });
     assert_eq!(s.object(bear).zone(), Zone::Graveyard);
 }
@@ -87,7 +87,12 @@ fn a_shield_does_not_save_a_sacrificed_permanent() {
 fn a_shield_does_not_apply_to_a_destruction_that_forbids_regeneration() {
     let (t, mut s, mut x, _, bear) = shielded_bear();
     with_game(&t, &mut s, &mut x, bear, |game, _| {
-        destroy_all(game, Bitboard::single(bear), Regeneration::Forbidden).unwrap();
+        destroy_all(
+            game,
+            game.state().permanents_in(Bitboard::single(bear)),
+            Regeneration::Forbidden,
+        )
+        .unwrap();
     });
     // CR 701.19c: such effects "cause regeneration shields to not be applied."
     assert_eq!(s.object(bear).zone(), Zone::Graveyard);
