@@ -213,6 +213,20 @@ fn clean(show: &Show, case: &str) {
 }
 
 /// How far `pose` is off the straight way from `from` to `to`, as a vector.
+/// Where the card in `slot` lies on its way at `t`, before its flight's shape draws it nearer
+/// the eye (`Segment::unlifted_at`), so that heights and progress are measured along its way.
+fn on_way(show: &Show, slot: usize, t: u64) -> Pose {
+    let track = flight(show).track(slot);
+    track
+        .iter()
+        .rev()
+        .find(|record| record.segment.start <= t)
+        .map_or_else(
+            || pose(show, slot, t),
+            |record| record.segment.unlifted_at(t),
+        )
+}
+
 fn off_line(pose: Pose, from: Pose, to: Pose) -> Vec3 {
     let way = to.position - from.position;
     let at = pose.position - from.position;
@@ -385,7 +399,7 @@ fn a_resolving_permanent_is_thrown_up_and_half_way_across_at_a_quarter() {
     let to = pose(&show, slot, end);
     let quarter = start + (end - start) / 4;
     let [_, up, _] = axes(&show);
-    let height = |t: u64| off_line(pose(&show, slot, t), from, to).dot(up);
+    let height = |t: u64| off_line(on_way(&show, slot, t), from, to).dot(up);
     let highest = (start..=end)
         .step_by(usize::try_from(MS).expect("small"))
         .map(|t| (t, height(t)))
@@ -403,7 +417,7 @@ fn a_resolving_permanent_is_thrown_up_and_half_way_across_at_a_quarter() {
         at_quarter > 0.97 * highest.1,
         "at its greatest height by a quarter of its time: {at_quarter} of {highest:?}"
     );
-    let across = progress(pose(&show, slot, quarter), from, to);
+    let across = progress(on_way(&show, slot, quarter), from, to);
     assert!(
         (across - 0.5).abs() < 0.08,
         "half way across at a quarter of its time: {across}"
@@ -444,7 +458,7 @@ fn a_thrown_permanent_never_rises_past_the_top_of_the_window() {
                 top > edge - 1.0,
                 "{case}: its top is at {top} points, above the safe area's at {edge}, at {t}"
             );
-            highest = highest.max(off_line(now, from, to).dot(up));
+            highest = highest.max(off_line(on_way(&show, slot, t), from, to).dot(up));
         }
         let full = thrown::HEIGHT * space::card::WIDTH * from.scale;
         if capped {

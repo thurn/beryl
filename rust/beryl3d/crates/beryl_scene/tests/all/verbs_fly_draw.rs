@@ -405,7 +405,7 @@ fn a_draw_then_a_cast_fits_on_one_track() {
 /// that instant, face, size and lean included.
 #[test]
 fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
-    use beryl_scene::pose::{Bow, Curve, Shape, Turning};
+    use beryl_scene::pose::{Bow, Curve, Lift, Shape, Turning};
     use beryl_scene::verbs::Interval;
     use glam::Vec3;
     let from = Pose {
@@ -427,10 +427,24 @@ fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
         },
         lean: held::LEAN.to_radians(),
         eye: 1500.0,
+        lift: Lift {
+            eye: Vec3::new(0.0, -1200.0, 900.0),
+            forward: Vec3::new(0.0, 0.8, -0.6),
+            near: 900.0,
+            hold: 0.6,
+        },
     };
+    // Held nearer the eye until late in the flight, so that the times below fall both while it
+    // is held at `near` and while it eases back.
     let swept = Shape::Swept {
         bulge: Vec3::new(40.0, 120.0, 60.0),
         grow: 0.4,
+        lift: Lift {
+            eye: Vec3::new(0.0, -1200.0, 900.0),
+            forward: Vec3::new(0.0, 0.8, -0.6),
+            near: 900.0,
+            hold: 0.6,
+        },
     };
     for (shape, turning) in [
         (

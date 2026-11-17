@@ -1483,7 +1483,16 @@ streaks and notices (`StepOut`).
   screen coordinates, placed relative to the camera as the hand is), is held up
   there sinking a little toward the hand, and drops into the hand: three
   segments. Each of several drawn together is one `Swept` segment past that
-  place.
+  place. On the phone, whose table has no room beside the stack, that place is
+  over where the card will lie in the hand (`verbs.fly.held.phone`), as the web
+  interface's phone holds it, and it is kept inside the safe area.
+- **A flying card is drawn in front of what it passes.** The web interface draws
+  a flying card above every other. A straight, thrown, held or swept flight
+  moves its card toward the eye along its line of sight for most of its way
+  (`Lift`, with `verbs.fly.front`), which changes nothing on the window but what
+  the card is drawn over, and eases it back as it lands. On the phone this is
+  what keeps a flight in sight: the viewer's piles lie partly under the hand,
+  and the battlefields lie just above and below the stack.
 - **Bows are measured on the screen.** A flight that leaves its straight line
   sideways (`Shape::Bowed`) takes its length across and up the window from its
   two ends' places on the window, in millimetres at the depth of its middle, as

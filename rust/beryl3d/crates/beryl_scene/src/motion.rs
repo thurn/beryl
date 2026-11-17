@@ -242,7 +242,7 @@ impl Segment {
                 lean: Quat::IDENTITY,
                 grow: 0.0,
             },
-            Shape::Swept { bulge, grow } => {
+            Shape::Swept { bulge, grow, .. } => {
                 let curved = 2.0 * eased * (1.0 - eased);
                 Along {
                     u: eased,
@@ -297,6 +297,25 @@ impl Segment {
 
     /// A travelling path's pose `elapsed` of its time through.
     fn travelled(&self, elapsed: f32) -> Pose {
+        let pose = self.unlifted(elapsed);
+        // A lifted card is drawn nearer the eye along its line of sight, and smaller by as
+        // much, so that on screen it is where the straight way has it.
+        match self.shape.lift() {
+            Some(lift) => {
+                let nearer = lift.nearer(pose.position, self.along(elapsed).u);
+                Pose {
+                    position: lift.eye + (pose.position - lift.eye) * nearer,
+                    scale: pose.scale * nearer,
+                    ..pose
+                }
+            }
+            None => pose,
+        }
+    }
+
+    /// A travelling path's pose `elapsed` of its time through, where it would be drawn if its
+    /// shape held it no nearer the eye.
+    fn unlifted(&self, elapsed: f32) -> Pose {
         let Along {
             u,
             offset,
@@ -316,23 +335,24 @@ impl Segment {
             _ => pose.scale + grow,
         };
         let turned = self.turned(elapsed, u);
-        let position = pose.position + offset;
-        // A lifted card is drawn nearer the eye along its line of sight, and smaller by as
-        // much, so that on screen it is where the straight way has it.
-        let (position, scale) = match self.shape {
-            Shape::Lifted(lift) | Shape::BowedNear { lift, .. } => {
-                let nearer = lift.nearer(position, u);
-                (lift.eye + (position - lift.eye) * nearer, scale * nearer)
-            }
-            _ => (position, scale),
-        };
         Pose {
-            position,
+            position: pose.position + offset,
             rotation: lean * pose.rotation,
             scale,
             turn: self.from.turn + (self.to.turn - self.from.turn) * turned,
             ..pose
         }
+    }
+
+    /// Where its card lies on its way at `t`, as `pose_at` has it but before a shape that holds
+    /// the card nearer the eye moves it along its line of sight (`Shape::lift`): the same place
+    /// on the window, at the depth its way has.
+    #[must_use]
+    pub fn unlifted_at(&self, t: u64) -> Pose {
+        if self.shape.lift().is_none() || t <= self.start || t >= self.end() {
+            return self.pose_at(t);
+        }
+        self.unlifted(self.elapsed(t))
     }
 
     /// The pose it gives at `t`: its start pose before it begins, its end pose once it has
@@ -449,6 +469,10 @@ impl Segment {
         if rest < 1e-4 {
             return;
         }
+        let pose = match self.shape.lift() {
+            Some(lift) => lift.unlifted(pose, u),
+            None => pose,
+        };
         let to = self.to;
         // Each part of the pose is `from + (to - from) * u`, so `from = (now - to * u) / rest`.
         let back = |now: f32, to: f32| (now - to * u) / rest;

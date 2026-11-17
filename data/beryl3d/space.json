@@ -44,6 +44,11 @@
         "near": 0.6,
         "hold": 0.5
       },
+      "front": {
+        "near": 0.6,
+        "hold": 0.85,
+        "keep": 0.02
+      },
       "drawn_front": {
         "near": 0.5,
         "hold": 0.5
@@ -72,6 +77,10 @@
           0.0
         ],
         "size": 1.3,
+        "phone": {
+          "size": 1.57,
+          "foot": 0.25
+        },
         "depth": 280,
         "in": 0.55,
         "hold": 0.2,

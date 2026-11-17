@@ -12,6 +12,10 @@
 //!   flying card above every other and Arena lifts a played card above the hand. A card from
 //!   the middle of a big hand would otherwise start behind the cards to its right, which each
 //!   face the camera a little nearer the eye, and stay hidden under them.
+//! - Every straight, thrown, held or swept flight is also held nearer the eye for most of its
+//!   way (`in_front`), so that it is drawn in front of the hand, the stack and the cards it
+//!   passes without moving on the window: on the phone the viewer's piles lie partly under the
+//!   hand and the battlefields lie just above and below the stack.
 //! - The opponent's land drops out of their hand into the open table on the side away from
 //!   where it is going, tilted, and swings back along the table to its place.
 //! - A card the viewer draws alone flies from the library to a place beside the stack, bowing
@@ -41,12 +45,12 @@
 
 use beryl_protocol::protocol::{Side, Why, ZoneName};
 use beryl_protocol::script::Act;
-use glam::{Quat, Vec3};
+use glam::{Quat, Vec2, Vec3};
 use std::f32::consts::PI;
 
 use super::{Interval, StepIn, StepOut};
-use crate::data::space;
-use crate::data::space::verbs::fly::{bows, drawn_front, held, played, thrown, turn};
+use crate::data::space::verbs::fly::{bows, drawn_front, front, held, played, thrown, turn};
+use crate::data::{audit, space};
 use crate::pose::{Bow, Curve, Lift, Pose, Segment, Shape, Turning};
 use crate::table::Camera;
 use beryl_protocol::script::Subject;
@@ -266,19 +270,110 @@ fn room((from, to): (Pose, Pose), camera: &Camera) -> f32 {
 }
 
 /// Where the viewer's drawn card is held up to be read, for a card that rests at `rest` in
-/// the hand: upright beside the stack, `held.size` times as tall as a card of the hand, placed
-/// relative to the camera as the hand is (the web's `beside` in `ui/src/stage/desktop.ts`).
+/// the hand, placed relative to the camera as the hand is. On the desktop it is upright beside
+/// the stack, `held.size` times as tall as a card of the hand (the web's `beside` in
+/// `ui/src/stage/desktop.ts`). On the phone, whose narrow table has no room beside the stack,
+/// it is upright over where it will lie, `held.phone.size` times as tall as that card on the
+/// window, its foot `held.phone.foot` of the way down it (the web's `drawn`). Either is moved
+/// back inside the window's safe area where it would leave part of the card outside.
 fn held_place(step: &StepIn<'_>, rest: Pose) -> Pose {
-    let height = step.places.layout().hand.height * held::SIZE;
-    let ndc = held::NDC;
-    let pose = step
-        .places
-        .camera()
-        .screen_pose(ndc, held::DEPTH, Quat::IDENTITY, height);
+    let camera = step.places.camera();
+    let size = camera.window.size;
+    let (mut ndc, height) = if camera.window.phone() {
+        let (corners, _) = camera.card_box(&rest);
+        let low = corners
+            .iter()
+            .copied()
+            .reduce(Vec2::min)
+            .unwrap_or_default();
+        let high = corners
+            .iter()
+            .copied()
+            .reduce(Vec2::max)
+            .unwrap_or_default();
+        let tall = (high.y - low.y) * held::phone::SIZE;
+        let middle = Vec2::new(
+            f32::midpoint(low.x, high.x),
+            low.y + (high.y - low.y) * held::phone::FOOT - tall / 2.0,
+        );
+        (
+            Vec2::new(
+                middle.x / (size.width / 2.0) - 1.0,
+                1.0 - middle.y / (size.height / 2.0),
+            ),
+            tall / size.height,
+        )
+    } else {
+        (held::NDC, step.places.layout().hand.height * held::SIZE)
+    };
+    let place = |ndc: Vec2| camera.screen_pose(ndc, held::DEPTH, Quat::IDENTITY, height);
+    let mut pose = place(ndc);
+    // The card faces the camera at a fixed depth, so it moves on the window as its `ndc` does,
+    // one window's half width or height for each unit.
+    let (corners, _) = camera.card_box(&pose);
+    let inside = into_safe_area(&corners, camera);
+    if inside != Vec2::ZERO {
+        ndc += Vec2::new(
+            inside.x / (size.width / 2.0),
+            -inside.y / (size.height / 2.0),
+        );
+        pose = place(ndc);
+    }
     Pose {
         turn: rest.turn,
         opacity: rest.opacity,
         ..pose
+    }
+}
+
+/// How far, in points on the window, a box with `corners` must move to lie inside the window's
+/// safe area along each axis, or as far in as it can where it is larger: zero where it already
+/// does.
+fn into_safe_area(corners: &[Vec2], camera: &Camera) -> Vec2 {
+    let (size, inset) = (camera.window.size, camera.window.safe_area);
+    let low = corners
+        .iter()
+        .copied()
+        .reduce(Vec2::min)
+        .unwrap_or_default();
+    let high = corners
+        .iter()
+        .copied()
+        .reduce(Vec2::max)
+        .unwrap_or_default();
+    let inward = |low: f32, high: f32, start: f32, end: f32| {
+        if high > end {
+            (end - high).max(start - low)
+        } else if low < start {
+            start - low
+        } else {
+            0.0
+        }
+    };
+    Vec2::new(
+        inward(low.x, high.x, inset.left, size.width - inset.right),
+        inward(low.y, high.y, inset.top, size.height - inset.bottom),
+    )
+}
+
+/// How a flight from `from` to `to` is drawn in front of everything it passes, as the web
+/// interface draws a flying card above every other: held just beyond `front.near` of the depth
+/// of the nearer of its two ends and the stack (`Lift`), until `front.hold` of its way, and then
+/// back to where it lies as it lands. It changes nothing on the window but what the card is drawn
+/// over. On the phone the viewer's piles lie partly under the hand, the stack lies between the
+/// two battlefields, and the battlefield lies just below the stack, so a card that kept to the
+/// depth of its way would pass under the hand or the stack and be hidden for most of its
+/// flight.
+fn in_front(camera: &Camera, from: Pose, to: Pose) -> Lift {
+    let nearest = camera
+        .depth(from.position)
+        .min(camera.depth(to.position))
+        .min(space::stack::DEPTH);
+    Lift {
+        eye: camera.eye,
+        forward: -camera.axes()[2],
+        near: nearest * front::NEAR,
+        hold: front::HOLD,
     }
 }
 
@@ -326,6 +421,9 @@ fn held_up(step: &StepIn<'_>, (from, to): (Pose, Pose), out: &mut StepOut<'_>, s
     let (flying, holding) = (held::IN, held::HOLD);
     let camera = step.places.camera();
     let bowed = bow(&HELD_IN, -1.0, (from, up), camera);
+    // Drawn in front of the hand as it rises from the library, which on the phone lies
+    // partly under the hand.
+    let lift = in_front(camera, from, to);
     // The web leans and holds back the growth only of a card that turns over (its `heldUp`
     // returns the bowed pose alone for a card already face up).
     let (shape, turning) = if turns(from, to) {
@@ -336,11 +434,12 @@ fn held_up(step: &StepIn<'_>, (from, to): (Pose, Pose), out: &mut StepOut<'_>, s
                 bow: bowed,
                 lean,
                 eye,
+                lift,
             },
             Some(HELD_TURN),
         )
     } else {
-        (Shape::Bowed(bowed), None)
+        (Shape::BowedNear { bow: bowed, lift }, None)
     };
     out.segment(
         subject,
@@ -404,9 +503,11 @@ fn swept(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
         })
         .sum::<Vec3>();
     let scale = pull(from.scale, via.scale, to.scale);
+    let camera = step.places.camera();
     Shape::Swept {
         bulge: control - (from.position + to.position) / 2.0,
         grow: scale - f32::midpoint(from.scale, to.scale),
+        lift: in_front(camera, from, to),
     }
 }
 
@@ -453,10 +554,22 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
                 ..between
             }
         }
-        Path::Straight { rises } => Segment {
+        Path::Straight { rises } if travels => Segment {
             arc: arc(rises),
+            // A bow of nothing is the straight line, so that the card can be drawn in front.
+            shape: Shape::BowedNear {
+                bow: Bow {
+                    offset: Vec3::ZERO,
+                    sharpness: 1.0,
+                    lean: 0.0,
+                    axis: axes[2],
+                },
+                lift: in_front(step.places.camera(), from, to),
+            },
             ..between
         },
+        // One that stays where it rests keeps its depth among the cards beside it.
+        Path::Straight { .. } => between,
         Path::Bowed {
             bowing,
             toward,
@@ -491,6 +604,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
                     * (thrown::HEIGHT * space::card::WIDTH * from.scale)
                         .min(room((from, to), step.places.camera())),
                 aloft: thrown::SCALE * from.scale,
+                lift: in_front(step.places.camera(), from, to),
             },
             ..between
         },
@@ -507,8 +621,9 @@ const LOOKS: u16 = 24;
 const PUSHED_FROM: f32 = 0.2;
 
 /// `segment`, bowed down or left on the screen as far as it takes for its card's centre to stay
-/// inside the top and right edges of the window's safe area, so that at least half the card is
-/// seen, at every moment of its flight but those near its ends. The opponent's hand is held
+/// inside the top and right edges of the window's safe area, by half the side of the square the
+/// "on screen" check asks to see of a card, so that at least half the card and all that square
+/// are seen, at every moment of its flight but those near its ends. The opponent's hand is held
 /// mostly above the window, and their graveyard, exile and library lie along the top right, so a
 /// flight between them that keeps to its own line in the table's space is mostly out of sight:
 /// its ends lie at very different depths, so that line curves above the top edge on the window.
@@ -534,6 +649,13 @@ fn kept_in_window(segment: Segment, camera: &Camera) -> Segment {
         ..segment
     };
     let (size, insets) = (camera.window.size, camera.window.safe_area);
+    // Half the square of a card the "on screen" check holds inside the safe area, so that the
+    // centre kept that far in leaves the whole square in.
+    let margin = if camera.window.phone() {
+        audit::PHONE_TARGET_POINTS
+    } else {
+        audit::TARGET_POINTS
+    } / 2.0;
     // The moments looked at, each as the card's centre with no bow and the share of the bow it
     // has there, found once, since a push changes only the bow's offset. They are spread evenly
     // over the easing curve's own parameter rather than over time, which takes no search for
@@ -562,8 +684,8 @@ fn kept_in_window(segment: Segment, camera: &Camera) -> Segment {
             let position = straight + bow.offset * arch;
             let centre = camera.to_screen(position);
             let points = camera.to_screen(position + Vec3::X).x - centre.x;
-            let short_down = insets.top - centre.y;
-            let short_left = centre.x - (size.width - insets.right);
+            let short_down = insets.top + margin - centre.y;
+            let short_left = centre.x - (size.width - insets.right - margin);
             down = down.max(short_down / points / arch);
             left = left.max(short_left / points / arch);
         }
