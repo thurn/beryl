@@ -247,11 +247,12 @@ mod tests {
 
     #[test]
     fn printed_battlefield_filters_have_a_partner_in_the_pool() {
+        use crate::derive::witness::{ATTACHED_AURA, requires_aura};
         use beryl_card::{Objects, TargetKind};
 
         let mut missing = Vec::new();
         for &def in CARDS.cards() {
-            let mut check = |filter: Filter| {
+            let mut check = |filter: Filter, can_cast_aura: bool| {
                 let mut only_printed = !filter.needs_a_resolution();
                 filter.walk(&mut |node| {
                     if matches!(node, Node::Filter(Filter::Token)) {
@@ -270,7 +271,18 @@ mod tests {
                             printed(part, permanent, face, Zone::Battlefield)
                         }) == Some(true)
                     });
-                    if partner.is_none() {
+                    // A witness casts its partner before targeting it, so an Aura never
+                    // starts on the board unattached.
+                    let aura_partner = can_cast_aura
+                        && requires_aura(filter)
+                        && seat == P0
+                        && ATTACHED_AURA.hand.iter().any(|&name| {
+                            let face = CARDS.get(name).expect("an Aura witness card").front();
+                            matches(filter, seat, &|part| {
+                                printed(part, Permanent::new(name), face, Zone::Battlefield)
+                            }) == Some(true)
+                        });
+                    if partner.is_none() && !aura_partner {
                         missing.push(format!(
                             "{} needs a board prop for {filter:?} on seat {seat}",
                             def.name
@@ -291,7 +303,7 @@ mod tests {
                     },
                 ) = node
                 {
-                    check(*filter);
+                    check(*filter, false);
                 }
             });
             for target in def.faces.iter().flat_map(|face| {
@@ -306,7 +318,7 @@ mod tests {
                         | TargetKind::PermanentOrPlayer
                         | TargetKind::SpellOrPermanent
                 ) {
-                    check(target.filter);
+                    check(target.filter, target.kind == TargetKind::Permanent);
                 }
             }
         }

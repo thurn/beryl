@@ -208,6 +208,13 @@
       "Chains of Mephistopheles: if a player would draw a card except the first one they draw in each of their draw steps , that player discards a card instead . if [-the-] {+you do , that+} player [-discards a card this way , they draw-] {+draws+} a card . [-if the-] {+otherwise , that+} player [-doesn't discard a card this way , they mill-] {+mills+} a card ."
     ]
   },
+  "Night's Whisper": {
+    "reason": "wording",
+    "note": "The renderer separates the card draw and life loss into two sentences. Both instructions affect the caster and happen in the same order.",
+    "diff": [
+      "Night's Whisper: [-you-] draw two cards [-and-] {+. you+} lose 2 life ."
+    ]
+  },
   "Notion Thief": {
     "reason": "wording",
     "note": "A replaced draw never happens (CR 614.6), so \"that player skips that draw and you draw a card\" instead is \"you draw a card instead\": the renderer does not name the skipped draw.",
@@ -227,6 +234,13 @@
     "note": "Oracle says \"return the exiled card ... under its owner's control\"; the renderer says \"the cards exiled with this creature ... under their owners' control\". Both mean the cards the enters ability exiled, linked to this Fiend Hunter, each returned under its own owner's control.",
     "diff": [
       "Fiend Hunter: when ~ leaves the battlefield , return the {+cards+} exiled [-card-] {+with ~+} to the battlefield under [-its owner's-] {+their owners'+} control ."
+    ]
+  },
+  "White Knight": {
+    "reason": "wording",
+    "note": "The renderer spells out that the creature has protection from black. This is the same protection ability as the standalone keyword.",
+    "diff": [
+      "White Knight: {+~ has+} protection from black {+.+}"
     ]
   },
   "Worldgorger Dragon": {

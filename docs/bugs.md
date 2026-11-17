@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A spell could still affect a player who gained protection after it was
+  cast.** Target selection checked protection from everything, but resolution
+  only checked the target's player filter. Resolution now checks protection
+  again. The Teferi's Protection scenario with Tendrils of Agony checks that
+  gaining protection invalidates the spell's only target, so even the caster's
+  life gain is skipped.
+
 - **The fifth basic land text change could be dropped.** The text map stored
   only four subtype replacements, so a fifth could leave a printed Island
   reading Forest when it should read Swamp. `Words` now maps all five basic land

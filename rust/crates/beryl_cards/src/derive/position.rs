@@ -265,6 +265,15 @@ pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witnes
         (TURN, P0, TurnStep::PrecombatMain)
     };
     let mut scenario = Scenario::new(PREFIX).at(at.0, at.1, at.2);
+    if let Some(witness) = witness {
+        let interactions = witness
+            .hand
+            .iter()
+            .copied()
+            .filter(|name| !props::ALL.iter().any(|prop| prop.card == *name))
+            .collect::<Vec<_>>();
+        scenario = scenario.interaction(leak(interactions));
+    }
     scenario.setup.players = [
         PlayerSetup {
             life: 20,

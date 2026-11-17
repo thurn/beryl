@@ -188,5 +188,105 @@ pub mod scenarios {
                 ME.pt(Card::PaintersServant, 2, 4),
                 ME.colored(Zone::Battlefield, Card::Mountain, Colors::RED),
             ]),
+        // If the Dragon leaves before its enters trigger resolves, its leaves trigger has
+        // nothing to return. The enters trigger then exiles the lands with no later return.
+        Scenario::new("Worldgorger Dragon leaves before it can exile anything")
+            .interaction(&[Card::GetLost])
+            .hand(P0, &[DRAGON])
+            .battlefield(P0, &[Card::Mountain; 6])
+            .hand(P1, &[Card::GetLost, Card::GetLost])
+            .battlefield(P1, &[Card::Plains; 4])
+            .actions(&[
+                ME.casts(DRAGON),
+                Resolve,
+                ME.passes(),
+                THEM.casts(Card::GetLost),
+                Resolve,
+                Resolve,
+                ME.controls(Card::Mountain, 6),
+                Resolve,
+                ME.has(Zone::Exile, Card::Mountain, 6),
+                ME.has(Zone::Graveyard, DRAGON, 1),
+            ]),
+        // Holy Strength can enchant a creature already present when it returns, but not
+        // the creature that the Dragon's ability returns in the same event.
+        Scenario::new("Worldgorger Dragon returns an Aura attached to a creature already there")
+            .interaction(&[Card::HolyStrength, Card::GetLost])
+            .hand(P0, &[DRAGON, Card::HolyStrength])
+            .battlefield(
+                P0,
+                &[
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Plains,
+                    Prop::Vanilla,
+                ],
+            )
+            .hand(P1, &[Card::GetLost, Card::GetLost])
+            .battlefield(
+                P1,
+                &[
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Prop::Flier,
+                ],
+            )
+            .actions(&[
+                ME.casts(Card::HolyStrength),
+                ME.targets(Prop::Vanilla),
+                Resolve,
+                ME.casts(DRAGON),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Exile, Card::HolyStrength, 1),
+                ME.passes(),
+                THEM.casts(Card::GetLost),
+                THEM.targets(DRAGON),
+                Resolve,
+                Resolve,
+                THEM.pt(Prop::Flier, 4, 3),
+                ME.pt(Prop::Vanilla, 2, 1),
+                ME.controls(Card::HolyStrength, 1),
+            ]),
+        // With no creature already on the battlefield, the returning Aura has no legal
+        // attachment and stays in exile while the creature it used to enchant returns.
+        Scenario::new("Worldgorger Dragon leaves an Aura in exile without a legal attachment")
+            .interaction(&[Card::HolyStrength, Card::GetLost])
+            .hand(P0, &[DRAGON, Card::HolyStrength])
+            .battlefield(
+                P0,
+                &[
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Plains,
+                    Prop::Vanilla,
+                ],
+            )
+            .hand(P1, &[Card::GetLost, Card::GetLost])
+            .battlefield(P1, &[Card::Plains; 4])
+            .actions(&[
+                ME.casts(Card::HolyStrength),
+                Resolve,
+                ME.casts(DRAGON),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Exile, Card::HolyStrength, 1),
+                ME.passes(),
+                THEM.casts(Card::GetLost),
+                Resolve,
+                Resolve,
+                ME.pt(Prop::Vanilla, 2, 1),
+                ME.has(Zone::Exile, Card::HolyStrength, 1),
+            ]),
     ];
 }

@@ -13,7 +13,8 @@
 //! The mutation check (`crate::mutation`) finds a field no witness covers: a mutant of the
 //! card with that field changed survives every scenario.
 
-use beryl_card::{CostAction, CostPart, Filter, Node};
+use beryl_card::words::Words;
+use beryl_card::{CostAction, CostPart, Filter, Node, Subtype};
 use beryl_engine::Zone;
 use beryl_engine::card::{
     Ability, AbilityKind, Behavior, CardDef, Castings, Effect, FaceIx, Objects, Players, Rewrite,
@@ -117,6 +118,30 @@ const OWN_ARTIFACT: Witness = Witness {
     theirs_graveyard: &[],
     prelude: &[],
 };
+
+/// A spell that targets an Aura needs one cast onto a creature. A loose Aura on the starting
+/// battlefield would go to the graveyard before the spell could target it.
+pub(super) const ATTACHED_AURA: Witness = Witness {
+    words: "with an attached Aura",
+    mine: &[Permanent::new(props::THIEF.card)],
+    theirs: &[],
+    hand: &[names::HOLY_STRENGTH],
+    theirs_graveyard: &[],
+    prelude: &[
+        ME.casts(names::HOLY_STRENGTH),
+        ME.targets(props::THIEF.card),
+        Resolve,
+    ],
+};
+
+pub(super) fn requires_aura(filter: Filter) -> bool {
+    match filter {
+        Filter::SubtypeWord(word) => word.read(&Words::NONE) == Subtype::Aura,
+        Filter::All(parts) => parts.iter().copied().any(requires_aura),
+        Filter::AnyOf(parts) => parts.iter().copied().all(requires_aura),
+        _ => false,
+    }
+}
 
 /// A creature card in player 1's graveyard, for a spell that targets one, as Animate Dead's
 /// "enchant creature card in a graveyard": the starting graveyards hold an instant and a
@@ -245,6 +270,13 @@ pub(super) fn witnesses(def: &'static CardDef) -> Vec<&'static Witness> {
         |a: &Ability| (a.targets().iter()).any(|t| t.kind.abilities().is_some());
     if abilities.clone().any(targets_abilities) {
         found.borrow_mut().push(&ABILITY_TO_TARGET);
+    }
+    if abilities.clone().any(|a| {
+        a.targets()
+            .iter()
+            .any(|t| t.kind == TargetKind::Permanent && requires_aura(t.filter))
+    }) {
+        found.borrow_mut().push(&ATTACHED_AURA);
     }
     if exiles_from_hand(def) {
         found.borrow_mut().push(&CARD_TO_EXILE);

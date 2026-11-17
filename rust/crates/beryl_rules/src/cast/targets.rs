@@ -322,7 +322,10 @@ pub(super) fn source_of<L: Layout>(entry: &StackEntry<L>) -> Option<L::Slot> {
 /// longer in the zone it was in when it was targeted is illegal. Other changes to the game
 /// state may cause a target to no longer be legal". A zone change gives the object a new
 /// incarnation, so a stale reference is illegal, and an ability that has left the stack is
-/// gone ([`AbilityTarget::Gone`]).
+/// gone ([`AbilityTarget::Gone`]). A player who gains protection from everything "can't be
+/// targeted by spells or abilities" ([CR 702.16j]).
+///
+/// [CR 702.16j]: https://yawgatog.com/resources/magic-rules/#R70216j
 pub(crate) fn still_legal<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -335,7 +338,8 @@ pub(crate) fn still_legal<L: Layout>(
     let itself = Itself::resolving(entry);
     let Some(r) = target.as_object() else {
         if let Some(player) = target.as_player() {
-            return player_matches(spec, player, you);
+            return player_matches(spec, player, you)
+                && !rule_change::protected_from_everything(s, t, player);
         }
         return ability_still_legal(s, t, entry, spec, target);
     };

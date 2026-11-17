@@ -391,5 +391,183 @@ pub mod scenarios {
             advance_to(3, TurnStep::EndOfCombat),
             THEM.life(18),
         ]),
+        // The life-gain instruction has no effect. Beza's same trigger still makes Treasure.
+        Scenario::new("Teferi's Protection stops Beza's life gain while other effects resolve")
+            .interaction(&[Card::BezaTheBoundingSpring])
+            .life(P0, 15)
+            .hand(P0, &[Card::BezaTheBoundingSpring, PROTECTION])
+            .battlefield(P0, &[Card::Plains; 7])
+            .battlefield(P1, &[Card::Island])
+            .actions(&[
+                ME.casts(Card::BezaTheBoundingSpring),
+                Resolve,
+                ME.casts(PROTECTION),
+                Resolve,
+                Resolve,
+                ME.life(15),
+                ME.controls(crate::tokens::TREASURE_TOKEN, 1),
+            ]),
+        // Gaining protection in response makes the only target illegal, so even the life-gain
+        // instruction for Tendrils' caster is skipped.
+        Scenario::new("Teferi's Protection makes Tendrils of Agony lose its only target")
+            .interaction(&[Card::TendrilsOfAgony])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .hand(P0, &[PROTECTION])
+            .battlefield(P0, &[Card::Plains; 3])
+            .hand(P1, &[Card::TendrilsOfAgony])
+            .battlefield(P1, &[Card::Swamp; 4])
+            .actions(&[
+                THEM.casts(Card::TendrilsOfAgony),
+                THEM.targets_player(ME),
+                ME.casts(PROTECTION),
+                stack(0),
+                ME.life(20),
+                THEM.life(20),
+                THEM.has(Zone::Graveyard, Card::TendrilsOfAgony, 1),
+            ]),
+        // A blue card is available, but P0 cannot pay the one life for Force of Will.
+        Scenario::new("Teferi's Protection prevents paying Force of Will's alternative cost")
+            .interaction(&[Card::ForceOfWill])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .hand(P0, &[PROTECTION, Card::ForceOfWill, Card::Counterspell])
+            .battlefield(P0, &[Card::Plains; 3])
+            .hand(P1, &[Prop::Equipment])
+            .battlefield(P1, &[Card::Plains])
+            .actions(&[
+                THEM.passes(),
+                ME.casts(PROTECTION),
+                Resolve,
+                THEM.casts(Prop::Equipment),
+                THEM.controls(Prop::Equipment, 1),
+                ME.life(20),
+                ME.has(Zone::Hand, Card::ForceOfWill, 1),
+                ME.has(Zone::Hand, Card::Counterspell, 1),
+            ]),
+        // Phasing is not a zone change. Portable Hole keeps its exiled card while phased
+        // out, and its enters ability does not trigger when it phases in.
+        Scenario::new("Phasing Portable Hole keeps its exiled card in exile")
+            .hand(P0, &[PROTECTION, Prop::Artifact])
+            .battlefield(P0, &[Card::Plains; 4])
+            .battlefield(P1, &[Prop::Vanilla])
+            .actions(&[
+                ME.casts(Prop::Artifact),
+                Resolve,
+                Resolve,
+                THEM.has(Zone::Exile, Prop::Vanilla, 1),
+                ME.casts(PROTECTION),
+                Resolve,
+                ME.controls(Prop::Artifact, 0),
+                THEM.has(Zone::Exile, Prop::Vanilla, 1),
+                advance_to(3, TurnStep::Upkeep),
+                ME.controls(Prop::Artifact, 1),
+                THEM.has(Zone::Exile, Prop::Vanilla, 1),
+                stack(0),
+            ]),
+        // The creature retains its counters through both halves of phasing.
+        Scenario::new("A creature keeps its counters through phasing")
+            .hand(P0, &[PROTECTION])
+            .battlefield(P0, &[Card::Plains; 3])
+            .permanents(
+                P0,
+                &[Permanent::new(Prop::Vanilla).counters(CounterKind::PlusOne, 2)],
+            )
+            .actions(&[
+                ME.casts(PROTECTION),
+                Resolve,
+                ME.controls(Prop::Vanilla, 0),
+                advance_to(3, TurnStep::Upkeep),
+                ME.controls(Prop::Vanilla, 1),
+                ME.counters(Prop::Vanilla, CounterKind::PlusOne, 2),
+            ]),
+        // Painter's Servant stops affecting objects during phasing and remembers its
+        // chosen color when it phases in.
+        Scenario::new("Painter's Servant remembers its chosen color through phasing")
+            .interaction(&[Card::PaintersServant])
+            .hand(P0, &[PROTECTION, Card::PaintersServant])
+            .battlefield(P0, &[Card::Plains; 5])
+            .battlefield(P1, &[Card::Island])
+            .actions(&[
+                ME.casts(Card::PaintersServant),
+                Resolve,
+                ME.chooses_color(Colors::RED),
+                THEM.colored(Zone::Battlefield, Card::Island, Colors::RED),
+                ME.casts(PROTECTION),
+                Resolve,
+                THEM.colored(Zone::Battlefield, Card::Island, Colors::NONE),
+                advance_to(3, TurnStep::Upkeep),
+                THEM.colored(Zone::Battlefield, Card::Island, Colors::RED),
+            ]),
+        // The caster still draws both cards from Night's Whisper while its life loss is blocked.
+        Scenario::new("Teferi's Protection stops Night's Whisper's life loss but allows the draw")
+            .interaction(&[Card::NightsWhisper])
+            .hand(P0, &[Card::NightsWhisper, PROTECTION])
+            .battlefield(
+                P0,
+                &[
+                    Card::Swamp,
+                    Card::Swamp,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .library(P0, &[Card::Island, Card::Mountain])
+            .actions(&[
+                ME.casts(Card::NightsWhisper),
+                ME.casts(PROTECTION),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Hand, Card::Island, 1),
+                ME.has(Zone::Hand, Card::Mountain, 1),
+                ME.life(20),
+            ]),
+        // The phased-out creature is an illegal target, but the other target still
+        // exists, so Aura Finesse still draws a card for its caster.
+        Scenario::new("Aura Finesse still draws when only its creature target phases out")
+            .interaction(&[Card::AuraFinesse, HOLY])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .hand(P0, &[PROTECTION])
+            .battlefield(
+                P0,
+                &[Card::Plains, Card::Plains, Card::Plains, Prop::Vanilla],
+            )
+            .hand(P1, &[HOLY, Card::AuraFinesse])
+            .battlefield(P1, &[Card::Plains, Card::Island, Prop::Flier])
+            .library(P1, &[Card::Mountain])
+            .actions(&[
+                THEM.casts(HOLY),
+                THEM.targets(Prop::Flier),
+                Resolve,
+                THEM.casts(Card::AuraFinesse),
+                THEM.targets(Prop::Vanilla),
+                ME.casts(PROTECTION),
+                Resolve,
+                ME.controls(Prop::Vanilla, 0),
+                THEM.pt(Prop::Flier, 4, 3),
+                THEM.has(Zone::Hand, Card::Mountain, 1),
+            ]),
+        // Protection has no bearing on a discard instruction that doesn't target its player.
+        Scenario::new("Teferi's Protection allows discarding to Jace's untargeted ability")
+            .interaction(&[Card::JaceVrynsProdigy])
+            .hand(P0, &[PROTECTION, Card::Mountain])
+            .battlefield(
+                P0,
+                &[
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::JaceVrynsProdigy,
+                ],
+            )
+            .library(P0, &[Card::Island])
+            .actions(&[
+                ME.activates(Card::JaceVrynsProdigy, 0),
+                ME.casts(PROTECTION),
+                Resolve,
+                Resolve,
+                ME.picks(Card::Mountain),
+                ME.has(Zone::Graveyard, Card::Mountain, 1),
+                ME.has(Zone::Hand, Card::Island, 1),
+            ]),
     ];
 }

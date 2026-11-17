@@ -376,5 +376,42 @@ pub mod scenarios {
                 THEM.has(Zone::Graveyard, Prop::Vanilla, 1),
                 ME.controls(Prop::Vanilla, 0),
             ]),
+        // Protection is inactive in the graveyard. On the battlefield it prevents attachment,
+        // so the Aura falls off and its delayed trigger makes the Knight's controller sacrifice it.
+        SETUP
+            .titled("Animate Dead can't attach to a creature with protection from black")
+            .interaction(&[Card::WhiteKnight])
+            .graveyard(P1, &[Card::WhiteKnight])
+            .actions(&[
+                ME.casts(ANIMATE),
+                Resolve,
+                ME.controls(ANIMATE, 1),
+                Resolve,
+                ME.controls(Card::WhiteKnight, 1),
+                ME.has(Zone::Graveyard, ANIMATE, 1),
+                Resolve,
+                ME.controls(Card::WhiteKnight, 0),
+                THEM.has(Zone::Graveyard, Card::WhiteKnight, 1),
+            ]),
+        // A spell can target the Aura and another creature, but the new enchant ability only
+        // permits attachment to the creature this Aura returned. The card draw still happens.
+        SETUP
+            .titled("Aura Finesse can't move Animate Dead to another creature")
+            .interaction(&[Card::AuraFinesse])
+            .hand(P0, &[ANIMATE, Card::AuraFinesse])
+            .battlefield(P0, &[Card::Swamp, Card::Plains, Card::Island])
+            .battlefield(P1, &[Prop::Flier])
+            .actions(&[
+                ME.casts(ANIMATE),
+                Resolve,
+                Resolve,
+                ME.casts(Card::AuraFinesse),
+                ME.targets(Prop::Flier),
+                Resolve,
+                ME.controls(ANIMATE, 1),
+                ME.pt(Prop::Vanilla, 1, 1),
+                THEM.pt(Prop::Flier, 3, 1),
+                ME.has(Zone::Hand, Card::Plains, 1),
+            ]),
     ];
 }

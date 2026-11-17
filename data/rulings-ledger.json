@@ -1,4 +1,40 @@
 {
+  "Animate Dead": [
+    {
+      "published_at": "2016-06-08",
+      "hash": "0982f09b124b",
+      "scenario": [
+        "Animate Dead can't attach to a creature with protection from black"
+      ]
+    },
+    {
+      "published_at": "2016-06-08",
+      "hash": "233bbd40aa07",
+      "scenario": [
+        "Animate Dead returns an opponent's creature card under your control",
+        "Stifle on the enters trigger leaves the creature card"
+      ]
+    },
+    {
+      "published_at": "2016-06-08",
+      "hash": "b1d2fe198b4b",
+      "scenario": [
+        "Animate Dead destroyed before its enters ability resolves"
+      ]
+    },
+    {
+      "published_at": "2016-06-08",
+      "hash": "460fd3eda2ac",
+      "scenario": [
+        "Aura Finesse can't move Animate Dead to another creature"
+      ]
+    },
+    {
+      "published_at": "2016-06-08",
+      "hash": "171921fac83e",
+      "untestable": "The White Knight scenario checks that protection doesn't apply in the graveyard. Shroud is absent from the permanent keyword vocabulary."
+    }
+  ],
   "Blood Moon": [
     {
       "published_at": "2020-08-07",
@@ -495,6 +531,7 @@
       ]
     }
   ],
+  "Gemrazer": [],
   "Glorious Anthem": [],
   "Griselbrand": [
     {
@@ -1037,6 +1074,28 @@
       ]
     }
   ],
+  "Stifle": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "221746e25763",
+      "scenario": [
+        "Stifle counters a delayed trigger"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "718c2188f6f0",
+      "scenario": [
+        "Stifle counters an activated ability",
+        "Stifle counters an enters trigger"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "a870d0f450ea",
+      "covered": "TargetSpec::ability"
+    }
+  ],
   "Tarmogoyf": [
     {
       "published_at": "2024-06-07",
@@ -1072,6 +1131,179 @@
       "scenario": [
         "kindred counts as a card type and supertypes do not"
       ]
+    }
+  ],
+  "Teferi's Protection": [
+    {
+      "published_at": "2017-08-25",
+      "hash": "31a22f0c60ae",
+      "untestable": "The replacement vocabulary cannot match a life gain or life loss event."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "b5636d344bdd",
+      "scenario": [
+        "Phasing Portable Hole keeps its exiled card in exile"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "6a7d39e7bc3f",
+      "untestable": "Words of Worship needs an activated ability that installs a replacement for the next draw. The vocabulary does not express that temporary replacement."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "1e874d84dfd6",
+      "untestable": "The life vocabulary can gain or lose an amount, but has no instruction to set a life total."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "c8c7cd0030c1",
+      "scenario": [
+        "a phased-out Phantasmal Image is not sacrificed",
+        "a creature phased out in response to Lightning Bolt survives",
+        "Painter's Servant remembers its chosen color through phasing",
+        "an attack into an empty board deals no damage"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "ad6db0fc6337",
+      "untestable": "The duration vocabulary does not express a condition that must stay true, as in continuous effects lasting for as long as something remains true."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "94ae180044cd",
+      "scenario": [
+        "Teferi's Protection makes Tendrils of Agony lose its only target",
+        "Aura Finesse still draws when only its creature target phases out"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "83ea09b6c734",
+      "untestable": "Alternative casting costs cannot make another player gain life. Invigorate needs that cost and a condition on which lands its caster controls."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "23a2f877c661",
+      "scenario": [
+        "A creature keeps its counters through phasing"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "751d270dfa64",
+      "scenario": [
+        "an attack into an empty board deals no damage",
+        "Teferi's Protection allows discarding to Jace's untargeted ability"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "91921af11485",
+      "scenario": [
+        "Phasing Portable Hole keeps its exiled card in exile",
+        "a stolen artifact phases in at its thief's untap step"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "6a65b5c6ae2e",
+      "scenario": [
+        "an Aura that phased out alone phases in attached to nothing"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "53948bb1de2c",
+      "untestable": "The effects vocabulary cannot exchange life totals."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "14f8deab31d0",
+      "scenario": [
+        "Teferi's Protection stops Beza's life gain while other effects resolve",
+        "Teferi's Protection stops Night's Whisper's life loss but allows the draw"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "24c8bab3c8ce",
+      "scenario": [
+        "Painter's Servant remembers its chosen color through phasing"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "9e20c50abd40",
+      "scenario": [
+        "Teferi's Protection prevents paying Force of Will's alternative cost"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "0e0c21f97325",
+      "untestable": "The Lightning Bolt and lifelink scenarios show targeting and damage prevention. The Aura attachment vocabulary supports objects but cannot attach an Aura to a player."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "148be37d63cd",
+      "scenario": [
+        "a token that phases out phases back in"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "ab932f0f1936",
+      "untestable": "The damage vocabulary has prevention and damage replacement but cannot make damage unpreventable."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "01e3b8992ff4",
+      "scenario": [
+        "a creature that phased in attacks that turn"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "7916bee94fb4",
+      "untestable": "The turn vocabulary cannot skip an untap step."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "c54f4a84303b",
+      "scenario": [
+        "an equipped creature phases out and in with its Equipment"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "782de586fbbc",
+      "scenario": [
+        "a creature phased out in response to Lightning Bolt survives",
+        "Aura Finesse still draws when only its creature target phases out"
+      ]
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "6770853b7245",
+      "untestable": "This heading introduces the phasing rulings and describes no game behavior."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "8bbc53a47c19",
+      "untestable": "This heading introduces the protection rulings and describes no game behavior."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "5e4dda325da9",
+      "untestable": "This heading introduces the life total rulings and describes no game behavior."
+    },
+    {
+      "published_at": "2017-08-25",
+      "hash": "66faa379ad79",
+      "untestable": "The Skydiver scenario covers a continuing change of control. A temporary theft spell such as Act of Treason needs a mandatory untap effect. The part about a player leaving needs a multiplayer scenario."
     }
   ],
   "Tendrils of Agony": [
@@ -1293,6 +1525,24 @@
       "hash": "6af434fc3b0c",
       "scenario": [
         "Urborg on the battlefield does not affect land cards in the library"
+      ]
+    }
+  ],
+  "Worldgorger Dragon": [
+    {
+      "published_at": "2022-12-08",
+      "hash": "5f6663e75da9",
+      "scenario": [
+        "Worldgorger Dragon leaves before it can exile anything"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "442ad9df64e1",
+      "scenario": [
+        "Worldgorger Dragon returns an Aura attached to a creature already there",
+        "Worldgorger Dragon leaves an Aura in exile without a legal attachment",
+        "A second creature card lets Animate Dead end the loop"
       ]
     }
   ]
