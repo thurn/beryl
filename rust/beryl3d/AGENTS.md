@@ -229,6 +229,9 @@ project, and selects the main lanes.
   - `line_end_points` and `line_reshape_points`: how far an arrow's end may move
     and still be at rest, and how far a control point must move to count as a
     change of shape (the "lines hold" check).
+  - `mark_points`: how far a mark's outline may sit from the middle of the card,
+    ability or life total it rings, and how far its line may fall inside that
+    thing's box (the "marks on their things" check).
   - `step_ms`, `step_points`, `seen`, `transparent` and `crowded`: the web stage
     audit's thresholds, which "every step shown" and "not crowded" use. A step
     whose verb travels moves its subject at least `step_points` over at least

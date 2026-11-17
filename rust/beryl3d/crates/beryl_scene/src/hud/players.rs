@@ -24,6 +24,7 @@ use glam::Vec2;
 use crate::art::orb;
 use crate::data::space::hud::INCOMING_GAP;
 use crate::element::{Align, Anchor, Element, Justify, Position, Shown, holder, text};
+use crate::input::Rect;
 use crate::screens::ScreenIn;
 use crate::table::phone::strip;
 use crate::table::{DESKTOP, Window};
@@ -54,6 +55,35 @@ pub fn orb_centre(side: Side, window: Window) -> Vec2 {
     points(DESKTOP.players[index(side)].life, window.size)
 }
 
+/// The name of `side`'s orb in the tree, by which the "marks on their things" check finds the
+/// life total a mark on that player rings.
+#[must_use]
+pub fn orb_name(side: Side) -> &'static str {
+    match side {
+        Side::You => "your orb",
+        Side::Opponent => "opponent's orb",
+    }
+}
+
+/// The box on the window of the core of `side`'s orb, with its bezel, when the orb's art fills
+/// `art`: the life total a mark on that player rings. The art's scale is read from the box, so
+/// it holds on either layout.
+#[must_use]
+pub fn core_box(side: Side, art: Rect) -> Rect {
+    let units = art.width / orb::ART[2];
+    let half = (Vec2::new(orb::CORE_RX, orb::CORE_RY) + orb::BEZEL / 2.0) * units;
+    let centre = Vec2::new(
+        art.x + art.width / 2.0,
+        art.y + art.height / 2.0 + orb::face_offset(side) * units,
+    );
+    Rect {
+        x: centre.x - half.x,
+        y: centre.y - half.y,
+        width: 2.0 * half.x,
+        height: 2.0 * half.y,
+    }
+}
+
 /// `side`'s orb as `view` shows it: one element the size of the web's orb art, showing the art
 /// (`Shown::Orb`).
 fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
@@ -70,10 +100,7 @@ fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
     // Where the core's bezel ends on the right, from the art's left edge.
     let core_right = (orb::CORE_RX + orb::BEZEL / 2.0 - left) * units;
     let mut element = Element::new(crate::frame::Role::Region)
-        .name(match side {
-            Side::You => "your orb",
-            Side::Opponent => "opponent's orb",
-        })
+        .name(orb_name(side))
         .width(width * units)
         .height(height * units)
         .selected(active)

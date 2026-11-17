@@ -60,6 +60,7 @@ pub enum Rule {
     LinesHold,
     Clips,
     LayerDrawn,
+    MarksOn,
     PhoneSizes,
     Jump,
     RestPlacement,
@@ -70,7 +71,7 @@ pub enum Rule {
 
 impl Rule {
     /// Every rule, in the doc's order.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::OnScreen,
         Self::Overlap,
         Self::Reachable,
@@ -79,6 +80,7 @@ impl Rule {
         Self::Named,
         Self::Clips,
         Self::LayerDrawn,
+        Self::MarksOn,
         Self::PhoneSizes,
         Self::Jump,
         Self::RestPlacement,
@@ -112,6 +114,7 @@ impl Rule {
             Self::LinesHold => "lines-hold",
             Self::Clips => "clips",
             Self::LayerDrawn => "layer-drawn",
+            Self::MarksOn => "marks-on",
             Self::PhoneSizes => "phone-sizes",
             Self::Jump => "no-jumps",
             Self::RestPlacement => "rest-placement",

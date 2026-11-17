@@ -20,10 +20,10 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{Lit, MarkSpan, Open, Span};
 use crate::data::space::light;
-use crate::frame::{Band, Draw, FrameBuilder, StateBits, sprites};
+use crate::frame::{Band, Draw, ElementId, FrameBuilder, Ringed, StateBits, sprites};
 use crate::play::Scene;
 use crate::pose::{Curve, Pose};
-use crate::table::{CARD_HEIGHT, Look};
+use crate::table::{ABILITY_IDS, CARD_HEIGHT, Look};
 use crate::tokens::color;
 
 /// How far through its coming and going an open mark is at `now`, from 0 (not seen) to 1
@@ -179,7 +179,21 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         let size = sprites::outline_size(half + Vec2::splat(grow));
         let transform =
             Affine3A::from_scale_rotation_translation(size.extend(1.0), pose.rotation, position);
-        builder.draw(band, Draw::glow(transform, tint, sprites::OUTLINE, 0.0));
+        builder.ring(
+            band,
+            ringed(on),
+            Draw::glow(transform, tint, sprites::OUTLINE, 0.0),
+        );
+    }
+}
+
+/// What an outline on `on` rings, as the table names it: a card's element id is its slot, and
+/// an ability's is `ABILITY_IDS` more than its id (`table::scene`).
+fn ringed(on: Subject) -> Ringed {
+    match on {
+        Subject::Object { slot } => Ringed::Element(ElementId(u32::from(slot.0))),
+        Subject::Ability { id } => Ringed::Element(ElementId(ABILITY_IDS + id % ABILITY_IDS)),
+        Subject::Player { player } => Ringed::Player(player),
     }
 }
 

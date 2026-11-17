@@ -3,7 +3,7 @@
 //! every object at its placement; a card wears its mark's state from the mark's begin to its
 //! end, across scripts; an outline encloses its card in flight; a mark under another card lies
 //! in the table's band; a card picked to pay turns and wears no outline; and a mark on a player
-//! lies on their anchor.
+//! lies on their anchor. The "marks on their things" check faults an outline off its card.
 
 use crate::common::{MS, before, discard, empty_frame, frame, show};
 use beryl_protocol::GameUpdate;
@@ -11,8 +11,11 @@ use beryl_protocol::protocol::{ObjectId, Side};
 use beryl_protocol::script::{
     Act, Mark, Span as Edge, Subject, Table as Played, Verb, time_script,
 };
+use beryl_scene::agent::checks::marks_on;
 use beryl_scene::agent::steps::{no_jumps, rest_equals_placement, step_times};
+use beryl_scene::agent::{Context, Layout, Rule};
 use beryl_scene::frame::{Band, Draw, Frame, Material, Resolved, StateBits, sprites};
+use beryl_scene::input::Insets;
 use beryl_scene::light::marks::band;
 use beryl_scene::play::Show;
 use beryl_scene::play::record::ScriptRecord;
@@ -348,4 +351,45 @@ fn a_mark_on_a_player_lies_on_their_anchor() {
     );
     let width = quad_point(outlines[0], 0.5, 0.0).distance(quad_point(outlines[0], -0.5, 0.0));
     assert!(width > 1.0, "the outline has a size: {width}");
+}
+
+/// The "marks on their things" check passes an outline the table drew round its card through a
+/// flight, and faults the same outline moved 10 millimetres to the right or drawn at seven
+/// tenths of its width, as the desktop app's outlines once were.
+#[test]
+fn the_marks_check_faults_an_outline_moved_off_its_card_or_narrower_than_it() {
+    let (start, cards) = before();
+    let begun = marked(&start, Edge::Begin, Mark::Selected, card(cards.discard));
+    let (flown, _) = discard(&begun, cards);
+    let (show, frames) = play(&[start, begun, flown]);
+    let context = Context {
+        recording: "test".to_owned(),
+        seat: Side::You,
+        layout: Layout::Desktop,
+        size: show.table().camera().window.size,
+        safe_area: Insets::default(),
+        at: 0,
+    };
+    let mut checked = 0;
+    for (t, frame) in frames.iter().filter(|(_, frame)| !frame.rings.is_empty()) {
+        assert_eq!(
+            marks_on(frame, &context),
+            Vec::new(),
+            "the drawn outline is on its card at {} ms",
+            t / MS
+        );
+        let mut moved = frame.clone();
+        moved.rings[0].model[3] += 10.0;
+        let mut narrowed = frame.clone();
+        for column in [0, 4, 8] {
+            narrowed.rings[0].model[column] *= 0.7;
+        }
+        for (how, broken) in [("moved", moved), ("narrowed", narrowed)] {
+            let faults = marks_on(&broken, &context);
+            assert_eq!(faults.len(), 1, "the {how} outline at {} ms", t / MS);
+            assert_eq!(faults[0].rule, Rule::MarksOn);
+        }
+        checked += 1;
+    }
+    assert!(checked > 10, "the outline was drawn: {checked} frames");
 }

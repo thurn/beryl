@@ -3049,6 +3049,13 @@ screen, so they cover every card spec that is ever generated.
   them inside the window. The layer is placed for the table's camera, so a frame
   that was not given that camera, as the start screen once was when no game was
   going on, draws its whole layer off screen and shows a black window.
+- **Marks on their things.** Each mark's outline is centred on the card, ability
+  or life total it rings, within 2 points, and the line it is drawn along goes
+  round that thing's box on screen, falling inside it by no more than 2 points.
+  The outline is a quad in the table's space, so the check projects it as the
+  renderer draws it (`Frame::rings`), where the other checks read only the
+  elements. Outlines drawn at seven tenths of their card's width passed every
+  other check before this one.
 - **Phone sizes.** On the phone layout, touch targets are at least 44 by 44
   points and text at least 11 points.
 - **No jumps.** Where one of an object's segments ends and the next begins, the

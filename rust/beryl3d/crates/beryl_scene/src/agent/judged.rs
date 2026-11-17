@@ -88,6 +88,7 @@ impl Judged {
             Rule::LayerDrawn,
             frame.draws.len().saturating_sub(frame.layer as usize),
         );
+        self.add(Rule::MarksOn, frame.rings.len());
         // "Phone sizes" judges only the phone layout.
         if layout == Layout::Phone {
             self.add(Rule::PhoneSizes, targets + frame.lines.len());

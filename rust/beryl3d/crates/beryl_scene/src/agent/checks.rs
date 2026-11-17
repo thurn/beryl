@@ -13,7 +13,7 @@ use super::hit::{
 };
 use super::tree::locator_of;
 use crate::data::audit;
-use crate::frame::{Draw, Frame, Place, REVEALED_FACE, Role, StateBits};
+use crate::frame::{Draw, Frame, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits, sprites};
 use crate::input::{Rect, Size};
 
 /// The most covering elements a "reachable" fault names.
@@ -31,6 +31,7 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults.extend(blank_cards(frame, context));
     faults.extend(clips(frame, context));
     faults.extend(layer_drawn(frame, context));
+    faults.extend(marks_on(frame, context));
     faults.extend(phone_sizes(frame, context));
     faults
 }
@@ -443,6 +444,107 @@ pub fn layer_drawn(frame: &Frame, context: &Context) -> Vec<Fault> {
         ),
         Vec::new(),
     )]
+}
+
+/// Marks on their things: each mark's outline (`Frame::rings`) is centred on the card,
+/// ability or life total (the core of the player's orb, `hud::players::core_box`) it rings, within `MARK_POINTS`, and the line it is drawn along
+/// (`sprites::OUTLINE_LINE`) goes round that thing's box on screen, falling inside it by no
+/// more than `MARK_POINTS`. The outline is a quad in the table's space, so it is projected
+/// through `Frame::view_projection` as the renderer draws it, while the thing's box is the one
+/// its element gives. An outline off its card, or narrower than it, breaks the rule. A card
+/// or ability the frame did not draw, and a player whose orb is not on screen, leave nothing
+/// to compare.
+#[must_use]
+pub fn marks_on(frame: &Frame, context: &Context) -> Vec<Fault> {
+    let tolerance = audit::MARK_POINTS;
+    let mut faults = Vec::new();
+    for ring in &frame.rings {
+        let Some(index) = ringed_element(frame, ring.on) else {
+            continue;
+        };
+        let element = bounds(&frame.resolved[index as usize]);
+        let thing = match ring.on {
+            Ringed::Element(_) => element,
+            Ringed::Player(side) => crate::hud::players::core_box(side, element),
+        };
+        let line = ring_rect(ring, frame.view_projection, context.size);
+        let offset = rect_centre(line) - rect_centre(thing);
+        let around = Rect {
+            x: line.x - tolerance,
+            y: line.y - tolerance,
+            width: line.width + 2.0 * tolerance,
+            height: line.height + 2.0 * tolerance,
+        };
+        let problem = if offset.length() > tolerance {
+            format!("is centred {:.1},{:.1} points from it", offset.x, offset.y)
+        } else if !contains(around, thing) {
+            "does not go round it".to_owned()
+        } else {
+            continue;
+        };
+        let subject = subject(frame, index);
+        faults.push(fault(
+            Rule::MarksOn,
+            context,
+            format!(
+                "the mark on {} ({}) {problem}",
+                subject.describe(),
+                super::fault::rect_text(line)
+            ),
+            vec![subject],
+        ));
+    }
+    faults
+}
+
+/// The index in `Frame::resolved` of the element `on` names: a card's or an ability's element
+/// of the table, or the orb of a player's life total in the flat layer.
+fn ringed_element(frame: &Frame, on: Ringed) -> Option<u32> {
+    let found = match on {
+        Ringed::Element(id) => frame
+            .resolved
+            .iter()
+            .position(|element| element.id == id && element.place != Place::Layer),
+        Ringed::Player(side) => {
+            let name = crate::hud::players::orb_name(side);
+            frame.resolved.iter().position(|element| {
+                element.place == Place::Layer && frame.name(element.name) == name
+            })
+        }
+    }?;
+    u32::try_from(found).ok()
+}
+
+/// The rectangle on the window, in logical points, that bounds the line `ring`'s outline is
+/// drawn along, through `projection`, in a window of `size`.
+fn ring_rect(ring: &Ring, projection: glam::Mat4, size: Size) -> Rect {
+    let m = ring.model;
+    let [x, y] = sprites::OUTLINE_LINE;
+    let corners = [(-x, -y), (x, -y), (x, y), (-x, y)].map(|(qx, qy)| {
+        let point = glam::Vec3::new(
+            m[0] * qx + m[1] * qy + m[3],
+            m[4] * qx + m[5] * qy + m[7],
+            m[8] * qx + m[9] * qy + m[11],
+        );
+        let ndc = projection.project_point3(point);
+        Vec2::new(
+            f32::midpoint(ndc.x, 1.0) * size.width,
+            f32::midpoint(1.0, -ndc.y) * size.height,
+        )
+    });
+    let min = corners.into_iter().reduce(Vec2::min).unwrap_or_default();
+    let max = corners.into_iter().reduce(Vec2::max).unwrap_or_default();
+    Rect {
+        x: min.x,
+        y: min.y,
+        width: max.x - min.x,
+        height: max.y - min.y,
+    }
+}
+
+/// The centre of `rect`.
+fn rect_centre(rect: Rect) -> Vec2 {
+    Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0)
 }
 
 /// Whether the centre of `draw` projects inside the window through `projection`.

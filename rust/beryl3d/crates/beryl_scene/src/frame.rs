@@ -361,6 +361,9 @@ pub struct Frame {
     /// "reachable" check put these boxes in place of the drawn ones, so that a pointer over the
     /// part of the fan a raised card covers still finds the card that rests there.
     pub lifted: Vec<Lifted>,
+    /// Each mark's outline the frame draws, with the thing it rings, for the "marks on their
+    /// things" check.
+    pub rings: Vec<Ring>,
     pub load: Load,
     pub work: Work,
     /// The sort keys and reordered records of `FrameBuilder::finish`, kept so that ordering
@@ -372,6 +375,26 @@ pub struct Frame {
 /// and a pointer swept across a hand leaves each card it crossed falling for a moment; past this
 /// many, the card that started falling first lands at once.
 pub const LIFTED: usize = 32;
+
+/// The most mark outlines a frame records in `Frame::rings`: two on each card, ability and
+/// player. An outline past that many is drawn but not checked.
+pub const RINGS: usize = 2 * (OBJECTS + ABILITIES + 2);
+
+/// What a mark's outline rings: a card's or an ability's element of the table, or a player's
+/// life total.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ringed {
+    Element(ElementId),
+    Player(Side),
+}
+
+/// A mark's outline as the frame draws it: the thing it rings and the transform of its record
+/// (`Draw::model`), which places the `sprites::OUTLINE` quad in the table's space.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ring {
+    pub on: Ringed,
+    pub model: [f32; 12],
+}
 
 /// A hand card up out of its place in the fan, and the box it has resting there.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -430,6 +453,7 @@ impl Frame {
             sounds: Vec::with_capacity(SOUNDS),
             lines: Vec::with_capacity(elements),
             lifted: Vec::with_capacity(LIFTED),
+            rings: Vec::with_capacity(RINGS),
             load: Load::default(),
             work: Work::default(),
             scratch: order::Scratch::with_capacity(draws),
@@ -499,6 +523,7 @@ impl<'a> FrameBuilder<'a> {
         frame.sounds.clear();
         frame.lines.clear();
         frame.lifted.clear();
+        frame.rings.clear();
         frame.load = Load::default();
         frame.work = Work::default();
         frame.scratch.clear();
@@ -576,6 +601,18 @@ impl<'a> FrameBuilder<'a> {
         self.frame.scratch.push(band, self.frame.draws.len(), &draw);
         self.frame.draws.push(draw);
         self.frame.work.records += 1;
+    }
+
+    /// Adds the record of a mark's outline that rings `on` to `band`, as `draw` does, and
+    /// records it in `Frame::rings` for the checks.
+    pub fn ring(&mut self, band: Band, on: Ringed, outline: Draw) {
+        if self.frame.rings.len() < RINGS {
+            self.frame.rings.push(Ring {
+                on,
+                model: outline.model,
+            });
+        }
+        self.draw(band, outline);
     }
 
     /// Starts `sound` in this frame.
