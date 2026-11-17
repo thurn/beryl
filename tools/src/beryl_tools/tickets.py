@@ -71,7 +71,7 @@ def invoke(
 
 
 def list_issues(executable: str, *filters: str) -> list[dict[str, Any]]:
-    # With no --limit all matching tickets are returned. tk's --limit 0 returns none.
+    # With no --limit, or --limit 0, all matching tickets are returned.
     return json.loads(invoke(executable, "list", *filters))
 
 

@@ -69,7 +69,7 @@ def verdict(
 
 
 def check_bead(check: str, lane: str, *comments: Mapping[str, object]) -> str:
-    """A `ci-check` ticket as `bd export` prints it."""
+    """An imported `ci-check` ticket snapshot."""
     return json.dumps(
         {
             "id": "by-ci-" + check.replace(":", "-")[:10],

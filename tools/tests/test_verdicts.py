@@ -314,7 +314,6 @@ def test_every_file_is_the_product_of_a_repo_check(repo: Path) -> None:
     assert verdicts.classify("rust", before, shortened) == "flaky"
     write(repo, "docs/guide.md", "reflowed\n")
     assert verdicts.classify("repo", shortened, tree(repo)) == "catch"
-    write(repo, ".beads/issues.jsonl", "{}\n")
     write(repo, "data/file-length-allowlist.json", "{}\n")
     assert verdicts.classify("repo", shortened, tree(repo)) == "mixed"
 

@@ -10,7 +10,7 @@ from beryl_efficiency.ingest import LineSource, Row
 
 
 def bead(id: str, **fields: object) -> dict[str, object]:
-    """A ticket record as `bd list --json` prints one, with `fields` over the defaults."""
+    """An imported ticket snapshot record, with `fields` over the defaults."""
     return {
         "id": id,
         "title": f"Ticket {id}",

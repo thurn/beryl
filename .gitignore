@@ -29,9 +29,4 @@ __pycache__/
 # Enact worktrees.
 /.worktrees/
 
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-*.gate.lock*
-
 .playwright-mcp/

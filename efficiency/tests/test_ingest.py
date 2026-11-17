@@ -101,14 +101,14 @@ def test_a_snapshot_is_written_only_when_it_changed(tmp_path: Path) -> None:
 
 def test_a_source_that_fails_is_reported_and_others_still_run(tmp_path: Path) -> None:
     def broken() -> bytes:
-        raise SourceError("bd: not found")
+        raise SourceError("ticket snapshot unavailable")
 
     folder = tmp_path / "logs"
     folder.mkdir()
     (folder / "a.jsonl").write_bytes(b'{"id": "x", "n": 1}\n')
     db = open_db(tmp_path)
     summary = ingest.ingest(db, [Beads(broken), Lines(folder)], "host")
-    assert summary.sources["beads"].error == "bd: not found"
+    assert summary.sources["beads"].error == "ticket snapshot unavailable"
     assert summary.sources["lines"].rows == 1
     nonsense = ingest.ingest(db, [Beads(lambda: b"{")], "host")
     assert nonsense.sources["beads"].error.startswith("the snapshot contains no JSON")

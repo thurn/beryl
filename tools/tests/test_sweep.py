@@ -96,7 +96,7 @@ def test_failed_checks_replay_by_name_or_whole() -> None:
 
 
 class FakeTickets(verdicts.Tickets):
-    """bd as the sweep's filing uses it, in memory."""
+    """The ticket store used by sweep filing, in memory."""
 
     def __init__(self) -> None:
         self.issues: list[dict[str, object]] = []

@@ -417,10 +417,10 @@ def test_slow_cis_budget_leaves_out_the_sweeps_records() -> None:
 
 def test_a_sweep_that_fails_to_start_does_not_fail_slow_ci() -> None:
     def broken() -> str:
-        raise RuntimeError("bd is gone")
+        raise RuntimeError("tk is unavailable")
 
     lines = slow_ci.start_sweeps((broken, lambda: "b3d sweep: not due"))
-    assert lines == ["a sweep was not started: bd is gone", "b3d sweep: not due"]
+    assert lines == ["a sweep was not started: tk is unavailable", "b3d sweep: not due"]
 
 
 def test_slow_ci_starts_a_sweep_only_when_one_is_due() -> None:

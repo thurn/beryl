@@ -249,5 +249,10 @@
     "metric": "bead.agent-minutes",
     "expect": "down",
     "commit": "c166fc4ae2abbc8ecb99286ba16167e3f6b9eef7"
+  },
+  {
+    "label": "Enact tk documents every option, provides offline agent guidance and supports --brief discovery output so sessions avoid loading full ticket bodies to select work",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
