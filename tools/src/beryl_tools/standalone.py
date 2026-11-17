@@ -1,5 +1,4 @@
-"""The standalone Python projects' paths and their check lanes: the efficiency dashboard
-(docs/efficiency-dashboard.md, "Isolation") and the bead status site (status/AGENTS.md).
+"""The standalone Python projects' paths and check lanes, including the efficiency dashboard.
 
 Each project is a separate Python package that imports nothing from the tools and that nothing
 imports. A change to a project's paths selects that project's lane and, like any path, `repo`;
@@ -49,8 +48,7 @@ class Project:
 EFFICIENCY = Project(
     "efficiency", re.compile(r"^efficiency/|^data/efficiency-[^/]*\.json$")
 )
-STATUS = Project("status", re.compile(r"^status/"))
-PROJECTS: tuple[Project, ...] = (EFFICIENCY, STATUS)
+PROJECTS: tuple[Project, ...] = (EFFICIENCY,)
 NAMES: frozenset[str] = frozenset(p.name for p in PROJECTS)
 
 

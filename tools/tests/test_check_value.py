@@ -156,7 +156,7 @@ def test_bisections_and_the_fast_check_are_left_out() -> None:
     assert scores.groups[0].runs == 1
 
 
-class Store(verdicts.Beads):
+class Store(verdicts.Tickets):
     def __init__(self, history: dict[str, list[verdicts.Entry]]) -> None:
         self.found = history
 

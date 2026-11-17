@@ -322,7 +322,7 @@ def search(
 def delivering(
     found: list[Found], commits: list[str]
 ) -> dict[str, tuple[str, list[str]]]:
-    """Each culprit's bead, with every commit it delivered (verdicts.Beads.delivering)."""
+    """Each culprit's bead, with every commit it delivered (verdicts.Tickets.delivering)."""
     beads: dict[str, tuple[str, list[str]]] = {}
     for f in found:
         sha = commits[f.low] if f.verdict == "culprit" else ""

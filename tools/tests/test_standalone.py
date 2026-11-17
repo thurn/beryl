@@ -31,11 +31,6 @@ DASHBOARD: list[str] = [
     "efficiency/pyproject.toml",
     "data/efficiency-prices.json",
 ]
-STATUS: list[str] = [
-    "status/src/beryl_status/cli.py",
-    "status/src/cirrus/static/cirrus.css",
-    "status/tests/test_build.py",
-]
 ELSEWHERE: list[list[str]] = [
     ["rust/crates/beryl_session/src/lib.rs"],
     ["tools/src/beryl_tools/checks.py"],
@@ -113,18 +108,7 @@ def test_every_lane_includes_it_and_slow_ci_can_make_it() -> None:
 
 def test_split() -> None:
     own, rest = standalone.split(
-        [*DASHBOARD, *STATUS, "data/efficiency.txt", "efficiencyx/a", "statusx/a"]
+        [*DASHBOARD, "data/efficiency.txt", "efficiencyx/a", "statusx/a"]
     )
-    assert own == {"efficiency": DASHBOARD, "status": STATUS}
+    assert own == {"efficiency": DASHBOARD}
     assert rest == ["data/efficiency.txt", "efficiencyx/a", "statusx/a"]
-
-
-def test_status_paths_run_only_its_lane_and_repo(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    assert fast(monkeypatch, STATUS) == {"repo", "status"}
-    plan = slow(STATUS)
-    assert set(plan.why) == {"repo", "names", "status"}
-    for changed in ELSEWHERE:
-        assert "status" not in fast(monkeypatch, changed), changed
-        assert "status" not in slow(changed).why, changed

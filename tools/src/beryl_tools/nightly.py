@@ -418,9 +418,9 @@ def unsupported() -> bool:
 
 
 def agent_environment() -> dict[str, str]:
-    """Give launchd the tools for coverage, legacy filing and Enact's native client."""
+    """Give launchd the tools for coverage and Enact's native client."""
     directories: list[str] = []
-    for tool in ("uv", "node", "git", "cargo", "just", "bd", "dolt"):
+    for tool in ("uv", "node", "git", "cargo", "just"):
         found = shutil.which(tool)
         if found and str(Path(found).parent) not in directories:
             directories.append(str(Path(found).parent))

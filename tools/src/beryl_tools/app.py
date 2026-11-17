@@ -26,9 +26,7 @@ def tauri(*args: str) -> int:
         # Launching the packaged app from Finder drops the terminal's environment.
         uv = shutil.which("uv")
         if uv:
-            tools = (
-                shutil.which(tool) for tool in ("uv", "git", "cargo", "bd", "dolt")
-            )
+            tools = (shutil.which(tool) for tool in ("uv", "git", "cargo"))
             tool_dirs = dict.fromkeys(
                 str(Path(tool).absolute().parent) for tool in tools if tool
             )

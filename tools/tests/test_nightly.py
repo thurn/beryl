@@ -244,43 +244,58 @@ def test_the_oracles_play_every_scenario_at_low_priority_and_log_each(
     assert (record["script"], record["commit"]) == ("nightly", "abc123")
 
 
-class FakeBd(verdicts.Beads):
-    """bd as the nightly's filing uses it, in memory."""
+class FakeTickets(verdicts.Tickets):
+    """The ticket service as the nightly's filing uses it, in memory."""
 
     def __init__(self) -> None:
         self.issues: list[dict[str, object]] = []
 
-    def bd(self, *args: str) -> tuple[int, str]:
-        if args[:3] == ("list", "--label", nightly_failures.LABEL):
-            return 0, json.dumps(self.issues)
-        if args[0] == "create":
-            flag = lambda name: args[args.index(name) + 1]  # noqa: E731
-            bead = f"by-{len(self.issues) + 1}"
-            self.issues.append(
-                {
-                    "id": bead,
-                    "title": flag("--title"),
-                    "description": flag("--description"),
-                    "priority": int(flag("--priority")),
-                    "labels": flag("--labels").split(","),
-                    "metadata": json.loads(flag("--metadata")),
-                    "status": "open",
-                    "comments": [],
-                }
-            )
-            return 0, bead
-        if args[:2] == ("comments", "add"):
-            [issue] = [i for i in self.issues if i["id"] == args[2]]
-            comments = issue["comments"]
-            assert isinstance(comments, list)
-            comments.append(args[3])
-            return 0, ""
-        raise AssertionError(args)
+    def list_issues(self, *filters: str, include_closed: bool = False) -> object:
+        flag, label = filters
+        assert flag == "--label"
+        return [
+            issue
+            for issue in self.issues
+            if isinstance(assigned := issue["labels"], list) and label in assigned
+        ]
+
+    def create_issue(
+        self,
+        *,
+        title: str,
+        body: str,
+        priority: str,
+        labels: str,
+        acceptance: str = "",
+        parent: str = "",
+        metadata: dict[str, str] | None = None,
+    ) -> tuple[int, str]:
+        ticket = f"by-{len(self.issues) + 1}"
+        self.issues.append(
+            {
+                "id": ticket,
+                "status": "open",
+                "title": title,
+                "description": body,
+                "priority": int(priority),
+                "labels": labels.split(","),
+                "metadata": metadata,
+                "comments": [],
+            }
+        )
+        return 0, ticket
+
+    def add_comment(self, issue: str, comment: str) -> tuple[int, str]:
+        [ticket] = [row for row in self.issues if row["id"] == issue]
+        comments = ticket["comments"]
+        assert isinstance(comments, list)
+        comments.append(comment)
+        return 0, ""
 
 
 @pytest.fixture
-def bd(monkeypatch: pytest.MonkeyPatch) -> FakeBd:
-    fake = FakeBd()
+def bd(monkeypatch: pytest.MonkeyPatch) -> FakeTickets:
+    fake = FakeTickets()
     monkeypatch.setattr(verdicts, "STORE", fake)
     return fake
 
@@ -320,7 +335,7 @@ def night(steps: list[nightly.Step], tip: str, now: datetime) -> dict[str, objec
 
 
 def test_a_failed_check_files_one_steward_bead_and_a_repeat_comments_on_it(
-    bd: FakeBd,
+    bd: FakeTickets,
 ) -> None:
     passing = checking("oracle", {"oracle:Card A/a/forge": "pass"})
     assert night([passing], "good", NOW)["outcome"] == "ok"
@@ -354,7 +369,7 @@ def test_a_failed_check_files_one_steward_bead_and_a_repeat_comments_on_it(
     assert filed_for(second) == ["oracle:Card B/b/xmage"]
 
 
-def test_a_closed_bead_does_not_hold_back_a_new_one(bd: FakeBd) -> None:
+def test_a_closed_bead_does_not_hold_back_a_new_one(bd: FakeTickets) -> None:
     broken = checking("fuzz", {"fuzz:games": "fail"})
     night([broken], "bad1", NOW)
     bd.issues[0]["status"] = "closed"
@@ -363,7 +378,7 @@ def test_a_closed_bead_does_not_hold_back_a_new_one(bd: FakeBd) -> None:
     assert "just fuzz" in str(bd.issues[1]["description"])
 
 
-def test_each_failing_lane_gets_its_own_bead(bd: FakeBd) -> None:
+def test_each_failing_lane_gets_its_own_bead(bd: FakeTickets) -> None:
     steps = [
         checking("motion", {"motion:fly/desktop": "fail"}),
         checking("oracle", {"oracle:Card A/a/forge": "fail"}),
@@ -390,13 +405,11 @@ def test_a_check_that_passed_its_rerun_is_not_filed() -> None:
     assert found == {"ui-test": ["ui-test:b"]}
 
 
-def test_the_agents_path_finds_bd(monkeypatch: pytest.MonkeyPatch) -> None:
-    # bd installs to ~/.local/bin, outside the other tools' directories; without it the nightly
-    # filed no bead and kept no verdicts.
-    found = {"bd": "/home/me/.local/bin/bd", "uv": "/opt/homebrew/bin/uv"}
+def test_the_agents_path_finds_cargo(monkeypatch: pytest.MonkeyPatch) -> None:
+    found = {"cargo": "/home/me/.cargo/bin/cargo", "uv": "/opt/homebrew/bin/uv"}
     monkeypatch.setattr(nightly.shutil, "which", lambda tool: found.get(tool))
     path = nightly.agent_environment()["PATH"].split(":")
-    assert "/home/me/.local/bin" in path and "/opt/homebrew/bin" in path
+    assert "/home/me/.cargo/bin" in path and "/opt/homebrew/bin" in path
 
 
 def test_no_verdicts_found_keeps_the_last_history(
@@ -404,16 +417,16 @@ def test_no_verdicts_found_keeps_the_last_history(
 ) -> None:
     verdicts.save_history({"ui-test:scry": [{"verdict": "catch"}]})
 
-    class Empty(verdicts.Beads):
-        def bd(self, *args: str) -> tuple[int, str]:
-            return -1, ""
+    class Empty(verdicts.Tickets):
+        def list_issues(self, *filters: str, include_closed: bool = False) -> object:
+            return []
 
     monkeypatch.setattr(verdicts, "STORE", Empty())
     assert verdicts.refresh_history() == 1
     assert verdicts.cached_history() == {"ui-test:scry": [{"verdict": "catch"}]}
 
 
-def test_a_lane_quotes_its_own_steps_output_and_keeps_it_whole(bd: FakeBd) -> None:
+def test_a_lane_quotes_its_own_steps_output_and_keeps_it_whole(bd: FakeTickets) -> None:
     # The night's output ends with whatever step ran last. A fuzz bead once quoted the oracle
     # and iroh steps' output, and the next firing overwrote `last-output.txt`, so the fuzz
     # failure could only be seen by running the fuzz again.

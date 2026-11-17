@@ -120,12 +120,10 @@ The lanes:
   `beryl_cli` if the cloned `rust/target` is behind) leaves too little of it for
   the capture, the capture is skipped and each check logged as cut. It also runs
   nightly.
-- `efficiency` and `status`: black, pyre and pytest on the standalone projects
-  `efficiency/` (the efficiency dashboard) and `status/` (the bead status site).
-  Only a project's own paths select its lane (`efficiency/` and
-  `data/efficiency-*.json`; `status/`), and they select no other lane but `repo`
-  in the fast check (`tools/src/beryl_tools/standalone.py`). Slow CI runs each
-  one too, when one of its paths changed.
+- `efficiency`: black, pyre and pytest on the standalone efficiency dashboard.
+  Only `efficiency/` and `data/efficiency-*.json` select this lane. These paths
+  select no other fast lane except `repo`. Slow CI runs the lane when one of its
+  paths changes.
 
 For a change to `ui/` or `rust/`, it also runs as many of the `ui-test` and
 `shots` browser checks as fit in the time left, choosing those the change could
@@ -356,7 +354,7 @@ folders both apps share or a data file Beryl 3D reads can land without Beryl
   `--dry-run` prints the beads it would file instead of filing them. The record
   is in `$BERYL_CACHE/b3d/sweep`: `log.jsonl` and `last-output.txt`.
 
-## Beads the checks file
+## Tickets the checks file
 
 The checks file beads by themselves: `flaky-check`, `ci-cut` and `check-budget`
 (below), `sweep-failure` (above), `nightly-failure`, and the P0 `role:steward`

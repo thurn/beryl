@@ -19,7 +19,7 @@ passes and timings stay in the run log (runlog.py). No check runs without being 
 CI, except one on the [`PENDING`] list: one a named bead's work must make pass one day. It runs
 and is logged as pending-fail or pending-pass, and fails no run.
 
-Nothing here fails a check: a git or bd call that fails is reported and the run goes on.
+Nothing here fails a check: a git or ticket request that fails is reported and the run goes on.
 """
 
 from __future__ import annotations
@@ -30,7 +30,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Iterable
@@ -52,7 +51,7 @@ from .slow_only import (
 # check was deleted or renamed, or the diff to a pass would be too wide to say anything.
 UNRESOLVED_DAYS = 14
 # Set to "off" to keep verdicts out of the beads (the tests do).
-BEADS_ENV = "BERYL_CI_BEADS"
+TICKETS_ENV = "BERYL_CI_TICKETS"
 # The verdicts `by verdict` sets; `mixed` is only ever inferred, as a question.
 VERDICTS = ("flaky", "stale", "catch", "miss")
 
@@ -83,12 +82,11 @@ CHECK_SIDE: dict[str, Side] = {
     "oracle": Side(("data/oracle-divergences.json",), rust="scenarios"),
     "python": Side(("tools/tests/*",)),
     "efficiency": Side(("efficiency/tests/*",)),
-    "status": Side(("status/tests/*",)),
     "names": Side(("data/card-names-allowlist.json",)),
     "repo": Side(("data/file-length-allowlist.json",)),
 }
 # Neither side of any check: prose and the beads.
-NEUTRAL = ("docs/*", ".beads/*", "*.md")
+NEUTRAL = ("docs/*", "*.md")
 # Lanes whose checks lint files of every kind (file length, Markdown and justfile format), so
 # prose, other lanes' checks and test code are all their product. Only the beads are neutral:
 # a fix that shortened an over-long `ui/scripts` file once read as a flake of `repo:file-length`.
@@ -235,7 +233,7 @@ def sides(lane: str, old: str, new: str) -> set[str] | None:
     )
     touched: set[str] = set()
     for path in diff.stdout.splitlines():
-        if matches(path, (".beads/*",) if whole else NEUTRAL):
+        if not whole and matches(path, NEUTRAL):
             continue
         if matches(path, own.globs):
             touched.add("check")
@@ -332,7 +330,7 @@ def entries(comments: Iterable[object]) -> list[Entry]:
 
 
 def parse_json(out: str) -> object:
-    """The JSON array bd printed, past any warning before it."""
+    """The JSON array the client printed, past any warning before it."""
     start = out.find("[")
     if start < 0:
         return []
@@ -342,41 +340,31 @@ def parse_json(out: str) -> object:
         return []
 
 
-class Beads:
+class Tickets:
     """Best-effort CI reporting through the active tracker."""
 
     _check_tickets: dict[str, str] | None = None
 
-    def tracker(self, native: Callable[[str], str], *legacy: str) -> tuple[int, str]:
+    def tracker(self, operation: str, native: Callable[[str], str]) -> tuple[int, str]:
+        if os.environ.get(TICKETS_ENV) == "off":
+            return -1, ""
         try:
-            executable = "" if os.environ.get(BEADS_ENV) == "off" else tickets.client()
-            if executable:
-                return 0, native(executable)
-            return self.bd(*legacy)
+            return 0, native(tickets.client())
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
-            warn(f"tracker {legacy[0]}: {error}")
+            warn(f"tracker {operation}: {error}")
             return -1, ""
 
     def list_issues(self, *filters: str, include_closed: bool = False) -> object:
         all_flag = ("--all",) if include_closed else ()
         _, out = self.tracker(
-            lambda tk: tickets.invoke(tk, "list", *filters, *all_flag),
-            "list",
-            *filters,
-            *all_flag,
-            "-n",
-            "0",
-            "--json",
+            "list", lambda tk: tickets.invoke(tk, "list", *filters, *all_flag)
         )
         return parse_json(out)
 
     def add_comment(self, issue: str, comment: str) -> tuple[int, str]:
         return self.tracker(
-            lambda tk: tickets.invoke(tk, "comments", "add", issue, "--", comment),
             "comments",
-            "add",
-            issue,
-            comment,
+            lambda tk: tickets.invoke(tk, "comments", "add", issue, "--", comment),
         )
 
     def create_issue(
@@ -390,17 +378,6 @@ class Beads:
         parent: str = "",
         metadata: dict[str, str] | None = None,
     ) -> tuple[int, str]:
-        legacy = [
-            "create",
-            "--title",
-            title,
-            "--description",
-            body,
-            "--priority",
-            priority,
-            "--labels",
-            labels,
-        ]
         fields: dict[str, object] = {
             "title": title,
             "body": body,
@@ -408,35 +385,12 @@ class Beads:
             "labels": labels.split(","),
         }
         if acceptance:
-            legacy.extend(("--acceptance", acceptance))
             fields["acceptance"] = acceptance
-        if parent:
-            legacy.extend(("--parent", parent))
         if metadata is not None:
-            legacy.extend(("--metadata", json.dumps(metadata)))
             fields["metadata"] = metadata
         return self.tracker(
-            lambda tk: tickets.create_issue(tk, fields, parent=parent),
-            *legacy,
-            "--silent",
+            "create", lambda tk: tickets.create_issue(tk, fields, parent=parent)
         )
-
-    def bd(self, *args: str) -> tuple[int, str]:
-        if os.environ.get(BEADS_ENV) == "off" or shutil.which("bd") is None:
-            return -1, ""
-        try:
-            run = subprocess.run(
-                ["bd", *args],
-                cwd=paths.REPO,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                check=False,
-            )
-        except (OSError, subprocess.SubprocessError) as e:
-            warn(f"bd {args[0]}: {e}")
-            return -1, ""
-        return run.returncode, run.stdout
 
     def history(self, checks: Iterable[str]) -> dict[str, list[Entry]]:
         """Each check's verdicts. A single export avoids one request per check."""
@@ -444,7 +398,7 @@ class Beads:
         if not wanted:
             return {}
         wanted_beads = {bead_id(check) for check in wanted}
-        _, out = self.tracker(lambda tk: tickets.invoke(tk, "export"), "export")
+        _, out = self.tracker("export", lambda tk: tickets.invoke(tk, "export"))
         found: dict[str, list[Entry]] = {}
         for line in out.splitlines():
             try:
@@ -494,33 +448,9 @@ class Beads:
         tickets.invoke(tk, "comments", "add", issue, "--", json.dumps(entry))
 
     def record(self, check: str, lane: str, entry: Entry) -> bool:
-        try:
-            tk = "" if os.environ.get(BEADS_ENV) == "off" else tickets.client()
-            if tk:
-                self.record_native(tk, check, lane, entry)
-                return True
-        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
-            warn(f"{check}: verdict {entry.get('verdict')} not recorded: {error}")
-            return False
-        bead = bead_id(check)
-        # Fails harmlessly when the bead exists.
-        self.bd(
-            "create",
-            "--id",
-            bead,
-            "--title",
-            check,
-            "--status",
-            "closed",
-            "--labels",
-            f"ci-check,ci-lane:{lane}",
-            "--description",
-            DESCRIPTION,
-            "--silent",
+        code, _ = self.tracker(
+            "record", lambda tk: self.record_native(tk, check, lane, entry) or ""
         )
-        code, _ = self.bd("comments", "add", bead, json.dumps(entry))
-        if code:
-            warn(f"{check}: verdict {entry.get('verdict')} not recorded in {bead}")
         return code == 0
 
     def steward(self, commits: set[str]) -> tuple[str, list[str]]:
@@ -529,7 +459,7 @@ class Beads:
         return self.delivered(commits, "--label", "role:steward")
 
     def delivered(self, commits: set[str], *only: str) -> tuple[str, list[str]]:
-        """The bead whose Enact metadata lists one of `commits` as delivered, of those `bd list`
+        """The bead whose Enact metadata lists one of `commits` as delivered, of those `tk list`
         selects with `only`, with those of its commits among them; empty when none does.
         """
         bead, theirs = self.delivering(commits, *only)
@@ -550,7 +480,40 @@ class Beads:
         return "", []
 
 
-STORE: Beads = Beads()
+class DryRun(Tickets):
+    """Read existing tickets and print the writes the sweep would make."""
+
+    def __init__(self, real: Tickets, command: str) -> None:
+        self.real = real
+        self.command = command
+
+    def list_issues(self, *filters: str, include_closed: bool = False) -> object:
+        return self.real.list_issues(*filters, include_closed=include_closed)
+
+    def create_issue(
+        self,
+        *,
+        title: str,
+        body: str,
+        priority: str,
+        labels: str,
+        acceptance: str = "",
+        parent: str = "",
+        metadata: dict[str, str] | None = None,
+    ) -> tuple[int, str]:
+        host = (metadata or {}).get("enact_ci_host", "")
+        print(
+            f"{self.command}: would file under {parent}, labelled {labels}, P{priority}, "
+            f"from host {host}: {title}\n{body}\nAcceptance: {acceptance}"
+        )
+        return 0, "(dry run)"
+
+    def add_comment(self, issue: str, comment: str) -> tuple[int, str]:
+        print(f"{self.command}: would add to {issue} the comment:\n{comment}")
+        return 0, ""
+
+
+STORE: Tickets = Tickets()
 
 # The sentence every bead the checks file ends its instructions with (flaky.py, budget.py,
 # sweep.py, nightly_failures.py), so the session that picks it up finds the procedure.
@@ -565,7 +528,7 @@ def history_path() -> Path:
 
 def save_history(history: dict[str, list[Entry]]) -> None:
     """Keeps the checks' verdicts for the fast check's ordering (selection.py), which cannot wait
-    on bd: `by ci-report` and the nightly write it."""
+    on the ticket server: `by ci-report` and the nightly write it."""
     try:
         path = history_path()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -589,7 +552,7 @@ def refresh_history() -> int:
     """Fetches every check's verdicts from the beads and keeps them (`save_history`)."""
     history = STORE.history(STORE.checks())
     if not history:
-        # bd missing or failing reads as no checks; keeping that would erase the last good
+        # the ticket service unavailable reads as no checks; keeping that would erase the last good
         # history, so the run fails instead.
         warn(f"found no check's verdicts; {history_path()} keeps its last ones")
         return 1

@@ -15,62 +15,66 @@ from beryl_tools import (
     runlog,
     runstore,
     step_runner,
+    tickets,
     tokens,
     verdicts,
 )
 
 
-class FakeBd(verdicts.Beads):
-    """bd as the ci-check beads use it, in memory."""
+class FakeTickets(verdicts.Tickets):
+    """The ticket operations the CI reporters use, in memory."""
 
     def __init__(self) -> None:
         self.issues: dict[str, dict[str, object]] = {}
         self.stewards: list[dict[str, object]] = []
-        # The beads flaky.py filed, by id.
         self.filed: dict[str, dict[str, object]] = {}
 
-    def bd(self, *args: str) -> tuple[int, str]:
-        if args[0] == "create" and "--id" not in args:
-            bead = f"by-f{len(self.filed) + 1}"
-            self.filed[bead] = {
-                "id": bead,
-                "status": "open",
-                "title": args[args.index("--title") + 1],
-                "priority": args[args.index("--priority") + 1],
-                "acceptance": args[args.index("--acceptance") + 1],
-                "body": args[args.index("--description") + 1],
-                "metadata": json.loads(args[args.index("--metadata") + 1]),
-                "comments": [],
-            }
-            return 0, bead + "\n"
-        if args[:2] == ("comments", "add") and args[2] in self.filed:
-            comments = self.filed[args[2]]["comments"]
-            assert isinstance(comments, list)
-            comments.append(args[3])
-            return 0, ""
-        if args[:3] == ("list", "--label", "flaky-check"):
-            return 0, json.dumps(list(self.filed.values()))
-        if args[0] == "create":
-            bead = args[args.index("--id") + 1]
-            if bead in self.issues:
-                return 1, ""
-            labels = args[args.index("--labels") + 1].split(",")
-            title = args[args.index("--title") + 1]
-            self.issues[bead] = {"title": title, "labels": labels, "comments": []}
-            return 0, bead
-        if args[:2] == ("comments", "add"):
-            comments = self.issues[args[2]]["comments"]
-            assert isinstance(comments, list)
-            comments.append({"id": str(uuid.uuid4()), "text": args[3]})
-            return 0, ""
-        if args == ("export",):
-            return 0, "\n".join(
-                json.dumps({"id": bead, **issue}) for bead, issue in self.issues.items()
+    def create(
+        self,
+        _client: str,
+        fields: dict[str, object],
+        *,
+        parent: str = "",
+        request_key: str = "",
+    ) -> str:
+        if request_key and fields["status"] == "closed":
+            self.issues.setdefault(
+                request_key, {"id": request_key, **fields, "comments": []}
             )
-        if args[:3] == ("list", "--label", "ci-check"):
-            return 0, json.dumps(list(self.issues.values()))
-        if args[:3] == ("list", "--label", "role:steward"):
-            return 0, json.dumps(self.stewards)
+            return request_key
+        identifier = f"by-f{len(self.filed) + 1}"
+        self.filed[identifier] = {
+            "status": "open",
+            **fields,
+            "id": identifier,
+            "parent": parent,
+            "priority": str(fields.get("priority", "")),
+            "comments": [],
+        }
+        return identifier
+
+    def invoke(self, _client: str, *args: str, input_text: str | None = None) -> str:
+        if args[:2] == ("comments", "add"):
+            identifier, entry = args[2], args[-1]
+            if identifier in self.filed:
+                comments = self.filed[identifier]["comments"]
+                assert isinstance(comments, list)
+                comments.append(entry)
+            else:
+                comments = self.issues[identifier]["comments"]
+                assert isinstance(comments, list)
+                comments.append({"id": str(uuid.uuid4()), "text": entry})
+            return ""
+        if args[0] == "list":
+            label = args[args.index("--label") + 1]
+            rows = {
+                "flaky-check": list(self.filed.values()),
+                "ci-check": list(self.issues.values()),
+                "role:steward": self.stewards,
+            }
+            return json.dumps(rows[label])
+        if args == ("export",):
+            return "\n".join(json.dumps(issue) for issue in self.issues.values())
         raise AssertionError(args)
 
     def verdicts(self, check: str) -> list[object]:
@@ -78,8 +82,12 @@ class FakeBd(verdicts.Beads):
 
 
 @pytest.fixture
-def bd(monkeypatch: pytest.MonkeyPatch) -> FakeBd:
-    fake = FakeBd()
+def bd(monkeypatch: pytest.MonkeyPatch) -> FakeTickets:
+    fake = FakeTickets()
+    monkeypatch.delenv(verdicts.TICKETS_ENV, raising=False)
+    monkeypatch.setattr(tickets, "client", lambda: "tk-fixture")
+    monkeypatch.setattr(tickets, "invoke", fake.invoke)
+    monkeypatch.setattr(tickets, "create_issue", fake.create)
     monkeypatch.setattr(verdicts, "STORE", fake)
     # These lanes run fixture scripts, so they need neither a CLI build nor CPU tokens.
     monkeypatch.setattr(step_runner, "BUILDS_CLI", frozenset())
@@ -144,7 +152,7 @@ def flaky(check: str, root: Path, whole: bool = False) -> checks.Lane:
 
 
 def test_a_check_that_passes_on_the_rerun_is_flaky(
-    tmp_path: Path, bd: FakeBd, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, bd: FakeTickets, capsys: pytest.CaptureFixture[str]
 ) -> None:
     lane = flaky("ui-test:scry", tmp_path)
     assert checks.run_lanes([lane], "check", 60) == 0
@@ -157,7 +165,7 @@ def test_a_check_that_passes_on_the_rerun_is_flaky(
 
 
 def test_a_fix_to_the_check_alone_is_stale_and_to_the_product_a_catch(
-    repo: Path, bd: FakeBd, capsys: pytest.CaptureFixture[str]
+    repo: Path, bd: FakeTickets, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert checks.run_lanes([one("ui-test:drag", False)], "check", 60) == 1
     write(repo, "ui/scripts/kept-table.mjs", "checks, fixed\n")
@@ -187,7 +195,9 @@ def test_a_fix_to_the_check_alone_is_stale_and_to_the_product_a_catch(
     assert bd.verdicts("ui-test:drag") == ["stale", "catch", "flaky", "catch"]
 
 
-def test_a_step_that_could_not_run_waits_for_no_verdict(repo: Path, bd: FakeBd) -> None:
+def test_a_step_that_could_not_run_waits_for_no_verdict(
+    repo: Path, bd: FakeTickets
+) -> None:
     cannot = ["sh", "-c", f"exit {checks.CANNOT_RUN}"]
     assert (
         checks.run_lanes([checks.Lane("repo").step("just", cannot)], "check", 60) == 1
@@ -200,7 +210,7 @@ def test_a_step_that_could_not_run_waits_for_no_verdict(repo: Path, bd: FakeBd) 
 
 
 def test_a_pass_settles_only_failures_from_its_own_place(
-    repo: Path, bd: FakeBd
+    repo: Path, bd: FakeTickets
 ) -> None:
     assert checks.run_lanes([one("shots:board", False)], "check", 60) == 1
     git(repo, "checkout", "-qb", "other")
@@ -215,7 +225,7 @@ def test_a_pass_settles_only_failures_from_its_own_place(
 
 
 def test_a_slow_ci_failure_names_the_steward_that_fixed_it(
-    repo: Path, bd: FakeBd
+    repo: Path, bd: FakeTickets
 ) -> None:
     assert checks.run_lanes([one("shots:board", False)], "ci", 60) == 1
     write(repo, "ui/src/Board.tsx", "board, repaired\n")
@@ -235,7 +245,7 @@ def test_a_slow_ci_failure_names_the_steward_that_fixed_it(
 
 
 def test_a_steward_fix_is_judged_by_its_own_commits_alone(
-    repo: Path, bd: FakeBd
+    repo: Path, bd: FakeTickets
 ) -> None:
     assert checks.run_lanes([one("shots:board", False)], "ci", 60) == 1
     commit = ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm"]
@@ -317,7 +327,7 @@ def test_the_items_of_a_rust_file_end_where_their_brackets_close() -> None:
     ]
 
 
-def flaked_elsewhere(bd: FakeBd, check: str, days: float) -> None:
+def flaked_elsewhere(bd: FakeTickets, check: str, days: float) -> None:
     """Records a flake of `check` `days` ago in another run: another commit on another machine."""
     when = datetime.now(timezone.utc) - timedelta(days=days)
     entry: verdicts.Entry = {
@@ -331,7 +341,7 @@ def flaked_elsewhere(bd: FakeBd, check: str, days: float) -> None:
 
 
 def test_a_check_files_its_delete_bead_when_it_flakes_in_a_second_run(
-    tmp_path: Path, bd: FakeBd, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, bd: FakeTickets, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # A first flake files nothing, and neither does a second on the same commit and machine,
     # which is most often a concurrent run sharing the first one's trouble.
@@ -363,7 +373,7 @@ def test_a_check_files_its_delete_bead_when_it_flakes_in_a_second_run(
     (tmp_path / "ran").unlink()
     assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
     assert list(bd.filed) == [bead]
-    [comment] = bd.filed[bead]["comments"]  # pyre-ignore[23]: a list, from FakeBd
+    [comment] = bd.filed[bead]["comments"]  # pyre-ignore[23]: a list, from FakeTickets
     assert str(comment).startswith("Flaked again in `by check`")
     assert "first attempt broke" in str(comment)
     assert (
@@ -386,7 +396,7 @@ def test_a_check_files_its_delete_bead_when_it_flakes_in_a_second_run(
     assert len(bd.filed) == 3
 
 
-def test_a_check_that_flaked_before_still_fails_the_run(bd: FakeBd) -> None:
+def test_a_check_that_flaked_before_still_fails_the_run(bd: FakeTickets) -> None:
     for days in (1, 2, 3):
         when = datetime.now(timezone.utc) - timedelta(days=days)
         bd.record(
@@ -396,7 +406,7 @@ def test_a_check_that_flaked_before_still_fails_the_run(bd: FakeBd) -> None:
     assert bd.filed == {}
 
 
-def test_a_build_failure_is_never_excused(tmp_path: Path, bd: FakeBd) -> None:
+def test_a_build_failure_is_never_excused(tmp_path: Path, bd: FakeTickets) -> None:
     lane = checks.Lane("app").step(
         "smoke", ["sh", "-c", f"exit {checks.CANNOT_RUN}"], rerun=checks.whole
     )
@@ -404,7 +414,7 @@ def test_a_build_failure_is_never_excused(tmp_path: Path, bd: FakeBd) -> None:
 
 
 def test_a_pending_check_is_logged_as_pending_and_fails_no_run(
-    bd: FakeBd, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    bd: FakeTickets, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     pending = verdicts.Pending("shots:flight", "flight_to_stack", "by-bank1")
     monkeypatch.setattr(verdicts, "PENDING", (pending,))
@@ -427,9 +437,9 @@ def test_a_pending_check_is_logged_as_pending_and_fails_no_run(
 def test_verdicts_that_cannot_be_recorded_fail_no_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    class Broken(FakeBd):
-        def bd(self, *args: str) -> tuple[int, str]:
-            return 1, "not json"
+    class Broken(FakeTickets):
+        def list_issues(self, *filters: str, include_closed: bool = False) -> object:
+            return []
 
     monkeypatch.setattr(verdicts, "STORE", Broken())
     assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
@@ -450,7 +460,7 @@ def report_args(**more: object) -> argparse.Namespace:
 
 
 def test_the_verdict_command_corrects_through_the_cli(
-    bd: FakeBd, capsys: pytest.CaptureFixture[str]
+    bd: FakeTickets, capsys: pytest.CaptureFixture[str]
 ) -> None:
     bd.record(
         "rust:a::b", "rust", {"time": "2026-11-10T00:00:00+00:00", "verdict": "mixed"}

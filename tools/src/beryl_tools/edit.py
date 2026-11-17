@@ -79,7 +79,7 @@ def existing_worktree(main: Path, branch: str) -> Path | None:
 
 def formatter(tree: Path, rel: str) -> tuple[list[str], Path] | None:
     """The command, and where to run it, that formats `rel` as the checks expect."""
-    if rel.startswith((".beads/", ".agents/")):
+    if rel.startswith(".agents/"):
         return None
     if rel.endswith(".md"):
         return [sys.executable, "-m", "mdformat", rel], tree

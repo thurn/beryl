@@ -43,6 +43,7 @@ def test_detect_uses_main_enrollment_from_an_old_worktree(
         'print(\'{"backend": "server", "tk": "/fixture/tk"}\')\n'
     )
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    assert tickets.detect(old) == ""
+    with pytest.raises(tickets.TicketError):
+        tickets.detect(old)
     config.write_text('[tickets]\nproject = "by"\nurl = "http://localhost:8888"\n')
     assert tickets.detect(old) == "/fixture/tk"

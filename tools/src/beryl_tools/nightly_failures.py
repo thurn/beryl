@@ -12,8 +12,8 @@ host that failed in `enact_ci_host`, so this machine's viziers take it first.
 
 A check that an open nightly bead already names is not filed again: the next night's repeat
 failure comments on that bead instead (the checks are in its metadata, [`CHECKS_KEY`]). A
-night with no failed check files nothing. Nothing here fails the nightly: a bd call that fails
-is reported and the run goes on (verdicts.Beads).
+night with no failed check files nothing. Nothing here fails the nightly: a ticket request that fails
+is reported and the run goes on (verdicts.Tickets).
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ def host() -> str:
     return os.environ.get("ENACT_HOST") or socket.gethostname().split(".")[0].lower()
 
 
-def open_beads(store: verdicts.Beads, label: str = LABEL) -> dict[str, set[str]]:
+def open_beads(store: verdicts.Tickets, label: str = LABEL) -> dict[str, set[str]]:
     """Each open bead with `label` (the nightly's by default), with the checks it was filed
     for."""
     beads = store.list_issues("--label", label)
@@ -124,7 +124,7 @@ def file(
     failed: dict[str, list[str]],
     output: str,
     passed: str = "",
-    store: verdicts.Beads | None = None,
+    store: verdicts.Tickets | None = None,
     by_lane: Mapping[str, str] | None = None,
     kept: Mapping[str, str] | None = None,
 ) -> list[str]:

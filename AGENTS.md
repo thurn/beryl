@@ -31,7 +31,7 @@ the one for the area you are changing.
 
 ## Writing for readers
 
-This applies to code comments, commit messages, beads and reports, and to this
+This applies to code comments, commit messages, tickets and reports, and to this
 file.
 
 - Write for a reader who knows Magic, Rust and TypeScript but has not read the
@@ -83,9 +83,6 @@ write:
   commands.
 - `efficiency/`: the efficiency dashboard, `just efficiency`, a standalone
   Python project with its own check lane (`efficiency/AGENTS.md`).
-- `status/`: the bead status site, `just status`, and the cirrus design system
-  it is built from, another standalone Python project with its own lane
-  (`status/AGENTS.md`).
 - Outside the repository:
   - `~/Library/Caches/beryl` (`$BERYL_CACHE`) holds the shared `rust/target` and
     `ui/node_modules` that worktrees copy from, the oracle builds and their last
@@ -112,54 +109,52 @@ means `python3 ~/enact/scripts/enact.py`.
      same worktree and run it again.
   4. If its output includes `watch_ci`, there is no Enact run around to fix a
      slow-CI failure, so you must watch it yourself: run `enact ci --wait <sha>`
-     until it passes, and if it fails, claim and fix the Steward bead before you
-     finish.
+     until it passes, and if it fails, claim and fix the Steward ticket before
+     you finish.
 - **Session titles show status.** An agent session making a change titles itself
   `⚒️ <short summary>` when it starts (Claude Desktop: `set_session_title` on
   `self`; Codex: `set_thread_title`). It switches to 🔮 while waiting on slow CI,
-  🚒 while fixing a Steward bead, `✅ <same summary>` as its last step when done,
-  and `⛔` if it stops without finishing.
+  🚒 while fixing a Steward ticket, `✅ <same summary>` as its last step when
+  done, and `⛔` if it stops without finishing.
 - Never commit or push directly to `master` or `staging`. `master` only moves
   forward when slow CI passes on `staging`. When slow CI fails, Enact files a P0
-  "Steward" bead to get it fixed. `enact ci --status` shows the CI runner and
+  "Steward" ticket to get it fixed. `enact ci --status` shows the CI runner and
   its log. Keep the main checkout clean, because Enact fast-forwards its
   `staging` and `master` branches.
 - Slow CI runs on two machines: this Mac and Cygnus, a Windows PC. A pass on
   either one moves `master` forward. `enact ci --wait` lists failures on the
   other OS as `other_os_stewards`.
-- The live task tracker is Beads (`bd`, prefix `by`). Publish direct Beads edits
-  with `enact sync`. Beryl's bug and CI reporters and efficiency ingest also
-  support Enact's ticket backend. Run `enact backend` to identify the active
-  tracker. In ticket mode, use the returned `tk` path for direct edits, which
-  publish immediately. Plans, designs and decisions go in the tracker so its
-  history is the record.
-- File beads freely and in parallel. Merge conflicts are cheap: `enact push`
-  rebases, and you fix and push again. A bead can be picked up within minutes of
-  filing, so either land what it depends on in `staging` first or block it with
-  a dependency.
-- Every session has to spend time learning the code it touches, so each bead
+- Beryl uses `tk` for tickets. Run `enact backend` for the managed client path.
+  Ticket writes publish immediately. Record plans, designs and decisions on
+  their tickets so the history records them.
+- File tickets freely and in parallel. Merge conflicts are cheap: `enact push`
+  rebases, and you fix and push again. A ticket can be picked up within minutes
+  of filing, so either land what it depends on in `staging` first or block it
+  with a dependency.
+- Every session has to spend time learning the code it touches, so each ticket
   should name the files, helpers and tests it needs by path, so that its session
-  can read them all in its first message. Label mechanical beads (wiring,
+  can read them all in its first message. Label mechanical tickets (wiring,
   renames, boilerplate tests) `tier:light` so they run on Sonnet.
-- A lane is a group of beads that one session works through in order, so it
-  learns their code once. Give two to four beads the same `lane:<name>` label
+- A lane is a group of tickets that one session works through in order, so it
+  learns their code once. Give two to four tickets the same `lane:<name>` label
   when they touch the same code and have the same tier. A lane's session keeps
-  the model of its first bead, so a bead with a different tier stays out of the
-  lane, as does a design bead large enough to fill a session by itself. Block
-  such a bead with a dependency if it edits the lane's code. Never put a lane or
-  tier label on an epic, because its children inherit it. `/enact-plan` applies
-  the same rules ("Lane and tier pass" in its skill) to beads it is given.
-- **No Fable without an explicit ask.** Never label a bead `tier:fable`, and
+  the model of its first ticket, so a ticket with a different tier stays out of
+  the lane, as does a design ticket large enough to fill a session by itself.
+  Block such a ticket with a dependency if it edits the lane's code. Never put a
+  lane or tier label on an epic, because its children inherit it. `/enact-plan`
+  applies the same rules ("Lane and tier pass" in its skill) to tickets it is
+  given.
+- **No Fable without an explicit ask.** Never label a ticket `tier:fable`, and
   never start a session or subagent on a Fable model, unless the user has
   explicitly asked for it. Design work defaults to `tier:opus` and mechanical
   work to `tier:sonnet` (or `tier:light`).
-- No plan, bead or skill includes a step that waits for the user's approval.
+- No plan, ticket or skill includes a step that waits for the user's approval.
   Where his judgement might be wanted, go ahead with a sensible default and
-  record the choice in the bead you're working on. Never file a bead asking him
-  to look at something. The exceptions are the count gate (K1 in
+  record the choice in the ticket you're working on. Never file a ticket asking
+  him to look at something. The exceptions are the count gate (K1 in
   `docs/engine-architecture.md`) and adding a UI exception (see UI).
-- `/enact <beads|epic|task>` runs work inline in one session, and
-  `/enact-plan <bead|plan|task>` runs it unattended across several sessions.
+- `/enact <tickets|epic|task>` runs work inline in one session, and
+  `/enact-plan <ticket|plan|task>` runs it unattended across several sessions.
   Most work uses neither.
 
 ## Code structure
@@ -261,7 +256,8 @@ target sizes (`ui/scripts/capture.mjs`).
   lists before pushing again.
 - Browser checks: the fast check plays those a change can break, slow CI only a
   smoke test (`ui-smoke`), and the browser sweep (`just sweep`) all of them on
-  staging every 3 hours, filing a bead for what fails without blocking `master`.
+  staging every 3 hours, filing a ticket for what fails without blocking
+  `master`.
 - Headless browser checks run at a higher priority than any build and share a
   limited number of page slots across all sessions. Run only the checks your
   change needs (`just ui-test <title>`, `just specs --shots <card>`) rather than
@@ -298,7 +294,7 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
   Beryl already has, never a new look, and listed in UI Conventions under "Not
   seen in Arena".
 - Never wait on the user for a UI decision. Go ahead based on Arena or the
-  closest existing behavior. Never file a bead asking him to look at it.
+  closest existing behavior. Never file a ticket asking him to look at it.
 
 ## Workflow
 
@@ -316,8 +312,8 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
   search with a "find nothing" option instead of asking "Search?" first). This
   rule is a Beryl exception: Arena asks first. Also never give players priority
   when they would only pass, such as when their own spell is alone on the stack.
-- It's fine to file your own beads outside an Enact role, but in that case offer
-  to fix them in the current session rather than just adding them to the
+- It's fine to file your own tickets outside an Enact role, but in that case
+  offer to fix them in the current session rather than just adding them to the
   backlog.
 
 ## Conventions
@@ -334,7 +330,7 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
   dependency is clearly worth it.
 - Agents don't add Markdown files unless explicitly asked. README.md, the
   `AGENTS.md` files and `docs/` are the only Markdown; plans, designs and notes
-  go in beads. Each `AGENTS.md` has a one-line `CLAUDE.md` beside it that
+  go in tickets. Each `AGENTS.md` has a one-line `CLAUDE.md` beside it that
   imports it. Keep this root file to rules that apply to every change: reference
   material for one area goes in that directory's `AGENTS.md`, a procedure goes
   in a skill, and a rule that a check already explains when it fails needs one
@@ -349,12 +345,12 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
   differential test), adding it in the same change where you can, or say why
   none can. Link the fixing commit's hash when the bug wasn't found and fixed in
   the same session.
-- Do not directly reference planning documents or beads in code (e.g. "plan
+- Do not directly reference planning documents or tickets in code (e.g. "plan
   K16"), this gets stale fast. If you touch code with such references, delete
   them.
-- Timeouts only catch hangs: a slow test or run files a bead, never fails CI.
+- Timeouts only catch hangs: a slow test or run files a ticket, never fails CI.
   Tests fail deterministically; delete flaky ones. Avoid slow integration tests:
   prefer a fast test that keeps most of their value.
 - Never use "no card with this behavior is implemented yet, so I can't write a
-  test" as an excuse. Implement additional cards or file a bead under your
+  test" as an excuse. Implement additional cards or file a ticket under your
   current epic for really major items.

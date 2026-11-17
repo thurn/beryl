@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from . import paths, system, tickets
+from . import system, tickets
 
 REPORT = "report.md"
 DONE = "done"
@@ -44,7 +44,7 @@ BUNDLE_FILES: frozenset[str] = frozenset(
         "journal.jsonl",
     )
 )
-# Every bead filed from a report carries it, so `bd list --label bug-report` finds them.
+# Every bead filed from a report carries it, so `tk list --label bug-report` finds them.
 LABEL = "bug-report"
 # And a report of a questionable play of the AI's (`kind: ai`) carries this one too.
 AI_LABEL = "ai-play"
@@ -220,21 +220,6 @@ def description(report: Report) -> str:
     return "\n".join(words).strip()
 
 
-def run_bd(args: list[str]) -> str:
-    run = subprocess.run(
-        ["bd", "--sandbox", *args],
-        cwd=paths.REPO,
-        env={**os.environ, "BD_NON_INTERACTIVE": "1"},
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=30,
-    )
-    if run.returncode != 0:
-        raise RuntimeError(f"bd {' '.join(args[:2])}: {run.stderr.strip()}")
-    return run.stdout.strip()
-
-
 def file_bead(report: Report, priority: str) -> str:
     reference = f"bug-report:{report.id}"
     labels = [LABEL]
@@ -244,50 +229,21 @@ def file_bead(report: Report, priority: str) -> str:
         labels.append(SPEC_VIEWER_LABEL)
     tk = tickets.client()
     # A previous attempt may have created the issue before saving its ID locally.
-    if tk:
-        filed = report_issues(tickets.list_issues(tk, "--all", "--label", LABEL))
-        if report.id in filed:
-            return filed[report.id]
-        return tickets.create_issue(
-            tk,
-            {
-                "type": "bug",
-                "title": report.title or report.id,
-                "body": bead_description(report),
-                "labels": labels,
-                "priority": int(priority),
-                "metadata": {"bug_report_id": report.id},
-            },
-            request_key=reference,
-        )
-    existing = json.loads(
-        run_bd(["list", "--all", "--external-ref", reference, "--json"])
+    filed = report_issues(tickets.list_issues(tk, "--all", "--label", LABEL))
+    if report.id in filed:
+        return filed[report.id]
+    return tickets.create_issue(
+        tk,
+        {
+            "type": "bug",
+            "title": report.title or report.id,
+            "body": bead_description(report),
+            "labels": labels,
+            "priority": int(priority),
+            "metadata": {"bug_report_id": report.id},
+        },
+        request_key=reference,
     )
-    if existing:
-        return str(existing[0]["id"])
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as body:
-        body.write(bead_description(report))
-    try:
-        return run_bd(
-            [
-                "create",
-                "--type",
-                "bug",
-                "--title",
-                report.title or report.id,
-                "--body-file",
-                body.name,
-                "--labels",
-                ",".join(labels),
-                "--priority",
-                priority,
-                "--external-ref",
-                reference,
-                "--silent",
-            ]
-        ).splitlines()[-1]
-    finally:
-        os.unlink(body.name)
 
 
 def list_cmd(args: argparse.Namespace) -> int:
@@ -459,13 +415,7 @@ def filed_beads() -> dict[str, str]:
     """Issues already filed for a report, including those filed on another machine."""
     try:
         tk = tickets.client()
-        if tk:
-            return report_issues(tickets.list_issues(tk, "--all", "--label", LABEL))
-        return report_issues(
-            json.loads(
-                run_bd(["list", "--all", "--label", LABEL, "--limit", "0", "--json"])
-            )
-        )
+        return report_issues(tickets.list_issues(tk, "--all", "--label", LABEL))
     except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
         print(
             f"bugs: can't list filed reports, importing as open: {error}",

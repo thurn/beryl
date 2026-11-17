@@ -303,7 +303,7 @@ def file(
     since: str,
     found: list[str],
     output: str,
-    store: verdicts.Beads | None = None,
+    store: verdicts.Tickets | None = None,
 ) -> list[str]:
     """Files the sweep's failed checks: a comment on each open sweep bead that names one of
     them already, and a new bead per lane for the rest. Returns a line per bead touched.

@@ -237,7 +237,7 @@ def bead_lines(code: str, plan: Plan) -> Iterator[str]:
     def create(tier: str, title: str, description: str) -> str:
         return shlex.join(
             [
-                "bd",
+                "tk",
                 "create",
                 "--title",
                 title,

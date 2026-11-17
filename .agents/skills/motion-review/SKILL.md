@@ -1,7 +1,6 @@
----
-name: motion-review
-description: Get a verb's motion on Beryl's stage judged by an independent reviewer, when the user asks for that. Films the verb from both seats in both layouts beside Arena's clips of it, hands only the films to a fresh Opus or Fable reviewer who scores a fixed rubric (readable, staged, path and easing, anticipation and settle, depth, groups, fits Beryl, pace), and reports the verdict. Use only when the user asks to review, judge or pass an animation; it gates nothing, so never run it because a verb is new, its motion changed or a bead is closing.
----
+______________________________________________________________________
+
+## name: motion-review description: Get a verb's motion on Beryl's stage judged by an independent reviewer, when the user asks for that. Films the verb from both seats in both layouts beside Arena's clips of it, hands only the films to a fresh Opus or Fable reviewer who scores a fixed rubric (readable, staged, path and easing, anticipation and settle, depth, groups, fits Beryl, pace), and reports the verdict. Use only when the user asks to review, judge or pass an animation; it gates nothing, so never run it because a verb is new, its motion changed or a bead is closing.
 
 # Motion review
 
@@ -100,10 +99,10 @@ conclusion returns it.
 
 Give the user the reviewer's report as it wrote it, with the paths of the sheets
 it names. `PASS` is every line of the rubric scored pass or note. When the work
-has a bead, put the report there too as one comment, then `enact sync`:
+has a bead, put the report there too as one comment:
 
 ```sh
-bd comments add <bead> "Motion review, round <n> (<model>): <its report>"
+tk comments add <ticket> "Motion review, round <n> (<model>): <its report>"
 ```
 
 ## 4. After the report

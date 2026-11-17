@@ -1,4 +1,3 @@
-import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -96,43 +95,59 @@ def test_failed_checks_replay_by_name_or_whole() -> None:
     assert sweep.reproduce("pytest", ["pytest:pytest"]) == "just test-py"
 
 
-class FakeBd(verdicts.Beads):
+class FakeTickets(verdicts.Tickets):
     """bd as the sweep's filing uses it, in memory."""
 
     def __init__(self) -> None:
         self.issues: list[dict[str, object]] = []
 
-    def bd(self, *args: str) -> tuple[int, str]:
-        if args[:3] == ("list", "--label", sweep.LABEL):
-            return 0, json.dumps(self.issues)
-        if args[0] == "create":
-            flag = lambda name: args[args.index(name) + 1]  # noqa: E731
-            bead = f"by-{len(self.issues) + 1}"
-            self.issues.append(
-                {
-                    "id": bead,
-                    "title": flag("--title"),
-                    "description": flag("--description"),
-                    "labels": flag("--labels").split(","),
-                    "metadata": json.loads(flag("--metadata")),
-                    "status": "open",
-                    "comments": [],
-                }
-            )
-            return 0, bead
-        if args[:2] == ("comments", "add"):
-            [issue] = [i for i in self.issues if i["id"] == args[2]]
-            comments = issue["comments"]
-            assert isinstance(comments, list)
-            comments.append(args[3])
-            return 0, ""
-        raise AssertionError(args)
+    def list_issues(self, *filters: str, include_closed: bool = False) -> object:
+        flag, label = filters
+        assert flag == "--label"
+        return [
+            issue
+            for issue in self.issues
+            if isinstance(assigned := issue["labels"], list) and label in assigned
+        ]
+
+    def create_issue(
+        self,
+        *,
+        title: str,
+        body: str,
+        priority: str,
+        labels: str,
+        acceptance: str = "",
+        parent: str = "",
+        metadata: dict[str, str] | None = None,
+    ) -> tuple[int, str]:
+        ticket = f"by-{len(self.issues) + 1}"
+        self.issues.append(
+            {
+                "id": ticket,
+                "status": "open",
+                "title": title,
+                "description": body,
+                "priority": int(priority),
+                "labels": labels.split(","),
+                "metadata": metadata,
+                "comments": [],
+            }
+        )
+        return 0, ticket
+
+    def add_comment(self, issue: str, comment: str) -> tuple[int, str]:
+        [ticket] = [row for row in self.issues if row["id"] == issue]
+        comments = ticket["comments"]
+        assert isinstance(comments, list)
+        comments.append(comment)
+        return 0, ""
 
 
 def test_a_failure_files_a_steward_bead_with_its_culprit_and_a_repeat_comments() -> (
     None
 ):
-    store = FakeBd()
+    store = FakeTickets()
     found = [
         "bisect: ui-test:a pile splits  culprit 1234567890 feat: piles  (3 commits since"
         " the last passing sweep)"

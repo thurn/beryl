@@ -18,7 +18,7 @@ documented formats:
   holds the failure's `time`, `host`, `commit`, `script`, `lane`, its `verdict` (`catch`,
   `stale`, `flaky`, `mixed` or `miss`) and, when a Steward bead fixed it, `steward`. A later
   comment with `corrects` set to an earlier comment's id replaces that one's verdict. They are
-  read from `bd export`, which prints every bead with its comments.
+  read from `tk export`, which prints every bead with its comments.
 
 A check belongs to a family ([`family`]), which groups related checks in the tree the `ci`
 query shows: script, check lane, family, check.
@@ -32,16 +32,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import scope
-from .beads import main_checkout, run_bd
 from .ingest import LineSource, Merge, Row, SnapshotSource, SourceError
 
-EXPORT: list[str] = ["bd", "export"]
-# The label of the beads that hold each check's verdicts.
 CHECK_LABEL = "ci-check"
-# The outcomes of a line that ran a check; `skip` is the only other one counted.
+VERDICTS = ("catch", "stale", "flaky", "mixed", "miss")
 RAN: frozenset[str] = frozenset({"pass", "fail", "pending-pass", "pending-fail"})
-# The verdicts a failure can get.
-VERDICTS: tuple[str, ...] = ("catch", "stale", "flaky", "mixed", "miss")
 
 
 def family(check: str) -> str:
@@ -237,19 +232,13 @@ def verdict_rows(
 
 
 class Verdicts(SnapshotSource):
-    """The verdicts on the checks' beads, from `bd export`."""
+    """The verdicts on the checks' beads, from `tk export`."""
 
     name = "verdicts"
     owns = ("verdicts",)
 
     def __init__(self, read: Callable[[], bytes]) -> None:
         self._read = read
-
-    @staticmethod
-    def here(start: Path) -> Verdicts:
-        """The source for the repository at `start`, read with `bd` in its main checkout."""
-        checkout = main_checkout(start)
-        return Verdicts(lambda: run_bd(checkout, EXPORT))
 
     def read(self) -> bytes:
         return self._read()
@@ -270,7 +259,7 @@ class Verdicts(SnapshotSource):
             except (ValueError, TypeError):
                 skipped += 1
         if skipped and not rows:
-            raise SourceError("bd export printed no beads")
+            raise SourceError("tk export printed no beads")
         return rows, skipped
 
 

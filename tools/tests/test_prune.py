@@ -45,7 +45,7 @@ def verdict(name: str, days_ago: float = 1, **more: object) -> verdicts.Entry:
     }
 
 
-class Store(verdicts.Beads):
+class Store(verdicts.Tickets):
     def __init__(self, history: dict[str, list[verdicts.Entry]]) -> None:
         self.found = history
 

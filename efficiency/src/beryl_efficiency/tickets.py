@@ -5,49 +5,27 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
-import tomllib
 from collections import defaultdict
 from collections.abc import Callable
 from functools import cache
 from pathlib import Path
 
 from . import beads, cilog, ticket_ids, timing, tokens, windows
-from .ingest import CursorSource, Row, SnapshotSource, Source, SourceError
+from .ingest import CursorSource, Row, SnapshotSource, SourceError
 
 Read = Callable[..., bytes]
 
 
-def sources(
-    checkout: Path,
-) -> tuple[SnapshotSource, SnapshotSource, CursorSource | None]:
-    """Select the same backend and tk binary as Enact, once per ingest."""
-    legacy = (beads.Beads.here(checkout), cilog.Verdicts.here(checkout))
-    config = beads.main_checkout(checkout) / ".enact.toml"
-    if not config.is_file():
-        return (*legacy, None)
-    try:
-        settings = tomllib.loads(config.read_text(encoding="utf-8")).get("tickets", {})
-        if not isinstance(settings, dict):
-            raise TypeError("expected a [tickets] table")
-        if not settings.get("project") and settings.get("backend") != "server":
-            return (*legacy, None)
-    except (OSError, ValueError, TypeError) as error:
-        message: str = f"Enact backend: {error}"
-
-        def unavailable() -> bytes:
-            raise SourceError(message)
-
-        return beads.Beads(unavailable), cilog.Verdicts(unavailable), None
+def sources(checkout: Path) -> tuple[SnapshotSource, SnapshotSource, CursorSource]:
+    """Discover Enact's native client once per ingest."""
 
     @cache
-    def binary() -> str | None:
+    def binary() -> str:
         helper = Path.home() / "enact" / "scripts" / "enact.py"
         try:
             active = json.loads(
                 beads.run_command(checkout, [sys.executable, str(helper), "backend"])
             )
-            if active["backend"] == "beads":
-                return None
             if active["backend"] == "server" and isinstance(active["tk"], str):
                 return str(active["tk"])
             raise ValueError("unexpected Enact backend reply")
@@ -55,39 +33,11 @@ def sources(
             raise SourceError(f"Enact backend: {error}") from error
 
     def tk(*args: str) -> bytes:
-        path = binary()
-        if path is None:
-            return b"[]"
-        return beads.run_command(checkout, [path, "--json", "--retry-for", "2", *args])
+        return beads.run_command(
+            checkout, [binary(), "--json", "--retry-for", "2", *args]
+        )
 
-    records, verdicts, events = native_sources(tk)
-    return (
-        BackendSnapshot(legacy[0], records, binary),
-        BackendSnapshot(legacy[1], verdicts, binary),
-        events,
-    )
-
-
-class BackendSnapshot(SnapshotSource):
-    def __init__(
-        self,
-        legacy: SnapshotSource,
-        native: SnapshotSource,
-        binary: Callable[[], str | None],
-    ) -> None:
-        self.legacy = legacy
-        self.native = native
-        self.binary = binary
-        self.name: str = legacy.name
-        self.owns: tuple[str, ...] = legacy.owns
-
-    def read(self) -> bytes:
-        source = self.native if self.binary() is not None else self.legacy
-        return source.read()
-
-    def parse(self, data: bytes) -> tuple[list[Row], int]:
-        source = self.native if self.binary() is not None else self.legacy
-        return source.parse(data)
+    return native_sources(tk)
 
 
 def native_sources(read: Read) -> tuple[SnapshotSource, SnapshotSource, CursorSource]:

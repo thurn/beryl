@@ -1,1 +1,0 @@
-"""The bead status site."""

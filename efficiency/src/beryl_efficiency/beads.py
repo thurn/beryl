@@ -1,4 +1,4 @@
-"""The beads source: every bead's latest state, from `bd list --all -n 0 --json`
+"""The beads source: the stored format used by older imported ticket snapshots
 (docs/efficiency-dashboard.md, "Sources").
 
 Later queries use each bead's id, parent, labels, status, its creation, start and close
@@ -13,8 +13,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 from .ingest import Row, SnapshotSource, SourceError
-
-COMMAND: list[str] = ["bd", "list", "--all", "-n", "0", "--json"]
 
 
 def main_checkout(start: Path) -> Path:
@@ -32,11 +30,6 @@ def main_checkout(start: Path) -> Path:
         return start
     common = Path(found)
     return common.parent if common.name == ".git" else common
-
-
-def run_bd(cwd: Path, command: list[str] = COMMAND) -> bytes:
-    """`command`'s output, run in `cwd`; `bd list` by default."""
-    return run_command(cwd, command)
 
 
 def run_command(cwd: Path, command: list[str]) -> bytes:
@@ -106,12 +99,6 @@ class Beads(SnapshotSource):
     def __init__(self, read: Callable[[], bytes]) -> None:
         self._read = read
 
-    @staticmethod
-    def here(start: Path) -> Beads:
-        """The source for the repository at `start`, read with `bd` in its main checkout."""
-        checkout = main_checkout(start)
-        return Beads(lambda: run_bd(checkout))
-
     def read(self) -> bytes:
         return self._read()
 
@@ -119,9 +106,9 @@ class Beads(SnapshotSource):
         try:
             records = json.loads(data)
         except ValueError as e:
-            raise SourceError(f"bd printed no JSON: {e}") from e
+            raise SourceError(f"the snapshot contains no JSON: {e}") from e
         if not isinstance(records, list):
-            raise SourceError("bd printed no list of beads")
+            raise SourceError("the snapshot contains no list of beads")
         rows: list[Row] = []
         skipped = 0
         for record in records:

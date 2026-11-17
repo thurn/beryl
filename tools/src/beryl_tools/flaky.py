@@ -22,8 +22,8 @@ name no checks of their own each asked an Opus session to find a failure nothing
 
 Each check has at most one open bead, labeled [`LABEL`] with the check in its metadata
 ([`CHECK_KEY`]). While it is open, a later flake of the same check adds a comment to it instead
-of filing another. Nothing here fails a run: a bd call that fails is reported and the run goes
-on (verdicts.Beads).
+of filing another. Nothing here fails a run: a ticket request that fails is reported and the run goes
+on (verdicts.Tickets).
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ class Flake:
     whole: bool = False
 
 
-def open_beads(store: verdicts.Beads) -> dict[str, str]:
+def open_beads(store: verdicts.Tickets) -> dict[str, str]:
     """The open flaky-check beads, by the check each was filed for."""
     beads = store.list_issues("--label", LABEL)
     found: dict[str, str] = {}
@@ -206,7 +206,7 @@ def report(
     flakes: dict[str, Flake],
     script: str,
     commit: str,
-    store: verdicts.Beads | None = None,
+    store: verdicts.Tickets | None = None,
     host: str | None = None,
     failures: dict[str, str] | None = None,
 ) -> list[str]:
@@ -220,7 +220,7 @@ def report(
     host = host or socket.gethostname()
     known = open_beads(store)
     where = seen(script, commit, host)
-    # One `bd export` for all of them, and none when every flaky check has its bead open.
+    # One `tk export` for all of them, and none when every flaky check has its bead open.
     history = store.history([c for c in flakes if c not in known])
     lines: list[str] = []
     short = host.split(".")[0]

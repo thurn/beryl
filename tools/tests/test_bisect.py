@@ -291,7 +291,7 @@ def test_narrowing_arguments_name_their_checks() -> None:
     assert not bisect.names("Brainstorm", "oracle:Brainstorms/x/xmage")
 
 
-class Store(verdicts.Beads):
+class Store(verdicts.Tickets):
     """The ci-check beads and the Enact beads' delivered commits, in memory."""
 
     def __init__(self, delivered: dict[str, list[str]]) -> None:

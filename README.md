@@ -21,17 +21,15 @@ On an Apple silicon Mac:
 | uv                       | `brew install uv`                                                                        |
 | just 1.59+               | `cargo install just --locked`                                                            |
 | cargo-nextest            | `cargo install cargo-nextest --locked`; the fast check runs the Rust tests with it       |
-| Enact, Beads 1.3+, Dolt  | [Enact](https://github.com/thurn/enact)'s setup, then `enact setup` here                 |
+| Enact and tk             | [Enact setup](https://github.com/thurn/enact#setup), then `enact setup` here             |
 | Maven, JDK 21            | `just oracle-setup`, with Homebrew; it also builds the XMage and Forge oracles           |
 | Rosetta                  | `softwareupdate --install-rosetta --agree-to-license`; Forge's build runs an x86-64 tool |
 | iOS and Android SDKs     | `just mobile-setup`                                                                      |
 | Lima                     | `brew install lima`, then `just bench-count` once to create the count gate's VM          |
 
-Beryl's live task tracker is Beads. The ticket Worker is available for local
-verification through Enact, and Beryl's `.enact.toml` ships its coordinates
-commented out. See the [Enact simulator commands][ticket-tests]. Beryl epic
-`by-vaexw` tracks production activation. Native Windows verification is tracked
-in `by-r61mr.38`.
+Beryl uses Enact's `tk` ticket client. The repository configures the production
+project in `.enact.toml`. Use `enact backend` for the managed executable path
+and the [ticket dashboard](https://tickets.thurn.workers.dev/by/) for browsing.
 
 Run the setup recipes one at a time: each installs with Homebrew, which takes a
 lock.
@@ -66,5 +64,3 @@ build in a headless simulator or emulator.
 The step icons beside each life total are from
 [Phosphor Icons](https://phosphoricons.com), Copyright (c) 2023 Phosphor Icons,
 under the MIT License.
-
-[ticket-tests]: https://github.com/thurn/enact#local-ticket-verification

@@ -284,46 +284,56 @@ def test_a_steps_own_command_is_what_a_worker_types() -> None:
     assert sweep.own_command("scene-purity").startswith("just b3d sweep --step")
 
 
-class FakeBd(verdicts.Beads):
-    """bd as the sweep's filing uses it, in memory."""
+class FakeTickets(verdicts.Tickets):
+    """Ticket filing, in memory."""
 
     def __init__(self) -> None:
         self.issues: list[dict[str, object]] = []
 
-    def bd(self, *args: str) -> tuple[int, str]:
-        if args[:3] == ("list", "--label", sweep.LABEL):
-            return 0, json.dumps(self.issues)
-        if args[0] == "create":
-            flag = lambda name: args[args.index(name) + 1]  # noqa: E731
-            bead = f"by-{len(self.issues) + 1}"
-            self.issues.append(
-                {
-                    "id": bead,
-                    "title": flag("--title"),
-                    "description": flag("--description"),
-                    "parent": flag("--parent"),
-                    "acceptance": flag("--acceptance"),
-                    "priority": flag("--priority"),
-                    "labels": flag("--labels").split(","),
-                    "metadata": json.loads(flag("--metadata")),
-                    "status": "open",
-                    "comments": [],
-                }
-            )
-            return 0, bead
-        if args[:2] == ("comments", "add"):
-            [issue] = [i for i in self.issues if i["id"] == args[2]]
-            comments = issue["comments"]
-            assert isinstance(comments, list)
-            comments.append(args[3])
-            return 0, ""
-        raise AssertionError(args)
+    def list_issues(self, *filters: str, include_closed: bool = False) -> object:
+        assert filters[:2] == ("--label", sweep.LABEL)
+        return self.issues
+
+    def create_issue(
+        self,
+        *,
+        title: str,
+        body: str,
+        priority: str,
+        labels: str,
+        acceptance: str = "",
+        parent: str = "",
+        metadata: dict[str, str] | None = None,
+    ) -> tuple[int, str]:
+        identifier = f"by-{len(self.issues) + 1}"
+        self.issues.append(
+            {
+                "id": identifier,
+                "title": title,
+                "description": body,
+                "parent": parent,
+                "acceptance": acceptance,
+                "priority": priority,
+                "labels": labels.split(","),
+                "metadata": metadata,
+                "status": "open",
+                "comments": [],
+            }
+        )
+        return 0, identifier
+
+    def add_comment(self, issue: str, comment: str) -> tuple[int, str]:
+        [record] = [row for row in self.issues if row["id"] == issue]
+        comments = record["comments"]
+        assert isinstance(comments, list)
+        comments.append(comment)
+        return 0, ""
 
 
 def test_a_failed_step_files_one_bead_under_the_epic_and_a_repeat_comments(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    store = FakeBd()
+    store = FakeTickets()
     failed = {
         "b3d-cargo-test": ["b3d-cargo-test:cargo-test"],
         "b3d-release-socket": ["b3d-release-socket:release-socket"],
@@ -336,7 +346,7 @@ def test_a_failed_step_files_one_bead_under_the_epic_and_a_repeat_comments(
     # Each new bead records the machine that ran the step, without pinning it there.
     monkeypatch.setenv("ENACT_HOST", "cygnus")
     # A dry run reads the open beads and prints the ones it would file.
-    dry = sweep.DryRun(store)
+    dry = verdicts.DryRun(store, "b3d sweep")
     sweep.file("bad1", failed, "good", found, output, dry)
     printed = capsys.readouterr().out
     assert printed.count("would file") == 2
@@ -401,7 +411,7 @@ def test_slow_cis_budget_leaves_out_the_sweeps_records() -> None:
         )
     ]
     assert all(r["script"] == "ci" for r in check_value.slow_ci(records))
-    lines = budget.slow_report(records, {}, verdicts.Beads(), 100.0, host="mac")
+    lines = budget.slow_report(records, {}, verdicts.Tickets(), 100.0, host="mac")
     assert lines == ["ci budget: a full run uses 10 of 100 CPU seconds"]
 
 
@@ -501,7 +511,7 @@ def test_a_step_that_passes_at_a_newer_tip_files_no_bead(
     assert "cargo-test: fixed on the tip newer" in capsys.readouterr().out
 
     # Only what still fails reaches the filing.
-    store = FakeBd()
+    store = FakeTickets()
     output = {name: "failure" for name in failed}
     sweep.file("bad1", kept, "good", [], output, store)
     [issue] = store.issues

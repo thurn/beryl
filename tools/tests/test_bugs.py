@@ -77,22 +77,22 @@ def test_lists_games_per_day_without_reports(
 def test_file_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
     folder = report(tmp_path)
-    calls: list[list[str]] = []
+    calls: list[dict[str, object]] = []
 
-    def fake_bd(args: list[str]) -> str:
-        if args[0] == "list":
-            return "[]"
-        calls.append(args)
-        body = Path(args[args.index("--body-file") + 1]).read_text()
+    def create(_client: str, fields: dict[str, object], *, request_key: str) -> str:
+        calls.append(fields)
+        body = str(fields["body"])
         assert "The arrow\njumps." in body and "seed 77, turn 5" in body
         return "by-x1"
 
-    monkeypatch.setattr(bugs, "run_bd", fake_bd)
+    monkeypatch.setattr(bugs.tickets, "client", lambda: "tk")
+    monkeypatch.setattr(bugs.tickets, "list_issues", lambda *_: [])
+    monkeypatch.setattr(bugs.tickets, "create_issue", create)
     r = bugs.load(folder)
     assert r is not None and r.title == "Arrow jumps: on block"
 
     assert cli.main(["bugs", "file"]) == 0
-    assert calls[0][calls[0].index("--title") + 1] == "Arrow jumps: on block"
+    assert calls[0]["title"] == "Arrow jumps: on block"
     filed = bugs.load(folder)
     assert filed is not None and filed.status == "filed" and filed.bead == "by-x1"
     # Filed once only.
@@ -113,19 +113,18 @@ def test_an_ai_report_files_an_incident_bead(
     folder = report(tmp_path)
     md = folder / "report.md"
     md.write_text(md.read_text().replace("status: open", "kind: ai\nstatus: open"))
-    calls: list[list[str]] = []
+    calls: list[dict[str, object]] = []
 
-    def fake_bd(args: list[str]) -> str:
-        if args[0] == "list":
-            return "[]"
-        calls.append(args)
-        body = Path(args[args.index("--body-file") + 1]).read_text()
-        assert "docs/incidents/" in body
+    def create(_client: str, fields: dict[str, object], *, request_key: str) -> str:
+        calls.append(fields)
+        assert "docs/incidents/" in str(fields["body"])
         return "by-ai1"
 
-    monkeypatch.setattr(bugs, "run_bd", fake_bd)
+    monkeypatch.setattr(bugs.tickets, "client", lambda: "tk")
+    monkeypatch.setattr(bugs.tickets, "list_issues", lambda *_: [])
+    monkeypatch.setattr(bugs.tickets, "create_issue", create)
     assert cli.main(["bugs", "file"]) == 0
-    assert calls[0][calls[0].index("--labels") + 1] == "bug-report,ai-play"
+    assert calls[0]["labels"] == ["bug-report", "ai-play"]
 
 
 def test_spec_viewer_report_files_reproduction_context(
@@ -143,17 +142,17 @@ def test_spec_viewer_report_files_reproduction_context(
         )
     )
 
-    def fake_bd(args: list[str]) -> str:
-        if args[0] == "list":
-            return "[]"
-        body = Path(args[args.index("--body-file") + 1]).read_text()
+    def create(_client: str, fields: dict[str, object], *, request_key: str) -> str:
+        body = str(fields["body"])
         assert "bug in the spec viewer" in body
         assert page in body and "oust/review-0/theirs" in body
         assert "1280×800 CSS px at 2× scale" in body
-        assert args[args.index("--labels") + 1] == "bug-report,spec-viewer"
+        assert fields["labels"] == ["bug-report", "spec-viewer"]
         return "by-viewer"
 
-    monkeypatch.setattr(bugs, "run_bd", fake_bd)
+    monkeypatch.setattr(bugs.tickets, "client", lambda: "tk")
+    monkeypatch.setattr(bugs.tickets, "list_issues", lambda *_: [])
+    monkeypatch.setattr(bugs.tickets, "create_issue", create)
     assert cli.main(["bugs", "file"]) == 0
     saved = bugs.load(folder)
     assert saved is not None and saved.bead == "by-viewer"
@@ -165,17 +164,14 @@ def test_retry_recovers_existing_bead(
     monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
     folder: Path = report(tmp_path)
 
-    def fake_bd(args: list[str]) -> str:
-        assert args == [
-            "list",
-            "--all",
-            "--external-ref",
-            f"bug-report:{folder.name}",
-            "--json",
-        ]
-        return '[{"id":"by-recovered"}]'
-
-    monkeypatch.setattr(bugs, "run_bd", fake_bd)
+    monkeypatch.setattr(bugs.tickets, "client", lambda: "tk")
+    monkeypatch.setattr(
+        bugs.tickets,
+        "list_issues",
+        lambda *_: [
+            {"id": "by-recovered", "metadata": {"bug_report_id": folder.name}},
+        ],
+    )
     assert cli.main(["bugs", "file", "--", folder.name]) == 0
     saved = bugs.load(folder)
     assert (
@@ -188,7 +184,8 @@ def test_import_resets_sender_status_and_preserves_evidence(
 ) -> None:
     root = tmp_path / "bugs"
     monkeypatch.setenv("BERYL_BUGS", str(root))
-    monkeypatch.setattr(bugs, "run_bd", lambda _args: "[]")
+    monkeypatch.setattr(bugs.tickets, "client", lambda: "tk")
+    monkeypatch.setattr(bugs.tickets, "list_issues", lambda *_: [])
     key = "20261108-143012-arrow-jumps"
     bundle = tmp_path / "reports.zip"
     with ZipFile(bundle, "w") as archive:
@@ -244,16 +241,15 @@ def test_import_keeps_a_bead_this_tracker_has(
                 ),
             )
 
-    def fake_bd(args: list[str]) -> str:
-        assert args[:2] == ["list", "--all"] and "bug-report" in args
-        return json.dumps(
-            [
-                {"id": "by-local", "external_ref": f"bug-report:{synced}"},
-                {"id": "by-unrelated", "external_ref": None},
-            ]
-        )
-
-    monkeypatch.setattr(bugs, "run_bd", fake_bd)
+    monkeypatch.setattr(bugs.tickets, "client", lambda: "tk")
+    monkeypatch.setattr(
+        bugs.tickets,
+        "list_issues",
+        lambda *_: [
+            {"id": "by-local", "metadata": {"bug_report_id": synced}},
+            {"id": "by-unrelated", "metadata": {}},
+        ],
+    )
     assert cli.main(["bugs", "import", str(bundle)]) == 0
     kept = bugs.load(root / synced)
     reset = bugs.load(root / unsynced)
@@ -261,7 +257,7 @@ def test_import_keeps_a_bead_this_tracker_has(
     assert reset is not None and reset.status == "open" and not reset.bead
 
 
-def test_import_without_bd_imports_as_open(
+def test_import_with_unavailable_tracker_imports_as_open(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = tmp_path / "bugs"
@@ -275,10 +271,10 @@ def test_import_without_bd_imports_as_open(
         )
         archive.writestr(f"reports/{key}/report.md", REPORT)
 
-    def failing_bd(_args: list[str]) -> str:
-        raise RuntimeError("bd list: no database")
+    def unavailable() -> str:
+        raise RuntimeError("ticket tracker unavailable")
 
-    monkeypatch.setattr(bugs, "run_bd", failing_bd)
+    monkeypatch.setattr(bugs.tickets, "client", unavailable)
     assert cli.main(["bugs", "import", str(bundle)]) == 0
     saved = bugs.load(root / key)
     assert saved is not None and saved.status == "open" and not saved.bead
@@ -308,7 +304,6 @@ def test_filing_a_migrated_report_reuses_its_ticket(
         pytest.fail("a migrated report must not create a second issue")
 
     monkeypatch.setattr(bugs.tickets, "create_issue", unexpected_write)
-    monkeypatch.setattr(bugs, "run_bd", unexpected_write)
     assert cli.main(["bugs", "file"]) == 0
     saved = bugs.load(folder)
     assert saved is not None and saved.bead == "old-ticket"

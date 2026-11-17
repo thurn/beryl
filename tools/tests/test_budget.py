@@ -3,7 +3,6 @@ slow CI one per lane naming the checks to cut."""
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 
 import pytest
@@ -22,37 +21,53 @@ def labels(issue: dict[str, object]) -> list[str]:
     return [str(label) for label in found] if isinstance(found, list) else []
 
 
-class FakeBd(verdicts.Beads):
-    """bd as budget.py uses it, in memory."""
+class FakeTickets(verdicts.Tickets):
+    """The ticket service as budget.py uses it, in memory."""
 
     def __init__(self) -> None:
         self.issues: list[dict[str, object]] = []
 
-    def bd(self, *args: str) -> tuple[int, str]:
-        if args[:2] == ("list", "--label"):
-            return 0, json.dumps([i for i in self.issues if args[2] in labels(i)])
-        if args[0] == "create":
-            flag = lambda name: args[args.index(name) + 1]  # noqa: E731
-            bead = f"by-{len(self.issues) + 1}"
-            self.issues.append(
-                {
-                    "id": bead,
-                    "status": "open",
-                    "title": flag("--title"),
-                    "description": flag("--description"),
-                    "labels": flag("--labels").split(","),
-                    "metadata": json.loads(flag("--metadata")),
-                }
-            )
-            return 0, bead + "\n"
-        return 1, ""
+    def list_issues(self, *filters: str, include_closed: bool = False) -> object:
+        flag, label = filters
+        assert flag == "--label"
+        return [
+            issue
+            for issue in self.issues
+            if isinstance(assigned := issue["labels"], list) and label in assigned
+        ]
+
+    def create_issue(
+        self,
+        *,
+        title: str,
+        body: str,
+        priority: str,
+        labels: str,
+        acceptance: str = "",
+        parent: str = "",
+        metadata: dict[str, str] | None = None,
+    ) -> tuple[int, str]:
+        ticket = f"by-{len(self.issues) + 1}"
+        self.issues.append(
+            {
+                "id": ticket,
+                "status": "open",
+                "title": title,
+                "description": body,
+                "priority": int(priority),
+                "labels": labels.split(","),
+                "metadata": metadata,
+                "comments": [],
+            }
+        )
+        return 0, ticket
 
 
 LANES = ["rust 120 s (fmt 1 s, clippy 1 s, tests 118 s)", "repo 2 s (just 0 s)"]
 
 
 def test_an_overrun_files_a_bead_naming_its_lanes() -> None:
-    store = FakeBd()
+    store = FakeTickets()
     line = budget.report("check", 60, "191 s", LANES, "load average 6", store)
     assert line == "check: over budget: filed by-1 to audit it"
     [issue] = store.issues
@@ -62,7 +77,7 @@ def test_an_overrun_files_a_bead_naming_its_lanes() -> None:
 
 
 def test_an_open_bead_takes_later_overruns_of_its_script() -> None:
-    store = FakeBd()
+    store = FakeTickets()
     budget.report("check", 60, "191 s", LANES, "", store)
     again = budget.report("check", 60, "200 s", LANES, "", store)
     assert again == "check: over budget: by-1 is open to audit it"
@@ -71,7 +86,7 @@ def test_an_open_bead_takes_later_overruns_of_its_script() -> None:
 
 
 def test_a_closed_bead_lets_the_next_overrun_file_again() -> None:
-    store = FakeBd()
+    store = FakeTickets()
     budget.report("check", 60, "191 s", LANES, "", store)
     store.issues[0]["status"] = "closed"
     budget.report("check", 60, "191 s", LANES, "", store)
@@ -118,12 +133,12 @@ def runs(
     return [r for i in range(first, first + count) for r in run(i, {**CHECKS, **more})]
 
 
-def slow(store: FakeBd, records: list[dict[str, object]], cpu: float) -> list[str]:
+def slow(store: FakeTickets, records: list[dict[str, object]], cpu: float) -> list[str]:
     return budget.slow_report(records, CAUGHT, store, cpu, host="mac")
 
 
 def test_slow_ci_over_its_cpu_budget_files_a_bead_per_lane_naming_the_cuts() -> None:
-    store = FakeBd()
+    store = FakeTickets()
     # 201 CPU s a run; cutting `rust:costly` and `ui:drag` leaves 121.
     lines = slow(store, runs() + run(99, {"rust:costly": 9999.0}, host="pc"), 125)
     assert lines[0] == "ci budget: a full run uses 201 CPU seconds, over 125"
@@ -143,7 +158,7 @@ def test_slow_ci_over_its_cpu_budget_files_a_bead_per_lane_naming_the_cuts() -> 
 
 
 def test_a_check_that_caught_a_bug_is_moved_to_the_nightly() -> None:
-    store = FakeBd()
+    store = FakeTickets()
     slow(store, runs(), 90)
     ui = str(store.issues[-1]["description"])
     assert "- move to the nightly: `ui:caught`: 10 runs, 1 catches" in ui
@@ -151,7 +166,7 @@ def test_a_check_that_caught_a_bug_is_moved_to_the_nightly() -> None:
 
 
 def test_slow_ci_under_its_budget_files_nothing() -> None:
-    store = FakeBd()
+    store = FakeTickets()
     assert slow(store, runs(), 300) == [
         "ci budget: a full run uses 201 of 300 CPU seconds"
     ]
@@ -159,13 +174,13 @@ def test_slow_ci_under_its_budget_files_nothing() -> None:
 
 
 def test_one_noisy_run_is_not_the_median() -> None:
-    store = FakeBd()
+    store = FakeTickets()
     records = runs() + run(check_value.RUNS, {**CHECKS, "rust:costly": 5000.0})
     assert slow(store, records, 250)[0].endswith("of 250 CPU seconds")
 
 
 def test_an_open_cut_bead_holds_back_the_next() -> None:
-    store = FakeBd()
+    store = FakeTickets()
     slow(store, runs(), 125)
     filed = len(store.issues)
     assert slow(store, runs(), 125) == [
@@ -175,7 +190,7 @@ def test_an_open_cut_bead_holds_back_the_next() -> None:
 
 
 def test_after_a_cut_closes_only_runs_since_count() -> None:
-    store = FakeBd()
+    store = FakeTickets()
     slow(store, runs(), 125)
     for issue in store.issues:
         issue["status"] = "closed"
@@ -196,7 +211,7 @@ def test_after_a_cut_closes_only_runs_since_count() -> None:
 
 
 def test_too_few_runs_measure_nothing() -> None:
-    store = FakeBd()
+    store = FakeTickets()
     assert (
         slow(store, runs(count=3), 1)[0] == "ci budget: 3 of 10 runs; not measured yet"
     )

@@ -1,7 +1,6 @@
----
-name: bugfix
-description: Work the bug reports filed from Beryl's in-app bug button (⌘B) as an Enact run — file them as beads, group reports that share a cause into lanes and give each a model tier, then run them through /enact-plan's vizier loop, where worker sessions reproduce, fix, verify and close each report. Use when asked to fix reported bugs, work the bug reports, or run /bugfix.
----
+______________________________________________________________________
+
+## name: bugfix description: Work the bug reports filed from Beryl's in-app bug button (⌘B) as an Enact run — file them as beads, group reports that share a cause into lanes and give each a model tier, then run them through /enact-plan's vizier loop, where worker sessions reproduce, fix, verify and close each report. Use when asked to fix reported bugs, work the bug reports, or run /bugfix.
 
 # Fixing reported bugs
 
@@ -11,23 +10,23 @@ hands every report to worker sessions and never fixes, reproduces or closes a
 report itself. Workers are Enact executor sessions; each one follows
 [Worker: fixing one report](#worker-fixing-one-report) below for its bead.
 
-`/enact-plan` cannot be invoked as a skill by a model, so read its
-`SKILL.md` (resolve `ENACT` from it as it says) and follow it. The user's
-`/bugfix` invocation is the invocation `/enact-plan` expects: it authorizes the run's sessions, and any parallelism, **light**
-keyword or other instructions given with `/bugfix` pass straight through. A
-`/bugfix` run's parallelism defaults to **3**, not `/enact-plan`'s 1, so its
-pool starts four sessions; a parallelism given with `/bugfix` overrides it. Its
-input is the bug-report beads chosen in
+`/enact-plan` cannot be invoked as a skill by a model, so read its `SKILL.md`
+(resolve `ENACT` from it as it says) and follow it. The user's `/bugfix`
+invocation is the invocation `/enact-plan` expects: it authorizes the run's
+sessions, and any parallelism, **light** keyword or other instructions given
+with `/bugfix` pass straight through. A `/bugfix` run's parallelism defaults to
+**3**, not `/enact-plan`'s 1, so its pool starts four sessions; a parallelism
+given with `/bugfix` overrides it. Its input is the bug-report beads chosen in
 [Vizier: planning the run](#vizier-planning-the-run), handled as "Several
 beads". Everything `/enact-plan` says about pre-flight, permission mode, the
-Claude Desktop session pool, registering the run, the loop, titles and the
-final report applies unchanged; this skill only adds how to choose and prepare
-the beads. In Claude Desktop the pool can only be started in the turn the user
+Claude Desktop session pool, registering the run, the loop, titles and the final
+report applies unchanged; this skill only adds how to choose and prepare the
+beads. In Claude Desktop the pool can only be started in the turn the user
 invoked you, so do all of the planning below in that turn.
 
 Nothing in this workflow waits for the user. Where a report leaves a real
-question, the worker decides it (Worker step 1) and proceeds. Never file a
-bead asking the user to look at something.
+question, the worker decides it (Worker step 1) and proceeds. Never file a bead
+asking the user to look at something.
 
 MTG Arena is the reference for the UI's flow, motion, timing, table layout and
 wording (AGENTS.md, UI). Beryl differs from it only where
@@ -40,8 +39,8 @@ scope of the complaint beyond the pictured card. AI reports retain the
 blunder-catalog completion criteria below.
 
 Run `just ticket-backend` to select the tracker for this session. When it
-reports `server`, use the executable from its `tk` field for the native
-commands below. When it reports `beads`, use the `bd` commands.
+reports `server`, use the executable from its `tk` field for the native commands
+below. When it reports `beads`, use the `bd` commands.
 
 ## Where reports are
 
@@ -50,14 +49,14 @@ player select the area that shows the bug, and writes a folder under
 `~/Library/Application Support/ca.thurn.beryl/bugs` (`$BERYL_BUGS` overrides it;
 `beryl_session`'s `bugs.rs` writes it):
 
-Phone reports stay on the phone until `just mobile-bugs` pulls them into this folder.
-A shared zip is taken with `just mobile-bugs <zip>`.
+Phone reports stay on the phone until `just mobile-bugs` pulls them into this
+folder. A shared zip is taken with `just mobile-bugs <zip>`.
 
 - `report.md`: front matter (`kind`: `bug`, or `ai` for a play of the AI's the
-  player ticked "AI play" for; `status`: open, filed or done; `bead`;
-  the game's `seed`, `turn`, `step`, `decision`; the `commit` the app was built
-  from, marked if it had uncommitted changes; the page `url`), then the player's
-  words and how to reproduce it.
+  player ticked "AI play" for; `status`: open, filed or done; `bead`; the game's
+  `seed`, `turn`, `step`, `decision`; the `commit` the app was built from,
+  marked if it had uncommitted changes; the page `url`), then the player's words
+  and how to reproduce it.
 - `screenshot.png`: the area they selected. `window.png`: the whole window at
   that instant, animations frozen mid-flight and hovers held. Look at both with
   the Read tool.
@@ -89,32 +88,31 @@ reproduces it.
 This is `/enact-plan`'s pre-flight. Start with its steps 1 to 3 (title, update
 Enact, project setup, permission mode), then:
 
-1. **File them.** `just bugs` lists open and filed reports. `just bugs file` files a bead for each open one (type bug, label
-   `bug-report`, priority 1) holding the report's path and the player's words,
-   and saves the issue ID in the report's front matter. For closed history and
-   work left in progress, use `tk list --label bug-report --all --json` or
-   `bd list --label bug-report --all --limit 0`. Reconcile the local
-   reports with the beads and establish the reports in scope for this run; do
-   not silently omit blocked, deferred, or interrupted work. Leave out beads
-   labeled `human` (they wait on the reporter, below) and beads another
-   session or vizier is actively working; name both in your summary.
+1. **File them.** `just bugs` lists open and filed reports. `just bugs file`
+   files a bead for each open one (type bug, label `bug-report`, priority 1)
+   holding the report's path and the player's words, and saves the issue ID in
+   the report's front matter. For closed history and work left in progress, use
+   `tk list --label bug-report --all --json`. Reconcile the local reports with
+   the beads and establish the reports in scope for this run; do not silently
+   omit blocked, deferred, or interrupted work. Leave out beads labeled `human`
+   (they wait on the reporter, below) and beads another session or vizier is
+   actively working; name both in your summary.
 
-2. **Read each report, briefly.** Read every report in scope: its words and
-   its screenshot. This reading is for routing, not for deciding what the
-   player wants; the worker does that with the evidence in front of it
-   (Worker step 1). Do not read code, open a worktree, reproduce, or run
-   subagents to interpret reports. Note on each bead only facts you checked:
+2. **Read each report, briefly.** Read every report in scope: its words and its
+   screenshot. This reading is for routing, not for deciding what the player
+   wants; the worker does that with the evidence in front of it (Worker step 1).
+   Do not read code, open a worktree, reproduce, or run subagents to interpret
+   reports. Note on each bead only facts you checked:
 
    - related open and closed reports and the commits that fixed them, found by
      searching the same issue list and `git log`;
    - for a repeat report, whether its app build (`commit` in the front matter)
      already contains the earlier fix;
-   - the line "Follow the `bugfix` skill's 'Worker: fixing one report'
-     section."
+   - the line "Follow the `bugfix` skill's 'Worker: fixing one report' section."
 
    Never write a guess as a fact or a default. In particular, do not describe
-   how an earlier build or Arena showed something unless you have looked at
-   it; the worker finds that out.
+   how an earlier build or Arena showed something unless you have looked at it;
+   the worker finds that out.
 
 3. **Group and route.** Several reports with one cause are one fix: give them
    the same `lane:<name>` so one session fixes the cause once and verifies and
@@ -123,52 +121,50 @@ Enact, project setup, permission mode), then:
    reported twice), not because two fixes might touch the same files or
    directory: merge conflicts are cheap, and a lane costs parallelism. Do not
    run `/enact-plan`'s "Lane and tier pass" over these beads. Add an edge
-   (`tk dep add <dependent> <prerequisite>` or
-   `bd dep add <dependent> <prerequisite>`) only where one fix changes how
+   (`tk dep add <dependent> <prerequisite>`) only where one fix changes how
    another report must be judged.
 
    Then give every bead a tier, since Beryl assigns models by name
    (`/enact-plan`, "Models by name"; AGENTS.md, Enact):
 
    - `tier:opus` by default: reports whose cause is not obvious, rules engine
-     behavior, motion, prompt shapes, repeat reports, and every `ai-play`
-     report (judging a blunder is design work).
+     behavior, motion, prompt shapes, repeat reports, and every `ai-play` report
+     (judging a blunder is design work).
    - `tier:sonnet` only where the report itself names a small, local change: a
      wording change, a color, a misaligned element.
 
    Never use `tier:fable` unless the user asked for it.
 
-4. **Run them.** Continue with `/enact-plan` at "A bead", case "Several
-   beads": create the run epic (title `Bug reports <date>`; its description
-   lists the reports in scope and the tier policy above), reparent each bead into it, then "Finish planning" and the loop.
-   A bug-report bead that already sits under the open epic of an earlier
-   `/bugfix` run with claimed children belongs to that run's vizier: leave
-   it. Under any other parent, move it into the new epic and note the old
-   parent on the bead. Add no Wardens, Masons, Sages or Archivist unless
-   the invocation asks; each worker's verification below is the review.
-   From here on you are the vizier in `/enact-plan`'s loop and nothing
-   else: you never read a bead's progress, review a fix, or close a report.
+4. **Run them.** Continue with `/enact-plan` at "A bead", case "Several beads":
+   create the run epic (title `Bug reports <date>`; its description lists the
+   reports in scope and the tier policy above), reparent each bead into it, then
+   "Finish planning" and the loop. A bug-report bead that already sits under the
+   open epic of an earlier `/bugfix` run with claimed children belongs to that
+   run's vizier: leave it. Under any other parent, move it into the new epic and
+   note the old parent on the bead. Add no Wardens, Masons, Sages or Archivist
+   unless the invocation asks; each worker's verification below is the review.
+   From here on you are the vizier in `/enact-plan`'s loop and nothing else: you
+   never read a bead's progress, review a fix, or close a report.
 
-5. **Report.** When the loop returns `done` (or the run stops), reconcile
-   the reports in scope with `just bugs` and the final bead states, and give
-   the reporter a concise outcome for every report: verified fixed (with
-   commit), cataloged AI blunder, awaiting the reporter (`human`), handed
-   back unfinished, or left out (with the reason). Do not let a successful
-   subset stand in for completing the run.
+5. **Report.** When the loop returns `done` (or the run stops), reconcile the
+   reports in scope with `just bugs` and the final bead states, and give the
+   reporter a concise outcome for every report: verified fixed (with commit),
+   cataloged AI blunder, awaiting the reporter (`human`), handed back
+   unfinished, or left out (with the reason). Do not let a successful subset
+   stand in for completing the run.
 
 ## Worker: fixing one report
 
 You are an Enact executor session working one bug-report bead (or a lane of
-them). Your role files from Enact still apply: worktree, `enact push`,
-handoff comment and `enact close`. This section says what finishing a bug
-report means. The bead holds the report and related history, not an
-interpretation: deciding what the player is asking for is your first job
-(step 1).
+them). Your role files from Enact still apply: worktree, `enact push`, handoff
+comment and `enact close`. This section says what finishing a bug report means.
+The bead holds the report and related history, not an interpretation: deciding
+what the player is asking for is your first job (step 1).
 
-1. **Decide what the player wants, then reproduce it.** Read the report's
-   words, `screenshot.png` and `window.png` before anything else, and decide
-   what the player saw and what they want. Write that down on the bead with
-   observable acceptance criteria covering every part of the complaint.
+1. **Decide what the player wants, then reproduce it.** Read the report's words,
+   `screenshot.png` and `window.png` before anything else, and decide what the
+   player saw and what they want. Write that down on the bead with observable
+   acceptance criteria covering every part of the complaint.
 
    - **Scope.** A named card often stands for a shared interaction: a chooser
      that opens with the wrong button on one card is a complaint about that
@@ -182,20 +178,19 @@ interpretation: deciding what the player is asking for is your first job
      screenshot; what Arena does at the same moment (for a UI report, the
      `arena-pixel-match` film of step 2, started now: see Arena before you
      design); UI Conventions; the nearest behavior Beryl already has. Take the
-     reading that covers the whole complaint, not a narrower one that is
-     easier to build.
-   - **"It used to be better."** Find out what the earlier build actually
-     showed at that moment (`git log`, `git show <commit>^:<path>`, an old
-     spec film) before you restore anything. Never assume which component it
-     was.
+     reading that covers the whole complaint, not a narrower one that is easier
+     to build.
+   - **"It used to be better."** Find out what the earlier build actually showed
+     at that moment (`git log`, `git show <commit>^:<path>`, an old spec film)
+     before you restore anything. Never assume which component it was.
    - **A repeat report:** say what the earlier fix or its verification missed
      before you write another patch.
    - **A motion, arrow or combat-line report:** read the moment's script first
      (`just specs --script <card>`, or the steps
      `just ui-shots --views <fixture>` lists; the `specs` skill, step 2). A
      wrong script is a session bug in the builder
-     (`rust/crates/beryl_session/src/script/`); a right script played wrongly
-     is the stage's (`ui/src/stage/`). Hold the fix with a case of the verb or
+     (`rust/crates/beryl_session/src/script/`); a right script played wrongly is
+     the stage's (`ui/src/stage/`). Hold the fix with a case of the verb or
      shape suite (`ui/scripts/verb-cases*.mjs`, `shape-cases*.mjs`).
 
    Then reproduce it. Pick by what went wrong:
@@ -234,9 +229,9 @@ interpretation: deciding what the player is asking for is your first job
    **Beryl 3D reports.** A report whose `ui.json` names Beryl 3D as its client
    came from the native client (docs/beryl-3d.md, "Bug reports"); the steps
    above stay the web interface's. Run `just b3d bug <report>` first: it prints
-   the player's words, the commit, the frozen frame's element tree and the
-   frame log's summary, and then the commands that reproduce the report. Run
-   them next:
+   the player's words, the commit, the frozen frame's element tree and the frame
+   log's summary, and then the commands that reproduce the report. Run them
+   next:
 
    - A report saved while a recording replayed:
      `just b3d tree <recording> --seat <seat> --at <at>ms` and `png` with the
@@ -247,12 +242,12 @@ interpretation: deciding what the player is asking for is your first job
      `just b3d live tree`, `live png` and `live do` look at and drive it.
 
 2. **Fix and verify** rules and UI bugs through a worktree as AGENTS.md says.
-   Enact has already claimed the bead for you.
-   Identify the shared mechanism responsible for the complaint and fix it at
-   that level. Choose representative neighboring cases that could expose the
-   same failure, such as both seats, a trigger resolving immediately versus
-   stopping for priority, or different destination zones. Record why those cases
-   cover the scope; avoid card-specific patches for shared behavior.
+   Enact has already claimed the bead for you. Identify the shared mechanism
+   responsible for the complaint and fix it at that level. Choose representative
+   neighboring cases that could expose the same failure, such as both seats, a
+   trigger resolving immediately versus stopping for priority, or different
+   destination zones. Record why those cases cover the scope; avoid
+   card-specific patches for shared behavior.
 
    Reproduce the failure before editing and repeat the same interaction after
    the fix. If the original replay drifts or lacks the relevant transition,
@@ -266,22 +261,22 @@ interpretation: deciding what the player is asking for is your first job
    broken state as a fixture or spec moment for the generic audits (AGENTS.md,
    Checks). A rules engine bug also gets its `docs/bugs.md` entry.
 
-   When the user's report asks for something Arena does differently, or
-   reverses an earlier report, build what it asks, and add, change or remove
-   the exception in `data/ui-conventions.json` in the same change (then
+   When the user's report asks for something Arena does differently, or reverses
+   an earlier report, build what it asks, and add, change or remove the
+   exception in `data/ui-conventions.json` in the same change (then
    `just conventions` regenerates `docs/ui-conventions.md`). Name the report's
    bead in the entry.
 
    **Every UI report runs `/arena-pixel-match`. This is not optional, however
    small the change looks.** Read the skill and follow it for the reported
    moment and the neighboring cases: film Arena first, while deciding the fix
-   (step 1), and film again after it. It films the same moment in an Arena recording and
-   in Beryl side by side (through the `arena-video` and `specs` skills), lists
-   every difference in what is shown, where, how large and when, and has you
-   fix them until none is left or each one left is named. The player's report
-   and UI Conventions override Arena there, as that skill says. A final
-   screenshot, passing typecheck, engine event, or DOM presence alone cannot
-   prove the screen behaves as requested. Extend the specs' coverage when
+   (step 1), and film again after it. It films the same moment in an Arena
+   recording and in Beryl side by side (through the `arena-video` and `specs`
+   skills), lists every difference in what is shown, where, how large and when,
+   and has you fix them until none is left or each one left is named. The
+   player's report and UI Conventions override Arena there, as that skill says.
+   A final screenshot, passing typecheck, engine event, or DOM presence alone
+   cannot prove the screen behaves as requested. Extend the specs' coverage when
    necessary. Only when Arena has no such moment does the hand-written
    expectation below stand in for the side-by-side film, and "no such moment"
    needs evidence: record on the bead the `arena-video` searches you ran and
@@ -299,40 +294,35 @@ interpretation: deciding what the player is asking for is your first job
    (each row fixed, or named with its reason). Where Arena has no such moment,
    the bead instead records the `arena-video` searches that found none and the
    hand-written expectation that stands in (the test above, or the UI
-   Conventions entry it follows). Without one of these, hand the report back
-   as "only partly fixed" below. Then run
-   `just bugs done <bead> --commit <sha>` with the `staging` SHA that
-   `enact push` reported, which marks the report done and moves it to
-   `done/`, and finish as Enact's role files say: the handoff comment, then
-   `enact close <bead> --reason "<what was wrong>"` (with `--continue` in a
-   lane). Enact's vizier waits for slow CI, so ignore `watch_ci`.
+   Conventions entry it follows). Without one of these, hand the report back as
+   "only partly fixed" below. Then run `just bugs done <bead> --commit <sha>`
+   with the `staging` SHA that `enact push` reported, which marks the report
+   done and moves it to `done/`, and finish as Enact's role files say: the
+   handoff comment, then `enact close <bead> --reason "<what was wrong>"` (with
+   `--continue` in a lane). Enact's vizier waits for slow CI, so ignore
+   `watch_ci`.
 
 Some reports end without a fix. Hand such a bead back so the run can finish
 without it, and so a later `/bugfix` run sees it:
 
-- **Awaiting the reporter.** A rules report describes behavior the
-  Comprehensive Rules require, or an AI report needs the reporter's judgment
-  (step 1). Record the evidence and expected behavior with
-  `tk comment <id> "..."` or `bd note <bead> "..."`. Run
+- **Awaiting the reporter.** A rules report describes behavior the Comprehensive
+  Rules require, or an AI report needs the reporter's judgment (step 1). Record
+  the evidence and expected behavior with `tk comment <id> "..."`. Run
   `enact release <id> --reason "awaiting reporter"`, then detach it with
-  `tk update <id> --parent "" --add-label human` or
-  `bd update <bead> --parent "" --add-label human`. Run `enact sync`.
-  Find these reports with `tk list --label human --label bug-report` or
-  `bd human list`. Once the reporter confirms, record the confirmation with
-  `tk comment <id> "<confirmation>"` and clear the label with
-  `tk update <id> --remove-label human`, or use
-  `bd human respond <bead> "<confirmation>"`. Run `just bugs done <id>` and
-  `enact sync`. If the reporter instead identifies a bug or confirms a
-  blunder, clear the label and leave the report filed for the next `/bugfix`.
+  `tk update <id> --parent "" --add-label human`. Find these reports with
+  `tk list --label human --label bug-report`. Once the reporter confirms, record
+  the confirmation with `tk comment <id> "<confirmation>"` and clear the label
+  with `tk update <id> --remove-label human`. Run `just bugs done <id>`. If the
+  reporter instead identifies a bug or confirms a blunder, clear the label and
+  leave the report filed for the next `/bugfix`.
 - **Not reproduced or only partly fixed.** A UI report is never working as
-  intended merely because Arena does the same: the user's report wins
-  (step 2). A rules or UI report you cannot reproduce stays filed. Record
-  what you tried, the acceptance criteria still unmet and the next action
-  with `tk comment <id> "..."` or `bd note <bead> "..."`. Run
-  `enact release <id> --reason "..."`, then `tk update <id> --parent ""` or
-  `bd update <bead> --parent ""`, and `enact sync`. Push any partial fix
-  that is correct on its own, but never run `just bugs done` for it, and
-  never archive a report merely because a related change landed.
+  intended merely because Arena does the same: the user's report wins (step 2).
+  A rules or UI report you cannot reproduce stays filed. Record what you tried,
+  the acceptance criteria still unmet and the next action with
+  `tk comment <id> "..."`. Run `enact release <id> --reason "..."`, then
+  `tk update <id> --parent ""`. Push any partial fix that is correct on its own,
+  but never run `just bugs done` for it, and never archive a report merely
+  because a related change landed.
 
-After a hand-back, retitle ⛔ as Enact's role files say for a release and
-end your turn with a summary of where the report stands.
+After a hand-back, retitle ⛔ as Enact's role files say for a release and end
+your turn with a summary of where the report stands.

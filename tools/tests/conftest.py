@@ -23,7 +23,7 @@ def own_cache(
     low-disk mode sets the free space it wants."""
     cache = tmp_path_factory.mktemp("cache")
     monkeypatch.setenv("BERYL_CACHE", str(cache))
-    monkeypatch.setenv("BERYL_CI_BEADS", "off")
+    monkeypatch.setenv("BERYL_CI_TICKETS", "off")
     monkeypatch.setenv("BERYL_SPEED", "off")
     monkeypatch.delenv("BERYL_CHECK_RESULTS", raising=False)
     # Nor does the fast check's time contract (deadline.py) reach a test run under it.

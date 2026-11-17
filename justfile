@@ -151,15 +151,15 @@ playground *args:
 scenarios *args:
     {{ by }} scenarios "$@"
 
-# Open top-level tickets or beads, excluding bug reports and automatically filed CI work
-beads:
-    @{{ by }} beads
+# Open top-level tickets, excluding bug reports and automatically filed CI work
+tickets:
+    @{{ by }} tickets
 
 # Report the active tracker and its native client path
 ticket-backend:
     @{{ by }} ticket-backend
 
-# The app's bug reports: list, import a ZIP, file as beads, or mark done
+# The app's bug reports: list, import a ZIP, file tickets, or mark done
 [group('app')]
 bugs *args:
     {{ by }} bugs "$@"
@@ -193,11 +193,6 @@ speed *args:
 [group('bench')]
 cpu *args:
     {{ by }} cpu "$@"
-
-# The beads as a web page on http://127.0.0.1:8766 (build; publish pushes it to GitHub Pages; install/uninstall the agent that publishes on bead changes, at most every 10 minutes)
-[group('bench')]
-status *args:
-    @uv run --quiet --no-dev --project status beryl-status "$@"
 
 # Where agent time, CPU and tokens go, per bead (ingest [--rebuild], sql '<query>', coverage; --json, --no-ingest; serve runs at normal priority)
 [group('bench')]
@@ -485,7 +480,7 @@ fmt:
     {{ by }} warm
     cd ui && node_modules/.bin/prettier --write --log-level warn .
     just --fmt --unstable
-    git ls-files -co --exclude-standard '*.md' | grep -v -e '^.beads/' -e '^.agents/' | xargs uv run --quiet --project tools mdformat
+    git ls-files -co --exclude-standard '*.md' | grep -v -e '^.agents/' | xargs uv run --quiet --project tools mdformat
 
 # Edit one file in $EDITOR in a fresh worktree, then commit and `enact push` it
 [group('enact')]

@@ -7,7 +7,7 @@ A source is one of four kinds:
   read from the byte offset recorded in the `sources` table. A file whose first bytes no longer
   match their recorded fingerprint was replaced, and is read again from the start. A last line
   with no newline is left for the next ingest.
-- A `SnapshotSource` is a command's whole output, such as `bd list`. It is read whole every
+- A `SnapshotSource` is a command's whole output, such as `tk export`. It is read whole every
   time, and when its digest matches the last one it writes nothing and counts no bytes read.
 - A `FileSource` is a set of small files that are rewritten in place, such as the desktop
   app's session records. A file is read whole when its size or modification time changed.

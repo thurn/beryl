@@ -19,7 +19,6 @@
 /tools/.pytest_cache/
 /efficiency/.venv/
 /efficiency/.pyre/
-/status/.pyre/
 __pycache__/
 *.egg-info/
 
@@ -33,9 +32,6 @@ __pycache__/
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db
-.beads-credential-key
-.beads/proxieddb/
 *.gate.lock*
-/.beads/interactions.jsonl
 
 .playwright-mcp/

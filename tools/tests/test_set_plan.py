@@ -145,7 +145,7 @@ def test_list_and_plan_partition_a_sets_first_printings(
 
     output = capsys.readouterr()
     commands = [shlex.split(line) for line in output.out.splitlines()]
-    assert all(command[:2] == ["bd", "create"] for command in commands)
+    assert all(command[:2] == ["tk", "create"] for command in commands)
     assert [command[-1] for command in commands] == [
         "tier:opus",
         "tier:opus",

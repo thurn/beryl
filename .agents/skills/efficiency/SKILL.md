@@ -1,7 +1,6 @@
----
-name: efficiency
-description: Find out where agent time, CPU, LLM tokens (dollars) or CI cost went for a bead, epic, session, cohort or day, and find savings opportunities, with `just efficiency` and its local page. Use when asked what a bead or epic cost, why a session was slow or expensive, what CI or pushes cost, which models or roles spend the most, or what to cut to save time or tokens.
----
+______________________________________________________________________
+
+## name: efficiency description: Find out where agent time, CPU, LLM tokens (dollars) or CI cost went for a bead, epic, session, cohort or day, and find savings opportunities, with `just efficiency` and its local page. Use when asked what a bead or epic cost, why a session was slow or expensive, what CI or pushes cost, which models or roles spend the most, or what to cut to save time or tokens.
 
 # Efficiency tools
 
@@ -12,7 +11,8 @@ anything at the time; ingest reads these sources afterwards:
 - Claude Code transcripts and the desktop app's session records, and Codex logs
   (`~/.codex/sessions`, `.jsonl` only). Bead windows (the stretch of a session
   spent on one bead) come from the Enact commands a session ran.
-- Beads (`bd list`), and `git log` and `master`'s reflog from the main checkout.
+- Tickets (`tk list`), and `git log` and `master`'s reflog from the main
+  checkout.
 - The CPU sampler, the CPU token pool's lease log, the CI run log and the
   verdicts on `ci-check` beads.
 - Enact's lock-wait log (`.git/enact/lock-waits.jsonl` in the main checkout):
@@ -70,13 +70,14 @@ just efficiency sql "select count(*) from requests where model like 'claude-opus
 
 `findings` is where to start looking for savings. Its rules include
 `small-reads`, `carried-logs`, `fixed-prefix`, `wake-ups`, `outlier-beads`,
-`tier-gap`, `queued`, `enact-lock-wait`, `compile-share`, `repeated-command`, `chained-commands`,
-`never-caught` and `flake-cost`; `just efficiency findings --help` lists them
-all. Each item names its evidence query and example beads.
+`tier-gap`, `queued`, `enact-lock-wait`, `compile-share`, `repeated-command`,
+`chained-commands`, `never-caught` and `flake-cost`;
+`just efficiency findings --help` lists them all. Each item names its evidence
+query and example beads.
 
 `tier-gap` (move beads to a cheaper model) is not a useful finding to report:
-the user already knows it is an option. When asked for savings, leave it out
-and recommend from the other rules.
+the user already knows it is an option. When asked for savings, leave it out and
+recommend from the other rules.
 
 `sql` is read-only and is for questions no named query answers. The main tables
 are `beads`, `labels`, `sessions`, `windows`, `requests`, `tool_calls`,
@@ -123,8 +124,7 @@ opportunities, in answers about velocity or in findings:
   that picks it up.
 - Hours when no bead session is running, such as the gaps between Enact runs or
   while a run is paused or stopped.
-- An "always-on worker pool" or dispatcher that drains `bd ready` without a
-  run.
+- An "always-on worker pool" or dispatcher that drains `tk ready` without a run.
 - Sessions stopped by a usage limit (the weekly limit or a model's limit), and
   advice to avoid hitting one.
 
@@ -149,18 +149,17 @@ each finding before reporting it:
    It says what someone saw and what changed, so you can tell whether it covers
    this finding or only a nearby one.
 3. **Look for beads.** Search the open and in-progress beads, descriptions as
-   well as titles:
-   `bd list --status open,in_progress --json -n 0`, filtered for the tool's
-   name, the command and the symptom. A finding can also come from a bead's own
-   text: for example, the acceptance criteria that a tool writes into the beads
-   it files can send workers to run a slow command.
+   well as titles: `tk list --json`, filtered for the tool's name, the command
+   and the symptom. A finding can also come from a bead's own text: for example,
+   the acceptance criteria that a tool writes into the beads it files can send
+   workers to run a slow command.
 4. **Read the code as it is now** (`git show origin/staging:<path>`), not the
    main checkout, which may lag behind. Confirm that the cause you inferred
    still exists, such as a lock, a priority class or a retry loop.
-5. **Re-measure only with enough data.** If a fix landed, compare the same
-   query before and after it, and say how many hours or cases the "after" side
-   holds. A few hours of data is not enough to call a fix a success or a
-   failure. Say so, and report the finding as "fixed, not yet measured".
+5. **Re-measure only with enough data.** If a fix landed, compare the same query
+   before and after it, and say how many hours or cases the "after" side holds.
+   A few hours of data is not enough to call a fix a success or a failure. Say
+   so, and report the finding as "fixed, not yet measured".
 
 Report each finding as one of: **fixed** (name the commit), **covered** (name
 the bead and say what it leaves out), or **open** (no fix or bead). Only an open

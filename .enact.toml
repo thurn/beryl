@@ -3,11 +3,9 @@ remote = "origin"
 staging_branch = "staging"
 master_branch = "master"
 
-# Uncomment after the Worker is deployed and the fleet is ready to enroll.
-# Enact and the bd shim then follow the project's server-side cutover state.
-# [tickets]
-# project = "by"
-# url = "https://tickets.thurn.workers.dev"
+[tickets]
+project = "by"
+url = "https://tickets.thurn.workers.dev"
 
 [checks]
 fast = "uv run --quiet --project tools by check"

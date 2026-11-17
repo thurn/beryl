@@ -587,7 +587,7 @@ def file(
     since: str,
     found: list[str],
     output_by_lane: dict[str, str],
-    store: verdicts.Beads | None = None,
+    store: verdicts.Tickets | None = None,
 ) -> list[str]:
     """Files the sweep's failed checks, by step: a comment on each open sweep bead that names
     one of them already, and a new bead per step for the rest. Returns a line per bead
@@ -631,29 +631,6 @@ def file(
             else f"b3d sweep: {step}: bead not filed for {', '.join(new)}"
         )
     return lines
-
-
-class DryRun(verdicts.Beads):
-    """bd as the sweep's filing uses it, reading the real beads but printing each bead or
-    comment it would write instead of writing it."""
-
-    def __init__(self, real: verdicts.Beads) -> None:
-        self.real = real
-
-    def tracker(self, native: Callable[[str], str], *args: str) -> tuple[int, str]:
-        if args[0] == "list":
-            return self.real.tracker(native, *args)
-        if args[0] == "create":
-            flag = lambda name: args[args.index(name) + 1]  # noqa: E731
-            print(
-                f"b3d sweep: would file under {flag('--parent')}, labelled "
-                f"{flag('--labels')}, P{flag('--priority')}, from host "
-                f"{json.loads(flag('--metadata'))['enact_ci_host']}: {flag('--title')}\n"
-                f"{flag('--description')}\nAcceptance: {flag('--acceptance')}"
-            )
-            return 0, "(dry run)"
-        print(f"b3d sweep: would add to {args[2]} the comment:\n{args[3]}")
-        return 0, ""
 
 
 def failed_by_step(
@@ -748,7 +725,7 @@ def sweep_run(args: argparse.Namespace) -> int:
         for line in found:
             print(line)
     output_by_lane = {o.lane: o.log for o in failed}
-    store = DryRun(verdicts.STORE) if args.dry_run else None
+    store = verdicts.DryRun(verdicts.STORE, "b3d sweep") if args.dry_run else None
     by_step = failed_by_step(commit, began, failed)
     if not args.dry_run:
         by_step = still_failing(commit, by_step)

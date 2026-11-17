@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .beads import main_checkout, run_bd
+from .beads import main_checkout, run_command
 from .ingest import Row, SnapshotSource, SourceError
 from .scope import parse_time
 
@@ -144,7 +144,9 @@ class Commits(SnapshotSource):
         """The source for the repository at `start`, read in its main checkout, whose
         `staging` and `master` Enact fast-forwards."""
         checkout = main_checkout(start)
-        return Commits(lambda: run_bd(checkout, LOG) + SEPARATOR + reflog(checkout))
+        return Commits(
+            lambda: run_command(checkout, LOG) + SEPARATOR + reflog(checkout)
+        )
 
     def read(self) -> bytes:
         return self._read()

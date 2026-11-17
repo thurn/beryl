@@ -80,12 +80,12 @@ FULL_ENV = "BERYL_CI_FULL"
 # The paths no lane but `repo` (Markdown formatting) and `names` reads: documentation, agent
 # instructions and skills, editor settings and the beads.
 QUIET: re.Pattern[str] = re.compile(
-    r"^(docs|\.beads|\.agents|\.claude|\.vscode)/|^(.*/)?[^/]*\.md$|^\.gitignore$"
+    r"^(docs|\.agents|\.claude|\.vscode)/|^(.*/)?[^/]*\.md$|^\.gitignore$"
 )
 # The paths the rules of `lane_reason` place; a change to any other runs every lane it reaches
 # in full.
 PLACED: re.Pattern[str] = re.compile(
-    r"^(rust|ui|tools|data|efficiency|status)/|^justfile$|^\.enact\.toml$|^rust-toolchain\.toml$"
+    r"^(rust|ui|tools|data|efficiency)/|^justfile$|^\.enact\.toml$|^rust-toolchain\.toml$"
 )
 # The data files that Rust crates embed or their tests and the card-text step read, and the
 # toolchain's pin: these run the rust lane on the whole workspace.
@@ -125,7 +125,6 @@ LANES: tuple[str, ...] = (
     "oracle",
     "counts",
     "efficiency",
-    "status",
 )
 # The lanes the browser sweep runs in full every few hours (sweep.py) instead of slow CI, which
 # `by ci` still runs when named.
@@ -406,7 +405,6 @@ def lanes_for(packages: list[str] | None) -> dict[str, Callable[[], checks.Lane]
         "mobile": mobile.lane,
         "pytest": checks.pytest_lane,
         "efficiency": standalone.EFFICIENCY.lane,
-        "status": standalone.STATUS.lane,
     }
     return {name: without_fast_only(make) for name, make in made.items()}
 

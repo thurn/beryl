@@ -191,7 +191,7 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
 ) -> None:
     now: datetime = datetime.now(timezone.utc)
 
-    class Verdicts(verdicts.Beads):
+    class Verdicts(verdicts.Tickets):
         """The checks' beads hold one recent flake and one catch from before the window."""
 
         def checks(self) -> list[str]:
@@ -249,7 +249,7 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
 def test_backfilled_failures_count_as_runs_and_rewrites_as_stale_updates(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    class Verdicts(verdicts.Beads):
+    class Verdicts(verdicts.Tickets):
         """The failure's verdict, backfilled into its bead."""
 
         def checks(self) -> list[str]:
@@ -332,7 +332,7 @@ def test_the_report_counts_selection_misses_per_100_landed_commits(
 ) -> None:
     now: datetime = datetime.now(timezone.utc)
 
-    class Verdicts(verdicts.Beads):
+    class Verdicts(verdicts.Tickets):
         """Two misses in the window and one before it, beside a catch."""
 
         def checks(self) -> list[str]:

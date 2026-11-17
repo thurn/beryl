@@ -41,7 +41,7 @@ def plan(
 
 
 def test_a_docs_change_runs_only_the_lanes_that_need_no_build() -> None:
-    chosen = plan(["docs/checks.md", "AGENTS.md", ".beads/issues.jsonl"])
+    chosen = plan(["docs/checks.md", "AGENTS.md"])
     assert set(chosen.why) == {"repo", "names"}
     assert set(chosen.left) == set(EVERYTHING) - {"repo", "names"}
     assert not chosen.whole
@@ -60,7 +60,7 @@ def test_a_card_file_runs_the_lanes_that_build_and_play_it() -> None:
         "oracle",
     }
     # The rollout benchmark does not depend on the changed package.
-    assert set(chosen.left) == {"python", "ui", "counts", "efficiency", "status"}
+    assert set(chosen.left) == {"python", "ui", "counts", "efficiency"}
     assert chosen.why["rust"] == f"{CARD} changed"
 
 

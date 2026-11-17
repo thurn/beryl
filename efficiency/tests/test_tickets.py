@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -31,53 +30,26 @@ def ndjson(*rows: object) -> bytes:
     return "".join(json.dumps(row) + "\n" for row in rows).encode()
 
 
-def test_backend_selection_uses_enacts_cutover_state(
+def test_enact_client_is_discovered_once_per_ingest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    main: Path = tmp_path / "main"
-    main.mkdir()
-    checkout: Path = tmp_path / "old"
-    config = main / ".enact.toml"
-    config.write_text('# [tickets]\n# project = "by"\n')
-
-    def git(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=main, check=True, capture_output=True)
-
-    git("init")
-    git("add", ".enact.toml")
-    git(
-        "-c",
-        "user.name=Test",
-        "-c",
-        "user.email=test@example.com",
-        "commit",
-        "-m",
-        "Dormant",
-    )
-    git("worktree", "add", "--detach", str(checkout))
-
     calls: list[str] = []
-    backend: dict[str, str] = {"backend": "beads"}
 
     def read(cwd: Path, command: list[str]) -> bytes:
-        assert cwd == (main if "bd" in command else checkout)
+        assert cwd == tmp_path
         calls.append(command[-1])
-        return json.dumps(backend).encode() if command[-1] == "backend" else b""
+        return (
+            b'{"backend":"server","tk":"/fixture/tk"}'
+            if command[-1] == "backend"
+            else b"[]" if "events" in command else b""
+        )
 
     monkeypatch.setattr(beads, "run_command", read)
-    assert tickets.sources(checkout)[2] is None
+    records, verdicts, events = tickets.sources(tmp_path)
     assert calls == []
-    config.write_text('[tickets]\nproject = "by"\nurl = "http://localhost:8888"\n')
-    records, verdicts, events = tickets.sources(checkout)
-    assert calls == []
-    assert records.read() == b""
-    assert events is not None and events.page(0)[1] == 0
-    assert calls == ["backend", "--json"]
-    backend.update(backend="server", tk="/fixture/tk")
-    records, verdicts, events = tickets.sources(checkout)
-    assert events is not None
     assert records.read() == verdicts.read() == b""
-    assert calls == ["backend", "--json", "backend", "export"]
+    assert calls == ["backend", "export"]
+    assert events.page(0)[1] == 0
 
 
 @pytest.mark.parametrize("prefix", ["", "T"])

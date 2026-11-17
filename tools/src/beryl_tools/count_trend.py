@@ -164,7 +164,7 @@ def rust_commits(old: str, new: str) -> list[str]:
     return out.splitlines()
 
 
-def open_bead(label: str, store: verdicts.Beads) -> str | None:
+def open_bead(label: str, store: verdicts.Tickets) -> str | None:
     beads = store.list_issues("--label", label)
     for b in beads if isinstance(beads, list) else []:
         if isinstance(b, dict) and b.get("status") != "closed":
@@ -203,7 +203,7 @@ def file_or_comment(
     title: str,
     body: str,
     tier: str,
-    store: verdicts.Beads,
+    store: verdicts.Tickets,
 ) -> str:
     known = open_bead(label, store)
     if known:
@@ -219,7 +219,7 @@ def file_or_comment(
 
 
 def report(
-    measured: int, bar: int, passed: bool, store: verdicts.Beads | None = None
+    measured: int, bar: int, passed: bool, store: verdicts.Tickets | None = None
 ) -> list[str]:
     """Records a staging tip's count and files the beads its trend calls for; returns lines
     to print. A count measured elsewhere is only compared, never recorded or filed on.

@@ -20,13 +20,15 @@ class TicketError(RuntimeError):
 def detect(repo: Path) -> str:
     config = (paths.main_checkout(repo) or repo) / ".enact.toml"
     if not config.is_file():
-        return ""
+        raise TicketError(f"Missing {config}")
     with config.open("rb") as file:
         settings = tomllib.load(file).get("tickets", {})
-    if not isinstance(settings, dict):
-        raise TicketError("expected a [tickets] table")
-    if not settings.get("project") and settings.get("backend") != "server":
-        return ""
+    if (
+        not isinstance(settings, dict)
+        or not settings.get("project")
+        or not settings.get("url")
+    ):
+        raise TicketError(f"{config} requires [tickets].project and [tickets].url")
 
     # Enact owns worktree config precedence, cutover waits and the client cache.
     helper = Path.home() / "enact" / "scripts" / "enact.py"
@@ -40,8 +42,6 @@ def detect(repo: Path) -> str:
     if result.returncode:
         raise TicketError((result.stderr or result.stdout).strip())
     data = json.loads(result.stdout)
-    if data.get("backend") == "beads":
-        return ""
     if data.get("backend") == "server" and isinstance(data.get("tk"), str):
         return data["tk"]
     raise TicketError("Enact returned an invalid backend")
@@ -97,13 +97,7 @@ def create_issue(
 def backend_cmd(_: argparse.Namespace) -> int:
     try:
         executable = client()
-        print(
-            json.dumps(
-                {"backend": "server", "tk": executable}
-                if executable
-                else {"backend": "beads"}
-            )
-        )
+        print(json.dumps({"backend": "server", "tk": executable}))
     except (RuntimeError, OSError, ValueError) as error:
         print(f"ticket-backend: {error}", file=sys.stderr)
         return 1
@@ -124,38 +118,16 @@ TOP_LEVEL_EXCLUDED = (
 def top_level(_: argparse.Namespace) -> int:
     try:
         executable = client()
-        if executable:
-            issues = [
-                issue
-                for issue in list_issues(executable)
-                if not issue.get("parent")
-                and not set(TOP_LEVEL_EXCLUDED).intersection(issue.get("labels") or [])
-            ]
-        else:
-            result = subprocess.run(
-                [
-                    "bd",
-                    "list",
-                    "--no-parent",
-                    "--exclude-label",
-                    ",".join(TOP_LEVEL_EXCLUDED),
-                    "--flat",
-                    "-n",
-                    "0",
-                    "--json",
-                ],
-                cwd=paths.REPO,
-                stdout=subprocess.PIPE,
-                text=True,
-                check=False,
-            )
-            if result.returncode:
-                return result.returncode
-            issues = json.loads(result.stdout)
+        issues = [
+            issue
+            for issue in list_issues(executable)
+            if not issue.get("parent")
+            and not set(TOP_LEVEL_EXCLUDED).intersection(issue.get("labels") or [])
+        ]
         for issue in issues:
             print(issue["id"], issue["title"])
     except (RuntimeError, OSError, ValueError) as error:
-        print(f"beads: {error}", file=sys.stderr)
+        print(f"tickets: {error}", file=sys.stderr)
         return 1
     return 0
 
@@ -165,5 +137,5 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "ticket-backend", help="show the active tracker and native client path"
     ).set_defaults(func=backend_cmd)
     sub.add_parser(
-        "beads", help="list top-level work in the active tracker"
+        "tickets", help="list top-level work in the active tracker"
     ).set_defaults(func=top_level)

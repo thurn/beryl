@@ -16,7 +16,7 @@ something to the nightly. The checks in [`KEEP`] are never named. While any cut 
 closes it counts only the runs that started after it closed, and waits for [`check_value.RUNS`] of them, so
 the checks that bead cut are not counted, nor named, again.
 
-Nothing here fails a run: a bd call that fails is reported and the run goes on (verdicts.Beads).
+Nothing here fails a run: a ticket request that fails is reported and the run goes on (verdicts.Tickets).
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ SCRIPT_KEY = "beryl_budget_script"
 PRIORITY = "2"
 
 
-def open_bead(script: str, store: verdicts.Beads) -> str | None:
+def open_bead(script: str, store: verdicts.Tickets) -> str | None:
     """The open budget bead filed for `script`, if any."""
     beads = store.list_issues("--label", LABEL)
     for b in beads if isinstance(beads, list) else []:
@@ -77,7 +77,7 @@ def report(
     took: str,
     lanes: list[str],
     load: str,
-    store: verdicts.Beads | None = None,
+    store: verdicts.Tickets | None = None,
 ) -> str:
     """Files a bead for a run of `script` over `budget`, unless one is open; returns a line
     saying which."""
@@ -128,7 +128,7 @@ def kept(check: str) -> bool:
     return check in KEEP or f"{check.split(':')[0]}:*" in KEEP
 
 
-def cut_beads(store: verdicts.Beads) -> tuple[list[str], str]:
+def cut_beads(store: verdicts.Tickets) -> tuple[list[str], str]:
     """The open cut beads, and the latest time a closed one closed (`""` when none has)."""
     beads = store.list_issues("--label", CUT_LABEL, include_closed=True)
     opened: list[str] = []
@@ -144,7 +144,7 @@ def cut_beads(store: verdicts.Beads) -> tuple[list[str], str]:
 
 
 def run_time(value: object) -> str:
-    """A bd time (`2026-11-13T17:57:58Z`) as the run log writes one, so the two compare as
+    """A ticket timestamp (`2026-11-13T17:57:58Z`) as the run log writes one, so the two compare as
     strings; `""` when it is not a time."""
     try:
         when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
@@ -204,7 +204,7 @@ def file_cut(
     groups: list[check_value.Group],
     whole: float,
     budget: float,
-    store: verdicts.Beads,
+    store: verdicts.Tickets,
 ) -> str:
     host = socket.gethostname().split(".")[0]
     count = sum(len(g.checks) for g in groups)
@@ -226,7 +226,7 @@ def file_cut(
 def slow_report(
     records: list[dict[str, object]] | None = None,
     history: dict[str, list[verdicts.Entry]] | None = None,
-    store: verdicts.Beads | None = None,
+    store: verdicts.Tickets | None = None,
     budget: float = SLOW_CPU_BUDGET,
     host: str | None = None,
 ) -> list[str]:

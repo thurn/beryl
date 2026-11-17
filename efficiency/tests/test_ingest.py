@@ -111,7 +111,7 @@ def test_a_source_that_fails_is_reported_and_others_still_run(tmp_path: Path) ->
     assert summary.sources["beads"].error == "bd: not found"
     assert summary.sources["lines"].rows == 1
     nonsense = ingest.ingest(db, [Beads(lambda: b"{")], "host")
-    assert nonsense.sources["beads"].error.startswith("bd printed no JSON")
+    assert nonsense.sources["beads"].error.startswith("the snapshot contains no JSON")
 
 
 def test_every_ingest_records_its_own_cost(tmp_path: Path) -> None:

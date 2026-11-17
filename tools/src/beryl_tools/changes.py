@@ -71,7 +71,7 @@ def markdown_files() -> list[str]:
     return [
         p
         for p in git("ls-files", "-co", "--exclude-standard", "*.md").splitlines()
-        if not p.startswith((".beads/", ".agents/"))
+        if not p.startswith(".agents/")
     ]
 
 

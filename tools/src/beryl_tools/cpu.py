@@ -131,7 +131,7 @@ _TOOLS = (
     "Python",
     "node",
     "git",
-    "bd",
+    "tk",
     "tk",
     "enact",
     "bash",
