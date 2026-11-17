@@ -29,6 +29,14 @@ impl<L: Layout> Permanent<L> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Spell<L: Layout = Small>(ObjectRef<L>);
 
+impl<L: Layout> Spell<L> {
+    /// The slot of this incarnation.
+    #[inline]
+    pub fn slot(self) -> L::Slot {
+        self.0.slot
+    }
+}
+
 /// A card in one zone, identified by its own incarnation.
 ///
 /// ```compile_fail,E0308
@@ -42,6 +50,14 @@ pub struct Spell<L: Layout = Small>(ObjectRef<L>);
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct CardIn<Z: ZoneMark, L: Layout = Small>(ObjectRef<L>, PhantomData<Z>);
+
+impl<Z: ZoneMark, L: Layout> CardIn<Z, L> {
+    /// The slot of this incarnation.
+    #[inline]
+    pub fn slot(self) -> L::Slot {
+        self.0.slot
+    }
+}
 
 /// A reference checked against the state immediately before an action.
 #[repr(transparent)]

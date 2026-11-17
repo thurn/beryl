@@ -606,7 +606,7 @@ impl<L: Layout> State<L> {
         debug_assert!(
             entry
                 .spell()
-                .is_none_or(|spell| self.is_current(spell) && self.zones.stack.contains(spell.slot)),
+                .is_none_or(|spell| self.spell(spell).is_some()),
             "a spell's entry without its card on the stack"
         );
         if self.keeps_words() {
@@ -659,7 +659,7 @@ impl<L: Layout> State<L> {
             return Ok(None);
         };
         let entry = self.remove_from_stack(sink, i);
-        self.keep_departed_spell(t, &entry)?;
+        self.keep_departed_spell(t, spell, &entry)?;
         Ok(Some(entry))
     }
 

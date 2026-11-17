@@ -17,6 +17,7 @@ use crate::bitboard::Bitboard;
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::object::{AbilityMask, CombatRole, Flag};
+use crate::reference::Permanent;
 use crate::state::State;
 use crate::table::GameTable;
 
@@ -446,17 +447,16 @@ impl<L: Layout> State<L> {
         self.replacing.protects()
     }
 
-    /// The colors the permanent in `slot` has protection from (see [CR 702.16a]), none for an
-    /// object that is no permanent, and none without a look at the permanent while no effect
-    /// gives protection ([`crate::event::Replaces::PROTECTION`]).
+    /// The colors this permanent has protection from (see [CR 702.16a]). While no effect
+    /// gives protection, this reads only [`crate::event::Replaces::PROTECTION`].
     ///
     /// [CR 702.16a]: https://yawgatog.com/resources/magic-rules/#R70216a
     #[inline]
-    pub fn protection(&self, slot: L::Slot) -> Colors {
-        if !self.may_protect() || !self.object(slot).on_battlefield() {
+    pub fn protection(&self, permanent: Permanent<L>) -> Colors {
+        if !self.may_protect() {
             return Colors::NONE;
         }
-        self.derived(slot).protection
+        self.derived(permanent.slot()).protection
     }
 
     /// [`State::power`] for toughness.

@@ -3,6 +3,8 @@
 
 use std::cell::{Cell, OnceCell};
 
+use beryl_kernel::reference::Graveyard;
+
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, AbilityKind, Castings, CostAction, CostPart, Face, FaceIx, Keywords,
@@ -302,8 +304,10 @@ fn cast_sources<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboar
 #[cold]
 #[inline(never)]
 fn escaping<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
-    s.zone(ZoneKey::Of(player, Zone::Graveyard))
-        .filter(|slot| s.escapes(t, slot))
+    s.zone(ZoneKey::Of(player, Zone::Graveyard)).filter(|slot| {
+        s.card_in(s.object_ref(slot), Graveyard)
+            .is_some_and(|card| s.escapes(t, card))
+    })
 }
 
 /// How `player` may cast one card now, apart from its face's own options: for free during a
@@ -335,7 +339,9 @@ impl Ways {
                 // graveyard", and lets its owner cast it from there.
                 let escape = s.reaches_elsewhere() && {
                     let o = s.object(slot);
-                    o.zone() == Zone::Graveyard && o.owner() == player && s.escapes(t, slot)
+                    o.owner() == player
+                        && s.card_in(s.object_ref(slot), Graveyard)
+                            .is_some_and(|card| s.escapes(t, card))
                 };
                 Ways {
                     plain: !escape || permission.is_some() || s.object(slot).zone() == Zone::Hand,

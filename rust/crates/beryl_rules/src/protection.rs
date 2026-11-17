@@ -51,6 +51,9 @@ pub(crate) fn protected_from<L: Layout>(
     permanent: L::Slot,
     source: L::Slot,
 ) -> bool {
+    let Some(permanent) = s.permanent(s.object_ref(permanent)) else {
+        return false;
+    };
     let protection = s.protection(permanent);
     protection != Colors::NONE && protection.intersects(s.colors(t, source))
 }

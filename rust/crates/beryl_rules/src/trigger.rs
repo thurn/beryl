@@ -471,8 +471,10 @@ pub(crate) fn match_look_back<L: Layout>(
         if merges {
             elsewhere::look_back_merged(s, t, left, to)?;
         }
-        if s.triggers().len() > waiting {
-            s.record_last_known(left)?;
+        if s.triggers().len() > waiting
+            && let Some(permanent) = s.permanent(object)
+        {
+            s.record_last_known(permanent)?;
         }
     }
     Ok(())

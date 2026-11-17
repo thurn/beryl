@@ -1,6 +1,8 @@
 //! The steps of casting a spell (CR 601.2a to 601.2i) and activating an ability (CR 602.2a), in
 //! order: announce, targets, pay, and the spell becomes cast.
 
+use beryl_kernel::reference::Graveyard;
+
 use crate::bitboard::Bitboard;
 use crate::card::{CastingIx, ObjectAbility, Part, Prompt, Purpose, TargetSpec};
 use crate::casting;
@@ -85,7 +87,9 @@ pub(crate) fn begin_cast<L: Layout>(
 /// Notes that the static ability that gives the card in `slot` escape did what it says, as the
 /// card is cast for it ([`crate::coverage`]).
 fn hit_escape<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) {
-    if let Some(reach) = s.escape_from(t, slot) {
+    if let Some(card) = s.card_in(s.object_ref(slot), Graveyard)
+        && let Some(reach) = s.escape_from(t, card)
+    {
         let face = s.definition(reach.source).face(t);
         crate::coverage::hit(&face.abilities[usize::from(reach.ability)]);
     }

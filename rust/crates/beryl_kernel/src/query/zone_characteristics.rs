@@ -26,6 +26,7 @@ use crate::chosen::ChosenValue;
 
 use crate::effects::LayerChange;
 use crate::layout::{Layout, Queue};
+use crate::reference::{CardIn, Graveyard};
 use crate::state::State;
 use crate::subtypes::GameSubtypes;
 use crate::table::GameTable;
@@ -130,7 +131,7 @@ impl<L: Layout> State<L> {
 }
 
 impl<L: Layout> State<L> {
-    /// Whether the card in `slot`, which is not a permanent, has escape from an effect that
+    /// Whether a card in a graveyard has escape from an effect that
     /// reaches it ([`beryl_card::Modification::GrantEscape`]), as Underworld Breach's "Each
     /// nonland card in your graveyard has escape" (see [CR 702.138a]): "Escape represents a
     /// static ability that functions while the card with escape is in a player's
@@ -138,17 +139,18 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 702.138a]: https://yawgatog.com/resources/magic-rules/#R702138a
     #[inline]
-    pub fn escapes(&self, t: &GameTable, slot: L::Slot) -> bool {
-        self.reaches_elsewhere() && self.escape_from(t, slot).is_some()
+    pub fn escapes(&self, t: &GameTable, card: CardIn<Graveyard, L>) -> bool {
+        self.reaches_elsewhere() && self.escape_from(t, card).is_some()
     }
 
-    /// The effect that gives the card in `slot`, which is not a permanent, escape, the first
+    /// The first effect that gives this graveyard card escape,
     /// in the order the layers apply them: [`State::escapes`]'s answer, with what said it.
     /// The effect's filter reads the card as the effects before it in the layers left it:
     /// escape is granted in layer 6, after any change of its types or colors.
     #[cold]
     #[inline(never)]
-    pub fn escape_from(&self, t: &GameTable, slot: L::Slot) -> Option<Reach<L>> {
+    pub fn escape_from(&self, t: &GameTable, card: CardIn<Graveyard, L>) -> Option<Reach<L>> {
+        let slot = card.slot();
         let mut so_far = None;
         self.elsewhere.iter().copied().find(|&reach| {
             let (filter, change) = self.reach_change(t, reach);

@@ -28,6 +28,7 @@ use crate::invariants::{Violation, check};
 use crate::layout::{Layout, Queue, Small};
 use crate::object::{Derived, ObjectRef};
 use crate::query::Copiable;
+use crate::reference::{Permanent, Spell};
 use crate::state::{PendingTrigger, StackEntry, State};
 use crate::table::{Capability, GameTable};
 
@@ -104,15 +105,16 @@ impl<L: Layout> State<L> {
         self.last_known.as_slice()
     }
 
-    /// Keeps the last-known information of the permanent in `slot`, which is about to leave
-    /// the battlefield, from its layer results as they are now: once for each object, however
-    /// many abilities look back at it. The layer results must be current.
-    pub fn record_last_known(&mut self, slot: L::Slot) -> Result<(), Full> {
+    /// Keeps the last-known information of a permanent about to leave the battlefield.
+    /// Pass a permanent just checked against this state, with up-to-date layer results.
+    /// A second ability looking back at the same permanent uses the same row.
+    pub fn record_last_known(&mut self, permanent: Permanent<L>) -> Result<(), Full> {
         debug_assert!(
-            self.object(slot).on_battlefield() && !self.flags.derived_dirty,
-            "last-known information of a permanent with current layer results"
+            !self.flags.derived_dirty,
+            "last-known information with stale layers"
         );
-        let object = self.object_ref(slot);
+        let slot = permanent.slot();
+        let object = permanent.into();
         if self.last_known(object).is_some() {
             return Ok(());
         }
@@ -147,22 +149,21 @@ impl<L: Layout> State<L> {
     pub(crate) fn keep_departed_spell(
         &mut self,
         t: &GameTable,
+        spell: Spell<L>,
         entry: &StackEntry<L>,
     ) -> Result<(), Full> {
         if !t.can(Capability::CopiesItself) {
             return Ok(());
         }
-        let Some(spell) = entry.spell() else {
-            return Ok(());
-        };
-        let named = self.triggers.iter().any(|tr| tr.of.source == Some(spell))
-            || self.stack.iter().any(|e| e.source() == Some(spell));
+        let object = spell.into();
+        let named = self.triggers.iter().any(|tr| tr.of.source == Some(object))
+            || self.stack.iter().any(|e| e.source() == Some(object));
         if !named {
             return Ok(());
         }
         let row = DepartedSpell {
             entry: entry.clone(),
-            copiable: self.copiable(spell.slot),
+            copiable: self.copiable(spell.slot()),
         };
         self.departed_spells.push(row)
     }

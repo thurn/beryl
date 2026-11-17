@@ -230,8 +230,10 @@ pub(super) fn look_back_away<L: Layout>(
                 }
             }
         }
-        if s.triggers().len() > waiting {
-            s.record_last_known(left)?;
+        if s.triggers().len() > waiting
+            && let Some(permanent) = s.permanent(object)
+        {
+            s.record_last_known(permanent)?;
         }
     }
     Ok(())
