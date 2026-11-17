@@ -248,7 +248,7 @@
     }
   },
   "tests": {
-    "median_frames": 137,
+    "median_frames": 139,
     "most_frames": 5984
   },
   "scaling": {
