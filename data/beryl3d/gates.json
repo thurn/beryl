@@ -119,7 +119,7 @@
       "total_placed": 2024,
       "worst_frame_draw_calls": 13,
       "worst_frame_upload_bytes": 32240,
-      "worst_frame_blended_area": 0.7924,
+      "worst_frame_blended_area": 0.7923,
       "handle_allocations": 2245,
       "frame_allocations": 0,
       "worst_frame_instructions": 2803575,
