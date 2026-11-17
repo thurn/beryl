@@ -588,6 +588,12 @@ async function takeBack(context, watch, layout, fixture, key) {
     }
 }
 
+/** Whether the seat watching `view` sees the opponent acting, by the rule the dock uses
+ * while the player has nothing to answer (`opponentActing` in src/game/Narration.tsx). */
+const opponentActs = (view) =>
+    view.status.kind === "thinking" ||
+    (view.status.kind !== "free" && view.turn.active === "opponent");
+
 /** Watches `fixture` from the seat across the table on a page of its own, up to the first
  * view that asks that seat: none of the prompt the other seat answers is shown, and the
  * prompt that view asks this seat is. */
@@ -604,10 +610,12 @@ async function watchIt(context, watch, layout, fixture) {
             title: "",
             symbols: [],
             marks: [],
-            // The turn button stands where it will be, with nothing to press.
+            // The turn button stands where it will be, with nothing to press. While the
+            // other seat acts it reads "Opponent's Turn", as Arena's does (`opponentActing`
+            // in src/game/Narration.tsx), and "Pass" otherwise.
             buttons: [
                 {
-                    label: "Pass",
+                    label: opponentActs(views[0]) ? "Opponent's Turn" : "Pass",
                     enabled: false,
                     where: "forward",
                     caption: layout.captions ? "" : undefined,
