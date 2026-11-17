@@ -61,20 +61,6 @@ pub mod scenarios {
                 ME.attacks_with(Prop::Flier),
                 ME.tapped(Prop::Flier, 1),
             ]),
-        // "Loses all abilities" began before the Aura was attached, so its timestamp is the
-        // earlier and the keyword the Aura grants stays.
-        Scenario::new("an Aura attached after Dress Down still gives vigilance")
-            .interaction(&[DRESS_DOWN])
-            .battlefield(P0, &[DRESS_DOWN, Card::Plains, Prop::Flier])
-            .hand(P0, &[VIGILANCE])
-            .actions(&[
-                ME.casts(VIGILANCE),
-                Resolve,
-                advance_to(1, TurnStep::BeginningOfCombat),
-                ME.passes(),
-                ME.attacks_with(Prop::Flier),
-                ME.tapped(Prop::Flier, 0),
-            ]),
         // Dress Down, cast with flash after the Aura was attached, has the later timestamp:
         // the creature loses vigilance, though the Aura stays attached.
         Scenario::new("Dress Down after the Aura takes vigilance away")

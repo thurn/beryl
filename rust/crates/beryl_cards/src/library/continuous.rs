@@ -1,9 +1,11 @@
-//! Continuous effects ([CR 611](https://yawgatog.com/resources/magic-rules/#R611)) that
-//! change a rule of the game
-//! ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)).
+//! Scenarios for continuous effects ([CR 611](https://yawgatog.com/resources/magic-rules/#R611))
+//! and their order of application ([CR 613](https://yawgatog.com/resources/magic-rules/#R613)).
 
-use beryl_engine::TurnStep;
+use beryl_card::TextWord;
+use beryl_engine::card::{Colors, Subtype};
+use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+use beryl_scenario_types::{ME, Resolve, THEM, advance_to, stack};
 
 use crate::{names, props};
 
@@ -39,5 +41,238 @@ pub const SCENARIOS: &[Scenario] =
                     player: P1,
                     life: 23,
                 }),
+            ]),
+    ];
+
+/// Opalescence starts applying in layer 4, so it still sets power and toughness in
+/// layer 7b after the animated enchantments lose their abilities to Humility.
+pub const ANIMATED_ENCHANTMENTS: &[Scenario] = &[
+    // Humility first: it becomes a creature and loses its ability in layer 6, but its 1/1
+    // applies in layer 7b before Opalescence's later one. Humility is 4/4, and Glorious
+    // Anthem, its ability gone, is 3/3.
+    Scenario::new("with Humility earlier, each is as big as its mana value")
+        .interaction(&[names::HUMILITY, names::GLORIOUS_ANTHEM])
+        .battlefield(P0, &with_plains([names::HUMILITY, names::GLORIOUS_ANTHEM]))
+        .hand(P0, &[OPALESCENCE])
+        .actions(&[
+            ME.casts(OPALESCENCE),
+            Resolve,
+            ME.pt(names::HUMILITY, 4, 4),
+            ME.pt(names::GLORIOUS_ANTHEM, 3, 3),
+            ME.creature(OPALESCENCE, false),
+        ]),
+    // Opalescence first: Humility's 1/1 comes later in layer 7b, so every enchantment
+    // creature is 1/1, Humility with them.
+    Scenario::new("with Humility later, each is 1/1")
+        .interaction(&[names::HUMILITY, names::GLORIOUS_ANTHEM])
+        .battlefield(P0, &with_plains([OPALESCENCE, names::GLORIOUS_ANTHEM]))
+        .hand(P0, &[names::HUMILITY])
+        .actions(&[
+            ME.pt(names::GLORIOUS_ANTHEM, 4, 4),
+            ME.casts(names::HUMILITY),
+            Resolve,
+            ME.pt(names::GLORIOUS_ANTHEM, 1, 1),
+            ME.pt(names::HUMILITY, 1, 1),
+            ME.creature(OPALESCENCE, false),
+        ]),
+    // In timestamp order Opalescence, Humility, Opalescence, layer 7b applies the first
+    // Opalescence's 4/4, Humility's 1/1, then the second Opalescence's 4/4: the second
+    // Opalescence, which only the first sets, is 1/1, and the other two are 4/4.
+    Scenario::new("between two Opalescences, Humility is 4/4 and the last is 1/1")
+        .interaction(&[names::HUMILITY])
+        .battlefield(P1, &[OPALESCENCE])
+        .battlefield(P0, &EIGHT_PLAINS)
+        .hand(P0, &[names::HUMILITY, OPALESCENCE])
+        .actions(&[
+            ME.casts(names::HUMILITY),
+            Resolve,
+            ME.casts(OPALESCENCE),
+            Resolve,
+            THEM.pt(OPALESCENCE, 4, 4),
+            ME.pt(names::HUMILITY, 4, 4),
+            ME.pt(OPALESCENCE, 1, 1),
+        ]),
+    // A Humility entering after both Opalescences sets every creature's base size last.
+    Scenario::new("Humility after both Opalescences makes all creatures 1/1")
+        .interaction(&[names::HUMILITY])
+        .battlefield(
+            P0,
+            &[
+                OPALESCENCE,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+            ],
+        )
+        .battlefield(P1, &[OPALESCENCE, props::FLIER.card])
+        .hand(P0, &[names::HUMILITY])
+        .actions(&[
+            ME.casts(names::HUMILITY),
+            Resolve,
+            ME.pt(names::HUMILITY, 1, 1),
+            ME.pt(OPALESCENCE, 1, 1),
+            THEM.pt(OPALESCENCE, 1, 1),
+            THEM.pt(props::FLIER.card, 1, 1),
+        ]),
+    // Both Opalescences entered after Humility, so their 4/4 overrides its 1/1.
+    Scenario::new("Humility before both Opalescences leaves the enchantments 4/4")
+        .interaction(&[names::HUMILITY])
+        .battlefield(
+            P0,
+            &[
+                names::HUMILITY,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+                names::PLAINS,
+            ],
+        )
+        .battlefield(P1, &[OPALESCENCE, props::FLIER.card])
+        .hand(P0, &[OPALESCENCE])
+        .actions(&[
+            ME.casts(OPALESCENCE),
+            Resolve,
+            ME.pt(names::HUMILITY, 4, 4),
+            ME.pt(OPALESCENCE, 4, 4),
+            THEM.pt(OPALESCENCE, 4, 4),
+            THEM.pt(props::FLIER.card, 1, 1),
+        ]),
+];
+
+const OPALESCENCE: &str = names::OPALESCENCE;
+const EIGHT_PLAINS: [&str; 8] = [names::PLAINS; 8];
+
+const fn with_plains(first: [&'static str; 2]) -> [&'static str; 6] {
+    [
+        first[0],
+        first[1],
+        names::PLAINS,
+        names::PLAINS,
+        names::PLAINS,
+        names::PLAINS,
+    ]
+}
+
+/// Setting Urborg to a single basic land type removes the ability irrespective of
+/// which continuous effect has the later timestamp.
+pub const SETTING_LAND_TYPES: &[Scenario] = &[
+    // Dryad Arbor stays a 1/1 creature, a Dryad, and taps for {R} as a Mountain.
+    Scenario::new("Dryad Arbor is a 1/1 Mountain creature that taps for {R}")
+        .interaction(&[names::DRYAD_ARBOR])
+        .battlefield(
+            P0,
+            &[
+                names::BLOOD_MOON,
+                names::DRYAD_ARBOR,
+                names::ISLAND,
+                names::ISLAND,
+            ],
+        )
+        .hand(P0, &[names::BLOOD_MOON])
+        .actions(&[
+            ME.creature(names::DRYAD_ARBOR, true),
+            ME.colored(Zone::Battlefield, names::DRYAD_ARBOR, Colors::GREEN),
+            ME.has_subtype(names::DRYAD_ARBOR, Subtype::Mountain, true),
+            ME.has_subtype(names::DRYAD_ARBOR, Subtype::Forest, false),
+            ME.has_subtype(names::DRYAD_ARBOR, Subtype::Dryad, true),
+            ME.pt(names::DRYAD_ARBOR, 1, 1),
+            ME.casts(names::BLOOD_MOON),
+            Resolve,
+            ME.controls(names::BLOOD_MOON, 2),
+        ]),
+    // Urborg arrives under Blood Moon as a Mountain with no ability, so the Plains are no
+    // Swamps and can't pay Damn's {B}{B}, and Urborg itself taps only for {R}.
+    Scenario::new("Urborg entering under it makes no Swamps")
+        .interaction(&[names::URBORG_TOMB_OF_YAWGMOTH, names::DAMN])
+        .battlefield(
+            P0,
+            &[
+                names::BLOOD_MOON,
+                names::PLAINS,
+                names::PLAINS,
+                props::FLIER.card,
+            ],
+        )
+        .hand(P0, &[names::URBORG_TOMB_OF_YAWGMOTH, names::DAMN])
+        .actions(&[
+            ME.plays(names::URBORG_TOMB_OF_YAWGMOTH),
+            ME.deciding(DecisionKind::Attacker, 2),
+        ]),
+    // With Urborg first, every land is a Swamp and Damn could be cast. Blood Moon arriving
+    // later removes Urborg's ability all the same: the basic lands left untapped are
+    // Swamps no longer, and passing is all P0 can do.
+    Scenario::new("Blood Moon entering after Urborg ends its Swamps")
+        .interaction(&[names::URBORG_TOMB_OF_YAWGMOTH, names::DAMN])
+        .battlefield(
+            P0,
+            &[
+                names::URBORG_TOMB_OF_YAWGMOTH,
+                names::MOUNTAIN,
+                names::ISLAND,
+                names::ISLAND,
+                names::PLAINS,
+                names::PLAINS,
+                props::FLIER.card,
+            ],
+        )
+        .hand(P0, &[names::BLOOD_MOON, names::DAMN])
+        .actions(&[
+            ME.casts(names::BLOOD_MOON),
+            Resolve,
+            ME.controls(names::BLOOD_MOON, 1),
+            ME.deciding(DecisionKind::Priority, 1),
+        ]),
+];
+
+/// Dryad Arbor's printed characteristics apply in every zone, and the land play is
+/// subject to the same limit as any other land.
+pub const LAND_CREATURE: &[Scenario] = &[
+    Scenario::new("Dryad Arbor uses the turn's land play and never goes on the stack")
+        .hand(P0, &[names::DRYAD_ARBOR, names::PLAINS])
+        .battlefield(P0, &[props::FLIER.card])
+        .actions(&[
+            ME.colored(Zone::Hand, names::DRYAD_ARBOR, Colors::GREEN),
+            ME.plays(names::DRYAD_ARBOR),
+            stack(0),
+            ME.controls(names::DRYAD_ARBOR, 1),
+            ME.colored(Zone::Battlefield, names::DRYAD_ARBOR, Colors::GREEN),
+            ME.has_subtype(names::DRYAD_ARBOR, Subtype::Dryad, true),
+            ME.has_subtype(names::DRYAD_ARBOR, Subtype::Forest, true),
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.deciding(DecisionKind::Attacker, 2),
+            ME.has(Zone::Hand, names::PLAINS, 1),
+        ]),
+    // The color indicator contributes green independently of the permanent's rules text.
+    Scenario::new("a text change does not change Dryad Arbor's color indicator")
+        .interaction(&[names::MIND_BEND])
+        .hand(P0, &[names::MIND_BEND])
+        .battlefield(P0, &[names::DRYAD_ARBOR, names::ISLAND])
+        .actions(&[
+            ME.casts(names::MIND_BEND),
+            ME.targets(names::DRYAD_ARBOR),
+            Resolve,
+            ME.chooses_word(TextWord::Color(Colors::GREEN)),
+            ME.chooses_word(TextWord::Color(Colors::RED)),
+            ME.colored(Zone::Battlefield, names::DRYAD_ARBOR, Colors::GREEN),
+        ]),
+];
+
+/// Dress Down removes the creature's abilities in layer 6. An Aura that attaches
+/// afterward applies later in that layer and grants vigilance.
+pub const ABILITIES_IN_TIMESTAMP_ORDER: &[Scenario] =
+    &[
+        Scenario::new("an Aura attached after Dress Down still gives vigilance")
+            .interaction(&[names::DRESS_DOWN])
+            .battlefield(P0, &[names::DRESS_DOWN, names::PLAINS, props::FLIER.card])
+            .hand(P0, &[names::VIGILANCE])
+            .actions(&[
+                ME.casts(names::VIGILANCE),
+                Resolve,
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(props::FLIER.card),
+                ME.tapped(props::FLIER.card, 0),
             ]),
     ];

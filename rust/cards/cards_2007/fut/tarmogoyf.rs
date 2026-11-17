@@ -73,6 +73,14 @@ pub mod scenarios {
             .graveyard(P0, &[Card::GoldMyr, Card::GoldMyr])
             .graveyard(P1, &[Prop::Flier])
             .actions(&[ME.pt(GOYF, 2, 3)]),
+        // One Tarfire contributes both kindred and instant. The basic land and the
+        // legendary creature each contribute just their card type.
+        Scenario::new("kindred counts as a card type and supertypes do not")
+            .interaction(&[Card::Tarfire, Card::AdelineResplendentCathar])
+            .battlefield(P0, &[GOYF])
+            .graveyard(P0, &[Card::Tarfire, Card::SnowCoveredIsland])
+            .graveyard(P1, &[Card::AdelineResplendentCathar])
+            .actions(&[ME.pt(GOYF, 4, 5)]),
         // A creature and a sorcery make it 2/3. Lightning Bolt is in its owner's graveyard by
         // the time state-based actions look at the 3 damage, and as a third card type it makes
         // Tarmogoyf 3/4, which survives.

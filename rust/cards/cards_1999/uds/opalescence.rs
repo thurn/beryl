@@ -67,8 +67,6 @@ pub mod scenarios {
         ]
     }
 
-    const EIGHT_PLAINS: [&str; 8] = [Card::Plains; 8];
-
     pub const SCENARIOS: &[Scenario] = &[
         // Glorious Anthem, mana value 3, is a 3/3 creature that its own +1/+1 makes 4/4.
         // Opalescence is no creature.
@@ -90,34 +88,6 @@ pub mod scenarios {
                 Resolve,
                 ME.controls(Card::SwiftReconfiguration, 1),
                 ME.creature(Card::SwiftReconfiguration, false),
-            ]),
-        // Humility first: it becomes a creature and loses its ability in layer 6, but its 1/1
-        // applies in layer 7b before Opalescence's later one. Humility is 4/4, and Glorious
-        // Anthem, its ability gone, is 3/3.
-        Scenario::new("with Humility earlier, each is as big as its mana value")
-            .interaction(&[Card::Humility, Card::GloriousAnthem])
-            .battlefield(P0, &with_plains([Card::Humility, Card::GloriousAnthem]))
-            .hand(P0, &[OPALESCENCE])
-            .actions(&[
-                ME.casts(OPALESCENCE),
-                Resolve,
-                ME.pt(Card::Humility, 4, 4),
-                ME.pt(Card::GloriousAnthem, 3, 3),
-                ME.creature(OPALESCENCE, false),
-            ]),
-        // Opalescence first: Humility's 1/1 comes later in layer 7b, so every enchantment
-        // creature is 1/1, Humility with them.
-        Scenario::new("with Humility later, each is 1/1")
-            .interaction(&[Card::Humility, Card::GloriousAnthem])
-            .battlefield(P0, &with_plains([OPALESCENCE, Card::GloriousAnthem]))
-            .hand(P0, &[Card::Humility])
-            .actions(&[
-                ME.pt(Card::GloriousAnthem, 4, 4),
-                ME.casts(Card::Humility),
-                Resolve,
-                ME.pt(Card::GloriousAnthem, 1, 1),
-                ME.pt(Card::Humility, 1, 1),
-                ME.creature(OPALESCENCE, false),
             ]),
         // As creatures, Humility and Dress Down each remove the other's ability in layer 6:
         // a loop of dependencies, applied in timestamp order (CR 613.8b). Humility, the
@@ -156,23 +126,6 @@ pub mod scenarios {
             .battlefield(P0, &[OPALESCENCE])
             .battlefield(P1, &[OPALESCENCE])
             .actions(&[ME.pt(OPALESCENCE, 4, 4), THEM.pt(OPALESCENCE, 4, 4)]),
-        // In timestamp order Opalescence, Humility, Opalescence, layer 7b applies the first
-        // Opalescence's 4/4, Humility's 1/1, then the second Opalescence's 4/4: the second
-        // Opalescence, which only the first sets, is 1/1, and the other two are 4/4.
-        Scenario::new("between two Opalescences, Humility is 4/4 and the last is 1/1")
-            .interaction(&[Card::Humility])
-            .battlefield(P1, &[OPALESCENCE])
-            .battlefield(P0, &EIGHT_PLAINS)
-            .hand(P0, &[Card::Humility, OPALESCENCE])
-            .actions(&[
-                ME.casts(Card::Humility),
-                Resolve,
-                ME.casts(OPALESCENCE),
-                Resolve,
-                THEM.pt(OPALESCENCE, 4, 4),
-                ME.pt(Card::Humility, 4, 4),
-                ME.pt(OPALESCENCE, 1, 1),
-            ]),
         // Summoning sickness applies to a permanent that became a creature the turn it came
         // under its controller's control (CR 302.6): Glorious Anthem, cast this turn, can't
         // attack; the Flier can.
@@ -195,6 +148,30 @@ pub mod scenarios {
                 advance_to(1, TurnStep::BeginningOfCombat),
                 ME.passes(),
                 ME.deciding(DecisionKind::Attacker, 2),
+            ]),
+        // An Anthem controlled since the turn began can attack on the turn it becomes
+        // a creature. Only how long it has been under its controller's control matters.
+        Scenario::new("an older enchantment can attack on the turn it becomes a creature")
+            .interaction(&[Card::GloriousAnthem])
+            .hand(P0, &[OPALESCENCE])
+            .battlefield(
+                P0,
+                &[
+                    Card::GloriousAnthem,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .actions(&[
+                ME.casts(OPALESCENCE),
+                Resolve,
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(Card::GloriousAnthem),
+                advance_to(1, TurnStep::EndOfCombat),
+                THEM.life(16),
             ]),
         // Without Opalescence on the battlefield an enchantment is no creature.
         Scenario::new("an enchantment is no creature without it")

@@ -87,6 +87,22 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         names::TEFERI_TIME_RAVELER,
         continuous::SCENARIOS,
     ),
+    (
+        "continuous",
+        names::OPALESCENCE,
+        continuous::ANIMATED_ENCHANTMENTS,
+    ),
+    (
+        "continuous",
+        names::BLOOD_MOON,
+        continuous::SETTING_LAND_TYPES,
+    ),
+    ("continuous", names::DRYAD_ARBOR, continuous::LAND_CREATURE),
+    (
+        "continuous",
+        names::VIGILANCE,
+        continuous::ABILITIES_IN_TIMESTAMP_ORDER,
+    ),
     ("costs", names::THIRST_FOR_DISCOVERY, costs::SCENARIOS),
     ("damage", names::MANA_CRYPT, damage::SCENARIOS),
     (

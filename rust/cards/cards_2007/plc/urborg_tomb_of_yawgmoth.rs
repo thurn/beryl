@@ -70,15 +70,49 @@ pub mod scenarios {
         // Dryad Arbor keeps its Forest type and gains Swamp: it taps for {B}, with Urborg's
         // own {B} paying for Damn.
         Scenario::new("Dryad Arbor is a Swamp too")
-            .interaction(&[Card::Damn])
+            .interaction(&[Card::Damn, Card::DryadArbor])
             .battlefield(P0, &[URBORG, Card::DryadArbor])
             .hand(P0, &[Card::Damn])
             .battlefield(P1, &[Prop::Flier])
             .actions(&[
+                ME.has_subtype(Card::DryadArbor, Subtype::Forest, true),
+                ME.has_subtype(Card::DryadArbor, Subtype::Swamp, true),
+                ME.has_subtype(URBORG, Subtype::Swamp, true),
                 ME.casts(Card::Damn),
                 ME.targets(Prop::Flier),
                 Resolve,
                 THEM.has(Zone::Graveyard, Prop::Flier, 1),
+            ]),
+        // A Swamp search in the library never offers Urborg itself.
+        Scenario::new("Urborg in the library is not a Swamp card")
+            .interaction(&[Card::LilianasShade])
+            .hand(P0, &[Card::LilianasShade])
+            .battlefield(P0, &[Card::Swamp; 4])
+            .library(P0, &[URBORG, Card::Swamp])
+            .actions(&[
+                ME.casts(Card::LilianasShade),
+                Resolve,
+                Resolve,
+                ME.yes(),
+                ME.deciding(DecisionKind::ChooseUpTo, 2),
+                ME.picks_up_to(Card::Swamp),
+                ME.has(Zone::Library, URBORG, 1),
+            ]),
+        // An Urborg already on the battlefield does not turn the Plains in the library
+        // into a card the Shade can find.
+        Scenario::new("Urborg on the battlefield does not affect land cards in the library")
+            .interaction(&[Card::LilianasShade])
+            .hand(P0, &[Card::LilianasShade])
+            .battlefield(P0, &[URBORG, Card::Plains, Card::Plains, Card::Plains])
+            .library(P0, &[Card::Plains, Card::Swamp])
+            .actions(&[
+                ME.casts(Card::LilianasShade),
+                Resolve,
+                Resolve,
+                ME.yes(),
+                ME.deciding(DecisionKind::ChooseUpTo, 2),
+                ME.picks_up_to(Card::Swamp),
+                ME.has(Zone::Library, Card::Plains, 1),
             ]),
     ];
 }

@@ -236,5 +236,26 @@
     "scenario": "generated 4: cast from hand with filter partners",
     "cr": "CR 701.23b (https://yawgatog.com/resources/magic-rules/#R70123b): \"If a player is searching a hidden zone for cards with a stated quality, such as a card with a certain card type or color, that player isn't required to find some or all of those cards even if they're present in that zone.\"",
     "reason": "XMage's Trinket Mage searches with a target of exactly one card (\"from 1 to 1\") whenever one qualifies, so its controller cannot fail to find Portable Hole."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Blood Moon",
+    "scenario": "Bojuka Bog enters without exiling a graveyard",
+    "cr": "CR 614.12 (https://yawgatog.com/resources/magic-rules/#R61412): \"Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c-d.) Such effects may come from the permanent itself if they affect only that permanent (as opposed to a general subset of permanents that includes it). They may also come from other sources. To determine which replacement effects apply and how they apply, check the characteristics of the permanent as it would exist on the battlefield, taking into account replacement effects that have already modified how it enters the battlefield (see rule 616.1), continuous effects from the permanent's own static abilities that would apply to it once it's on the battlefield, and continuous effects that already exist and would apply to the permanent.\"",
+    "reason": "XMage enters Bojuka Bog tapped under Blood Moon. The replacement effect is checked on the land as it would exist on the battlefield, where Blood Moon has already removed it."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Opalescence",
+    "scenario": "Humility after both Opalescences makes all creatures 1/1",
+    "cr": "CR 613.6 (https://yawgatog.com/resources/magic-rules/#R6136): \"If an effect should be applied in different layers and/or sublayers, the parts of the effect each apply in their appropriate ones. If an effect starts to apply in one layer and/or sublayer, it will continue to be applied to the same set of objects in each other applicable layer and/or sublayer, even if the ability generating the effect is removed during this process.\"",
+    "reason": "XMage loses Humility after it becomes a creature. Opalescence's sizing effect continues from layer 4 to layer 7b, where the later Humility sets the animated enchantments to 1/1."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Opalescence",
+    "scenario": "Humility before both Opalescences leaves the enchantments 4/4",
+    "cr": "CR 613.6 (https://yawgatog.com/resources/magic-rules/#R6136): \"If an effect should be applied in different layers and/or sublayers, the parts of the effect each apply in their appropriate ones. If an effect starts to apply in one layer and/or sublayer, it will continue to be applied to the same set of objects in each other applicable layer and/or sublayer, even if the ability generating the effect is removed during this process.\"",
+    "reason": "XMage loses Humility when the second Opalescence enters. Both Opalescence effects start in layer 4 and continue into layer 7b even after Humility removes their abilities, so the animated enchantments are 4/4."
   }
 ]

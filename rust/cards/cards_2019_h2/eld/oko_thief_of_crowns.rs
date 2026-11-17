@@ -105,6 +105,8 @@ pub mod scenarios {
                 Resolve,
                 ME.has_loyalty(OKO, 6),
                 ME.has(Zone::Battlefield, FOOD_TOKEN, 1),
+                ME.creature(FOOD_TOKEN, false),
+                ME.has_subtype(FOOD_TOKEN, Subtype::Food, true),
                 ME.activates(FOOD_TOKEN, 0),
                 Resolve,
                 ME.life(23),
@@ -138,6 +140,10 @@ pub mod scenarios {
                 // before combat.
                 ME.activates(OKO, 1), // +1
                 ME.pt(ADELINE, 3, 3),
+                ME.colored(Zone::Battlefield, ADELINE, Colors::GREEN),
+                ME.has_subtype(ADELINE, Subtype::Elk, true),
+                ME.has_subtype(ADELINE, Subtype::Human, false),
+                ME.has_subtype(ADELINE, Subtype::Knight, false),
                 ME.attacks_with(ADELINE),
                 ME.tapped(ADELINE, 1),
                 ME.controls(crate::tokens::HUMAN_TOKEN, 0),
@@ -393,6 +399,127 @@ pub mod scenarios {
                 Resolve,
                 ME.pt(Card::DressDown, 3, 3),
                 ME.has_subtype(Card::DressDown, Subtype::Elk, true),
+            ]),
+        // The Bolt leaves 3 damage on a 4/5. Oko makes that damage lethal by setting its
+        // toughness to 3 before the next state-based action check.
+        Scenario::new("+1 makes damage already on the creature lethal")
+            .interaction(&[Card::LightningBolt, BEZA])
+            .battlefield(P0, &[OKO, Card::Mountain])
+            .battlefield(P1, &[BEZA])
+            .hand(P0, &[Card::LightningBolt])
+            .actions(&[
+                ME.casts(Card::LightningBolt),
+                ME.targets(BEZA),
+                Resolve,
+                THEM.pt(BEZA, 4, 5),
+                ME.activates(OKO, 1),
+                Resolve,
+                THEM.has(Zone::Graveyard, BEZA, 1),
+            ]),
+        // Even after the temporary Crew effect expires, Oko's later type-setting effect
+        // leaves the formerly reconfigured Vehicle a green 3/3 creature.
+        Scenario::new("+1 lasts after a temporary animation wears off")
+            .interaction(&[Card::SwiftReconfiguration])
+            .battlefield(P0, &[OKO, Card::Plains, VANILLA, Prop::Flier, Prop::Flier])
+            .hand(P0, &[Card::SwiftReconfiguration])
+            .actions(&[
+                ME.casts(Card::SwiftReconfiguration),
+                ME.targets(VANILLA),
+                Resolve,
+                ME.creature(VANILLA, false),
+                Action::activate_granted(P0, VANILLA, 0),
+                Resolve,
+                ME.creature(VANILLA, true),
+                ME.activates(OKO, 1),
+                ME.targets(VANILLA),
+                Resolve,
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.done_attacking(),
+                advance_to(2, TurnStep::Upkeep),
+                ME.pt(VANILLA, 3, 3),
+                ME.colored(Zone::Battlefield, VANILLA, Colors::GREEN),
+            ]),
+        // The Elk effect remains after the planeswalker that created it leaves.
+        Scenario::new("+1 keeps an Elk after Oko leaves")
+            .interaction(&[Card::GetLost])
+            .battlefield(P0, &[OKO, Card::Plains, Card::Plains])
+            .battlefield(P1, &[Prop::Flier])
+            .hand(P0, &[Card::GetLost])
+            .actions(&[
+                ME.activates(OKO, 1),
+                Resolve,
+                ME.casts(Card::GetLost),
+                ME.targets(OKO),
+                Resolve,
+                ME.has(Zone::Graveyard, OKO, 1),
+                THEM.pt(Prop::Flier, 3, 3),
+                THEM.has_subtype(Prop::Flier, Subtype::Elk, true),
+            ]),
+        // Vigilance granted after the Elk effect starts is still present when it attacks.
+        Scenario::new("+1 allows abilities granted later")
+            .interaction(&[Card::Vigilance])
+            .battlefield(P0, &[OKO, Card::Plains, VANILLA])
+            .hand(P0, &[Card::Vigilance])
+            .actions(&[
+                ME.activates(OKO, 1),
+                Resolve,
+                ME.casts(Card::Vigilance),
+                Resolve,
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(VANILLA),
+                ME.tapped(VANILLA, 0),
+            ]),
+        // The Equipment keeps its controller and stays attached when Oko trades its wearer.
+        Scenario::new("−5 exchanges a creature without exchanging its Equipment")
+            .permanents(P0, &[oko(5)])
+            .battlefield(P0, &[SCIMITAR, VANILLA, Card::Island])
+            .battlefield(P1, &[Prop::Flier])
+            .actions(&[
+                ME.activates(SCIMITAR, 1),
+                Resolve,
+                ME.activates(OKO, 2),
+                ME.targets(VANILLA),
+                Resolve,
+                ME.controls(SCIMITAR, 1),
+                THEM.controls(VANILLA, 1),
+                THEM.pt(VANILLA, 3, 2),
+                ME.controls(Prop::Flier, 1),
+            ]),
+        // Trading the Equipment leaves its +1/+1 on the same creature until it is moved.
+        Scenario::new("−5 exchanges Equipment without detaching it")
+            .permanents(P0, &[oko(5)])
+            .battlefield(P0, &[SCIMITAR, VANILLA, Card::Island])
+            .battlefield(P1, &[Prop::Flier])
+            .actions(&[
+                ME.activates(SCIMITAR, 1),
+                Resolve,
+                ME.activates(OKO, 2),
+                ME.targets(SCIMITAR),
+                Resolve,
+                THEM.controls(SCIMITAR, 1),
+                ME.pt(VANILLA, 3, 2),
+            ]),
+        // Once the exchange is complete, neither the turn ending nor the new creature
+        // growing above 3 power hands it back to its former controller.
+        Scenario::new("−5 still controls the creature after cleanup and a power increase")
+            .permanents(P0, &[oko(5)])
+            .battlefield(P0, &[Prop::Artifact, SCIMITAR, Card::Island])
+            .battlefield(P1, &[Prop::Flier])
+            .library(P0, &[Card::Island, Card::Island])
+            .library(P1, &[Card::Island, Card::Island])
+            .actions(&[
+                ME.activates(OKO, 2),
+                ME.targets(Prop::Artifact),
+                Resolve,
+                ME.controls(Prop::Flier, 1),
+                advance_to(3, TurnStep::PrecombatMain),
+                ME.activates(SCIMITAR, 1),
+                Resolve,
+                ME.pt(Prop::Flier, 4, 2),
+                ME.controls(Prop::Flier, 1),
+                THEM.controls(Prop::Artifact, 1),
             ]),
     ];
 }

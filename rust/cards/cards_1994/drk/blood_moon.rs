@@ -74,29 +74,17 @@ pub mod scenarios {
                 Resolve,
                 ME.controls(Prop::Artifact, 1),
             ]),
-        // Dryad Arbor stays a 1/1 creature, a Dryad, and taps for {R} as a Mountain.
-        Scenario::new("Dryad Arbor is a 1/1 Mountain creature that taps for {R}")
-            .battlefield(
-                P0,
-                &[BLOOD_MOON, Card::DryadArbor, Card::Island, Card::Island],
-            )
-            .hand(P0, &[BLOOD_MOON])
+        // The Bog enters as a Mountain, without its enters trigger or its replacement effect.
+        Scenario::new("Bojuka Bog enters without exiling a graveyard")
+            .interaction(&[Card::BojukaBog])
+            .battlefield(P0, &[BLOOD_MOON])
+            .hand(P0, &[Card::BojukaBog])
+            .graveyard(P1, &[Prop::Flier])
             .actions(&[
-                ME.creature(Card::DryadArbor, true),
-                ME.pt(Card::DryadArbor, 1, 1),
-                ME.casts(BLOOD_MOON),
-                Resolve,
-                ME.controls(BLOOD_MOON, 2),
-            ]),
-        // Urborg arrives under Blood Moon as a Mountain with no ability, so the Plains are no
-        // Swamps and can't pay Damn's {B}{B}, and Urborg itself taps only for {R}.
-        Scenario::new("Urborg entering under it makes no Swamps")
-            .interaction(&[Card::UrborgTombOfYawgmoth, Card::Damn])
-            .battlefield(P0, &[BLOOD_MOON, Card::Plains, Card::Plains, Prop::Flier])
-            .hand(P0, &[Card::UrborgTombOfYawgmoth, Card::Damn])
-            .actions(&[
-                ME.plays(Card::UrborgTombOfYawgmoth),
-                ME.deciding(DecisionKind::Attacker, 2),
+                ME.plays(Card::BojukaBog),
+                stack(0),
+                ME.tapped(Card::BojukaBog, 0),
+                THEM.has(Zone::Graveyard, Prop::Flier, 1),
             ]),
         // Urborg still has the same name and is legendary as a Mountain. Playing a second
         // copy makes its controller choose one to keep.
@@ -109,30 +97,6 @@ pub mod scenarios {
                 ME.picks(Card::UrborgTombOfYawgmoth),
                 ME.controls(Card::UrborgTombOfYawgmoth, 1),
                 ME.has(Zone::Graveyard, Card::UrborgTombOfYawgmoth, 1),
-            ]),
-        // With Urborg first, every land is a Swamp and Damn could be cast. Blood Moon arriving
-        // later removes Urborg's ability all the same: the basic lands left untapped are
-        // Swamps no longer, and passing is all P0 can do.
-        Scenario::new("Blood Moon entering after Urborg ends its Swamps")
-            .interaction(&[Card::UrborgTombOfYawgmoth, Card::Damn])
-            .battlefield(
-                P0,
-                &[
-                    Card::UrborgTombOfYawgmoth,
-                    Card::Mountain,
-                    Card::Island,
-                    Card::Island,
-                    Card::Plains,
-                    Card::Plains,
-                    Prop::Flier,
-                ],
-            )
-            .hand(P0, &[BLOOD_MOON, Card::Damn])
-            .actions(&[
-                ME.casts(BLOOD_MOON),
-                Resolve,
-                ME.controls(BLOOD_MOON, 1),
-                ME.deciding(DecisionKind::Priority, 1),
             ]),
         // CR 614.12: an entering replacement looks at the land "as it would exist on the
         // battlefield". Soporific Springs would be a Mountain with no ability of its text, so

@@ -3,7 +3,9 @@
     {
       "published_at": "2020-08-07",
       "hash": "a1b062b96b5b",
-      "untestable": "Bojuka Bog, a nonbasic land with its own enters-the-battlefield trigger, has no implementation."
+      "scenario": [
+        "Bojuka Bog enters without exiling a graveyard"
+      ]
     },
     {
       "published_at": "2020-08-07",
@@ -26,6 +28,302 @@
       "scenario": [
         "a land that asks for life as it enters enters untapped",
         "a land that enters tapped unless few lands enters untapped"
+      ]
+    }
+  ],
+  "Dress Down": [
+    {
+      "published_at": "2021-06-18",
+      "hash": "31ff118c6f6d",
+      "scenario": [
+        "an Aura attached after Dress Down still gives vigilance"
+      ]
+    },
+    {
+      "published_at": "2021-06-18",
+      "hash": "be379639d091",
+      "scenario": [
+        "made a creature, it loses its own sacrifice trigger",
+        "entering as a creature, it draws nothing"
+      ]
+    }
+  ],
+  "Dryad Arbor": [
+    {
+      "published_at": "2011-09-22",
+      "hash": "a4f82edeb75a",
+      "scenario": [
+        "Dryad Arbor is a 1/1 Mountain creature that taps for {R}"
+      ]
+    },
+    {
+      "published_at": "2013-06-07",
+      "hash": "e44d32737694",
+      "scenario": [
+        "a text change does not change Dryad Arbor's color indicator"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "b89359e509bd",
+      "scenario": [
+        "Dryad Arbor is a 1/1 Mountain creature that taps for {R}"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "2d35f22da716",
+      "scenario": [
+        "Dryad Arbor uses the turn's land play and never goes on the stack"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "354c1ae7a9ce",
+      "scenario": [
+        "Dryad Arbor uses the turn's land play and never goes on the stack"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "f527fb3bba1e",
+      "scenario": [
+        "Dryad Arbor uses the turn's land play and never goes on the stack",
+        "Dryad Arbor is a 1/1 Mountain creature that taps for {R}"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "79ab914c1f56",
+      "untestable": "The vocabulary only grants flash timing to spells. Land plays have no permission for Scout's Warning or Teferi, Mage of Zhalfir to change their timing."
+    }
+  ],
+  "Glorious Anthem": [],
+  "Humility": [
+    {
+      "published_at": "2006-02-01",
+      "hash": "39e66755a48b",
+      "scenario": [
+        "Humility after both Opalescences makes all creatures 1/1",
+        "between two Opalescences, Humility is 4/4 and the last is 1/1",
+        "Humility before both Opalescences leaves the enchantments 4/4"
+      ]
+    },
+    {
+      "published_at": "2007-02-01",
+      "hash": "9f8dbeed4cf2",
+      "scenario": [
+        "a mana creature makes no mana",
+        "Dryad Arbor loses the mana ability of its land type"
+      ]
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "2e6d0ed58263",
+      "scenario": [
+        "with Humility earlier, each is as big as its mana value",
+        "with Humility later, each is 1/1"
+      ]
+    }
+  ],
+  "Oko, Thief of Crowns": [
+    {
+      "published_at": "2019-10-04",
+      "hash": "658679374f37",
+      "scenario": [
+        "+1 makes damage already on the creature lethal"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "769a5f96ea85",
+      "scenario": [
+        "−5 exchanges nothing when a target is gone"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "ac6650984455",
+      "scenario": [
+        "+1 lasts after a temporary animation wears off"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "5be7f0a73f7d",
+      "scenario": [
+        "+1 allows abilities granted later"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "cd5a769d1ffd",
+      "scenario": [
+        "+1's Elk has no abilities",
+        "+1's Elk is no longer an artifact",
+        "+1's Elk replaces a land creature's subtypes"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "c69afdbaf22f",
+      "scenario": [
+        "−5 exchanges a creature without exchanging its Equipment",
+        "−5 exchanges Equipment without detaching it"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "3cc452e07f67",
+      "scenario": [
+        "+1 makes an opponent's creature a 3/3 Elk",
+        "+1 keeps an Elk after Oko leaves"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "0fcc7e3b28b5",
+      "scenario": [
+        "+1's Elk under an earlier Humility is 3/3",
+        "+1's Elk under a later Humility is 1/1"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "d87344cae4eb",
+      "scenario": [
+        "+1's Elk wearing an Equipment attached before",
+        "+1's Elk wearing an Equipment attached after",
+        "+1's Elk keeps its +1/+1 counters"
+      ]
+    },
+    {
+      "published_at": "2019-10-04",
+      "hash": "272924e96738",
+      "scenario": [
+        "−5 still controls the creature after cleanup and a power increase"
+      ]
+    },
+    {
+      "published_at": "2024-11-08",
+      "hash": "726b754ddfb8",
+      "covered": "CostPart::SACRIFICE"
+    },
+    {
+      "published_at": "2024-11-08",
+      "hash": "710aaf83f2a7",
+      "untestable": "The joke about eating a physical card describes no game action."
+    },
+    {
+      "published_at": "2024-11-08",
+      "hash": "6160c0b16c54",
+      "scenario": [
+        "+2 creates a Food, which gains 3 life"
+      ]
+    }
+  ],
+  "Opalescence": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "632d05a9eb5e",
+      "scenario": [
+        "another enchantment is a creature as big as its mana value",
+        "two Opalescences make each other creatures"
+      ]
+    },
+    {
+      "published_at": "2006-02-01",
+      "hash": "39e66755a48b",
+      "scenario": [
+        "Humility after both Opalescences makes all creatures 1/1",
+        "between two Opalescences, Humility is 4/4 and the last is 1/1",
+        "Humility before both Opalescences leaves the enchantments 4/4"
+      ]
+    },
+    {
+      "published_at": "2008-08-01",
+      "hash": "f64bbd140062",
+      "scenario": [
+        "an enchantment cast this turn can't attack",
+        "an older enchantment can attack on the turn it becomes a creature"
+      ]
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "2e6d0ed58263",
+      "scenario": [
+        "with Humility earlier, each is as big as its mana value",
+        "with Humility later, each is 1/1"
+      ]
+    }
+  ],
+  "Tarmogoyf": [
+    {
+      "published_at": "2024-06-07",
+      "hash": "9cebf2892c10",
+      "covered": "Amount::CardTypesAmong"
+    },
+    {
+      "published_at": "2026-08-21",
+      "hash": "1f3f8cd83d9d",
+      "scenario": [
+        "Tarmogoyf in a graveyard counts itself",
+        "Tarmogoyf in a hand counts the graveyards"
+      ]
+    },
+    {
+      "published_at": "2026-08-21",
+      "hash": "36738b99600f",
+      "scenario": [
+        "Tarmogoyf counts card types, not cards"
+      ]
+    },
+    {
+      "published_at": "2026-08-21",
+      "hash": "ee2e2deab97e",
+      "scenario": [
+        "Tarmogoyf counts the instant that damaged it",
+        "Tarmogoyf dies to damage that adds no card type"
+      ]
+    },
+    {
+      "published_at": "2026-08-21",
+      "hash": "4579c8576f13",
+      "scenario": [
+        "kindred counts as a card type and supertypes do not"
+      ]
+    }
+  ],
+  "Urborg, Tomb of Yawgmoth": [
+    {
+      "published_at": "2021-03-19",
+      "hash": "32f75996ac6b",
+      "scenario": [
+        "Urborg and another land are Swamps",
+        "the opponent's lands are Swamps too",
+        "Dryad Arbor is a Swamp too"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "1e1da44dc0b8",
+      "scenario": [
+        "Urborg entering under it makes no Swamps",
+        "Blood Moon entering after Urborg ends its Swamps"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "8f744669da04",
+      "scenario": [
+        "Urborg in the library is not a Swamp card"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "6af434fc3b0c",
+      "scenario": [
+        "Urborg on the battlefield does not affect land cards in the library"
       ]
     }
   ]
