@@ -223,5 +223,10 @@
     "label": "Card writers start from a Rust draft and see vocabulary and example files only for unresolved clauses",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The fast check's pytest step runs the Python test files that fit its window, those the change edits or whose imports reach it first, and stops at the window's end, instead of all 855 tests on any tools/ change (median 93 s, cut off at 180 s in a quarter of runs), and the browser sweep runs the whole suite",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]

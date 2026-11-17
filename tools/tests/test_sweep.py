@@ -89,6 +89,11 @@ def test_failed_checks_replay_by_name_or_whole() -> None:
     assert sweep.reproduce("shots", ["shots:phone-main"]) == "just ui-shots phone-main"
     assert sweep.reproduce("ui-test", ["ui-test:ui-test"]) == "just ui-test"
     assert sweep.reproduce("mobile", ["mobile:mobile-check"]) == "just mobile-check"
+    assert (
+        sweep.reproduce("pytest", ["python:tests/test_warm.py::test_a_clone_is_kept"])
+        == "just test-py tests/test_warm.py::test_a_clone_is_kept"
+    )
+    assert sweep.reproduce("pytest", ["pytest:pytest"]) == "just test-py"
 
 
 class FakeBd(verdicts.Beads):

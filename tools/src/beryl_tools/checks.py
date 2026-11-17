@@ -103,6 +103,7 @@ from .lanes import (
     card_oracle_lane,
     names_lane,
     oracle_lane,
+    pytest_lane,
     python_lane,
     repo_lane,
     scale_lane,

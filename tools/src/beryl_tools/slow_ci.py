@@ -17,9 +17,10 @@ or ui/, and so on. Within a lane, the Rust lane tests only the packages the chan
 (`rust_tests.affected_packages`), and the oracle lane plays the changed cards and a sample
 (oracle_selection.py). A lane left out gets a `skip` record in the run log that says why.
 
-The full browser lanes (`shots`, `ui-test`) and the phone builds (`mobile`), [`SWEPT`], are not
-slow CI's: the fast check plays the browser checks a change can break, and the browser sweep
-(sweep.py) runs all three on origin/staging every few hours, filing what fails without blocking
+The full browser lanes (`shots`, `ui-test`), the phone builds (`mobile`) and the whole Python
+test suite (`pytest`), [`SWEPT`], are not slow CI's: the fast check plays the browser checks a
+change can break and the Python test files that fit its window, and the browser sweep (sweep.py)
+runs all four on origin/staging every few hours, filing what fails without blocking
 master. A run starts the sweep in the background when one is due (`sweep.start_background`). Slow CI keeps one small browser check, `ui-smoke` (`checks.SMOKE_TITLES`).
 
 The tools are not judged by path. Each lane's pass records its fingerprint ([`fingerprint`]):
@@ -128,7 +129,7 @@ LANES: tuple[str, ...] = (
 )
 # The lanes the browser sweep runs in full every few hours (sweep.py) instead of slow CI, which
 # `by ci` still runs when named.
-SWEPT: tuple[str, ...] = ("shots", "ui-test", "mobile")
+SWEPT: tuple[str, ...] = ("shots", "ui-test", "mobile", "pytest")
 ALWAYS = "always: needs no build"
 
 
@@ -403,6 +404,7 @@ def lanes_for(packages: list[str] | None) -> dict[str, Callable[[], checks.Lane]
         "oracle": checks.oracle_lane,
         "counts": bench.lane,
         "mobile": mobile.lane,
+        "pytest": checks.pytest_lane,
         "efficiency": standalone.EFFICIENCY.lane,
         "status": standalone.STATUS.lane,
     }

@@ -1,5 +1,5 @@
-"""`by sweep`: the browser sweep, which runs the full `shots`, `ui-test` and `mobile` lanes on
-origin/staging every [`EVERY`] from a launchd agent (`just sweep-install`), at normal priority
+"""`by sweep`: the browser sweep, which runs the full `shots`, `ui-test` and `mobile` lanes, and
+every Python test (`pytest`, lanes.pytest_lane), on origin/staging every [`EVERY`] from a launchd agent (`just sweep-install`), at normal priority
 inside CPU tokens of the `sweep` class, which hold at most a quarter of the cores (tokens.py).
 
 These lanes are most of what slow CI used to spend, and where its timeouts and flaky failures
@@ -8,6 +8,8 @@ plays the browser checks the change can break (selection.py). What a full sweep 
 break no selection foresaw: a change to shared stage or engine code that breaks a verb or a
 screen the selection did not pick. That need not run on every staging tip, nor block master, so
 slow CI keeps only a few browser checks (`checks.SMOKE_TITLES`) and this sweep runs the rest.
+The Python tests are the same case: the fast check runs the test files that fit its window
+(python_fit.py) and slow CI none, so the sweep runs them all.
 Every 3 hours, at about 8 commits an hour, a failure leaves about 24 commits to search, where
 a nightly would leave about 190.
 
@@ -59,10 +61,10 @@ AGENT = "ca.thurn.beryl.sweep"
 SCRIPT = "sweep"
 EVERY = timedelta(hours=3)
 # The lanes the sweep runs in full, which slow CI leaves to it (slow_ci.SWEPT).
-LANES: tuple[str, ...] = ("shots", "ui-test", "mobile")
+LANES: tuple[str, ...] = ("shots", "ui-test", "mobile", "pytest")
 # The step of each browser lane, whose record (`<lane>:<step>`) stands for the whole step when it
 # failed without naming a check (runlog.Run.records).
-STEPS: dict[str, str] = {"shots": "ui-shots", "ui-test": "ui-test"}
+STEPS: dict[str, str] = {"shots": "ui-shots", "ui-test": "ui-test", "pytest": "pytest"}
 # The wall seconds a sweep's bisection may take. Nothing waits on it: the next firing skips
 # while it runs.
 SEARCH = 1800.0
@@ -235,7 +237,12 @@ def last_passed(records: list[dict[str, object]]) -> str:
 
 
 def lanes() -> list[checks.Lane]:
-    return [checks.shots_lane(), checks.ui_test_lane(), mobile.lane()]
+    return [
+        checks.shots_lane(),
+        checks.ui_test_lane(),
+        mobile.lane(),
+        checks.pytest_lane(),
+    ]
 
 
 def commits_since(since: str) -> list[str]:
@@ -251,11 +258,16 @@ def reproduce(lane: str, failed: list[str]) -> str:
     lane when its step failed as a whole (`<lane>:<step>`)."""
     if lane == "mobile":
         return "just mobile-check"
-    recipe = "just ui-shots" if lane == "shots" else "just ui-test"
+    recipe = {"shots": "just ui-shots", "pytest": "just test-py"}.get(
+        lane, "just ui-test"
+    )
     if any(c in (f"{lane}:lane", f"{lane}:{STEPS.get(lane)}") for c in failed):
         return recipe
-    # `shots:<name>` and `ui-test:<title>` by name or title; a verb or shape check by its id.
-    names = [c.removeprefix(f"{lane}:") for c in failed]
+    # `shots:<name>` and `ui-test:<title>` by name or title; a verb or shape check by its id;
+    # a Python test (`python:<node id>`) by its node id.
+    names = [
+        c.removeprefix("python:" if lane == "pytest" else f"{lane}:") for c in failed
+    ]
     return " ".join([recipe, *(shlex.quote(n) for n in names)])
 
 

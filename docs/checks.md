@@ -29,7 +29,18 @@ The lanes:
 
 - `repo`: justfile and Markdown formatting.
 - `python`: black, pyre and pytest. If only cards or vocabulary changed, it runs
-  just the scale harness's tests.
+  just the scale harness's tests. Slow CI runs no Python tests, and the browser
+  sweep runs all of them. In the fast check, pytest runs the test files that fit
+  its window (`deadline.step_limit`, at least 45 s), chosen by file
+  (`python_fit.py`): files the change edits always run, then files whose imports
+  reach a module the change edits, then files never timed, then the rest by
+  record. The rest are named as deferred to the sweep. A change to `tools/`
+  other than a module or a test file (`conftest.py`, `pyproject.toml`, a
+  fixture) or to the card store runs every file. pytest is stopped 3 s before
+  the window ends: the step then fails only if a test that finished failed.
+  Before this, the step ran all 855 tests on any change to `tools/`: a median of
+  93 s, cut off at the 180 s limit in a quarter of runs, and the tests it never
+  reached ran nowhere.
 - `rust`: rustfmt, clippy and tests, then `card-text`. The tests that run are
   those that fit the time left once they are built (`rust_fit.py`): tests the
   run log has never timed first, then those that caught a break, then those that
@@ -230,6 +241,9 @@ a launchd agent that fires every 3 hours.
   including every verb and prompt shape check.
 - `mobile`: `cargo check` of the app for the iOS Simulator and Android, which
   needs `just mobile-setup`.
+- `pytest`: every Python test (`just test-py`), since the fast check runs only
+  the test files that fit its window and slow CI runs none. Its checks keep the
+  python lane's names, `python:<node id>`.
 
 Which browser checks run where:
 

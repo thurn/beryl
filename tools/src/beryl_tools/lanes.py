@@ -114,6 +114,20 @@ def python_lane(only: list[str] | None = None) -> Lane:
     )
 
 
+def pytest_lane() -> Lane:
+    """Every Python test, for the browser sweep (sweep.py). Slow CI leaves the Python tests to
+    the fast check (slow_only.FAST_ONLY), whose pytest step runs only the test files that fit its
+    window (python_fit.py); the sweep runs every file on staging, so a file the fast check
+    deferred still runs within a few hours. Its checks keep the python lane's names
+    (`python:<node id>`), so a failure here and one in a fast check name the same test.
+    """
+    return Lane("pytest").step(
+        "pytest",
+        [sys.executable, "-m", "beryl_tools.checks", "pytest", "--lane", "python"],
+        rerun=failed_pytests,
+    )
+
+
 # The Python tests that read card and vocabulary files, which `scale_lane` runs alone for a Rust
 # change (tests/test_scale.py and tests/test_card_names.py read every card file;
 # tests/test_card.py reads beryl_card's source as card brief does, and tests/test_specs.py the
