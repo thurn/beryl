@@ -12,6 +12,7 @@
 mod action;
 mod check;
 mod cues;
+mod element;
 mod gesture;
 mod glyphs;
 mod keys;
@@ -23,12 +24,13 @@ use std::sync::Arc;
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
-use beryl_protocol::protocol::{Side, Status, ZoneName};
+use beryl_protocol::protocol::{Side, Status};
 use beryl_protocol::script::Verb;
 use glam::Vec2;
 
 pub use action::{Action, KeyChord, key_code, point};
 pub use check::{Checked, Mode, StepMoment, TimelineStep};
+pub use element::Element;
 pub use moment::{Duration, Moment, Name, Offset, ParseError};
 pub use recording::{Answer, OPEN, RECORDINGS, Recording, Responses, plays_on};
 
@@ -36,10 +38,9 @@ use self::cues::Cues;
 use self::moment::{moment_distance, offset_from};
 use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
 use crate::faces::FaceList;
-use crate::frame::{Frame, Place, Role, Sound, StateBits, Wake};
+use crate::frame::{Frame, Sound, StateBits, Wake};
 use crate::input::{
-    AssetReady, Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Rect, Size,
-    Tier,
+    AssetReady, Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size, Tier,
 };
 use crate::play::record::Plant;
 use crate::{Client, Config};
@@ -65,42 +66,6 @@ impl fmt::Display for DriverError {
 }
 
 impl std::error::Error for DriverError {}
-
-/// An element as `find` found it in the present frame.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Element {
-    /// Its index in the frame's resolved elements.
-    pub index: u32,
-    pub role: Role,
-    pub name: String,
-    pub place: Place,
-    pub rect: Rect,
-    pub interactive: bool,
-    pub state: StateBits,
-}
-
-impl Element {
-    /// The zone a card is in; `None` for an element of the flat layer or a face in the Revealed
-    /// Cards pile.
-    #[must_use]
-    pub fn zone(&self) -> Option<ZoneName> {
-        match self.place {
-            Place::Card { zone, .. } => Some(zone),
-            Place::Layer | Place::Revealed => None,
-        }
-    }
-
-    /// Its bounding box on screen, in logical points.
-    #[must_use]
-    pub fn rect(&self) -> Rect {
-        self.rect
-    }
-
-    #[must_use]
-    pub fn states(&self) -> StateBits {
-        self.state
-    }
-}
 
 /// A recording played through a client, for one seat in one window.
 pub struct Page {
