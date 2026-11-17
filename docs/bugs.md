@@ -6,6 +6,12 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Paying a cost with cards in a large graveyard could revisit earlier cards.**
+  The casting cursor was a byte and wrapped after the 255th card. Casting now
+  checks the conversion and reads the position from the chosen set when the
+  cached cursor is full. The cast lint catches unchecked narrowing, and
+  `graveyard_cursor_reaches_above_the_byte_limit` covers the fallback.
+
 - **A nontoken copying Jace, Telepath Unbound had mana value 2.**
   `State::mana_value` used token status to recognize copied back faces (CR
   712.6d). The query now checks whether the effective face comes from a copy

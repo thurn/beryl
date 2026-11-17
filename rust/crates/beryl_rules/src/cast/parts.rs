@@ -29,7 +29,7 @@ use crate::state::{
 };
 use crate::table::GameTable;
 
-use super::costs::total_cost;
+use super::costs::{graveyard_start, total_cost};
 use super::delve::{DELVE, DELVE_PART, delve_candidates, delve_most, delves};
 use super::steps::{finish, pay_mana, top};
 use super::timing::entry_ability_of;
@@ -476,7 +476,7 @@ fn substitute_options<L: Layout>(
         // Cards from a graveyard are chosen from the bottom up (see `choices`): each set is
         // one sequence of answers, and a card leaves only those above it to choose after.
         let graveyard = s.graveyard(c.player);
-        let from = usize::from(paying_objects.graveyard_from);
+        let from = graveyard_start(graveyard, &paying_objects);
         let (offered, above) = if chosen.zone == Zone::Graveyard {
             let order = graveyard.get(from..).unwrap_or_default();
             let offered = collapse_in_order(s, order.iter().copied().filter(|&g| able.contains(g)));
@@ -553,12 +553,12 @@ fn choices<L: Layout>(
     c: &Casting<L>,
 ) -> Bitboard<L::Slot> {
     let (action, chosen) = part_being_paid(t, entry, c);
+    let paying = step(c);
     let PayingObjects {
-        graveyard_from,
         chosen: picked,
         left,
         ..
-    } = step(c);
+    } = paying;
     let able = candidates(s, t, c.player, itself(entry), action, chosen) & !picked;
     match (chosen.measure, chosen.zone) {
         (Measure::Count(_), Zone::Graveyard) => {
@@ -573,7 +573,7 @@ fn choices<L: Layout>(
                 .0;
             collapse_in_order(
                 s,
-                graveyard[usize::from(graveyard_from)..=last]
+                graveyard[graveyard_start(graveyard, &paying)..=last]
                     .iter()
                     .copied()
                     .filter(|&slot| able.contains(slot)),
@@ -732,7 +732,7 @@ pub(super) fn perform<L: Layout>(
                     if action == CostAction::Exile {
                         let graveyard = s.graveyard(c.player);
                         if let Some(i) = graveyard.iter().position(|&g| g == slot) {
-                            paying.graveyard_from = i as u8 + 1;
+                            paying.graveyard_from = u8::try_from(i + 1).unwrap_or(u8::MAX);
                         }
                         paying.chosen.insert(slot);
                     } else {
@@ -768,7 +768,7 @@ pub(super) fn perform<L: Layout>(
             let slot = object.expect("an object to pay with");
             if let Some(i) = s.graveyard(c.player).iter().position(|&g| g == slot) {
                 // The next pick starts above it.
-                paying.graveyard_from = i as u8 + 1;
+                paying.graveyard_from = u8::try_from(i + 1).unwrap_or(u8::MAX);
             }
             paying.chosen.insert(slot);
             paying.left -= 1;

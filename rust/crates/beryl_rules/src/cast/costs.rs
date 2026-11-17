@@ -6,7 +6,7 @@ use crate::card::{CastingOption, Castings, Face, ManaCost};
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::rule_change;
-use crate::state::{Casting, Pending, StackEntry, StackItem, State};
+use crate::state::{Casting, PayingObjects, Pending, StackEntry, StackItem, State};
 use crate::table::GameTable;
 
 use super::legal::spent_by_cost;
@@ -178,5 +178,45 @@ pub(super) fn spent_by_entry<L: Layout>(t: &GameTable, entry: &StackEntry<L>) ->
     match source_of(entry) {
         Some(source) => spent_by_cost(source, entry_ability_of(t, entry)),
         None => Bitboard::EMPTY,
+    }
+}
+
+/// The position above the last graveyard card chosen toward a cost
+/// ([CR 601.2h]): "The player pays the total cost." The byte cursor caches the position
+/// for ordinary graveyards. At its limit, recover the position from the chosen cards,
+/// which remain in the graveyard until the cost is fully paid.
+///
+/// [CR 601.2h]: https://yawgatog.com/resources/magic-rules/#R6012h
+pub(super) fn graveyard_start<L: Layout>(
+    graveyard: &[L::Slot],
+    paying: &PayingObjects<L>,
+) -> usize {
+    if paying.graveyard_from == u8::MAX {
+        graveyard
+            .iter()
+            .rposition(|&slot| paying.chosen.contains(slot))
+            .map_or(0, |last| last + 1)
+    } else {
+        usize::from(paying.graveyard_from)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use beryl_kernel::ids::{LargeSlot, SlotId};
+
+    use super::{PayingObjects, graveyard_start};
+    use crate::layout::Large;
+
+    #[test]
+    fn graveyard_cursor_reaches_above_the_byte_limit() {
+        let graveyard: Vec<_> = (0..300).map(LargeSlot::from_index).collect();
+        let mut paying = PayingObjects::<Large>::start(0, 3);
+        assert_eq!(graveyard_start(&graveyard, &paying), 0);
+        for index in [254, 255, 276] {
+            paying.chosen.insert(graveyard[index]);
+            paying.graveyard_from = u8::try_from(index + 1).unwrap_or(u8::MAX);
+            assert_eq!(graveyard_start(&graveyard, &paying), index + 1);
+        }
     }
 }
