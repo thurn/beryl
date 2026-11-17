@@ -264,5 +264,10 @@
     "label": "Oracle outcomes use each scenario’s exported inputs so unrelated exporter edits retain prior passes",
     "metric": "slow-ci.cpu-seconds-per-run",
     "expect": "down"
+  },
+  {
+    "label": "Native builds avoid stale LLVM-symbol links and manual cleans by disabling incremental reuse only for dependencies, while native workspace edits remain incremental",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

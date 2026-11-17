@@ -74,6 +74,12 @@ opt-level = 2
 # change to a dependency (docs/beryl-3d.md, "Edit-to-output time").
 [profile.dev.package."*"]
 opt-level = 1
+# After an engine revision, reused incremental codegen units in the main workspace's path
+# dependencies left missing `_anon.*.llvm.*` symbols at the native link. Compile each changed
+# dependency in full; Cargo still reuses unchanged crates. `test` inherits this override.
+# Native members such as `beryl_scene` keep incremental compilation for quick edits.
+# Registry crates already build without it, so the wildcard needs no maintained package list.
+incremental = false
 # The face encoders and the scaler they use, at opt-level 3. `just b3d png` compresses a
 # placeholder on every run for each face whose scan is missing, since placeholders are never
 # cached: unoptimized, 11 placeholders took 1.4 s of the program's 2.6 CPU-seconds.
