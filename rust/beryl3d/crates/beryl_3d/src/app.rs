@@ -485,7 +485,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         .load
         .map(|(threads, class)| crate::load::start(threads, class));
     #[cfg(feature = "tools")]
-    let drive = options.drive.as_deref().map(drive).transpose()?;
+    let drive = options.drive.as_deref().map(crate::options::drive_script).transpose()?;
     let slow_gpu = options.slow_gpu.unwrap_or_default();
     let (settings, saver) = player_settings(options);
     let audio = start_audio(options.window, &settings.clone().unwrap_or_default());
@@ -693,37 +693,6 @@ fn data_dirs() -> Option<beryl_shell::Dirs> {
         None => eprintln!("beryl3d: no home folder, so no game is saved"),
     }
     dirs
-}
-
-/// The drive script `name` names: a file in `rust/beryl3d/drive` named `<name>.drive`, or a
-/// path.
-#[cfg(feature = "tools")]
-fn drive(name: &str) -> Result<beryl_host::Drive, String> {
-    let scripts = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../drive");
-    let path = if name.contains(['/', '\\']) {
-        PathBuf::from(name)
-    } else {
-        scripts.join(format!("{name}.drive"))
-    };
-    if !path.exists() && !name.contains(['/', '\\']) {
-        let known: Vec<String> = std::fs::read_dir(&scripts)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .filter_map(|entry| {
-                let path = entry.path();
-                if path.extension()? != "drive" {
-                    return None;
-                }
-                Some(path.file_stem()?.to_string_lossy().into_owned())
-            })
-            .collect();
-        return Err(format!(
-            "--drive {name}: no such script; the scripts are {}",
-            known.join(", ")
-        ));
-    }
-    beryl_host::Drive::load(&path)
 }
 
 /// Where `--pause-at` stops the clock, in nanoseconds.

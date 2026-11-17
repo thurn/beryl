@@ -220,6 +220,37 @@ pub fn usage(tools: bool) -> String {
     lines.join("\n")
 }
 
+/// The drive script `name` names: a file in `rust/beryl3d/drive` named `<name>.drive`, or a
+/// path.
+#[cfg(feature = "tools")]
+pub(crate) fn drive_script(name: &str) -> Result<beryl_host::Drive, String> {
+    let scripts = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../drive");
+    let path = if name.contains(['/', '\\']) {
+        PathBuf::from(name)
+    } else {
+        scripts.join(format!("{name}.drive"))
+    };
+    if !path.exists() && !name.contains(['/', '\\']) {
+        let known: Vec<String> = std::fs::read_dir(&scripts)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|entry| {
+                let path = entry.path();
+                if path.extension()? != "drive" {
+                    return None;
+                }
+                Some(path.file_stem()?.to_string_lossy().into_owned())
+            })
+            .collect();
+        return Err(format!(
+            "--drive {name}: no such script; the scripts are {}",
+            known.join(", ")
+        ));
+    }
+    beryl_host::Drive::load(&path)
+}
+
 /// A duration written as `just b3d` writes one: a number and `ms` or `s` (`850ms`, `1.25s`).
 fn duration(text: &str) -> Result<Duration, String> {
     let (number, scale) = if let Some(number) = text.strip_suffix("ms") {
