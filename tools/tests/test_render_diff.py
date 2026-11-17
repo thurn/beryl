@@ -17,9 +17,14 @@ JACE: Context = render_diff.context_of(
 )
 
 
-def test_strip_reminder_text_keeps_a_line_of_reminder_text_alone() -> None:
+def test_strip_reminder_text_keeps_basic_land_mana_text() -> None:
     text = "Flash (You may cast this spell any time you could cast an instant.)\n({T}: Add {U}.)"
     assert render_diff.strip_reminder_text(text, PLAIN) == "Flash\n{T}: Add {U}."
+
+
+def test_strip_reminder_text_removes_a_land_creatures_standalone_reminder() -> None:
+    text = '(This land is affected by summoning sickness and has "{T}: Add {G}.")'
+    assert render_diff.strip_reminder_text(text, PLAIN) == ""
 
 
 def test_unify_self_reference_covers_the_name_its_short_form_and_this_type() -> None:
