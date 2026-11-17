@@ -1,6 +1,6 @@
 {
   "tools": [
-    { "job": "specs", "web": "a card's spec moments as text, film and checks", "skills": ["specs"], "b3d": null },
+    { "job": "specs", "web": "a card's spec moments as text, film and checks", "skills": ["specs"], "b3d": "just b3d spec <card> [moment]" },
     { "job": "ui-review", "web": "playing the interface as a player and reporting its defects", "skills": ["ui-review"], "b3d": "just b3d play; .claude/skills/ui-review/SKILL.md, section \"Beryl 3D\"" },
     { "job": "motion-film", "web": "`just motion --film`: a verb filmed beside Arena's clips", "skills": [], "b3d": null },
     { "job": "motion-review", "web": "a verb's motion judged by an independent reviewer", "skills": ["motion-review"], "b3d": null },

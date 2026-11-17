@@ -311,3 +311,25 @@ time. Where the recordings show nothing, judge by the design philosophy in
 at something. Report what each moment
 shows from each seat, what you fixed, which other cards' moments
 changed, and any moment you could not get and why.
+
+## Beryl 3D
+
+The web instructions above stay the way to look at the web interface. Beryl 3D
+records every spec moment as `<card>/<moment>` in its recordings pack, and
+`just b3d spec` shows a card's moments as text, with no window and no GPU. For
+each moment and seat it prints the prompts of `just b3d info`, the `just b3d
+tree` at each prompt (cut to 40 lines) and the result of `just b3d check`.
+
+```bash
+just b3d spec counterspell
+just b3d spec counterspell counters-a-spell-into-its-owners-graveyard --seat you --film
+```
+
+The first prints every moment from both seats; the second one moment from your
+seat, with `just b3d film` pictures (their paths are printed). A misspelt card
+exits 2 and names the nearest specced cards.
+
+To go on with one moment, use the command line its section prints:
+`just b3d tree <card>/<moment> --seat you --at prompt:1 --within <place>`,
+`just b3d diff` between two times, `just b3d png --at <moment> --tree` for a
+picture and `just b3d check` for the faults. The `b3d` skill describes each.
