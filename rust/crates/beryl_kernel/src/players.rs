@@ -144,13 +144,15 @@ impl<L: Layout> State<L> {
     /// ([CR 400.1]): "Each player has their own library, hand, and graveyard. The other zones are
     /// shared by all players."
     ///
+    /// Components of a merged permanent have no zone of their own ([`Zone::Merged`]).
+    ///
     /// [CR 400.1]: https://yawgatog.com/resources/magic-rules/#R4001
     #[inline]
     pub fn in_zone(&self, zone: Zone) -> Bitboard<L::Slot> {
         match zone {
             Zone::Stack => self.zone(ZoneKey::Stack),
-            Zone::Nowhere => Bitboard::EMPTY,
-            _ => self
+            Zone::Nowhere | Zone::Merged => Bitboard::EMPTY,
+            Zone::Library | Zone::Hand | Zone::Battlefield | Zone::Graveyard | Zone::Exile => self
                 .zones
                 .members
                 .iter()
@@ -165,6 +167,12 @@ mod tests {
     use crate::layout::Small;
     use crate::profile::Profile;
     use crate::state::State;
+
+    #[test]
+    fn merged_components_have_no_zone_membership() {
+        let state = State::<Small>::empty(Profile::EXACT);
+        assert!(state.in_zone(beryl_card::Zone::Merged).is_empty());
+    }
 
     #[test]
     fn the_rules_name_players_by_sets_and_orders() {

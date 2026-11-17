@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Querying zone membership for merged components panicked.** The zone
+  query indexed the owner's zone table with `Zone::Merged`, which is an
+  internal location for a component of a permanent. The query now returns
+  an empty set. `merged_components_have_no_zone_membership` covers the
+  query, and the exhaustive zone match requires new locations to choose
+  how membership works.
+
 - **A permanent cast for impending kept its creature types while it was an
   enchantment.** The layer code removed the Creature card type without checking
   which subtypes the remaining card types could have. Both layer paths now
