@@ -103,6 +103,9 @@ pub enum TablePress {
     Rewind(u32),
     /// Open or fold the log.
     ToggleLog,
+    /// Open the proposal panel for the proposal with this id, or fold it if `None`, on a phone,
+    /// where it is folded to a button (`assists::proposals`).
+    ToggleProposals(Option<u32>),
     /// The custom token form's color `n` of `tokens::COLORS`, turned on or off.
     CustomColor(u8),
     /// The custom token form's Create token.
@@ -163,6 +166,10 @@ pub struct TableState {
     pub custom: Option<tokens::CustomToken>,
     pub order: Option<order::LibraryOrder>,
     pub log_open: bool,
+    /// The id of the first proposal the panel was opened for on a phone, where it is folded to
+    /// a button until it is opened (`assists::proposals`). A proposal with another id finds it
+    /// folded again.
+    pub proposals_open: Option<u32>,
     /// The numbers of the log lines whose actions stopped the last undo or rewind, which the
     /// log highlights (`blocked` in the web's `TableLogControls`).
     pub blocked: Vec<u32>,
@@ -210,6 +217,7 @@ impl TableState {
             custom: None,
             order: None,
             log_open: false,
+            proposals_open: None,
             blocked: Vec::new(),
             last_token: None,
             pending: std::collections::VecDeque::new(),

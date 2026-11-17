@@ -92,7 +92,8 @@ pub fn table(input: &ScreenIn) -> Element {
         )
     });
     let table = input.view.and_then(|view| view.table.as_ref());
-    let proposals = table.and_then(|table| assists::proposals(&table.proposals, input.window));
+    let proposals = table
+        .and_then(|table| assists::proposals(&table.proposals, state.proposals_open, input.window));
     let labels = (input.view.zip(table))
         .map(|(view, table)| assists::labels(&table.labels, view, input.window.phone()))
         .unwrap_or_default();

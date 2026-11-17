@@ -136,6 +136,10 @@ impl Client {
                 self.manual.log_open = !self.manual.log_open;
                 self.show_screen();
             }
+            TablePress::ToggleProposals(open) => {
+                self.manual.proposals_open = open;
+                self.show_screen();
+            }
             TablePress::CustomColor(at) => {
                 if let Some(color) = (self.manual.custom.as_mut())
                     .and_then(|form| form.colors.get_mut(usize::from(at)))
@@ -169,7 +173,10 @@ impl Client {
                 self.send_answer(Answer::ProposalLine { id, line, on });
             }
             TablePress::ApplyProposal { id, revision } => {
+                // The panel folds again once its proposal is applied.
+                self.manual.proposals_open = None;
                 self.send_answer(Answer::ApplyProposal { id, revision });
+                self.show_screen();
             }
             TablePress::Label(id) => self.send_answer(Answer::ApplyLabel { id }),
             TablePress::SortCard(card) => {

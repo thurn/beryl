@@ -37,6 +37,11 @@ fn assisted_view() -> PlayerView {
 
 /// A client on the Mac in a 1600 by 900 window that has been given `view` and drawn it.
 fn client_at(view: &PlayerView) -> Client {
+    client_sized(view, 1600.0, 900.0)
+}
+
+/// A client on the Mac in a window `width` by `height` that has been given `view` and drawn it.
+fn client_sized(view: &PlayerView, width: f32, height: f32) -> Client {
     let mut client = Client::new(Config {
         elements: 2048,
         draws: 2048,
@@ -44,10 +49,7 @@ fn client_at(view: &PlayerView) -> Client {
     });
     client.handle(Input::Platform { mac: true });
     client.handle(Input::Surface {
-        size: Size {
-            width: 1600.0,
-            height: 900.0,
-        },
+        size: Size { width, height },
         scale: 2.0,
         safe_area: Insets::default(),
     });
@@ -200,6 +202,40 @@ fn a_proposal_line_turns_off_and_apply_sends_the_proposal() {
             },
             Answer::ApplyProposal { id: 7, revision: 3 },
         ]
+    );
+}
+
+#[test]
+fn a_phone_folds_the_proposal_panel_to_a_button_that_opens_it() {
+    let mut view = assisted_view();
+    view.table.as_mut().unwrap().proposals = vec![ProposalView {
+        id: 7,
+        revision: 3,
+        title: "Turn upkeep".to_owned(),
+        lines: vec![ProposalLine {
+            id: 1,
+            text: "Draw a card".to_owned(),
+            whose: Side::You,
+            on: true,
+        }],
+    }];
+    let mut client = client_sized(&view, 393.0, 759.0);
+    let frame = client.frame(1).clone();
+    assert!(
+        find(&frame, Role::Button, "Apply").is_none(),
+        "the panel is open"
+    );
+
+    press(&mut client, 1, Role::Button, "Show proposals");
+    press(&mut client, 2, Role::Button, "Apply");
+    assert_eq!(
+        answers(&mut client),
+        [Answer::ApplyProposal { id: 7, revision: 3 }]
+    );
+    let frame = client.frame(3).clone();
+    assert!(
+        find(&frame, Role::Button, "Show proposals").is_some(),
+        "Apply did not fold the panel"
     );
 }
 

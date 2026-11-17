@@ -5,7 +5,7 @@
 //!   and Apply, which commits the checked lines as one undoable batch (the web's
 //!   `ProposalPanel`, `ui/src/table/ProposalPanel.tsx`). The table marks each affected card
 //!   itself, with a suggested mark in the view's script. On the desktop the panel stands in the
-//!   log's column at the table's left edge; on a phone it has a strip of its own along the top;
+//!   log's column at the table's left edge; on a phone it is folded to a button under the log's icon;
 //! - state nudges' labels: a small button on each card or life total a nudge is about, which
 //!   applies the nudge's action (the web's `CardLabels` and `LifeLabels`,
 //!   `ui/src/table/Labels.tsx`);
@@ -39,33 +39,71 @@ pub const PROPOSALS: &str = "Proposals";
 /// title, a checkbox per line with whose change it is, and Apply, enabled while a line is
 /// checked. On the desktop it stands in the log's column at the table's left edge, centred
 /// between the two players' rows, where no card lies, since the space under the log holds the
-/// opponent's lands. On a phone it has a strip of its own along the top of the safe area.
+/// opponent's lands. A phone's table has no room the panel could take without covering cards,
+/// so there it is folded to a button under the log's icon button in the safe area's top right
+/// corner, beside the opponent's battlefield, and opens under that button while `opened` is the
+/// id of the first proposal, with the button at its top, as the folded log does. The web gives the panel a strip of its own over
+/// the phone's hand instead.
 #[must_use]
-pub fn proposals(proposals: &[ProposalView], window: Window) -> Option<Element> {
-    if proposals.is_empty() {
-        return None;
-    }
+pub fn proposals(
+    proposals: &[ProposalView],
+    opened: Option<u32>,
+    window: Window,
+) -> Option<Element> {
+    let first = proposals.first()?.id;
+    let phone = window.phone();
     let mut panel = column()
         .name(PROPOSALS)
         .gap(space::M)
         .padding(space::M)
         .background(color::PANEL)
         .border((color::METAL, size::BORDER))
-        .radius(size::PANEL_RADIUS)
-        .children(proposals.iter().map(|each| proposal(each, window.phone())));
-    panel.anchor = Some(if window.phone() {
-        use crate::data::space::flat::phone::GUTTER;
-        let safe = window.safe_area;
-        panel = panel.width(window.size.width - safe.left - safe.right - 2.0 * GUTTER);
-        Anchor::Point(Vec2::new(safe.left + GUTTER, safe.top + GUTTER), Vec2::ZERO)
-    } else {
-        panel = panel.width(crate::data::space::flat::table::log::WIDTH);
+        .radius(size::PANEL_RADIUS);
+    if !phone {
+        panel = panel
+            .children(proposals.iter().map(|each| proposal(each, false)))
+            .width(crate::data::space::flat::table::log::WIDTH);
         let left = crate::data::space::flat::table::EDGE;
-        Anchor::Point(
+        panel.anchor = Some(Anchor::Point(
             Vec2::new(left, window.size.height / 2.0),
             Vec2::new(0.0, 0.5),
-        )
-    });
+        ));
+        return Some(panel);
+    }
+    let gutter = crate::data::space::flat::phone::GUTTER;
+    let safe = window.safe_area;
+    let right = window.size.width - safe.right - gutter;
+    let top = safe.top + gutter + size::ICON_BUTTON + space::S;
+    let corner = Anchor::Point(Vec2::new(right, top), Vec2::X);
+    let open = opened == Some(first);
+    let name = if open {
+        "Hide proposals"
+    } else {
+        "Show proposals"
+    };
+    let mut heading = touch(small(button(PROPOSALS)), true).name(name);
+    // Narrower than a button's own padding makes it, to keep clear of the opponent's cards.
+    heading.style.padding = [0.0, space::M, 0.0, space::M];
+    let heading = heading
+        .selected(open)
+        .on_press(Press::Table(TablePress::ToggleProposals(
+            (!open).then_some(first),
+        )));
+    if !open {
+        let mut folded = heading;
+        folded.anchor = Some(corner);
+        return Some(folded);
+    }
+    panel = panel
+        .width(window.size.width - safe.left - safe.right - 2.0 * gutter)
+        .align_items(Align::End)
+        .child(heading)
+        .children(
+            proposals
+                .iter()
+                .map(|each| proposal(each, true).align_self(Align::Stretch)),
+        );
+    panel.anchor = Some(corner);
     Some(panel)
 }
 
@@ -145,9 +183,17 @@ pub fn labels(labels: &[LabelView], view: &PlayerView, phone: bool) -> Vec<Eleme
                         .name(&label.text)
                         .on_press(Press::Table(TablePress::Label(label.id)))
                 }));
-            // The row's bottom centre stands at the card's centre less half its height would
-            // be best, but an anchor names only the centre: the row stands centred on it.
-            tags.anchor = Some(Anchor::Object(subject, Vec2::splat(0.5)));
+            // On a phone the row straddles the card's top edge, reaching
+            // `labels.phone_overlap` points into the card, so that both the card and the one
+            // above it keep a touch's room uncovered; a row centred on the card would cover its
+            // middle, and one wholly above it the lower half of the row above. The desktop's
+            // cards are large enough for the row to stand centred on the card.
+            tags.anchor = Some(if phone {
+                let overlap = crate::data::space::flat::table::labels::PHONE_OVERLAP;
+                Anchor::Above(subject, -overlap)
+            } else {
+                Anchor::Object(subject, Vec2::splat(0.5))
+            });
             tags
         })
         .collect()
