@@ -80,8 +80,10 @@ def test_backend_selection_uses_enacts_cutover_state(
     assert calls == ["backend", "--json", "backend", "export"]
 
 
+@pytest.mark.parametrize("prefix", ["", "T"])
 def test_one_store_attributes_old_and_new_sessions_ci_and_leases(
     tmp_path: Path,
+    prefix: str,
 ) -> None:
     old = "by-previous.7"
     metadata = {"enact_worktree": "/fixtures/tree", "enact_ci_range": "green..bad"}
@@ -99,25 +101,25 @@ def test_one_store_attributes_old_and_new_sessions_ci_and_leases(
 
     # The importer allocated a different native ID after this child was moved.
     export: bytes = ndjson(
-        {"id": "k7mq", "title": "Native epic", "type": "epic", "labels": []},
+        {"id": f"{prefix}k7mq", "title": "Native epic", "type": "epic", "labels": []},
         {
-            "id": "k7mq.2",
+            "id": f"{prefix}k7mq.2",
             "aliases": [old],
-            "parent": "k7mq",
+            "parent": f"{prefix}k7mq",
             "title": "Migrated Steward",
             "type": "task",
             "created_at": at(10, 0),
             "metadata": {**metadata, "_enact_beads": {"started_at": at(10, 0)}},
         },
         {
-            "id": "k7mq.3",
-            "parent": "k7mq",
+            "id": f"{prefix}k7mq.3",
+            "parent": f"{prefix}k7mq",
             "title": "Native ticket",
             "type": "task",
             "metadata": {"enact_worktree": "/fixtures/native"},
         },
         {
-            "id": "c5ck",
+            "id": f"{prefix}c5ck",
             "title": "repo:check",
             "labels": ["ci-check"],
             "comments": [
@@ -145,7 +147,12 @@ def test_one_store_attributes_old_and_new_sessions_ci_and_leases(
         4: {
             "kind": "ci",
             "at": at(10, 2),
-            "data": {"tip": "bad", "passed": False, "ticket": "k7mq.2", "host": HOST},
+            "data": {
+                "tip": "bad",
+                "passed": False,
+                "ticket": f"{prefix}k7mq.2",
+                "host": HOST,
+            },
         },
         5: {
             "kind": "ci",
@@ -166,7 +173,7 @@ def test_one_store_attributes_old_and_new_sessions_ci_and_leases(
         ).encode()
 
     legacy_log.shell(
-        at(10, 4), "old-close", "enact close k7mq.2", at(10, 5), ""
+        at(10, 4), "old-close", f"enact close {prefix}k7mq.2", at(10, 5), ""
     ).write()
     (
         Rollout(tmp_path, OTHER)
@@ -212,7 +219,7 @@ def test_one_store_attributes_old_and_new_sessions_ci_and_leases(
         events[seq] = {
             "kind": "session",
             "at": at(11, minute),
-            "data": {"ticket": "k7mq.3", "session": OTHER, "action": action},
+            "data": {"ticket": f"{prefix}k7mq.3", "session": OTHER, "action": action},
         }
     ingest.ingest(db, sources, HOST)
     assert cursors == [0, 4, 5, 5, 8]
@@ -236,6 +243,7 @@ def test_one_store_attributes_old_and_new_sessions_ci_and_leases(
     ).fetchone() == ("by-k7mq.3", "enact lease wait")
     assert facts.load(db).beads["by-k7mq.3"].started == at(11, 2)
     assert bead.report(db, old).json() == bead.report(db, "k7mq.2").json()
+    assert bead.report(db, old).json() == bead.report(db, "Tk7mq.2").json()
     assert (
         rollups.epic(facts.load(db), Scope(), "k7mq").json()
         == rollups.epic(facts.load(db), Scope(), "by-k7mq").json()

@@ -116,7 +116,7 @@ def ids(records: list[dict[str, object]]) -> dict[str, str]:
     """Keep the original ID for moved children and other imported IDs that changed."""
     result: dict[str, str] = {}
     for record in records:
-        ticket = str(record["id"])
+        ticket = str(record["id"]).removeprefix("T")
         aliases = record.get("aliases")
         legacy = (
             [
@@ -131,7 +131,7 @@ def ids(records: list[dict[str, object]]) -> dict[str, str]:
         # if it is itself an alias, or if this ticket has no imported Beads ID.
         prefixed = ticket_ids.prefixed(ticket)
         bead = prefixed if prefixed in legacy else next(iter(legacy), prefixed)
-        for alias in (ticket, prefixed, *legacy):
+        for alias in (ticket, f"T{ticket}", prefixed, *legacy):
             result[alias] = bead
     return result
 
