@@ -2,11 +2,12 @@
 
 use beryl_cards::names::{
     AANGS_ICEBERG, ABHORRENT_OCULUS, COUNTERSPELL, CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER,
-    FLOODFARM_VERGE, GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY,
-    MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN, MANA_TITHE, OUST, PLAINS, REPRIEVE,
-    SEACHROME_COAST, SINK_INTO_STUPOR, SNAPCASTER_MAGE, SPARAS_HEADQUARTERS, STOCK_UP, STRIP_MINE,
-    SWIFT_RECONFIGURATION, TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR,
-    THIRST_FOR_DISCOVERY, THUNDERTRAP_TRAINER, TIME_SPIRAL, TRINKET_MAGE, TUNDRA, WINDS_OF_ABANDON,
+    FLOODFARM_VERGE, FOREST, GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY,
+    LIFE_AND_LIMB, MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN, MANA_TITHE, MOUNTAIN, OUST,
+    PAINTERS_SERVANT, PLAINS, REPRIEVE, SEACHROME_COAST, SINK_INTO_STUPOR, SNAPCASTER_MAGE,
+    SPARAS_HEADQUARTERS, STOCK_UP, STRIP_MINE, SUBTLETY, SWIFT_RECONFIGURATION,
+    TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER, THE_WANDERING_EMPEROR, THIRST_FOR_DISCOVERY,
+    THUNDERTRAP_TRAINER, TIME_SPIRAL, TRINKET_MAGE, TUNDRA, WINDS_OF_ABANDON, WORLDGORGER_DRAGON,
 };
 use beryl_engine::{DecisionKind, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
@@ -320,4 +321,55 @@ pub(super) const CHOICES: &[Scenario] = &[
             ],
         )
         .library(P1, LANDS),
+    // Subtlety with the mana to cast it and blue cards to exile for its evoke cost, whose two
+    // ways to be cast open the "Choose One" modal as Winds of Abandon's do.
+    Scenario::new("choice-evoke")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, &[ISLAND_, ISLAND_, ISLAND_, PLAINS_, PLAINS_])
+        .hand(P0, &[SUBTLETY, COUNTERSPELL, JACE_VRYNS_PRODIGY])
+        .library(P0, LANDS)
+        .permanents(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS),
+    // Spara's Headquarters in hand with a land still to play and {3} to cycle it: played or
+    // cycled, it opens the same "Choose One" modal.
+    Scenario::new("choice-cycling")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, &[ISLAND_, ISLAND_, PLAINS_])
+        .hand(P0, &[SPARAS_HEADQUARTERS])
+        .library(P0, LANDS)
+        .permanents(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS),
+    // Worldgorger Dragon exiles the human's other permanents, and the opponent destroys it in
+    // their upkeep with Get Lost, so its leaves ability returns them all together. Painter's
+    // Servant adds a color and Life and Limb sets the Forest's color, both in layer 5, so the
+    // order of their timestamps matters and the human picks which enters first.
+    Scenario::new("choice-enter-order")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                MOUNTAIN,
+                MOUNTAIN,
+                MOUNTAIN,
+                MOUNTAIN,
+                MOUNTAIN,
+                MOUNTAIN,
+                FOREST,
+                PAINTERS_SERVANT,
+                LIFE_AND_LIMB,
+            ],
+        )
+        .hand(P0, &[WORLDGORGER_DRAGON])
+        .library(P0, LANDS)
+        .permanents(P1, &[PLAINS_, PLAINS_, PLAINS_])
+        .hand(P1, &[GET_LOST])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, WORLDGORGER_DRAGON),
+            Action::AdvanceTo {
+                turn: 4,
+                step: TurnStep::Upkeep,
+            },
+            Action::cast(P1, GET_LOST),
+        ]),
 ];

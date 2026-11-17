@@ -923,6 +923,25 @@
       "after": 1
     },
     {
+      "name": "arrow-target-leaves",
+      "board": "arrow-target-leaves",
+      "until": "first priority decision for seat 0",
+      "where": ["they control 0 Tormod's Crypt"]
+    },
+    {
+      "name": "stack-copy",
+      "board": "stack-copy",
+      "stops": { "fullControl": true },
+      "until": "first priority decision for seat 0",
+      "where": ["not castable Fork", "not stack Fork"]
+    },
+    {
+      "name": "mana-floating-spent",
+      "board": "mana-floating-spent",
+      "until": "first priority decision for seat 0",
+      "where": ["controls 1 Leonin Scimitar"]
+    },
+    {
       "name": "mana-picker",
       "board": "mana-picker",
       "until": "first priority decision for seat 0"
@@ -962,6 +981,24 @@
       "board": "choice-overload",
       "until": "first priority decision for seat 0",
       "clicks": ["Winds of Abandon", "press decline"]
+    },
+    {
+      "name": "choice-evoke",
+      "board": "choice-evoke",
+      "until": "first priority decision for seat 0",
+      "clicks": ["Subtlety", "press decline"]
+    },
+    {
+      "name": "choice-cycling",
+      "board": "choice-cycling",
+      "until": "first priority decision for seat 0",
+      "clicks": ["Spara's Headquarters", "press decline"]
+    },
+    {
+      "name": "choice-enter-order",
+      "board": "choice-enter-order",
+      "until": "first chooseObject decision for seat 0",
+      "where": ["prompt enter-order"]
     },
     {
       "name": "menu-choices",

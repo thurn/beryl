@@ -88,11 +88,13 @@ impl Client {
 
     /// The card the inspector shows now, from the last frame: the card a finger asked to see
     /// (`Inspector::pinned`), or else the hovered card, at rest and not held, on the game screen
-    /// with no sheet open, when it is one the web interface's `Controls` inspects. A card in the
-    /// viewer's hand rises in the fan to be read instead, unless it is face down or its click was
-    /// just refused; a finger, which raises no card, sees it whole.
+    /// or the manual table's with no sheet open, when it is one the web interface's `Controls`
+    /// inspects. A card in the viewer's hand rises in the fan to be read instead, unless it is
+    /// face down or its click was just refused; a finger, which raises no card, sees it whole. A
+    /// face-down card shows its face only to a viewer who knows it, whose view names it (UI
+    /// Conventions, "Inspecting a face-down manual card"): one with no name has no face to find.
     fn inspected_now(&self) -> Option<Inspected> {
-        if self.screen != Screen::Game || self.sheet.is_some() {
+        if !matches!(self.screen, Screen::Game | Screen::Table) || self.sheet.is_some() {
             return None;
         }
         let pinned = self.inspector.pinned;

@@ -3,7 +3,8 @@
 //! a sweep from the empty table draws a rectangle and selects the permanents it touches, a
 //! summary stands over them with their count and total power and toughness, a drag held over a
 //! library shows its Top and Bottom halves, and the selected cards dropped on the Top half open
-//! the order tray before anything moves.
+//! the order tray before anything moves. Pointing at a face-down card shows its face only to a
+//! viewer who knows it.
 
 use beryl_inspect::pages;
 use beryl_protocol::protocol::{Side, ZoneName};
@@ -141,5 +142,49 @@ fn the_selection_dropped_on_a_librarys_top_opens_the_order_tray() {
     assert!(
         page.try_find("region \"Selection\"").is_err(),
         "the summary shows over the order tray"
+    );
+}
+
+/// The face-down card on `side`'s battlefield, as an action's point `<x>,<y>`.
+fn face_down(page: &mut Page, side: Side) -> String {
+    let frame = page.frame();
+    let card = (frame.resolved.iter())
+        .find(|element| {
+            element.role == Role::Card
+                && element.state.has(StateBits::FACE_DOWN)
+                && matches!(
+                    element.place,
+                    Place::Card {
+                        zone: ZoneName::Battlefield,
+                        side: placed,
+                        ..
+                    } if placed == side
+                )
+        })
+        .unwrap_or_else(|| panic!("{side:?} has no face-down card on the battlefield"));
+    let centre = card.corners.iter().copied().sum::<Vec2>() / 4.0;
+    format!("{},{}", centre.x, centre.y)
+}
+
+/// UI Conventions, "Inspecting a face-down manual card": "Pointing at the card opens a face
+/// preview only if the viewer knows the card's identity." The viewer's own face-down card is
+/// named in their view; the opponent's is not.
+#[test]
+fn pointing_at_a_face_down_card_shows_its_face_only_to_a_viewer_who_knows_it() {
+    let mut page = table();
+    let yours = face_down(&mut page, Side::You);
+    page.run(&format!("move {yours}\nstill"));
+    assert!(
+        page.try_find("region \"Serra Angel, inspected\"").is_ok(),
+        "your face-down Serra Angel shows no face:\n{}",
+        page.tree()
+    );
+    let mut page = table();
+    let theirs = face_down(&mut page, Side::Opponent);
+    page.run(&format!("move {theirs}\nstill"));
+    let tree = page.tree();
+    assert!(
+        !tree.contains(", inspected\""),
+        "the opponent's face-down card shows a face:\n{tree}"
     );
 }

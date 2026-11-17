@@ -11,7 +11,12 @@
       "shows": "card hand.theirs face-down picked"
     },
     "Inspecting a face-down manual card": {
-      "open": "No recording holds a face-down card on the manual table, so the face preview's rule cannot be shown (needs bead by-q44s.9.32)."
+      "recording": "screen/table",
+      "at": "end",
+      "shows": "region \"Serra Angel, inspected\"",
+      "do": [
+        "hover card \"Serra Angel\" #31"
+      ]
     },
     "Paying with permanents": {
       "recording": "aangs-iceberg/ability-1",
@@ -35,10 +40,17 @@
       "shows": "text \"Choose an effect to apply.\""
     },
     "Permanents entering together": {
-      "open": "No recording asks \"Choose which enters first.\", so Beryl 3D's pick prompt for it is not shown (needs bead by-q44s.9.32)."
+      "recording": "choice-enter-order",
+      "at": "end",
+      "shows": "text \"Choose which enters first.\""
     },
     "Evoke and cycling": {
-      "open": "The cast-evoke fixture records no \"Choose One\" between casting Subtlety and its exile cost, and no cycling recording opens one, so the modal is not shown for either (needs bead by-q44s.9.32)."
+      "recording": "choice-evoke",
+      "at": "end",
+      "shows": "button \"Cast Subtlety with evoke, exile a blue card\" interactive",
+      "do": [
+        "press card \"Subtlety\""
+      ]
     },
     "Known cards in a library": {
       "recording": "jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen",
@@ -62,7 +74,11 @@
       "shows": "card hand.theirs face-down moving"
     },
     "A linked exile returning": {
-      "open": "The Fiend Hunter and Aang's Iceberg recordings stop before the exiled card returns, so no recording plays the return (needs bead by-q44s.9.32)."
+      "recording": "fiend-hunter/dying-returns-the-exiled-creature",
+      "at": "step:6.9.0",
+      "still": false,
+      "seat": "opponent",
+      "shows": "card \"Geist of the Moors\" battlefield.yours.creatures interactive moving"
     },
     "Your own spell returned to hand": {
       "recording": "stack-bounce",
@@ -113,13 +129,19 @@
       "shows": "card \"Plains\" battlefield.yours.lands interactive tapped moving"
     },
     "Mana spent from a pool": {
-      "open": "In mana-floating the pool is spent with a count step and no streak from the pool, and no other recording spends floating mana, so the streak is not shown (needs bead by-q44s.9.32)."
+      "open": "The mana-floating-spent fixture spends floating mana on Leonin Scimitar, and its script streaks the mana from the pool into the spell (step:3.1.0, `just b3d timeline mana-floating-spent`), but Beryl 3D draws a streak as light with no element, so no tree line can show it."
     },
     "A target that moves": {
-      "open": "animate-dead/fizzles-when-the-creature-card-is-exiled-in-response exiles a target in response, but the moment its arrow ends has not been confirmed (needs bead by-q44s.9.32)."
+      "recording": "arrow-target-leaves",
+      "at": "step:5.5.0",
+      "still": false,
+      "shows": "arrow \"hostile-target\" faded(50%)"
     },
     "A copy on the stack": {
-      "open": "In fork/copies-lightning-bolt-with-a-new-target the copy's appear step (step:10.0.0) seeks to the recording's last view, so no moment shows the copy on the stack yet (needs bead by-q44s.9.32)."
+      "recording": "stack-copy",
+      "at": "step:7.0.0",
+      "still": false,
+      "shows": "card \"Lightning Bolt\" stack interactive moving faded(50%)"
     },
     "A permanent changing sides": {
       "recording": "thieving-skydiver/kicked-steals-mana-crypt-over-a-map",
@@ -161,7 +183,9 @@
       "layout": "phone"
     },
     "Mutating over or under": {
-      "open": "No recording asks \"Over or Under?\"; the Gemrazer recordings show only the merged result (needs bead by-q44s.9.32)."
+      "recording": "gemrazer/over-drudge-skeletons-activates-the-skeletons-ability-ask-2",
+      "at": "end",
+      "shows": "button \"OVER\" interactive primary"
     },
     "A permanent's chosen value": {
       "open": "Beryl 3D shows \"Chosen:\" and the value only in the inspection panel; a card's face on the table draws no free text, so the one-line value is not drawn (needs bead by-q44s.9.31)."

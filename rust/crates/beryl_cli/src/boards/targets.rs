@@ -1,9 +1,10 @@
 //! Boards that choose targets, and the arrows drawn to them.
 
 use beryl_cards::names::{
-    COUNTERSPELL, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, JACE_WIELDER_OF_MYSTERIES,
-    MANA_CRYPT, OUST, PLAINS, REPRIEVE, SNAPCASTER_MAGE, STAFF_OF_THE_STORYTELLER, STOCK_UP,
-    TEFERI_HERO_OF_DOMINARIA, TEFERI_TIME_RAVELER, THIRST_FOR_DISCOVERY, TRINKET_MAGE,
+    ANIMATE_DEAD, COUNTERSPELL, FORK, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY,
+    JACE_WIELDER_OF_MYSTERIES, LIGHTNING_BOLT, MANA_CRYPT, MOUNTAIN, OUST, PLAINS, REPRIEVE,
+    SNAPCASTER_MAGE, STAFF_OF_THE_STORYTELLER, STOCK_UP, SWAMP, TEFERI_HERO_OF_DOMINARIA,
+    TEFERI_TIME_RAVELER, THIRST_FOR_DISCOVERY, TORMODS_CRYPT, TRINKET_MAGE,
 };
 use beryl_engine::{DecisionKind, TurnStep};
 use beryl_scenario::{Action, P0, P1, Permanent, Pick, Scenario};
@@ -164,4 +165,37 @@ pub(super) const TARGETS: &[Scenario] = &[
         .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, SNAPCASTER_MAGE)]),
+    // Animate Dead aimed at Snapcaster Mage in the opponent's graveyard, which the opponent
+    // exiles in response with Tormod's Crypt, so the spell's arrow ends and Animate Dead
+    // finds no target. The land in hand keeps the human's priority after it.
+    Scenario::new("arrow-target-leaves")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .battlefield(P0, &[SWAMP, PLAINS])
+        .hand(P0, &[ANIMATE_DEAD, ISLAND])
+        .library(P0, LANDS)
+        .permanents(P1, &[Permanent::new(TORMODS_CRYPT), ISLAND_])
+        .graveyard(P1, &[SNAPCASTER_MAGE])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, ANIMATE_DEAD),
+            Action::activate(P1, TORMODS_CRYPT, 0),
+            Action::answer(P1, DecisionKind::Target, Pick::Player { player: P1 }),
+        ]),
+    // The opponent's Lightning Bolt aims at the human, who copies it with Fork and aims the
+    // copy at the opponent: the copy is on the stack above the Bolt. A second Bolt and the
+    // mana for it, and the fixture's full control, give the human priority there.
+    Scenario::new("stack-copy")
+        .at(3, P1, TurnStep::PrecombatMain)
+        .battlefield(P0, &[MOUNTAIN, MOUNTAIN, MOUNTAIN])
+        .hand(P0, &[FORK, LIGHTNING_BOLT])
+        .library(P0, LANDS)
+        .battlefield(P1, &[MOUNTAIN])
+        .hand(P1, &[LIGHTNING_BOLT])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P1, LIGHTNING_BOLT),
+            Action::answer(P1, DecisionKind::Target, Pick::Player { player: P0 }),
+            Action::cast(P0, FORK),
+            Action::answer(P0, DecisionKind::Target, Pick::Player { player: P1 }),
+        ]),
 ];

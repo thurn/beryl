@@ -2,7 +2,7 @@
 
 use beryl_cards::names::{
     AANGS_ICEBERG, ABHORRENT_OCULUS, COUNTERSPELL, CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER,
-    ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, JACE_WIELDER_OF_MYSTERIES,
+    ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY, JACE_WIELDER_OF_MYSTERIES, LEONIN_SCIMITAR,
     MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_TITHE, NO_MORE_LIES, OUST, PLAINS, PORTABLE_HOLE,
     REPRIEVE, SINK_INTO_STUPOR, SNAPCASTER_MAGE, SPARAS_HEADQUARTERS, SPHINX_OF_FALSE_CONCLUSIONS,
     STAFF_OF_THE_STORYTELLER, STOCK_UP, SUBTLETY, SWIFT_RECONFIGURATION, TEFERI_HERO_OF_DOMINARIA,
@@ -238,6 +238,20 @@ pub(super) const STACK: &[Scenario] = &[
         .permanents(P1, &[ISLAND_, PLAINS_])
         .library(P1, LANDS)
         .actions(&[Action::cast(P0, CURRENCY_CONVERTER)]),
+    // The same, and the {C} left floating pays for Leonin Scimitar. The land in hand keeps
+    // the human's priority once the Scimitar resolves, so that the step does not end in the
+    // view that spends the pool.
+    Scenario::new("mana-floating-spent")
+        .at(3, P0, TurnStep::PrecombatMain)
+        .permanents(P0, &[Permanent::new(MANA_CRYPT)])
+        .hand(P0, &[CURRENCY_CONVERTER, LEONIN_SCIMITAR, ISLAND])
+        .library(P0, LANDS)
+        .permanents(P1, &[ISLAND_, PLAINS_])
+        .library(P1, LANDS)
+        .actions(&[
+            Action::cast(P0, CURRENCY_CONVERTER),
+            Action::cast(P0, LEONIN_SCIMITAR),
+        ]),
     // The human's own main phase with a Tundra, an Island and a Plains untapped and Reprieve
     // to cast: tapping the Tundra asks which mana it adds.
     Scenario::new("mana-picker")

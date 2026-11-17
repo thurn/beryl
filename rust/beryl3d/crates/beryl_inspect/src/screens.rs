@@ -1,9 +1,10 @@
 //! Screen recordings: a client put on a screen, or a sheet opened over one, with no engine and
 //! an empty view, as the stress boards are made (`crate::stress`). Each is named
 //! `screen/<name>`, and `data/beryl3d/screens.json` lists them for the parity list. The manual
-//! table's is a view of a solo table built by hand, with a few cards in each zone, which opens
-//! the table screen itself, and then the same view again with the banner a shuffle announces.
-//! The lobby's is a solo table's lobby built by hand, with the sample
+//! table's is a view of a solo table built by hand, with a few cards in each zone and a
+//! face-down card on each side's battlefield, which opens the table screen itself, and then the
+//! same view again with the banner a shuffle announces. The lobby's is a solo table's lobby
+//! built by hand, with the sample
 //! deck loaded. The manual table's assists have one of their own, `screen/table-assists`: the
 //! same table with every assist on, a turn upkeep proposal, a state nudge's label on the
 //! opponent's creature and an activated ability on the viewer's first land.
@@ -14,8 +15,9 @@
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, LIST_AGENTS, TABLE_LOBBY};
 use beryl_protocol::protocol::{
-    AssistsView, CardType, LabelView, LinkState, LogLine, PlayerState, ProposalLine, ProposalView,
-    Side, TableAbilityOption, TableCardCommands, TablePrompt, TableView, TargetRef, ZoneName,
+    AssistsView, CardType, Facing, LabelView, LinkState, LogLine, PlayerState, ProposalLine,
+    ProposalView, Side, TableAbilityOption, TableCardCommands, TablePrompt, TableView, TargetRef,
+    ZoneName,
 };
 use beryl_protocol::script::{Act, Notice, Reset, Step, StepTiming};
 use beryl_protocol::{AgentView, GameUpdate, PlayerView, SessionId};
@@ -85,7 +87,17 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         _ => vec![opened],
     };
     let mut view = if table_screen(opened) {
-        let mut view = testing::ViewBuilder::sample().build();
+        let mut builder = testing::ViewBuilder::sample();
+        // UI Conventions, "Inspecting a face-down manual card": each side has a face-down
+        // card on the battlefield, which the table stands after its other permanents. The
+        // viewer knows their own, so its name is in the view and pointing at it shows its face;
+        // the opponent's has no name, so pointing at it shows nothing.
+        for (side, name) in [(Side::You, "Serra Angel"), (Side::Opponent, "")] {
+            let card = builder.card(ZoneName::Battlefield, side, name);
+            card.name = (!name.is_empty()).then(|| name.to_owned());
+            card.facing = Facing::Down;
+        }
+        let mut view = builder.build();
         let mut table = testing::table(&view);
         // A few log lines, so that the checks see the log at the table's left with its undo
         // and rewind buttons.
