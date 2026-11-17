@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-sbpt</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-sbpt</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-sbpt</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">5</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Pushed the XMage fixes and rollout optimizations after local macOS slow CI and the staging fast check passed.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 3cfaa15b4c34306380d367f64ddc663f47647101. Failing range since last passing commit: f144b550c5203f85f3a458bbf077186e9a4cc351..3cfaa15b4c34306380d367f64ddc663f47647101.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling cards_2006 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2006)
+   Compiling cards_2001 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2001)
+   Compiling beryl_session v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_session)
+   Compiling beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_engine)
+   Compiling beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_search)
+   Compiling beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_bench)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 1m 22s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-0e7674399cf92de8)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 394,440,106 instructions, +1.06% against the bar of 390,293,470: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+bench: -0.26% since f144b550c520, the last staging tip measured (395,479,184)
+ci counts count-gate: FAILED (exit 1) after 83.7 s (101 s on the clock); rerunning it once
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.27s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-0e7674399cf92de8)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 394,440,106 instructions, +1.06% against the bar of 390,293,470: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+bench: -0.26% since f144b550c520, the last staging tip measured (395,479,184)
+ci counts count-gate: FAILED (exit 1) after 12.7 s (18 s on the clock), after waiting 0.2 s for CPU tokens
+ci: repo 0 s (file-length 0 s)
+ci: python 8 s (black 2 s, pyre 6 s)
+ci: rust 695 s (clippy 85 s, tests 610 s)
+ci: ui 6 s (tsc 6 s)
+ci: names 12 s (card-names 5 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 4 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 96 s (smoke 96 s)
+ci: ui-smoke 137 s (ui-test 137 s)
+ci: oracle 605 s (oracle FAILED)
+ci: counts 96 s (count-gate FAILED)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle counts in 695.3 s (826 s on the clock) (budget 300 s)
+ci: load average 14 12 14 on 10 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 1.04x the reference&#x27;s time (`just speed`)
+bisect: 3 failed checks over 40 commits since counts last passed here (ac2b54994f), 600 s to search
+bisect: 3cfaa15b4c: 3 of 3 checks fail
+bisect: cca8f6607d: 1 of 3 checks fail
+bisect: 1023c46fe5: 1 of 1 checks fail
+bisect: 98a6b9ffc7: 2 of 2 checks fail
+bisect: b26685a694: 1 of 1 checks fail
+bisect: 119fe1c0d4: 0 of 2 checks fail
+bisect: fc50cb18df: 1 of 1 checks fail
+bisect: a58a6a678b: 0 of 2 checks fail
+bisect: 474eb6636a: 1 of 1 checks fail
+bisect: 54a5534c33: 0 of 2 checks fail
+bisect: 098eb43334: 1 of 1 checks fail
+bisect: ac2b54994f: 1 of 1 checks fail
+bisect: oracle:Force of Will  culprit 98a6b9ffc7 feat: alternative costs and delve; Force of Will, Angler  (40 commits since counts last passed here)  bead by-bajq.7.2
+miss: oracle:Force of Will/generated 2: cast in response to Oust from hand/xmage unknown (no fast check of 98a6b9ffc7 in this host&#x27;s run log)
+record: oracle:Force of Will/generated 2: cast in response to Oust from hand/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+miss: oracle:Force of Will/generated 4: cast in response to Wetland Sambar from hand with another blue card in hand/xmage unknown (no fast check of 98a6b9ffc7 in this host&#x27;s run log)
+record: oracle:Force of Will/generated 4: cast in response to Wetland Sambar from hand with another blue card in hand/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+miss: oracle:Force of Will/generated 6: cast in response to Oust from hand with another blue card in hand/xmage unknown (no fast check of 98a6b9ffc7 in this host&#x27;s run log)
+record: oracle:Force of Will/generated 6: cast in response to Oust from hand with another blue card in hand/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Subtlety  culprit 98a6b9ffc7 feat: alternative costs and delve; Force of Will, Angler  (40 commits since counts last passed here)  bead by-bajq.7.2
+miss: oracle:Subtlety/generated 6: cast in response to Oust from hand/xmage unknown (no fast check of 98a6b9ffc7 in this host&#x27;s run log)
+record: oracle:Subtlety/generated 6: cast in response to Oust from hand/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+miss: oracle:Subtlety/generated 8: cast from hand with another blue card in hand/xmage unknown (no fast check of 98a6b9ffc7 in this host&#x27;s run log)
+record: oracle:Subtlety/generated 8: cast from hand with another blue card in hand/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+miss: oracle:Subtlety/generated 11: cast in response to Wetland Sambar from hand with another blue card in hand/xmage unknown (no fast check of 98a6b9ffc7 in this host&#x27;s run log)
+record: oracle:Subtlety/generated 11: cast in response to Wetland Sambar from hand with another blue card in hand/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)
+record: and 3 more checks
+bisect: counts:count-gate  fails at ac2b54994f too: no commit since counts last passed here to blame
+record: counts:count-gate  runs 126, failures 23, flaky 0, stale 0, catch 3, miss 0 (30 days)
+ci: sweep: next due in 131 min
+ci: b3d sweep: started in the background (/Users/dthurn/Library/Caches/beryl/b3d/sweep/background.log)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">5</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T07:49:37Z" tabindex="0" data-tip="2026-11-15T07:49:37Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 7518451370284a8765fd4f2cd4b3faae04a60ccb. Failing range since last passing commit: f144b550c5203f85f3a458bbf077186e9a4cc351..7518451370284a8765fd4f2cd4b3faae04a60ccb.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling cards_2003 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2003)
+   Compiling cards_2026_q3 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2026_q3)
+   Compiling cards_2008 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2008)
+   Compiling cards_2022_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2022_h2)
+   Compiling cards_2019_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2019_h1)
+   Compiling cards_1994 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_1994)
+   Compiling cards_1993 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_1993)
+   Compiling cards_2020_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2020_h2)
+   Compiling cards_2015 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2015)
+   Compiling cards_2026_q2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2026_q2)
+   Compiling cards_2016 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2016)
+   Compiling cards_1995 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_1995)
+   Compiling beryl_rules v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_rules)
+   Compiling beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_cards)
+   Compiling beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_engine)
+   Compiling beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_search)
+   Compiling beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_bench)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 1m 30s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-0e7674399cf92de8)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 395,568,033 instructions, +1.35% against the bar of 390,293,470: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+bench: +0.29% since 3cfaa15b4c34, the last staging tip measured (394,440,106)
+ci counts count-gate: FAILED (exit 1) after 50.6 s (110 s on the clock), after waiting 23.7 s for CPU tokens; rerunning it once
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.31s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-0e7674399cf92de8)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 395,568,033 instructions, +1.35% against the bar of 390,293,470: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+bench: +0.29% since 3cfaa15b4c34, the last staging tip measured (394,440,106)
+ci counts count-gate: FAILED (exit 1) after 8.8 s (18 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: python 1 s (black 0 s, pyre 1 s)
+ci: rust 7 s (clippy FAILED)
+ci: names 2 s (card-names 1 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 0 s, card-headers 0 s, card-crates 0 s)
+ci: app 31 s (smoke 31 s)
+ci: ui-smoke 62 s (ui-test 62 s)
+ci: oracle 171 s (oracle FAILED)
+ci: counts 59 s (count-gate FAILED)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust oracle counts in 171.2 s (485 s on the clock) (budget 300 s)
+bisect: 3 failed checks over 46 commits since counts last passed here (ac2b54994f), 600 s to search
+bisect: 7518451370: 3 of 3 checks fail
+bisect: 37adb2589e: 1 of 3 checks fail
+bisect: bb4348f8dd: 1 of 1 checks fail
+bisect: 1a7e650734: 2 of 2 checks fail
+bisect: 8bc489cccf: 1 of 1 checks fail
+bisect: 54a5534c33: 0 of 2 checks fail
+bisect: fc50cb18df: 1 of 1 checks fail
+bisect: f144b550c5: out of time
+bisect: rust  not bisected: a static check, a kill or a failed build
+bisect: oracle:Force of Will  out of time: culprit among 6 commits 98a6b9ffc7..1a7e650734  (46 commits since counts last passed here)
+record: oracle:Force of Will/generated 2: cast in response to Oust from hand/xmage  runs 7, failures 7, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Force of Will/generated 4: cast in response to Wetland Sambar from hand with another blue card in hand/xmage  runs 7, failures 7, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Force of Will/generated 6: cast in response to Oust from hand with another blue card in hand/xmage  runs 7, failures 7, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Subtlety  out of time: culprit among 6 commits 98a6b9ffc7..1a7e650734  (46 commits since counts last passed here)
+record: oracle:Subtlety/generated 6: cast in response to Oust from hand/xmage  runs 7, failures 7, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Subtlety/generated 8: cast from hand with another blue card in hand/xmage  runs 7, failures 7, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Subtlety/generated 11: cast in response to Wetland Sambar from hand with another blue card in hand/xmage  runs 7, failures 7, flaky 0, stale 0, catch 0, miss 1 (30 days)
+record: and 3 more checks
+bisect: counts:count-gate  out of time: culprit among 3 commits 098eb43334..fc50cb18df  (46 commits since counts last passed here)
+record: counts:count-gate  runs 132, failures 29, flaky 0, stale 0, catch 3, miss 0 (30 days)
+ci: sweep: next due in 104 min
+ci: b3d sweep: one is running</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T07:50:37Z" tabindex="0" data-tip="2026-11-15T07:50:37Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 6e27d714d35108f178176c64ac6d2a7585bff628. Failing range since last passing commit: f144b550c5203f85f3a458bbf077186e9a4cc351..6e27d714d35108f178176c64ac6d2a7585bff628.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling cards_1998 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_1998)
+   Compiling cards_2025_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2025_h2)
+   Compiling cards_2015 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2015)
+   Compiling cards_2007 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2007)
+   Compiling cards_2002 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2002)
+   Compiling cards_2008 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2008)
+   Compiling cards_2026_q1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2026_q1)
+   Compiling cards_2018 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2018)
+   Compiling cards_1995 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_1995)
+   Compiling beryl_rules v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_rules)
+   Compiling beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_cards)
+   Compiling beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_engine)
+   Compiling beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_search)
+   Compiling beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_bench)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 1m 28s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-0e7674399cf92de8)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 394,440,106 instructions, +1.06% against the bar of 390,293,470: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+bench: -0.26% since ef1bccee3437, the last staging tip measured (395,479,184)
+ci counts count-gate: FAILED (exit 1) after 45.4 s (102 s on the clock), after waiting 73.1 s for CPU tokens; rerunning it once
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.35s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-0e7674399cf92de8)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 394,440,106 instructions, +1.06% against the bar of 390,293,470: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+bench: -0.26% since ef1bccee3437, the last staging tip measured (395,479,184)
+ci counts count-gate: FAILED (exit 1) after 7.9 s (11 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: python 2 s (black 1 s, pyre 2 s)
+ci: rust 725 s (clippy 30 s, tests 695 s)
+ci: ui 2 s (tsc 2 s)
+ci: names 4 s (card-names 1 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 0 s)
+ci: app 67 s (smoke 67 s)
+ci: ui-smoke 68 s (ui-test 68 s)
+ci: oracle 767 s (oracle FAILED)
+ci: counts 53 s (count-gate FAILED)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle counts in 766.5 s (1384 s on the clock) (budget 300 s)
+ci: load average 18 32 39 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 3 failed checks over 48 commits since counts last passed here (4b0d874a88), 600 s to search
+bisect: 6e27d714d3: 3 of 3 checks fail
+bisect: 36b4170719: 1 of 3 checks fail
+bisect: 36cf4c7377: 1 of 1 checks fail
+bisect: 6a827096e0: 2 of 2 checks fail
+bisect: fc50cb18df: 1 of 1 checks fail
+bisect: f85506675f: 0 of 2 checks fail
+bisect: ac2b54994f: 1 of 1 checks fail
+bisect: 98a6b9ffc7: 2 of 2 checks fail
+bisect: 94bd18128b: 1 of 1 checks fail
+bisect: 54a5534c33: out of time
+bisect: oracle:Force of Will  out of time: culprit among 3 commits a58a6a678b..98a6b9ffc7  (48 commits since counts last passed here)
+record: oracle:Force of Will/generated 2: cast in response to Oust from hand/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Force of Will/generated 4: cast in response to Wetland Sambar from hand with another blue card in hand/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Force of Will/generated 6: cast in response to Oust from hand with another blue card in hand/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Subtlety  out of time: culprit among 3 commits a58a6a678b..98a6b9ffc7  (48 commits since counts last passed here)
+record: oracle:Subtlety/generated 6: cast in response to Oust from hand/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Subtlety/generated 8: cast from hand with another blue card in hand/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Subtlety/generated 11: cast in response to Wetland Sambar from hand with another blue card in hand/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 1 (30 days)
+record: and 3 more checks
+bisect: counts:count-gate  out of time: culprit among 2 commits ccf2d538bc..94bd18128b  (48 commits since counts last passed here)
+record: counts:count-gate  runs 413, failures 26, flaky 0, stale 0, catch 3, miss 0 (30 days)
+ci: sweep: started in the background (/Users/dthurn/Library/Caches/beryl/sweep/background.log)
+ci: b3d sweep: started in the background (/Users/dthurn/Library/Caches/beryl/b3d/sweep/background.log)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T08:20:22Z" tabindex="0" data-tip="2026-11-15T08:20:22Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at ffa9d40db4da7812d1e31f352dd293665d3f0b90. Failing range since last passing commit: f144b550c5203f85f3a458bbf077186e9a4cc351..ffa9d40db4da7812d1e31f352dd293665d3f0b90.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling cards_2026_q3 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2026_q3)
+   Compiling cards_2025_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2025_h1)
+   Compiling cards_2024_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2024_h2)
+   Compiling cards_1998 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_1998)
+   Compiling cards_2015 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2015)
+   Compiling beryl_rules v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_rules)
+   Compiling beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_cards)
+   Compiling beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_engine)
+   Compiling beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_search)
+   Compiling beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_bench)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 1m 35s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-0e7674399cf92de8)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 395,568,337 instructions, +1.35% against the bar of 390,293,470: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+bench: +0.29% since c73ecddbed78, the last staging tip measured (394,440,106)
+ci counts count-gate: FAILED (exit 1) after 103.7 s (229 s on the clock), after waiting 0.3 s for CPU tokens
+ci: repo 0 s (file-length 0 s)
+ci: python 3 s (black 1 s, pyre 3 s)
+ci: rust 253 s (clippy 59 s, tests 194 s)
+ci: ui 3 s (tsc 3 s)
+ci: names 6 s (card-names 2 s, two-player 0 s, board-door 1 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 175 s (smoke 175 s)
+ci: ui-smoke 140 s (ui-test 140 s)
+ci: oracle 307 s (oracle FAILED)
+ci: counts 147 s (count-gate FAILED)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle counts in 306.5 s (727 s on the clock) (budget 300 s)
+ci: load average 42 47 48 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 3 failed checks over 60 commits since counts last passed here (4b0d874a88), 600 s to search
+bisect: ffa9d40db4: 3 of 3 checks fail
+bisect: f85506675f: 1 of 3 checks fail
+bisect: bb4348f8dd: 1 of 1 checks fail
+bisect: 6fdc52777e: 2 of 2 checks fail
+bisect: b26685a694: 1 of 1 checks fail
+bisect: 1a7e650734: 2 of 2 checks fail
+bisect: 098eb43334: 1 of 1 checks fail
+bisect: f94432e2f8: 2 of 2 checks fail
+bisect: 94bd18128b: 1 of 1 checks fail
+bisect: 54a5534c33: 0 of 2 checks fail
+bisect: ccf2d538bc: 1 of 1 checks fail
+bisect: 98a6b9ffc7: 2 of 2 checks fail
+bisect: 4b0d874a88: 1 of 1 checks fail
+bisect: oracle:Force of Will  culprit 98a6b9ffc7 feat: alternative costs and delve; Force of Will, Angler  (60 commits since counts last passed here)  bead by-bajq.7.2
+miss: oracle:Force of Will/generated 2: cast in response to Oust from hand/xmage (fast check at f144b550c5 did not choose it: its oracle lane did not run)
+record: oracle:Force of Will/generated 2: cast in response to Oust from hand/xmage  runs 4, failures 4, flaky 0, stale 0, catch 1, miss 1 (30 days)
+miss: oracle:Force of Will/generated 4: cast in response to Wetland Sambar from hand with another blue card in hand/xmage (fast check at f144b550c5 did not choose it: its oracle lane did not run)
+record: oracle:Force of Will/generated 4: cast in response to Wetland Sambar from hand with another blue card in hand/xmage  runs 4, failures 4, flaky 0, stale 0, catch 1, miss 1 (30 days)
+miss: oracle:Force of Will/generated 6: cast in response to Oust from hand with another blue card in hand/xmage (fast check at f144b550c5 did not choose it: its oracle lane did not run)
+record: oracle:Force of Will/generated 6: cast in response to Oust from hand with another blue card in hand/xmage  runs 4, failures 4, flaky 0, stale 0, catch 1, miss 1 (30 days)
+bisect: oracle:Subtlety  culprit 98a6b9ffc7 feat: alternative costs and delve; Force of Will, Angler  (60 commits since counts last passed here)  bead by-bajq.7.2
+miss: oracle:Subtlety/generated 6: cast in response to Oust from hand/xmage (fast check at f144b550c5 did not choose it: its oracle lane did not run)
+record: oracle:Subtlety/generated 6: cast in response to Oust from hand/xmage  runs 4, failures 4, flaky 0, stale 0, catch 1, miss 1 (30 days)
+miss: oracle:Subtlety/generated 8: cast from hand with another blue card in hand/xmage (fast check at f144b550c5 did not choose it: its oracle lane did not run)
+record: oracle:Subtlety/generated 8: cast from hand with another blue card in hand/xmage  runs 4, failures 4, flaky 0, stale 0, catch 1, miss 1 (30 days)
+miss: oracle:Subtlety/generated 11: cast in response to Wetland Sambar from hand with another blue card in hand/xmage (fast check at f144b550c5 did not choose it: its oracle lane did not run)
+record: oracle:Subtlety/generated 11: cast in response to Wetland Sambar from hand with another blue card in hand/xmage  runs 6, failures 6, flaky 0, stale 0, catch 1, miss 1 (30 days)
+record: and 3 more checks
+bisect: counts:count-gate  fails at 4b0d874a88 too: no commit since counts last passed here to blame
+record: counts:count-gate  runs 415, failures 28, flaky 0, stale 0, catch 4, miss 0 (30 days)
+ci: sweep: one is running
+ci: b3d sweep: started in the background (/Users/dthurn/Library/Caches/beryl/b3d/sweep/background.log)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T08:23:58Z" tabindex="0" data-tip="2026-11-15T08:23:58Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at ffa9d40db4da7812d1e31f352dd293665d3f0b90. Failing range since last passing commit: f144b550c5203f85f3a458bbf077186e9a4cc351..ffa9d40db4da7812d1e31f352dd293665d3f0b90.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling cards_2021_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2021_h2)
+   Compiling cards_2018 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2018)
+   Compiling cards_2020_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2020_h2)
+   Compiling cards_1993 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_1993)
+   Compiling cards_2004 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2004)
+   Compiling cards_1997 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_1997)
+   Compiling cards_2025_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2025_h2)
+   Compiling cards_1994 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_1994)
+   Compiling cards_2016 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2016)
+   Compiling cards_2000 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2000)
+   Compiling cards_2012 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2012)
+   Compiling cards_2026_q4 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2026_q4)
+   Compiling cards_2006 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2006)
+   Compiling cards_2003 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2003)
+   Compiling cards_2011 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2011)
+   Compiling cards_2008 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/cards/cards_2008)
+   Compiling beryl_rules v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_rules)
+   Compiling beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_cards)
+   Compiling beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_engine)
+   Compiling beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_search)
+   Compiling beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_bench)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 1m 31s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-0e7674399cf92de8)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 395,568,337 instructions, +1.35% against the bar of 390,293,470: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+bench: +0.00% since 751845137028, the last staging tip measured (395,568,033)
+ci counts count-gate: FAILED (exit 1) after 82.3 s (215 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: python 5 s (black 1 s, pyre 4 s)
+ci: rust 438 s (clippy 50 s, tests 388 s)
+ci: ui 4 s (tsc 4 s)
+ci: names 8 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 0 s)
+ci: app 43 s (smoke 43 s)
+ci: ui-smoke 65 s (ui-test 65 s)
+ci: oracle 396 s (oracle FAILED)
+ci: counts 152 s (count-gate FAILED)
+verdict: rust rust:clippy catch
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle counts in 437.9 s (865 s on the clock) (budget 300 s)
+ci: load average 14 15 20 on 10 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 1.04x the reference&#x27;s time (`just speed`)
+bisect: 3 failed checks over 25 commits since master (f144b550c5), 600 s to search
+bisect: ffa9d40db4: 3 of 3 checks fail
+bisect: 6e27d714d3: 3 of 3 checks fail
+bisect: 34ced856d6: 3 of 3 checks fail
+bisect: a822d72df6: 3 of 3 checks fail
+bisect: fe15396194: 3 of 3 checks fail
+bisect: 6a827096e0: 3 of 3 checks fail
+bisect: f144b550c5: 3 of 3 checks fail
+bisect: oracle:Force of Will  fails at f144b550c5 too: no commit since master to blame
+record: oracle:Force of Will/generated 2: cast in response to Oust from hand/xmage  runs 11, failures 9, flaky 0, stale 0, catch 1, miss 1 (30 days)
+record: oracle:Force of Will/generated 4: cast in response to Wetland Sambar from hand with another blue card in hand/xmage  runs 11, failures 9, flaky 0, stale 0, catch 1, miss 1 (30 days)
+record: oracle:Force of Will/generated 6: cast in response to Oust from hand with another blue card in hand/xmage  runs 11, failures 9, flaky 0, stale 0, catch 1, miss 1 (30 days)
+bisect: oracle:Subtlety  fails at f144b550c5 too: no commit since master to blame
+record: oracle:Subtlety/generated 6: cast in response to Oust from hand/xmage  runs 11, failures 9, flaky 0, stale 0, catch 1, miss 1 (30 days)
+record: oracle:Subtlety/generated 8: cast from hand with another blue card in hand/xmage  runs 11, failures 9, flaky 0, stale 0, catch 1, miss 1 (30 days)
+record: oracle:Subtlety/generated 11: cast in response to Wetland Sambar from hand with another blue card in hand/xmage  runs 11, failures 9, flaky 0, stale 0, catch 1, miss 1 (30 days)
+record: and 3 more checks
+bisect: counts:count-gate  fails at f144b550c5 too: no commit since master to blame
+record: counts:count-gate  runs 136, failures 31, flaky 0, stale 0, catch 4, miss 0 (30 days)
+ci: sweep: next due in 68 min
+ci: b3d sweep: not due: ffa9d40db4 was swept already</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T08:29:15Z" tabindex="0" data-tip="2026-11-15T08:29:15Z">2026-11-15</time></header><div class="c-prose"><p>Handoff: XMage now takes alternative-cost answers from the cast command in BerylScenarioTest.java and declines copy effects while placing setup permanents in xmage.py. The full local oracle rerun passed 900 XMage and 1,049 Forge scenarios, including Generated 31. cast/costs.rs skips unselected options, and event.rs uses one slot of scratch storage for single-object moves while retaining the shared pipeline and the Animate Dead handling. Local macOS slow CI passed before delivery. With Animate Dead included, the rollout used 384,443,088 instructions against the new 384,206,865 baseline and all five family gates passed. Enact pushed bb097b8e after the fast check passed.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T08:20:22Z" tabindex="0" data-tip="2026-11-15T08:20:22Z">2026-11-15</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-15T07:34:22Z" tabindex="0" data-tip="2026-11-15T07:34:22Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">01a1de21-a160-77a1-9baa-de7702171def</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-sbpt</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">f144b550c5203f85f3a458bbf077186e9a4cc351..ffa9d40db4da7812d1e31f352dd293665d3f0b90</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">acec207388ea16f5a2dd48367a4522f29354862a 2dffcd28368e455d9ae562d4b2a8e50d5aa7d436 e72a70584a1399980dc614a09b83b2ce2685be82 bb097b8e8aeb6ba3317e213497a56d4c6db3b6a6</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">ed51ba83741f47c0a5400bf60599212c</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-bmdk</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-bajq by-bmdk by-bajq.7 by-bmdk.3 by-q44s by-bajq.5 by-bajq.9 by-q44s.1 by-bajq.6</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">01a1de21-a160-77a1-9baa-de7702171def</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">01a1d760-e601-7fc0-9d66-3dabf9c28a13</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-sbpt</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1de21-a160-77a1-9baa-de7702171def">01a1de21</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-15T07:21:06Z" tabindex="0" data-tip="2026-11-15T07:21:06Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-15T08:31:06Z" tabindex="0" data-tip="2026-11-15T08:31:06Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-15T08:29:37Z" tabindex="0" data-tip="2026-11-15T08:29:37Z">2026-11-15</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

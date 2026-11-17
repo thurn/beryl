@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-nl72</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-nl72</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-nl72</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">8</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Count gate passes on staging (391.69M, +0.60%, bar unchanged); slow CI passed at c53ae6f8</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at ebe1f089122dbc188b829bd0a0941b5b9cb2286f. Failing range since last passing commit: b8e33966bc9c48f84b05ddfdb0fe2fc51a415553..ebe1f089122dbc188b829bd0a0941b5b9cb2286f.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling cards_2009 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2009)
+   Compiling cards_2023_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2023_h1)
+   Compiling beryl_scenario_types v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/crates/beryl_scenario_types)
+   Compiling beryl_kernel v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/crates/beryl_kernel)
+   Compiling cards_2017 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2017)
+   Compiling cards_2015 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2015)
+   Compiling cards_2004 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2004)
+   Compiling cards_2011 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2011)
+   Compiling cards_2000 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2000)
+   Compiling cards_2010 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2010)
+   Compiling cards_2026_q1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2026_q1)
+   Compiling cards_2022_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2022_h1)
+   Compiling cards_2002 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2002)
+   Compiling cards_2018 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2018)
+   Compiling cards_2008 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2008)
+   Compiling cards_2012 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2012)
+   Compiling cards_1998 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_1998)
+   Compiling cards_1993 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_1993)
+   Compiling cards_2006 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2006)
+   Compiling cards_2003 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2003)
+   Compiling cards_2025_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2025_h2)
+   Compiling cards_2016 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2016)
+   Compiling cards_2019_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2019_h1)
+   Compiling cards_2007 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2007)
+   Compiling cards_2020_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2020_h2)
+   Compiling cards_2024_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2024_h2)
+   Compiling cards_2022_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2022_h2)
+   Compiling cards_2021_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2021_h2)
+   Compiling beryl_rules v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/crates/beryl_rules)
+   Compiling cards_2001 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/cards/cards_2001)
+   Compiling beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/crates/beryl_engine)
+   Compiling beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/crates/beryl_cards)
+   Compiling beryl_scenario v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/crates/beryl_scenario)
+   Compiling beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/crates/beryl_search)
+   Compiling beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-ebe1f089122d/rust/crates/beryl_bench)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 50.04s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-21c76d4db0041df4)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 398,738,907 instructions, +2.41% against the bar of 389,343,295: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+ci counts count-gate: FAILED (exit 1) after 79.2 s (71 s on the clock), after waiting 85.6 s for CPU tokens; rerunning it once
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.55s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-21c76d4db0041df4)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 398,738,907 instructions, +2.41% against the bar of 389,343,295: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+ci counts count-gate: FAILED (exit 1) after 13.6 s (16 s on the clock)
+ci: repo 36 s (just 0 s, markdown 35 s, file-length 0 s, conventions 1 s)
+ci: scale 2 s (pytest 2 s)
+ci: rust 211 s (build-paths 0 s, fmt 2 s, clippy 95 s, tests 113 s, card-text 1 s)
+ci: script 104 s (script-check 104 s)
+ci: ui 56 s (prettier 36 s, tsc 19 s, test 1 s)
+ci: names 6 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 211 s (smoke 211 s)
+ci: ui-smoke 142 s (ui-test 142 s)
+ci: oracle 213 s (oracle 213 s)
+ci: counts 93 s (count-gate FAILED)
+ci budget: 1 of 10 runs since a cut bead closed at 2026-11-14T01:14:42+00:00; not measured yet
+ci: FAILED: counts in 212.9 s (309 s on the clock) (budget 300 s)
+bisect: 1 failed checks over 0 commits since master (ebe1f08912), 600 s to search
+bisect: ebe1f08912: 1 of 1 checks fail
+bisect: counts:count-gate  fails at ebe1f08912 too: no commit since master to blame
+record: counts:count-gate  runs 309, failures 4, flaky 0, stale 0, catch 1, miss 0 (30 days)
+ci: sweep: next due in 71 min</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">8</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">9</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author"><span class="c-tip-target" tabindex="0" data-tip="9578a5e1-e7d0-40e1-92c6-1d5dfbc853e3">9578a5e1</span></span><time class="c-time" datetime="2026-11-14T01:28:09Z" tabindex="0" data-tip="2026-11-14T01:28:09Z">2026-11-14</time></header><div class="c-prose"><p>Released by Enact: pool member open on screen</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T01:38:04Z" tabindex="0" data-tip="2026-11-14T01:38:04Z">2026-11-14</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 25c3f7f2b27d493e7815d4621784634dc35b7654. Failing range since last passing commit: ebe1f089122dbc188b829bd0a0941b5b9cb2286f..25c3f7f2b27d493e7815d4621784634dc35b7654.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling cards_2026_q1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2026_q1)
+   Compiling beryl_scenario_types v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/crates/beryl_scenario_types)
+   Compiling beryl_kernel v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/crates/beryl_kernel)
+   Compiling cards_2021_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2021_h2)
+   Compiling cards_2021_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2021_h1)
+   Compiling cards_2004 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2004)
+   Compiling cards_2001 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2001)
+   Compiling cards_1993 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_1993)
+   Compiling cards_2025_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2025_h1)
+   Compiling cards_2017 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2017)
+   Compiling cards_2020_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2020_h2)
+   Compiling cards_2022_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2022_h1)
+   Compiling cards_2011 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2011)
+   Compiling cards_2012 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2012)
+   Compiling cards_2026_q4 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2026_q4)
+   Compiling cards_2020_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2020_h1)
+   Compiling cards_2023_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2023_h2)
+   Compiling cards_2005 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2005)
+   Compiling cards_2019_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2019_h1)
+   Compiling cards_2019_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2019_h2)
+   Compiling cards_2009 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2009)
+   Compiling cards_2015 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2015)
+   Compiling cards_2024_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2024_h1)
+   Compiling cards_2026_q2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2026_q2)
+   Compiling beryl_rules v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/crates/beryl_rules)
+   Compiling cards_2006 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2006)
+   Compiling cards_2018 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2018)
+   Compiling cards_2002 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2002)
+   Compiling cards_2000 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2000)
+   Compiling cards_2013 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/cards/cards_2013)
+   Compiling beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/crates/beryl_engine)
+   Compiling beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/crates/beryl_cards)
+   Compiling beryl_scenario v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/crates/beryl_scenario)
+   Compiling beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/crates/beryl_search)
+   Compiling beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-25c3f7f2b27d/rust/crates/beryl_bench)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 36.91s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-21c76d4db0041df4)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 398,738,478 instructions, +2.41% against the bar of 389,343,295: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+ci counts count-gate: FAILED (exit 1) after 108.6 s (89 s on the clock)
+ci: repo 4 s (just 0 s, markdown 3 s, file-length 0 s, conventions 1 s)
+ci: python 42 s (black 2 s, pyre 6 s, pytest 34 s)
+ci: rust 241 s (build-paths 0 s, fmt 2 s, clippy 78 s, tests 159 s, card-text 1 s)
+ci: script 59 s (script-check 59 s)
+ci: ui 10 s (prettier 4 s, tsc 5 s, test 1 s)
+ci: names 7 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 78 s (smoke 78 s)
+ci: ui-smoke 100 s (ui-test 100 s)
+ci: oracle 163 s (oracle 163 s)
+ci: counts 172 s (count-gate FAILED)
+ci budget: 2 of 10 runs since a cut bead closed at 2026-11-14T01:14:42+00:00; not measured yet
+ci: FAILED: counts in 240.9 s (269 s on the clock) (budget 300 s)
+bisect: 1 failed checks over 5 commits since master (ebe1f08912), 600 s to search
+bisect: 25c3f7f2b2: 1 of 1 checks fail
+bisect: 746b7dc08c: 1 of 1 checks fail
+bisect: bf276fb3a2: 1 of 1 checks fail
+bisect: 708c99c738: 1 of 1 checks fail
+bisect: ebe1f08912: 1 of 1 checks fail
+bisect: counts:count-gate  fails at ebe1f08912 too: no commit since master to blame
+record: counts:count-gate  runs 311, failures 6, flaky 0, stale 0, catch 1, miss 0 (30 days)
+ci: sweep: next due in 60 min</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T01:54:34Z" tabindex="0" data-tip="2026-11-14T01:54:34Z">2026-11-14</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at e0ee030ca8e2fc199a59d2c4a2cc7a4114c4fbb4. Failing range since last passing commit: ebe1f089122dbc188b829bd0a0941b5b9cb2286f..e0ee030ca8e2fc199a59d2c4a2cc7a4114c4fbb4.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling cards_2005 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2005)
+   Compiling cards_2026_q3 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2026_q3)
+   Compiling cards_2021_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2021_h2)
+   Compiling cards_2025_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2025_h1)
+   Compiling cards_2011 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2011)
+   Compiling cards_2024_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2024_h2)
+   Compiling cards_2017 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2017)
+   Compiling cards_2026_q4 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2026_q4)
+   Compiling cards_2019_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2019_h1)
+   Compiling cards_2001 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2001)
+   Compiling cards_2014 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2014)
+   Compiling cards_2026_q1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2026_q1)
+   Compiling cards_2006 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2006)
+   Compiling cards_2013 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2013)
+   Compiling cards_2022_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2022_h2)
+   Compiling cards_2021_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2021_h1)
+   Compiling cards_1998 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_1998)
+   Compiling cards_2020_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2020_h1)
+   Compiling cards_2012 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2012)
+   Compiling cards_2016 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2016)
+   Compiling beryl_rules v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/crates/beryl_rules)
+   Compiling cards_2015 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2015)
+   Compiling cards_2018 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2018)
+   Compiling cards_2008 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/cards/cards_2008)
+   Compiling beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/crates/beryl_engine)
+   Compiling beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/crates/beryl_cards)
+   Compiling beryl_scenario v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/crates/beryl_scenario)
+   Compiling beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/crates/beryl_search)
+   Compiling beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e0ee030ca8e2/rust/crates/beryl_bench)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 38.57s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-21c76d4db0041df4)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 398,738,478 instructions, +2.41% against the bar of 389,343,295: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+ci counts count-gate: FAILED (exit 1) after 77.3 s; rerunning it once
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.14s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-21c76d4db0041df4)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 398,738,478 instructions, +2.41% against the bar of 389,343,295: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+ci counts count-gate: FAILED (exit 1) after 9.2 s (8 s on the clock)
+ci: repo 6 s (just 0 s, markdown 5 s, file-length 0 s, conventions 1 s)
+ci: python 46 s (black 4 s, pyre 8 s, pytest 34 s)
+ci: scale 6 s (pytest 6 s)
+ci: rust 482 s (build-paths 1 s, fmt 4 s, clippy 270 s, tests 206 s, card-text 1 s)
+ci: script 96 s (script-check 96 s)
+ci: ui 13 s (prettier 8 s, tsc 5 s, test 1 s)
+ci: names 11 s (card-names 5 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 153 s (smoke 153 s)
+ci: ui-smoke 294 s (ui-test 294 s)
+ci: oracle 206 s (oracle 206 s)
+ci: counts 81 s (count-gate FAILED)
+ci budget: 3 of 10 runs since a cut bead closed at 2026-11-14T01:14:42+00:00; not measured yet
+ci: FAILED: counts in 481.8 s (531 s on the clock) (budget 300 s)
+ci: load average 11 15 14 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 1 failed checks over 8 commits since master (ebe1f08912), 600 s to search
+bisect: e0ee030ca8: 1 of 1 checks fail
+bisect: 73e6f128a9: 1 of 1 checks fail
+bisect: bf276fb3a2: 1 of 1 checks fail
+bisect: 708c99c738: 1 of 1 checks fail
+bisect: ebe1f08912: 1 of 1 checks fail
+bisect: counts:count-gate  fails at ebe1f08912 too: no commit since master to blame
+record: counts:count-gate  runs 313, failures 8, flaky 0, stale 0, catch 1, miss 0 (30 days)
+ci: sweep: next due in 44 min</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T02:03:46Z" tabindex="0" data-tip="2026-11-14T02:03:46Z">2026-11-14</time></header><div class="c-prose"><p>Cause: count-gate +2.41% (398.74M vs bar 389.34M). ebe1f089 (bounded turn search) added +1.42% purely through inlining changes (Callgrind diff vs. the commit reverted): a third const-generic copy of engine::advance (next_within) made LLVM outline sba::check/combat::prune/passes_silently from next; payable_responses gave activation_options a 2nd caller so it left decision; derived Pending::eq outlined. Fix df0c1cca: one advance with a runtime Limit, TARGETS as a const param of Situation, matches! for Pending. Count now 393.59M vs 393.16M with ebe1f089 reverted. Still +1.09% over the bar: the other 0.98% is drift from earlier commits since the bar was last lowered (0d557502, 2026-11-11). Remaining ~0.08% of ebe1f089 is payable_responses' Small instantiation of shared cast-legality callees (stubbing it gives 393.27M, still 31k over). K1: three attempts did not hold the gate, so a bar raise needs a human decision.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T02:09:59Z" tabindex="0" data-tip="2026-11-14T02:09:59Z">2026-11-14</time></header><div class="c-prose"><p>Holding: the user started session local_7c62aa2b-5096-4836-894e-4d95027555b0 ('Count-gate creep') to fix the earlier 0.98% drift and change the bar as needed. Once it reports its commit, I'll check that the gate passes on staging and close this bead.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T02:17:07Z" tabindex="0" data-tip="2026-11-14T02:17:07Z">2026-11-14</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at b82d822949ecc10e277ee374d667e7d15ab6feb8. Failing range since last passing commit: 1202bca634f542c90ffe16becda15ee9e533ad86..b82d822949ecc10e277ee374d667e7d15ab6feb8.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling cards_2010 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2010)
+   Compiling beryl_scenario_types v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/crates/beryl_scenario_types)
+   Compiling beryl_kernel v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/crates/beryl_kernel)
+   Compiling cards_2016 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2016)
+   Compiling cards_2023_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2023_h2)
+   Compiling cards_2026_q4 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2026_q4)
+   Compiling cards_2026_q2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2026_q2)
+   Compiling cards_1995 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_1995)
+   Compiling cards_2019_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2019_h2)
+   Compiling cards_2017 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2017)
+   Compiling cards_1994 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_1994)
+   Compiling cards_2026_q1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2026_q1)
+   Compiling cards_2009 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2009)
+   Compiling cards_2021_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2021_h1)
+   Compiling cards_2008 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2008)
+   Compiling cards_2022_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2022_h1)
+   Compiling cards_2024_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2024_h1)
+   Compiling cards_2011 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2011)
+   Compiling cards_2026_q3 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2026_q3)
+   Compiling cards_2018 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2018)
+   Compiling cards_2003 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2003)
+   Compiling cards_2019_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2019_h1)
+   Compiling cards_1996 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_1996)
+   Compiling cards_2025_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2025_h1)
+   Compiling cards_2021_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2021_h2)
+   Compiling cards_2015 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2015)
+   Compiling cards_2024_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/cards/cards_2024_h2)
+   Compiling beryl_rules v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/crates/beryl_rules)
+   Compiling beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/crates/beryl_engine)
+   Compiling beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/crates/beryl_cards)
+   Compiling beryl_scenario v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/crates/beryl_scenario)
+   Compiling beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/crates/beryl_search)
+   Compiling beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-b82d822949ec/rust/crates/beryl_bench)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 34.57s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-21c76d4db0041df4)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 393,585,546 instructions, +1.09% against the bar of 389,343,295: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+ci counts count-gate: FAILED (exit 1) after 54.7 s (45 s on the clock); rerunning it once
+bench: another bench-count run is using the VM; waiting for it
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.27s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-21c76d4db0041df4)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 393,585,546 instructions, +1.09% against the bar of 389,343,295: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+ci counts count-gate: FAILED (exit 1) after 65.3 s (53 s on the clock), after waiting 0.3 s for CPU tokens
+ci: repo 3 s (just 0 s, markdown 2 s, file-length 0 s, conventions 1 s)
+ci: rust 225 s (build-paths 0 s, fmt 2 s, clippy 101 s, tests 121 s, card-text 1 s)
+ci: script 59 s (script-check 59 s)
+ci: names 7 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 74 s (smoke 74 s)
+ci: ui-smoke 107 s (ui-test 107 s)
+ci: oracle 163 s (oracle 163 s)
+ci: counts 120 s (count-gate FAILED)
+ci budget: 5 of 10 runs since a cut bead closed at 2026-11-14T01:14:42+00:00; not measured yet
+ci: FAILED: counts in 244.6 s (budget 300 s)
+bisect: 1 failed checks over 4 commits since master (1202bca634), 600 s to search
+bisect: b82d822949: 1 of 1 checks fail
+bisect: 23147ca11e: 1 of 1 checks fail
+bisect: 3bccb70c72: 1 of 1 checks fail
+bisect: 1202bca634: 1 of 1 checks fail
+bisect: counts:count-gate  fails at 1202bca634 too: no commit since master to blame
+record: counts:count-gate  runs 317, failures 12, flaky 0, stale 0, catch 1, miss 0 (30 days)
+ci: sweep: next due in 21 min</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T02:34:40Z" tabindex="0" data-tip="2026-11-14T02:34:40Z">2026-11-14</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 0996dd40cdb3b81682ffd66536ea38f1890587a6. Failing range since last passing commit: 1202bca634f542c90ffe16becda15ee9e533ad86..0996dd40cdb3b81682ffd66536ea38f1890587a6.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling cards_2008 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2008)
+   Compiling beryl_scenario_types v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/crates/beryl_scenario_types)
+   Compiling beryl_kernel v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/crates/beryl_kernel)
+   Compiling cards_1994 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_1994)
+   Compiling cards_1997 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_1997)
+   Compiling cards_2021_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2021_h1)
+   Compiling cards_2013 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2013)
+   Compiling cards_1993 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_1993)
+   Compiling cards_1996 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_1996)
+   Compiling cards_2026_q4 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2026_q4)
+   Compiling cards_2021_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2021_h2)
+   Compiling cards_2001 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2001)
+   Compiling cards_2024_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2024_h1)
+   Compiling cards_2023_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2023_h2)
+   Compiling cards_2010 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2010)
+   Compiling cards_2026_q2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2026_q2)
+   Compiling cards_2004 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2004)
+   Compiling cards_1995 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_1995)
+   Compiling cards_2025_h2 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2025_h2)
+   Compiling cards_2026_q3 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2026_q3)
+   Compiling cards_2018 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2018)
+   Compiling cards_2005 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2005)
+   Compiling cards_2016 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2016)
+   Compiling cards_1998 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_1998)
+   Compiling cards_2019_h1 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2019_h1)
+   Compiling cards_2009 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2009)
+   Compiling cards_2017 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2017)
+   Compiling cards_2011 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2011)
+   Compiling beryl_rules v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/crates/beryl_rules)
+   Compiling cards_2015 v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/cards/cards_2015)
+   Compiling beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/crates/beryl_engine)
+   Compiling beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/crates/beryl_cards)
+   Compiling beryl_scenario v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/crates/beryl_scenario)
+   Compiling beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/crates/beryl_search)
+   Compiling beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-0996dd40cdb3/rust/crates/beryl_bench)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 53.42s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-21c76d4db0041df4)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 393,585,546 instructions, +1.09% against the bar of 389,343,295: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+ci counts count-gate: FAILED (exit 1) after 18.9 s (72 s on the clock); rerunning it once
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.39s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-21c76d4db0041df4)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 393,585,546 instructions, +1.09% against the bar of 389,343,295: over the 1.0% tolerance. Make the new cost free for these decks, or raise the bar only as count-gate.toml allows
+ci counts count-gate: FAILED (exit 1) after 3.2 s (19 s on the clock)
+ci: repo 4 s (just 0 s, markdown 3 s, file-length 0 s, conventions 0 s)
+ci: python 22 s (black 2 s, pyre 5 s, pytest 14 s)
+ci: rust 203 s (build-paths 0 s, fmt 2 s, clippy 47 s, tests 153 s, card-text 1 s)
+ci: script 25 s (script-check 25 s)
+ci: ui 9 s (prettier 5 s, tsc 3 s, test 1 s)
+ci: names 8 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 33 s (smoke 33 s)
+ci: ui-smoke 14 s (ui-test 14 s)
+ci: oracle 53 s (oracle 53 s)
+ci: counts 22 s (count-gate FAILED)
+ci budget: 2 of 10 runs since a cut bead closed at 2026-11-14T01:14:42+00:00; not measured yet
+ci: FAILED: counts in 203.2 s (779 s on the clock) (budget 300 s)
+bisect: 1 failed checks over 0 commits since master (0996dd40cd), 600 s to search
+bisect: 0996dd40cd: 1 of 1 checks fail
+bisect: counts:count-gate  fails at 0996dd40cd too: no commit since master to blame
+record: counts:count-gate  runs 35, failures 6, flaky 0, stale 0, catch 2, miss 0 (30 days)
+ci: sweep: started in the background (/Users/dthurn/Library/Caches/beryl/sweep/background.log)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T03:20:37Z" tabindex="0" data-tip="2026-11-14T03:20:37Z">2026-11-14</time></header><div class="c-prose"><p>Handoff: slow CI on macOS passed at c53ae6f8, which includes b82d8229 (perf: keep the rollout engine loop inlined, 398.7M -&gt; 393.6M), 63ce44b0 (count benchmarks built with -p beryl_bench, so the test-only coverage feature is off: 391.95M) and d947a7c3 (Equipment check out of the engine loop: 391.69M). That is +0.60% against the bar of 389,343,295, inside the 1% tolerance, so the bar is unchanged. The creep analysis is in <a href="by-riqp" data-hovercard="hc-by-riqp"><span class="c-mono">by-riqp</span></a>.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T04:18:43Z" tabindex="0" data-tip="2026-11-14T04:18:43Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_b441175a-761f-4cff-a180-66283d0e37bd">session b44117</span></span>closed this<span class="c-timeline-detail">Count gate passes on staging (391.69M, +0.60%, bar unchanged); slow CI passed at c53ae6f8</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T03:20:57Z" tabindex="0" data-tip="2026-11-14T03:20:57Z">2026-11-14</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">5 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T02:17:07Z" tabindex="0" data-tip="2026-11-14T02:17:07Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_b441175a-761f-4cff-a180-66283d0e37bd">session b44117</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_b441175a-761f-4cff-a180-66283d0e37bd">session b44117</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T01:29:51Z" tabindex="0" data-tip="2026-11-14T01:29:51Z">2026-11-14</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T01:29:35Z" tabindex="0" data-tip="2026-11-14T01:29:35Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:9578a5e1-e7d0-40e1-92c6-1d5dfbc853e3">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:9578a5e1-e7d0-40e1-92c6-1d5dfbc853e3">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T01:28:59Z" tabindex="0" data-tip="2026-11-14T01:28:59Z">2026-11-14</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T01:28:59Z" tabindex="0" data-tip="2026-11-14T01:28:59Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="9578a5e1-e7d0-40e1-92c6-1d5dfbc853e3">9578a5e1</span></span>status changed</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T01:27:57Z" tabindex="0" data-tip="2026-11-14T01:27:57Z">2026-11-14</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T01:27:16Z" tabindex="0" data-tip="2026-11-14T01:27:16Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:9578a5e1-e7d0-40e1-92c6-1d5dfbc853e3">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:9578a5e1-e7d0-40e1-92c6-1d5dfbc853e3">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T01:27:16Z" tabindex="0" data-tip="2026-11-14T01:27:16Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T01:26:05Z" tabindex="0" data-tip="2026-11-14T01:26:05Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T01:26:05Z" tabindex="0" data-tip="2026-11-14T01:26:05Z">2026-11-14</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>ci@example.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-14T01:27:17Z" tabindex="0" data-tip="2026-11-14T01:27:17Z">2026-11-14</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">local_b441175a-761f-4cff-a180-66283d0e37bd</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-nl72</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">1202bca634f542c90ffe16becda15ee9e533ad86..0996dd40cdb3b81682ffd66536ea38f1890587a6</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">b82d822949ecc10e277ee374d667e7d15ab6feb8</span></dd></div><div class="c-meta-item"><dt>enact_pool_session</dt><dd><span class="c-mono">local_b441175a-761f-4cff-a180-66283d0e37bd</span></dd></div><div class="c-meta-item"><dt>enact_recovery</dt><dd><span class="c-mono">[{&quot;owner&quot;: &quot;vizier:jarvis:claude:9578a5e1-e7d0-40e1-92c6-1d5dfbc853e3&quot;, &quot;session&quot;: null, &quot;vizier&quot;: &quot;9578a5e1-e7d0-40e1-92c6-1d5dfbc853e3&quot;, &quot;provider&quot;: &quot;claude&quot;, &quot;app&quot;: &quot;claude&quot;, &quot;project&quot;: &quot;/Users/dthurn/beryl&quot;, &quot;spawn_host&quot;: &quot;jarvis&quot;, &quot;host&quot;: null, &quot;path&quot;: null, &quot;branch&quot;: null, &quot;inactive&quot;: &quot;relinquished&quot;, &quot;evidence&quot;: &quot;current owner explicitly released&quot;, &quot;released&quot;: &quot;2026-11-14T01:27:56Z&quot;, &quot;reason&quot;: &quot;pool member open on screen&quot;}]</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">7512fd8bfcaa44d88e4715431f352974</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-3ec6</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-3ec6 by-97g by-7pm by-bmdk by-7pm.3</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">local_b441175a-761f-4cff-a180-66283d0e37bd</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">9578a5e1-e7d0-40e1-92c6-1d5dfbc853e3</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-nl72</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">jarvis</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="local_b441175a-761f-4cff-a180-66283d0e37bd">session b44117</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-14T01:26:06Z" tabindex="0" data-tip="2026-11-14T01:26:06Z">2026-11-14</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-14T04:18:43Z" tabindex="0" data-tip="2026-11-14T04:18:43Z">2026-11-14</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-14T03:20:58Z" tabindex="0" data-tip="2026-11-14T03:20:58Z">2026-11-14</time></dd></div></dl></aside></div></div></div><template id="hc-by-riqp"><div class="c-card-top"><span class="c-mono">by-riqp</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Count gate creep, 2026-11-11 to 11-13: causes and guardrails</div><div class="c-hovercard-meta"><span class="c-dot c-tone-neutral">Open</span><span>task</span></div></template>
+</main>
+</body>
+</html>

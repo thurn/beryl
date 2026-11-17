@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-q3d</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-q3d</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-q3d</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#notes"><span class="c-toc-label">Notes</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Paused flip test clock before gesture; targeted and full local CI pass, repair pushed4bded3b.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 8b72720c8e6cde8d3ebf2f18cbddf9c8cd3753c4. Failing range since last passing commit: 01d95aa6fa635d30df24667ed40c5f4e6227fdfd..8b72720c8e6cde8d3ebf2f18cbddf9c8cd3753c4.</p>
+<p>Log tail:</p>
+<pre><code>ok: hovering a card in choice-look&#x27;s prompt keeps its inspector off the prompt
+ok: the turn button stands still whatever its label, at 1600 wide
+ok: the turn button stands still whatever its label, at 1280 wide
+ok: hovering a card in greedy-turn-9&#x27;s target step covers no target
+ok: hovering a card in attached-across&#x27;s target step covers no target
+ok: hovering a card in crew&#x27;s target step covers no target
+ok: up to one target is picked on the board with its count
+ok: up to one target chooses none from its one button
+ok: an untap picks the lands the hand&#x27;s instants want
+ok: an attack past a planeswalker asks nothing of what it attacks
+ok: explore shows the revealed card and answers by where it goes
+ok: a click on a spell with one target, the player&#x27;s own, asks it
+ok: Teferi&#x27;s untap picks the tapped lands to begin with
+ok: an untap is picked on the board, the human&#x27;s tapped lands picked to begin with
+ok: graveyard targets show their faces
+ok: Thirst&#x27;s basic land is discarded from the hand in two clicks
+ok: Thirst&#x27;s two cards are picked from the hand before Discard is offered
+ok: a search finds nothing from its second button
+ok: a loot&#x27;s draw shows before the discard is asked, from the raised hand
+ok: ability frames have square tops and shield bottoms
+ok: an up-to-one search lights one card and sends it
+ok: choice-scry&#x27;s choice text fits its box
+ok: the cleanup discard counts its picks
+ok: choice-jace&#x27;s choice text fits its box
+ok: choice-explore&#x27;s choice text fits its box
+ok: choice-search&#x27;s choice text fits its box
+ok: Adeline&#x27;s Human is in view as what it attacks is asked
+ok: Adeline&#x27;s Human requires a highlighted direct attack target
+ok: attack destinations use thin lines: you player
+ok: attack destinations use thin lines: you 68
+ok: the crew meter fills with the power tapped
+ok: crewing shows the power picked against the crew cost without text
+ok: attack destinations use thin lines: opponent player
+ok: attack destinations use thin lines: opponent 68
+ok: a waterbend shows its cost in symbols with its tappers lit
+ok: Enter on the start screen starts a game
+ok: cards for the bottom toggle in their slots until confirmed
+ok: Enter with a game in progress returns to it
+ok: the start screen remembers the last opponent across a reload
+ok: a waterbend payable by lands waits for confirmation
+ok: the result waits for the killing blow, says why, and can be put aside
+ok: the settings concede the game once confirmed in place
+ok: a new game with one in progress asks first, then concedes it
+ok: a game resumed at launch gives way to a new game at one click
+ok: a reloaded page takes up the game in progress
+ok: libraries face their owners
+ok: waterbend selections are reversible until confirmation
+ui-test: FAILED
+ci ui-test ui-test: FAILED (exit 1) after 111.5 s (150 s on the clock, the machine loaded)
+ci: repo 1 s (just 0 s, markdown 1 s)
+ci: python 11 s (black 1 s, pyre 3 s, pytest 7 s)
+ci: rust 123 s (build-paths 0 s, fmt 1 s, clippy 37 s, tests 85 s)
+ci: ui 4 s (prettier 2 s, tsc 2 s, card-names 0 s)
+ci: app 33 s (smoke 33 s)
+ci: shots 80 s (ui-shots 80 s)
+ci: ui-test 112 s (ui-test FAILED)
+ci: oracle 49 s (oracle 49 s)
+ci: counts 29 s (count-gate 29 s)
+ci: mobile 51 s (mobile-check 51 s)
+ci: FAILED: ui-test in 128.3 s (172 s on the clock, the machine loaded) (budget 300 s)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="notes"><h2 class="c-section-title">Notes</h2><div class="c-prose"><p>Exact failure: interactions.mjs faceFlip asserts old .card-face-down after an awaited click plus100ms while Playwright installed clock is still running. Under loaded CI, click/IPC can already consume the160ms first half, so a correctly completed face switch fails. CardLayer useCardTurn changes facing only in first animation completion at90deg; no product race found. Hidden-hand flip coverage records whole transition but this test uniquely checks known face-down permanent frame. Preserve it by pausing clock before gesture, then advancing only test-controlled100/500ms; do not loosen boundary. Required full baseline CI running locally before repair. Local full CI baseline passed143.6s, confirming intermittent timing false positive rather than deterministic product failure. Repaired test pauses installed clock before gesture; targeted permanent flip passes and full post-fix CI passes85.0s (all lanes, ui-test85s). Kept test because known face-down permanent surface is distinct coverage; unchanged100ms/500ms assertions now deterministic. Evidence logs /tmp/<a href="by-q3d" data-hovercard="hc-by-q3d"><span class="c-mono">by-q3d</span></a>-before-ci.log, /tmp/<a href="by-q3d" data-hovercard="hc-by-q3d"><span class="c-mono">by-q3d</span></a>-flip.log, /tmp/<a href="by-q3d" data-hovercard="hc-by-q3d"><span class="c-mono">by-q3d</span></a>-after-ci.log.</p></div></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="01a1c2fc-1eb0-7602-90cf-a6d83b3e4119">01a1c2fc</span></span>closed this<span class="c-timeline-detail">Paused flip test clock before gesture; targeted and full local CI pass, repair pushed4bded3b.</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T03:59:56Z" tabindex="0" data-tip="2026-11-10T03:59:56Z">2026-11-10</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T03:59:07Z" tabindex="0" data-tip="2026-11-10T03:59:07Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>edited the notes <span class="c-muted">×2</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T03:58:48Z" tabindex="0" data-tip="2026-11-10T03:58:48Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="01a1c2fc-1eb0-7602-90cf-a6d83b3e4119">01a1c2fc</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="01a1c2fc-1eb0-7602-90cf-a6d83b3e4119">01a1c2fc</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T03:51:54Z" tabindex="0" data-tip="2026-11-10T03:51:54Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T03:50:53Z" tabindex="0" data-tip="2026-11-10T03:50:53Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T03:50:53Z" tabindex="0" data-tip="2026-11-10T03:50:53Z">2026-11-10</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-10T03:51:54Z" tabindex="0" data-tip="2026-11-10T03:51:54Z">2026-11-10</time></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">01d95aa6fa635d30df24667ed40c5f4e6227fdfd..8b72720c8e6cde8d3ebf2f18cbddf9c8cd3753c4</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">4bded3b4c1d9717eb5704e92dc2c44bd45321ab2</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono"></span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1c2fc-1eb0-7602-90cf-a6d83b3e4119">01a1c2fc</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-10T03:50:53Z" tabindex="0" data-tip="2026-11-10T03:50:53Z">2026-11-10</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-10T03:59:57Z" tabindex="0" data-tip="2026-11-10T03:59:57Z">2026-11-10</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-10T03:59:57Z" tabindex="0" data-tip="2026-11-10T03:59:57Z">2026-11-10</time></dd></div></dl></aside></div></div></div><template id="hc-by-q3d"><div class="c-card-top"><span class="c-mono">by-q3d</span><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span></div><div class="c-hovercard-title">Fix slow CI failure on macos</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template>
+</main>
+</body>
+</html>

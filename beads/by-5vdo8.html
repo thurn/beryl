@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-5vdo8</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-5vdo8</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-5vdo8</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">4</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>fixed in a7cad3fe8: XMage exporter retaps player A's permanents; known faults recorded for partner scenarios</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at cdba19360fbdc5089697184a16655dc87b94a07b. Failing range since last passing commit: 09161b7871ed4df64f9c331d1c891d4183037380..cdba19360fbdc5089697184a16655dc87b94a07b.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;status&quot;: &quot;fail&quot;,
+        &quot;failure&quot;: &quot;Missing TARGET def for turn 1, step PRECOMBAT_MAIN, PlayerA&quot;,
+        &quot;generated&quot;: true
+      }
+    ],
+    &quot;log&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/xmage-oracle.log&quot;,
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;forge&quot;: {
+    &quot;pass&quot;: 104,
+    &quot;fail&quot;: 0,
+    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 0,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 3008 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 3904 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1525 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 60.0 s, after waiting 0.2 s for CPU tokens and the shared build
+ci: repo 0 s (file-length 0 s)
+ci: rust 277 s (clippy 6 s, tests 271 s)
+ci: names 7 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, rulings 0 s, citations 1 s, card-headers 0 s, rule-ownership 0 s, card-crates 1 s)
+ci: app 33 s (smoke 33 s)
+ci: ui-smoke 183 s (ui-test 183 s)
+ci: oracle 324 s (oracle FAILED)
+ci: counts 200 s (count-gate 85 s, count-gate-families 115 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 323.8 s (503 s on the clock) (budget 300 s)
+ci: load average 24 22 23 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 6 failed checks over 4 commits since master (09161b7871), 600 s to search
+bisect: cdba19360f: 6 of 6 checks fail
+bisect: 76ed653ecc: out of time
+bisect: oracle:Trinket Mage/generated 4: cast from hand with filter partners/xmage  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (4 commits since master)
+record: oracle:Trinket Mage/generated 4: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Builder&#x27;s Blessing/generated 3: cast from hand with filter partners/xmage  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (4 commits since master)
+record: oracle:Builder&#x27;s Blessing/generated 3: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Teferi, Hero of Dominaria  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (4 commits since master)
+record: oracle:Teferi, Hero of Dominaria/generated 11: activate ability 0 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Teferi, Hero of Dominaria/generated 12: activate ability 0 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Teferi, Hero of Dominaria/generated 13: activate ability 0 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Swift Reconfiguration  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (4 commits since master)
+record: oracle:Swift Reconfiguration/generated 3: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Swift Reconfiguration/generated 4: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Swift Reconfiguration/generated 5: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:The Wandering Emperor  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (4 commits since master)
+record: oracle:The Wandering Emperor/generated 7: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:The Wandering Emperor/generated 8: activate ability 1 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:The Wandering Emperor/generated 9: activate ability 1 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: and 6 more checks
+bisect: oracle:Aang&#x27;s Iceberg  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (4 commits since master)
+record: oracle:Aang&#x27;s Iceberg/generated 21: activate ability 1 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Aang&#x27;s Iceberg/generated 22: activate ability 1 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: next due in 79 min
+ci: b3d sweep: started in the background (/Users/dthurn/Library/Caches/beryl/b3d/sweep/background.log)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">4</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-17T04:28:15Z" tabindex="0" data-tip="2026-11-17T04:28:15Z">2026-11-17</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 9367c3716232d9b7b1d4acbfb54c33eef8b6c7f6. Failing range since last passing commit: 09161b7871ed4df64f9c331d1c891d4183037380..9367c3716232d9b7b1d4acbfb54c33eef8b6c7f6.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;generated&quot;: true
+      }
+    ],
+    &quot;log&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/xmage-oracle.log&quot;,
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;forge&quot;: {
+    &quot;pass&quot;: 104,
+    &quot;fail&quot;: 0,
+    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 0,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 2842 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 4238 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1670 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 48.3 s (70 s on the clock)warm: pruned 4364 stale objects and 109 incremental sessions; evicted 0 unused builds (0.0 GB) to fit 15 GB
+warm: cloned /Users/dthurn/beryl/.worktrees/ci-runner/rust/target in 37.6 s
+warm: saved a copy of /Users/dthurn/beryl/.worktrees/ci-runner/rust/target without its incremental caches
+
+ci: repo 1 s (file-length 1 s)
+ci: rust 264 s (clippy 22 s, tests 242 s)
+ci: names 9 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 3 s, divergences 0 s, rulings 0 s, citations 1 s, card-headers 0 s, rule-ownership 0 s, card-crates 1 s)
+ci: app 40 s (smoke 40 s)
+ci: ui-smoke 177 s (ui-test 177 s)
+ci: oracle 266 s (oracle FAILED)
+ci: counts 156 s (count-gate 61 s, count-gate-families 94 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 265.7 s (605 s on the clock) (budget 300 s)
+bisect: 6 failed checks over 8 commits since master (09161b7871), 600 s to search
+bisect: 9367c37162: out of time
+bisect: oracle:Trinket Mage/generated 4: cast from hand with filter partners/xmage  out of time: culprit among 8 commits 8132a4d90b..9367c37162  (8 commits since master)
+record: oracle:Trinket Mage/generated 4: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Builder&#x27;s Blessing/generated 3: cast from hand with filter partners/xmage  out of time: culprit among 8 commits 8132a4d90b..9367c37162  (8 commits since master)
+record: oracle:Builder&#x27;s Blessing/generated 3: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Teferi, Hero of Dominaria  out of time: culprit among 8 commits 8132a4d90b..9367c37162  (8 commits since master)
+record: oracle:Teferi, Hero of Dominaria/generated 11: activate ability 0 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Teferi, Hero of Dominaria/generated 12: activate ability 0 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Teferi, Hero of Dominaria/generated 13: activate ability 0 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Swift Reconfiguration  out of time: culprit among 8 commits 8132a4d90b..9367c37162  (8 commits since master)
+record: oracle:Swift Reconfiguration/generated 3: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Swift Reconfiguration/generated 4: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Swift Reconfiguration/generated 5: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:The Wandering Emperor  out of time: culprit among 8 commits 8132a4d90b..9367c37162  (8 commits since master)
+record: oracle:The Wandering Emperor/generated 7: cast from hand with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:The Wandering Emperor/generated 8: activate ability 1 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:The Wandering Emperor/generated 9: activate ability 1 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: and 6 more checks
+bisect: oracle:Aang&#x27;s Iceberg  out of time: culprit among 8 commits 8132a4d90b..9367c37162  (8 commits since master)
+record: oracle:Aang&#x27;s Iceberg/generated 21: activate ability 1 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Aang&#x27;s Iceberg/generated 22: activate ability 1 on the battlefield with filter partners/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: one is running
+ci: b3d sweep: one is running
+ci: stopped the idle beryl3d-bench virtual machine</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-17T04:43:40Z" tabindex="0" data-tip="2026-11-17T04:43:40Z">2026-11-17</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at b3914072cbd6db49c2111affad7677058530aca0. Failing range since last passing commit: 09161b7871ed4df64f9c331d1c891d4183037380..b3914072cbd6db49c2111affad7677058530aca0.</p>
+<p>Log tail:</p>
+<pre><code>    &quot;stale_gaps&quot;: []
+  },
+  &quot;forge&quot;: {
+    &quot;pass&quot;: 104,
+    &quot;fail&quot;: 0,
+    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 0,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 2787 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 3272 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1555 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 80.7 s, after waiting 15.1 s for CPU tokens and the shared build
+ci: repo 1 s (file-length 1 s)
+ci: python 5 s (black 1 s, pyre 4 s)
+ci: rust 541 s (clippy 26 s, tests 514 s)
+ci: ui 6 s (design-tokens 0 s, tsc 6 s)
+ci: names 10 s (card-names 5 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, rulings 0 s, citations 1 s, card-headers 0 s, rule-ownership 0 s, card-crates 1 s)
+ci: app 20 s (smoke 20 s)
+ci: ui-smoke 10 s (ui-test 10 s)
+ci: oracle 163 s (oracle FAILED)
+ci: counts 111 s (count-gate 22 s, count-gate-families 90 s)
+ci: efficiency 39 s (black 1 s, pyre 2 s, pytest 36 s)
+ci: status 7 s (black 1 s, pyre 2 s, pytest 4 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 540.8 s (760 s on the clock) (budget 300 s)
+ci: load average 27 23 24 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 6 failed checks over 14 commits since master (09161b7871), 600 s to search
+bisect: b3914072cb: 6 of 6 checks fail
+bisect: 3362d6dfed: 6 of 6 checks fail
+bisect: cdba19360f: 6 of 6 checks fail
+bisect: 76ed653ecc: out of time
+bisect: oracle:Trinket Mage/generated 4: cast from hand with filter partners/xmage  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (14 commits since master)
+record: oracle:Trinket Mage/generated 4: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Builder&#x27;s Blessing/generated 3: cast from hand with filter partners/xmage  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (14 commits since master)
+record: oracle:Builder&#x27;s Blessing/generated 3: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Teferi, Hero of Dominaria  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (14 commits since master)
+record: oracle:Teferi, Hero of Dominaria/generated 11: activate ability 0 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Teferi, Hero of Dominaria/generated 12: activate ability 0 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Teferi, Hero of Dominaria/generated 13: activate ability 0 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Swift Reconfiguration  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (14 commits since master)
+record: oracle:Swift Reconfiguration/generated 3: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Swift Reconfiguration/generated 4: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Swift Reconfiguration/generated 5: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:The Wandering Emperor  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (14 commits since master)
+record: oracle:The Wandering Emperor/generated 7: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:The Wandering Emperor/generated 8: activate ability 1 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:The Wandering Emperor/generated 9: activate ability 1 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: and 6 more checks
+bisect: oracle:Aang&#x27;s Iceberg  out of time: culprit among 4 commits 8132a4d90b..cdba19360f  (14 commits since master)
+record: oracle:Aang&#x27;s Iceberg/generated 21: activate ability 1 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Aang&#x27;s Iceberg/generated 22: activate ability 1 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: next due in 48 min
+ci: b3d sweep: one is running</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-17T04:54:46Z" tabindex="0" data-tip="2026-11-17T04:54:46Z">2026-11-17</time></header><div class="c-prose"><p>Handoff: Cause: dc38ddac6 added generated "with filter partners" scenarios, and 19 of them failed in XMage only. Forge passed all of them. Fix a7cad3fe8:</p>
+<ol><li>In tools/src/beryl_tools/xmage.py, Exporter.permanent now adds player A's tapped permanents untapped and emits tapAtStart, a new helper in BerylScenarioTest.java. XMage's turn-1 untap step had been untapping them, which broke Builder's Blessing and The Wandering Emperor. There is a test in tools/tests/test_xmage.py.</li><li>Swift Reconfiguration generated 3-5 and Trinket Mage generated 4 were recorded with <code>just card diverge</code>, using the same reasons as those cards' existing entries.</li><li>Teferi generated 11-13 and Aang's Iceberg generated 21-22 were added to data/oracle-exporter-gaps.json with their base scenarios' gaps. Local <code>by ci</code> passed the oracle lane, but file-length then failed on xmage.py at 808 lines. I trimmed it to 800 and re-ran the six cards (0 failures) and file-length (passed). For review: tapAtStart uses Permanent.setTapped, so no becomes-tapped triggers fire, which matches Beryl's setup.</li></ol></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-17T04:57:03Z" tabindex="0" data-tip="2026-11-17T04:57:03Z">2026-11-17</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 249960ad93d0b62e772a02479f4147f22cabd218. Failing range since last passing commit: 09161b7871ed4df64f9c331d1c891d4183037380..249960ad93d0b62e772a02479f4147f22cabd218.</p>
+<p>Log tail:</p>
+<pre><code>    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 0,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 2730 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 4226 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1570 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: [],
+    &quot;generated_pass&quot;: 74
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 57.1 s (68 s on the clock)warm: pruned 3398 stale objects and 316 incremental sessions; evicted 0 unused builds (0.0 GB) to fit 15 GB
+warm: cloned /Users/dthurn/beryl/.worktrees/ci-runner/rust/target in 24.2 s
+warm: saved a copy of /Users/dthurn/beryl/.worktrees/ci-runner/rust/target without its incremental caches
+
+ci: repo 1 s (file-length 1 s)
+ci: python 7 s (black 1 s, pyre 6 s)
+ci: rust 19 s (clippy FAILED)
+ci: ui 6 s (design-tokens 0 s, tsc 6 s)
+ci: names 10 s (card-names 5 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, rulings 0 s, citations 1 s, card-headers 0 s, rule-ownership 0 s, card-crates 0 s)
+ci: app 28 s (smoke 28 s)
+ci: ui-smoke 6 s (ui-test 6 s)
+ci: oracle 190 s (oracle FAILED)
+ci: counts 278 s (count-gate 64 s, count-gate-families 213 s)
+ci: efficiency 39 s (black 1 s, pyre 3 s, pytest 35 s)
+ci: status 4 s (black 0 s, pyre 2 s, pytest 1 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust oracle in 277.7 s (479 s on the clock) (budget 300 s)
+bisect: 6 failed checks over 16 commits since master (09161b7871), 600 s to search
+bisect: 249960ad93: 6 of 6 checks fail
+bisect: 9367c37162: 6 of 6 checks fail
+bisect: cdba19360f: 6 of 6 checks fail
+bisect: 76ed653ecc: 0 of 6 checks fail
+bisect: dc38ddac6a: out of time
+bisect: rust  not bisected: a static check, a kill or a failed build
+bisect: oracle:Trinket Mage/generated 4: cast from hand with filter partners/xmage  out of time: culprit among 2 commits dc38ddac6a..cdba19360f  (16 commits since master)
+record: oracle:Trinket Mage/generated 4: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Builder&#x27;s Blessing/generated 3: cast from hand with filter partners/xmage  out of time: culprit among 2 commits dc38ddac6a..cdba19360f  (16 commits since master)
+record: oracle:Builder&#x27;s Blessing/generated 3: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Teferi, Hero of Dominaria  out of time: culprit among 2 commits dc38ddac6a..cdba19360f  (16 commits since master)
+record: oracle:Teferi, Hero of Dominaria/generated 11: activate ability 0 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Teferi, Hero of Dominaria/generated 12: activate ability 0 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Teferi, Hero of Dominaria/generated 13: activate ability 0 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Swift Reconfiguration  out of time: culprit among 2 commits dc38ddac6a..cdba19360f  (16 commits since master)
+record: oracle:Swift Reconfiguration/generated 3: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Swift Reconfiguration/generated 4: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Swift Reconfiguration/generated 5: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:The Wandering Emperor  out of time: culprit among 2 commits dc38ddac6a..cdba19360f  (16 commits since master)
+record: oracle:The Wandering Emperor/generated 7: cast from hand with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:The Wandering Emperor/generated 8: activate ability 1 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:The Wandering Emperor/generated 9: activate ability 1 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: and 6 more checks
+bisect: oracle:Aang&#x27;s Iceberg  out of time: culprit among 2 commits dc38ddac6a..cdba19360f  (16 commits since master)
+record: oracle:Aang&#x27;s Iceberg/generated 21: activate ability 1 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Aang&#x27;s Iceberg/generated 22: activate ability 1 on the battlefield with filter partners/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: next due in 123 min
+ci: b3d sweep: started in the background (/Users/dthurn/Library/Caches/beryl/b3d/sweep/background.log)</code></pre></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_c30acc3f-956b-47f2-8f8f-3ba99acc7124">session c30acc</span></span>closed this<span class="c-timeline-detail">fixed in a7cad3fe8: XMage exporter retaps player A&#x27;s permanents; known faults recorded for partner scenarios</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T04:54:51Z" tabindex="0" data-tip="2026-11-17T04:54:51Z">2026-11-17</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">3 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T04:53:30Z" tabindex="0" data-tip="2026-11-17T04:53:30Z">2026-11-17</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_c30acc3f-956b-47f2-8f8f-3ba99acc7124">session c30acc</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_c30acc3f-956b-47f2-8f8f-3ba99acc7124">session c30acc</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T04:14:26Z" tabindex="0" data-tip="2026-11-17T04:14:26Z">2026-11-17</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T04:14:21Z" tabindex="0" data-tip="2026-11-17T04:14:21Z">2026-11-17</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:32f74257-d3b1-4102-8f70-a1d50feaf650">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:32f74257-d3b1-4102-8f70-a1d50feaf650">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T04:13:33Z" tabindex="0" data-tip="2026-11-17T04:13:33Z">2026-11-17</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T04:12:00Z" tabindex="0" data-tip="2026-11-17T04:12:00Z">2026-11-17</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T04:12:00Z" tabindex="0" data-tip="2026-11-17T04:12:00Z">2026-11-17</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>ci@example.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-17T04:13:34Z" tabindex="0" data-tip="2026-11-17T04:13:34Z">2026-11-17</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">local_c30acc3f-956b-47f2-8f8f-3ba99acc7124</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-5vdo8</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">09161b7871ed4df64f9c331d1c891d4183037380..249960ad93d0b62e772a02479f4147f22cabd218</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">a7cad3fe8d9bb777aee61c1cb5cfee503615ea89</span></dd></div><div class="c-meta-item"><dt>enact_pool_session</dt><dd><span class="c-mono">local_c30acc3f-956b-47f2-8f8f-3ba99acc7124</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">4fd41d30edc54a74a176c0eecf501437</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-q44s</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-q44s by-ptc7 by-r61mr by-ptc7.3 by-q44s.11 by-q44s.9 by-q44s.7</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">local_c30acc3f-956b-47f2-8f8f-3ba99acc7124</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">32f74257-d3b1-4102-8f70-a1d50feaf650</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/slot-01</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">jarvis</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="local_c30acc3f-956b-47f2-8f8f-3ba99acc7124">session c30acc</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-17T04:12:01Z" tabindex="0" data-tip="2026-11-17T04:12:01Z">2026-11-17</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-17T04:57:04Z" tabindex="0" data-tip="2026-11-17T04:57:04Z">2026-11-17</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-17T04:54:52Z" tabindex="0" data-tip="2026-11-17T04:54:52Z">2026-11-17</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

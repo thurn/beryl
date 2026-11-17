@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-k0h4</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-k0h4</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-k0h4</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#notes"><span class="c-toc-label">Notes</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">1</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Flaky scry caption check raced a timer set in a React effect; replaced the fixed wait with a bounded wait (3f0c7e4e). Slow CI passed on staging.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 4aaa4de9636345e096b6264bba54159e60a20ec0. Failing range since last passing commit: f153549d84935d99a8c03d0e93e6f62853e443f1..4aaa4de9636345e096b6264bba54159e60a20ec0.</p>
+<p>Log tail:</p>
+<pre><code>ok: attack destinations use thin lines: you player
+ok: attack destinations use thin lines: you 68
+ok: attack destinations use thin lines: opponent player
+ok: attack destinations use thin lines: opponent 68
+ok: the crew meter fills with the power tapped
+ok: waterbend prompt renders its generic mana symbol
+ok: crewing shows the power picked against the crew cost without text
+ok: waterbend prompt renders its generic mana symbol
+ok: phone waterbend long press previews without accepting
+ok: waterbend finishes when manual picks cover the cost
+ok: Enter on the start screen starts a game
+ok: waterbend Auto Pay highlights only on hover and accepts on click
+ok: cards for the bottom toggle in their slots until confirmed
+ok: waterbend Auto Pay keeps manual picks
+ok: Enter with a game in progress returns to it
+ok: the start screen remembers the last opponent across a reload
+ok: the life result shows Victory and the applicable details
+ok: the effect result shows Victory and the applicable details
+ok: the life-loss result waits for the killing blow and can be put aside
+ok: the library result shows Victory and the applicable details
+ok: the concede result shows Defeat and the applicable details
+ok: a new game with one in progress asks first, then concedes it
+ok: a game resumed at launch gives way to a new game at one click
+ok: the settings concede the game once confirmed in place
+ok: a reloaded page takes up the game in progress
+ok: zone pile faces share a bottom edge: you, 0 in graveyard
+ok: zone pile faces share a bottom edge: you, 1 in graveyard
+ok: zone pile faces share a bottom edge: opponent, 0 in graveyard
+ok: zone pile faces share a bottom edge: opponent, 1 in graveyard
+ok: cancelled frames stay cancelled across bug report freeze
+ok: a second bug report keeps thawed frames frozen
+ok: libraries match the other piles
+ok: undo does not repeat an automatic target
+ok: self-target is green for you
+ok: self-target is green for opponent
+ok: bug report thaw never revives resolved arrows
+ok: tokens reach their destination before ceasing: opponent hand
+ok: tokens reach their destination before ceasing: you hand
+ok: tokens reach their destination before ceasing: you library
+ok: tokens reach their destination before ceasing: opponent library
+ok: tokens reach their destination before ceasing: you graveyard
+ok: tokens reach their destination before ceasing: you exile
+ok: tokens reach their destination before ceasing: opponent graveyard
+ok: tokens reach their destination before ceasing: opponent exile
+ok: bug report thaw preserves later attack arrows
+ok: bug report thaw preserves later player arrows
+ok: bug report thaw preserves later object arrows
+ui-test: FAILED
+ci ui-test ui-test: FAILED (exit 1) after 121.4 s (302 s on the clock, the machine loaded)
+ci: repo 2 s (just 0 s, markdown 2 s)
+ci: python 9 s (black 1 s, pyre 3 s, pytest 5 s)
+ci: rust 88 s (build-paths 0 s, fmt 1 s, clippy 18 s, tests 69 s)
+ci: ui 8 s (prettier 4 s, tsc 3 s, card-names 0 s)
+ci: app 24 s (smoke 24 s)
+ci: shots 52 s (ui-shots 52 s)
+ci: ui-test 121 s (ui-test FAILED)
+ci: oracle 38 s (oracle 38 s)
+ci: counts 12 s (count-gate 12 s)
+ci: mobile 33 s (mobile-check 33 s)
+ci: FAILED: ui-test in 125.8 s (316 s on the clock, the machine loaded) (budget 300 s)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="notes"><h2 class="c-section-title">Notes</h2><div class="c-prose"><p>Failure at 1b991d3d (a docs-only commit on a tree that passed at 308ed32b): ui-test 'opponent scry plays consecutive results and lifts the new top cards', caption.count() 1 !== 0 after a fixed clock.runFor(850). The caption's 1,800 ms timer is set in a React effect (Board.tsx, expiredScry), which flushes in real time, so on a loaded machine it can register after the paused clock was advanced. Not reproduced locally; read from the code. Repair 3f0c7e4e: untilGone() steps the clock until the caption is gone and fails past 1,800 ms. Passed 5 filtered runs, fails when the limit is cut to 600 ms, just ci passed in the worktree, slow CI passed on staging at 3f0c7e4e. No product change. The earlier failure this bead was filed for (4aaa4de9: ETB trigger first frame, thaw player arrow) is tracked in <a href="by-6sbc" data-hovercard="hc-by-6sbc"><span class="c-mono">by-6sbc</span></a>.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">1</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-11T00:53:04Z" tabindex="0" data-tip="2026-11-11T00:53:04Z">2026-11-11</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 1b991d3d80c7a656e6f55e4c24f038b29aebfd5e. Failing range since last passing commit: 308ed32b6e39e0b54b9cf2865c738ce2f90e30e3..1b991d3d80c7a656e6f55e4c24f038b29aebfd5e.</p>
+<p>Log tail:</p>
+<pre><code>ok: attack destinations use thin lines: you player
+ok: attack destinations use thin lines: you 68
+ok: attack destinations use thin lines: opponent player
+ok: attack destinations use thin lines: opponent 68
+ok: the crew meter fills with the power tapped
+ok: crewing shows the power picked against the crew cost without text
+ok: waterbend prompt renders its generic mana symbol
+ok: waterbend prompt renders its generic mana symbol
+ok: phone waterbend long press previews without accepting
+ok: waterbend finishes when manual picks cover the cost
+ok: Enter on the start screen starts a game
+ok: cards for the bottom toggle in their slots until confirmed
+ok: Enter with a game in progress returns to it
+ok: the start screen remembers the last opponent across a reload
+ok: waterbend Auto Pay highlights only on hover and accepts on click
+ok: the life-loss result waits for the killing blow and can be put aside
+ok: waterbend Auto Pay keeps manual picks
+ok: the life result shows Victory and the applicable details
+ok: the effect result shows Victory and the applicable details
+ok: the library result shows Victory and the applicable details
+ok: the concede result shows Defeat and the applicable details
+ok: the settings concede the game once confirmed in place
+ok: a game resumed at launch gives way to a new game at one click
+ok: a new game with one in progress asks first, then concedes it
+ok: zone pile faces share a bottom edge: you, 0 in graveyard
+ok: a reloaded page takes up the game in progress
+ok: zone pile faces share a bottom edge: you, 1 in graveyard
+ok: zone pile faces share a bottom edge: opponent, 0 in graveyard
+ok: zone pile faces share a bottom edge: opponent, 1 in graveyard
+ok: libraries match the other piles
+ok: a second bug report keeps thawed frames frozen
+ok: cancelled frames stay cancelled across bug report freeze
+ok: undo does not repeat an automatic target
+ok: self-target is green for you
+ok: self-target is green for opponent
+ok: bug report thaw never revives resolved arrows
+ok: tokens reach their destination before ceasing: you hand
+ok: tokens reach their destination before ceasing: you library
+ok: tokens reach their destination before ceasing: opponent hand
+ok: tokens reach their destination before ceasing: opponent library
+ok: tokens reach their destination before ceasing: you graveyard
+ok: tokens reach their destination before ceasing: you exile
+ok: tokens reach their destination before ceasing: opponent graveyard
+ok: tokens reach their destination before ceasing: opponent exile
+ok: bug report thaw preserves later player arrows
+ok: bug report thaw preserves later attack arrows
+ok: bug report thaw preserves later object arrows
+ui-test: FAILED
+ci ui-test ui-test: FAILED (exit 1) after 199.8 s
+ci: repo 1 s (just 0 s, markdown 1 s)
+ci: python 13 s (black 1 s, pyre 4 s, pytest 8 s)
+ci: rust 131 s (build-paths 0 s, fmt 1 s, clippy 23 s, tests 107 s)
+ci: ui 7 s (prettier 2 s, tsc 4 s, card-names 0 s)
+ci: app 39 s (smoke 39 s)
+ci: shots 94 s (ui-shots 94 s)
+ci: ui-test 192 s (ui-test FAILED)
+ci: oracle 54 s (oracle 54 s)
+ci: counts 34 s (count-gate 34 s)
+ci: mobile 48 s (mobile-check 48 s)
+ci: FAILED: ui-test in 204.5 s (budget 300 s)</code></pre></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="d0166bbc-e8d7-4620-9c84-0d25d9336c87">d0166bbc</span></span>closed this<span class="c-timeline-detail">Flaky scry caption check raced a timer set in a React effect; replaced the fixed wait with a bounded wait (3f0c7e4e). Slow CI passed on staging.</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T01:07:08Z" tabindex="0" data-tip="2026-11-11T01:07:08Z">2026-11-11</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>edited the notes</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T01:06:58Z" tabindex="0" data-tip="2026-11-11T01:06:58Z">2026-11-11</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T01:00:48Z" tabindex="0" data-tip="2026-11-11T01:00:48Z">2026-11-11</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="d0166bbc-e8d7-4620-9c84-0d25d9336c87">d0166bbc</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="d0166bbc-e8d7-4620-9c84-0d25d9336c87">d0166bbc</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T00:53:56Z" tabindex="0" data-tip="2026-11-11T00:53:56Z">2026-11-11</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T00:53:19Z" tabindex="0" data-tip="2026-11-11T00:53:19Z">2026-11-11</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T00:20:51Z" tabindex="0" data-tip="2026-11-11T00:20:51Z">2026-11-11</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T00:20:51Z" tabindex="0" data-tip="2026-11-11T00:20:51Z">2026-11-11</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-11T00:53:57Z" tabindex="0" data-tip="2026-11-11T00:53:57Z">2026-11-11</time></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">308ed32b6e39e0b54b9cf2865c738ce2f90e30e3..1b991d3d80c7a656e6f55e4c24f038b29aebfd5e</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">3f0c7e4eb08c4e6acd504eee93efc5e4e3847048</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono"></span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="d0166bbc-e8d7-4620-9c84-0d25d9336c87">d0166bbc</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-11T00:20:52Z" tabindex="0" data-tip="2026-11-11T00:20:52Z">2026-11-11</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-11T01:07:09Z" tabindex="0" data-tip="2026-11-11T01:07:09Z">2026-11-11</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-11T01:07:09Z" tabindex="0" data-tip="2026-11-11T01:07:09Z">2026-11-11</time></dd></div></dl></aside></div></div></div><template id="hc-by-6sbc"><div class="c-card-top"><span class="c-mono">by-6sbc</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Flaky ui-tests: ETB trigger first frame, thaw player arrow</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>bug</span></div></template>
+</main>
+</body>
+</html>

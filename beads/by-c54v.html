@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-c54v</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-c54v</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-c54v</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">3</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Two generated oracle scenarios that were already failing are now listed as exporter gaps (eb4cbd41); oracle lane passes locally</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 20d3df097e3e29ca05bde758808ab941bc01e449. Failing range since last passing commit: 65d9d78ee5a71df699dfe1a9091399d2a4854461..20d3df097e3e29ca05bde758808ab941bc01e449.</p>
+<p>Log tail:</p>
+<pre><code>      }
+    ],
+    &quot;log&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/xmage-oracle.log&quot;,
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;forge&quot;: {
+    &quot;pass&quot;: 98,
+    &quot;fail&quot;: 1,
+    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 1,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 82&quot;,
+        &quot;status&quot;: &quot;fail&quot;,
+        &quot;failures&quot;: [
+          &quot;no {\&quot;pick\&quot;:\&quot;Card\&quot;,\&quot;card\&quot;:\&quot;Griselbrand\&quot;} among [Containment Priest (16)]&quot;
+        ]
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 95&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;an activated ability of a cost the exporter cannot write&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 2798 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 3462 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1353 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 302.2 s
+ci: repo 0 s (file-length 0 s)
+ci: python 10 s (black 3 s, pyre 7 s)
+ci: rust 398 s (clippy 40 s, tests 358 s)
+ci: ui 5 s (tsc 5 s)
+ci: names 10 s (card-names 4 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, citations 1 s, card-headers 1 s, card-crates 1 s)
+ci: app 107 s (smoke 107 s)
+ci: ui-smoke 336 s (ui-test 336 s)
+ci: oracle 446 s (oracle FAILED)
+ci: counts 160 s (count-gate 118 s, count-gate-families 41 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 405.5 s (budget 300 s)
+ci: load average 17 17 20 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 1 failed checks over 11 commits since master (65d9d78ee5), 600 s to search
+bisect: 20d3df097e: 1 of 1 checks fail
+bisect: 3e2ccf7383: 1 of 1 checks fail
+bisect: cd39e4b6ca: 1 of 1 checks fail
+bisect: 8732a9f246: 1 of 1 checks fail
+bisect: 9b5d30dac2: 1 of 1 checks fail
+bisect: 65d9d78ee5: 1 of 1 checks fail
+bisect: oracle:Generated  fails at 65d9d78ee5 too: no commit since master to blame
+record: oracle:Generated/Generated 45/xmage  runs 285, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Generated/Generated 82/forge  runs 294, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: next due in 103 min</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">3</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T20:23:19Z" tabindex="0" data-tip="2026-11-14T20:23:19Z">2026-11-14</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 20d3df097e3e29ca05bde758808ab941bc01e449. Failing range since last passing commit: 65d9d78ee5a71df699dfe1a9091399d2a4854461..20d3df097e3e29ca05bde758808ab941bc01e449.</p>
+<p>Log tail:</p>
+<pre><code>      }
+    ],
+    &quot;log&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/xmage-oracle.log&quot;,
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;forge&quot;: {
+    &quot;pass&quot;: 98,
+    &quot;fail&quot;: 1,
+    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 1,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 82&quot;,
+        &quot;status&quot;: &quot;fail&quot;,
+        &quot;failures&quot;: [
+          &quot;no {\&quot;pick\&quot;:\&quot;Card\&quot;,\&quot;card\&quot;:\&quot;Griselbrand\&quot;} among [Containment Priest (16)]&quot;
+        ]
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 95&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;an activated ability of a cost the exporter cannot write&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 2624 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 3641 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1504 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 249.9 s (412 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: python 9 s (black 3 s, pyre 6 s)
+ci: rust 276 s (clippy 18 s, tests 258 s)
+ci: ui 5 s (tsc 5 s)
+ci: names 10 s (card-names 5 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 38 s (smoke 38 s)
+ci: ui-smoke 41 s (ui-test 41 s)
+ci: oracle 303 s (oracle FAILED)
+ci: counts 67 s (count-gate 39 s, count-gate-families 29 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 302.8 s (629 s on the clock) (budget 300 s)
+ci: load average 10 16 15 on 10 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 1.04x the reference&#x27;s time (`just speed`)
+bisect: 1 failed checks over 11 commits since master (65d9d78ee5), 600 s to search
+bisect: 20d3df097e: 1 of 1 checks fail
+bisect: 3e2ccf7383: 1 of 1 checks fail
+bisect: cd39e4b6ca: 1 of 1 checks fail
+bisect: 8732a9f246: 1 of 1 checks fail
+bisect: 9b5d30dac2: 1 of 1 checks fail
+bisect: 65d9d78ee5: 1 of 1 checks fail
+bisect: oracle:Generated  fails at 65d9d78ee5 too: no commit since master to blame
+record: oracle:Generated/Generated 45/xmage  runs 17, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Generated/Generated 82/forge  runs 17, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: next due in 47 min</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T20:33:25Z" tabindex="0" data-tip="2026-11-14T20:33:25Z">2026-11-14</time></header><div class="c-prose"><p>Diagnosis: the oracle lane failed on Forge 'Generated 82' and XMage 'Generated 45'. Both scenarios are byte-identical at the last green commit 65d9d78e, and running 65d9d78e's tools against the same cached oracle builds fails both the same way. The lane only plays generated scenarios when exporters or harnesses change (oracle_selection.HARNESS); 2d82c218 and 3a3fced4 changed them, so the failures were already there but hadn't been played. Causes: (82) Forge GameState.setupPlayerState puts battlefield cards in with moveToPlay/moveTo, which applies replacement effects, so p0's Containment Priest exiles p1's Griselbrand during setup; (45) XMage picks its own sources for Jace's payment (five skipped Tapped steps) and leaves no white for Get Lost. Neither is a rules difference: added both to data/oracle-exporter-gaps.json. XMage 'Generated 26' also failed once in my local run (it passed in the CI run). It is the known flake <a href="by-ovgn" data-hovercard="hc-by-ovgn"><span class="c-mono">by-ovgn</span></a>, so I left it to that bead.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T20:36:36Z" tabindex="0" data-tip="2026-11-14T20:36:36Z">2026-11-14</time></header><div class="c-prose"><p>Handoff: data/oracle-exporter-gaps.json gains xmage/Generated/'Generated 45' and forge/Generated/'Generated 82' (commit eb4cbd41). Locally, 'by oracle --select' on the fix passed (xmage 700 pass, forge 741 pass, 0 fail, no stale gaps). If a generator change renames these scenarios, the entries go stale and fail the lane: remove them then. Possible later improvement, not filed: the Forge harness could set up battlefield permanents without applying replacement effects (GameState.setupPlayerState uses moveToPlay/moveTo).</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T23:36:26Z" tabindex="0" data-tip="2026-11-14T23:36:26Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_801eb8fe-500d-4b77-afe5-2f7884122191">session 801eb8</span></span>closed this<span class="c-timeline-detail">Two generated oracle scenarios that were already failing are now listed as exporter gaps (eb4cbd41); oracle lane passes locally</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T20:37:17Z" tabindex="0" data-tip="2026-11-14T20:37:17Z">2026-11-14</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T20:35:54Z" tabindex="0" data-tip="2026-11-14T20:35:54Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_801eb8fe-500d-4b77-afe5-2f7884122191">session 801eb8</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_801eb8fe-500d-4b77-afe5-2f7884122191">session 801eb8</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T20:13:20Z" tabindex="0" data-tip="2026-11-14T20:13:20Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:cbb9808a-de49-4a99-875b-45e98ffc13c7">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:cbb9808a-de49-4a99-875b-45e98ffc13c7">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T20:11:03Z" tabindex="0" data-tip="2026-11-14T20:11:03Z">2026-11-14</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T20:11:03Z" tabindex="0" data-tip="2026-11-14T20:11:03Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T20:09:57Z" tabindex="0" data-tip="2026-11-14T20:09:57Z">2026-11-14</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T20:09:57Z" tabindex="0" data-tip="2026-11-14T20:09:57Z">2026-11-14</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>ci@example.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-14T20:11:04Z" tabindex="0" data-tip="2026-11-14T20:11:04Z">2026-11-14</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">local_801eb8fe-500d-4b77-afe5-2f7884122191</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-c54v</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">65d9d78ee5a71df699dfe1a9091399d2a4854461..20d3df097e3e29ca05bde758808ab941bc01e449</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">eb4cbd41173c6fc1fc9d78de3aaa4f4ceda14e0b</span></dd></div><div class="c-meta-item"><dt>enact_pool_session</dt><dd><span class="c-mono">local_801eb8fe-500d-4b77-afe5-2f7884122191</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">65ab31399e784ec0b07bb43c90e44c95</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-jj37</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-jj37 by-bajq by-bajq.3 by-bajq.2</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">local_801eb8fe-500d-4b77-afe5-2f7884122191</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">cbb9808a-de49-4a99-875b-45e98ffc13c7</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-c54v</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">jarvis</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="local_801eb8fe-500d-4b77-afe5-2f7884122191">session 801eb8</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-14T20:09:57Z" tabindex="0" data-tip="2026-11-14T20:09:57Z">2026-11-14</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-14T23:36:27Z" tabindex="0" data-tip="2026-11-14T23:36:27Z">2026-11-14</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-14T20:37:17Z" tabindex="0" data-tip="2026-11-14T20:37:17Z">2026-11-14</time></dd></div></dl></aside></div></div></div><template id="hc-by-ovgn"><div class="c-card-top"><span class="c-mono">by-ovgn</span><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></div><div class="c-hovercard-title">Delete flaky check oracle:Generated/Generated 26/xmage</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template>
+</main>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-b41g</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-b41g</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-b41g</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#notes"><span class="c-toc-label">Notes</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Corrected the mulligan shot to wait for the parked opponent hand; full local CI passed before delivery in 222f2c84.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 1fc066c39ef5f2c29dccf87046c9d74f3ef8c6d7. Failing range since last passing commit: 30ce5492df8fe1dce73fea9b0bad7bbd2e3e78a2..1fc066c39ef5f2c29dccf87046c9d74f3ef8c6d7.</p>
+<p>Log tail:</p>
+<pre><code>/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-choice-scry-1280.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-choice-scry-1920.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-choice-scry-battlefield.png
+ui-shots: game-opponent-mulligan: page.waitForSelector: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator(&#x27;.card-el-handling&#x27;) to be visible[22m
+
+    at capture (/Users/dthurn/beryl/.worktrees/ci-1fc066c39ef5/ui/scripts/shots.mjs:61:38)
+    at async file:///Users/dthurn/beryl/.worktrees/ci-1fc066c39ef5/ui/scripts/shots.mjs:139:19
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-choice-look.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-choice-jace.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-trigger-order.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-trigger-order-1280.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-choice-search.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-choice-pay.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-choice-thirst.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-choice-thirst-hand.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-untap-teferi.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-emblems.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-emblems-hover.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-target-graveyard.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-choice-cleanup.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-menu-walker.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-converter-may-exile.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-converter-menu.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-converter-choose.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-converter-exiled.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-menu-walker-low.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-walkers.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-menu-land-face.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-pay-life.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-namesake-target.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-untap.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-crew.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-attack-token.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-waterbend.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-sick-compare.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-token-compare.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-full-control.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-stolen-owner.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-tracker-main.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-tracker-begin-combat.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-tracker-attackers.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-tracker-end-combat.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-tracker-blockers.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-tracker-damage.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-1fc066c39ef5/game-coin-on-draw.png
+ui-shots: FAILED
+ci shots ui-shots: FAILED (exit 1) after 94.9 s
+ci: repo 1 s (just 0 s, markdown 1 s)
+ci: python 13 s (black 1 s, pyre 4 s, pytest 8 s)
+ci: rust 130 s (build-paths 0 s, fmt 1 s, clippy 41 s, tests 88 s)
+ci: ui 5 s (prettier 2 s, tsc 2 s, card-names 0 s)
+ci: app 40 s (smoke 40 s)
+ci: shots 92 s (ui-shots FAILED)
+ci: ui-test 157 s (ui-test 157 s)
+ci: oracle 55 s (oracle 55 s)
+ci: counts 31 s (count-gate 31 s)
+ci: mobile 54 s (mobile-check 54 s)
+ci: FAILED: shots in 174.3 s (budget 300 s)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="notes"><h2 class="c-section-title">Notes</h2><div class="c-prose"><p>Diagnosis from shared CI: 259c37e5 intentionally keeps the opponent hand parked during private choices, and its interaction regression asserts zero .card-el-handling elements. The screenshot still waits for that removed state. A visible selector keyed to the actual state can be .opening:has([aria-label="Opponent is considering their hand"]); the status span alone is empty and the screenshot runner waits for visibility. The failing screenshot still waited for .card-el-handling in game-opponent-mulligan, but 259c37e5 correctly keeps the opponent hand parked, as covered by its interaction test. Updated the shot to wait for the opponent’s held cards. The focused screenshot passes and shows all seven card backs parked along the top edge. Running the full local suite before delivery.</p></div></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="01a1c416-e9b4-7a22-82f8-a9f92e3cceb8">01a1c416</span></span>closed this<span class="c-timeline-detail">Corrected the mulligan shot to wait for the parked opponent hand; full local CI passed before delivery in 222f2c84.</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:32:35Z" tabindex="0" data-tip="2026-11-10T06:32:35Z">2026-11-10</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:32:05Z" tabindex="0" data-tip="2026-11-10T06:32:05Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>edited the notes <span class="c-muted">×2</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:29:28Z" tabindex="0" data-tip="2026-11-10T06:29:28Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="01a1c416-e9b4-7a22-82f8-a9f92e3cceb8">01a1c416</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="01a1c416-e9b4-7a22-82f8-a9f92e3cceb8">01a1c416</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:28:18Z" tabindex="0" data-tip="2026-11-10T06:28:18Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:27:39Z" tabindex="0" data-tip="2026-11-10T06:27:39Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:27:39Z" tabindex="0" data-tip="2026-11-10T06:27:39Z">2026-11-10</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-10T06:28:19Z" tabindex="0" data-tip="2026-11-10T06:28:19Z">2026-11-10</time></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">30ce5492df8fe1dce73fea9b0bad7bbd2e3e78a2..1fc066c39ef5f2c29dccf87046c9d74f3ef8c6d7</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">222f2c84f38e2d064e5c2905c49e10eca4e159a1</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono"></span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1c416-e9b4-7a22-82f8-a9f92e3cceb8">01a1c416</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-10T06:27:39Z" tabindex="0" data-tip="2026-11-10T06:27:39Z">2026-11-10</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-10T06:32:36Z" tabindex="0" data-tip="2026-11-10T06:32:36Z">2026-11-10</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-10T06:32:36Z" tabindex="0" data-tip="2026-11-10T06:32:36Z">2026-11-10</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

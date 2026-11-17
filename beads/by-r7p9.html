@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on windows · by-r7p9</title>
+<meta name="description" content="Fix slow CI failure on windows">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-r7p9</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-r7p9</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on windows</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Superseded: Windows slow CI passed at 9b834c7 (the next commit, which also left the browser lanes to the Mac), and master advanced past cf14310.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on cygnus (windows) at cf143106397922b3ba60dc29e28d2b58f14b2e37. Failing range since last passing commit: b0626f4c7364529dc42efb657ebce1ea2f9e4d5a..cf143106397922b3ba60dc29e28d2b58f14b2e37.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Counterspell with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Snapcaster Mage&quot;,
+        &quot;name&quot;: &quot;Snapcaster Mage: a flashback spell returned to hand is exiled&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Counterspell with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Snapcaster Mage&quot;,
+        &quot;name&quot;: &quot;Snapcaster Mage: flashback is the one alternative cost&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Damn with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Abhorrent Oculus&quot;,
+        &quot;name&quot;: &quot;Abhorrent Oculus exiles six of seven graveyard cards as it&#x27;s cast&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a choice of the cards an exile cost takes&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Abhorrent Oculus&quot;,
+        &quot;name&quot;: &quot;Manifest dread with one card in the library manifests it&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;Beryl fails it: Manifest dread with one card in the library manifests it: action 17: Controls { player: P0, card: \&quot;Island\&quot;, count: 2 }: expected 2, found 3&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 28&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a chosen payment plan&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 6488 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 5455 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 3063 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;D:\\beryl-cache\\oracles\\logs\\oracle.json&quot;
+}
+ci oracle oracle: 416.8 sverdicts: shots:game-trigger-order-1280: verdict flaky not recorded in by-ci-6f3c564d35
+
+ci: repo 5 s (just 0 s, markdown 3 s, file-length 1 s, conventions 1 s)
+ci: python 250 s (black 4 s, pytest 246 s)
+ci: rust 426 s (build-paths 1 s, fmt 3 s, clippy 51 s, tests 371 s)
+ci: script 84 s (script-check 84 s)
+ci: ui 17 s (prettier 10 s, tsc 6 s, test 1 s)
+ci: names 9 s (card-names 5 s, two-player 1 s, board-door 1 s, citations 3 s)
+ci: app 311 s (smoke 311 s)
+ci: shots 372 s (ui-shots 372 s after a rerun)
+ci: ui-test 557 s (ui-test 557 s)
+ci: oracle 417 s (oracle 417 s)
+flaky: shots game-trigger-order-1280
+verdict: shots shots:game-trigger-order-1280 flaky
+ci: passed in 562.1 s (budget 450 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 3 3 3 on 20 cores; the times above are adjusted for load beyond the cores, up to 8x</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on windows at the staging tip.</p></div></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body">closed this<span class="c-timeline-detail">Superseded: Windows slow CI passed at 9b834c7 (the next commit, which also left the browser lanes to the Mac), and master advanced past cf14310.</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T03:14:01Z" tabindex="0" data-tip="2026-11-12T03:14:01Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T03:00:50Z" tabindex="0" data-tip="2026-11-12T03:00:50Z">2026-11-12</time></div></li></ol><p class="c-empty">bd recorded no events for this bead; these come from its timestamps.</p></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>thurn@users.noreply.github.com</dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">cygnus</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">windows</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">b0626f4c7364529dc42efb657ebce1ea2f9e4d5a..cf143106397922b3ba60dc29e28d2b58f14b2e37</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono"></span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-muted">Nobody</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-12T03:00:50Z" tabindex="0" data-tip="2026-11-12T03:00:50Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-12T03:14:01Z" tabindex="0" data-tip="2026-11-12T03:14:01Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-12T03:14:01Z" tabindex="0" data-tip="2026-11-12T03:14:01Z">2026-11-12</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

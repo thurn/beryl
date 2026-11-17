@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix the Beryl 3D sweep&#x27;s cargo-test step: b3d-cargo-test:cargo-test · by-q44s.95</title>
+<meta name="description" content="Fix the Beryl 3D sweep&#x27;s cargo-test step: b3d-cargo-test:cargo-test">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><a class="c-crumb" href="by-q44s">by-q44s</a><span class="c-crumb" aria-current="page">by-q44s.95</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-q44s.95</span><span class="c-dot c-tone-neutral">Open</span></div><h1 class="c-title">Fix the Beryl 3D sweep&#x27;s cargo-test step: b3d-cargo-test:cargo-test</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">2</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>cargo-test</code> on darwin at 20dcb4e44096ee5f981a2232381e3e834e69b0c1. The last sweep that passed on this machine was at bf9d3188a55f0d8cd3da165cdadc2a5f32c34ecb.</p>
+<ul><li><code>b3d-cargo-test:cargo-test</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-cargo-test:cargo-test  out of time: culprit among 55 commits d03b244c7e..20dcb4e440  (55 commits since the last passing sweep)
+record: b3d-cargo-test:cargo-test  runs 23, failures 12, flaky 0, stale 0, catch 0, miss 1 (30 days)</code></pre>
+<p>Run the step's own command, <code>just b3d cargo-test</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step cargo-test --commit 20dcb4e44096</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>urth-chorus-counter-casts-the-discard-ask-12/you/1600x900@2 with OffPlacement planted at t=550ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (789,142 22x30) overlaps text &quot;Combat&quot; #65540 (749,169 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1600x900@2 with Duration planted at t=2466ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (789,142 22x30) overlaps text &quot;Combat&quot; #65540 (749,169 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1600x900@2 with Unseen planted at t=50ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (789,142 22x30) overlaps text &quot;Combat&quot; #65540 (749,169 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1600x900@2 with Crowded planted at t=33ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (789,142 22x30) overlaps text &quot;Combat&quot; #65540 (749,169 101x26)
+b3d:late-game/you/1600x900@2 with Jump planted at t=25583ms: only every tick finds text-overlap at t=28266ms: text of text &quot;-2&quot; #65716 (789,142 22x30) overlaps text &quot;Combat&quot; #65696 (749,169 101x26)
+b3d:late-game/you/1600x900@2 with OffPlacement planted at t=87116ms: only every tick finds text-overlap at t=28266ms: text of text &quot;-2&quot; #65716 (789,142 22x30) overlaps text &quot;Combat&quot; #65696 (749,169 101x26)
+b3d:late-game/you/1600x900@2 with Duration planted at t=26900ms: only every tick finds text-overlap at t=28266ms: text of text &quot;-2&quot; #65716 (789,142 22x30) overlaps text &quot;Combat&quot; #65696 (749,169 101x26)
+b3d:late-game/you/1600x900@2 with Unseen planted at t=40966ms: only every tick finds text-overlap at t=28266ms: text of text &quot;-2&quot; #65716 (789,142 22x30) overlaps text &quot;Combat&quot; #65696 (749,169 101x26)
+b3d:late-game/you/1600x900@2 with Crowded planted at t=60183ms: only every tick finds text-overlap at t=28266ms: text of text &quot;-2&quot; #65716 (789,142 22x30) overlaps text &quot;Combat&quot; #65696 (749,169 101x26)
+b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1920x1080 with Jump planted at t=1316ms: only every tick finds text-overlap at t=950ms: text of text &quot;-3&quot; #65599 (949,164 22x30) overlaps text &quot;Combat&quot; #65577 (909,190 101x26)
+b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1920x1080 with OffPlacement planted at t=1600ms: only every tick finds text-overlap at t=950ms: text of text &quot;-3&quot; #65599 (949,164 22x30) overlaps text &quot;Combat&quot; #65577 (909,190 101x26)
+b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1920x1080 with Duration planted at t=1300ms: only every tick finds text-overlap at t=950ms: text of text &quot;-3&quot; #65599 (949,164 22x30) overlaps text &quot;Combat&quot; #65577 (909,190 101x26)
+b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1920x1080 with Unseen planted at t=2583ms: only every tick finds text-overlap at t=950ms: text of text &quot;-3&quot; #65599 (949,164 22x30) overlaps text &quot;Combat&quot; #65577 (909,190 101x26)
+b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1920x1080 with Crowded planted at t=1883ms: only every tick finds text-overlap at t=950ms: text of text &quot;-3&quot; #65599 (949,164 22x30) overlaps text &quot;Combat&quot; #65577 (909,190 101x26)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- runner::the_run_log_agrees_with_the_allowance_comparison stdout ----
+
+thread &#x27;runner::the_run_log_agrees_with_the_allowance_comparison&#x27; (119440329) panicked at crates/beryl_inspect/tests/all/runner.rs:313:5:
+assertion `left == right` failed
+  left: (&quot;fail&quot;, 1)
+ right: (&quot;pass&quot;, 0)
+
+
+failures:
+    differential::the_check_times_find_every_planted_fault
+    runner::the_run_log_agrees_with_the_allowance_comparison
+
+test result: FAILED. 125 passed; 2 failed; 1 ignored; 0 measured; 0 filtered out; finished in 150.45s
+
+error: test failed, to rerun pass `-p beryl_inspect --test all`
+b3d-sweep b3d-cargo-test cargo-test: FAILED (exit 101) after 548.3 s (762 s on the clock)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>just b3d cargo-test</code> passes in a worktree rebased on the staging tip (<code>just b3d sweep --step cargo-test --commit origin/staging</code> replays it in a tree of its own).</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">2</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-17T08:50:41Z" tabindex="0" data-tip="2026-11-17T08:50:41Z">2026-11-17</time></header><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>cargo-test</code> on darwin at 00e6d3b3b2f20e64829fb2ff0e6caf7621acf950. The last sweep that passed on this machine was at bf9d3188a55f0d8cd3da165cdadc2a5f32c34ecb.</p>
+<ul><li><code>b3d-cargo-test:cargo-test</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-cargo-test:cargo-test  out of time: culprit among 35 commits d03b244c7e..7464475dbb  (70 commits since the last passing sweep)
+record: b3d-cargo-test:cargo-test  runs 25, failures 14, flaky 0, stale 0, catch 0, miss 1 (30 days)</code></pre>
+<p>Run the step's own command, <code>just b3d cargo-test</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step cargo-test --commit 00e6d3b3b2f2</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>ext &quot;Combat&quot; #65583 (909,190 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1600x900@2 with Jump planted at t=850ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (789,142 22x30) overlaps text &quot;Combat&quot; #65540 (749,169 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1600x900@2 with OffPlacement planted at t=550ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (789,142 22x30) overlaps text &quot;Combat&quot; #65540 (749,169 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1600x900@2 with Duration planted at t=2466ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (789,142 22x30) overlaps text &quot;Combat&quot; #65540 (749,169 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1600x900@2 with Unseen planted at t=50ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (789,142 22x30) overlaps text &quot;Combat&quot; #65540 (749,169 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1600x900@2 with Crowded planted at t=33ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (789,142 22x30) overlaps text &quot;Combat&quot; #65540 (749,169 101x26)
+b3d:late-game/you/1600x900@2 with Jump planted at t=25583ms: only every tick finds text-overlap at t=28266ms: text of text &quot;-2&quot; #65716 (789,142 22x30) overlaps text &quot;Combat&quot; #65696 (749,169 101x26)
+b3d:late-game/you/1600x900@2 with OffPlacement planted at t=87116ms: only every tick finds text-overlap at t=28266ms: text of text &quot;-2&quot; #65716 (789,142 22x30) overlaps text &quot;Combat&quot; #65696 (749,169 101x26)
+b3d:late-game/you/1600x900@2 with Duration planted at t=26900ms: only every tick finds text-overlap at t=28266ms: text of text &quot;-2&quot; #65716 (789,142 22x30) overlaps text &quot;Combat&quot; #65696 (749,169 101x26)
+b3d:late-game/you/1600x900@2 with Unseen planted at t=40966ms: only every tick finds text-overlap at t=28266ms: text of text &quot;-2&quot; #65716 (789,142 22x30) overlaps text &quot;Combat&quot; #65696 (749,169 101x26)
+b3d:late-game/you/1600x900@2 with Crowded planted at t=60183ms: only every tick finds text-overlap at t=28266ms: text of text &quot;-2&quot; #65716 (789,142 22x30) overlaps text &quot;Combat&quot; #65696 (749,169 101x26)
+b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1920x1080 with Jump planted at t=1316ms: only every tick finds text-overlap at t=950ms: text of text &quot;-3&quot; #65599 (949,164 22x30) overlaps text &quot;Combat&quot; #65577 (909,190 101x26)
+b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1920x1080 with OffPlacement planted at t=1600ms: only every tick finds text-overlap at t=950ms: text of text &quot;-3&quot; #65599 (949,164 22x30) overlaps text &quot;Combat&quot; #65577 (909,190 101x26)
+b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1920x1080 with Duration planted at t=1300ms: only every tick finds text-overlap at t=950ms: text of text &quot;-3&quot; #65599 (949,164 22x30) overlaps text &quot;Combat&quot; #65577 (909,190 101x26)
+b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1920x1080 with Unseen planted at t=2583ms: only every tick finds text-overlap at t=950ms: text of text &quot;-3&quot; #65599 (949,164 22x30) overlaps text &quot;Combat&quot; #65577 (909,190 101x26)
+b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1920x1080 with Crowded planted at t=1883ms: only every tick finds text-overlap at t=950ms: text of text &quot;-3&quot; #65599 (949,164 22x30) overlaps text &quot;Combat&quot; #65577 (909,190 101x26)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    differential::the_check_times_find_every_planted_fault
+
+test result: FAILED. 126 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 166.69s
+
+error: test failed, to rerun pass `-p beryl_inspect --test all`
+b3d-sweep b3d-cargo-test cargo-test: FAILED (exit 101) after 1144.5 s (1471 s on the clock)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-17T10:06:14Z" tabindex="0" data-tip="2026-11-17T10:06:14Z">2026-11-17</time></header><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>cargo-test</code> on darwin at 2a0c49aa78ad857ce66151e5d2ac8ca82ce57219. The last sweep that passed on this machine was at bf9d3188a55f0d8cd3da165cdadc2a5f32c34ecb.</p>
+<ul><li><code>b3d-cargo-test:cargo-test</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-cargo-test:cargo-test  out of time: culprit among 85 commits d03b244c7e..2a0c49aa78  (85 commits since the last passing sweep)
+record: b3d-cargo-test:cargo-test  runs 27, failures 16, flaky 0, stale 0, catch 0, miss 1 (30 days)</code></pre>
+<p>Run the step's own command, <code>just b3d cargo-test</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step cargo-test --commit 2a0c49aa78ad</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>0 101x26)
+b3d:overlord-of-the-mistmoors/overlord-cast-in-full-then-attacking/you/1920x1080 with OffPlacement planted at t=166ms: only every tick finds text-overlap at t=5450ms: text of text &quot;-6&quot; #65612 (948,162 24x30) overlaps text &quot;Combat&quot; #65593 (909,190 101x26)
+b3d:overlord-of-the-mistmoors/overlord-cast-in-full-then-attacking/you/1920x1080 with Duration planted at t=1450ms: only every tick finds text-overlap at t=5450ms: text of text &quot;-6&quot; #65612 (948,162 24x30) overlaps text &quot;Combat&quot; #65593 (909,190 101x26)
+b3d:overlord-of-the-mistmoors/overlord-cast-in-full-then-attacking/you/1920x1080 with Unseen planted at t=1933ms: only every tick finds text-overlap at t=5450ms: text of text &quot;-6&quot; #65612 (948,162 24x30) overlaps text &quot;Combat&quot; #65593 (909,190 101x26)
+b3d:overlord-of-the-mistmoors/overlord-cast-in-full-then-attacking/you/1920x1080 with Crowded planted at t=250ms: only every tick finds text-overlap at t=5450ms: text of text &quot;-6&quot; #65612 (948,162 24x30) overlaps text &quot;Combat&quot; #65593 (909,190 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1440x900 with Jump planted at t=2233ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (709,142 22x30) overlaps text &quot;Combat&quot; #65540 (669,169 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1440x900 with OffPlacement planted at t=2083ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (709,142 22x30) overlaps text &quot;Combat&quot; #65540 (669,169 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1440x900 with Duration planted at t=1850ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (709,142 22x30) overlaps text &quot;Combat&quot; #65540 (669,169 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1440x900 with Unseen planted at t=2083ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (709,142 22x30) overlaps text &quot;Combat&quot; #65540 (669,169 101x26)
+b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1440x900 with Crowded planted at t=866ms: only every tick finds text-overlap at t=866ms: text of text &quot;-2&quot; #65597 (709,142 22x30) overlaps text &quot;Combat&quot; #65540 (669,169 101x26)
+b3d:adeline-resplendent-cathar/adelines-human-arrives-attacking/you/1440x900 with Jump planted at t=621ms: only every tick finds text-overlap at t=1583ms: text of text &quot;-1&quot; #65608 (711,142 19x30) overlaps text &quot;Combat&quot; #65581 (669,169 101x26)
+b3d:adeline-resplendent-cathar/adelines-human-arrives-attacking/you/1440x900 with OffPlacement planted at t=2200ms: only every tick finds text-overlap at t=1583ms: text of text &quot;-1&quot; #65608 (711,142 19x30) overlaps text &quot;Combat&quot; #65581 (669,169 101x26)
+b3d:adeline-resplendent-cathar/adelines-human-arrives-attacking/you/1440x900 with Duration planted at t=0ms: only every tick finds text-overlap at t=1583ms: text of text &quot;-1&quot; #65608 (711,142 19x30) overlaps text &quot;Combat&quot; #65581 (669,169 101x26)
+b3d:adeline-resplendent-cathar/adelines-human-arrives-attacking/you/1440x900 with Unseen planted at t=516ms: only every tick finds text-overlap at t=1583ms: text of text &quot;-1&quot; #65608 (711,142 19x30) overlaps text &quot;Combat&quot; #65581 (669,169 101x26)
+b3d:adeline-resplendent-cathar/adelines-human-arrives-attacking/you/1440x900 with Crowded planted at t=633ms: only every tick finds text-overlap at t=1583ms: text of text &quot;-1&quot; #65608 (711,142 19x30) overlaps text &quot;Combat&quot; #65581 (669,169 101x26)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    differential::the_check_times_find_every_planted_fault
+
+test result: FAILED. 126 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 161.85s
+
+error: test failed, to rerun pass `-p beryl_inspect --test all`
+b3d-sweep b3d-cargo-test cargo-test: FAILED (exit 101) after 720.0 s (887 s on the clock)</code></pre></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T07:12:03Z" tabindex="0" data-tip="2026-11-17T07:12:03Z">2026-11-17</time></div></li></ol><p class="c-empty">bd recorded no events for this bead; these come from its timestamps.</p></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>beryl_nightly_checks</dt><dd><span class="c-mono">b3d-cargo-test:cargo-test</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-neutral">Open</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span><span class="c-muted">High</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-muted">Nobody</span></dd></div><div class="c-meta-item"><dt>Epic</dt><dd><a href="by-q44s" data-hovercard="hc-by-q44s">Beryl 3D: a native Rust client to replace the web interface and Tauri</a></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">b3d-sweep</span><span class="c-chip c-tone-muted">role:executor</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-17T07:12:03Z" tabindex="0" data-tip="2026-11-17T07:12:03Z">2026-11-17</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-17T07:12:03Z" tabindex="0" data-tip="2026-11-17T07:12:03Z">2026-11-17</time></dd></div></dl></aside></div></div></div><template id="hc-by-q44s"><div class="c-card-top"><span class="c-mono">by-q44s</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Beryl 3D: a native Rust client to replace the web interface and Tauri</div><div class="c-hovercard-meta"><span class="c-dot c-tone-neutral">Open</span><span>epic</span><span class="c-progress"><span class="c-progress-track"><span class="c-progress-fill" style="width:90%"></span></span><span class="c-progress-label">392/437</span></span></div></template>
+</main>
+</body>
+</html>

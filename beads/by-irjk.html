@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix sweep ui-test failure: ui-test:manual table arrow Escape cancels the drag · by-irjk</title>
+<meta name="description" content="Fix sweep ui-test failure: ui-test:manual table arrow Escape cancels the drag">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-irjk</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-irjk</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix sweep ui-test failure: ui-test:manual table arrow Escape cancels the drag</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">1</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Restored Escape cancellation for manual table arrow drags in staging commit 2d4fcb13. The browser regression and the UI, app and smoke checks pass.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>The browser sweep (<code>by sweep</code>, tools/src/beryl_tools/sweep.py) failed 1 ui-test check(s) on origin/staging at f144b550c5203f85f3a458bbf077186e9a4cc351. The last sweep that passed was at b6bf7088090e2e1856aab020f6b13022e9ef2f4d.</p>
+<ul><li><code>ui-test:manual table arrow Escape cancels the drag</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: ui-test:manual table arrow Escape cancels the drag  culprit 17e571f4a5 feat: wire manual table shortcuts and command list  (71 commits since the last passing sweep)  bead by-bmdk.3.16
+miss: ui-test:manual table arrow Escape cancels the drag (fast check at 17e571f4a5 did not choose it: not chosen)
+record: ui-test:manual table arrow Escape cancels the drag  runs 3, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)</code></pre>
+<p>Replay them with <code>just ui-test &#x27;manual table arrow Escape cancels the drag&#x27;</code>. Slow CI does not run these lanes, so <code>just ci</code> passing proves nothing here; the fast check runs only the checks a change can break.</p>
+<p>Before deleting a check, ask: could a fast, deterministic test (a Rust unit test, a Node test with no browser, a check against a recorded fixture) keep most of what this check protects? If so, write that test. Fix the product when the check caught a real break; a check that failed without one is deleted or rewritten. The <code>cifix</code> skill (<code>.agents/skills/cifix/SKILL.md</code>) says how to work this bead.</p>
+<p>Output tail:</p>
+<pre><code>ok: shape:declare/theirs/phone
+ok: shape:declare/yours/desktop
+ok: shape:declare/yours/phone
+ok: shape:yesNo/theirs/desktop
+ok: shape:yesNo/theirs/phone
+ok: shape:yesNo/yours/desktop
+ok: shape:yesNo/yours/phone
+ok: shape:number/theirs/desktop
+ok: shape:number/theirs/phone
+ok: shape:number/yours/desktop
+ok: shape:number/yours/phone
+ok: shape:mode/theirs/desktop
+ok: shape:pay/yours/desktop
+ok: shape:mode/theirs/phone
+ok: shape:catalog/yours/desktop
+ok: shape:catalog/theirs/desktop
+ok: shape:mode/yours/desktop
+ok: shape:catalog/theirs/phone
+ok: shape:mode/yours/phone
+ok: shape:catalog/yours/phone
+ok: shape:divide/theirs/desktop
+ok: shape:divide/yours/desktop
+ok: shape:divide/theirs/phone
+ok: shape:divide/yours/phone
+ok: shape:pay/yours/phone
+ui-test: FAILED
+sweep ui-test ui-test: FAILED (exit 1) after 291.1 s (797 s on the clock); rerunning manual table arrow Escape cancels the drag once
+FAILED: manual table arrow Escape cancels the drag
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+1 !== 0
+
+    at file:///Users/dthurn/Library/Caches/beryl/ci/coverage/trees/f144b550c520/ui/scripts/kept-table-arrows.mjs:184:16
+    at async play (file:///Users/dthurn/Library/Caches/beryl/ci/coverage/trees/f144b550c520/ui/scripts/kept-harness.mjs:229:17)
+    at async file:///Users/dthurn/Library/Caches/beryl/ci/coverage/trees/f144b550c520/ui/scripts/kept-harness.mjs:232:17
+    at async Promise.all (index 0)
+    at async check (file:///Users/dthurn/Library/Caches/beryl/ci/coverage/trees/f144b550c520/ui/scripts/kept-harness.mjs:259:17)
+    at async file:///Users/dthurn/Library/Caches/beryl/ci/coverage/trees/f144b550c520/ui/scripts/kept-table-arrows.mjs:173:1
+ui-test: FAILED
+sweep ui-test ui-test: FAILED (exit 1) after 4.1 s (9 s on the clock)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>just ui-test &#x27;manual table arrow Escape cancels the drag&#x27;</code> passes at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">1</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T07:33:02Z" tabindex="0" data-tip="2026-11-15T07:33:02Z">2026-11-15</time></header><div class="c-prose"><p>Handoff: In ui/src/table/keyboard.ts, the capture listener now leaves Escape to the active arrow drag, using TableArrows.dragging from ui/src/table/arrows.ts. The existing bubble handler cancels the pointer gesture and clears the preview, so releasing the button sends no action. Reproduced the sweep failure at 17e571f4a5 and the starting staging tip 75184513. The Escape regression and eight related browser checks passed with the fix. The UI, app and UI smoke lanes passed, and Enact's fast checks passed before push to 2d4fcb13. The broader local slow run found existing Rust clippy, XMage oracle and count-gate failures outside these UI changes, and worktree cleanup stopped its post-check bisection. The managed slow CI runner is active.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body">closed this<span class="c-timeline-detail">Restored Escape cancellation for manual table arrow drags in staging commit 2d4fcb13. The browser regression and the UI, app and smoke checks pass.</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T07:33:26Z" tabindex="0" data-tip="2026-11-15T07:33:26Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body">started work</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T07:19:45Z" tabindex="0" data-tip="2026-11-15T07:19:45Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T06:52:41Z" tabindex="0" data-tip="2026-11-15T06:52:41Z">2026-11-15</time></div></li></ol><p class="c-empty">bd recorded no events for this bead; these come from its timestamps.</p></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-15T07:19:45Z" tabindex="0" data-tip="2026-11-15T07:19:45Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>beryl_nightly_checks</dt><dd><span class="c-mono">ui-test:manual table arrow Escape cancels the drag</span></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">01a1de13-dafc-7182-a2a4-62288553e4ca</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-irjk</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">2d4fcb1309c2b70ae61959972ded08b39f32bf1f</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">e190ca8fdc0e4482a4daf84d33c65c03</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-bmdk</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-bmdk</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">01a1de13-dafc-7182-a2a4-62288553e4ca</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">01a1d760-e601-7fc0-9d66-3dabf9c28a13</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-irjk</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span><span class="c-muted">High</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1de13-dafc-7182-a2a4-62288553e4ca">01a1de13</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span><span class="c-chip c-tone-muted">sweep-failure</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-15T06:52:41Z" tabindex="0" data-tip="2026-11-15T06:52:41Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-15T07:34:44Z" tabindex="0" data-tip="2026-11-15T07:34:44Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-15T07:33:26Z" tabindex="0" data-tip="2026-11-15T07:33:26Z">2026-11-15</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

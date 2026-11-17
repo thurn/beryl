@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-ix14</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-ix14</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-ix14</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">2</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>fixed: tools tests pin free disk space (5e688bee); slow CI passed locally</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at dad39b6f52a3e17be88d08266ca2493d9bdf3746. Failing range since last passing commit: b0626f4c7364529dc42efb657ebce1ea2f9e4d5a..dad39b6f52a3e17be88d08266ca2493d9bdf3746.</p>
+<p>Log tail:</p>
+<pre><code>        warm.ensure(tree)
+        assert (target / &quot;debug&quot; / &quot;beryl&quot;).read_text() == &quot;binary&quot;
+        assert not (target / &quot;tauri&quot;).exists()
+    
+        warm.ensure(tree, tauri=True)
+&gt;       assert (target / &quot;tauri&quot; / &quot;debug&quot; / &quot;beryl&quot;).read_text() == &quot;app&quot;
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_warm.py:98: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/pathlib/__init__.py:986: in read_text
+    with self.open(mode=&#x27;r&#x27;, encoding=encoding, errors=errors, newline=newline) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath(&#x27;/private/var/folders/dw/rtc6lpnx293gdfl40kv4xt5m0000gn/T/pytest-of-dthurn/pytest-1456/test_the_tauri_target_is_clone0/tree/rust/target/tauri/debug/beryl&#x27;)
+mode = &#x27;r&#x27;, buffering = -1, encoding = &#x27;utf-8&#x27;, errors = None, newline = None
+
+    def open(self, mode=&#x27;r&#x27;, buffering=-1, encoding=None,
+             errors=None, newline=None):
+        &quot;&quot;&quot;
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        &quot;&quot;&quot;
+        if &quot;b&quot; not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: &#x27;/private/var/folders/dw/rtc6lpnx293gdfl40kv4xt5m0000gn/T/pytest-of-dthurn/pytest-1456/test_the_tauri_target_is_clone0/tree/rust/target/tauri/debug/beryl&#x27;
+
+/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/pathlib/__init__.py:970: FileNotFoundError
+----------------------------- Captured stderr call -----------------------------
+prune-caches: 48.3 GB free: low-disk mode
+prune-caches: removed 0 folders of checkouts that are gone, 0.0 GB
+prune-caches: removed /private/var/folders/dw/rtc6lpnx293gdfl40kv4xt5m0000gn/T/pytest-of-dthurn/pytest-1456/test_the_tauri_target_is_clone0/cache/target/tauri (0.0 GB)
+prune-caches: removed 1 folders of the shared target, 0.0 GB
+warm: cloned /private/var/folders/dw/rtc6lpnx293gdfl40kv4xt5m0000gn/T/pytest-of-dthurn/pytest-1456/test_the_tauri_target_is_clone0/cache/target in 0.0 s
+=========================== short test summary info ============================
+FAILED tests/test_warm.py::test_the_tauri_target_is_cloned_only_for_the_tauri_cli
+ci python pytest: FAILED (exit 1) after 41.6 s (49 s on the clock, the machine loaded)
+ci: repo 3 s (just 0 s, markdown 2 s, file-length 0 s, conventions 0 s)
+ci: python 79 s (black 2 s, pyre 5 s, pytest FAILED)
+ci: rust 209 s (build-paths 0 s, fmt 2 s, clippy 68 s, tests 138 s)
+ci: script 23 s (script-check 23 s)
+ci: ui 7 s (prettier 4 s, tsc 2 s, test 0 s)
+ci: names 3 s (card-names 2 s, two-player 0 s, board-door 0 s, citations 0 s)
+ci: app 63 s (smoke 63 s)
+ci: shots 132 s (ui-shots 132 s)
+ci: ui-test 283 s (ui-test 283 s)
+ci: oracle 62 s (oracle 62 s)
+ci: counts 29 s (count-gate 29 s)
+ci: mobile 81 s (mobile-check 81 s)
+ci: FAILED: python in 388.3 s (614 s on the clock, the machine loaded) (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 29 28 24 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x
+bisect: 1 failed checks over 1 commits since origin/master (b0626f4c73), 326 s to search
+bisect: dad39b6f52: 1 of 1 checks fail
+bisect: b0626f4c73: 1 of 1 checks fail
+bisect: python:pytest  fails at b0626f4c73 too: no commit since master to blame
+record: python:pytest  runs 240, failures 10, flaky 1, stale 3, catch 1, miss 1 (30 days)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">2</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T02:58:19Z" tabindex="0" data-tip="2026-11-12T02:58:19Z">2026-11-12</time></header><div class="c-prose"><p>Cause: tests/test_warm.py::test_the_tauri_target_is_cloned_only_for_the_tauri_cli read the host's real free disk. jarvis had 48.3 GB free (&lt; caches.LOW_DISK 60 GB), so warm.ensure's caches.run(only_when_low=True) went into low-disk mode and spare() removed the test cache's target/tauri before the tauri clone. Not caused by any commit in the range (bisect agreed: fails at b0626f4c too). Reproduced by faking shutil.disk_usage free=1 with the old conftest. Fix: tools/tests/conftest.py's autouse own_cache pins caches.free_space to 10x LOW_DISK; test_caches.low_disk_cache now patches caches.free_space instead of shutil.disk_usage. Test kept: the product is right, the test was host-dependent; it guards the tauri-only clone, which nothing else covers. Also annotated a pyre-flagged captured variable in test_warm.py (from cf143106).</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T03:12:00Z" tabindex="0" data-tip="2026-11-12T03:12:00Z">2026-11-12</time></header><div class="c-prose"><p>Handoff: 5e688bee. tools/tests/conftest.py own_cache pins caches.free_space (10x LOW_DISK) so no tools test sees the host disk; tests/test_caches.py low_disk_cache patches caches.free_space (was shutil.disk_usage); tests/test_warm.py annotates captured 'profile' for pyre. Local just ci passed at 256 s (budget 300) under load 46. Reviewer: any new code reading the disk should go through caches.free_space or be pinned in conftest.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T03:23:33Z" tabindex="0" data-tip="2026-11-12T03:23:33Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_5592304d-8c25-4a54-ad8b-0723ee88833a">session 559230</span></span>closed this<span class="c-timeline-detail">fixed: tools tests pin free disk space (5e688bee); slow CI passed locally</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T03:12:15Z" tabindex="0" data-tip="2026-11-12T03:12:15Z">2026-11-12</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T03:11:27Z" tabindex="0" data-tip="2026-11-12T03:11:27Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_5592304d-8c25-4a54-ad8b-0723ee88833a">session 559230</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_5592304d-8c25-4a54-ad8b-0723ee88833a">session 559230</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T02:54:08Z" tabindex="0" data-tip="2026-11-12T02:54:08Z">2026-11-12</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T02:53:41Z" tabindex="0" data-tip="2026-11-12T02:53:41Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:d9cae4ca-c7c1-414a-8d3f-6373d9b06723">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:d9cae4ca-c7c1-414a-8d3f-6373d9b06723">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T02:53:07Z" tabindex="0" data-tip="2026-11-12T02:53:07Z">2026-11-12</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T02:53:07Z" tabindex="0" data-tip="2026-11-12T02:53:07Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T02:52:16Z" tabindex="0" data-tip="2026-11-12T02:52:16Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T02:52:16Z" tabindex="0" data-tip="2026-11-12T02:52:16Z">2026-11-12</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>ci@example.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-12T02:53:08Z" tabindex="0" data-tip="2026-11-12T02:53:08Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">local_5592304d-8c25-4a54-ad8b-0723ee88833a</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-ix14</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">b0626f4c7364529dc42efb657ebce1ea2f9e4d5a..dad39b6f52a3e17be88d08266ca2493d9bdf3746</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">5e688bee047bda67d3e0917525bf2e76c596e381</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">69045c2769b04032a821d9751749d57f</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-w8gv</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-w8gv</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">local_5592304d-8c25-4a54-ad8b-0723ee88833a</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">d9cae4ca-c7c1-414a-8d3f-6373d9b06723</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-ix14</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">jarvis</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="local_5592304d-8c25-4a54-ad8b-0723ee88833a">session 559230</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-12T02:52:17Z" tabindex="0" data-tip="2026-11-12T02:52:17Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-12T03:23:34Z" tabindex="0" data-tip="2026-11-12T03:23:34Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-12T03:12:15Z" tabindex="0" data-tip="2026-11-12T03:12:15Z">2026-11-12</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

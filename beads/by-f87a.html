@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix sweep ui-test failure: ui-test:a bug report uses the viewport from before the keyboard opened and 2 more · by-f87a</title>
+<meta name="description" content="Fix sweep ui-test failure: ui-test:a bug report uses the viewport from before the keyboard opened and 2 more">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-f87a</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-f87a</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix sweep ui-test failure: ui-test:a bug report uses the viewport from before the keyboard opened and 2 more</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">1</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Fixed all three browser sweep checks in b5296a8b. Focused replays, local slow CI, and the staging fast check passed.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>The browser sweep (<code>by sweep</code>, tools/src/beryl_tools/sweep.py) failed 3 ui-test check(s) on origin/staging at 96709ae5df81769887ba4b90ca97927f774f44c0. The last sweep that passed was at 68f3f644ca0ee78c7ed3df2d31d3393e275af78d.</p>
+<ul><li><code>ui-test:a bug report uses the viewport from before the keyboard opened</code></li><li><code>ui-test:manual table turn Shift+Tab wraps to Untap and untaps</code></li><li><code>ui-test:manual table lobby imports, swaps, reloads and starts a solo deck</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>record: ui-test:a bug report uses the viewport from before the keyboard opened  runs 36, failures 7, flaky 3, stale 0, catch 0, miss 0 (30 days)
+record: ui-test:manual table turn Shift+Tab wraps to Untap and untaps  runs 9, failures 1, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: ui-test:manual table lobby imports, swaps, reloads and starts a solo deck  runs 4, failures 1, flaky 0, stale 0, catch 0, miss 0 (30 days)</code></pre>
+<p>Replay them with <code>just ui-test &#x27;a bug report uses the viewport from before the keyboard opened&#x27; &#x27;manual table turn Shift+Tab wraps to Untap and untaps&#x27; &#x27;manual table lobby imports, swaps, reloads and starts a solo deck&#x27;</code>. Slow CI does not run these lanes, so <code>just ci</code> passing proves nothing here; the fast check runs only the checks a change can break.</p>
+<p>Before deleting a check, ask: could a fast, deterministic test (a Rust unit test, a Node test with no browser, a check against a recorded fixture) keep most of what this check protects? If so, write that test. Fix the product when the check caught a real break; a check that failed without one is deleted or rewritten. The <code>cifix</code> skill (<code>.agents/skills/cifix/SKILL.md</code>) says how to work this bead.</p>
+<p>Output tail:</p>
+<pre><code>ok: shape:zone/theirs/desktop
+ok: shape:split/yours/desktop
+ok: shape:zone/theirs/phone
+ok: shape:order/yours/desktop
+ok: shape:zone/yours/desktop
+ok: shape:split/yours/phone
+ok: shape:order/theirs/desktop
+ok: shape:order/theirs/phone
+ok: shape:pay/theirs/desktop
+ok: shape:order/yours/phone
+ok: shape:zone/yours/phone
+ok: shape:pay/theirs/phone
+ok: shape:declare/theirs/desktop
+ok: shape:declare/theirs/phone
+ok: shape:declare/yours/desktop
+ok: shape:declare/yours/phone
+ok: shape:yesNo/yours/desktop
+ok: shape:yesNo/theirs/desktop
+ok: shape:yesNo/theirs/phone
+ok: shape:pay/yours/desktop
+ok: shape:number/theirs/desktop
+ok: shape:number/yours/desktop
+ok: shape:yesNo/yours/phone
+ok: shape:number/theirs/phone
+ok: shape:mode/theirs/desktop
+ok: shape:number/yours/phone
+ok: shape:mode/theirs/phone
+ok: shape:catalog/yours/desktop
+ok: shape:mode/yours/desktop
+ok: shape:catalog/theirs/desktop
+ok: shape:pay/yours/phone
+ok: shape:mode/yours/phone
+ok: shape:catalog/yours/phone
+ok: shape:catalog/theirs/phone
+ok: shape:divide/theirs/desktop
+ok: shape:divide/yours/desktop
+ok: shape:divide/theirs/phone
+ok: shape:divide/yours/phone
+ui-test: FAILED
+sweep ui-test ui-test: FAILED (exit 1) after 293.7 s (567 s on the clock)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>just ui-test &#x27;a bug report uses the viewport from before the keyboard opened&#x27; &#x27;manual table turn Shift+Tab wraps to Untap and untaps&#x27; &#x27;manual table lobby imports, swaps, reloads and starts a solo deck&#x27;</code> passes at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">1</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T02:42:16Z" tabindex="0" data-tip="2026-11-16T02:42:16Z">2026-11-16</time></header><div class="c-prose"><p>Handoff: The sweep recorded three checker failures at 96709ae5. In kept-bug-reports.mjs the fake IPC returned null for table_saved and crashed the start screen. The check now boots on the live test server and intercepts report_bug to inspect the original viewport and crop in the posted request. In kept-table-turn.mjs the Shift+Tab check waits via showTableView for the end-step setup on the stage. In kept-table-lobby.mjs the check waits for the picker to close and reads the count in the loaded Deck region. All three passed ten utility-priority replays and passed again in the fast check for b5296a8b. The local configured slow check passed after clearing stale Rust incremental artifacts for beryl_session and beryl_table_session.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body">closed this<span class="c-timeline-detail">Fixed all three browser sweep checks in b5296a8b. Focused replays, local slow CI, and the staging fast check passed.</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T02:42:34Z" tabindex="0" data-tip="2026-11-16T02:42:34Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body">started work</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T02:17:54Z" tabindex="0" data-tip="2026-11-16T02:17:54Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T02:15:16Z" tabindex="0" data-tip="2026-11-16T02:15:16Z">2026-11-16</time></div></li></ol><p class="c-empty">bd recorded no events for this bead; these come from its timestamps.</p></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-16T02:17:54Z" tabindex="0" data-tip="2026-11-16T02:17:54Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>beryl_nightly_checks</dt><dd><span class="c-mono">ui-test:a bug report uses the viewport from before the keyboard opened
+ui-test:manual table turn Shift+Tab wraps to Untap and untaps
+ui-test:manual table lobby imports, swaps, reloads and starts a solo deck</span></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">01a1e225-cc34-7782-97f8-089a48d81e65</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-f87a</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">b5296a8b38268e2ad6adf29648e603bc7614654b</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">569e01bc57a44b069a66427983d3caf2</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-bmdk</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-bmdk</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">01a1e225-cc34-7782-97f8-089a48d81e65</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">01a1d760-e601-7fc0-9d66-3dabf9c28a13</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/slot-01</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span><span class="c-muted">High</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1e225-cc34-7782-97f8-089a48d81e65">01a1e225</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span><span class="c-chip c-tone-muted">sweep-failure</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-16T02:15:16Z" tabindex="0" data-tip="2026-11-16T02:15:16Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-16T02:43:55Z" tabindex="0" data-tip="2026-11-16T02:43:55Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-16T02:42:34Z" tabindex="0" data-tip="2026-11-16T02:42:34Z">2026-11-16</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

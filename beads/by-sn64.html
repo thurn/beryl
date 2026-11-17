@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-sn64</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-sn64</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-sn64</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">9</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Rust scenario coverage and metadata fixed in 9cbd4668 on staging. Slow Rust and fast checks passed. Full macOS CI remains with oracle repair <a href="by-bmdk.8" data-hovercard="hc-by-bmdk-8"><span class="c-mono">by-bmdk.8</span></a>.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 8786e72a4c2f19975095232e9e5dab42f0306ef9. Failing range since last passing commit: 65d9d78ee5a71df699dfe1a9091399d2a4854461..8786e72a4c2f19975095232e9e5dab42f0306ef9.</p>
+<p>Log tail:</p>
+<pre><code>running 15 tests
+...............
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+
+running 57 tests
+................. 17/57
+tests::derive::every_ability_of_a_generated_card_is_exercised_by_its_generated_scenarios --- FAILED
+....................... 41/57
+tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props --- FAILED
+...............
+failures:
+
+---- tests::derive::every_ability_of_a_generated_card_is_exercised_by_its_generated_scenarios stdout ----
+
+thread &#x27;tests::derive::every_ability_of_a_generated_card_is_exercised_by_its_generated_scenarios&#x27; (73999912) panicked at crates/beryl_cards/src/tests/derive.rs:203:5:
+no generated scenario exercises Builder&#x27;s Blessing: ability 0 (Static)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props stdout ----
+
+thread &#x27;tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props&#x27; (73999996) panicked at crates/beryl_cards/src/tests/props.rs:123:5:
+Vigilance: &quot;an Aura attached after Dress Down still gives vigilance&quot; names [&quot;Dress Down&quot;]
+Vigilance: &quot;Dress Down after the Aura takes vigilance away&quot; names [&quot;Dress Down&quot;]
+Life and Limb: &quot;a basic Forest is a creature under Blood Moon&quot; names [&quot;Blood Moon&quot;]
+Life and Limb: &quot;Dryad Arbor under Blood Moon is no Forest for it&quot; names [&quot;Blood Moon&quot;]
+Life and Limb: &quot;Blood Moon coming after leaves Dryad Arbor no Forest&quot; names [&quot;Blood Moon&quot;]
+Wild Nacatl: &quot;no Mountain and no Plains leaves it a 1/1&quot; marks Island as an interaction, which it may name without
+Wild Nacatl: &quot;a land Blood Moon makes a Mountain counts as one&quot; names [&quot;Blood Moon&quot;]
+Wild Nacatl: &quot;a land Blood Moon makes a Mountain is no longer a Plains&quot; names [&quot;Blood Moon&quot;]
+
+
+failures:
+    tests::derive::every_ability_of_a_generated_card_is_exercised_by_its_generated_scenarios
+    tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props
+
+test result: FAILED. 55 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+
+error: test failed, to rerun pass `-p beryl_cards --lib`
+ci rust tests: FAILED (exit 101) after 2.5 s
+ci: repo 0 s (file-length 0 s)
+ci: python 9 s (black 3 s, pyre 6 s)
+ci: rust 484 s (clippy 68 s, tests FAILED)
+ci: ui 4 s (tsc 4 s)
+ci: names 8 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 1 s, card-crates 1 s)
+ci: app 84 s (smoke 84 s)
+ci: ui-smoke 114 s (ui-test 114 s)
+ci: oracle 552 s (oracle 552 s after a rerun)
+ci: counts 89 s (count-gate 72 s, count-gate-families 18 s)
+flaky: oracle oracle
+verdict: oracle oracle:oracle flaky
+flaky: oracle:oracle: by-xean is open to delete it
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 552.3 s (793 s on the clock) (budget 300 s)
+ci: load average 6 10 12 on 10 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 1.04x the reference&#x27;s time (`just speed`)
+bisect: 1 failed checks over 0 commits since master (8786e72a4c), 600 s to search
+bisect: 8786e72a4c: 1 of 1 checks fail
+bisect: rust:tests  fails at 8786e72a4c too: no commit since master to blame
+record: rust:tests  runs 175, failures 10, flaky 1, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: started in the background (/Users/dthurn/Library/Caches/beryl/sweep/background.log)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p>The macOS slow CI Rust lane passes with Builder's Blessing and Glorious Anthem covered by generated scenarios and card scenario metadata validated. The separate oracle lane failures remain tracked by <a href="by-bmdk.8" data-hovercard="hc-by-bmdk-8"><span class="c-mono">by-bmdk.8</span></a>, which requires the full macOS slow suite to pass.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">9</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T21:44:45Z" tabindex="0" data-tip="2026-11-14T21:44:45Z">2026-11-14</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 260cb554014b0c334a972fb89a73307b919174f4. Failing range since last passing commit: c00e22224e58d2f778631fed98cfdc4dd566a923..260cb554014b0c334a972fb89a73307b919174f4.</p>
+<p>Log tail:</p>
+<pre><code>    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 2,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 36&quot;,
+        &quot;status&quot;: &quot;fail&quot;,
+        &quot;failures&quot;: [
+          &quot;the game ended before step 6: {\&quot;op\&quot;:\&quot;answer\&quot;,\&quot;player\&quot;:0,\&quot;kind\&quot;:\&quot;DamageDivision\&quot;,\&quot;purpose\&quot;:\&quot;combat-damage\&quot;,\&quot;pick\&quot;:{\&quot;pick\&quot;:\&quot;Card\&quot;,\&quot;card\&quot;:\&quot;Malcolm, Alluring Scoundrel\&quot;}}&quot;
+        ]
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 82&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;exporter gap: Forge&#x27;s game state setup puts each permanent onto the battlefield through its zone change, so Containment Priest exiles the opponent&#x27;s Griselbrand before the scenario starts&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 95&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;an activated ability of a cost the exporter cannot write&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 1968 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 2124 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 936 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 255.4 s (209 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: python 14 s (black 2 s, pyre 12 s)
+ci: rust 337 s (clippy 26 s, tests 311 s)
+ci: ui 5 s (tsc 5 s)
+ci: names 7 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 74 s (smoke 74 s)
+ci: ui-smoke 78 s (ui-test 78 s)
+ci: oracle 370 s (oracle FAILED)
+ci: counts 108 s (count-gate 76 s, count-gate-families 33 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 370.3 s (309 s on the clock) (budget 300 s)
+ci: load average 6 7 15 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 2 failed checks over 11 commits since master (c00e22224e), 600 s to search
+bisect: 260cb55401: 2 of 2 checks fail
+bisect: f784dc126d: 2 of 2 checks fail
+bisect: 1f20647767: 1 of 2 checks fail
+bisect: 5725eda310: 0 of 1 checks fail
+bisect: 84adad1f1f: 1 of 1 checks fail
+bisect: db4d25022d: 1 of 1 checks fail
+bisect: oracle:Rest in Peace  culprit 1f20647767 feat: replace a draw with instructions, once each  (11 commits since master)  bead by-bajq.3.4
+record: oracle:Rest in Peace  runs 0, failures 0, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Generated/Generated 36/forge  culprit db4d25022d feat: Chains of Mephistopheles and Notion Thief  (11 commits since master)  bead by-bajq.3.4
+miss: oracle:Generated/Generated 36/forge (fast check at 2ba2751614 did not choose it: not chosen)
+record: oracle:Generated/Generated 36/forge  runs 298, failures 6, flaky 0, stale 0, catch 0, miss 1 (30 days)
+ci: sweep: next due in 8 min</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T21:49:34Z" tabindex="0" data-tip="2026-11-14T21:49:34Z">2026-11-14</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 5725eda31097fa5b3bebe04068fc8495e7d7c91a. Failing range since last passing commit: 6a4988c32a0a9cf04a8c37959533070a0681a9f1..5725eda31097fa5b3bebe04068fc8495e7d7c91a.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 104&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment after one XMage chose the sources of, onto a stack&quot;
+      }
+    ],
+    &quot;log&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/xmage-oracle.log&quot;,
+    &quot;stale_gaps&quot;: [
+      &quot;Generated / Generated 45&quot;
+    ]
+  },
+  &quot;forge&quot;: {
+    &quot;pass&quot;: 98,
+    &quot;fail&quot;: 0,
+    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 2,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 82&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;exporter gap: Forge&#x27;s game state setup puts each permanent onto the battlefield through its zone change, so Containment Priest exiles the opponent&#x27;s Griselbrand before the scenario starts&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 95&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;an activated ability of a cost the exporter cannot write&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 3562 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 6367 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1851 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 36.5 s (123 s on the clock), after waiting 8.1 s for CPU tokens
+ci: repo 0 s (file-length 0 s)
+ci: python 4 s (black 1 s, pyre 3 s)
+ci: rust 456 s (clippy 36 s, tests FAILED)
+ci: ui 2 s (tsc 2 s)
+ci: names 3 s (card-names 1 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 0 s, divergences 0 s, citations 0 s, card-headers 0 s, card-crates 0 s)
+ci: app 37 s (smoke 37 s)
+ci: ui-smoke 51 s (ui-test 51 s)
+ci: oracle 93 s (oracle FAILED)
+ci: counts 53 s (count-gate 34 s, count-gate-families 19 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust oracle in 456.2 s (1298 s on the clock) (budget 300 s)
+ci: load average 15 19 23 on 10 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 1.04x the reference&#x27;s time (`just speed`)
+bisect: 2 failed checks over 0 commits since master (5725eda310), 600 s to search
+bisect: 5725eda310: 1 of 2 checks fail
+bisect: oracle:oracle  flaky: passed at the tip on its bisection rerun
+record: oracle:oracle  runs 3, failures 3, flaky 2, stale 0, catch 0, miss 0 (30 days)
+bisect: rust:tests  fails at 5725eda310 too: no commit since master to blame
+record: rust:tests  runs 179, failures 14, flaky 1, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: next due in 148 min</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T22:11:25Z" tabindex="0" data-tip="2026-11-14T22:11:25Z">2026-11-14</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at c5abbc04c6ac9eb3ba14f2025071496eef8b07fb. Failing range since last passing commit: c5abbc04c6ac9eb3ba14f2025071496eef8b07fb..c5abbc04c6ac9eb3ba14f2025071496eef8b07fb.</p>
+<p>Log tail:</p>
+<pre><code>running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 15 tests
+...............
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+
+running 57 tests
+....................................... 39/57
+tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props --- FAILED
+.......... 50/57
+tests::derive::every_ability_of_a_generated_card_is_exercised_by_its_generated_scenarios --- FAILED
+......
+failures:
+
+---- tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props stdout ----
+
+thread &#x27;tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props&#x27; (74696713) panicked at crates/beryl_cards/src/tests/props.rs:123:5:
+Vigilance: &quot;an Aura attached after Dress Down still gives vigilance&quot; names [&quot;Dress Down&quot;]
+Vigilance: &quot;Dress Down after the Aura takes vigilance away&quot; names [&quot;Dress Down&quot;]
+Life and Limb: &quot;a basic Forest is a creature under Blood Moon&quot; names [&quot;Blood Moon&quot;]
+Life and Limb: &quot;Dryad Arbor under Blood Moon is no Forest for it&quot; names [&quot;Blood Moon&quot;]
+Life and Limb: &quot;Blood Moon coming after leaves Dryad Arbor no Forest&quot; names [&quot;Blood Moon&quot;]
+Wild Nacatl: &quot;no Mountain and no Plains leaves it a 1/1&quot; marks Island as an interaction, which it may name without
+Wild Nacatl: &quot;a land Blood Moon makes a Mountain counts as one&quot; names [&quot;Blood Moon&quot;]
+Wild Nacatl: &quot;a land Blood Moon makes a Mountain is no longer a Plains&quot; names [&quot;Blood Moon&quot;]
+
+---- tests::derive::every_ability_of_a_generated_card_is_exercised_by_its_generated_scenarios stdout ----
+
+thread &#x27;tests::derive::every_ability_of_a_generated_card_is_exercised_by_its_generated_scenarios&#x27; (74696633) panicked at crates/beryl_cards/src/tests/derive.rs:213:5:
+no generated scenario exercises Builder&#x27;s Blessing: ability 0 (Static)
+
+
+failures:
+    tests::derive::every_ability_of_a_generated_card_is_exercised_by_its_generated_scenarios
+    tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props
+
+test result: FAILED. 55 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+
+error: test failed, to rerun pass `-p beryl_cards --lib`
+ci rust tests: FAILED (exit 101) after 1.9 s (2 s on the clock)
+ci: repo 1 s (file-length 1 s)
+ci: python 8 s (black 3 s, pyre 4 s)
+ci: rust 264 s (clippy 20 s, tests FAILED)
+ci: ui 5 s (tsc 5 s)
+ci: names 8 s (card-names 4 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 0 s)
+ci: app 40 s (smoke 40 s)
+ci: ui-smoke 55 s (ui-test 55 s)
+ci: oracle 43 s (oracle 43 s)
+ci: counts 47 s (count-gate 28 s, count-gate-families 19 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 264.5 s (643 s on the clock) (budget 300 s)
+bisect: 1 failed checks over 0 commits since master (c5abbc04c6), 600 s to search
+bisect: c5abbc04c6: 1 of 1 checks fail
+bisect: rust:tests  fails at c5abbc04c6 too: no commit since master to blame
+record: rust:tests  runs 182, failures 17, flaky 1, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: next due in 124 min</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T22:19:10Z" tabindex="0" data-tip="2026-11-14T22:19:10Z">2026-11-14</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at ce79e7cb16951849fa1d596c26af1b0755d8e6f1. Failing range since last passing commit: c5abbc04c6ac9eb3ba14f2025071496eef8b07fb..ce79e7cb16951849fa1d596c26af1b0755d8e6f1.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;failures&quot;: [
+          &quot;step 34 {\&quot;assert\&quot;:\&quot;Controls\&quot;,\&quot;player\&quot;:1,\&quot;card\&quot;:\&quot;Elite Spellbinder\&quot;,\&quot;count\&quot;:1}: Forge has 0 at turn 3 MAIN1, stack 0&quot;,
+          &quot;step 36 {\&quot;assert\&quot;:\&quot;Pt\&quot;,\&quot;player\&quot;:1,\&quot;card\&quot;:\&quot;Elite Spellbinder\&quot;,\&quot;token\&quot;:false,\&quot;power\&quot;:3,\&quot;toughness\&quot;:1}: p1 controls no Elite Spellbinder&quot;
+        ]
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 82&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;exporter gap: Forge&#x27;s game state setup puts each permanent onto the battlefield through its zone change, so Containment Priest exiles the opponent&#x27;s Griselbrand before the scenario starts&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 106&quot;,
+        &quot;status&quot;: &quot;fail&quot;,
+        &quot;failures&quot;: [
+          &quot;Forge has no untapped Swamp to tap for mana&quot;
+        ]
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 95&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;an activated ability of a cost the exporter cannot write&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 1845 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 2232 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 980 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 276.0 s (231 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: python 8 s (black 2 s, pyre 6 s)
+ci: rust 369 s (clippy 26 s, tests 343 s)
+ci: ui 4 s (tsc 4 s)
+ci: names 8 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 71 s (smoke 71 s)
+ci: ui-smoke 80 s (ui-test 80 s)
+ci: oracle 402 s (oracle FAILED)
+ci: counts 125 s (count-gate 90 s, count-gate-families 35 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 402.3 s (358 s on the clock) (budget 300 s)
+ci: load average 16 15 14 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 2 failed checks over 2 commits since master (c5abbc04c6), 600 s to search
+bisect: ce79e7cb16: 2 of 2 checks fail
+bisect: 00c546798d: 2 of 2 checks fail
+bisect: c5abbc04c6: 2 of 2 checks fail
+bisect: oracle:Rest in Peace  fails at c5abbc04c6 too: no commit since master to blame
+record: oracle:Rest in Peace  runs 0, failures 0, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Generated  fails at c5abbc04c6 too: no commit since master to blame
+record: oracle:Generated/Generated 36/forge  runs 300, failures 8, flaky 0, stale 0, catch 0, miss 1 (30 days)
+record: oracle:Generated/Generated 54/forge  runs 51, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Generated/Generated 76/forge  runs 271, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: and 1 more checks
+ci: sweep: next due in 156 min</code></pre>
+<p>No vizier on this machine has a fresh lease on a run this failure affects, so nobody is repairing it (<code>enact_unowned=true</code>). Claim it with <code>enact claim &lt;bead&gt;</code> and repair it as a Steward; claiming clears the flag.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T22:43:47Z" tabindex="0" data-tip="2026-11-14T22:43:47Z">2026-11-14</time></header><div class="c-prose"><p>Handoff: d956b232 repairs the scenario checks reproduced from the prior macOS card test binary. The generator adds a friendly creature when a static layer selects its controller's creatures, and deduplicates scripts within each starting position so the witness is kept. This covers Builder's Blessing and Glorious Anthem and retires the latter's coverage exception. Vigilance, Life and Limb and Wild Nacatl now mark the actual cross-card pairings. All 57 beryl_cards library tests pass. The slow-suite rerun is in /tmp/beryl-<a href="by-sn64" data-hovercard="hc-by-sn64"><span class="c-mono">by-sn64</span></a>-fixed-ci.log. The independent XMage/Forge failures were filed separately under <a href="by-bmdk.8" data-hovercard="hc-by-bmdk-8"><span class="c-mono">by-bmdk.8</span></a> with their reproduction and the observed causes.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T22:52:02Z" tabindex="0" data-tip="2026-11-14T22:52:02Z">2026-11-14</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at ce79e7cb16951849fa1d596c26af1b0755d8e6f1. Failing range since last passing commit: c5abbc04c6ac9eb3ba14f2025071496eef8b07fb..ce79e7cb16951849fa1d596c26af1b0755d8e6f1.</p>
+<p>Log tail:</p>
+<pre><code>        ]
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 82&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;exporter gap: Forge&#x27;s game state setup puts each permanent onto the battlefield through its zone change, so Containment Priest exiles the opponent&#x27;s Griselbrand before the scenario starts&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 106&quot;,
+        &quot;status&quot;: &quot;fail&quot;,
+        &quot;failures&quot;: [
+          &quot;Forge has no untapped Swamp to tap for mana&quot;
+        ]
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 95&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;an activated ability of a cost the exporter cannot write&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 4257 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 4480 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1797 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 809.0 s (1158 s on the clock), after waiting 12.4 s for CPU tokens
+ci: repo 0 s (file-length 0 s)
+ci: python 9 s (black 3 s, pyre 6 s)
+ci: rust 921 s (clippy 75 s, tests FAILED)
+ci: ui 4 s (tsc 4 s)
+ci: names 8 s (card-names 4 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 102 s (smoke 102 s)
+ci: ui-smoke 160 s (ui-test 160 s)
+ci: oracle 987 s (oracle FAILED)
+ci: counts 108 s (count-gate 78 s, count-gate-families 30 s)
+verdict: oracle oracle:Generated/Generated 26/xmage mixed: the fix touched the check and the product; say which with `just verdict &#x27;oracle:Generated/Generated 26/xmage&#x27; stale|catch`
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust oracle in 986.9 s (1476 s on the clock) (budget 300 s)
+ci: load average 13 13 15 on 10 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 1.04x the reference&#x27;s time (`just speed`)
+bisect: 3 failed checks over 2 commits since master (c5abbc04c6), 600 s to search
+bisect: ce79e7cb16: 3 of 3 checks fail
+bisect: 00c546798d: 3 of 3 checks fail
+bisect: c5abbc04c6: 3 of 3 checks fail
+bisect: rust:tests  fails at c5abbc04c6 too: no commit since master to blame
+record: rust:tests  runs 186, failures 21, flaky 1, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Rest in Peace  fails at c5abbc04c6 too: no commit since master to blame
+record: oracle:Rest in Peace  runs 0, failures 0, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Generated  fails at c5abbc04c6 too: no commit since master to blame
+record: oracle:Generated/Generated 36/forge  runs 24, failures 4, flaky 0, stale 0, catch 0, miss 1 (30 days)
+record: oracle:Generated/Generated 54/forge  runs 13, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Generated/Generated 76/forge  runs 10, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: and 1 more checks
+ci: sweep: next due in 84 min</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T23:00:07Z" tabindex="0" data-tip="2026-11-14T23:00:07Z">2026-11-14</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 97b45a47c1f25b1130f6252bd7e0133c69e6e558. Failing range since last passing commit: c5abbc04c6ac9eb3ba14f2025071496eef8b07fb..97b45a47c1f25b1130f6252bd7e0133c69e6e558.</p>
+<p>Log tail:</p>
+<pre><code>          &quot;step 36 {\&quot;assert\&quot;:\&quot;Pt\&quot;,\&quot;player\&quot;:1,\&quot;card\&quot;:\&quot;Elite Spellbinder\&quot;,\&quot;token\&quot;:false,\&quot;power\&quot;:3,\&quot;toughness\&quot;:1}: p1 controls no Elite Spellbinder&quot;
+        ]
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 82&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;exporter gap: Forge&#x27;s game state setup puts each permanent onto the battlefield through its zone change, so Containment Priest exiles the opponent&#x27;s Griselbrand before the scenario starts&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 106&quot;,
+        &quot;status&quot;: &quot;fail&quot;,
+        &quot;failures&quot;: [
+          &quot;Forge has no untapped Swamp to tap for mana&quot;
+        ]
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 95&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;an activated ability of a cost the exporter cannot write&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 1806 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 2043 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 934 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 61.6 s (50 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: python 3 s (black 1 s, pyre 3 s)
+ci: rust 439 s (clippy 54 s, tests 385 s)
+ci: ui 3 s (tsc 3 s)
+ci: names 6 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 66 s (smoke 66 s)
+ci: ui-smoke 109 s (ui-test 109 s)
+ci: oracle 487 s (oracle FAILED)
+ci: counts 116 s (count-gate 82 s, count-gate-families 34 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 456.3 s (budget 300 s)
+ci: load average 6 6 7 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 2 failed checks over 6 commits since master (c5abbc04c6), 600 s to search
+bisect: 97b45a47c1: 2 of 2 checks fail
+bisect: 202387486e: 2 of 2 checks fail
+bisect: ce79e7cb16: 2 of 2 checks fail
+bisect: 00c546798d: 2 of 2 checks fail
+bisect: c5abbc04c6: 2 of 2 checks fail
+bisect: oracle:Rest in Peace  fails at c5abbc04c6 too: no commit since master to blame
+record: oracle:Rest in Peace  runs 0, failures 0, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Generated  fails at c5abbc04c6 too: no commit since master to blame
+record: oracle:Generated/Generated 36/forge  runs 302, failures 10, flaky 0, stale 0, catch 0, miss 1 (30 days)
+record: oracle:Generated/Generated 54/forge  runs 53, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Generated/Generated 76/forge  runs 273, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: and 1 more checks
+ci: sweep: next due in 115 min</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T23:05:32Z" tabindex="0" data-tip="2026-11-14T23:05:32Z">2026-11-14</time></header><div class="c-prose"><p>The full local slow run on d956b232 passed Rust, repository checks, Python, UI, names, app, UI smoke and count gates. Its only failing lane was oracle and the failing cases match the independent pre-fix failure on ce79e7cb. The Rust repair is the coherent first delivery. <a href="by-bmdk.8" data-hovercard="hc-by-bmdk-8"><span class="c-mono">by-bmdk.8</span></a> carries the oracle and combined full-suite acceptance.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-14T23:11:03Z" tabindex="0" data-tip="2026-11-14T23:11:03Z">2026-11-14</time></header><div class="c-prose"><p>Final handoff: Enact rebased the repair to 9cbd4668 and pushed it to staging. The standalone macOS slow Rust lane and the Enact fast check passed. XMage and Forge each passed 23 changed-card scenarios in fast CI. The full local slow run failed only in the pre-existing oracle lane; <a href="by-bmdk.8" data-hovercard="hc-by-bmdk-8"><span class="c-mono">by-bmdk.8</span></a> holds that repair and the full-suite requirement.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">3 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-14T23:00:07Z" tabindex="0" data-tip="2026-11-14T23:00:07Z">2026-11-14</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-14T22:33:38Z" tabindex="0" data-tip="2026-11-14T22:33:38Z">2026-11-14</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">01a1dc32-818e-7621-921c-aa6d28e2d8f7</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-sn64</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">c5abbc04c6ac9eb3ba14f2025071496eef8b07fb..97b45a47c1f25b1130f6252bd7e0133c69e6e558</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">9cbd4668a288a4cb801d780078903c99cacd4aa6</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">6058431f9d534baa82bfb9c8949ff850</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-bmdk</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-jj37 by-bajq by-bajq.3 by-bajq.2 by-bmdk by-3ec6 by-u9pf by-bmdk.3 by-ix1t</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">01a1dc32-818e-7621-921c-aa6d28e2d8f7</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">01a1d760-e601-7fc0-9d66-3dabf9c28a13</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-sn64</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1dc32-818e-7621-921c-aa6d28e2d8f7">01a1dc32</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-14T21:14:17Z" tabindex="0" data-tip="2026-11-14T21:14:17Z">2026-11-14</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-14T23:12:44Z" tabindex="0" data-tip="2026-11-14T23:12:44Z">2026-11-14</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-14T23:11:28Z" tabindex="0" data-tip="2026-11-14T23:11:28Z">2026-11-14</time></dd></div></dl></aside></div></div></div><template id="hc-by-bmdk-8"><div class="c-card-top"><span class="c-mono">by-bmdk.8</span><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span></div><div class="c-hovercard-title">Fix macOS scenario oracle failures</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-sn64"><div class="c-card-top"><span class="c-mono">by-sn64</span><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span></div><div class="c-hovercard-title">Fix slow CI failure on macos</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template>
+</main>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on windows · by-50vi</title>
+<meta name="description" content="Fix slow CI failure on windows">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-50vi</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-50vi</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on windows</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">4</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>oracle lane left to the Mac on Windows (53b549f7), removing the over-budget lane and its load on rust; tests step logs build time; Mac slow CI passed</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on cygnus (windows) at 15da9f6ee138d5f9c4263daaddec682ec7ae6e76. Failing range since last passing commit: 9d51c50280c5f69406d75dec1081b7ab05240ee4..15da9f6ee138d5f9c4263daaddec682ec7ae6e76.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a choice of the cards an exile cost takes&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Snapcaster Mage&quot;,
+        &quot;name&quot;: &quot;Snapcaster Mage: flashback a counterspell, then exile it&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Counterspell with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Snapcaster Mage&quot;,
+        &quot;name&quot;: &quot;Snapcaster Mage: a flashback spell returned to hand is exiled&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Counterspell with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Snapcaster Mage&quot;,
+        &quot;name&quot;: &quot;Snapcaster Mage: flashback is the one alternative cost&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Damn with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Abhorrent Oculus&quot;,
+        &quot;name&quot;: &quot;Abhorrent Oculus exiles six of seven graveyard cards as it&#x27;s cast&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a choice of the cards an exile cost takes&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Abhorrent Oculus&quot;,
+        &quot;name&quot;: &quot;Manifest dread with one card in the library manifests it&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;Beryl fails it: Manifest dread with one card in the library manifests it: action 17: Controls { player: P0, card: \&quot;Island\&quot;, count: 2 }: expected 2, found 3&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 28&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a chosen payment plan&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 4223 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 11075 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 3632 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;D:\\beryl-cache\\oracles\\logs\\oracle.json&quot;
+}
+ci oracle oracle: 510.2 s
+ci: repo 7 s (just 0 s, markdown 4 s, file-length 2 s, conventions 1 s)
+ci: python 72 s (black 3 s, pytest 69 s)
+ci: rust 576 s (build-paths 3 s, fmt 3 s, clippy 67 s, tests 503 s)
+ci: script 115 s (script-check 115 s)
+ci: ui 24 s (prettier 11 s, tsc 9 s, test 4 s)
+ci: names 14 s (card-names 6 s, two-player 1 s, board-door 1 s, discarded-push 2 s, citations 3 s)
+ci: oracle 510 s (oracle 510 s)
+ci: passed in 595.6 s (budget 450 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 2 2 2 on 20 cores; the times above are adjusted for load beyond the cores, up to 8x</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on windows at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">4</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T07:39:55Z" tabindex="0" data-tip="2026-11-12T07:39:55Z">2026-11-12</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on cygnus (windows) at 443f8b57a00b0818b9e34992556d1bc14e8de49c. Failing range since last passing commit: 15da9f6ee138d5f9c4263daaddec682ec7ae6e76..443f8b57a00b0818b9e34992556d1bc14e8de49c.</p>
+<p>Log tail:</p>
+<pre><code>  77:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  78:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  79:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  80:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  81:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  82:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  83:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  84:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  85:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  86:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  87:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  88:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  89:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  90:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  91:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  92:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  93:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  94:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  95:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  96:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  97:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  98:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+  99:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+ 100:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+ 101:     0x7ffd4ddba814 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+ 102:     0x7ffd4d10d6d0 - core[6380f46c71b215e4]::slice::sort::stable::quicksort::quicksort::&lt;rustc_middle[fafc4954b0cce51f]::mono::CodegenUnit, &lt;[rustc_middle[fafc4954b0cce51f]::mono::CodegenUnit]&gt;::sort_by&lt;rustc_monomorphize[2c0cafeec4eec405]::partitioning::merge_codegen_units::{closure#6}&gt;::{closure#0}&gt;
+ 103:     0x7ffd4dda37d8 - rustc_monomorphize[2c0cafeec4eec405]::partitioning::collect_and_partition_mono_items
+ 104:     0x7ffd4d494a27 - rustc_query_impl[757a2518e15308ec]::plumbing::verify_query_key_hashes
+ 105:     0x7ffd4d380f50 - &lt;&lt;rustc_ty_utils[a23332fb4bb35fd4]::opaque_types::OpaqueTypeCollector&gt;::collect_taits_declared_in_body::TaitInBodyFinder as rustc_hir[55250e77a429a444]::intravisit::Visitor&gt;::visit_nested_item
+ 106:     0x7ffd50f4ca91 - rustc_query_impl[757a2518e15308ec]::execution::collect_active_query_jobs
+ 107:     0x7ffd4ad5f30f - &lt;rustc_interface[d9e19aed855a9319]::passes::LintStoreExpandImpl as rustc_expand[a8bf8b382ff6dbb6]::base::LintStoreExpand&gt;::pre_expansion_lint
+ 108:     0x7ffd4adcb913 - &lt;rustc_codegen_llvm[78fdeeb4f51d84b2]::LlvmCodegenBackend as rustc_codegen_ssa[4c26b17a03c7b65b]::traits::backend::CodegenBackend&gt;::codegen_crate
+ 109:     0x7ffd4ad3e233 - &lt;rustc_interface[d9e19aed855a9319]::queries::Linker&gt;::codegen_and_build_linker
+ 110:     0x7ffd4ad10a59 - std[2a1f8e54e2930f4]::sys::backtrace::__rust_begin_short_backtrace::&lt;std[2a1f8e54e2930f4]::thread::lifecycle::spawn_unchecked&lt;ctrlc[75dfe702384e6772]::set_handler_inner&lt;rustc_driver_impl[9361cccfbcde1e27]::install_ctrlc_handler::{closure#0}&gt;::{closure#0}, ()&gt;::{closure#1}::{closure#0}::{closure#0}, ()&gt;
+ 111:     0x7ffd4ad08a05 - RINvNtNtCse0R8cuyqEa_3std3sys9backtrace28___rust_begin_short_backtraceNCNCINvNtCsiHMamp5DUIn_15rustc_interface4util26run_in_thread_with_globalsNCINvB1d_31run_in_thread_pool_with_globalsNCINvNtB1f_9interface12run_compileruNCNvCscEvGEeMUPR3_17rustc_driver_im
+ 112:     0x7ffd4ad14a97 - std[2a1f8e54e2930f4]::sys::backtrace::__rust_begin_short_backtrace::&lt;std[2a1f8e54e2930f4]::thread::lifecycle::spawn_unchecked&lt;ctrlc[75dfe702384e6772]::set_handler_inner&lt;rustc_driver_impl[9361cccfbcde1e27]::install_ctrlc_handler::{closure#0}&gt;::{closure#0}, ()&gt;::{closure#1}::{closure#0}::{closure#0}, ()&gt;
+ 113:     0x7ffd9f44e6a3 - std::sys::thread::windows::impl$0::new::thread_start
+                               at /rustc/48a229ceaefd4985c50990b14116b6d856af0985/library\std\src\sys\thread\windows.rs:58
+ 114:     0x7ffe10d5dda7 - BaseThreadInitThunk
+ 115:     0x7ffe126f9c5c - RtlUserThreadStart
+error: could not compile `beryl_cli` (bin &quot;beryl_cli&quot; test)
+
+Caused by:
+  process didn&#x27;t exit successfully: `C:\Users\dthurn\.rustup\toolchains\1.98.1-x86_64-pc-windows-msvc\bin\rustc.exe --crate-name beryl_cli --edition=2024 &#x27;crates\beryl_cli\src\main.rs&#x27; --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 &#x27;--warn=clippy::pedantic&#x27; --deny=unsafe_code &#x27;--allow=clippy::must_use_candidate&#x27; &#x27;--allow=clippy::module_name_repetitions&#x27; &#x27;--allow=clippy::missing_panics_doc&#x27; &#x27;--allow=clippy::missing_errors_doc&#x27; &#x27;--allow=clippy::many_single_char_names&#x27; &#x27;--allow=clippy::cast_sign_loss&#x27; &#x27;--allow=clippy::cast_precision_loss&#x27; &#x27;--allow=clippy::cast_possible_wrap&#x27; &#x27;--allow=clippy::cast_possible_truncation&#x27; --test --check-cfg &#x27;cfg(docsrs,test)&#x27; --check-cfg &#x27;cfg(feature, values())&#x27; -C metadata=923ef57fc2808b82 -C extra-filename=-b162c22b51998e60 --out-dir &#x27;D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps&#x27; -C &#x27;incremental=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\incremental&#x27; -L &#x27;dependency=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps&#x27; --extern &#x27;beryl_cards=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\libberyl_cards-c68b376bab100de8.rlib&#x27; --extern &#x27;beryl_engine=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\libberyl_engine-dacbd62d679b20d5.rlib&#x27; --extern &#x27;beryl_scenario=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\libberyl_scenario-da96049a32412065.rlib&#x27; --extern &#x27;beryl_search=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\libberyl_search-55a2a976af4d4b9e.rlib&#x27; --extern &#x27;beryl_session=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\libberyl_session-d70d02b326ce85a5.rlib&#x27; --extern &#x27;ctrlc=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\libctrlc-0dc4d847eb09999b.rlib&#x27; --extern &#x27;libc=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\liblibc-bd97fe429ae42490.rlib&#x27; --extern &#x27;serde=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\libserde-db7fd04e9fb84894.rlib&#x27; --extern &#x27;serde_json=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\libserde_json-cf3b19a67a6d417b.rlib&#x27; --extern &#x27;tempfile=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\libtempfile-c111a93c80bc4ee4.rlib&#x27; --extern &#x27;terminal_size=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\libterminal_size-054a4eb0e0d4b3da.rlib&#x27; --extern &#x27;winapi_util=D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\deps\libwinapi_util-26d911ce162e346a.rlib&#x27; -C &#x27;link-arg=/STACK:8388608&#x27;` (exit code: 0xc0000409, STATUS_STACK_BUFFER_OVERRUN)
+note: did not finalize incremental compilation session directory `\\?\D:\beryl\.worktrees\ci-443f8b57a00b\rust\target\debug\incremental\beryl_app-1v0ny754uh1ip\s-ho33mw7n9a-1psexhh-working`: Access is denied. (os error 5)
+  |
+  = help: the next build will not be able to reuse work from this compilation
+ci rust tests: FAILED (exit 125) after 284.9 s
+ci: repo 7 s (just 0 s, markdown 5 s, file-length 2 s, conventions 1 s)
+ci: python 92 s (black 4 s, pytest 88 s)
+ci: rust 378 s (build-paths 1 s, fmt 4 s, clippy 88 s, tests FAILED)
+ci: script 98 s (script-check 98 s after a rerun)
+ci: ui 28 s (prettier 12 s, tsc 9 s, test 7 s)
+ci: names 15 s (card-names 7 s, two-player 2 s, board-door 1 s, discarded-push 2 s, citations 3 s)
+ci: oracle 408 s (oracle 408 s)
+flaky: script script:fixtures/crew/yours
+verdict: script script:fixtures/crew/yours flaky
+ci: FAILED: rust in 414.4 s (budget 450 s)
+bisect: 0 failed checks over 7 commits since origin/master (15da9f6ee1), 526 s to search
+bisect: rust  not bisected: a static check, a timeout or a build that failed</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T07:45:56Z" tabindex="0" data-tip="2026-11-12T07:45:56Z">2026-11-12</time></header><div class="c-prose"><p>Analysis from the Mac (session working dev infrastructure overnight; not claiming, since the cause is not plain from here). The range 9d51c502..15da9f6e is one commit, 15da9f6e, which changes only the fast check's lane selection (rust_tests.affected_packages via checks.fast_lanes); slow CI's rust_lane() passes no packages and runs clippy and the tests on the whole workspace exactly as before, and the python lane already ran pytest -n 4 at 9d51c502, which passed. The run passed every lane and was over budget at 595.6 s on an idle machine (load 2 on 20 cores), so neither the load excuse nor a rerun applied. Cygnus has overrun the same way on unrelated commits: <a href="by-r7p9" data-hovercard="hc-by-r7p9"><span class="c-mono">by-r7p9</span></a> 562 s, <a href="by-6h2o" data-hovercard="hc-by-6h2o"><span class="c-mono">by-6h2o</span></a> 627 s (which passed at 332 s and 297 s on the next runs), with rust (tests 370-503 s, compile included) and oracle (400-600 s) the critical paths each time, against Mac runs of about 130-160 s for the tests. Likely cause: how stale the cached rust/target is when the CI worktree clones it, which decides how much a Windows run recompiles; the next run on the same runner usually passes. A Windows machine should check whether the tests step's time is compile (cargo test --no-run) or test time before changing anything.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T12:47:21Z" tabindex="0" data-tip="2026-11-12T12:47:21Z">2026-11-12</time></header><div class="c-prose"><p>Steward (jarvis, macOS; no access to cygnus, so not reproduced there). Both failures share a cause: on Windows the oracle lane is structurally at or over the 450 s budget alone (408-600 s across runs) and runs beside the rust lane: two JVMs (XMage, Forge) plus its own cargo build of beryl_scenario with the scenarios feature into target/run (paths.RUN_TARGET is a separate target dir on Windows), while the rust lane compiles clippy and the test binaries and the script lane builds beryl_cli into target/run too. Run 1 passed every lane but rust tests took 503 s and oracle 510 s. Run 2: rustc aborted (0xc0000409, the code Rust's abort gives on Windows: OOM or a fatal error, not a code bug; the same tree builds on macOS and passed slow CI there at 1e06aa7d) compiling beryl_cli's test binary 285 s into the tests step while oracle ran; the incremental 'Access is denied' is fallout of the abort. Fix 53b549f7: oracle joins WINDOWS_SKIPS (the Mac runs it every slow CI; the check is OS-independent; Windows fast checks still run it on changed cards), removing the over-budget lane and its CPU/memory pressure on the rust lane. Also the tests step now prints 'rust-tests: built in N s', so the next Windows log says whether the tests step's time is compile or test, as the earlier comment asked. If Windows rust alone still overruns, that line says where to cut next. Did not run full by ci locally: the change is a no-op on macOS but for the print line, and the Mac's slow CI started on it at push.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T12:47:22Z" tabindex="0" data-tip="2026-11-12T12:47:22Z">2026-11-12</time></header><div class="c-prose"><p>Handoff: tools/src/beryl_tools/checks.py WINDOWS_SKIPS gains oracle (comment says why); rust_tests.py rust_tests_step prints the --no-run build time; AGENTS.md lists oracle among the lanes Windows leaves to the Mac. Reviewer: check Cygnus's next slow-CI log for the rust lane's time and the 'built in' line.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T13:14:59Z" tabindex="0" data-tip="2026-11-12T13:14:59Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_c94801a1-2aea-467c-897c-a0dfae8ac7ca">session c94801</span></span>closed this<span class="c-timeline-detail">oracle lane left to the Mac on Windows (53b549f7), removing the over-budget lane and its load on rust; tests step logs build time; Mac slow CI passed</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T13:01:39Z" tabindex="0" data-tip="2026-11-12T13:01:39Z">2026-11-12</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T12:46:49Z" tabindex="0" data-tip="2026-11-12T12:46:49Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_c94801a1-2aea-467c-897c-a0dfae8ac7ca">session c94801</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_c94801a1-2aea-467c-897c-a0dfae8ac7ca">session c94801</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T12:42:20Z" tabindex="0" data-tip="2026-11-12T12:42:20Z">2026-11-12</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T12:42:03Z" tabindex="0" data-tip="2026-11-12T12:42:03Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:d9cae4ca-c7c1-414a-8d3f-6373d9b06723">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:d9cae4ca-c7c1-414a-8d3f-6373d9b06723">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T12:41:35Z" tabindex="0" data-tip="2026-11-12T12:41:35Z">2026-11-12</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T12:41:35Z" tabindex="0" data-tip="2026-11-12T12:41:35Z">2026-11-12</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>thurn@users.noreply.github.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-12T12:41:35Z" tabindex="0" data-tip="2026-11-12T12:41:35Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">local_c94801a1-2aea-467c-897c-a0dfae8ac7ca</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-50vi</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">cygnus</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">windows</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">15da9f6ee138d5f9c4263daaddec682ec7ae6e76..443f8b57a00b0818b9e34992556d1bc14e8de49c</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">53b549f73b478d6822c7e1039e0922d6bdb79be6</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">eeb197ce981f4941b1cc7b05d76992e4</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-w8gv</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-w8gv</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">local_c94801a1-2aea-467c-897c-a0dfae8ac7ca</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">d9cae4ca-c7c1-414a-8d3f-6373d9b06723</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-50vi</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">jarvis</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="local_c94801a1-2aea-467c-897c-a0dfae8ac7ca">session c94801</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-12T07:31:16Z" tabindex="0" data-tip="2026-11-12T07:31:16Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-12T13:14:59Z" tabindex="0" data-tip="2026-11-12T13:14:59Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-12T13:01:40Z" tabindex="0" data-tip="2026-11-12T13:01:40Z">2026-11-12</time></dd></div></dl></aside></div></div></div><template id="hc-by-r7p9"><div class="c-card-top"><span class="c-mono">by-r7p9</span><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span></div><div class="c-hovercard-title">Fix slow CI failure on windows</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-6h2o"><div class="c-card-top"><span class="c-mono">by-6h2o</span><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span></div><div class="c-hovercard-title">Fix slow CI failure on windows</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template>
+</main>
+</body>
+</html>

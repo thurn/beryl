@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix sweep ui-test failure: shape:pick/theirs/phone and 21 more · by-48j3o</title>
+<meta name="description" content="Fix sweep ui-test failure: shape:pick/theirs/phone and 21 more">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-48j3o</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-48j3o</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix sweep ui-test failure: shape:pick/theirs/phone and 21 more</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">1</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Already fixed by 0d24de514. All 22 reported browser checks passed at staging 8f7d5cade.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>The browser sweep (<code>by sweep</code>, tools/src/beryl_tools/sweep.py) failed 22 ui-test check(s) on origin/staging at 2bce9232d4025312833e5f69078f76ba7b202a1e. The last sweep that passed was at 790c47f21de0a463075026b0037e0f858d33fe3e.</p>
+<ul><li><code>shape:pick/theirs/phone</code></li><li><code>shape:pick/theirs/desktop</code></li><li><code>shape:split/theirs/desktop</code></li><li><code>shape:split/theirs/phone</code></li><li><code>shape:zone/theirs/desktop</code></li><li><code>shape:zone/theirs/phone</code></li><li><code>shape:order/theirs/desktop</code></li><li><code>shape:order/theirs/phone</code></li><li><code>shape:pay/theirs/desktop</code></li><li><code>shape:pay/theirs/phone</code></li><li><code>shape:declare/theirs/desktop</code></li><li><code>shape:declare/theirs/phone</code></li><li><code>shape:yesNo/theirs/desktop</code></li><li><code>shape:yesNo/theirs/phone</code></li><li><code>shape:number/theirs/desktop</code></li><li><code>shape:number/theirs/phone</code></li><li><code>shape:mode/theirs/desktop</code></li><li><code>shape:mode/theirs/phone</code></li><li><code>shape:catalog/theirs/desktop</code></li><li><code>shape:catalog/theirs/phone</code></li><li><code>shape:divide/theirs/desktop</code></li><li><code>shape:divide/theirs/phone</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: shape:pick/theirs/phone  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:pick/theirs/phone  runs 51, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)
+bisect: shape:pick/theirs/desktop  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:pick/theirs/desktop  runs 54, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)
+bisect: shape:split/theirs/desktop  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:split/theirs/desktop  runs 54, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)
+bisect: shape:split/theirs/phone  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:split/theirs/phone  runs 51, failures 2, flaky 0, stale 1, catch 0, miss 2 (30 days)
+bisect: shape:zone/theirs/desktop  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:zone/theirs/desktop  runs 54, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)
+bisect: shape:pay/theirs/phone  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:pay/theirs/phone  runs 52, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)
+bisect: shape:order/theirs/phone  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:order/theirs/phone  runs 51, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)
+bisect: shape:order/theirs/desktop  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:order/theirs/desktop  runs 54, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)
+bisect: shape:zone/theirs/phone  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:zone/theirs/phone  runs 51, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)
+bisect: shape:pay/theirs/desktop  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:pay/theirs/desktop  runs 54, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)
+bisect: shape:number/theirs/desktop  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:number/theirs/desktop  runs 54, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)
+bisect: shape:declare/theirs/phone  out of time: culprit among 15 commits af967be127..1750f7f436  (57 commits since the last passing sweep)
+record: shape:declare/theirs/phone  runs 53, failures 2, flaky 0, stale 0, catch 0, miss 1 (30 days)</code></pre>
+<p>Replay them with <code>just ui-test shape:pick/theirs/phone shape:pick/theirs/desktop shape:split/theirs/desktop shape:split/theirs/phone shape:zone/theirs/desktop shape:zone/theirs/phone shape:order/theirs/desktop shape:order/theirs/phone shape:pay/theirs/desktop shape:pay/theirs/phone shape:declare/theirs/desktop shape:declare/theirs/phone shape:yesNo/theirs/desktop shape:yesNo/theirs/phone shape:number/theirs/desktop shape:number/theirs/phone shape:mode/theirs/desktop shape:mode/theirs/phone shape:catalog/theirs/desktop shape:catalog/theirs/phone shape:divide/theirs/desktop shape:divide/theirs/phone</code>. Slow CI does not run these lanes, so <code>just ci</code> passing proves nothing here; the fast check runs only the checks a change can break.</p>
+<p>Before deleting a check, ask: could a fast, deterministic test (a Rust unit test, a Node test with no browser, a check against a recorded fixture) keep most of what this check protects? If so, write that test. Fix the product when the check caught a real break; a check that failed without one is deleted or rewritten. The <code>cifix</code> skill (<code>.agents/skills/cifix/SKILL.md</code>) says how to work this bead.</p>
+<p>Output tail:</p>
+<pre><code>+       label: &quot;Opponent&#x27;s Turn&quot;,
+-       label: &#x27;Pass&#x27;,
+        where: &#x27;forward&#x27;
+      }
+    ],
+    coming: 0,
+    damage: null,
+
+    at holds (file:///Users/dthurn/Library/Caches/beryl/ci/coverage/tree/ui/scripts/shapes.mjs:317:16)
+    at async watchIt (file:///Users/dthurn/Library/Caches/beryl/ci/coverage/tree/ui/scripts/shapes.mjs:621:9)
+    at async play (file:///Users/dthurn/Library/Caches/beryl/ci/coverage/tree/ui/scripts/shapes.mjs:711:29)
+    at async file:///Users/dthurn/Library/Caches/beryl/ci/coverage/tree/ui/scripts/shapes.mjs:745:21
+    at async Promise.all (index 0)
+    at async file:///Users/dthurn/Library/Caches/beryl/ci/coverage/tree/ui/scripts/shapes.mjs:768:1
+FAILED: shape:divide/theirs/phone
+AssertionError [ERR_ASSERTION]: as it opens
++ actual - expected
+
+  {
+    busy: false,
+    buttons: [
+      {
+        caption: undefined,
+        enabled: false,
++       label: &quot;Opponent&#x27;s Turn&quot;,
+-       label: &#x27;Pass&#x27;,
+        where: &#x27;forward&#x27;
+      }
+    ],
+    coming: 0,
+    damage: null,
+
+    at holds (file:///Users/dthurn/Library/Caches/beryl/ci/coverage/tree/ui/scripts/shapes.mjs:317:16)
+    at async watchIt (file:///Users/dthurn/Library/Caches/beryl/ci/coverage/tree/ui/scripts/shapes.mjs:621:9)
+    at async play (file:///Users/dthurn/Library/Caches/beryl/ci/coverage/tree/ui/scripts/shapes.mjs:711:29)
+    at async file:///Users/dthurn/Library/Caches/beryl/ci/coverage/tree/ui/scripts/shapes.mjs:745:21
+    at async Promise.all (index 1)
+    at async file:///Users/dthurn/Library/Caches/beryl/ci/coverage/tree/ui/scripts/shapes.mjs:768:1
+ui-test: FAILED
+sweep ui-test ui-test: FAILED (exit 1) after 64.3 s (87 s on the clock)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>just ui-test shape:pick/theirs/phone shape:pick/theirs/desktop shape:split/theirs/desktop shape:split/theirs/phone shape:zone/theirs/desktop shape:zone/theirs/phone shape:order/theirs/desktop shape:order/theirs/phone shape:pay/theirs/desktop shape:pay/theirs/phone shape:declare/theirs/desktop shape:declare/theirs/phone shape:yesNo/theirs/desktop shape:yesNo/theirs/phone shape:number/theirs/desktop shape:number/theirs/phone shape:mode/theirs/desktop shape:mode/theirs/phone shape:catalog/theirs/desktop shape:catalog/theirs/phone shape:divide/theirs/desktop shape:divide/theirs/phone</code> passes at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">1</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-17T08:26:53Z" tabindex="0" data-tip="2026-11-17T08:26:53Z">2026-11-17</time></header><div class="c-prose"><p>Handoff: Staging already contains 0d24de514. The browser sweep expected a disabled Pass button while the opponent answered. The dock shows Opponent's Turn in that state. The existing fix updates watchIt in ui/scripts/shapes.mjs to derive the expected label from the recorded view. Replayed all 22 listed shape checks on staging 8f7d5cade. All passed on phone and desktop. No code changes were needed.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body">closed this<span class="c-timeline-detail">Already fixed by 0d24de514. All 22 reported browser checks passed at staging 8f7d5cade.</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T08:27:49Z" tabindex="0" data-tip="2026-11-17T08:27:49Z">2026-11-17</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body">started work</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T08:22:28Z" tabindex="0" data-tip="2026-11-17T08:22:28Z">2026-11-17</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T08:08:24Z" tabindex="0" data-tip="2026-11-17T08:08:24Z">2026-11-17</time></div></li></ol><p class="c-empty">bd recorded no events for this bead; these come from its timestamps.</p></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-17T08:22:28Z" tabindex="0" data-tip="2026-11-17T08:22:28Z">2026-11-17</time></dd></div><div class="c-meta-item"><dt>beryl_nightly_checks</dt><dd><span class="c-mono">shape:pick/theirs/phone
+shape:pick/theirs/desktop
+shape:split/theirs/desktop
+shape:split/theirs/phone
+shape:zone/theirs/desktop
+shape:zone/theirs/phone
+shape:order/theirs/desktop
+shape:order/theirs/phone
+shape:pay/theirs/desktop
+shape:pay/theirs/phone
+shape:declare/theirs/desktop
+shape:declare/theirs/phone
+shape:yesNo/theirs/desktop
+shape:yesNo/theirs/phone
+shape:number/theirs/desktop
+shape:number/theirs/phone
+shape:mode/theirs/desktop
+shape:mode/theirs/phone
+shape:catalog/theirs/desktop
+shape:catalog/theirs/phone
+shape:divide/theirs/desktop
+shape:divide/theirs/phone</span></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">01a1e89a-12ca-72e2-9e74-723c617b7234</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-48j3o</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">856dc221ee044c639f233ed1d1305a3a</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-ptc7</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">01a1e89a-12ca-72e2-9e74-723c617b7234</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">01a1e62b-963f-7cc0-9287-35221defbbca</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/slot-02</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span><span class="c-muted">High</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1e89a-12ca-72e2-9e74-723c617b7234">01a1e89a</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span><span class="c-chip c-tone-muted">sweep-failure</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-17T08:08:24Z" tabindex="0" data-tip="2026-11-17T08:08:24Z">2026-11-17</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-17T08:29:29Z" tabindex="0" data-tip="2026-11-17T08:29:29Z">2026-11-17</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-17T08:27:49Z" tabindex="0" data-tip="2026-11-17T08:27:49Z">2026-11-17</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-29m6</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-29m6</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-29m6</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#notes"><span class="c-toc-label">Notes</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">4</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Slow CI passed on the Mac at 09f6127f (ui-test 291 s, mobile-check passed; master advanced). Causes and fixes are in the notes: 1197fe04 (the audit takes the light's canvas for no cover) and 09f6127f (a cloned target forgets Swift module caches built elsewhere).</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at a7d2f9ffd890f446468c096c5bc39fcf382ff537. Failing range since last passing commit: cb758e7feb966b32bb72bcbbce92e5b9b733c586..a7d2f9ffd890f446468c096c5bc39fcf382ff537.</p>
+<p>Log tail:</p>
+<pre><code>+   &#x27;unseen Insect Token nowhere-&gt;battlefield (created): it came to be off screen, covered or transparent&#x27;,
++   &#x27;unseen Insect Token nowhere-&gt;battlefield (created): it came to be off screen, covered or transparent&#x27;,
++   &#x27;unseen ability 1 leaves the stack (resolve): it went where no player saw it&#x27;,
++   &#x27;unseen ability 2 leaves the stack (resolve): it went where no player saw it&#x27;
++ ]
+- []
+
+    at auditsHold (file:///Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/ui/scripts/verb-audit.mjs:70:12)
+    at async file:///Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/ui/scripts/verbs.mjs:747:29
+FAILED: verb:vanish/theirs/phone
+AssertionError [ERR_ASSERTION]: the audit of the moment
++ actual - expected
+
++ [
++   &#x27;unseen Insect Token nowhere-&gt;battlefield (created): it came to be off screen, covered or transparent&#x27;,
++   &#x27;unseen Insect Token nowhere-&gt;battlefield (created): it came to be off screen, covered or transparent&#x27;,
++   &#x27;unseen ability 1 leaves the stack (resolve): it went where no player saw it&#x27;,
++   &#x27;unseen ability 2 leaves the stack (resolve): it went where no player saw it&#x27;
++ ]
+- []
+
+    at auditsHold (file:///Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/ui/scripts/verb-audit.mjs:70:12)
+    at async file:///Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/ui/scripts/verbs.mjs:747:29
+    at async Promise.all (index 5)
+    at async file:///Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/ui/scripts/verbs.mjs:780:1
+ui-test: FAILED
+ci ui-test ui-test: FAILED (exit 1) after 28.0 s (47 s on the clock, the machine loaded)
+ci: repo 3 s (just 0 s, markdown 2 s, file-length 0 s, conventions 0 s)
+ci: python 27 s (black 2 s, pyre 5 s, pytest 20 s)
+ci: rust 221 s (build-paths 0 s, fmt 2 s, clippy 79 s, tests 140 s)
+ci: script 28 s (script-check 28 s)
+ci: ui 10 s (prettier 5 s, tsc 4 s, test 1 s)
+ci: names 4 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, citations 1 s)
+ci: app 47 s (smoke 47 s)
+ci: shots 131 s (ui-shots 131 s)
+ci: ui-test 369 s (ui-test FAILED)
+ci: oracle 94 s (oracle 94 s)
+ci: counts 40 s (count-gate 40 s)
+ci: mobile 98 s (mobile-check 98 s)
+ci: FAILED: ui-test in 378.6 s (697 s on the clock, the machine loaded) (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 26 32 31 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x
+bisect: 8 failed checks over 0 commits since origin/master (a7d2f9ffd8), 243 s to search
+bisect: a7d2f9ffd8: 8 of 8 checks fail
+bisect: verb:appear/yours/phone  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:appear/yours/phone  runs 94, failures 3, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:appear/yours/desktop  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:appear/yours/desktop  runs 130, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:appear/theirs/phone  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:appear/theirs/phone  runs 93, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:appear/theirs/desktop  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:appear/theirs/desktop  runs 130, failures 3, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/yours/phone  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:vanish/yours/phone  runs 89, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/yours/desktop  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:vanish/yours/desktop  runs 130, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/theirs/desktop  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:vanish/theirs/desktop  runs 130, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/theirs/phone  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:vanish/theirs/phone  runs 89, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="notes"><h2 class="c-section-title">Notes</h2><div class="c-prose"><p>Claimed 2026-11-12 by the session that pushed a7d2f9ff. Two causes. (1) a7d2f9ff's light canvas (ui/src/stage/glow.ts) was taken for a cover by the motion audit, which counts any canvas as hiding what is under it: verb:appear and verb:vanish failed in both layouts from both seats. Fixed in 1197fe04 (ui/scripts/audit.mjs: a .stage-lights canvas covers nothing, as an svg root does not). (2) The mobile check failed from the next run on: Tauri's build script (swift-rs) left a Swift module cache in rust/target that names the path of the CI worktree it was built in, the cache was saved, and every later worktree cloned it and had it refused ('was compiled with module cache path ..., but the path is currently ...'). Fixed in 09f6127f (tools/src/beryl_tools/warm.py forget_module_caches: a clone drops those caches; swift rebuilds them). by mobile-check passed in a fresh worktree cloned from the poisoned cache. Waiting on slow CI at 09f6127f.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">4</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T14:52:15Z" tabindex="0" data-tip="2026-11-12T14:52:15Z">2026-11-12</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 1db637a781043d6a3b69d916654b5034f1730b31. Failing range since last passing commit: a7d2f9ffd890f446468c096c5bc39fcf382ff537..1db637a781043d6a3b69d916654b5034f1730b31.</p>
+<p>Log tail:</p>
+<pre><code>  cargo:rustc-link-search=native=/usr/lib/swift
+  cargo:rustc-link-lib=clang_rt.iossim
+  cargo:rustc-link-search=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin
+  Command `cd &quot;/Users/dthurn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-2.12.5/mobile/ios-api&quot; &amp;&amp; &quot;swift&quot; &quot;build&quot; &quot;--sdk&quot; &quot;/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk&quot; &quot;-c&quot; &quot;debug&quot; &quot;--arch&quot; &quot;arm64&quot; &quot;--build-path&quot; &quot;/Users/dthurn/beryl/.worktrees/ci-1db637a78104/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri&quot; &quot;-Xswiftc&quot; &quot;-sdk&quot; &quot;-Xswiftc&quot; &quot;/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk&quot; &quot;-Xswiftc&quot; &quot;-target&quot; &quot;-Xswiftc&quot; &quot;arm64-apple-ios13.0-simulator&quot; &quot;-Xcc&quot; &quot;--target=arm64-apple-ios13.0-simulator&quot; &quot;-Xcxx&quot; &quot;--target=arm64-apple-ios13.0-simulator&quot;`
+  [0/1] Planning build
+  Building for debugging...
+  [0/5] Write sources
+  [2/5] Write swift-version--58304C5D6DBC2206.txt
+  error: emit-module command failed with exit code 1 (use -v to see invocation)
+  [4/7] Emitting module SwiftRs
+  &lt;unknown&gt;:0: error: precompiled file &#x27;/Users/dthurn/beryl/.worktrees/ci-1db637a78104/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ/SwiftShims-ETMZL06LU75E.pcm&#x27; was compiled with module cache path &#x27;/Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;, but the path is currently &#x27;/Users/dthurn/beryl/.worktrees/ci-1db637a78104/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;
+  &lt;unknown&gt;:0: error: missing required module &#x27;SwiftShims&#x27;
+  [5/7] Compiling SwiftRs lib.swift
+  &lt;unknown&gt;:0: error: precompiled file &#x27;/Users/dthurn/beryl/.worktrees/ci-1db637a78104/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ/SwiftShims-ETMZL06LU75E.pcm&#x27; was compiled with module cache path &#x27;/Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;, but the path is currently &#x27;/Users/dthurn/beryl/.worktrees/ci-1db637a78104/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;
+  &lt;unknown&gt;:0: error: missing required module &#x27;SwiftShims&#x27;
+
+  --- stderr
+
+  thread &#x27;main&#x27; (273951187) panicked at /Users/dthurn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/swift-rs-1.0.9/src-rs/build.rs:350:17:
+  Failed to compile swift package Tauri
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+mobile-check: aarch64-apple-ios-sim in 62 s
+mobile-check: missing targets or NDK? `just mobile-setup`
+ci mobile mobile-check: FAILED (exit 101) after 62.4 s
+ci: repo 5 s (just 0 s, markdown 4 s, file-length 0 s, conventions 1 s)
+ci: python 30 s (black 3 s, pyre 5 s, pytest 22 s)
+ci: rust 182 s (build-paths 0 s, fmt 3 s, clippy 83 s, tests 95 s)
+ci: script 39 s (script-check 39 s)
+ci: ui 12 s (prettier 7 s, tsc 5 s, test 1 s)
+ci: names 6 s (card-names 4 s, two-player 0 s, board-door 0 s, discarded-push 0 s, citations 1 s)
+ci: app 52 s (smoke 52 s)
+ci: shots 144 s (ui-shots 144 s)
+ci: ui-test 383 s (ui-test FAILED)
+ci: oracle 114 s (oracle 114 s)
+ci: counts 53 s (count-gate 53 s)
+ci: mobile 62 s (mobile-check FAILED)
+ci: FAILED: ui-test mobile in 394.3 s (677 s on the clock, the machine loaded) (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 22 30 31 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x
+bisect: 8 failed checks over 2 commits since origin/master (a7d2f9ffd8), 263 s to search
+bisect: 1db637a781: 8 of 8 checks fail
+bisect: 83e77e3a2f: 8 of 8 checks fail
+bisect: a7d2f9ffd8: 8 of 8 checks fail
+bisect: mobile  not bisected: a static check, a timeout or a build that failed
+bisect: verb:appear/yours/phone  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:appear/yours/phone  runs 96, failures 5, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:appear/yours/desktop  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:appear/yours/desktop  runs 132, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:appear/theirs/phone  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:appear/theirs/phone  runs 95, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:appear/theirs/desktop  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:appear/theirs/desktop  runs 132, failures 5, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/yours/phone  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:vanish/yours/phone  runs 91, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/yours/desktop  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:vanish/yours/desktop  runs 132, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/theirs/phone  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:vanish/theirs/phone  runs 91, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/theirs/desktop  fails at a7d2f9ffd8 too: no commit since master to blame
+record: verb:vanish/theirs/desktop  runs 132, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T15:03:34Z" tabindex="0" data-tip="2026-11-12T15:03:34Z">2026-11-12</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 6981714a262659f806e92abe07dd6d3bfa51a4d7. Failing range since last passing commit: a7d2f9ffd890f446468c096c5bc39fcf382ff537..6981714a262659f806e92abe07dd6d3bfa51a4d7.</p>
+<p>Log tail:</p>
+<pre><code>  cargo:rustc-link-search=native=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator
+  cargo:rustc-link-search=native=/usr/lib/swift
+  cargo:rustc-link-lib=clang_rt.iossim
+  cargo:rustc-link-search=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin
+  Command `cd &quot;/Users/dthurn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-2.12.5/mobile/ios-api&quot; &amp;&amp; &quot;swift&quot; &quot;build&quot; &quot;--sdk&quot; &quot;/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk&quot; &quot;-c&quot; &quot;debug&quot; &quot;--arch&quot; &quot;arm64&quot; &quot;--build-path&quot; &quot;/Users/dthurn/beryl/.worktrees/ci-6981714a2626/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri&quot; &quot;-Xswiftc&quot; &quot;-sdk&quot; &quot;-Xswiftc&quot; &quot;/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk&quot; &quot;-Xswiftc&quot; &quot;-target&quot; &quot;-Xswiftc&quot; &quot;arm64-apple-ios13.0-simulator&quot; &quot;-Xcc&quot; &quot;--target=arm64-apple-ios13.0-simulator&quot; &quot;-Xcxx&quot; &quot;--target=arm64-apple-ios13.0-simulator&quot;`
+  [0/1] Planning build
+  Building for debugging...
+  [0/5] Write sources
+  [2/5] Write swift-version--58304C5D6DBC2206.txt
+  error: emit-module command failed with exit code 1 (use -v to see invocation)
+  [4/7] Compiling SwiftRs lib.swift
+  &lt;unknown&gt;:0: error: precompiled file &#x27;/Users/dthurn/beryl/.worktrees/ci-6981714a2626/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ/SwiftShims-ETMZL06LU75E.pcm&#x27; was compiled with module cache path &#x27;/Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;, but the path is currently &#x27;/Users/dthurn/beryl/.worktrees/ci-6981714a2626/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;
+  &lt;unknown&gt;:0: error: missing required module &#x27;SwiftShims&#x27;
+  [5/7] Emitting module SwiftRs
+  &lt;unknown&gt;:0: error: precompiled file &#x27;/Users/dthurn/beryl/.worktrees/ci-6981714a2626/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ/SwiftShims-ETMZL06LU75E.pcm&#x27; was compiled with module cache path &#x27;/Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;, but the path is currently &#x27;/Users/dthurn/beryl/.worktrees/ci-6981714a2626/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;
+  &lt;unknown&gt;:0: error: missing required module &#x27;SwiftShims&#x27;
+
+  --- stderr
+
+  thread &#x27;main&#x27; (274380276) panicked at /Users/dthurn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/swift-rs-1.0.9/src-rs/build.rs:350:17:
+  Failed to compile swift package Tauri
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+warning: build failed, waiting for other jobs to finish...
+mobile-check: aarch64-apple-ios-sim in 59 s
+mobile-check: missing targets or NDK? `just mobile-setup`
+ci mobile mobile-check: FAILED (exit 101) after 59.0 s
+ci: repo 4 s (just 0 s, markdown 3 s, file-length 0 s, conventions 1 s)
+ci: python 30 s (black 2 s, pyre 6 s, pytest 22 s)
+ci: rust 194 s (build-paths 0 s, fmt 2 s, clippy 68 s, tests 124 s)
+ci: script 44 s (script-check 44 s)
+ci: ui 13 s (prettier 5 s, tsc 7 s, test 1 s)
+ci: names 4 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, citations 1 s)
+ci: app 58 s (smoke 58 s)
+ci: shots 189 s (ui-shots 189 s)
+ci: ui-test 437 s (ui-test FAILED)
+ci: oracle 114 s (oracle 114 s)
+ci: counts 52 s (count-gate 52 s)
+ci: mobile 55 s (mobile-check FAILED)
+ci: FAILED: ui-test mobile in 450.5 s (532 s on the clock, the machine loaded) (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 17 20 25 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x
+bisect: 8 failed checks over 0 commits since origin/master (6981714a26), 408 s to search
+bisect: 6981714a26: 8 of 8 checks fail
+bisect: mobile  not bisected: a static check, a timeout or a build that failed
+bisect: verb:appear/yours/phone  fails at 6981714a26 too: no commit since master to blame
+record: verb:appear/yours/phone  runs 98, failures 7, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:appear/yours/desktop  fails at 6981714a26 too: no commit since master to blame
+record: verb:appear/yours/desktop  runs 134, failures 6, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:appear/theirs/phone  fails at 6981714a26 too: no commit since master to blame
+record: verb:appear/theirs/phone  runs 97, failures 6, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:appear/theirs/desktop  fails at 6981714a26 too: no commit since master to blame
+record: verb:appear/theirs/desktop  runs 134, failures 7, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/yours/phone  fails at 6981714a26 too: no commit since master to blame
+record: verb:vanish/yours/phone  runs 93, failures 6, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/yours/desktop  fails at 6981714a26 too: no commit since master to blame
+record: verb:vanish/yours/desktop  runs 134, failures 6, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/theirs/phone  fails at 6981714a26 too: no commit since master to blame
+record: verb:vanish/theirs/phone  runs 93, failures 6, flaky 0, stale 0, catch 0, miss 0 (30 days)
+bisect: verb:vanish/theirs/desktop  fails at 6981714a26 too: no commit since master to blame
+record: verb:vanish/theirs/desktop  runs 134, failures 6, flaky 0, stale 0, catch 0, miss 0 (30 days)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T15:12:22Z" tabindex="0" data-tip="2026-11-12T15:12:22Z">2026-11-12</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 1197fe04c5c94edc797a5bfe3c92df962974e76d. Failing range since last passing commit: 59ecb8644ac0e460421c1a89e1f810bdcf2c0a2e..1197fe04c5c94edc797a5bfe3c92df962974e76d.</p>
+<p>Log tail:</p>
+<pre><code>  cargo:rustc-check-cfg=cfg(custom_protocol)
+  cargo:rustc-check-cfg=cfg(dev)
+  cargo:rustc-cfg=dev
+  cargo:dev=true
+  cargo:rustc-check-cfg=cfg(desktop)
+  cargo:rustc-check-cfg=cfg(mobile)
+  cargo:rustc-cfg=mobile
+  cargo:rustc-link-search=native=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator
+  cargo:rustc-link-search=native=/usr/lib/swift
+  cargo:rustc-link-lib=clang_rt.iossim
+  cargo:rustc-link-search=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin
+  Command `cd &quot;/Users/dthurn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-2.12.5/mobile/ios-api&quot; &amp;&amp; &quot;swift&quot; &quot;build&quot; &quot;--sdk&quot; &quot;/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk&quot; &quot;-c&quot; &quot;debug&quot; &quot;--arch&quot; &quot;arm64&quot; &quot;--build-path&quot; &quot;/Users/dthurn/beryl/.worktrees/ci-1197fe04c5c9/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri&quot; &quot;-Xswiftc&quot; &quot;-sdk&quot; &quot;-Xswiftc&quot; &quot;/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk&quot; &quot;-Xswiftc&quot; &quot;-target&quot; &quot;-Xswiftc&quot; &quot;arm64-apple-ios13.0-simulator&quot; &quot;-Xcc&quot; &quot;--target=arm64-apple-ios13.0-simulator&quot; &quot;-Xcxx&quot; &quot;--target=arm64-apple-ios13.0-simulator&quot;`
+  [0/1] Planning build
+  Building for debugging...
+  [0/5] Write sources
+  [2/5] Write swift-version--58304C5D6DBC2206.txt
+  error: emit-module command failed with exit code 1 (use -v to see invocation)
+  [4/7] Emitting module SwiftRs
+  &lt;unknown&gt;:0: error: precompiled file &#x27;/Users/dthurn/beryl/.worktrees/ci-1197fe04c5c9/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ/SwiftShims-ETMZL06LU75E.pcm&#x27; was compiled with module cache path &#x27;/Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;, but the path is currently &#x27;/Users/dthurn/beryl/.worktrees/ci-1197fe04c5c9/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;
+  &lt;unknown&gt;:0: error: missing required module &#x27;SwiftShims&#x27;
+  [5/7] Compiling SwiftRs lib.swift
+  &lt;unknown&gt;:0: error: precompiled file &#x27;/Users/dthurn/beryl/.worktrees/ci-1197fe04c5c9/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ/SwiftShims-ETMZL06LU75E.pcm&#x27; was compiled with module cache path &#x27;/Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;, but the path is currently &#x27;/Users/dthurn/beryl/.worktrees/ci-1197fe04c5c9/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;
+  &lt;unknown&gt;:0: error: missing required module &#x27;SwiftShims&#x27;
+
+  --- stderr
+
+  thread &#x27;main&#x27; (274866160) panicked at /Users/dthurn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/swift-rs-1.0.9/src-rs/build.rs:350:17:
+  Failed to compile swift package Tauri
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+warning: build failed, waiting for other jobs to finish...
+mobile-check: aarch64-apple-ios-sim in 32 s
+mobile-check: missing targets or NDK? `just mobile-setup`
+ci mobile mobile-check: FAILED (exit 101) after 32.1 s
+ci: repo 3 s (just 0 s, markdown 2 s, file-length 0 s, conventions 0 s)
+ci: python 26 s (black 2 s, pyre 5 s, pytest 20 s)
+ci: rust 170 s (build-paths 0 s, fmt 2 s, clippy 51 s, tests 116 s after a rerun)
+ci: script 26 s (script-check 26 s)
+ci: ui 9 s (prettier 4 s, tsc 4 s, test 1 s)
+ci: names 3 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, citations 1 s)
+ci: app 38 s (smoke 38 s)
+ci: shots 118 s (ui-shots 118 s)
+ci: ui-test 360 s (ui-test 360 s)
+ci: oracle 113 s (oracle 113 s)
+ci: counts 41 s (count-gate 41 s)
+ci: mobile 33 s (mobile-check FAILED)
+flaky: rust beryl_session::clicks a_session_takes_clicks_and_its_latest_view_keeps_the_prompt
+verdict: rust rust:beryl_session::clicks::a_session_takes_clicks_and_its_latest_view_keeps_the_prompt flaky
+verdict: ui-test verb:appear/yours/desktop mixed: the fix touched the check and the product; say which with `just verdict &#x27;verb:appear/yours/desktop&#x27; stale|catch`
+verdict: ui-test verb:appear/theirs/desktop mixed: the fix touched the check and the product; say which with `just verdict &#x27;verb:appear/theirs/desktop&#x27; stale|catch`
+verdict: ui-test verb:appear/yours/phone mixed: the fix touched the check and the product; say which with `just verdict &#x27;verb:appear/yours/phone&#x27; stale|catch`
+verdict: ui-test verb:vanish/yours/desktop mixed: the fix touched the check and the product; say which with `just verdict &#x27;verb:vanish/yours/desktop&#x27; stale|catch`
+verdict: ui-test verb:appear/theirs/phone mixed: the fix touched the check and the product; say which with `just verdict &#x27;verb:appear/theirs/phone&#x27; stale|catch`
+verdict: ui-test verb:vanish/theirs/desktop mixed: the fix touched the check and the product; say which with `just verdict &#x27;verb:vanish/theirs/desktop&#x27; stale|catch`
+verdict: ui-test verb:vanish/yours/phone mixed: the fix touched the check and the product; say which with `just verdict &#x27;verb:vanish/yours/phone&#x27; stale|catch`
+verdict: ui-test verb:vanish/theirs/phone mixed: the fix touched the check and the product; say which with `just verdict &#x27;verb:vanish/theirs/phone&#x27; stale|catch`
+ci: FAILED: mobile in 386.0 s (445 s on the clock, the machine loaded) (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 10 16 21 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x
+bisect: 0 failed checks over 1 commits since origin/master (59ecb8644a), 495 s to search
+bisect: mobile  not bisected: a static check, a timeout or a build that failed</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T15:20:30Z" tabindex="0" data-tip="2026-11-12T15:20:30Z">2026-11-12</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 9f18ecd8c13d3168b46f38873a7f4a9601e0228f. Failing range since last passing commit: 59ecb8644ac0e460421c1a89e1f810bdcf2c0a2e..9f18ecd8c13d3168b46f38873a7f4a9601e0228f.</p>
+<p>Log tail:</p>
+<pre><code>    Checking beryl_kernel v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-9f18ecd8c13d/rust/crates/beryl_kernel)
+    Checking beryl_rules v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-9f18ecd8c13d/rust/crates/beryl_rules)
+    Checking beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-9f18ecd8c13d/rust/crates/beryl_engine)
+    Checking beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-9f18ecd8c13d/rust/crates/beryl_cards)
+    Checking beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-9f18ecd8c13d/rust/crates/beryl_search)
+error: failed to run custom build command for `tauri v2.12.5`
+
+Caused by:
+  process didn&#x27;t exit successfully: `/Users/dthurn/beryl/.worktrees/ci-9f18ecd8c13d/rust/target/debug/build/tauri-bf54f1cf3aceb3db/build-script-build` (exit status: 101)
+  --- stdout
+  cargo:rustc-check-cfg=cfg(custom_protocol)
+  cargo:rustc-check-cfg=cfg(dev)
+  cargo:rustc-cfg=dev
+  cargo:dev=true
+  cargo:rustc-check-cfg=cfg(desktop)
+  cargo:rustc-check-cfg=cfg(mobile)
+  cargo:rustc-cfg=mobile
+  cargo:rustc-link-search=native=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator
+  cargo:rustc-link-search=native=/usr/lib/swift
+  cargo:rustc-link-lib=clang_rt.iossim
+  cargo:rustc-link-search=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/21/lib/darwin
+  Command `cd &quot;/Users/dthurn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-2.12.5/mobile/ios-api&quot; &amp;&amp; &quot;swift&quot; &quot;build&quot; &quot;--sdk&quot; &quot;/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk&quot; &quot;-c&quot; &quot;debug&quot; &quot;--arch&quot; &quot;arm64&quot; &quot;--build-path&quot; &quot;/Users/dthurn/beryl/.worktrees/ci-9f18ecd8c13d/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri&quot; &quot;-Xswiftc&quot; &quot;-sdk&quot; &quot;-Xswiftc&quot; &quot;/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk&quot; &quot;-Xswiftc&quot; &quot;-target&quot; &quot;-Xswiftc&quot; &quot;arm64-apple-ios13.0-simulator&quot; &quot;-Xcc&quot; &quot;--target=arm64-apple-ios13.0-simulator&quot; &quot;-Xcxx&quot; &quot;--target=arm64-apple-ios13.0-simulator&quot;`
+  [0/1] Planning build
+  Building for debugging...
+  [0/5] Write sources
+  [2/5] Write swift-version--58304C5D6DBC2206.txt
+  error: emit-module command failed with exit code 1 (use -v to see invocation)
+  [4/7] Emitting module SwiftRs
+  &lt;unknown&gt;:0: error: precompiled file &#x27;/Users/dthurn/beryl/.worktrees/ci-9f18ecd8c13d/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ/SwiftShims-ETMZL06LU75E.pcm&#x27; was compiled with module cache path &#x27;/Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;, but the path is currently &#x27;/Users/dthurn/beryl/.worktrees/ci-9f18ecd8c13d/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;
+  &lt;unknown&gt;:0: error: missing required module &#x27;SwiftShims&#x27;
+  [5/7] Compiling SwiftRs lib.swift
+  &lt;unknown&gt;:0: error: precompiled file &#x27;/Users/dthurn/beryl/.worktrees/ci-9f18ecd8c13d/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ/SwiftShims-ETMZL06LU75E.pcm&#x27; was compiled with module cache path &#x27;/Users/dthurn/beryl/.worktrees/ci-a7d2f9ffd890/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;, but the path is currently &#x27;/Users/dthurn/beryl/.worktrees/ci-9f18ecd8c13d/rust/target/aarch64-apple-ios-sim/debug/build/tauri-efcc204716a0652f/out/swift-rs/Tauri/arm64-apple-macosx/debug/ModuleCache/146AEZW2SO0EJ&#x27;
+  &lt;unknown&gt;:0: error: missing required module &#x27;SwiftShims&#x27;
+
+  --- stderr
+
+  thread &#x27;main&#x27; (275239012) panicked at /Users/dthurn/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/swift-rs-1.0.9/src-rs/build.rs:350:17:
+  Failed to compile swift package Tauri
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+warning: build failed, waiting for other jobs to finish...
+mobile-check: aarch64-apple-ios-sim in 31 s
+mobile-check: missing targets or NDK? `just mobile-setup`
+ci mobile mobile-check: FAILED (exit 101) after 30.8 s
+ci: repo 3 s (just 0 s, markdown 2 s, file-length 0 s, conventions 0 s)
+ci: python 25 s (black 2 s, pyre 4 s, pytest 19 s)
+ci: rust 175 s (build-paths 0 s, fmt 1 s, clippy 45 s, tests 128 s)
+ci: script 25 s (script-check 25 s)
+ci: ui 8 s (prettier 4 s, tsc 4 s, test 1 s)
+ci: names 3 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, citations 1 s)
+ci: app 35 s (smoke 35 s)
+ci: shots 119 s (ui-shots 119 s)
+ci: ui-test 351 s (ui-test 351 s)
+ci: oracle 112 s (oracle 112 s)
+ci: counts 36 s (count-gate 36 s)
+ci: mobile 31 s (mobile-check FAILED)
+ci: FAILED: mobile in 358.9 s (424 s on the clock, the machine loaded) (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 13 18 20 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x
+bisect: 0 failed checks over 3 commits since origin/master (59ecb8644a), 516 s to search
+bisect: mobile  not bisected: a static check, a timeout or a build that failed</code></pre></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>closed this<span class="c-timeline-detail">Slow CI passed on the Mac at 09f6127f (ui-test 291 s, mobile-check passed; master advanced). Causes and fixes are in the notes: 1197fe04 (the audit takes the light&#x27;s canvas for no cover) and 09f6127f (a cloned target forgets Swift module caches built elsewhere).</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T15:33:26Z" tabindex="0" data-tip="2026-11-12T15:33:26Z">2026-11-12</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T15:20:53Z" tabindex="0" data-tip="2026-11-12T15:20:53Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>edited the notes</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T15:17:40Z" tabindex="0" data-tip="2026-11-12T15:17:40Z">2026-11-12</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">3 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T15:12:45Z" tabindex="0" data-tip="2026-11-12T15:12:45Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>status changed</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T14:43:54Z" tabindex="0" data-tip="2026-11-12T14:43:54Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T14:37:34Z" tabindex="0" data-tip="2026-11-12T14:37:34Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T14:37:34Z" tabindex="0" data-tip="2026-11-12T14:37:34Z">2026-11-12</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>ci@example.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-12T14:43:55Z" tabindex="0" data-tip="2026-11-12T14:43:55Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">59ecb8644ac0e460421c1a89e1f810bdcf2c0a2e..9f18ecd8c13d3168b46f38873a7f4a9601e0228f</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-97g by-w8gv by-w8gv.21 by-w8gv.9</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-muted">Nobody</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-12T14:37:35Z" tabindex="0" data-tip="2026-11-12T14:37:35Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-12T15:33:27Z" tabindex="0" data-tip="2026-11-12T15:33:27Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-12T15:33:27Z" tabindex="0" data-tip="2026-11-12T15:33:27Z">2026-11-12</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

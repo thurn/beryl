@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on windows · by-j10</title>
+<meta name="description" content="Fix slow CI failure on windows">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-j10</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-j10</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on windows</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">1</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Cold cache on the machine's first CI run; the same tip passes slow CI warm (177 s)</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on cygnus (windows) at 21ec8dfeabd01c0a3fbc4ed8beb69cd3d7e939e1. Failing range since last passing commit: 3246fb8bb17f47cfba62c826c48302055674feff..21ec8dfeabd01c0a3fbc4ed8beb69cd3d7e939e1.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling html5ever v0.39.0
+   Compiling tinystr v0.8.5
+   Compiling potential_utf v0.1.6
+   Compiling icu_collections v2.4.0
+    Checking ts-rs v12.0.1
+   Compiling dom_query v0.28.0
+   Compiling icu_locale_core v2.4.0
+   Compiling icu_provider v2.4.0
+    Checking beryl_scenario v0.1.0 (D:\beryl\.worktrees\ci-21ec8dfeabd0\rust\crates\beryl_scenario)
+    Checking dpi v0.1.2
+    Checking jsonptr v0.7.1
+    Checking tinytemplate v1.2.1
+    Checking plist v1.10.3
+    Checking keyboard-types v0.8.3
+    Checking serialize-to-javascript v0.1.2
+   Compiling icu_properties v2.4.0
+   Compiling icu_normalizer v2.4.0
+   Compiling cargo-platform v0.1.9
+   Compiling cargo_toml v1.0.1
+   Compiling cargo_metadata v0.19.2
+    Checking json-patch v4.2.0
+    Checking beryl_cards v0.1.0 (D:\beryl\.worktrees\ci-21ec8dfeabd0\rust\crates\beryl_cards)
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling url v2.5.8
+    Checking beryl_search v0.1.0 (D:\beryl\.worktrees\ci-21ec8dfeabd0\rust\crates\beryl_search)
+   Compiling urlpattern v0.6.0
+    Checking beryl_session v0.1.0 (D:\beryl\.worktrees\ci-21ec8dfeabd0\rust\crates\beryl_session)
+    Checking beryl_bench v0.1.0 (D:\beryl\.worktrees\ci-21ec8dfeabd0\rust\crates\beryl_bench)
+    Checking softbuffer v0.4.8
+    Checking schannel v0.1.30
+    Checking window-vibrancy v0.8.1
+    Checking ctrlc v3.5.2
+    Checking terminal_size v0.4.4
+    Checking ureq v3.5.1
+    Checking half v2.7.1
+    Checking ciborium-ll v0.2.2
+    Checking ciborium v0.2.2
+    Checking criterion v0.8.2
+   Compiling tauri-build v2.7.4
+   Compiling tauri-codegen v2.7.4
+   Compiling tauri v2.12.5
+   Compiling beryl_app v0.1.0 (D:\beryl\.worktrees\ci-21ec8dfeabd0\rust\crates\beryl_app)
+   Compiling tauri-macros v2.7.4
+    Checking tao v0.37.2
+    Checking webview2-com v0.39.1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5m 07s
+ci rust clippy: 308.4 s
+ci rust tests: TIMED OUT after 281.4 s (deadline 600 s)
+ci: repo 4 s (just 0 s, markdown 4 s)
+ci: python 29 s (black 3 s, pytest 26 s)
+ci: rust 594 s (build-paths 3 s, fmt 1 s, clippy 308 s, tests TIMED OUT)
+ci: ui 32 s (prettier 10 s, tsc 21 s, card-names 1 s)
+ci: app 544 s (smoke 544 s)
+ci: shots 421 s (ui-shots 421 s)
+ci: ui-test 542 s (ui-test 542 s)
+ci: oracle 586 s (oracle 586 s)
+ci: FAILED: rust in 600.2 s (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 4 4 4 on 20 cores; the times above are adjusted for load beyond the cores, up to 8x</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on windows at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">1</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-08T14:31:27Z" tabindex="0" data-tip="2026-11-08T14:31:27Z">2026-11-08</time></header><div class="c-prose"><p>Cause: infrastructure, not code. This was the first slow-CI run ever on this Windows machine (cygnus), and enact push starts the detached CI runner before its remove hook saves the pushed worktree's rust/target and ui/node_modules into BERYL_CACHE (D:\beryl-cache). The cache was empty, so the CI worktree built everything cold with all lanes at once (clippy 308 s compiling deps such as thiserror); the rust lane hit the 600 s deadline. Every lane that finished passed. Verified: a fresh enact worktree at the same tip 21ec8df, with the cache now filled (cloned in 1.3 s), passes all lanes of by ci in 177 s (budget 300 s). No code change; 21ec8df reaches master with the next staging tip's slow-CI run. Possible Enact follow-up: run the worktree remove hook before starting the CI runner, so a machine's first CI run starts warm.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body">closed this<span class="c-timeline-detail">Cold cache on the machine&#x27;s first CI run; the same tip passes slow CI warm (177 s)</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-08T14:31:54Z" tabindex="0" data-tip="2026-11-08T14:31:54Z">2026-11-08</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body">started work</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-08T14:26:49Z" tabindex="0" data-tip="2026-11-08T14:26:49Z">2026-11-08</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-08T14:26:10Z" tabindex="0" data-tip="2026-11-08T14:26:10Z">2026-11-08</time></div></li></ol><p class="c-empty">bd recorded no events for this bead; these come from its timestamps.</p></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>thurn@users.noreply.github.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-08T14:26:49Z" tabindex="0" data-tip="2026-11-08T14:26:49Z">2026-11-08</time></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">cygnus</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">windows</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">3246fb8bb17f47cfba62c826c48302055674feff..21ec8dfeabd01c0a3fbc4ed8beb69cd3d7e939e1</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono"></span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="52ef51f0-d9f5-4e63-874d-9d23f9a47d69">52ef51f0</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-08T14:26:10Z" tabindex="0" data-tip="2026-11-08T14:26:10Z">2026-11-08</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-08T14:31:54Z" tabindex="0" data-tip="2026-11-08T14:31:54Z">2026-11-08</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-08T14:31:54Z" tabindex="0" data-tip="2026-11-08T14:31:54Z">2026-11-08</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

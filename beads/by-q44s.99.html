@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix the Beryl 3D sweep&#x27;s test step: b3d-test:test · by-q44s.99</title>
+<meta name="description" content="Fix the Beryl 3D sweep&#x27;s test step: b3d-test:test">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><a class="c-crumb" href="by-q44s">by-q44s</a><span class="c-crumb" aria-current="page">by-q44s.99</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-q44s.99</span><span class="c-dot c-tone-neutral">Open</span></div><h1 class="c-title">Fix the Beryl 3D sweep&#x27;s test step: b3d-test:test</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">2</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>test</code> on darwin at 2a0c49aa78ad857ce66151e5d2ac8ca82ce57219. The last sweep that passed on this machine was at bf9d3188a55f0d8cd3da165cdadc2a5f32c34ecb.</p>
+<ul><li><code>b3d-test:test</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-test:test  out of time: culprit among 85 commits d03b244c7e..2a0c49aa78  (85 commits since the last passing sweep)</code></pre>
+<p>Run the step's own command, <code>just b3d test</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step test --commit 2a0c49aa78ad</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>600x900@2 has 1 `text-overlap` faults, and none are listed
+OVER b3d:furnace-of-rath/doubles-trample-damage-after-assignment/you/1920x1080 has 1 `text-overlap` faults, and none are listed
+OVER b3d:furnace-of-rath/doubles-trample-damage-after-assignment/you/2560x1080 has 1 `text-overlap` faults, and none are listed
+slowest: b3d:stress-hand/you/1920x1080 11.3s, b3d:stress-hand/you/2560x1080 11.3s, b3d:stress-hand/you/1440x900 8.5s
+judged, in frames (scripts for the segment checks) / elements: on-screen 496404/6219837, overlap 494824/1992393, reachable 495072/3857908, duplicate 496440/17798103, text-fits 496440/3193321, text-overlap 496440/3193321, named 496404/6219837, clips 496440/14276, layer-drawn 496440/3379198, marks-on 11380/26024, phone-sizes 0/0, no-jumps 31000/385612, rest-placement 31000/135850, step-time 93588/229640, step-shown 1006187/29314, crowded 28152/54908, blank-card 496032/6282793, lines-hold 108519/139939
+8688 tests, 24 failed, 3 different faults; 1361563 frames, median 133 a test; 117.8s, 27.1 test-ms a test
+211 tests have a listed fault; most listed: text-overlap (462)
+b3d-sweep b3d-test test: FAILED (exit 1) after 434.2 s; rerunning it once
+just b3d test
+ERROR b3d:flickerwisp/returns-a-creature-without-its-counter-or-attachments/you/1440x900  (and 7 more tests)
+  the client panicked: placing only the groups a step changed gives what placing every group does
+FAULT text-overlap  b3d:furnace-of-rath/doubles-damage-and-life-gained-from-griselbrand/you/1440x900 t=1369ms  (and 3 more tests)
+  text of text &quot;-14&quot; #65596 (704,143 32x30) overlaps text &quot;Combat&quot; #65577 (669,169 101x26)
+  show: just b3d tree furnace-of-rath/doubles-damage-and-life-gained-from-griselbrand --seat you --size 1440x900 --at 1369ms
+FAULT text-overlap  b3d:furnace-of-rath/doubles-trample-damage-after-assignment/you/1440x900 t=930ms  (and 3 more tests)
+  text of text &quot;-10&quot; #65607 (703,144 34x30) overlaps text &quot;Combat&quot; #65579 (669,169 101x26)
+  show: just b3d tree furnace-of-rath/doubles-trample-damage-after-assignment --seat you --size 1440x900 --at 930ms
+OVER b3d:furnace-of-rath/doubles-damage-and-life-gained-from-griselbrand/you/1440x900 has 1 `text-overlap` faults, and none are listed
+OVER b3d:furnace-of-rath/doubles-damage-and-life-gained-from-griselbrand/you/1600x900@2 has 1 `text-overlap` faults, and none are listed
+OVER b3d:furnace-of-rath/doubles-damage-and-life-gained-from-griselbrand/you/1920x1080 has 1 `text-overlap` faults, and none are listed
+OVER b3d:furnace-of-rath/doubles-damage-and-life-gained-from-griselbrand/you/2560x1080 has 1 `text-overlap` faults, and none are listed
+OVER b3d:furnace-of-rath/doubles-trample-damage-after-assignment/you/1440x900 has 1 `text-overlap` faults, and none are listed
+OVER b3d:furnace-of-rath/doubles-trample-damage-after-assignment/you/1600x900@2 has 1 `text-overlap` faults, and none are listed
+OVER b3d:furnace-of-rath/doubles-trample-damage-after-assignment/you/1920x1080 has 1 `text-overlap` faults, and none are listed
+OVER b3d:furnace-of-rath/doubles-trample-damage-after-assignment/you/2560x1080 has 1 `text-overlap` faults, and none are listed
+slowest: b3d:stress-hand/you/2560x1080 20.6s, b3d:stress-hand/you/1920x1080 20.3s, b3d:stress-hand/you/1600x900@2 10.4s
+judged, in frames (scripts for the segment checks) / elements: on-screen 496404/6219837, overlap 494824/1992393, reachable 495072/3857908, duplicate 496440/17798103, text-fits 496440/3193321, text-overlap 496440/3193321, named 496404/6219837, clips 496440/14276, layer-drawn 496440/3379198, marks-on 11380/26024, phone-sizes 0/0, no-jumps 31000/385612, rest-placement 31000/135850, step-time 93588/229640, step-shown 1006187/29314, crowded 28152/54908, blank-card 496032/6282793, lines-hold 108519/139939
+8688 tests, 24 failed, 3 different faults; 1361563 frames, median 133 a test; 149.9s, 34.5 test-ms a test
+211 tests have a listed fault; most listed: text-overlap (462)
+b3d-sweep b3d-test test: FAILED (exit 1) after 771.4 s (876 s on the clock)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>just b3d test</code> passes in a worktree rebased on the staging tip (<code>just b3d sweep --step test --commit origin/staging</code> replays it in a tree of its own).</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">2</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-17T12:01:51Z" tabindex="0" data-tip="2026-11-17T12:01:51Z">2026-11-17</time></header><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>test</code> on darwin at a1f57cd5378fa377de8e50bb85552a54b268cbc5. The last sweep that passed on this machine was at bf9d3188a55f0d8cd3da165cdadc2a5f32c34ecb.</p>
+<ul><li><code>b3d-test:test</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-test:test  out of time: culprit among 49 commits 67a5b5f3dd..a1f57cd537  (99 commits since the last passing sweep)
+record: b3d-test:test  runs 2, failures 2, flaky 2, stale 0, catch 0, miss 0 (30 days)</code></pre>
+<p>Run the step's own command, <code>just b3d test</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step test --commit a1f57cd5378f</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>the recordings pack for the present sources is missing (/Users/dthurn/Library/Caches/beryl/b3d/recordings-645c7ee09f278696.bin); `just b3d record` builds it
+/Users/dthurn/Library/Caches/beryl/b3d/recordings-645c7ee09f278696.bin
+just b3d test
+OVER the median test evaluates 140 frames, over the limit of 139 in data/beryl3d/gates.json (tests.median_frames)
+slowest: b3d:stress-hand/you/1920x1080 13.4s, b3d:stress-hand/you/2560x1080 13.0s, b3d:stress-hand/you/1440x900 11.8s
+judged, in frames (scripts for the segment checks) / elements: on-screen 570936/7090088, overlap 569336/2258246, reachable 569600/4373213, duplicate 570972/20464349, text-fits 570972/3667449, text-overlap 570972/3667449, named 570936/7090088, clips 570972/15867, layer-drawn 570972/3899654, marks-on 12068/27256, phone-sizes 0/0, no-jumps 33308/407536, rest-placement 33308/144246, step-time 99536/245528, step-shown 1074915/31422, crowded 30104/58508, blank-card 570564/7280067, lines-hold 131767/171703
+9152 tests, 0 failed, 0 different faults; 1500555 frames, median 140 a test; 157.5s, 34.4 test-ms a test
+349 tests have a listed fault; most listed: text-overlap (622)
+b3d-sweep b3d-test test: FAILED (exit 1) after 888.1 s (1068 s on the clock); rerunning it once
+just b3d test
+OVER the median test evaluates 140 frames, over the limit of 139 in data/beryl3d/gates.json (tests.median_frames)
+slowest: b3d:stress-hand/you/1920x1080 11.5s, b3d:stress-hand/you/2560x1080 11.4s, b3d:stress-hand/you/1440x900 8.7s
+judged, in frames (scripts for the segment checks) / elements: on-screen 570936/7090088, overlap 569336/2258246, reachable 569600/4373213, duplicate 570972/20464349, text-fits 570972/3667449, text-overlap 570972/3667449, named 570936/7090088, clips 570972/15867, layer-drawn 570972/3899654, marks-on 12068/27256, phone-sizes 0/0, no-jumps 33308/407536, rest-placement 33308/144246, step-time 99536/245528, step-shown 1074915/31422, crowded 30104/58508, blank-card 570564/7280067, lines-hold 131767/171703
+9152 tests, 0 failed, 0 different faults; 1500555 frames, median 140 a test; 166.5s, 36.4 test-ms a test
+349 tests have a listed fault; most listed: text-overlap (622)
+b3d-sweep b3d-test test: FAILED (exit 1) after 54.6 s (170 s on the clock)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-17T12:59:13Z" tabindex="0" data-tip="2026-11-17T12:59:13Z">2026-11-17</time></header><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>test</code> on darwin at 025f7da16b36716c9a12b39271dd843e94ee4e8b. The last sweep that passed on this machine was at ec9a3c014e37509509baf510415e00af75b63e14.</p>
+<ul><li><code>b3d-test:test</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-test:test  out of time: culprit among 2 commits 17d0768cd7..d9ca05f50e  (6 commits since the last passing sweep)
+record: b3d-test:test  runs 4, failures 4, flaky 2, stale 0, catch 0, miss 0 (30 days)</code></pre>
+<p>Run the step's own command, <code>just b3d test</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step test --commit 025f7da16b36</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>just b3d test
+OVER the median test evaluates 140 frames, over the limit of 139 in data/beryl3d/gates.json (tests.median_frames)
+slowest: b3d:stress-hand/you/2560x1080 14.5s, b3d:stress-hand/you/1920x1080 13.6s, b3d:stress-hand/you/1600x900@2 12.9s
+judged, in frames (scripts for the segment checks) / elements: on-screen 570936/7090088, overlap 569336/2258246, reachable 569600/4373213, duplicate 570972/20464349, text-fits 570972/3667449, text-overlap 570972/3667449, named 570936/7090088, clips 570972/15867, layer-drawn 570972/3899654, marks-on 12068/27256, phone-sizes 0/0, no-jumps 33308/407536, rest-placement 33308/144246, step-time 99536/245528, step-shown 1074915/31422, crowded 30104/58508, blank-card 570564/7280067, lines-hold 131767/171703
+9152 tests, 0 failed, 0 different faults; 1500555 frames, median 140 a test; 297.6s, 32.5 test-ms a test
+349 tests have a listed fault; most listed: text-overlap (622)
+b3d-sweep b3d-test test: FAILED (exit 1) after 183.7 s (754 s on the clock); rerunning it once
+just b3d test
+OVER the median test evaluates 140 frames, over the limit of 139 in data/beryl3d/gates.json (tests.median_frames)
+slowest: b3d:stress-hand/you/1920x1080 11.5s, b3d:stress-hand/you/2560x1080 11.4s, b3d:stress-hand/you/1440x900 8.6s
+judged, in frames (scripts for the segment checks) / elements: on-screen 570936/7090088, overlap 569336/2258246, reachable 569600/4373213, duplicate 570972/20464349, text-fits 570972/3667449, text-overlap 570972/3667449, named 570936/7090088, clips 570972/15867, layer-drawn 570972/3899654, marks-on 12068/27256, phone-sizes 0/0, no-jumps 33308/407536, rest-placement 33308/144246, step-time 99536/245528, step-shown 1074915/31422, crowded 30104/58508, blank-card 570564/7280067, lines-hold 131767/171703
+9152 tests, 0 failed, 0 different faults; 1500555 frames, median 140 a test; 128.0s, 28.0 test-ms a test
+349 tests have a listed fault; most listed: text-overlap (622)
+b3d-sweep b3d-test test: FAILED (exit 1) after 316.0 s (735 s on the clock)</code></pre></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T10:06:22Z" tabindex="0" data-tip="2026-11-17T10:06:22Z">2026-11-17</time></div></li></ol><p class="c-empty">bd recorded no events for this bead; these come from its timestamps.</p></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>beryl_nightly_checks</dt><dd><span class="c-mono">b3d-test:test</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-neutral">Open</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span><span class="c-muted">High</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-muted">Nobody</span></dd></div><div class="c-meta-item"><dt>Epic</dt><dd><a href="by-q44s" data-hovercard="hc-by-q44s">Beryl 3D: a native Rust client to replace the web interface and Tauri</a></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">b3d-sweep</span><span class="c-chip c-tone-muted">role:executor</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-17T10:06:22Z" tabindex="0" data-tip="2026-11-17T10:06:22Z">2026-11-17</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-17T10:06:22Z" tabindex="0" data-tip="2026-11-17T10:06:22Z">2026-11-17</time></dd></div></dl></aside></div></div></div><template id="hc-by-q44s"><div class="c-card-top"><span class="c-mono">by-q44s</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Beryl 3D: a native Rust client to replace the web interface and Tauri</div><div class="c-hovercard-meta"><span class="c-dot c-tone-neutral">Open</span><span>epic</span><span class="c-progress"><span class="c-progress-track"><span class="c-progress-fill" style="width:90%"></span></span><span class="c-progress-label">392/437</span></span></div></template>
+</main>
+</body>
+</html>

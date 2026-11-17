@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on windows · by-i4ph</title>
+<meta name="description" content="Fix slow CI failure on windows">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-i4ph</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-i4ph</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on windows</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">1</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Fixed on staging e479da7; slow CI passed on Windows. audio path as_posix; shots: sideways slack for tapped text, no stale hover in resized checks, still() waits on stillness with a 20 s hang guard; ui-test: dropped the ETB flight's millisecond thresholds, visibility check polls fades under a hang guard, manifest start read from the first recorded frame, a boot that lost a module to net::ERR_ (Windows ENOBUFS) retries once; checks pytest stretches 8x.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on cygnus (windows) at 4aaa4de9636345e096b6264bba54159e60a20ec0. Failing range since last passing commit: 68e8f0b7cc2d5fbedce31d8464e82928914794ef..4aaa4de9636345e096b6264bba54159e60a20ec0.</p>
+<p>Log tail:</p>
+<pre><code>ok: attack destinations use thin lines: you player
+ok: attack destinations use thin lines: you 68
+ok: attack destinations use thin lines: opponent player
+ok: attack destinations use thin lines: opponent 68
+ok: crewing shows the power picked against the crew cost without text
+ok: the crew meter fills with the power tapped
+ok: waterbend prompt renders its generic mana symbol
+ok: waterbend prompt renders its generic mana symbol
+ok: phone waterbend long press previews without accepting
+ok: waterbend finishes when manual picks cover the cost
+ok: Enter on the start screen starts a game
+ok: cards for the bottom toggle in their slots until confirmed
+ok: Enter with a game in progress returns to it
+ok: waterbend Auto Pay highlights only on hover and accepts on click
+ok: waterbend Auto Pay keeps manual picks
+ok: the start screen remembers the last opponent across a reload
+ok: the life result shows Victory and the applicable details
+ok: the life-loss result waits for the killing blow and can be put aside
+ok: the library result shows Victory and the applicable details
+ok: the effect result shows Victory and the applicable details
+ok: a game resumed at launch gives way to a new game at one click
+ok: a new game with one in progress asks first, then concedes it
+ok: the concede result shows Defeat and the applicable details
+ok: the settings concede the game once confirmed in place
+ok: a reloaded page takes up the game in progress
+ok: zone pile faces share a bottom edge: you, 0 in graveyard
+ok: zone pile faces share a bottom edge: you, 1 in graveyard
+ok: zone pile faces share a bottom edge: opponent, 0 in graveyard
+ok: zone pile faces share a bottom edge: opponent, 1 in graveyard
+ok: cancelled frames stay cancelled across bug report freeze
+ok: libraries match the other piles
+ok: a second bug report keeps thawed frames frozen
+ok: self-target is green for you
+ok: self-target is green for opponent
+ok: undo does not repeat an automatic target
+ok: bug report thaw never revives resolved arrows
+ok: tokens reach their destination before ceasing: you hand
+ok: tokens reach their destination before ceasing: opponent hand
+ok: tokens reach their destination before ceasing: opponent library
+ok: tokens reach their destination before ceasing: you library
+ok: tokens reach their destination before ceasing: you graveyard
+ok: tokens reach their destination before ceasing: opponent graveyard
+ok: tokens reach their destination before ceasing: you exile
+ok: tokens reach their destination before ceasing: opponent exile
+ok: bug report thaw preserves later player arrows
+ok: bug report thaw preserves later attack arrows
+ok: bug report thaw preserves later object arrows
+ui-test: FAILED
+ci ui-test ui-test: FAILED (exit 1) after 356.3 s
+ci: repo 3 s (just 0 s, markdown 2 s)
+ci: python 16 s (black 3 s, pytest FAILED)
+ci: rust 284 s (build-paths 0 s, fmt 2 s, clippy 21 s, tests 260 s)
+ci: ui 11 s (prettier 6 s, tsc 4 s, card-names 0 s)
+ci: app 276 s (smoke 276 s)
+ci: shots 232 s (ui-shots FAILED)
+ci: ui-test 356 s (ui-test FAILED)
+ci: oracle 256 s (oracle 256 s)
+ci: FAILED: python shots ui-test in 358.9 s (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 1 1 1 on 20 cores; the times above are adjusted for load beyond the cores, up to 8x</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on windows at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">1</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-11T00:27:15Z" tabindex="0" data-tip="2026-11-11T00:27:15Z">2026-11-11</time></header><div class="c-prose"><p>Windows slow CI at 4aaa4de (first Windows push since 2026-11-08's 177 s pass) fails on: (1) pytest test_audio: stray path printed with backslashes, fixed in the steward worktree (as_posix); (2) ui-shots game-tapped-beneath: "2" cut by span.card-pt at 2560x1080 in Chromium, deterministic; (3) ui-test: flaky under load, different tests each run (ETB flight 320 ms x2 and game-over visibility in CI; face-down reveal timeout on a rerun alone); (4) budget: ui-test lane 356 s in CI (176 s alone) against the 300 s suite budget. None touch 4aaa4de's change (beryl_cli game pool size).</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body">closed this<span class="c-timeline-detail">Fixed on staging e479da7; slow CI passed on Windows. audio path as_posix; shots: sideways slack for tapped text, no stale hover in resized checks, still() waits on stillness with a 20 s hang guard; ui-test: dropped the ETB flight&#x27;s millisecond thresholds, visibility check polls fades under a hang guard, manifest start read from the first recorded frame, a boot that lost a module to net::ERR_ (Windows ENOBUFS) retries once; checks pytest stretches 8x.</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T01:31:52Z" tabindex="0" data-tip="2026-11-11T01:31:52Z">2026-11-11</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body">started work</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T00:20:17Z" tabindex="0" data-tip="2026-11-11T00:20:17Z">2026-11-11</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T00:18:19Z" tabindex="0" data-tip="2026-11-11T00:18:19Z">2026-11-11</time></div></li></ol><p class="c-empty">bd recorded no events for this bead; these come from its timestamps.</p></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>thurn@users.noreply.github.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-11T00:20:17Z" tabindex="0" data-tip="2026-11-11T00:20:17Z">2026-11-11</time></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">cygnus</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">windows</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">68e8f0b7cc2d5fbedce31d8464e82928914794ef..4aaa4de9636345e096b6264bba54159e60a20ec0</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">6076a6c08d92de87146d2301a74ec8bf1998f072 fa7a5fe941dad9364fa87e1e27ad72bdab99658b fc689d0d91db3aa932d0038196548b7cb887f4eb 4b0d6ee8d02f0025ac3a28c03fe9ad8317683a2a e479da744783cbf392eb67fe73ed78d837e9dd41</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono"></span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="44076d6a-34ce-4a3d-9c0b-342c5b128e12">44076d6a</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-11T00:18:19Z" tabindex="0" data-tip="2026-11-11T00:18:19Z">2026-11-11</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-11T01:31:52Z" tabindex="0" data-tip="2026-11-11T01:31:52Z">2026-11-11</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-11T01:31:52Z" tabindex="0" data-tip="2026-11-11T01:31:52Z">2026-11-11</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

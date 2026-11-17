@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix the Beryl 3D sweep&#x27;s timeline-parity-all step: b3d-timeline-parity-all:timeline-parity-all · by-q44s.101</title>
+<meta name="description" content="Fix the Beryl 3D sweep&#x27;s timeline-parity-all step: b3d-timeline-parity-all:timeline-parity-all">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><a class="c-crumb" href="by-q44s">by-q44s</a><span class="c-crumb" aria-current="page">by-q44s.101</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-q44s.101</span><span class="c-dot c-tone-neutral">Open</span></div><h1 class="c-title">Fix the Beryl 3D sweep&#x27;s timeline-parity-all step: b3d-timeline-parity-all:timeline-parity-all</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>timeline-parity-all</code> on darwin at 2a0c49aa78ad857ce66151e5d2ac8ca82ce57219. The last sweep that passed on this machine was at bf9d3188a55f0d8cd3da165cdadc2a5f32c34ecb.</p>
+<ul><li><code>b3d-timeline-parity-all:timeline-parity-all</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-timeline-parity-all:timeline-parity-all  out of time: culprit among 85 commits d03b244c7e..2a0c49aa78  (85 commits since the last passing sweep)
+record: b3d-timeline-parity-all:timeline-parity-all  runs 28, failures 5, flaky 2, stale 0, catch 1, miss 0 (30 days)</code></pre>
+<p>Run the step's own command, <code>just b3d timeline-parity</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step timeline-parity-all --commit 2a0c49aa78ad</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>just b3d timeline-parity
+
+thread &#x27;main&#x27; (121426724) panicked at crates/beryl_scene/src/play/step.rs:363:13:
+placing only the groups a step changed gives what placing every group does
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+b3d-sweep b3d-timeline-parity-all timeline-parity-all: FAILED (exit 101) after 905.4 s; rerunning it once
+just b3d timeline-parity
+
+thread &#x27;main&#x27; (121602117) panicked at crates/beryl_scene/src/play/step.rs:363:13:
+placing only the groups a step changed gives what placing every group does
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+b3d-sweep b3d-timeline-parity-all timeline-parity-all: FAILED (exit 101) after 530.4 s (702 s on the clock)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>just b3d timeline-parity</code> passes in a worktree rebased on the staging tip (<code>just b3d sweep --step timeline-parity-all --commit origin/staging</code> replays it in a tree of its own).</p></div></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T10:06:27Z" tabindex="0" data-tip="2026-11-17T10:06:27Z">2026-11-17</time></div></li></ol><p class="c-empty">bd recorded no events for this bead; these come from its timestamps.</p></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>beryl_nightly_checks</dt><dd><span class="c-mono">b3d-timeline-parity-all:timeline-parity-all</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-neutral">Open</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span><span class="c-muted">High</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-muted">Nobody</span></dd></div><div class="c-meta-item"><dt>Epic</dt><dd><a href="by-q44s" data-hovercard="hc-by-q44s">Beryl 3D: a native Rust client to replace the web interface and Tauri</a></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">b3d-sweep</span><span class="c-chip c-tone-muted">role:executor</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-17T10:06:27Z" tabindex="0" data-tip="2026-11-17T10:06:27Z">2026-11-17</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-17T10:06:27Z" tabindex="0" data-tip="2026-11-17T10:06:27Z">2026-11-17</time></dd></div></dl></aside></div></div></div><template id="hc-by-q44s"><div class="c-card-top"><span class="c-mono">by-q44s</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Beryl 3D: a native Rust client to replace the web interface and Tauri</div><div class="c-hovercard-meta"><span class="c-dot c-tone-neutral">Open</span><span>epic</span><span class="c-progress"><span class="c-progress-track"><span class="c-progress-fill" style="width:90%"></span></span><span class="c-progress-label">392/437</span></span></div></template>
+</main>
+</body>
+</html>

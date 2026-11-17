@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on windows · by-ag7m</title>
+<meta name="description" content="Fix slow CI failure on windows">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-ag7m</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-ag7m</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on windows</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">2</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>already fixed on staging by bad85941 (stage.ts under 800 lines); repo lane passes at 85a8963e</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on cygnus (windows) at 09038aae0da041ddf1b660d4d849b6cae96edded. Failing range since last passing commit: e28db8c6783182a20a6e6ddee2171a48348daa81..09038aae0da041ddf1b660d4d849b6cae96edded.</p>
+<p>Log tail:</p>
+<pre><code>✔ several cards drawn together sweep past where one is held, to a hand that opens once (1.7677ms)
+✔ the opponent&#x27;s draw flies face down, and is not held up (0.5314ms)
+✔ a card back that lands the other way up the table leaves that way up, and never spins (0.841ms)
+✔ a card turning over is tipped in depth, its top away and then its foot down (0.1589ms)
+✔ a lift keeps the cards it began with lifted until it ends (0.2232ms)
+✔ cards exiled together leave one at a time, about 0.3 s apart (2.7743ms)
+✔ the clock moves only when advanced, by exactly what it is given (3.004ms)
+✔ released, the clock sums the time between frames; held, it ignores them (0.4882ms)
+✔ a view with no script is drawn at rest at once, one node an object (2.8412ms)
+✔ two steps read the same at 800 ms in ticks of 16 ms (36.3624ms)
+✔ two steps read the same at 800 ms in ticks of 100 ms (1.1112ms)
+✔ two steps read the same at 800 ms in ticks of 1000 ms (1.7131ms)
+✔ the steps of a beat run together, each its stagger after the one before (1.1116ms)
+✔ what a step is about flies over what rests; what makes room for it does not (0.585ms)
+✔ a script given while another plays begins where that one ends (1.0096ms)
+✔ settle plays everything out and says how long it took (0.9679ms)
+✔ with no durations every step is over in the tick that begins it (0.4913ms)
+✔ a step&#x27;s beginning and end are told at their own stage times, in order (1.3633ms)
+✔ another layout places everything afresh, with no motion (0.5275ms)
+✔ a step makes and removes nodes; a reset drops what was playing (1.3159ms)
+✔ those who draw from the stage hear of records and tables, never of motion (0.7966ms)
+✔ a surface mounted later finds every node where the model has it (1.5269ms)
+✔ replaying a step changes the table as the script module says (0.7291ms)
+✔ a card held up joins its cause&#x27;s Revealed Cards, and another&#x27;s take their place (0.4512ms)
+✔ the verb suite&#x27;s lists name the design language&#x27;s verbs, each once (5.4937ms)
+✔ every verb has values to play it with, or an exemption (0.4642ms)
+✔ every verb the stage plays has a case, and its four checks (0.5317ms)
+✔ every verb the stage plays has a script written by hand (1.6343ms)
+ℹ tests 191
+ℹ suites 0
+ℹ pass 191
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4702.6418
+ci ui test: 4.6 s (5 s on the clock)
+=== ci names: passed
+ci names card-names: 3.7 s (4 s on the clock)
+ci names two-player: 1.0 s (1 s on the clock)
+ci names board-door: 0.4 s (0 s on the clock)
+ci names discarded-push: 0.5 s (1 s on the clock)
+ci names citations: 1.9 s (2 s on the clock)
+ci names card-headers: 0.8 s (1 s on the clock)
+ci names card-crates: 1.4 s (2 s on the clock)
+=== ci repo: FAILED
+ci repo just: 0.0 s (0 s on the clock)
+ci repo markdown: 3.4 s (4 s on the clock)
+file-length: ui/src/stage/stage.ts: 802 lines, over 800 and not on the allowlist: split it
+ci repo file-length: FAILED (exit 1) after 1.4 s (2 s on the clock)
+ci: repo 5 s (just 0 s, markdown 3 s, file-length FAILED)
+ci: python 87 s (black 2 s, pytest 84 s, excused)
+ci: rust 273 s (build-paths 1 s, fmt 4 s, clippy 45 s, tests 222 s)
+ci: script 82 s (script-check 82 s)
+ci: ui 20 s (prettier 8 s, tsc 6 s, test 5 s)
+ci: names 10 s (card-names 4 s, two-player 1 s, board-door 0 s, discarded-push 0 s, citations 2 s, card-headers 1 s, card-crates 1 s)
+quarantined: python python:pytest
+ci: FAILED: repo in 277.3 s (325 s on the clock) (budget 450 s)
+bisect: 0 failed checks over 2 commits since origin/master (e28db8c678), 615 s to search
+bisect: repo  not bisected: a static check, a timeout or a build that failed</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on windows at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">2</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-13T04:51:42Z" tabindex="0" data-tip="2026-11-13T04:51:42Z">2026-11-13</time></header><div class="c-prose"><p>Note from the user, relayed by the vizier on 2026-11-12: staging's justfile was reformatted with just 1.59 (commit f0dcdb8b, 'fix: onboarding gaps found setting up a new Mac'). Any machine on an older just fails the repo lane's 'just --fmt --check'. If this failure is that, the fix is upgrading just on Cygnus ('winget upgrade Casey.Just'), not reverting the formatting.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-13T04:54:01Z" tabindex="0" data-tip="2026-11-13T04:54:01Z">2026-11-13</time></header><div class="c-prose"><p>Steward: the only failing lane on cygnus was repo/file-length (ui/src/stage/stage.ts at 802 lines at 09038aae). Already fixed on staging by bad85941 'fix: stage.ts back under the 800-line limit' (800 lines now). 'by ci repo' passes at staging tip 85a8963e on jarvis; file-length is not OS-specific. The just-fmt lane passed on cygnus in that run, so the just 1.59 note does not apply here. No code change.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-13T16:35:12Z" tabindex="0" data-tip="2026-11-13T16:35:12Z">2026-11-13</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb">session 2f7a53</span></span>closed this<span class="c-timeline-detail">already fixed on staging by bad85941 (stage.ts under 800 lines); repo lane passes at 85a8963e</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-13T04:54:23Z" tabindex="0" data-tip="2026-11-13T04:54:23Z">2026-11-13</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-13T04:53:18Z" tabindex="0" data-tip="2026-11-13T04:53:18Z">2026-11-13</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb">session 2f7a53</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb">session 2f7a53</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-13T04:52:38Z" tabindex="0" data-tip="2026-11-13T04:52:38Z">2026-11-13</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-13T04:52:15Z" tabindex="0" data-tip="2026-11-13T04:52:15Z">2026-11-13</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:232e381d-446b-48dc-b742-bf52bcb7ad09">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:232e381d-446b-48dc-b742-bf52bcb7ad09">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-13T04:50:49Z" tabindex="0" data-tip="2026-11-13T04:50:49Z">2026-11-13</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-13T04:50:49Z" tabindex="0" data-tip="2026-11-13T04:50:49Z">2026-11-13</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>thurn@users.noreply.github.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-13T04:50:50Z" tabindex="0" data-tip="2026-11-13T04:50:50Z">2026-11-13</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-ag7m</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">cygnus</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">windows</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">e28db8c6783182a20a6e6ddee2171a48348daa81..09038aae0da041ddf1b660d4d849b6cae96edded</span></dd></div><div class="c-meta-item"><dt>enact_pool_session</dt><dd><span class="c-mono">local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">af664bd6a7a249a18a864799e0c6cec3</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-w8gv</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-97g</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">232e381d-446b-48dc-b742-bf52bcb7ad09</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-ag7m</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">jarvis</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb">session 2f7a53</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-13T02:50:35Z" tabindex="0" data-tip="2026-11-13T02:50:35Z">2026-11-13</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-13T16:35:12Z" tabindex="0" data-tip="2026-11-13T16:35:12Z">2026-11-13</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-13T04:54:23Z" tabindex="0" data-tip="2026-11-13T04:54:23Z">2026-11-13</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

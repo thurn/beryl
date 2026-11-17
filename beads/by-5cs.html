@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-5cs</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-5cs</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-5cs</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">1</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Transient host load (longthink at full power plus an MTGA session), not code: same tip passed in 149 s locally; 112672a adds the load average to over-budget by ci output; slow CI passed in 143 s and master advanced</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at e979d8067aaa3cd1cd20c22efb3139f3e020a576. Failing range since last passing commit: d4089d90d3df93680e116b03815c3df52c830c4f..e979d8067aaa3cd1cd20c22efb3139f3e020a576.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;name&quot;: &quot;Snapcaster Mage: flashback a counterspell, then exile it&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Counterspell with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Snapcaster Mage&quot;,
+        &quot;name&quot;: &quot;Snapcaster Mage: a flashback spell returned to hand is exiled&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Counterspell with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Snapcaster Mage&quot;,
+        &quot;name&quot;: &quot;Snapcaster Mage: flashback is the one alternative cost&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Damn with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Abhorrent Oculus&quot;,
+        &quot;name&quot;: &quot;Abhorrent Oculus exiles six of seven graveyard cards as it&#x27;s cast&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a choice of the cards an exile cost takes&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 28&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a chosen payment plan&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 9208 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 9049 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 6544 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: 506.3 s
+=== ci counts: passed
+   Compiling beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e979d8067aaa/rust/crates/beryl_engine)
+   Compiling beryl_scenario v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e979d8067aaa/rust/crates/beryl_scenario)
+   Compiling beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e979d8067aaa/rust/crates/beryl_cards)
+   Compiling beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e979d8067aaa/rust/crates/beryl_search)
+   Compiling beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-e979d8067aaa/rust/crates/beryl_bench)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 27.08s
+     Running benches/rollout_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/rollout_counts-14d69c261ac6de64)
+bench: rollout_counts::cube_rollout::rollouts::corpus: 405,777,238 instructions, +0.16% against the bar of 405,147,828
+ci counts count-gate: 41.5 s
+ci: repo 2 s (just 0 s, markdown 2 s)
+ci: python 16 s (black 3 s, pyre 6 s, pytest 7 s)
+ci: rust 493 s (build-paths 0 s, fmt 2 s, clippy 22 s, tests 469 s)
+ci: ui 11 s (prettier 5 s, tsc 6 s, card-names 0 s)
+ci: app 46 s (smoke 46 s)
+ci: shots 479 s (ui-shots 479 s)
+ci: ui-test 575 s (ui-test 575 s)
+ci: oracle 506 s (oracle 506 s)
+ci: counts 42 s (count-gate 42 s)
+ci: passed in 581 s (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">1</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-06T23:24:24Z" tabindex="0" data-tip="2026-11-06T23:24:24Z">2026-11-06</time></header><div class="c-prose"><p>Diagnosis: transient host load, not code. The failing run at e979d80 (~15:06-15:16 local) passed every lane but took 581 s; every lane slowed ~3x against d4089d9's 193 s run (rust tests 144-&gt;469, shots 136-&gt;479, ui-test 190-&gt;575, oracle 154-&gt;506), including the Java oracles and UI shots that e979d80's mana-solver change cannot affect (its count-gate rise is +0.16%). The host had just longthink run-003 at full power (18 threads, nice 10) plus MTGA, started ~15:08 and since exited; load average ~45-53 on 18 cores. Rerun of by ci at the same tip e979d80 in a fresh worktree at 15:21, with longthink still at full power and MTGA closed: passed in 149 s. The runner won't retest an already-tested tip and run <a href="by-cbf" data-hovercard="hc-by-cbf"><span class="c-mono">by-cbf</span></a> has nothing else to push, so I'm pushing a small diagnostic commit: an over-budget by ci now prints the load average and core count, so the next Steward can tell load from a slow step without bisecting. No tests deleted.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T23:28:32Z" tabindex="0" data-tip="2026-11-06T23:28:32Z">2026-11-06</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_20333d5a-9b44-4e3b-95c2-af54da470005">session 20333d</span></span>closed this<span class="c-timeline-detail">Transient host load (longthink at full power plus an MTGA session), not code: same tip passed in 149 s locally; 112672a adds the load average to over-budget by ci output; slow CI passed in 143 s and master advanced</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T23:28:09Z" tabindex="0" data-tip="2026-11-06T23:28:09Z">2026-11-06</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T23:25:09Z" tabindex="0" data-tip="2026-11-06T23:25:09Z">2026-11-06</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_20333d5a-9b44-4e3b-95c2-af54da470005">session 20333d</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_20333d5a-9b44-4e3b-95c2-af54da470005">session 20333d</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T23:18:02Z" tabindex="0" data-tip="2026-11-06T23:18:02Z">2026-11-06</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T23:17:33Z" tabindex="0" data-tip="2026-11-06T23:17:33Z">2026-11-06</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:b10605fc-7e7c-4a00-9229-d1ea9929cc26">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:b10605fc-7e7c-4a00-9229-d1ea9929cc26">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T23:17:01Z" tabindex="0" data-tip="2026-11-06T23:17:01Z">2026-11-06</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T23:17:01Z" tabindex="0" data-tip="2026-11-06T23:17:01Z">2026-11-06</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T23:15:57Z" tabindex="0" data-tip="2026-11-06T23:15:57Z">2026-11-06</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T23:15:57Z" tabindex="0" data-tip="2026-11-06T23:15:57Z">2026-11-06</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-06T23:17:02Z" tabindex="0" data-tip="2026-11-06T23:17:02Z">2026-11-06</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">local_20333d5a-9b44-4e3b-95c2-af54da470005</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-5cs</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">d4089d90d3df93680e116b03815c3df52c830c4f..e979d8067aaa3cd1cd20c22efb3139f3e020a576</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">112672a53f0c5391424c787081335e6a1e125f2d</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">35ffec57f1da4da8b860e0e13f99a983</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-cbf</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-cbf</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">local_20333d5a-9b44-4e3b-95c2-af54da470005</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">b10605fc-7e7c-4a00-9229-d1ea9929cc26</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-5cs</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">jarvis</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="local_20333d5a-9b44-4e3b-95c2-af54da470005">session 20333d</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-06T23:15:57Z" tabindex="0" data-tip="2026-11-06T23:15:57Z">2026-11-06</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-06T23:28:33Z" tabindex="0" data-tip="2026-11-06T23:28:33Z">2026-11-06</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-06T23:28:10Z" tabindex="0" data-tip="2026-11-06T23:28:10Z">2026-11-06</time></dd></div></dl></aside></div></div></div><template id="hc-by-cbf"><div class="c-card-top"><span class="c-mono">by-cbf</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Player games never stall: layout-generic State</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>epic</span><span class="c-progress"><span class="c-progress-track"><span class="c-progress-fill" style="width:100%"></span></span><span class="c-progress-label">6/6</span></span></div></template>
+</main>
+</body>
+</html>

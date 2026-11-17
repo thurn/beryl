@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-5fnf</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-5fnf</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-5fnf</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">3</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Load-stretched rerun hit the wall limit; now excused (68a33a13); slow CI green at 93b44b62</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 8e6fc07ccf3fecb051c3828442fdb4d545106147. Failing range since last passing commit: a65a9389d0fa79bffcf9db506f1cfafc72a06639..8e6fc07ccf3fecb051c3828442fdb4d545106147.</p>
+<p>Log tail:</p>
+<pre><code>ok: verb:point/yours/desktop
+ok: verb:mark/yours/phone
+ok: verb:mark/theirs/phone
+ok: verb:point/theirs/desktop
+ok: verb:streak/yours/desktop
+ok: verb:streak/theirs/desktop
+ok: verb:announce/yours/desktop
+ok: verb:point/yours/phone
+ok: verb:streak/yours/phone
+ok: verb:point/theirs/phone
+ok: verb:announce/theirs/desktop
+ok: verb:streak/theirs/phone
+ok: verb:announce/yours/phone
+ok: verb:dwell/yours/desktop
+ok: verb:announce/theirs/phone
+ok: verb:dwell/theirs/desktop
+ok: verb:set/yours/desktop
+ok: verb:dwell/yours/phone
+ok: verb:set/theirs/desktop
+ok: verb:showcase/yours/desktop
+ok: verb:dwell/theirs/phone
+ok: verb:set/yours/phone
+ok: verb:showcase/theirs/desktop
+ok: verb:set/theirs/phone
+ok: verb:showcase/yours/phone
+ok: verb:showcase/theirs/phone
+ok: shape:pick/theirs/desktop
+ok: shape:pick/theirs/phone
+ok: shape:pile/yours/phone
+ok: shape:pile/yours/desktop
+ok: shape:split/theirs/desktop
+ok: shape:pick/yours/desktop
+ok: shape:split/theirs/phone
+ok: shape:pick/yours/phone
+ok: shape:zone/theirs/desktop
+ok: shape:split/yours/desktop
+ok: shape:zone/theirs/phone
+ok: shape:order/theirs/desktop
+ok: shape:order/yours/desktop
+ok: shape:split/yours/phone
+ok: shape:zone/yours/desktop
+ok: shape:order/yours/phone
+ok: shape:order/theirs/phone
+ok: shape:pay/theirs/desktop
+ci ui-test ui-test: TIMED OUT after 205.7 s (474 s on the clock, the machine loaded) (the wall limit of 475 s before Enact&#x27;s kill)
+ci: repo 4 s (just 0 s, markdown 3 s, file-length 0 s, conventions 1 s)
+ci: python 26 s (black 1 s, pyre 4 s, pytest 22 s)
+ci: rust 68 s (build-paths 0 s, fmt 2 s, clippy 1 s, tests 65 s)
+ci: script 3 s (script-check 3 s)
+ci: ui 13 s (prettier 6 s, tsc 6 s, test 1 s)
+ci: names 4 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 1 s, citations 1 s)
+ci: app 18 s (smoke 18 s)
+ci: shots 54 s (ui-shots 54 s)
+ci: ui-test 206 s (ui-test TIMED OUT)
+ci: oracle 86 s (oracle 86 s)
+ci: counts 20 s (count-gate 20 s)
+ci: mobile 1 s (mobile-check 1 s)
+ci: FAILED: ui-test in 205.8 s (475 s on the clock, the machine loaded) (budget 300 s)
+bisect: 0 failed checks over 1 commits since origin/master (a65a9389d0), 0 s to search
+bisect: ui-test  not bisected: a static check, a timeout or a build that failed</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">3</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T21:05:38Z" tabindex="0" data-tip="2026-11-12T21:05:38Z">2026-11-12</time></header><div class="c-prose"><p>Diagnosis: not a product failure. runs.jsonl for 8e6fc07c shows the first slow-CI pass ran all 478 ui-test checks green but over budget at load ~35/18 cores, so slow_run reran the whole run; the rerun ran into the wall limit (Enact slow_timeout 1000 - 60 margin, from the run start) with ui-test at 206 load-adjusted s of its 300 budget. 8e6fc07c itself removed 192 ui-test checks, so the lane got smaller; per-verb times doubled only from load (longthink + <a href="by-w8gv.21.33" data-hovercard="hc-by-w8gv-21-33"><span class="c-mono">by-w8gv.21.33</span></a> beryl_cli + others). Fix: slow_run excuses a rerun whose only failures are wall-limit kills on a loaded machine (Outcome.walled / Steps.walled), since the first run passed every check. A quiet-machine wall kill still fails. Tests in test_bisect.py.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T21:24:10Z" tabindex="0" data-tip="2026-11-12T21:24:10Z">2026-11-12</time></header><div class="c-prose"><p>Handoff: tools/src/beryl_tools/checks.py: Outcome.walled, Steps.walled(), and slow_run excuses a loaded rerun whose only failures are wall-limit kills (the first run passed every check). Tests: test_bisect.py test_a_rerun_under_load_cut_off_by_the_wall_limit_is_excused / test_a_wall_limit_kill_on_a_quiet_machine_still_fails. Local just ui-test at the failing tip passed (286 ok, 20 min wall at load ~50). Slow CI meanwhile passed at 93b44b62 and master advanced. Repair commit 68a33a13.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-12T21:26:07Z" tabindex="0" data-tip="2026-11-12T21:26:07Z">2026-11-12</time></header><div class="c-prose"><p>From the Warden of <a href="by-w8gv.21.33" data-hovercard="hc-by-w8gv-21-33"><span class="c-mono">by-w8gv.21.33</span></a> (evidence, not a takeover): just ci in my worktree on 8e6fc07c plus a test-only commit timed out the same way at load 38: ui-test 511.6 load-adjusted s (940 s on the clock), 285 of 286 checks ok, every other lane passed. Staging's own passes had the lane at 334, 387 and 478 s against 300. The lane's cost is the verb suite replaying the same moments once per verb; <a href="by-w8gv.21.76" data-hovercard="hc-by-w8gv-21-76"><span class="c-mono">by-w8gv.21.76</span></a> makes it cheaper.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-13T16:35:48Z" tabindex="0" data-tip="2026-11-13T16:35:48Z">2026-11-13</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb">session 2f7a53</span></span>closed this<span class="c-timeline-detail">Load-stretched rerun hit the wall limit; now excused (68a33a13); slow CI green at 93b44b62</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T21:24:35Z" tabindex="0" data-tip="2026-11-12T21:24:35Z">2026-11-12</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T21:23:38Z" tabindex="0" data-tip="2026-11-12T21:23:38Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb">session 2f7a53</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb">session 2f7a53</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T21:01:54Z" tabindex="0" data-tip="2026-11-12T21:01:54Z">2026-11-12</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T21:01:33Z" tabindex="0" data-tip="2026-11-12T21:01:33Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:232e381d-446b-48dc-b742-bf52bcb7ad09">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:232e381d-446b-48dc-b742-bf52bcb7ad09">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T21:00:43Z" tabindex="0" data-tip="2026-11-12T21:00:43Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T20:59:50Z" tabindex="0" data-tip="2026-11-12T20:59:50Z">2026-11-12</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-12T20:59:50Z" tabindex="0" data-tip="2026-11-12T20:59:50Z">2026-11-12</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>ci@example.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-12T21:00:44Z" tabindex="0" data-tip="2026-11-12T21:00:44Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-5fnf</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">a65a9389d0fa79bffcf9db506f1cfafc72a06639..8e6fc07ccf3fecb051c3828442fdb4d545106147</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">68a33a1379e9b89f6065ba9f5e9261cd44aa711d</span></dd></div><div class="c-meta-item"><dt>enact_pool_session</dt><dd><span class="c-mono">local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">5f82cc1d399742a49779bc8050811b29</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-w8gv</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-w8gv</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">232e381d-446b-48dc-b742-bf52bcb7ad09</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-5fnf</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">jarvis</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="local_2f7a533c-d93b-4bfd-82ed-60224a0a51bb">session 2f7a53</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-12T20:59:50Z" tabindex="0" data-tip="2026-11-12T20:59:50Z">2026-11-12</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-13T16:35:49Z" tabindex="0" data-tip="2026-11-13T16:35:49Z">2026-11-13</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-12T21:24:36Z" tabindex="0" data-tip="2026-11-12T21:24:36Z">2026-11-12</time></dd></div></dl></aside></div></div></div><template id="hc-by-w8gv-21-33"><div class="c-card-top"><span class="c-mono">by-w8gv.21.33</span><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></div><div class="c-hovercard-title">Warden: presentation step one</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-w8gv-21-76"><div class="c-card-top"><span class="c-mono">by-w8gv.21.76</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Verb suite: play each moment once, not once per verb</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template>
+</main>
+</body>
+</html>

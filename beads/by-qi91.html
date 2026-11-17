@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-qi91</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-qi91</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-qi91</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">5</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Fixed the Forge replay and Glasspool coverage failures, verified macOS slow CI locally, and pushed 3fd389fc.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 925afa5f74e80f252540245319f04c8c6057f506. Failing range since last passing commit: afcc42cebc130364ad60d5d4984d1c8cd832881f..925afa5f74e80f252540245319f04c8c6057f506.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;name&quot;: &quot;Generated 78&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment tapping a source of restricted mana&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 88&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment tapping a source of restricted mana&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 104&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment tapping a source of restricted mana&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 107&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment tapping a source of restricted mana&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 3249 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 4040 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1771 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 75.0 s (184 s on the clock)warm: pruned 10479 stale objects and 622 incremental sessions; evicted 65 unused builds (0.0 GB) to fit 15 GB
+warm: cloned /Users/dthurn/beryl/.worktrees/ci-runner/rust/target in 20.7 s
+warm: saved a copy of /Users/dthurn/beryl/.worktrees/ci-runner/rust/target without its incremental caches
+
+ci: repo 0 s (file-length 0 s)
+ci: python 1 s (black 0 s, pyre 1 s)
+ci: rust 352 s (clippy 72 s, tests 279 s)
+ci: ui 1 s (tsc 1 s)
+ci: names 3 s (card-names 1 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 0 s, card-headers 0 s, card-crates 0 s)
+ci: app 21 s (smoke 21 s)
+ci: ui-smoke 20 s (ui-test 20 s)
+ci: oracle 123 s (oracle FAILED)
+ci: counts 40 s (count-gate 20 s, count-gate-families 20 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 351.6 s (875 s on the clock) (budget 300 s)
+ci: load average 18 21 29 on 10 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 1.04x the reference&#x27;s time (`just speed`)
+bisect: 1 failed checks over 9 commits since oracle last passed here (1ee3594a36), 600 s to search
+bisect: 925afa5f74: 1 of 1 checks fail
+bisect: 4defebf53f: 0 of 1 checks fail
+bisect: b96e2d14c8: 1 of 1 checks fail
+bisect: 7f21b7322f: 1 of 1 checks fail
+bisect: oracle:Generated  culprit 7f21b7322f feat: becoming a copy; Thespian&#x27;s Stage, Dark Depths  (9 commits since oracle last passed here)  bead by-bajq.6.3
+miss: oracle:Generated/Generated 120/xmage unknown (no fast check of 7f21b7322f in this host&#x27;s run log)
+record: oracle:Generated/Generated 120/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+miss: oracle:Generated/Generated 2/forge unknown (no fast check of 7f21b7322f in this host&#x27;s run log)
+record: oracle:Generated/Generated 2/forge  runs 67, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: next due in 79 min
+ci: b3d sweep: not due: nothing since ce8361deff changes Beryl 3D or what it builds on</code></pre>
+<p>No vizier on this machine has a fresh lease on a run this failure affects, so nobody is repairing it (<code>enact_unowned=true</code>). Claim it with <code>enact claim &lt;bead&gt;</code> and repair it as a Steward; claiming clears the flag.</p></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">5</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T11:22:29Z" tabindex="0" data-tip="2026-11-15T11:22:29Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at adf4192f56a0ddf0a0c60bfb0df1b77ce86b8b50. Failing range since last passing commit: afcc42cebc130364ad60d5d4984d1c8cd832881f..adf4192f56a0ddf0a0c60bfb0df1b77ce86b8b50.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment tapping a source of restricted mana&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 78&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment tapping a source of restricted mana&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 88&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment tapping a source of restricted mana&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 104&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment tapping a source of restricted mana&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 107&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment tapping a source of restricted mana&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 2992 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 3826 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1812 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 231.4 s (436 s on the clock), after waiting 0.4 s for CPU tokens
+ci: repo 0 s (file-length 0 s)
+ci: python 4 s (black 1 s, pyre 3 s)
+ci: rust 277 s (clippy 11 s, tests 266 s)
+ci: ui 4 s (tsc 4 s)
+ci: names 6 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 0 s)
+ci: app 24 s (smoke 24 s)
+ci: ui-smoke 36 s (ui-test 36 s)
+ci: oracle 313 s (oracle FAILED)
+ci: counts 267 s (count-gate 111 s, count-gate-families 155 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 312.8 s (634 s on the clock) (budget 300 s)
+ci: load average 44 42 41 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 1 failed checks over 6 commits since master (afcc42cebc), 600 s to search
+bisect: adf4192f56: 1 of 1 checks fail
+bisect: b96e2d14c8: 1 of 1 checks fail
+bisect: 7f21b7322f: 1 of 1 checks fail
+bisect: 4defebf53f: out of time
+bisect: oracle:Generated  out of time: culprit among 2 commits 4defebf53f..7f21b7322f  (6 commits since master)
+record: oracle:Generated/Generated 120/xmage  runs 2, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Generated/Generated 2/forge  runs 340, failures 3, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: one is running
+ci: b3d sweep: started in the background (/Users/dthurn/Library/Caches/beryl/b3d/sweep/background.log)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T11:51:11Z" tabindex="0" data-tip="2026-11-15T11:51:11Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 56f56c8836706a0bc537e0a12f91b173bcab2bbf. Failing range since last passing commit: afcc42cebc130364ad60d5d4984d1c8cd832881f..56f56c8836706a0bc537e0a12f91b173bcab2bbf.</p>
+<p>Log tail:</p>
+<pre><code>          &quot;Tapped: after XMage chose a payment&#x27;s sources&quot;,
+          &quot;Tapped: after XMage chose a payment&#x27;s sources&quot;
+        ]
+      }
+    ],
+    &quot;log&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/xmage-oracle.log&quot;,
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;forge&quot;: {
+    &quot;pass&quot;: 99,
+    &quot;fail&quot;: 1,
+    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 0,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 2&quot;,
+        &quot;status&quot;: &quot;fail&quot;,
+        &quot;failures&quot;: [
+          &quot;Forge offers no ability of Leonin Scimitar matching Equip; it offers []&quot;
+        ]
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 2994 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 4001 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1613 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 402.9 s (526 s on the clock)warm: pruned 10688 stale objects and 630 incremental sessions; evicted 204 unused builds (0.2 GB) to fit 15 GB
+warm: cloned /Users/dthurn/beryl/.worktrees/ci-runner/rust/target in 22.5 s
+warm: saved a copy of /Users/dthurn/beryl/.worktrees/ci-runner/rust/target without its incremental caches
+
+ci: repo 0 s (file-length 0 s)
+ci: python 4 s (black 1 s, pyre 4 s)
+ci: rust 525 s (clippy 67 s, tests 458 s)
+ci: names 8 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 3 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 43 s (smoke 43 s)
+ci: ui-smoke 92 s (ui-test 92 s)
+ci: oracle 519 s (oracle FAILED)
+ci: counts 121 s (count-gate 54 s, count-gate-families 67 s)
+verdict: oracle oracle:Generated/Generated 6/xmage catch
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 525.1 s (903 s on the clock) (budget 300 s)
+ci: load average 27 17 18 on 10 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 1.04x the reference&#x27;s time (`just speed`)
+bisect: 1 failed checks over 17 commits since oracle last passed here (1ee3594a36), 600 s to search
+bisect: 56f56c8836: 1 of 1 checks fail
+bisect: 925afa5f74: 1 of 1 checks fail
+bisect: 4defebf53f: 0 of 1 checks fail
+bisect: b96e2d14c8: 1 of 1 checks fail
+bisect: 7f21b7322f: out of time
+bisect: oracle:Generated  out of time: culprit among 2 commits 7f21b7322f..b96e2d14c8  (17 commits since oracle last passed here)
+record: oracle:Generated/Generated 120/xmage  runs 6, failures 5, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Generated/Generated 2/forge  runs 72, failures 5, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: next due in 47 min
+ci: b3d sweep: started in the background (/Users/dthurn/Library/Caches/beryl/b3d/sweep/background.log)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T12:01:10Z" tabindex="0" data-tip="2026-11-15T12:01:10Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 9bb50d2050efc741b1822a3b3acf85c9d440a716. Failing range since last passing commit: afcc42cebc130364ad60d5d4984d1c8cd832881f..9bb50d2050efc741b1822a3b3acf85c9d440a716.</p>
+<p>Log tail:</p>
+<pre><code>          &quot;Tapped: after XMage chose a payment&#x27;s sources&quot;,
+          &quot;Tapped: after XMage chose a payment&#x27;s sources&quot;,
+          &quot;Tapped: after XMage chose a payment&#x27;s sources&quot;,
+          &quot;Tapped: after XMage chose a payment&#x27;s sources&quot;,
+          &quot;Tapped: after XMage chose a payment&#x27;s sources&quot;,
+          &quot;Tapped: after XMage chose a payment&#x27;s sources&quot;
+        ]
+      }
+    ],
+    &quot;log&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/xmage-oracle.log&quot;,
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;forge&quot;: {
+    &quot;pass&quot;: 99,
+    &quot;fail&quot;: 1,
+    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 0,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 2&quot;,
+        &quot;status&quot;: &quot;fail&quot;,
+        &quot;failures&quot;: [
+          &quot;Forge offers no ability of Leonin Scimitar matching Equip; it offers []&quot;
+        ]
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 8053 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 8314 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 2684 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 81.9 s (207 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: python 2 s (black 1 s, pyre 2 s)
+ci: rust 372 s (clippy 191 s, tests 181 s)
+ci: ui 2 s (tsc 2 s)
+ci: names 5 s (card-names 1 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 0 s, card-headers 0 s, card-crates 0 s)
+ci: app 70 s (smoke 70 s)
+ci: ui-smoke 94 s (ui-test 94 s)
+ci: oracle 261 s (oracle FAILED)
+ci: counts 248 s (count-gate 71 s, count-gate-families 177 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 371.6 s (888 s on the clock) (budget 300 s)
+ci: load average 33 49 51 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 1 failed checks over 15 commits since master (afcc42cebc), 600 s to search
+bisect: 9bb50d2050: 1 of 1 checks fail
+bisect: 456cecfea3: 1 of 1 checks fail
+bisect: ce8361deff: 1 of 1 checks fail
+bisect: 7f21b7322f: out of time
+bisect: oracle:Generated  out of time: culprit among 4 commits 4defebf53f..ce8361deff  (15 commits since master)
+record: oracle:Generated/Generated 120/xmage  runs 4, failures 4, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: oracle:Generated/Generated 2/forge  runs 342, failures 5, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: one is running
+ci: b3d sweep: started in the background (/Users/dthurn/Library/Caches/beryl/b3d/sweep/background.log)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T12:36:04Z" tabindex="0" data-tip="2026-11-15T12:36:04Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at cc0ada10423609aa15073af5550ba0003964dd4c. Failing range since last passing commit: afcc42cebc130364ad60d5d4984d1c8cd832881f..cc0ada10423609aa15073af5550ba0003964dd4c.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;reason&quot;: &quot;XMage lacks Dand\u00e2n&quot;
+      }
+    ],
+    &quot;log&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/xmage-oracle.log&quot;,
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;forge&quot;: {
+    &quot;pass&quot;: 99,
+    &quot;fail&quot;: 1,
+    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 0,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 2&quot;,
+        &quot;status&quot;: &quot;fail&quot;,
+        &quot;failures&quot;: [
+          &quot;Forge offers no ability of Leonin Scimitar matching Equip; it offers []&quot;
+        ]
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 2831 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 5648 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1852 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 967.2 s (1260 s on the clock)warm: pruned 11354 stale objects and 678 incremental sessions; evicted 154 unused builds (0.1 GB) to fit 15 GB
+warm: cloned /Users/dthurn/beryl/.worktrees/ci-runner/rust/target in 21.2 s
+warm: saved a copy of /Users/dthurn/beryl/.worktrees/ci-runner/rust/target without its incremental caches
+
+ci: repo 1 s (file-length 1 s)
+ci: python 6 s (black 1 s, pyre 5 s)
+ci: rust 1027 s (clippy 114 s, tests FAILED)
+ci: ui 5 s (tsc 5 s)
+ci: names 10 s (card-names 4 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 3 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 119 s (smoke 119 s)
+ci: ui-smoke 229 s (ui-test 229 s)
+ci: oracle 1084 s (oracle FAILED)
+ci: counts 208 s (count-gate 93 s, count-gate-families 116 s)
+verdict: oracle oracle:Generated/Generated 120/xmage mixed: the fix touched the check and the product; say which with `just verdict &#x27;oracle:Generated/Generated 120/xmage&#x27; stale|catch`
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust oracle in 1084.3 s (1463 s on the clock) (budget 300 s)
+ci: load average 17 17 15 on 10 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 1.04x the reference&#x27;s time (`just speed`)
+bisect: 2 failed checks over 25 commits since master (afcc42cebc), 600 s to search
+bisect: cc0ada1042: 2 of 2 checks fail
+bisect: 56f56c8836: 2 of 2 checks fail
+bisect: 9229a3e8da: 2 of 2 checks fail
+bisect: ce8361deff: 2 of 2 checks fail
+bisect: 7f21b7322f: 2 of 2 checks fail
+bisect: rust:tests  out of time: culprit among 2 commits 4defebf53f..7f21b7322f  (25 commits since master)
+record: rust:tests  runs 256, failures 54, flaky 1, stale 0, catch 0, miss 0 (30 days)
+bisect: oracle:Generated/Generated 2/forge  out of time: culprit among 2 commits 4defebf53f..7f21b7322f  (25 commits since master)
+record: oracle:Generated/Generated 2/forge  runs 77, failures 7, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: next due in 2 min
+ci: b3d sweep: one is running</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T12:44:41Z" tabindex="0" data-tip="2026-11-15T12:44:41Z">2026-11-15</time></header><div class="c-prose"><p>Handoff: d37fab59 makes Forge pass priority on setup triggers when Beryl's trace reaches its first action on an empty stack. Generated 2 now plays in Forge. Generated 120 draws Worldgorger Dragon after c991eaf2 and passes both oracles. The original XMage run asked for Painter's Servant's color through Dress Down. 3fd389fc adds a creature to generated copy-on-entry positions and tests Glasspool Shore entering tapped and later paying for Glasspool Mimic. Both oracles passed the new hand-written scenario and the generated copy cases. The copies benchmark passed with its refreshed corpus hash. 614e240b delivered the same hash before the push. The macOS slow suite passed locally at f4ecc666 (40.6 s wall). Enact rebased both fixes onto 614e240b and pushed 3fd389fc after fast checks. The fast check deferred some Rust and oracle checks at its wall limit, and the staging runner is active.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T12:01:11Z" tabindex="0" data-tip="2026-11-15T12:01:11Z">2026-11-15</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-15T11:28:27Z" tabindex="0" data-tip="2026-11-15T11:28:27Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">01a1def8-2917-7d70-99dd-70876ffa9516</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-qi91</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">afcc42cebc130364ad60d5d4984d1c8cd832881f..cc0ada10423609aa15073af5550ba0003964dd4c</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">d37fab594aa3197f6619fe1350b68657b63f6e71 3fd389fcb04366fdafa054733cff19b1056033a8</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">424242a8c12b49bd95d106d3c828aaa6</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-bmdk</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-q44s by-bajq by-q44s.1 by-bajq.6 by-bmdk by-bmdk.4 by-bajq.7 by-bajq.5</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">01a1def8-2917-7d70-99dd-70876ffa9516</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">01a1d760-e601-7fc0-9d66-3dabf9c28a13</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-qi91</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1def8-2917-7d70-99dd-70876ffa9516">01a1def8</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-15T11:16:25Z" tabindex="0" data-tip="2026-11-15T11:16:25Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-15T12:46:26Z" tabindex="0" data-tip="2026-11-15T12:46:26Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-15T12:45:01Z" tabindex="0" data-tip="2026-11-15T12:45:01Z">2026-11-15</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

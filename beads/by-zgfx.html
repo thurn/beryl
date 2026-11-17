@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix sweep ui-test failure: ui-test:a bug report uses the viewport from before the keyboard opened and 62 more · by-zgfx</title>
+<meta name="description" content="Fix sweep ui-test failure: ui-test:a bug report uses the viewport from before the keyboard opened and 62 more">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-zgfx</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-zgfx</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix sweep ui-test failure: ui-test:a bug report uses the viewport from before the keyboard opened and 62 more</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">2</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Fixed the bug-report test's real break (null stage_timings blocked render); 62 other failures were load timeouts and pass at tip</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>The browser sweep (<code>by sweep</code>, tools/src/beryl_tools/sweep.py) failed 63 ui-test check(s) on origin/staging at ce8361deff9738d9a0c2a754277f2f33002d6f97. The last sweep that passed was at 5c1dcc4ae139d6ce035f657059eccaca060fb5f4.</p>
+<ul><li><code>ui-test:a bug report uses the viewport from before the keyboard opened</code></li><li><code>ui-test:combat-blockers: what the decision offers and what is exiled can be seen</code></li><li><code>ui-test:hovering a hand card moves no other card and starts no layout animation</code></li><li><code>ui-test:a card exiled by the first slot stays under its host</code></li><li><code>ui-test:shape-divide-theirs: what the decision offers and what is exiled can be seen</code></li><li><code>ui-test:a pile&#x27;s edges show toward the table&#x27;s middle, under faces in line</code></li><li><code>ui-test:hovering a battlefield card moves no other card and starts no layout animation</code></li><li><code>verb:fly/theirs/desktop</code></li><li><code>verb:fly/theirs/phone</code></li><li><code>verb:emerge/theirs/desktop</code></li><li><code>verb:emerge/theirs/phone</code></li><li><code>verb:appear/yours/desktop</code></li><li><code>verb:appear/yours/phone</code></li><li><code>verb:appear/theirs/desktop</code></li><li><code>verb:appear/theirs/phone</code></li><li><code>verb:vanish/yours/desktop</code></li><li><code>verb:vanish/theirs/desktop</code></li><li><code>verb:vanish/theirs/phone</code></li><li><code>verb:lift/yours/desktop</code></li><li><code>verb:lift/yours/phone</code></li><li><code>verb:lift/theirs/desktop</code></li><li><code>verb:lift/theirs/phone</code></li><li><code>verb:tap/yours/phone</code></li><li><code>verb:tap/theirs/desktop</code></li><li><code>verb:tap/theirs/phone</code></li><li><code>verb:strike/yours/phone</code></li><li><code>verb:strike/theirs/desktop</code></li><li><code>verb:strike/theirs/phone</code></li><li><code>verb:count/yours/phone</code></li><li><code>verb:count/theirs/desktop</code></li><li><code>verb:count/theirs/phone</code></li><li><code>verb:flip/theirs/desktop</code></li><li><code>verb:flip/theirs/phone</code></li><li><code>verb:point/yours/phone</code></li><li><code>verb:point/theirs/desktop</code></li><li><code>verb:point/theirs/phone</code></li><li><code>verb:mark/theirs/phone</code></li><li><code>verb:streak/yours/phone</code></li><li><code>verb:streak/theirs/desktop</code></li><li><code>verb:streak/theirs/phone</code></li><li><code>verb:announce/theirs/desktop</code></li><li><code>verb:announce/theirs/phone</code></li><li><code>verb:dwell/yours/phone</code></li><li><code>verb:dwell/theirs/desktop</code></li><li><code>verb:dwell/theirs/phone</code></li><li><code>verb:set/theirs/desktop</code></li><li><code>verb:set/theirs/phone</code></li><li><code>verb:showcase/theirs/desktop</code></li><li><code>verb:showcase/theirs/phone</code></li><li><code>ui-test:shape-order-theirs: what the decision offers and what is exiled can be seen</code></li><li><code>ui-test:shape-pay: what the decision offers and what is exiled can be seen</code></li><li><code>ui-test:shape-order: what the decision offers and what is exiled can be seen</code></li><li><code>ui-test:shape-pay-theirs: what the decision offers and what is exiled can be seen</code></li><li><code>ui-test:shape-declare-theirs: what the decision offers and what is exiled can be seen</code></li><li><code>ui-test:shape-declare: what the decision offers and what is exiled can be seen</code></li><li><code>ui-test:shape-mode: what the decision offers and what is exiled can be seen</code></li><li><code>verb:fly/yours/phone</code></li><li><code>verb:emerge/yours/phone</code></li><li><code>verb:vanish/yours/phone</code></li><li><code>verb:flip/yours/phone</code></li><li><code>verb:announce/yours/phone</code></li><li><code>verb:set/yours/phone</code></li><li><code>verb:showcase/yours/phone</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>record: ui-test:a bug report uses the viewport from before the keyboard opened  runs 13, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: ui-test:shape-order-theirs: what the decision offers and what is exiled can be seen  runs 166, failures 1, flaky 0, stale 0, catch 0, miss 0 (30 days)
+record: ui-test:shape-pay: what the decision offers and what is exiled can be seen  runs 159, failures 1, flaky 0, stale 0, catch 0, miss 0 (30 days)</code></pre>
+<p>Replay them with <code>just ui-test &#x27;a bug report uses the viewport from before the keyboard opened&#x27; &#x27;combat-blockers: what the decision offers and what is exiled can be seen&#x27; &#x27;hovering a hand card moves no other card and starts no layout animation&#x27; &#x27;a card exiled by the first slot stays under its host&#x27; &#x27;shape-divide-theirs: what the decision offers and what is exiled can be seen&#x27; &#x27;a pile&#x27;&quot;&#x27;&quot;&#x27;s edges show toward the table&#x27;&quot;&#x27;&quot;&#x27;s middle, under faces in line&#x27; &#x27;hovering a battlefield card moves no other card and starts no layout animation&#x27; verb:fly/theirs/desktop verb:fly/theirs/phone verb:emerge/theirs/desktop verb:emerge/theirs/phone verb:appear/yours/desktop verb:appear/yours/phone verb:appear/theirs/desktop verb:appear/theirs/phone verb:vanish/yours/desktop verb:vanish/theirs/desktop verb:vanish/theirs/phone verb:lift/yours/desktop verb:lift/yours/phone verb:lift/theirs/desktop verb:lift/theirs/phone verb:tap/yours/phone verb:tap/theirs/desktop verb:tap/theirs/phone verb:strike/yours/phone verb:strike/theirs/desktop verb:strike/theirs/phone verb:count/yours/phone verb:count/theirs/desktop verb:count/theirs/phone verb:flip/theirs/desktop verb:flip/theirs/phone verb:point/yours/phone verb:point/theirs/desktop verb:point/theirs/phone verb:mark/theirs/phone verb:streak/yours/phone verb:streak/theirs/desktop verb:streak/theirs/phone verb:announce/theirs/desktop verb:announce/theirs/phone verb:dwell/yours/phone verb:dwell/theirs/desktop verb:dwell/theirs/phone verb:set/theirs/desktop verb:set/theirs/phone verb:showcase/theirs/desktop verb:showcase/theirs/phone &#x27;shape-order-theirs: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-pay: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-order: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-pay-theirs: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-declare-theirs: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-declare: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-mode: what the decision offers and what is exiled can be seen&#x27; verb:fly/yours/phone verb:emerge/yours/phone verb:vanish/yours/phone verb:flip/yours/phone verb:announce/yours/phone verb:set/yours/phone verb:showcase/yours/phone</code>. Slow CI does not run these lanes, so <code>just ci</code> passing proves nothing here; the fast check runs only the checks a change can break.</p>
+<p>Before deleting a check, ask: could a fast, deterministic test (a Rust unit test, a Node test with no browser, a check against a recorded fixture) keep most of what this check protects? If so, write that test. Fix the product when the check caught a real break; a check that failed without one is deleted or rewritten. The <code>cifix</code> skill (<code>.agents/skills/cifix/SKILL.md</code>) says how to work this bead.</p>
+<p>Output tail:</p>
+<pre><code>ok: shape:zone/theirs/desktop
+ok: shape:split/yours/desktop
+ok: shape:zone/theirs/phone
+ok: shape:order/yours/desktop
+ok: shape:order/theirs/desktop
+ok: shape:zone/yours/desktop
+ok: shape:split/yours/phone
+ok: shape:order/yours/phone
+ok: shape:pay/theirs/desktop
+ok: shape:order/theirs/phone
+ok: shape:pay/theirs/phone
+ok: shape:declare/theirs/desktop
+ok: shape:zone/yours/phone
+ok: shape:declare/theirs/phone
+ok: shape:declare/yours/desktop
+ok: shape:declare/yours/phone
+ok: shape:yesNo/theirs/desktop
+ok: shape:yesNo/yours/desktop
+ok: shape:yesNo/theirs/phone
+ok: shape:number/theirs/desktop
+ok: shape:number/theirs/phone
+ok: shape:number/yours/desktop
+ok: shape:yesNo/yours/phone
+ok: shape:mode/theirs/desktop
+ok: shape:number/yours/phone
+ok: shape:pay/yours/desktop
+ok: shape:mode/theirs/phone
+ok: shape:catalog/theirs/desktop
+ok: shape:catalog/yours/desktop
+ok: shape:mode/yours/desktop
+ok: shape:catalog/yours/phone
+ok: shape:catalog/theirs/phone
+ok: shape:divide/theirs/desktop
+ok: shape:mode/yours/phone
+ok: shape:divide/yours/desktop
+ok: shape:divide/theirs/phone
+ok: shape:divide/yours/phone
+ok: shape:pay/yours/phone
+ui-test: FAILED
+sweep ui-test ui-test: FAILED (exit 1) after 609.6 s (1262 s on the clock)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>just ui-test &#x27;a bug report uses the viewport from before the keyboard opened&#x27; &#x27;combat-blockers: what the decision offers and what is exiled can be seen&#x27; &#x27;hovering a hand card moves no other card and starts no layout animation&#x27; &#x27;a card exiled by the first slot stays under its host&#x27; &#x27;shape-divide-theirs: what the decision offers and what is exiled can be seen&#x27; &#x27;a pile&#x27;&quot;&#x27;&quot;&#x27;s edges show toward the table&#x27;&quot;&#x27;&quot;&#x27;s middle, under faces in line&#x27; &#x27;hovering a battlefield card moves no other card and starts no layout animation&#x27; verb:fly/theirs/desktop verb:fly/theirs/phone verb:emerge/theirs/desktop verb:emerge/theirs/phone verb:appear/yours/desktop verb:appear/yours/phone verb:appear/theirs/desktop verb:appear/theirs/phone verb:vanish/yours/desktop verb:vanish/theirs/desktop verb:vanish/theirs/phone verb:lift/yours/desktop verb:lift/yours/phone verb:lift/theirs/desktop verb:lift/theirs/phone verb:tap/yours/phone verb:tap/theirs/desktop verb:tap/theirs/phone verb:strike/yours/phone verb:strike/theirs/desktop verb:strike/theirs/phone verb:count/yours/phone verb:count/theirs/desktop verb:count/theirs/phone verb:flip/theirs/desktop verb:flip/theirs/phone verb:point/yours/phone verb:point/theirs/desktop verb:point/theirs/phone verb:mark/theirs/phone verb:streak/yours/phone verb:streak/theirs/desktop verb:streak/theirs/phone verb:announce/theirs/desktop verb:announce/theirs/phone verb:dwell/yours/phone verb:dwell/theirs/desktop verb:dwell/theirs/phone verb:set/theirs/desktop verb:set/theirs/phone verb:showcase/theirs/desktop verb:showcase/theirs/phone &#x27;shape-order-theirs: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-pay: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-order: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-pay-theirs: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-declare-theirs: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-declare: what the decision offers and what is exiled can be seen&#x27; &#x27;shape-mode: what the decision offers and what is exiled can be seen&#x27; verb:fly/yours/phone verb:emerge/yours/phone verb:vanish/yours/phone verb:flip/yours/phone verb:announce/yours/phone verb:set/yours/phone verb:showcase/yours/phone</code> passes at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">2</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T12:59:52Z" tabindex="0" data-tip="2026-11-15T12:59:52Z">2026-11-15</time></header><div class="c-prose"><p>Analysis: 1 real break + 62 load timeouts. (1) 'a bug report uses the viewport from before the keyboard opened' failed deterministically: its stubbed live transport returned null for stage_timings (queried at startup since 638f4b122), ownTimings(null) threw inside .then(ownTimings, onError) — onError doesn't catch that — so the app never rendered. Fixed in main.tsx (catch after ownTimings) and the test stub (stage_timings: {entries: []}). (2) The other 62 were page.goto/waitForFunction 30 s timeouts. That sweep took 6317 s against a usual 300-2000 s, and its ui-shots lane also hit goto timeouts, so the machine was overloaded. At the staging tip, all 78 checks the acceptance filters match pass with no change. No check was deleted. I haven't filed a follow-up: these checks have failed about once in 160 runs over 30 days.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T13:04:18Z" tabindex="0" data-tip="2026-11-15T13:04:18Z">2026-11-15</time></header><div class="c-prose"><p>Handoff: pushed 2c06581b9 to staging. It changes ui/src/main.tsx (the stageTimings promise chain now catches after ownTimings, so the app renders even when the timing table is missing or malformed) and ui/scripts/kept-bug-reports.mjs (the stub transport answers stage_timings). Reviewers: any other test that stubs the transport by hand needs a stage_timings answer to time the stage's own steps. Without one, the app now renders and logs a warning instead of failing to start.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_f2f33709-a930-4c94-ba4b-3bb772736e92">session f2f337</span></span>closed this<span class="c-timeline-detail">Fixed the bug-report test&#x27;s real break (null stage_timings blocked render); 62 other failures were load timeouts and pass at tip</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T13:09:29Z" tabindex="0" data-tip="2026-11-15T13:09:29Z">2026-11-15</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T13:03:30Z" tabindex="0" data-tip="2026-11-15T13:03:30Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_f2f33709-a930-4c94-ba4b-3bb772736e92">session f2f337</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_f2f33709-a930-4c94-ba4b-3bb772736e92">session f2f337</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T12:36:56Z" tabindex="0" data-tip="2026-11-15T12:36:56Z">2026-11-15</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T12:36:21Z" tabindex="0" data-tip="2026-11-15T12:36:21Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:d16a0e78-bc6d-4744-8ab1-6e9cdc28b3a2">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:d16a0e78-bc6d-4744-8ab1-6e9cdc28b3a2">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T12:35:15Z" tabindex="0" data-tip="2026-11-15T12:35:15Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T12:27:39Z" tabindex="0" data-tip="2026-11-15T12:27:39Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T12:27:39Z" tabindex="0" data-tip="2026-11-15T12:27:39Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">sweep-failure</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T12:27:39Z" tabindex="0" data-tip="2026-11-15T12:27:39Z">2026-11-15</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>ci@example.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-15T12:35:16Z" tabindex="0" data-tip="2026-11-15T12:35:16Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>beryl_nightly_checks</dt><dd><span class="c-mono">ui-test:a bug report uses the viewport from before the keyboard opened
+ui-test:combat-blockers: what the decision offers and what is exiled can be seen
+ui-test:hovering a hand card moves no other card and starts no layout animation
+ui-test:a card exiled by the first slot stays under its host
+ui-test:shape-divide-theirs: what the decision offers and what is exiled can be seen
+ui-test:a pile&#x27;s edges show toward the table&#x27;s middle, under faces in line
+ui-test:hovering a battlefield card moves no other card and starts no layout animation
+verb:fly/theirs/desktop
+verb:fly/theirs/phone
+verb:emerge/theirs/desktop
+verb:emerge/theirs/phone
+verb:appear/yours/desktop
+verb:appear/yours/phone
+verb:appear/theirs/desktop
+verb:appear/theirs/phone
+verb:vanish/yours/desktop
+verb:vanish/theirs/desktop
+verb:vanish/theirs/phone
+verb:lift/yours/desktop
+verb:lift/yours/phone
+verb:lift/theirs/desktop
+verb:lift/theirs/phone
+verb:tap/yours/phone
+verb:tap/theirs/desktop
+verb:tap/theirs/phone
+verb:strike/yours/phone
+verb:strike/theirs/desktop
+verb:strike/theirs/phone
+verb:count/yours/phone
+verb:count/theirs/desktop
+verb:count/theirs/phone
+verb:flip/theirs/desktop
+verb:flip/theirs/phone
+verb:point/yours/phone
+verb:point/theirs/desktop
+verb:point/theirs/phone
+verb:mark/theirs/phone
+verb:streak/yours/phone
+verb:streak/theirs/desktop
+verb:streak/theirs/phone
+verb:announce/theirs/desktop
+verb:announce/theirs/phone
+verb:dwell/yours/phone
+verb:dwell/theirs/desktop
+verb:dwell/theirs/phone
+verb:set/theirs/desktop
+verb:set/theirs/phone
+verb:showcase/theirs/desktop
+verb:showcase/theirs/phone
+ui-test:shape-order-theirs: what the decision offers and what is exiled can be seen
+ui-test:shape-pay: what the decision offers and what is exiled can be seen
+ui-test:shape-order: what the decision offers and what is exiled can be seen
+ui-test:shape-pay-theirs: what the decision offers and what is exiled can be seen
+ui-test:shape-declare-theirs: what the decision offers and what is exiled can be seen
+ui-test:shape-declare: what the decision offers and what is exiled can be seen
+ui-test:shape-mode: what the decision offers and what is exiled can be seen
+verb:fly/yours/phone
+verb:emerge/yours/phone
+verb:vanish/yours/phone
+verb:flip/yours/phone
+verb:announce/yours/phone
+verb:set/yours/phone
+verb:showcase/yours/phone</span></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">local_f2f33709-a930-4c94-ba4b-3bb772736e92</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-zgfx</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">2c06581b9e03026bf6579fc309f0e641572793b0</span></dd></div><div class="c-meta-item"><dt>enact_pool_session</dt><dd><span class="c-mono">local_f2f33709-a930-4c94-ba4b-3bb772736e92</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">cef8aa66c8944807a389d0ca1bab1df7</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-bajq</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-bajq</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">local_f2f33709-a930-4c94-ba4b-3bb772736e92</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">d16a0e78-bc6d-4744-8ab1-6e9cdc28b3a2</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-zgfx</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">jarvis</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span><span class="c-muted">High</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="local_f2f33709-a930-4c94-ba4b-3bb772736e92">session f2f337</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span><span class="c-chip c-tone-muted">sweep-failure</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-15T12:27:40Z" tabindex="0" data-tip="2026-11-15T12:27:40Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-15T13:09:29Z" tabindex="0" data-tip="2026-11-15T13:09:29Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-15T13:09:29Z" tabindex="0" data-tip="2026-11-15T13:09:29Z">2026-11-15</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

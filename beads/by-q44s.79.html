@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix the Beryl 3D sweep&#x27;s frame-counts step: b3d-frame-counts:frame-counts · by-q44s.79</title>
+<meta name="description" content="Fix the Beryl 3D sweep&#x27;s frame-counts step: b3d-frame-counts:frame-counts">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><a class="c-crumb" href="by-q44s">by-q44s</a><span class="c-crumb" aria-current="page">by-q44s.79</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-q44s.79</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix the Beryl 3D sweep&#x27;s frame-counts step: b3d-frame-counts:frame-counts</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">2</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>kept_in_window eases each moment once; stress-255 frame 30 back within tolerance, limits set to measured (4638c78b7)</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>frame-counts</code> on darwin at 60c897a6a483ab7abfa030d5ec4f78ee68964b91. The last sweep that passed on this machine was at 5ebd6bf2fb3cf5d439b5ce2b2f127ff0d59bb4e2.</p>
+<ul><li><code>b3d-frame-counts:frame-counts</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-frame-counts:frame-counts  culprit 47967ad953 fix: opponent flights along the top stay in the window  (6 commits since the last passing sweep)  bead by-q44s.3.53
+miss: b3d-frame-counts:frame-counts (fast check at 60c897a6a4 did not choose it: its b3d-frame-counts lane did not run)
+record: b3d-frame-counts:frame-counts  runs 26, failures 16, flaky 1, stale 0, catch 4, miss 2 (30 days)</code></pre>
+<p>Run the step's own command, <code>just b3d gate --counts</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step frame-counts --commit 60c897a6a483</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>just b3d gate --counts
+/Users/dthurn/Library/Caches/beryl/b3d/recordings-4bc5c93c0b1b1e31.bin
+FAIL stress-255 frame 30: worst_frame_instructions 3,267,119, +33.79% against the limit 2,442,066, over the tolerance of 20.0%
+stress-255 in total: total_instructions 49,070,653, +1.39% against the limit 48,395,785
+stress-1024 frame 30: worst_frame_instructions 9,282,734, +10.11% against the limit 8,430,203
+stress-1024 in total: total_instructions 104,122,476, +0.37% against the limit 103,733,907
+stress-verbs frame 30: worst_frame_instructions 2,610,593, -1.04% against the limit 2,638,123
+stress-verbs in total: total_instructions 45,151,497, -0.23% against the limit 45,257,285
+stress-hand frame 0: worst_frame_instructions 1,174,325, -0.31% against the limit 1,177,958
+stress-hand in total: total_instructions 33,828,807, -0.10% against the limit 33,861,840
+stress-stack frame 0: worst_frame_instructions 1,551,230, -0.06% against the limit 1,552,139
+stress-stack in total: total_instructions 126,816,912, -0.04% against the limit 126,868,703
+verbs-zones frame 980: worst_frame_instructions 4,831,921, +0.33% against the limit 4,816,173
+verbs-zones in total: total_instructions 151,381,904, +0.03% against the limit 151,331,897
+pay-default frame 0: worst_frame_instructions 1,257,851, +0.03% against the limit 1,257,448
+pay-default in total: total_instructions 7,371,585, +0.28% against the limit 7,351,088
+stress-1024 over stress-255: worst_frame_instructions 9,282,734 / 3,267,119 is 2.841 times, against the bound 3.85
+stress-1024 over stress-255: total_instructions 104,122,476 / 49,070,653 is 2.122 times, against the bound 2.44
+b3d-sweep b3d-frame-counts frame-counts: FAILED (exit 1) after 466.4 s (382 s on the clock); rerunning it once
+just b3d gate --counts
+/Users/dthurn/Library/Caches/beryl/b3d/recordings-4bc5c93c0b1b1e31.bin
+FAIL stress-255 frame 30: worst_frame_instructions 3,267,119, +33.79% against the limit 2,442,066, over the tolerance of 20.0%
+stress-255 in total: total_instructions 49,070,288, +1.39% against the limit 48,395,785
+stress-1024 frame 30: worst_frame_instructions 9,282,483, +10.11% against the limit 8,430,203
+stress-1024 in total: total_instructions 104,122,958, +0.38% against the limit 103,733,907
+stress-verbs frame 30: worst_frame_instructions 2,613,035, -0.95% against the limit 2,638,123
+stress-verbs in total: total_instructions 45,154,467, -0.23% against the limit 45,257,285
+stress-hand frame 0: worst_frame_instructions 1,174,766, -0.27% against the limit 1,177,958
+stress-hand in total: total_instructions 33,829,248, -0.10% against the limit 33,861,840
+stress-stack frame 0: worst_frame_instructions 1,551,927, -0.01% against the limit 1,552,139
+stress-stack in total: total_instructions 126,819,314, -0.04% against the limit 126,868,703
+verbs-zones frame 980: worst_frame_instructions 4,836,499, +0.42% against the limit 4,816,173
+verbs-zones in total: total_instructions 151,380,037, +0.03% against the limit 151,331,897
+pay-default frame 0: worst_frame_instructions 1,257,557, +0.01% against the limit 1,257,448
+pay-default in total: total_instructions 7,370,611, +0.27% against the limit 7,351,088
+stress-1024 over stress-255: worst_frame_instructions 9,282,483 / 3,267,119 is 2.841 times, against the bound 3.85
+stress-1024 over stress-255: total_instructions 104,122,958 / 49,070,288 is 2.122 times, against the bound 2.44
+b3d-sweep b3d-frame-counts frame-counts: FAILED (exit 1) after 41.9 s (34 s on the clock)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>just b3d gate --counts</code> passes in a worktree rebased on the staging tip (<code>just b3d sweep --step frame-counts --commit origin/staging</code> replays it in a tree of its own).</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">2</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T21:07:37Z" tabindex="0" data-tip="2026-11-16T21:07:37Z">2026-11-16</time></header><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>frame-counts</code> on darwin at 6841138d87d2214b58f838dd75a92eeee7e0f976. The last sweep that passed on this machine was at 5ebd6bf2fb3cf5d439b5ce2b2f127ff0d59bb4e2.</p>
+<ul><li><code>b3d-frame-counts:frame-counts</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-frame-counts:frame-counts  culprit 47967ad953 fix: opponent flights along the top stay in the window  (8 commits since the last passing sweep)  bead by-q44s.3.53
+miss: b3d-frame-counts:frame-counts (fast check at 60c897a6a4 did not choose it: its b3d-frame-counts lane did not run)
+record: b3d-frame-counts:frame-counts  runs 28, failures 18, flaky 1, stale 0, catch 4, miss 2 (30 days)</code></pre>
+<p>Run the step's own command, <code>just b3d gate --counts</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step frame-counts --commit 6841138d87d2</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>just b3d gate --counts
+/Users/dthurn/Library/Caches/beryl/b3d/recordings-4bc5c93c0b1b1e31.bin
+bench: the VM is busy or a waited-for run goes first; waiting
+FAIL stress-255 frame 30: worst_frame_instructions 3,267,118, +33.79% against the limit 2,442,066, over the tolerance of 20.0%
+stress-255 in total: total_instructions 49,069,166, +1.39% against the limit 48,395,785
+stress-1024 frame 30: worst_frame_instructions 9,283,128, +10.12% against the limit 8,430,203
+stress-1024 in total: total_instructions 104,122,690, +0.37% against the limit 103,733,907
+stress-verbs frame 30: worst_frame_instructions 2,610,639, -1.04% against the limit 2,638,123
+stress-verbs in total: total_instructions 45,151,419, -0.23% against the limit 45,257,285
+stress-hand frame 0: worst_frame_instructions 1,175,296, -0.23% against the limit 1,177,958
+stress-hand in total: total_instructions 33,828,808, -0.10% against the limit 33,861,840
+stress-stack frame 0: worst_frame_instructions 1,551,282, -0.06% against the limit 1,552,139
+stress-stack in total: total_instructions 126,816,580, -0.04% against the limit 126,868,703
+verbs-zones frame 980: worst_frame_instructions 4,832,485, +0.34% against the limit 4,816,173
+verbs-zones in total: total_instructions 151,375,619, +0.03% against the limit 151,331,897
+pay-default frame 0: worst_frame_instructions 1,257,945, +0.04% against the limit 1,257,448
+pay-default in total: total_instructions 7,373,329, +0.30% against the limit 7,351,088
+stress-1024 over stress-255: worst_frame_instructions 9,283,128 / 3,267,118 is 2.841 times, against the bound 3.85
+stress-1024 over stress-255: total_instructions 104,122,690 / 49,069,166 is 2.122 times, against the bound 2.44
+b3d-sweep b3d-frame-counts frame-counts: FAILED (exit 1) after 481.0 s; rerunning it once
+just b3d gate --counts
+/Users/dthurn/Library/Caches/beryl/b3d/recordings-4bc5c93c0b1b1e31.bin
+FAIL stress-255 frame 30: worst_frame_instructions 3,267,118, +33.79% against the limit 2,442,066, over the tolerance of 20.0%
+stress-255 in total: total_instructions 49,071,059, +1.40% against the limit 48,395,785
+stress-1024 frame 30: worst_frame_instructions 9,282,733, +10.11% against the limit 8,430,203
+stress-1024 in total: total_instructions 104,122,299, +0.37% against the limit 103,733,907
+stress-verbs frame 30: worst_frame_instructions 2,613,329, -0.94% against the limit 2,638,123
+stress-verbs in total: total_instructions 45,153,924, -0.23% against the limit 45,257,285
+stress-hand frame 0: worst_frame_instructions 1,174,244, -0.32% against the limit 1,177,958
+stress-hand in total: total_instructions 33,827,756, -0.10% against the limit 33,861,840
+stress-stack frame 0: worst_frame_instructions 1,550,279, -0.12% against the limit 1,552,139
+stress-stack in total: total_instructions 126,817,680, -0.04% against the limit 126,868,703
+verbs-zones frame 980: worst_frame_instructions 4,836,148, +0.41% against the limit 4,816,173
+verbs-zones in total: total_instructions 151,383,022, +0.03% against the limit 151,331,897
+pay-default frame 0: worst_frame_instructions 1,257,500, +0.00% against the limit 1,257,448
+pay-default in total: total_instructions 7,373,061, +0.30% against the limit 7,351,088
+stress-1024 over stress-255: worst_frame_instructions 9,282,733 / 3,267,118 is 2.841 times, against the bound 3.85
+stress-1024 over stress-255: total_instructions 104,122,299 / 49,071,059 is 2.122 times, against the bound 2.44
+b3d-sweep b3d-frame-counts frame-counts: FAILED (exit 1) after 150.6 s (126 s on the clock)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T21:19:18Z" tabindex="0" data-tip="2026-11-16T21:19:18Z">2026-11-16</time></header><div class="c-prose"><p>Handoff: rust/beryl3d/crates/beryl_scene/src/verbs/fly.rs kept_in_window now precomputes its moments once per flight via new Curve::point (motion.rs: samples the Bezier by parameter, no Newton search) and projects only the card centre (unlifted position; lift does not move it on screen). Measured on stress-255 frame 30: 3,267,119 -&gt; 2,682,886 (floor without the check 2,451,856). Raised stress-255 worst/total and stress-1024 worst limits in data/beryl3d/gates.json to measured values, old/new in commit body, since the window check is new per-flight work. just b3d test: 8264 tests, 0 faults; just b3d lane passes. Reviewer: sampling is now uneven in time (even in Bezier parameter), which only spreads samples, never skips the flight middle.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_63304fbb-d8cc-439a-99d2-5e05d0863ff4">session 63304f</span></span>closed this<span class="c-timeline-detail">kept_in_window eases each moment once; stress-255 frame 30 back within tolerance, limits set to measured (4638c78b7)</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T21:19:36Z" tabindex="0" data-tip="2026-11-16T21:19:36Z">2026-11-16</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T21:19:08Z" tabindex="0" data-tip="2026-11-16T21:19:08Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_63304fbb-d8cc-439a-99d2-5e05d0863ff4">session 63304f</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_63304fbb-d8cc-439a-99d2-5e05d0863ff4">session 63304f</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T20:44:12Z" tabindex="0" data-tip="2026-11-16T20:44:12Z">2026-11-16</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T20:43:25Z" tabindex="0" data-tip="2026-11-16T20:43:25Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:32f74257-d3b1-4102-8f70-a1d50feaf650">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:32f74257-d3b1-4102-8f70-a1d50feaf650">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T20:42:48Z" tabindex="0" data-tip="2026-11-16T20:42:48Z">2026-11-16</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T20:42:48Z" tabindex="0" data-tip="2026-11-16T20:42:48Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T20:41:51Z" tabindex="0" data-tip="2026-11-16T20:41:51Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">b3d-sweep</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T20:41:51Z" tabindex="0" data-tip="2026-11-16T20:41:51Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:executor</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T20:41:51Z" tabindex="0" data-tip="2026-11-16T20:41:51Z">2026-11-16</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>ci@example.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-16T20:42:49Z" tabindex="0" data-tip="2026-11-16T20:42:49Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>beryl_nightly_checks</dt><dd><span class="c-mono">b3d-frame-counts:frame-counts</span></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">local_63304fbb-d8cc-439a-99d2-5e05d0863ff4</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-q44s.79</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">4638c78b7f699a6a206327ee4ef6828dbb0fb206</span></dd></div><div class="c-meta-item"><dt>enact_pool_session</dt><dd><span class="c-mono">local_63304fbb-d8cc-439a-99d2-5e05d0863ff4</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">f852885ae7fe454cb912dfed9daa7670</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-q44s</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-q44s</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">local_63304fbb-d8cc-439a-99d2-5e05d0863ff4</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">32f74257-d3b1-4102-8f70-a1d50feaf650</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/slot-09</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">jarvis</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span><span class="c-muted">High</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="local_63304fbb-d8cc-439a-99d2-5e05d0863ff4">session 63304f</span></dd></div><div class="c-meta-item"><dt>Epic</dt><dd><a href="by-q44s" data-hovercard="hc-by-q44s">Beryl 3D: a native Rust client to replace the web interface and Tauri</a></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">b3d-sweep</span><span class="c-chip c-tone-muted">role:executor</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-16T20:41:51Z" tabindex="0" data-tip="2026-11-16T20:41:51Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-16T21:19:36Z" tabindex="0" data-tip="2026-11-16T21:19:36Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-16T21:19:36Z" tabindex="0" data-tip="2026-11-16T21:19:36Z">2026-11-16</time></dd></div></dl></aside></div></div></div><template id="hc-by-q44s"><div class="c-card-top"><span class="c-mono">by-q44s</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Beryl 3D: a native Rust client to replace the web interface and Tauri</div><div class="c-hovercard-meta"><span class="c-dot c-tone-neutral">Open</span><span>epic</span><span class="c-progress"><span class="c-progress-track"><span class="c-progress-fill" style="width:90%"></span></span><span class="c-progress-label">392/437</span></span></div></template>
+</main>
+</body>
+</html>

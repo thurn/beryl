@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix the Beryl 3D sweep&#x27;s gate step: b3d-gate:gate · by-q44s.90</title>
+<meta name="description" content="Fix the Beryl 3D sweep&#x27;s gate step: b3d-gate:gate">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><a class="c-crumb" href="by-q44s">by-q44s</a><span class="c-crumb" aria-current="page">by-q44s.90</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-q44s.90</span><span class="c-dot c-tone-neutral">Open</span></div><h1 class="c-title">Fix the Beryl 3D sweep&#x27;s gate step: b3d-gate:gate</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>gate</code> on darwin at 6780191a648cc14311c4e4dc0013905fe7532568. The last sweep that passed on this machine was at 8e4eafd366ac8558875c9c1cb96564f206773b78.</p>
+<ul><li><code>b3d-gate:gate</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-gate:gate  out of time: culprit among 23 commits c5742afe6d..6780191a64  (23 commits since the last passing sweep)
+record: b3d-gate:gate  runs 61, failures 12, flaky 2, stale 0, catch 7, miss 1 (30 days)</code></pre>
+<p>Run the step's own command, <code>just b3d gate</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step gate --commit 6780191a648c</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>just b3d gate
+/Users/dthurn/Library/Caches/beryl/b3d/recordings-b2d78f5ad1aa8ed8.bin
+FAIL stress-stack frame 32 (533 ms, flight): worst_frame_blended_area is 0.1123, under its limit 0.1124; `just b3d gate --update` lowers it
+stress-255: 127 frames; worst elements 298 at 0, segments 75 at 54, records 142 at 54, layout_nodes 46 at 0, text_runs 18 at 0, placed 1148 at 30, steps 14 at 30
+stress-1024: 127 frames; worst elements 1067 at 0, segments 75 at 54, records 142 at 54, layout_nodes 46 at 0, text_runs 19 at 0, placed 4608 at 30, steps 14 at 30
+stress-verbs: 117 frames; worst elements 161 at 116, segments 107 at 30, records 403 at 31, layout_nodes 46 at 0, text_runs 20 at 0, placed 1924 at 30, steps 106 at 30
+stress-hand: 246 frames; worst elements 97 at 0, segments 0 at 0, records 123 at 0, layout_nodes 40 at 0, text_runs 16 at 0, placed 60 at 0, steps 0 at 0
+stress-stack: 169 frames; worst elements 141 at 0, segments 50 at 152, records 1029 at 32, layout_nodes 44 at 0, text_runs 17 at 0, placed 75 at 0, steps 50 at 30
+verbs-zones: 1183 frames; worst elements 559 at 442, segments 23 at 321, records 95 at 467, layout_nodes 54 at 0, text_runs 29 at 0, placed 520 at 980, steps 12 at 166
+pay-default: 98 frames; worst elements 310 at 0, segments 3 at 60, records 39 at 60, layout_nodes 48 at 0, text_runs 24 at 0, placed 23 at 0, steps 4 at 60
+stress-255 enhanced: worst particles 0 at 0 (limit 2000)
+stress-1024 enhanced: worst particles 0 at 0 (limit 2000)
+stress-verbs enhanced: worst particles 513 at 69 (limit 2000)
+stress-hand enhanced: worst particles 0 at 0 (limit 2000)
+stress-stack enhanced: worst particles 0 at 0 (limit 2000)
+verbs-zones enhanced: worst particles 127 at 791 (limit 2000)
+pay-default enhanced: worst particles 0 at 0 (limit 2000)
+b3d-sweep b3d-gate gate: FAILED (exit 1) after 1834.4 s; rerunning it once
+just b3d gate
+/Users/dthurn/Library/Caches/beryl/b3d/recordings-b2d78f5ad1aa8ed8.bin
+FAIL stress-stack frame 32 (533 ms, flight): worst_frame_blended_area is 0.1123, under its limit 0.1124; `just b3d gate --update` lowers it
+stress-255: 127 frames; worst elements 298 at 0, segments 75 at 54, records 142 at 54, layout_nodes 46 at 0, text_runs 18 at 0, placed 1148 at 30, steps 14 at 30
+stress-1024: 127 frames; worst elements 1067 at 0, segments 75 at 54, records 142 at 54, layout_nodes 46 at 0, text_runs 19 at 0, placed 4608 at 30, steps 14 at 30
+stress-verbs: 117 frames; worst elements 161 at 116, segments 107 at 30, records 403 at 31, layout_nodes 46 at 0, text_runs 20 at 0, placed 1924 at 30, steps 106 at 30
+stress-hand: 246 frames; worst elements 97 at 0, segments 0 at 0, records 123 at 0, layout_nodes 40 at 0, text_runs 16 at 0, placed 60 at 0, steps 0 at 0
+stress-stack: 169 frames; worst elements 141 at 0, segments 50 at 152, records 1029 at 32, layout_nodes 44 at 0, text_runs 17 at 0, placed 75 at 0, steps 50 at 30
+verbs-zones: 1183 frames; worst elements 559 at 442, segments 23 at 321, records 95 at 467, layout_nodes 54 at 0, text_runs 29 at 0, placed 520 at 980, steps 12 at 166
+pay-default: 98 frames; worst elements 310 at 0, segments 3 at 60, records 39 at 60, layout_nodes 48 at 0, text_runs 24 at 0, placed 23 at 0, steps 4 at 60
+stress-255 enhanced: worst particles 0 at 0 (limit 2000)
+stress-1024 enhanced: worst particles 0 at 0 (limit 2000)
+stress-verbs enhanced: worst particles 513 at 69 (limit 2000)
+stress-hand enhanced: worst particles 0 at 0 (limit 2000)
+stress-stack enhanced: worst particles 0 at 0 (limit 2000)
+verbs-zones enhanced: worst particles 127 at 791 (limit 2000)
+pay-default enhanced: worst particles 0 at 0 (limit 2000)
+b3d-sweep b3d-gate gate: FAILED (exit 1) after 30.6 s</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>just b3d gate</code> passes in a worktree rebased on the staging tip (<code>just b3d sweep --step gate --commit origin/staging</code> replays it in a tree of its own).</p></div></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T06:11:58Z" tabindex="0" data-tip="2026-11-17T06:11:58Z">2026-11-17</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">b3d-sweep</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T06:11:58Z" tabindex="0" data-tip="2026-11-17T06:11:58Z">2026-11-17</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:executor</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-17T06:11:58Z" tabindex="0" data-tip="2026-11-17T06:11:58Z">2026-11-17</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>ci@example.com</dd></div><div class="c-meta-item"><dt>beryl_nightly_checks</dt><dd><span class="c-mono">b3d-gate:gate</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-neutral">Open</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span><span class="c-muted">High</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-muted">Nobody</span></dd></div><div class="c-meta-item"><dt>Epic</dt><dd><a href="by-q44s" data-hovercard="hc-by-q44s">Beryl 3D: a native Rust client to replace the web interface and Tauri</a></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">b3d-sweep</span><span class="c-chip c-tone-muted">role:executor</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-17T06:11:58Z" tabindex="0" data-tip="2026-11-17T06:11:58Z">2026-11-17</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-17T06:11:58Z" tabindex="0" data-tip="2026-11-17T06:11:58Z">2026-11-17</time></dd></div></dl></aside></div></div></div><template id="hc-by-q44s"><div class="c-card-top"><span class="c-mono">by-q44s</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Beryl 3D: a native Rust client to replace the web interface and Tauri</div><div class="c-hovercard-meta"><span class="c-dot c-tone-neutral">Open</span><span>epic</span><span class="c-progress"><span class="c-progress-track"><span class="c-progress-fill" style="width:90%"></span></span><span class="c-progress-label">392/437</span></span></div></template>
+</main>
+</body>
+</html>

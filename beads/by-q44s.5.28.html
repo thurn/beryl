@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Screens: the card gallery · by-q44s.5.28</title>
+<meta name="description" content="Screens: the card gallery">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><a class="c-crumb" href="by-q44s">by-q44s</a><a class="c-crumb" href="by-q44s.5">by-q44s.5</a><span class="c-crumb" aria-current="page">by-q44s.5.28</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-q44s.5.28</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Screens: the card gallery</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#blocked-by"><span class="c-toc-label">Blocked by</span><span class="c-toc-count">10</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#blocking"><span class="c-toc-label">Blocking</span><span class="c-toc-count">1</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">2</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>The Beryl 3D gallery landed on staging at 725bff5d9. All four desktop sizes and all 8,244 interface cases passed.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Read first: the epic <a href="by-q44s" data-hovercard="hc-by-q44s"><span class="c-mono">by-q44s</span></a> ('Rules for every bead'); rust/beryl3d/AGENTS.md; docs/beryl-3d.md 'The flat layer', 'The parity list' (screens). Code: beryl_scene src/screens/gallery.rs (the contract's stub). Web: ui/src/screens/ Gallery.tsx (<code>Gallery</code>: a static gallery of sample cards, prompts, menus and the scry overlay from ui/src/screens/samples.ts, silent), ui/src/screens/samples.ts.</p>
+<p>Build: <code>gallery</code> in src/screens/gallery.rs: the same sections and samples as Gallery.tsx, in a scrolling column, built from the widgets, the drawn card faces (<code>Shown::Face</code> of the sample cards, whose faces are Beryl's drawn frames when no scan is cached), a sample menu, and <code>scry_sample()</code>. The start screen reaches it as the web does (<code>#/gallery</code>: no button; give it the key G on the start screen, a shortcut of the root).</p>
+<p>Tests, in beryl_scene/tests/screens.rs: every section heading of Gallery.tsx is in the tree; the gallery scrolls to its last section; it plays no music. Every screen bead: the screen is one function in its file of beryl_scene src/screens, built from widgets and tokens; its entry in data/beryl3d/screens.json is set <code>&quot;built&quot;: true</code> with a recording that shows it; <code>just b3d test</code> runs its recording at the desktop window matrix with no fault ('on screen', 'no overlap', 'reachable', 'named', 'text fits'); on-screen words are the web's exactly.</p>
+<p>Run: just b3d cargo-test -p beryl_scene; just b3d test b3d:screen/gallery; just b3d lane.</p></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>just b3d test b3d:screen/gallery</code> passes at 1440x900, 1600x900, 1920x1080 and 2560x1080; the tests named above pass; screens.json marks the screen built; <code>just b3d tree screen/gallery</code> shows it (output in a comment).</p></div></section><section class="c-section" id="blocked-by"><h2 class="c-section-title">Blocked by<span class="c-count">10</span></h2><ul class="c-rows"><li><a class="c-row" href="by-q44s.5.8" data-prefetch><span class="c-row-main"><span class="c-dot c-tone-green" data-tip="Closed" tabindex="0"></span><span class="c-row-id c-mono c-hide-narrow">by-q44s.5.8</span><span class="c-row-text">Widgets: button, icon button, toggle and slider</span></span><span class="c-row-trailing"><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span></span></a></li><li><a class="c-row" href="by-q44s.5.6" data-prefetch><span class="c-row-main"><span class="c-dot c-tone-green" data-tip="Closed" tabindex="0"></span><span class="c-row-id c-mono c-hide-narrow">by-q44s.5.6</span><span class="c-row-text">Text: styled spans, inline mana symbols and glyphs at a new scale</span></span><span class="c-row-trailing"><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span></span></a></li><li><a class="c-row" href="by-q44s.5.23" data-prefetch><span class="c-row-main"><span class="c-dot c-tone-green" data-tip="Closed" tabindex="0"></span><span class="c-row-id c-mono c-hide-narrow">by-q44s.5.23</span><span class="c-row-text">Cards in elements: the card browser, pile viewer and revealed cards</span></span><span class="c-row-trailing"><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></span></a></li><li><a class="c-row" href="by-q44s.5.9" data-prefetch><span class="c-row-main"><span class="c-dot c-tone-green" data-tip="Closed" tabindex="0"></span><span class="c-row-id c-mono c-hide-narrow">by-q44s.5.9</span><span class="c-row-text">Widgets: list, menu, context menu and tooltip</span></span><span class="c-row-trailing"><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></span></a></li><li><a class="c-row" href="by-q44s.5.22" data-prefetch><span class="c-row-main"><span class="c-dot c-tone-green" data-tip="Closed" tabindex="0"></span><span class="c-row-id c-mono c-hide-narrow">by-q44s.5.22</span><span class="c-row-text">Cards in elements: flat faces, the inspector and hover preview</span></span><span class="c-row-trailing"><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></span></a></li><li><a class="c-row" href="by-q44s.5.2" data-prefetch><span class="c-row-main"><span class="c-dot c-tone-green" data-tip="Closed" tabindex="0"></span><span class="c-row-id c-mono c-hide-narrow">by-q44s.5.2</span><span class="c-row-text">M3 contract: Element in full, Press, screens, widget and prompt signatures</span></span><span class="c-row-trailing"><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></span></a></li><li><a class="c-row" href="by-q44s.5.3" data-prefetch><span class="c-row-main"><span class="c-dot c-tone-green" data-tip="Closed" tabindex="0"></span><span class="c-row-id c-mono c-hide-narrow">by-q44s.5.3</span><span class="c-row-text">Design tokens: one data file for both clients&#x27; styles</span></span><span class="c-row-trailing"><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></span></a></li><li><a class="c-row" href="by-q44s.5.33" data-prefetch><span class="c-row-main"><span class="c-dot c-tone-green" data-tip="Closed" tabindex="0"></span><span class="c-row-id c-mono c-hide-narrow">by-q44s.5.33</span><span class="c-row-text">Beryl&#x27;s drawn card frame, at both face sizes</span></span><span class="c-row-trailing"><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></span></a></li><li><a class="c-row" href="by-q44s.2" data-prefetch><span class="c-row-main"><span class="c-dot c-tone-green" data-tip="Closed" tabindex="0"></span><span class="c-row-id c-mono c-hide-narrow">by-q44s.2</span><span class="c-row-text">M1 review gate</span></span><span class="c-row-trailing"><span class="c-progress" data-tip="8 closed, 0 in progress, 0 to do" tabindex="0"><span class="c-progress-track"><span class="c-progress-fill" style="width:100%"></span></span><span class="c-progress-label">8/8</span></span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></span></a></li><li><a class="c-row" href="by-q44s.1.40" data-prefetch><span class="c-row-main"><span class="c-dot c-tone-green" data-tip="Closed" tabindex="0"></span><span class="c-row-id c-mono c-hide-narrow">by-q44s.1.40</span><span class="c-row-text">The interface test runner: `just b3d test`</span></span><span class="c-row-trailing"><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></span></a></li></ul></section><section class="c-section" id="blocking"><h2 class="c-section-title">Blocking<span class="c-count">1</span></h2><ul class="c-rows"><li><a class="c-row" href="by-q44s.5.41" data-prefetch><span class="c-row-main"><span class="c-dot c-tone-green" data-tip="Closed" tabindex="0"></span><span class="c-row-id c-mono c-hide-narrow">by-q44s.5.41</span><span class="c-row-text">Warden: screens, furniture and cards in elements</span></span><span class="c-row-trailing"><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></span></a></li></ul></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">2</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T16:17:17Z" tabindex="0" data-tip="2026-11-16T16:17:17Z">2026-11-16</time></header><div class="c-prose"><p>Handoff: beryl_scene/src/screens/gallery.rs builds the nine gallery sections as one scrollable screen. The Start screen opens it with G and Escape returns to Start after any open sample closes. The Scry and manual table prompt examples are static previews. The context menus and command query presets open interactively. Gallery stand-ins use a separate face list and the drawn-frame asset worker through Headless. Live asset delivery is recorded on host review <a href="by-q44s.5.43" data-hovercard="hc-by-q44s-5-43"><span class="c-mono">by-q44s.5.43</span></a>. The four desktop recording checks passed. The screens tests also check the settled gallery before and after scrolling at each size.</p>
+<pre><code class="language-text">just b3d tree screen/gallery --seat you --size 1600x900 --do still
+view 1 of 1, t=183ms, at rest, 191 elements
+game
+  layer
+    region &quot;gallery&quot; #65537 0,0 1600x900
+      region #65538 110,16 1380x2837
+        text &quot;Project Beryl&quot; #65539 731,16 137x30
+        text &quot;Game UI · Component Library&quot; #65540 642,62 316x27
+        region &quot;Foundations&quot; #65541 110,105 1380x251
+          text &quot;Foundations&quot; #65542 128,123 1345x24
+          region #65543 128,157 1345x69
+            region #65544 578,157 76x69
+              region &quot;Table&quot; #65545 578,157 76x16
+              text &quot;Table&quot; #65546 596,177 41x22
+              text &quot;#6B5F56&quot; #65547 583,203 66x22
+            region #65548 670,157 76x69
+              region &quot;Surface&quot; #65549 670,157 76x16
+              text &quot;Surface&quot; #65550 680,177 56x22
+              text &quot;#211F1C&quot; #65551 675,203 65x22
+            region #65552 762,157 76x69
+              region &quot;Text&quot; #65553 762,157 76x16
+              text &quot;Text&quot; #65554 784,177 32x22
+              text &quot;#F2E7D8&quot; #65555 767,203 67x22
+            region #65556 854,157 76x69
+              region &quot;Gold&quot; #65557 854,157 76x16
+              text &quot;Gold&quot; #65558 874,177 35x22
+              text &quot;#E4A242&quot; #65559 859,203 66x22
+            region #65560 946,157 76x69
+              region &quot;Cyan&quot; #65561 946,157 76x16
+              text &quot;Cyan&quot; #65562 966,177 37x22
+              text &quot;#33DCFE&quot; #65563 950,203 67x22
+          region #65564 128,236 1345x56
+            region #65565 620,236 172x56
+              text &quot;Scry&quot; #65566 683,236 46x30
+              text &quot;Serif · titles and actions&quot; #65567 620,269 172x22
+            region #65568 808,239 172x49
+              text &quot;Drag cards to reorder&quot; #65569 814,239 161x22
+              text &quot;Sans serif · instructions&quot; #65570 808,266 172x22
+          region #65571 128,302 1345x36
+            region #65572 651,302 123x36
+              region &quot;matte&quot; #65573 675,302 76x10
+              text &quot;Tabletop (matte)&quot; #65574 651,316 123x22
+            region #65575 791,302 158x36
+              region &quot;metal&quot; #65576 832,302 76x10
+              text &quot;Thin metallic borders&quot; #65577 791,316 158x22
+        region &quot;Actions &amp; status&quot; #65578 110,372 1380x228
+          text &quot;Actions &amp; status&quot; #65579 128,389 1345x24
+          region #65580 128,423 1345x74
+            region #65581 488,423 192x74
+              button &quot;Done&quot; #65582 488,423 192x48
+              text &quot;Primary&quot; #65583 555,475 58x22
+            region #65584 696,423 208x74
+              button &quot;View Battlefield&quot; #65585 696,423 208x48
+              text &quot;Secondary&quot; #65586 761,475 78x22
+            region #65587 920,423 192x74
+              button &quot;Pass&quot; #65588 920,423 192x48 disabled
+              text &quot;Disabled&quot; #65589 984,475 65x22
+          region #65590 128,508 1345x25
+            text &quot;Opponent has priority&quot; #65591 729,508 143x25
+          region #65592 128,543 1345x40
+            region &quot;Phase tracker&quot; #65593 708,543 184x40
+              region &quot;Upkeep&quot; #65594 712,547 32x32
+              region &quot;First main phase&quot; #65595 748,547 32x32
+              region &quot;Combat&quot; #65596 784,547 32x32
+              region &quot;Second main phase&quot; #65597 820,547 32x32
+              region &quot;End&quot; #65598 856,547 32x32
+        region &quot;Player &amp; zones&quot; #65599 110,616 1380x306
+          text &quot;Player &amp; zones&quot; #65600 128,634 1345x24
+          region #65601 128,668 1345x51
+            region #65602 697,668 45x51
+              text &quot;22&quot; #65603 706,668 28x25
+              text &quot;Active&quot; #65604 697,697 45x22
+            region #65605 758,668 58x51
+              text &quot;17&quot; #65606 773,668 28x25
+              text &quot;Inactive&quot; #65607 758,697 58x22
+            text &quot;Opponent&quot; #65608 832,681 71x25
+          region #65609 128,729 1345x176
+            region #65610 640,729 86x176
+              region #65611 640,729 86x149
+                region &quot;Card back&quot; #65612 640,729 86x120
+                text &quot;40&quot; #65613 669,853 28x25
+              text &quot;Library&quot; #65614 657,882 52x22
+            region #65615 742,729 86x176
+              region #65616 742,729 86x149
+                region &quot;Dusk Cut&quot; #65617 742,729 86x120
+                text &quot;4&quot; #65618 771,853 28x25
+              text &quot;Graveyard&quot; #65619 747,882 77x22
+            region #65620 844,729 115x176
+              region #65621 859,729 86x149
+                region &quot;Island&quot; #65622 859,729 86x120
+                text &quot;3&quot; #65623 888,853 28x25
+              text &quot;Lands (stacked)&quot; #65624 844,882 115x22
+        region &quot;Cards &amp; states&quot; #65625 110,938 1380x410
+          text &quot;Cards &amp; states&quot; #65626 128,956 1345x24
+          region #65627 128,990 1345x153
+            region &quot;Cinder Colossus&quot; #65628 526,1006 86x120
+            region #65629 628,1010 120x112
+              region &quot;Mountain&quot; #65630 628,1010 120x86
+              text &quot;Tapped&quot; #65631 660,1100 56x22
+            region #65632 764,993 86x147
+              region &quot;Plains&quot; #65633 764,993 86x120
+              text &quot;Untapped&quot; #65634 769,1117 74x22
+            region #65635 866,990 97x153
+              region #65636 868,990 92x126
+                region &quot;Gloom Wren&quot; #65637 871,993 86x120
+              text &quot;Source (gold)&quot; #65638 866,1120 97x22
+            region #65639 979,990 96x153
+              region #65640 981,990 92x126
+                region &quot;Gloom Wren&quot; #65641 984,993 86x120
+              text &quot;Target (cyan)&quot; #65642 979,1120 96x22
+          region #65643 128,1152 1345x179
+            region &quot;Exile Lance&quot; #65644 592,1152 128x179
+            region &quot;Mountain&quot; #65645 736,1152 128x179
+            region &quot;Plateau&quot; #65646 880,1152 128x179
+        region &quot;Combat &amp; stack&quot; #65647 110,1364 1380x437
+          text &quot;Combat &amp; stack&quot; #65648 128,1382 1345x24
+          region #65649 128,1416 1345x153
+            region #65650 660,1416 131x153
+              region #65651 680,1416 92x126
+                region &quot;Beast&quot; #65652 683,1419 86x120
+              text &quot;Attacker · angular&quot; #65653 660,1546 131x22
+            region #65654 807,1416 132x153
+              region #65655 828,1416 92x126
+                region &quot;Angel&quot; #65656 831,1419 86x120
+              text &quot;Blocker · rounded&quot; #65657 807,1546 132x22
+          region #65658 128,1578 1345x205
+            region &quot;Cinder Colossus&quot; #65659 254,1621 86x120
+            region #65660 356,1578 888x205
+              region &quot;Cinder Colossus ability&quot; #65661 736,1578 128x179
+              text &quot;When Cinder Colossus enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets.&quot; #65662 356,1761 888x22
+            region &quot;Beast&quot; #65663 1260,1621 86x120
+        region &quot;Scry overlay&quot; #65664 110,1817 1380x555
+          text &quot;Scry overlay&quot; #65665 128,1835 1345x24
+          region &quot;overlay&quot; #65666 128,1869 1345x453
+            region &quot;choice&quot; #65667 381,1885 638x421
+              text &quot;Scry&quot; #65668 641,1885 119x70
+              text &quot;Drag cards to put them on the top or bottom of your library.&quot; #65669 381,1964 638x27
+              region #65670 383,2002 634x246
+                region #65671 383,2002 312x246
+                  region #65672 383,2002 312x215
+                    region &quot;First card back&quot; #65673 383,2002 154x215
+                    region &quot;Second card back&quot; #65674 541,2002 154x215
+                  text &quot;Bottom&quot; #65675 499,2221 80x27
+                region #65676 705,2002 312x246
+                  region #65677 705,2002 312x215
+                    region &quot;Island&quot; #65678 705,2002 154x215
+                    region &quot;Quell&quot; #65679 863,2002 154x215
+                  text &quot;Top&quot; #65680 841,2221 40x27
+              button &quot;Done&quot; #65681 604,2258 192x48
+            region &quot;Foresee&quot; #65682 1035,1967 184x257
+          region #65683 128,2332 1345x22
+            text &quot;Drag &amp; reorder&quot; #65684 555,2332 113x22
+            text &quot;Source card&quot; #65685 684,2332 88x22
+            text &quot;Confirm&quot; #65686 788,2332 60x22
+            text &quot;Dimmed table backdrop&quot; #65687 865,2332 180x22
+        region &quot;Manual table prompts&quot; #65688 110,2388 1380x199
+          text &quot;Manual table prompts&quot; #65689 128,2406 1345x24
+          region #65690 128,2440 1345x130
+            region &quot;Draw cards&quot; #65691 280,2440 336x130
+              region #65692 290,2450 316x58
+                text &quot;Cards to draw&quot; #65693 290,2450 316x22
+                text &quot;1&quot; #65694 290,2476 316x32
+              region #65695 290,2512 316x48
+                button &quot;Cancel&quot; #65696 290,2512 155x48
+                button &quot;Draw 1&quot; #65697 449,2512 157x48
+            region &quot;Set note&quot; #65698 632,2440 336x130
+              region #65699 642,2450 316x58
+                text &quot;Note&quot; #65700 642,2450 316x22
+                text &quot;Doesn&#x27;t untap&quot; #65701 642,2476 316x32
+              region #65702 642,2512 316x48
+                button &quot;Cancel&quot; #65703 642,2512 149x48
+                button &quot;Set note&quot; #65704 795,2512 163x48
+            region &quot;Set power and toughness…&quot; #65705 984,2440 336x130
+              region #65706 994,2450 316x58
+                region #65707 994,2450 47x58
+                  text &quot;Power&quot; #65708 994,2450 47x22
+                  text &quot;3&quot; #65709 994,2476 47x32
+                region #65710 1045,2450 81x58
+                  text &quot;Toughness&quot; #65711 1045,2450 81x22
+                  text &quot;3&quot; #65712 1045,2476 81x32
+              region #65713 994,2512 316x48
+                button &quot;Cancel&quot; #65714 994,2512 156x48
+                button &quot;Set 3/3&quot; #65715 1154,2512 156x48
+        region &quot;Context menus&quot; #65716 110,2603 1380x117
+          text &quot;Context menus&quot; #65717 128,2621 1345x24
+          region #65718 128,2655 1345x48
+            button &quot;Permanent&quot; #65719 465,2655 192x48
+            button &quot;Library&quot; #65720 673,2655 192x48
+            button &quot;Bottom-right corner&quot; #65721 881,2655 255x48
+        region &quot;Command list&quot; #65722 110,2736 1380x117
+          text &quot;Command list&quot; #65723 128,2754 1345x24
+          region #65724 128,2788 1345x48
+            button &quot;Empty query&quot; #65725 496,2788 192x48
+            button &quot;Two groups&quot; #65726 704,2788 192x48
+            button &quot;No matches&quot; #65727 912,2788 192x48</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T16:34:13Z" tabindex="0" data-tip="2026-11-16T16:34:13Z">2026-11-16</time></header><div class="c-prose"><p>Verification: just b3d lane passed all four lanes, including the workspace tests, frame gate, 8,244 interface cases with zero failures, and fixture timeline parity. The gallery recording passed at 1440×900, 1600×900, 1920×1080 and 2560×1080. The offscreen capture confirmed the drawn sample faces and phase icons.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>dependency added<span class="c-timeline-detail">Added dependency: <a href="by-q44s.5.28" data-hovercard="hc-by-q44s-5-28"><span class="c-mono">by-q44s.5.28</span></a> blocks <a href="by-q44s.5.33" data-hovercard="hc-by-q44s-5-33"><span class="c-mono">by-q44s.5.33</span></a></span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T17:03:29Z" tabindex="0" data-tip="2026-11-15T17:03:29Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>dependency added<span class="c-timeline-detail">Added dependency: <a href="by-q44s.5.28" data-hovercard="hc-by-q44s-5-28"><span class="c-mono">by-q44s.5.28</span></a> blocks <a href="by-q44s.5.6" data-hovercard="hc-by-q44s-5-6"><span class="c-mono">by-q44s.5.6</span></a></span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T17:03:28Z" tabindex="0" data-tip="2026-11-15T17:03:28Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>dependency added<span class="c-timeline-detail">Added dependency: <a href="by-q44s.5.28" data-hovercard="hc-by-q44s-5-28"><span class="c-mono">by-q44s.5.28</span></a> blocks <a href="by-q44s.5.23" data-hovercard="hc-by-q44s-5-23"><span class="c-mono">by-q44s.5.23</span></a></span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T17:03:27Z" tabindex="0" data-tip="2026-11-15T17:03:27Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>dependency added<span class="c-timeline-detail">Added dependency: <a href="by-q44s.5.28" data-hovercard="hc-by-q44s-5-28"><span class="c-mono">by-q44s.5.28</span></a> blocks <a href="by-q44s.5.22" data-hovercard="hc-by-q44s-5-22"><span class="c-mono">by-q44s.5.22</span></a></span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T17:03:09Z" tabindex="0" data-tip="2026-11-15T17:03:09Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>dependency added<span class="c-timeline-detail">Added dependency: <a href="by-q44s.5.28" data-hovercard="hc-by-q44s-5-28"><span class="c-mono">by-q44s.5.28</span></a> blocks <a href="by-q44s.1.40" data-hovercard="hc-by-q44s-1-40"><span class="c-mono">by-q44s.1.40</span></a></span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T17:02:53Z" tabindex="0" data-tip="2026-11-15T17:02:53Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>dependency added<span class="c-timeline-detail">Added dependency: <a href="by-q44s.5.28" data-hovercard="hc-by-q44s-5-28"><span class="c-mono">by-q44s.5.28</span></a> blocks <a href="by-q44s.5.9" data-hovercard="hc-by-q44s-5-9"><span class="c-mono">by-q44s.5.9</span></a></span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T17:02:53Z" tabindex="0" data-tip="2026-11-15T17:02:53Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>dependency added<span class="c-timeline-detail">Added dependency: <a href="by-q44s.5.28" data-hovercard="hc-by-q44s-5-28"><span class="c-mono">by-q44s.5.28</span></a> blocks <a href="by-q44s.5.8" data-hovercard="hc-by-q44s-5-8"><span class="c-mono">by-q44s.5.8</span></a></span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T17:02:52Z" tabindex="0" data-tip="2026-11-15T17:02:52Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>dependency added<span class="c-timeline-detail">Added dependency: <a href="by-q44s.5.28" data-hovercard="hc-by-q44s-5-28"><span class="c-mono">by-q44s.5.28</span></a> blocks <a href="by-q44s.5.3" data-hovercard="hc-by-q44s-5-3"><span class="c-mono">by-q44s.5.3</span></a></span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T17:02:51Z" tabindex="0" data-tip="2026-11-15T17:02:51Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>dependency added<span class="c-timeline-detail">Added dependency: <a href="by-q44s.5.28" data-hovercard="hc-by-q44s-5-28"><span class="c-mono">by-q44s.5.28</span></a> blocks <a href="by-q44s.5.2" data-hovercard="hc-by-q44s-5-2"><span class="c-mono">by-q44s.5.2</span></a></span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T17:02:50Z" tabindex="0" data-tip="2026-11-15T17:02:50Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>dependency added<span class="c-timeline-detail">Added dependency: <a href="by-q44s.5.28" data-hovercard="hc-by-q44s-5-28"><span class="c-mono">by-q44s.5.28</span></a> blocks <a href="by-q44s.2" data-hovercard="hc-by-q44s-2"><span class="c-mono">by-q44s.2</span></a></span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T17:02:49Z" tabindex="0" data-tip="2026-11-15T17:02:49Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">tier:sonnet</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T16:54:11Z" tabindex="0" data-tip="2026-11-15T16:54:11Z">2026-11-15</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T16:54:11Z" tabindex="0" data-tip="2026-11-15T16:54:11Z">2026-11-15</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>ci@example.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-16T15:51:16Z" tabindex="0" data-tip="2026-11-16T15:51:16Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">01a1e50e-bc51-7410-9d01-e384bb4da638</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-q44s.5.28</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">725bff5d9d519419a114a7ed1810077de02efb43</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">b1006289b4604fd39fb9a6edd467c8b2</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-q44s</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-q44s</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">01a1e50e-bc51-7410-9d01-e384bb4da638</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">01a1e295-58a5-7c72-a2fc-b646a95defc1</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/slot-04</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span><span class="c-muted">Medium</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1e50e-bc51-7410-9d01-e384bb4da638">01a1e50e</span></dd></div><div class="c-meta-item"><dt>Epic</dt><dd><a href="by-q44s.5" data-hovercard="hc-by-q44s-5">M3: a whole game</a></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">tier:sonnet</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-15T16:54:11Z" tabindex="0" data-tip="2026-11-15T16:54:11Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-16T16:43:56Z" tabindex="0" data-tip="2026-11-16T16:43:56Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-16T16:42:57Z" tabindex="0" data-tip="2026-11-16T16:42:57Z">2026-11-16</time></dd></div></dl></aside></div></div></div><template id="hc-by-q44s"><div class="c-card-top"><span class="c-mono">by-q44s</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Beryl 3D: a native Rust client to replace the web interface and Tauri</div><div class="c-hovercard-meta"><span class="c-dot c-tone-neutral">Open</span><span>epic</span><span class="c-progress"><span class="c-progress-track"><span class="c-progress-fill" style="width:90%"></span></span><span class="c-progress-label">392/437</span></span></div></template><template id="hc-by-q44s-5-43"><div class="c-card-top"><span class="c-mono">by-q44s.5.43</span><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></div><div class="c-hovercard-title">Warden: the shell crate, sound, bug reports, live, frames, the app</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-q44s-5-28"><div class="c-card-top"><span class="c-mono">by-q44s.5.28</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Screens: the card gallery</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-q44s-5-33"><div class="c-card-top"><span class="c-mono">by-q44s.5.33</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Beryl&#x27;s drawn card frame, at both face sizes</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-q44s-5-6"><div class="c-card-top"><span class="c-mono">by-q44s.5.6</span><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span></div><div class="c-hovercard-title">Text: styled spans, inline mana symbols and glyphs at a new scale</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-q44s-5-23"><div class="c-card-top"><span class="c-mono">by-q44s.5.23</span><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></div><div class="c-hovercard-title">Cards in elements: the card browser, pile viewer and revealed cards</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-q44s-5-22"><div class="c-card-top"><span class="c-mono">by-q44s.5.22</span><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></div><div class="c-hovercard-title">Cards in elements: flat faces, the inspector and hover preview</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-q44s-1-40"><div class="c-card-top"><span class="c-mono">by-q44s.1.40</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">The interface test runner: `just b3d test`</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-q44s-5-9"><div class="c-card-top"><span class="c-mono">by-q44s.5.9</span><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></div><div class="c-hovercard-title">Widgets: list, menu, context menu and tooltip</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-q44s-5-8"><div class="c-card-top"><span class="c-mono">by-q44s.5.8</span><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span></div><div class="c-hovercard-title">Widgets: button, icon button, toggle and slider</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-q44s-5-3"><div class="c-card-top"><span class="c-mono">by-q44s.5.3</span><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></div><div class="c-hovercard-title">Design tokens: one data file for both clients&#x27; styles</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-q44s-5-2"><div class="c-card-top"><span class="c-mono">by-q44s.5.2</span><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span></div><div class="c-hovercard-title">M3 contract: Element in full, Press, screens, widget and prompt signatures</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template><template id="hc-by-q44s-2"><div class="c-card-top"><span class="c-mono">by-q44s.2</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">M1 review gate</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>epic</span><span class="c-progress"><span class="c-progress-track"><span class="c-progress-fill" style="width:100%"></span></span><span class="c-progress-label">8/8</span></span></div></template><template id="hc-by-q44s-5"><div class="c-card-top"><span class="c-mono">by-q44s.5</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">M3: a whole game</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>epic</span><span class="c-progress"><span class="c-progress-track"><span class="c-progress-fill" style="width:100%"></span></span><span class="c-progress-label">59/59</span></span></div></template>
+</main>
+</body>
+</html>

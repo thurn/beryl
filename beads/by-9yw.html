@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-9yw</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-9yw</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-9yw</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">1</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Fixed in 11bc7e5: opponent's back row clears the step banner; slow CI passed</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at e3768dc8f1ca84dc1d1528581ab43177fbe00f76. Failing range since last passing commit: cabb5490dec0aa3bb049007edb90ea0b1e187663..e3768dc8f1ca84dc1d1528581ab43177fbe00f76.</p>
+<p>Log tail:</p>
+<pre><code>/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-declare-block-choosing.png
+ui-shots: game-declare-block-choosing: text cut: &quot;Click the attacker Trinket Mage blocks&quot; lies under Staff of the Storyteller
+  text cut at 1180×820: &quot;Click the attacker Trinket Mage blocks&quot; lies under Staff of the Storyteller
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-trigger.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-declare-block-1280.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-counter.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-arrow-spell.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-arrow-ability.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-arrow-player.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-choice-scry.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-choice-scry-1280.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-choice-scry-1920.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-choice-scry-battlefield.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-choice-look.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-choice-jace.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-choice-pay.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-trigger-order-1280.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-trigger-order.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-choice-search.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-choice-thirst-hand.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-choice-thirst.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-untap-teferi.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-target-graveyard.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-choice-cleanup.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-menu-walker.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-converter-may-exile.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-converter-menu.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-converter-exiled.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-menu-walker-low.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-menu-land-face.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-converter-choose.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-pay-life.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-untap.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-namesake-target.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-attack-token.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-crew.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-waterbend.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-sick-compare.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-token-compare.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-stolen-owner.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-full-control.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-tracker-main.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-tracker-begin-combat.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-tracker-attackers.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-tracker-end-combat.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-tracker-blockers.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-tracker-damage.png
+/Users/dthurn/Library/Caches/beryl/ui-shots/ci-e3768dc8f1ca/game-coin-on-draw.png
+ui-shots: FAILED
+ci shots ui-shots: FAILED (exit 1) after 102 s
+ci: repo 3 s (just 0 s, markdown 2 s)
+ci: python 16 s (black 3 s, pyre 7 s, pytest 7 s)
+ci: rust 132 s (build-paths 0 s, fmt 2 s, clippy 17 s, tests 113 s)
+ci: ui 8 s (prettier 5 s, tsc 3 s, card-names 1 s)
+ci: app 44 s (smoke 44 s)
+ci: shots 102 s (ui-shots FAILED)
+ci: ui-test 150 s (ui-test 150 s)
+ci: oracle 134 s (oracle 134 s)
+ci: counts 32 s (count-gate 32 s)
+ci: FAILED: shots in 157 s (budget 300 s)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">1</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-06T21:17:08Z" tabindex="0" data-tip="2026-11-06T21:17:08Z">2026-11-06</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at cb3c2c5b085d84eba16abe5e7bad8389cb78bca5. Failing range since last passing commit: cabb5490dec0aa3bb049007edb90ea0b1e187663..cb3c2c5b085d84eba16abe5e7bad8389cb78bca5.</p>
+<p>Log tail:</p>
+<pre><code>ok: on nine cards in the opposing hand, no orb, tip, log or raised hand card covers a card on the table
+ok: a long pill refits to narrower room without a resize loop
+ok: a long pile&#x27;s viewer fades where more of it lies beyond the scroll
+ok: hovering a card in the opening hand inspects it
+ok: hovering a card in a scry inspects it
+ok: the turn button stands still whatever its label, at 1600 wide
+ok: the turn button stands still whatever its label, at 1280 wide
+ok: hovering a card in choice-look&#x27;s prompt keeps its inspector off the prompt
+ok: hovering a card in cast-kicker&#x27;s prompt keeps its inspector off the prompt
+ok: hovering a card in attached-across&#x27;s target step covers no target
+ok: hovering a card in crew&#x27;s target step covers no target
+ok: hovering a card in greedy-turn-9&#x27;s target step covers no target
+ok: up to one target chooses none from its one button
+ok: up to one target is picked on the board with its count
+ok: an attack past a planeswalker asks nothing of what it attacks
+ok: explore shows the revealed card and answers by where it goes
+ok: a click on a spell with one target, the player&#x27;s own, asks it
+ok: a loot&#x27;s draw shows before the discard is asked
+ok: an untap is picked on the board, the human&#x27;s tapped lands picked to begin with
+ok: Thirst&#x27;s basic land is discarded from the hand in two clicks
+ok: Thirst&#x27;s two cards are picked from the hand before Discard is offered
+ok: Teferi&#x27;s untap picks the tapped lands to begin with
+ok: a search finds nothing from its second button
+ok: the cleanup discard counts its picks
+ok: graveyard targets show their faces
+ok: an up-to-one search lights one card and sends it
+ok: choice-explore&#x27;s choice text fits its box
+ok: choice-scry&#x27;s choice text fits its box
+ok: choice-jace&#x27;s choice text fits its box
+ok: choice-thirst&#x27;s choice text fits its box
+ok: choice-loot&#x27;s choice text fits its box
+ok: choice-cleanup&#x27;s choice text fits its box
+ok: pay-life&#x27;s choice text fits its box
+ok: choice-search&#x27;s choice text fits its box
+ok: crewing shows the power picked against the crew cost without text
+ok: the crew meter fills with the power tapped
+ok: Adeline&#x27;s Human is in view as what it attacks is asked
+ok: Adeline&#x27;s Human attacks the player from the turn button
+ok: a waterbend payable by lands alone asks nothing
+ok: Enter on the start screen starts a game
+ok: Enter with a game in progress returns to it
+ok: a waterbend shows its cost in symbols with its tappers lit
+ok: cards for the bottom toggle in their slots until confirmed
+ok: the start screen remembers the last opponent across a reload
+ok: a new game with one in progress asks first, then concedes it
+ok: a reloaded page takes up the game in progress
+ok: the settings concede the game once confirmed in place
+ok: the result waits for the killing blow, says why, and can be put aside
+ui-test: FAILED
+ci ui-test ui-test: FAILED (exit 1) after 169 s
+ci: repo 3 s (just 0 s, markdown 2 s)
+ci: python 16 s (black 3 s, pyre 6 s, pytest 7 s)
+ci: rust 163 s (build-paths 0 s, fmt 2 s, clippy 21 s, tests 139 s)
+ci: ui 9 s (prettier 5 s, tsc 4 s, card-names 0 s)
+ci: app 58 s (smoke 58 s)
+ci: shots 113 s (ui-shots FAILED)
+ci: ui-test 169 s (ui-test FAILED)
+ci: oracle 159 s (oracle 159 s)
+ci: counts 35 s (count-gate 35 s)
+ci: FAILED: shots ui-test in 178 s (budget 300 s)</code></pre></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>closed this<span class="c-timeline-detail">Fixed in 11bc7e5: opponent&#x27;s back row clears the step banner; slow CI passed</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T21:20:27Z" tabindex="0" data-tip="2026-11-06T21:20:27Z">2026-11-06</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T21:17:12Z" tabindex="0" data-tip="2026-11-06T21:17:12Z">2026-11-06</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>claimed this for Derek Thurn</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T21:05:28Z" tabindex="0" data-tip="2026-11-06T21:05:28Z">2026-11-06</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T21:05:08Z" tabindex="0" data-tip="2026-11-06T21:05:08Z">2026-11-06</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-06T21:05:08Z" tabindex="0" data-tip="2026-11-06T21:05:08Z">2026-11-06</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-06T21:05:29Z" tabindex="0" data-tip="2026-11-06T21:05:29Z">2026-11-06</time></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">cabb5490dec0aa3bb049007edb90ea0b1e187663..cb3c2c5b085d84eba16abe5e7bad8389cb78bca5</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-cbf</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-06T21:05:09Z" tabindex="0" data-tip="2026-11-06T21:05:09Z">2026-11-06</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-06T21:20:28Z" tabindex="0" data-tip="2026-11-06T21:20:28Z">2026-11-06</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-06T21:20:28Z" tabindex="0" data-tip="2026-11-06T21:20:28Z">2026-11-06</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

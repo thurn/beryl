@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-8xk</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-8xk</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-8xk</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Racy assertion in the beryl_session sessions test (a second click could see the next decision); fixed in 26fe3a37</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at af6c1094b5d0642183ddefeb2d036eb732127cc0. Failing range since last passing commit: 26e446cc278c3163e7772aaa6a64d8f1cb56c206..af6c1094b5d0642183ddefeb2d036eb732127cc0.</p>
+<p>Log tail:</p>
+<pre><code>    beryl: command: choose refused: no decision is open {&quot;decision&quot;:162,&quot;error&quot;:{&quot;kind&quot;:&quot;notDeciding&quot;},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: decision 164 of game 1 is not the open one, 163 of game 1 {&quot;decision&quot;:164,&quot;error&quot;:{&quot;decision&quot;:{&quot;seq&quot;:164,&quot;session&quot;:1},&quot;kind&quot;:&quot;staleDecision&quot;,&quot;open&quot;:{&quot;seq&quot;:163,&quot;session&quot;:1}},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: candidate 1 of 1 {&quot;decision&quot;:163,&quot;error&quot;:{&quot;candidates&quot;:1,&quot;index&quot;:1,&quot;kind&quot;:&quot;noSuchCandidate&quot;},&quot;index&quot;:1,&quot;session&quot;:1}
+    beryl: command: choose refused: game 2 is not in progress {&quot;decision&quot;:163,&quot;error&quot;:{&quot;kind&quot;:&quot;staleSession&quot;,&quot;session&quot;:2},&quot;index&quot;:0,&quot;session&quot;:2}
+    beryl: command: choose refused: no decision is open {&quot;decision&quot;:163,&quot;error&quot;:{&quot;kind&quot;:&quot;notDeciding&quot;},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: decision 165 of game 1 is not the open one, 164 of game 1 {&quot;decision&quot;:165,&quot;error&quot;:{&quot;decision&quot;:{&quot;seq&quot;:165,&quot;session&quot;:1},&quot;kind&quot;:&quot;staleDecision&quot;,&quot;open&quot;:{&quot;seq&quot;:164,&quot;session&quot;:1}},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: candidate 1 of 1 {&quot;decision&quot;:164,&quot;error&quot;:{&quot;candidates&quot;:1,&quot;index&quot;:1,&quot;kind&quot;:&quot;noSuchCandidate&quot;},&quot;index&quot;:1,&quot;session&quot;:1}
+    beryl: command: choose refused: game 2 is not in progress {&quot;decision&quot;:164,&quot;error&quot;:{&quot;kind&quot;:&quot;staleSession&quot;,&quot;session&quot;:2},&quot;index&quot;:0,&quot;session&quot;:2}
+    beryl: command: choose refused: no decision is open {&quot;decision&quot;:164,&quot;error&quot;:{&quot;kind&quot;:&quot;notDeciding&quot;},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: decision 166 of game 1 is not the open one, 165 of game 1 {&quot;decision&quot;:166,&quot;error&quot;:{&quot;decision&quot;:{&quot;seq&quot;:166,&quot;session&quot;:1},&quot;kind&quot;:&quot;staleDecision&quot;,&quot;open&quot;:{&quot;seq&quot;:165,&quot;session&quot;:1}},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: candidate 1 of 1 {&quot;decision&quot;:165,&quot;error&quot;:{&quot;candidates&quot;:1,&quot;index&quot;:1,&quot;kind&quot;:&quot;noSuchCandidate&quot;},&quot;index&quot;:1,&quot;session&quot;:1}
+    beryl: command: choose refused: game 2 is not in progress {&quot;decision&quot;:165,&quot;error&quot;:{&quot;kind&quot;:&quot;staleSession&quot;,&quot;session&quot;:2},&quot;index&quot;:0,&quot;session&quot;:2}
+    beryl: command: choose refused: no decision is open {&quot;decision&quot;:165,&quot;error&quot;:{&quot;kind&quot;:&quot;notDeciding&quot;},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: decision 167 of game 1 is not the open one, 166 of game 1 {&quot;decision&quot;:167,&quot;error&quot;:{&quot;decision&quot;:{&quot;seq&quot;:167,&quot;session&quot;:1},&quot;kind&quot;:&quot;staleDecision&quot;,&quot;open&quot;:{&quot;seq&quot;:166,&quot;session&quot;:1}},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: candidate 1 of 1 {&quot;decision&quot;:166,&quot;error&quot;:{&quot;candidates&quot;:1,&quot;index&quot;:1,&quot;kind&quot;:&quot;noSuchCandidate&quot;},&quot;index&quot;:1,&quot;session&quot;:1}
+    beryl: command: choose refused: game 2 is not in progress {&quot;decision&quot;:166,&quot;error&quot;:{&quot;kind&quot;:&quot;staleSession&quot;,&quot;session&quot;:2},&quot;index&quot;:0,&quot;session&quot;:2}
+    beryl: command: choose refused: no decision is open {&quot;decision&quot;:166,&quot;error&quot;:{&quot;kind&quot;:&quot;notDeciding&quot;},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: decision 168 of game 1 is not the open one, 167 of game 1 {&quot;decision&quot;:168,&quot;error&quot;:{&quot;decision&quot;:{&quot;seq&quot;:168,&quot;session&quot;:1},&quot;kind&quot;:&quot;staleDecision&quot;,&quot;open&quot;:{&quot;seq&quot;:167,&quot;session&quot;:1}},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: candidate 1 of 1 {&quot;decision&quot;:167,&quot;error&quot;:{&quot;candidates&quot;:1,&quot;index&quot;:1,&quot;kind&quot;:&quot;noSuchCandidate&quot;},&quot;index&quot;:1,&quot;session&quot;:1}
+    beryl: command: choose refused: game 2 is not in progress {&quot;decision&quot;:167,&quot;error&quot;:{&quot;kind&quot;:&quot;staleSession&quot;,&quot;session&quot;:2},&quot;index&quot;:0,&quot;session&quot;:2}
+    beryl: command: choose refused: no decision is open {&quot;decision&quot;:167,&quot;error&quot;:{&quot;kind&quot;:&quot;notDeciding&quot;},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: decision 169 of game 1 is not the open one, 168 of game 1 {&quot;decision&quot;:169,&quot;error&quot;:{&quot;decision&quot;:{&quot;seq&quot;:169,&quot;session&quot;:1},&quot;kind&quot;:&quot;staleDecision&quot;,&quot;open&quot;:{&quot;seq&quot;:168,&quot;session&quot;:1}},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: candidate 1 of 1 {&quot;decision&quot;:168,&quot;error&quot;:{&quot;candidates&quot;:1,&quot;index&quot;:1,&quot;kind&quot;:&quot;noSuchCandidate&quot;},&quot;index&quot;:1,&quot;session&quot;:1}
+    beryl: command: choose refused: game 2 is not in progress {&quot;decision&quot;:168,&quot;error&quot;:{&quot;kind&quot;:&quot;staleSession&quot;,&quot;session&quot;:2},&quot;index&quot;:0,&quot;session&quot;:2}
+    beryl: command: choose refused: no decision is open {&quot;decision&quot;:168,&quot;error&quot;:{&quot;kind&quot;:&quot;notDeciding&quot;},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: decision 170 of game 1 is not the open one, 169 of game 1 {&quot;decision&quot;:170,&quot;error&quot;:{&quot;decision&quot;:{&quot;seq&quot;:170,&quot;session&quot;:1},&quot;kind&quot;:&quot;staleDecision&quot;,&quot;open&quot;:{&quot;seq&quot;:169,&quot;session&quot;:1}},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: candidate 1 of 1 {&quot;decision&quot;:169,&quot;error&quot;:{&quot;candidates&quot;:1,&quot;index&quot;:1,&quot;kind&quot;:&quot;noSuchCandidate&quot;},&quot;index&quot;:1,&quot;session&quot;:1}
+    beryl: command: choose refused: game 2 is not in progress {&quot;decision&quot;:169,&quot;error&quot;:{&quot;kind&quot;:&quot;staleSession&quot;,&quot;session&quot;:2},&quot;index&quot;:0,&quot;session&quot;:2}
+    beryl: command: choose refused: no decision is open {&quot;decision&quot;:169,&quot;error&quot;:{&quot;kind&quot;:&quot;notDeciding&quot;},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: decision 171 of game 1 is not the open one, 170 of game 1 {&quot;decision&quot;:171,&quot;error&quot;:{&quot;decision&quot;:{&quot;seq&quot;:171,&quot;session&quot;:1},&quot;kind&quot;:&quot;staleDecision&quot;,&quot;open&quot;:{&quot;seq&quot;:170,&quot;session&quot;:1}},&quot;index&quot;:0,&quot;session&quot;:1}
+    beryl: command: choose refused: candidate 1 of 1 {&quot;decision&quot;:170,&quot;error&quot;:{&quot;candidates&quot;:1,&quot;index&quot;:1,&quot;kind&quot;:&quot;noSuchCandidate&quot;},&quot;index&quot;:1,&quot;session&quot;:1}
+    beryl: command: choose refused: game 2 is not in progress {&quot;decision&quot;:170,&quot;error&quot;:{&quot;kind&quot;:&quot;staleSession&quot;,&quot;session&quot;:2},&quot;index&quot;:0,&quot;session&quot;:2}
+    beryl: command: choose refused: decision 170 of game 1 is not the open one, 171 of game 1 {&quot;decision&quot;:170,&quot;error&quot;:{&quot;decision&quot;:{&quot;seq&quot;:170,&quot;session&quot;:1},&quot;kind&quot;:&quot;staleDecision&quot;,&quot;open&quot;:{&quot;seq&quot;:171,&quot;session&quot;:1}},&quot;index&quot;:0,&quot;session&quot;:1}
+
+    thread &#x27;a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it&#x27; (157591088) panicked at crates/beryl_session/tests/sessions.rs:136:9:
+    assertion `left == right` failed
+      left: Err(StaleDecision { decision: DecisionId { session: SessionId(1), seq: 170 }, open: DecisionId { session: SessionId(1), seq: 171 } })
+     right: Err(NotDeciding)
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  Cancelling due to test failure: 17 tests still running
+────────────
+     Summary [  55.100s] 370/393 tests run: 369 passed, 1 failed, 0 skipped
+        FAIL [   0.330s] (353/393) beryl_session::sessions a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it
+warning: 23/393 tests were not run due to test failure (run with --no-fail-fast to run all tests, or run with --max-fail)
+error: test run failed
+allocations: no heap allocation in 24 rollouts, 3274 decisions, from the cube rollout benchmark&#x27;s positions
+allocations: no heap allocation in 4 random games
+allocations: no heap allocation in 8 rollouts under the rollout policy
+ci rust tests: FAILED (exit 100) after 25.9 s (122 s on the clock, the machine loaded)
+ci: repo 0 s (just 0 s, markdown 0 s)
+ci: python 6 s (black 0 s, pyre 1 s, pytest 4 s)
+ci: rust 31 s (build-paths 0 s, fmt 0 s, clippy 5 s, tests FAILED)
+ci: ui 2 s (prettier 1 s, tsc 1 s, card-names 0 s)
+ci: app 7 s (smoke 7 s)
+ci: shots 15 s (ui-shots 15 s)
+ci: ui-test 29 s (ui-test 29 s)
+ci: oracle 25 s (oracle 25 s)
+ci: counts 7 s (count-gate 7 s)
+ci: FAILED: rust in 32.6 s (165 s on the clock, the machine loaded) (budget 300 s)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="db265b0d-290a-45fc-a232-fc1b920f6e24">db265b0d</span></span>closed this<span class="c-timeline-detail">Racy assertion in the beryl_session sessions test (a second click could see the next decision); fixed in 26fe3a37</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-08T12:55:52Z" tabindex="0" data-tip="2026-11-08T12:55:52Z">2026-11-08</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="db265b0d-290a-45fc-a232-fc1b920f6e24">db265b0d</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="db265b0d-290a-45fc-a232-fc1b920f6e24">db265b0d</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-08T12:47:00Z" tabindex="0" data-tip="2026-11-08T12:47:00Z">2026-11-08</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-08T12:46:26Z" tabindex="0" data-tip="2026-11-08T12:46:26Z">2026-11-08</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-08T12:46:26Z" tabindex="0" data-tip="2026-11-08T12:46:26Z">2026-11-08</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-08T12:47:01Z" tabindex="0" data-tip="2026-11-08T12:47:01Z">2026-11-08</time></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">26e446cc278c3163e7772aaa6a64d8f1cb56c206..af6c1094b5d0642183ddefeb2d036eb732127cc0</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono"></span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="db265b0d-290a-45fc-a232-fc1b920f6e24">db265b0d</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-08T12:46:27Z" tabindex="0" data-tip="2026-11-08T12:46:27Z">2026-11-08</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-08T12:55:52Z" tabindex="0" data-tip="2026-11-08T12:55:52Z">2026-11-08</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-08T12:55:52Z" tabindex="0" data-tip="2026-11-08T12:55:52Z">2026-11-08</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

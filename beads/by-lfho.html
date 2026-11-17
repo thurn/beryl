@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-lfho</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-lfho</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-lfho</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">2</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Verified setup-name repair 97584b42 locally and pushed 66be4880 for the XMage untap replay gap; macOS slow suite passed locally and fast checks passed on rebase.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 9889f316215c14a0f906e7deaeeaceeb19de533e. Failing range since last passing commit: 40ca61f7a9b5197af9887a53e99f2ff5b4241302..9889f316215c14a0f906e7deaeeaceeb19de533e.</p>
+<p>Log tail:</p>
+<pre><code>      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 106&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment after one XMage chose the sources of, onto a stack&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 113&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment after one XMage chose the sources of&quot;
+      }
+    ],
+    &quot;log&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/xmage-oracle.log&quot;,
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;forge&quot;: {
+    &quot;pass&quot;: 100,
+    &quot;fail&quot;: 0,
+    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 0,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 2785 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 3822 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 1582 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 383.0 swarm: pruned 10489 stale objects and 716 incremental sessions; evicted 19 unused builds (0.0 GB) to fit 15 GB
+warm: cloned /Users/dthurn/beryl/.worktrees/ci-runner/rust/target in 26.3 s
+warm: saved a copy of /Users/dthurn/beryl/.worktrees/ci-runner/rust/target without its incremental caches
+
+ci: repo 0 s (file-length 0 s)
+ci: python 5 s (black 1 s, pyre 5 s)
+ci: rust 600 s (clippy 141 s, tests 459 s)
+ci: names 8 s (card-names 3 s, two-player 1 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 151 s (smoke 151 s)
+ci: ui-smoke 220 s (ui-test 220 s)
+ci: oracle 561 s (oracle FAILED)
+ci: counts 86 s (count-gate 49 s, count-gate-families 37 s)
+verdict: oracle oracle:Generated/Generated 36/forge catch
+verdict: oracle oracle:Generated/Generated 54/forge catch
+verdict: oracle oracle:Generated/Generated 76/forge catch
+verdict: oracle oracle:Generated/Generated 82/forge catch
+verdict: oracle oracle:Generated/Generated 106/forge catch
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 599.6 s (910 s on the clock) (budget 300 s)
+ci: load average 27 14 14 on 10 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 1.04x the reference&#x27;s time (`just speed`)
+bisect: 1 failed checks over 2 commits since master (40ca61f7a9), 600 s to search
+bisect: 9889f31621: 1 of 1 checks fail
+bisect: e671b8fb53: 1 of 1 checks fail
+bisect: 40ca61f7a9: 0 of 1 checks fail
+bisect: oracle:Generated/Generated 102/xmage  culprit e671b8fb53 feat: Pithing Needle and named-source prohibitions  (2 commits since master)  bead by-bajq.7.3
+miss: oracle:Generated/Generated 102/xmage unknown (no fast check of e671b8fb53 in this host&#x27;s run log)
+record: oracle:Generated/Generated 102/xmage  runs 34, failures 2, flaky 0, stale 0, catch 0, miss 0 (30 days)
+ci: sweep: next due in 68 min</code></pre>
+<p>No vizier on this machine has a fresh lease on a run this failure affects, so nobody is repairing it (<code>enact_unowned=true</code>). Claim it with <code>enact claim &lt;bead&gt;</code> and repair it as a Steward; claiming clears the flag.</p></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">2</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T02:35:44Z" tabindex="0" data-tip="2026-11-15T02:35:44Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at aef69e3360786f06a42607d6c887dd535f11ca52. Failing range since last passing commit: 40ca61f7a9b5197af9887a53e99f2ff5b4241302..aef69e3360786f06a42607d6c887dd535f11ca52.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment after one XMage chose the sources of, onto a stack&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 106&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment after one XMage chose the sources of, onto a stack&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 113&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a payment after one XMage chose the sources of&quot;
+      }
+    ],
+    &quot;log&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/xmage-oracle.log&quot;,
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;forge&quot;: {
+    &quot;pass&quot;: 100,
+    &quot;fail&quot;: 0,
+    &quot;allowlisted&quot;: 0,
+    &quot;unsupported&quot;: 0,
+    &quot;stale_allowlist&quot;: 0,
+    &quot;scenarios&quot;: [],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 3868 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 5398 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 2144 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;/Users/dthurn/Library/Caches/beryl/oracles/logs/oracle.json&quot;
+}
+ci oracle oracle: FAILED (exit 1) after 105.3 s (86 s on the clock), after waiting 8.0 s for CPU tokens
+ci: repo 0 s (file-length 0 s)
+ci: python 3 s (black 1 s, pyre 3 s)
+ci: rust 714 s (clippy 128 s, tests 587 s)
+ci: ui 3 s (tsc 3 s)
+ci: names 7 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 61 s (smoke 61 s)
+ci: ui-smoke 556 s (ui-test 556 s)
+ci: oracle 268 s (oracle FAILED)
+ci: counts 443 s (count-gate 131 s, count-gate-families 312 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: oracle in 687.2 s (budget 300 s)
+ci: load average 12 16 19 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 1 failed checks over 6 commits since master (40ca61f7a9), 600 s to search
+bisect: aef69e3360: 1 of 1 checks fail
+bisect: 9548ccaf7a: 1 of 1 checks fail
+bisect: 9889f31621: 1 of 1 checks fail
+bisect: e671b8fb53: 1 of 1 checks fail
+bisect: 40ca61f7a9: 0 of 1 checks fail
+bisect: oracle:Generated  culprit e671b8fb53 feat: Pithing Needle and named-source prohibitions  (6 commits since master)  bead by-bajq.7.3
+miss: oracle:Generated/Generated 26/xmage (fast check at 9889f31621 did not choose it: not chosen)
+record: oracle:Generated/Generated 26/xmage  runs 315, failures 2, flaky 1, stale 0, catch 1, miss 1 (30 days)
+miss: oracle:Generated/Generated 102/xmage (fast check at 9889f31621 did not choose it: not chosen)
+record: oracle:Generated/Generated 102/xmage  runs 315, failures 4, flaky 0, stale 0, catch 0, miss 1 (30 days)
+ci: sweep: next due in 90 min</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T02:42:57Z" tabindex="0" data-tip="2026-11-15T02:42:57Z">2026-11-15</time></header><div class="c-prose"><p>Handoff: <a href="by-45a0" data-hovercard="hc-by-45a0"><span class="c-mono">by-45a0</span></a>'s 97584b42 answers the setup name prompt and Generated 102 passed in XMage and Forge on this Mac. The next local staging run also exposed Generated 26: XMage had picked its own mana sources for Teferi, so its untap prompt could reject Beryl's Forest choice. Commit 66be4880 reports named untap choices after an XMage-chosen payment as unsupported and adds a deterministic exporter test. Forge still passed Generated 26. The full macOS slow command passed before the final rebase onto 39dd622d, and Enact's fast checks passed after it. The active CI runner will test the staging batch.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T02:35:44Z" tabindex="0" data-tip="2026-11-15T02:35:44Z">2026-11-15</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-15T02:19:49Z" tabindex="0" data-tip="2026-11-15T02:19:49Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">01a1dd01-bb6f-75f2-aaef-6216c858c210</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-lfho</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">40ca61f7a9b5197af9887a53e99f2ff5b4241302..aef69e3360786f06a42607d6c887dd535f11ca52</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">66be4880b641330cccb9692410fbec26825685f5</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">c13e87aed88145e4ac879339cdedaffe</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-bmdk</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-bajq by-bmdk by-bajq.7</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">01a1dd01-bb6f-75f2-aaef-6216c858c210</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">01a1d760-e601-7fc0-9d66-3dabf9c28a13</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-lfho</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1dd01-bb6f-75f2-aaef-6216c858c210">01a1dd01</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-15T02:09:17Z" tabindex="0" data-tip="2026-11-15T02:09:17Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-15T02:44:19Z" tabindex="0" data-tip="2026-11-15T02:44:19Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-15T02:43:17Z" tabindex="0" data-tip="2026-11-15T02:43:17Z">2026-11-15</time></dd></div></dl></aside></div></div></div><template id="hc-by-45a0"><div class="c-card-top"><span class="c-mono">by-45a0</span><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span></div><div class="c-hovercard-title">Fix slow CI failure on macos</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template>
+</main>
+</body>
+</html>

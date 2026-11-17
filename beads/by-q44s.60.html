@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix the Beryl 3D sweep&#x27;s cargo-test step: b3d-cargo-test:cargo-test · by-q44s.60</title>
+<meta name="description" content="Fix the Beryl 3D sweep&#x27;s cargo-test step: b3d-cargo-test:cargo-test">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><a class="c-crumb" href="by-q44s">by-q44s</a><span class="c-crumb" aria-current="page">by-q44s.60</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-q44s.60</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix the Beryl 3D sweep&#x27;s cargo-test step: b3d-cargo-test:cargo-test</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">2</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>obsolete: already fixed by 952fee95c and 805f9ba41; cargo-test replay passes at 822091abff</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>cargo-test</code> on darwin at b3c716029b67c89926ebc904abc070097e09863b. The last sweep that passed on this machine was at a72702a796b19d63c19d64e9ffa37e4801c43e85.</p>
+<ul><li><code>b3d-cargo-test:cargo-test</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-cargo-test:cargo-test  out of time: culprit among 10 commits 61c82b9dfc..2104192d76  (20 commits since the last passing sweep)
+record: b3d-cargo-test:cargo-test  runs 19, failures 10, flaky 0, stale 0, catch 0, miss 1 (30 days)</code></pre>
+<p>Run the step's own command, <code>just b3d cargo-test</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step cargo-test --commit b3c716029b67</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>
+    failures:
+        prompts::a_payment_says_what_is_left_to_pay_unless_a_mana_payment_has_paid_nothing
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 85 filtered out; finished in 0.09s
+
+  stderr ───
+
+    thread &#x27;prompts::a_payment_says_what_is_left_to_pay_unless_a_mana_payment_has_paid_nothing&#x27; (451573626) panicked at crates/beryl_inspect/tests/all/prompts.rs:65:5:
+    assertion `left == right` failed
+      left: &quot;text \&quot;Pay {1}{W}.\&quot; #65545 1241,749 102x48&quot;
+     right: &quot;text \&quot;Pay {1}{W}.\&quot; #65544 1241,749 102x48&quot;
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+        FAIL [  18.418s] (158/569) beryl_inspect::all differential::the_check_times_find_every_planted_fault
+  stdout ───
+
+    running 1 test
+    test differential::the_check_times_find_every_planted_fault ... FAILED
+
+    failures:
+
+    failures:
+        differential::the_check_times_find_every_planted_fault
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 85 filtered out; finished in 18.36s
+
+  stderr ───
+    1000 plantings over 200 tests; the check times found the planted kind [126, 124, 76, 57, 199] times ([Jump, OffPlacement, Duration, Unseen, Crowded])
+
+    thread &#x27;differential::the_check_times_find_every_planted_fault&#x27; (451569926) panicked at crates/beryl_inspect/tests/all/differential.rs:211:5:
+    b3d:aangs-iceberg/waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top-ask-3/opponent/1920x1080 with Crowded planted at t=2616ms could not be checked: no script with a step plays at t=2616ms
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+────────────
+     Summary [  42.562s] 569 tests run: 567 passed, 2 failed, 1 skipped
+        FAIL [   0.104s] (133/569) beryl_inspect::all prompts::a_payment_says_what_is_left_to_pay_unless_a_mana_payment_has_paid_nothing
+        FAIL [  18.418s] (158/569) beryl_inspect::all differential::the_check_times_find_every_planted_fault
+error: test run failed
+b3d-sweep b3d-cargo-test cargo-test: FAILED (exit 100) after 128.1 s</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>just b3d cargo-test</code> passes in a worktree rebased on the staging tip (<code>just b3d sweep --step cargo-test --commit origin/staging</code> replays it in a tree of its own).</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">2</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T16:25:52Z" tabindex="0" data-tip="2026-11-16T16:25:52Z">2026-11-16</time></header><div class="c-prose"><p>The Beryl 3D sweep (<code>just b3d sweep</code>, tools/src/beryl_tools/beryl3d/sweep.py) failed its step <code>cargo-test</code> on darwin at b55feb41155f6d6b53b60c331d4e0689ecebceb7. The last sweep that passed on this machine was at 74dc5a05ed8eb236910b5876d861b58c1865d359.</p>
+<ul><li><code>b3d-cargo-test:cargo-test</code></li></ul>
+<p>Bisection over the commits since that sweep:</p>
+<pre><code>bisect: b3d-cargo-test:cargo-test  out of time: culprit among 68 commits 1aaa147d5f..b55feb4115  (68 commits since the last passing sweep)
+record: b3d-cargo-test:cargo-test  runs 19, failures 8, flaky 0, stale 0, catch 0, miss 1 (30 days)</code></pre>
+<p>Run the step's own command, <code>just b3d cargo-test</code>, in your worktree, or replay it at that commit with <code>just b3d sweep --step cargo-test --commit b55feb41155f</code>. A replay runs in a tree of its own and does not wait for a sweep that is running.</p>
+<p>Beryl 3D's checks run only for a change to Beryl 3D, so a change to the main workspace (the session, the fixture recorder, the image cache, the data files) can break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); whoever is working on Beryl 3D takes this bead first.</p>
+<p>Output tail:</p>
+<pre><code>.................. 18/86
+differential::the_check_times_find_every_planted_fault --- FAILED
+...........i..
+running 1 test
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 85 filtered out; finished in 0.01s
+
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 85 filtered out; finished in 0.00s
+
+........ 41/86
+prompts::a_payment_says_what_is_left_to_pay_unless_a_mana_payment_has_paid_nothing --- FAILED
+............................................
+failures:
+
+---- differential::the_check_times_find_every_planted_fault stdout ----
+1000 plantings over 200 tests; the check times found the planted kind [126, 124, 76, 57, 199] times ([Jump, OffPlacement, Duration, Unseen, Crowded])
+
+thread &#x27;differential::the_check_times_find_every_planted_fault&#x27; (101910741) panicked at crates/beryl_inspect/tests/all/differential.rs:211:5:
+b3d:aangs-iceberg/waterbend-taps-a-creature-and-an-artifact-scry-reorders-the-top-ask-3/opponent/1920x1080 with Crowded planted at t=2616ms could not be checked: no script with a step plays at t=2616ms
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- prompts::a_payment_says_what_is_left_to_pay_unless_a_mana_payment_has_paid_nothing stdout ----
+
+thread &#x27;prompts::a_payment_says_what_is_left_to_pay_unless_a_mana_payment_has_paid_nothing&#x27; (101925265) panicked at crates/beryl_inspect/tests/all/prompts.rs:65:5:
+assertion `left == right` failed
+  left: &quot;text \&quot;Pay {1}{W}.\&quot; #65545 1241,749 102x48&quot;
+ right: &quot;text \&quot;Pay {1}{W}.\&quot; #65544 1241,749 102x48&quot;
+
+
+failures:
+    differential::the_check_times_find_every_planted_fault
+    prompts::a_payment_says_what_is_left_to_pay_unless_a_mana_payment_has_paid_nothing
+
+test result: FAILED. 83 passed; 2 failed; 1 ignored; 0 measured; 0 filtered out; finished in 137.51s
+
+error: test failed, to rerun pass `-p beryl_inspect --test all`
+b3d-sweep b3d-cargo-test cargo-test: FAILED (exit 101) after 132.7 s (738 s on the clock)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T16:37:03Z" tabindex="0" data-tip="2026-11-16T16:37:03Z">2026-11-16</time></header><div class="c-prose"><p>Handoff: no code change. Both failures were already fixed on staging before this bead was claimed: 952fee95c (prompts test no longer compares the element id #n, which shifts when a screen gains an element) and 805f9ba41 (differential test plants faults in steps that outlive scripts, so 'no script with a step plays at t=...' no longer occurs). Verified with <code>just b3d sweep --step cargo-test --commit origin/staging</code> at 822091abff: 574 tests run, 574 passed, 1 skipped.</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_c30acc3f-956b-47f2-8f8f-3ba99acc7124">session c30acc</span></span>closed this<span class="c-timeline-detail">obsolete: already fixed by 952fee95c and 805f9ba41; cargo-test replay passes at 822091abff</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T16:37:10Z" tabindex="0" data-tip="2026-11-16T16:37:10Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_c30acc3f-956b-47f2-8f8f-3ba99acc7124">session c30acc</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_c30acc3f-956b-47f2-8f8f-3ba99acc7124">session c30acc</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T16:23:45Z" tabindex="0" data-tip="2026-11-16T16:23:45Z">2026-11-16</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">2 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T16:22:36Z" tabindex="0" data-tip="2026-11-16T16:22:36Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:32f74257-d3b1-4102-8f70-a1d50feaf650">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:32f74257-d3b1-4102-8f70-a1d50feaf650">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T16:18:52Z" tabindex="0" data-tip="2026-11-16T16:18:52Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:executor</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T16:17:46Z" tabindex="0" data-tip="2026-11-16T16:17:46Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">b3d-sweep</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T16:17:46Z" tabindex="0" data-tip="2026-11-16T16:17:46Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T16:17:46Z" tabindex="0" data-tip="2026-11-16T16:17:46Z">2026-11-16</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>ci@example.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-16T16:18:53Z" tabindex="0" data-tip="2026-11-16T16:18:53Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>beryl_nightly_checks</dt><dd><span class="c-mono">b3d-cargo-test:cargo-test</span></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">local_c30acc3f-956b-47f2-8f8f-3ba99acc7124</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_pool_session</dt><dd><span class="c-mono">local_c30acc3f-956b-47f2-8f8f-3ba99acc7124</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">97b222da365c41faa2c618c9103cefc1</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-q44s</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">local_c30acc3f-956b-47f2-8f8f-3ba99acc7124</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">32f74257-d3b1-4102-8f70-a1d50feaf650</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-orange" data-tip="High" tabindex="0">P1</span><span class="c-muted">High</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="local_c30acc3f-956b-47f2-8f8f-3ba99acc7124">session c30acc</span></dd></div><div class="c-meta-item"><dt>Epic</dt><dd><a href="by-q44s" data-hovercard="hc-by-q44s">Beryl 3D: a native Rust client to replace the web interface and Tauri</a></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">b3d-sweep</span><span class="c-chip c-tone-muted">role:executor</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-16T16:17:47Z" tabindex="0" data-tip="2026-11-16T16:17:47Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-16T16:37:11Z" tabindex="0" data-tip="2026-11-16T16:37:11Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-16T16:37:11Z" tabindex="0" data-tip="2026-11-16T16:37:11Z">2026-11-16</time></dd></div></dl></aside></div></div></div><template id="hc-by-q44s"><div class="c-card-top"><span class="c-mono">by-q44s</span><span class="c-chip c-tone-neutral" data-tip="Medium" tabindex="0">P2</span></div><div class="c-hovercard-title">Beryl 3D: a native Rust client to replace the web interface and Tauri</div><div class="c-hovercard-meta"><span class="c-dot c-tone-neutral">Open</span><span>epic</span><span class="c-progress"><span class="c-progress-track"><span class="c-progress-fill" style="width:90%"></span></span><span class="c-progress-label">392/437</span></span></div></template>
+</main>
+</body>
+</html>

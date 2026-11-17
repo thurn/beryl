@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-ryre</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-ryre</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-ryre</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">6</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Fixed the combat assist test Clippy failure in 99150791. macOS slow CI passed locally and Enact pushed the repair to staging.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at d677facef978eec5fdd53f02bb12cd7ae3735853. Failing range since last passing commit: a75ee04711edb1014a2dd38b75a3b62a7b8b5e65..d677facef978eec5fdd53f02bb12cd7ae3735853.</p>
+<p>Log tail:</p>
+<pre><code>    Checking png v0.18.1
+    Checking security-framework v3.7.0
+    Checking tauri-runtime v2.12.2
+    Checking wry v0.57.1
+    Checking tao v0.37.2
+   Compiling tauri-codegen v2.7.4
+    Checking rustls-pki-types v1.15.1
+    Checking keyboard-types v0.8.3
+   Compiling serialize-to-javascript-impl v0.1.2
+    Checking pin-project-lite v0.2.17
+    Checking tokio v1.54.1
+   Compiling tauri-macros v2.7.4
+    Checking serialize-to-javascript v0.1.2
+    Checking muda v0.20.0
+    Checking webpki-root-certs v1.0.11
+    Checking tauri-runtime-wry v2.12.3
+    Checking native-tls v0.2.18
+    Checking der v0.8.3
+    Checking getrandom v0.3.4
+    Checking window-vibrancy v0.8.1
+   Compiling tauri-plugin-dialog v2.7.2
+   Compiling serde_repr v0.1.21
+    Checking utf8-zero v0.8.1
+    Checking heck v0.5.0
+    Checking ureq v3.5.1
+    Checking nix v0.31.3
+    Checking ctrlc v3.5.2
+    Checking rfd v0.16.0
+   Compiling beryl_app v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_app)
+    Checking beryl_art v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_art)
+    Checking beryl_cli v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_cli)
+   Compiling beryl-mobile v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_mobile)
+error: this function has too many lines (128/100)
+ --&gt; crates/beryl_table_session/tests/scripted_game/assists.rs:8:1
+  |
+8 | fn each_seat_can_preview_apply_and_undo_combat() {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#too_many_lines
+  = note: `-D clippy::too-many-lines` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(clippy::too_many_lines)]`
+
+error: could not compile `beryl_table_session` (test &quot;scripted_game&quot;) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+ci rust clippy: FAILED (exit 101) after 57.0 s (97 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: python 5 s (black 1 s, pyre 5 s)
+ci: rust 57 s (clippy FAILED)
+ci: ui 4 s (tsc 4 s)
+ci: names 9 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, citations 2 s, card-headers 1 s, card-crates 1 s)
+ci: app 89 s (smoke 89 s)
+ci: ui-smoke 189 s (ui-test 189 s)
+ci: oracle 173 s (oracle 173 s)
+ci: counts 144 s (count-gate 65 s, count-gate-families 78 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 188.7 s (408 s on the clock) (budget 300 s)
+bisect: 0 failed checks over 7 commits since master (a75ee04711), 600 s to search
+bisect: rust  not bisected: a static check, a kill or a failed build
+ci: sweep: next due in 75 min
+ci: b3d sweep: one is running</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">6</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T20:54:35Z" tabindex="0" data-tip="2026-11-15T20:54:35Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 8169355ae71d20a69db75f6de84e1e89fb72b1fd. Failing range since last passing commit: a75ee04711edb1014a2dd38b75a3b62a7b8b5e65..8169355ae71d20a69db75f6de84e1e89fb72b1fd.</p>
+<p>Log tail:</p>
+<pre><code>  &quot;system_platform&quot;: &quot;darwin&quot;,
+  &quot;shared_memory&quot;: {},
+  &quot;parallel&quot;: true,
+  &quot;number_of_workers&quot;: 4,
+  &quot;additional_logging_sections&quot;: [
+    &quot;-progress&quot;
+  ],
+  &quot;show_error_traces&quot;: false,
+  &quot;strict&quot;: true
+}
+2026-11-15 12:49:38,695 [PID 47266] PERFORMANCE  Initialized shared memory (heap size: 8589934592, dep table pow: 1, hash table pow: 26): 0.002s
+2026-11-15 12:49:38,707 [PID 47266] PERFORMANCE  Initialized multiprocessing workers (workers: 4): 0.003s
+2026-11-15 12:49:38,708 [PID 47266] INFO  Building module tracker...
+2026-11-15 12:49:38,926 [PID 47266] PERFORMANCE  Module tracker built: 0.221s
+2026-11-15 12:49:38,926 [PID 47266] PERFORMANCE  Full environment built: 0.222s
+2026-11-15 12:49:38,926 [PID 47266] INFO  Collecting all definitions...
+2026-11-15 12:49:39,275 [PID 47266] PERFORMANCE  Collected definitions (defines: 821): 0.349s
+2026-11-15 12:49:39,275 [PID 47266] INFO  Checking 821 functions...
+2026-11-15 12:49:40,536 [PID 47266] PERFORMANCE  Check_TypeCheck (defines: 821, raw errors: 71): 1.260s
+2026-11-15 12:49:40,536 [PID 47266] MEMORY  Shared memory size post-typecheck (size: 4)
+2026-11-15 12:49:40,594 [PID 47266] SUCCESS No type errors found
+ci efficiency pyre: 2.8 s
+........................................................................ [ 39%]
+........................................................................ [ 78%]
+........................................                                 [100%]
+184 passed in 7.44s
+ci efficiency pytest: 7.8 s
+=== ci rust: FAILED
+   Compiling adler2 v2.0.1
+   Compiling objc2-encode v4.1.0
+   Compiling beryl_app v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_app)
+   Compiling beryl-mobile v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_mobile)
+    Checking beryl_table_session v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_table_session)
+   Compiling miniz_oxide v0.9.1
+   Compiling objc2 v0.6.5
+   Compiling miniz_oxide v0.8.9
+error: this function has too many lines (128/100)
+ --&gt; crates/beryl_table_session/tests/scripted_game/assists.rs:8:1
+  |
+8 | fn each_seat_can_preview_apply_and_undo_combat() {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#too_many_lines
+  = note: `-D clippy::too-many-lines` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(clippy::too_many_lines)]`
+
+error: could not compile `beryl_table_session` (test &quot;scripted_game&quot;) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+ci rust clippy: FAILED (exit 101) after 2.5 s
+ci: repo 0 s (file-length 0 s)
+ci: python 5 s (black 0 s, pyre 4 s)
+ci: rust 2 s (clippy FAILED)
+ci: names 8 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: efficiency 10 s (black 0 s, pyre 3 s, pytest 7 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 10.5 s (36 s on the clock) (budget 300 s)
+bisect: 0 failed checks over 10 commits since master (a75ee04711), 600 s to search
+bisect: rust  not bisected: a static check, a kill or a failed build
+ci: sweep: next due in 68 min
+ci: b3d sweep: one is running</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T20:56:20Z" tabindex="0" data-tip="2026-11-15T20:56:20Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at d677facef978eec5fdd53f02bb12cd7ae3735853. Failing range since last passing commit: a75ee04711edb1014a2dd38b75a3b62a7b8b5e65..d677facef978eec5fdd53f02bb12cd7ae3735853.</p>
+<p>Log tail:</p>
+<pre><code>   Compiling serde_with v3.24.0
+   Compiling plist v1.10.3
+    Checking beryl_link v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_link)
+   Compiling zerocopy-derive v0.8.63
+   Compiling cargo_toml v1.0.1
+    Checking zerocopy v0.8.63
+   Compiling tauri-utils v2.10.2
+    Checking dpi v0.1.2
+    Checking tinytemplate v1.2.1
+    Checking beryl_table_session v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_table_session)
+   Compiling foreign-types-macros v0.2.4
+    Checking foreign-types v0.5.0
+    Checking half v2.7.1
+    Checking ciborium-ll v0.2.2
+    Checking ciborium v0.2.2
+    Checking criterion v0.8.2
+    Checking core-graphics v0.25.0
+    Checking beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_bench)
+    Checking tao v0.37.2
+    Checking wry v0.57.1
+    Checking keyboard-types v0.8.3
+   Compiling serialize-to-javascript-impl v0.1.2
+    Checking serialize-to-javascript v0.1.2
+    Checking muda v0.20.0
+   Compiling tauri-plugin v2.6.3
+   Compiling tauri-build v2.7.4
+   Compiling tauri-codegen v2.7.4
+   Compiling serde_repr v0.1.21
+    Checking beryl_cli v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_cli)
+    Checking tauri-runtime v2.12.2
+    Checking tauri-runtime-wry v2.12.3
+error: this function has too many lines (128/100)
+ --&gt; crates/beryl_table_session/tests/scripted_game/assists.rs:8:1
+  |
+8 | fn each_seat_can_preview_apply_and_undo_combat() {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#too_many_lines
+  = note: `-D clippy::too-many-lines` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(clippy::too_many_lines)]`
+
+error: could not compile `beryl_table_session` (test &quot;scripted_game&quot;) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+ci rust clippy: FAILED (exit 101) after 31.7 s (67 s on the clock)
+ci: repo 1 s (file-length 1 s)
+ci: python 6 s (black 1 s, pyre 5 s)
+ci: rust 32 s (clippy FAILED)
+ci: ui 7 s (tsc 7 s)
+ci: names 10 s (card-names 5 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 0 s)
+ci: app 140 s (smoke 140 s)
+ci: ui-smoke 91 s (ui-test 91 s)
+ci: oracle 170 s (oracle 170 s)
+ci: counts 352 s (count-gate 126 s, count-gate-families 226 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 352.1 s (543 s on the clock) (budget 300 s)
+ci: load average 56 39 40 on 18 cores; the times above are adjusted for load beyond the cores, up to 8x, and for this machine&#x27;s speed, 0.82x the reference&#x27;s time (`just speed`)
+bisect: 0 failed checks over 7 commits since master (a75ee04711), 600 s to search
+bisect: rust  not bisected: a static check, a kill or a failed build
+ci: sweep: started in the background (/Users/dthurn/Library/Caches/beryl/sweep/background.log)
+ci: b3d sweep: one is running</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T21:12:26Z" tabindex="0" data-tip="2026-11-15T21:12:26Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 1542738ac539d8216204af4177143852bfc63fff. Failing range since last passing commit: a75ee04711edb1014a2dd38b75a3b62a7b8b5e65..1542738ac539d8216204af4177143852bfc63fff.</p>
+<p>Log tail:</p>
+<pre><code>     Running benches/family_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/family_counts-bc568ff3cabd28bf)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.25s
+     Running benches/family_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/family_counts-bc568ff3cabd28bf)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.25s
+     Running benches/family_counts.rs (/home/dthurn.guest/targets/count-gate/release/deps/family_counts-bc568ff3cabd28bf)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.24s
+     Running benches/family_steps.rs (/home/dthurn.guest/targets/count-gate/release/deps/family_steps-0eee6e0040cfc364)
+bench: family blank: 341,601,421 instructions with the family, 341,658,057 on the controls, ratio 1.000 against the bar of 1.25; 3,695 steps paired, 0 skipped (0.0%)
+bench: family attachments: 332,706,101 instructions with the family, 332,714,468 on the controls, ratio 1.000 against the bar of 1.25; 3,619 steps paired, 30 skipped (0.8%)
+bench: family layers: 169,852,051 instructions with the family, 169,887,504 on the controls, ratio 1.000 against the bar of 1.25; 1,700 steps paired, 0 skipped (0.0%)
+bench: family replacement: 292,878,547 instructions with the family, 292,983,856 on the controls, ratio 1.000 against the bar of 1.25; 2,775 steps paired, 0 skipped (0.0%)
+bench: family costs: 571,313,920 instructions with the family, 571,388,743 on the controls, ratio 1.000 against the bar of 1.25; 2,953 steps paired, 0 skipped (0.0%)
+bench: family zones-and-text: 231,848,123 instructions with the family, 231,854,324 on the controls, ratio 1.000 against the bar of 1.25; 2,662 steps paired, 13 skipped (0.5%)
+bench: family copies: 423,130,759 instructions with the family, 423,151,958 on the controls, ratio 1.000 against the bar of 1.25; 3,765 steps paired, 162 skipped (4.1%)
+bench: family identity: 298,960,522 instructions with the family, 298,968,830 on the controls, ratio 1.000 against the bar of 1.25; 2,862 steps paired, 99 skipped (3.3%)
+ci counts count-gate-families: 62.9 s (132 s on the clock)
+=== ci rust: FAILED
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+   Compiling flate2 v1.1.10
+   Compiling wry v0.57.1
+   Compiling png v0.18.1
+    Checking tauri-runtime-wry v2.12.3
+   Compiling ico v0.6.0
+   Compiling tauri-codegen v2.7.4
+   Compiling beryl_app v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_app)
+   Compiling tauri-macros v2.7.4
+   Compiling beryl-mobile v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_mobile)
+    Checking tauri v2.12.5
+    Checking beryl_table_session v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_table_session)
+error: this function has too many lines (128/100)
+ --&gt; crates/beryl_table_session/tests/scripted_game/assists.rs:8:1
+  |
+8 | fn each_seat_can_preview_apply_and_undo_combat() {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#too_many_lines
+  = note: `-D clippy::too-many-lines` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(clippy::too_many_lines)]`
+
+error: could not compile `beryl_table_session` (test &quot;scripted_game&quot;) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+ci rust clippy: FAILED (exit 101) after 27.4 s (42 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: python 4 s (black 0 s, pyre 3 s)
+ci: rust 27 s (clippy FAILED)
+ci: ui 3 s (tsc 3 s)
+ci: names 6 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 0 s)
+ci: app 73 s (smoke 73 s)
+ci: ui-smoke 9 s (ui-test 9 s)
+ci: oracle 61 s (oracle 61 s)
+ci: counts 88 s (count-gate 25 s, count-gate-families 63 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 88.0 s (215 s on the clock) (budget 300 s)
+bisect: 0 failed checks over 16 commits since master (a75ee04711), 600 s to search
+bisect: rust  not bisected: a static check, a kill or a failed build
+ci: sweep: next due in 51 min
+ci: b3d sweep: one is running</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T21:14:39Z" tabindex="0" data-tip="2026-11-15T21:14:39Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at a5755645cda414b8747778564a3d2e285b34de23. Failing range since last passing commit: a75ee04711edb1014a2dd38b75a3b62a7b8b5e65..a5755645cda414b8747778564a3d2e285b34de23.</p>
+<p>Log tail:</p>
+<pre><code>    Checking miniz_oxide v0.8.9
+   Compiling cfg_aliases v0.2.2
+   Compiling getrandom v0.3.4
+    Checking objc2-web-kit v0.3.2
+    Checking wry v0.57.1
+    Checking tao v0.37.2
+   Compiling nix v0.31.3
+    Checking tauri-runtime v2.12.2
+    Checking pem-rfc7468 v1.0.0
+    Checking png v0.18.1
+    Checking security-framework v3.7.0
+    Checking rustls-pki-types v1.15.1
+    Checking pin-project-lite v0.2.17
+    Checking native-tls v0.2.18
+    Checking tokio v1.54.1
+    Checking muda v0.20.0
+    Checking webpki-root-certs v1.0.11
+   Compiling tauri-macros v2.7.4
+    Checking tauri-runtime-wry v2.12.3
+    Checking der v0.8.3
+    Checking window-vibrancy v0.8.1
+   Compiling tauri-plugin-dialog v2.7.2
+    Checking heck v0.5.0
+    Checking utf8-zero v0.8.1
+   Compiling beryl_cli v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_cli)
+    Checking ctrlc v3.5.2
+    Checking rfd v0.16.0
+    Checking ureq v3.5.1
+   Compiling beryl_app v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_app)
+    Checking beryl_art v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_art)
+   Compiling beryl-mobile v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_mobile)
+    Checking beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_search)
+error: this function has too many lines (128/100)
+ --&gt; crates/beryl_table_session/tests/scripted_game/assists.rs:8:1
+  |
+8 | fn each_seat_can_preview_apply_and_undo_combat() {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#too_many_lines
+  = note: `-D clippy::too-many-lines` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(clippy::too_many_lines)]`
+
+error: could not compile `beryl_table_session` (test &quot;scripted_game&quot;) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+ci rust clippy: FAILED (exit 101) after 16.7 s (27 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: python 4 s (black 1 s, pyre 3 s)
+ci: rust 17 s (clippy FAILED)
+ci: names 7 s (card-names 2 s, two-player 0 s, board-door 1 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 97 s (smoke 97 s)
+ci: ui-smoke 42 s (ui-test 42 s)
+ci: oracle 90 s (oracle 90 s)
+ci: counts 145 s (count-gate 70 s, count-gate-families 75 s)
+ci: efficiency 12 s (black 1 s, pyre 2 s, pytest 10 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 144.9 s (291 s on the clock) (budget 300 s)
+bisect: 0 failed checks over 15 commits since master (a75ee04711), 600 s to search
+bisect: rust  not bisected: a static check, a kill or a failed build
+ci: sweep: one is running
+ci: b3d sweep: one is running</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T21:26:55Z" tabindex="0" data-tip="2026-11-15T21:26:55Z">2026-11-15</time></header><div class="c-prose"><p>Handoff: Clippy rejected the linked-table combat assist test at 128 lines. The fix in 99150791 extracts the combat batch and undo checks into assert_combat_batch_and_undo in rust/crates/beryl_table_session/tests/scripted_game/assists.rs. The test exercises the same sequence and assertions. On macOS I reproduced the failure at the worktree base and ran uv run --quiet --project tools by ci successfully after the change, including workspace Clippy, Rust tests, app and UI smoke, and oracles. Enact then rebased and pushed the repair to staging. Its fast check passed at the wall limit with Clippy, Rust tests, and browser and script checks deferred. The staging CI runner was already active.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-15T21:28:49Z" tabindex="0" data-tip="2026-11-15T21:28:49Z">2026-11-15</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at f50a74d507ec7305e932209c54e3c5b89e091270. Failing range since last passing commit: a75ee04711edb1014a2dd38b75a3b62a7b8b5e65..f50a74d507ec7305e932209c54e3c5b89e091270.</p>
+<p>Log tail:</p>
+<pre><code>2026-11-15 13:20:52,652 [PID 58223] PERFORMANCE  Check_Postprocessing: 0.111s
+2026-11-15 13:20:52,652 [PID 58223] PERFORMANCE  Check (request kind: FullCheck): 2.247s
+2026-11-15 13:20:52,711 [PID 58223] SUCCESS No type errors found
+ci efficiency pyre: 2.9 s (5 s on the clock)
+........................................................................ [ 33%]
+........................................................................ [ 67%]
+.....................................................................    [100%]
+213 passed in 17.12s
+ci efficiency pytest: 11.0 s (19 s on the clock)
+=== ci rust: FAILED
+    Checking beryl_kernel v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_kernel)
+   Compiling beryl_cards v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_cards)
+   Compiling cpufeatures v0.2.17
+   Compiling beryl_cli v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_cli)
+   Compiling sha2 v0.10.9
+   Compiling tauri-codegen v2.7.4
+   Compiling tauri-macros v2.7.4
+    Checking beryl_rules v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_rules)
+    Checking beryl_protocol v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_protocol)
+   Compiling beryl_app v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_app)
+    Checking tauri v2.12.5
+    Checking beryl_engine v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_engine)
+    Checking beryl_scenario v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_scenario)
+   Compiling beryl-mobile v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_mobile)
+    Checking beryl_search v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_search)
+    Checking beryl_card_records v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_card_records)
+    Checking beryl_session v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_session)
+    Checking beryl_table_session v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_table_session)
+    Checking beryl_bench v0.1.0 (/Users/dthurn/beryl/.worktrees/ci-runner/rust/crates/beryl_bench)
+    Checking tauri-plugin-fs v2.5.1
+    Checking tauri-plugin-dialog v2.7.2
+error: this function has too many lines (128/100)
+ --&gt; crates/beryl_table_session/tests/scripted_game/assists.rs:8:1
+  |
+8 | fn each_seat_can_preview_apply_and_undo_combat() {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#too_many_lines
+  = note: `-D clippy::too-many-lines` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(clippy::too_many_lines)]`
+
+error: could not compile `beryl_table_session` (test &quot;scripted_game&quot;) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+ci rust clippy: FAILED (exit 101) after 15.1 s (25 s on the clock)
+ci: repo 1 s (file-length 1 s)
+ci: python 7 s (black 2 s, pyre 5 s)
+ci: rust 15 s (clippy FAILED)
+ci: ui 8 s (tsc 8 s)
+ci: names 12 s (card-names 4 s, two-player 1 s, board-door 1 s, discarded-push 1 s, plan-references 2 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 40 s (smoke 40 s)
+ci: ui-smoke 90 s (ui-test 90 s)
+ci: oracle 110 s (oracle 110 s)
+ci: counts 159 s (count-gate 76 s, count-gate-families 83 s)
+ci: efficiency 16 s (black 2 s, pyre 3 s, pytest 11 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 159.4 s (263 s on the clock) (budget 300 s)
+bisect: 0 failed checks over 21 commits since master (a75ee04711), 600 s to search
+bisect: rust  not bisected: a static check, a kill or a failed build
+ci: sweep: next due in 143 min
+ci: b3d sweep: one is running</code></pre></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">3 bookkeeping updates by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-15T21:28:50Z" tabindex="0" data-tip="2026-11-15T21:28:50Z">2026-11-15</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-15T21:04:38Z" tabindex="0" data-tip="2026-11-15T21:04:38Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">01a1e108-e086-7e22-9911-48b71c3c2196</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-ryre</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">a75ee04711edb1014a2dd38b75a3b62a7b8b5e65..a5755645cda414b8747778564a3d2e285b34de23</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">99150791e8fd6a492e8f657f14a3608fbd719b0c</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">ded684926e164c069309e88235c1f6dc</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-bmdk</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-q44s by-bmdk by-q44s.1 by-bmdk.5</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">01a1e108-e086-7e22-9911-48b71c3c2196</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">01a1d760-e601-7fc0-9d66-3dabf9c28a13</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/by-ryre</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1e108-e086-7e22-9911-48b71c3c2196">01a1e108</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-15T20:44:14Z" tabindex="0" data-tip="2026-11-15T20:44:14Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-15T21:28:13Z" tabindex="0" data-tip="2026-11-15T21:28:13Z">2026-11-15</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-15T21:27:16Z" tabindex="0" data-tip="2026-11-15T21:27:16Z">2026-11-15</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

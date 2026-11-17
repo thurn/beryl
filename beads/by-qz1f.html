@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on windows · by-qz1f</title>
+<meta name="description" content="Fix slow CI failure on windows">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-qz1f</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-qz1f</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on windows</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">9</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Windows slow CI green at e35c9c5: scry clock fix, Windows test fixes, 450 s Windows budget</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on cygnus (windows) at af0a6039e9dcd6d6745a654055da09f20a159f1e. Failing range since last passing commit: c91496316a44890d22f0492173713fca14c20d36..af0a6039e9dcd6d6745a654055da09f20a159f1e.</p>
+<p>Log tail:</p>
+<pre><code>ok: Enter on the start screen starts a game
+ok: Enter with a game in progress returns to it
+ok: cards for the bottom toggle in their slots until confirmed
+ok: waterbend Auto Pay keeps manual picks
+ok: waterbend Auto Pay highlights only on hover and accepts on click
+ok: the start screen remembers the last opponent across a reload
+ok: the life result shows Victory and the applicable details
+ok: the effect result shows Victory and the applicable details
+ok: the concede result shows Defeat and the applicable details
+ok: the library result shows Victory and the applicable details
+ok: a new game with one in progress asks first, then concedes it
+ok: the settings concede the game once confirmed in place
+ok: a game resumed at launch gives way to a new game at one click
+ok: the life-loss result waits for the killing blow and can be put aside
+ok: a reloaded page takes up the game in progress
+ok: zone pile faces share a bottom edge: you, 0 in graveyard
+ok: zone pile faces share a bottom edge: you, 1 in graveyard
+ok: zone pile faces share a bottom edge: opponent, 0 in graveyard
+ok: zone pile faces share a bottom edge: opponent, 1 in graveyard
+ok: cancelled frames stay cancelled across bug report freeze
+ok: libraries match the other piles
+ok: a second bug report keeps thawed frames frozen
+ok: self-target is green for you
+ok: self-target is green for opponent
+ok: undo does not repeat an automatic target
+ok: bug report thaw never revives resolved arrows
+ok: tokens reach their destination before ceasing: opponent hand
+ok: tokens reach their destination before ceasing: you library
+ok: tokens reach their destination before ceasing: you hand
+ok: tokens reach their destination before ceasing: opponent library
+ok: tokens reach their destination before ceasing: you graveyard
+ok: tokens reach their destination before ceasing: opponent graveyard
+ok: bug report thaw preserves later player arrows
+ok: bug report thaw preserves later object arrows
+ok: bug report thaw preserves later attack arrows
+ok: tokens reach their destination before ceasing: you exile
+ok: tokens reach their destination before ceasing: opponent exile
+ui-test: FAILED
+ci ui-test ui-test: FAILED (exit 1) after 262.7 s; rerunning clicking a scried card sends it to the bottom once
+ok: the log names an ability&#x27;s source, cost and targets
+FAILED: clicking a scried card sends it to the bottom
+AssertionError [ERR_ASSERTION]: the card moved left of the library, to the bottom
+    at check.fixture (file:///D:/beryl/.worktrees/ci-af0a6039e9dc/ui/scripts/interactions.mjs:2639:16)
+    at async file:///D:/beryl/.worktrees/ci-af0a6039e9dc/ui/scripts/interactions.mjs:235:17
+    at async Promise.all (index 0)
+    at async file:///D:/beryl/.worktrees/ci-af0a6039e9dc/ui/scripts/interactions.mjs:11041:1
+ui-test: FAILED
+ci ui-test ui-test: FAILED (exit 1) after 22.1 s
+ci: repo 5 s (just 0 s, markdown 3 s, file-length 1 s, conventions 1 s)
+ci: python 78 s (black 4 s, pytest 74 s)
+ci: rust 324 s (build-paths 1 s, fmt 3 s, clippy 48 s, tests 273 s)
+ci: ui 13 s (prettier 6 s, tsc 7 s)
+ci: names 4 s (card-names 4 s)
+ci: app 262 s (smoke 262 s)
+ci: shots 220 s (ui-shots 220 s)
+ci: ui-test 291 s (ui-test FAILED)
+ci: oracle 306 s (oracle 306 s)
+ci: FAILED: ui-test in 325.5 s (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 2 2 2 on 20 cores; the times above are adjusted for load beyond the cores, up to 8x</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on windows at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">9</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-11T04:20:36Z" tabindex="0" data-tip="2026-11-11T04:20:36Z">2026-11-11</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on cygnus (windows) at 414feee41777e8a62a34acd60bae7567b4fd599a. Failing range since last passing commit: af0a6039e9dcd6d6745a654055da09f20a159f1e..414feee41777e8a62a34acd60bae7567b4fd599a.</p>
+<p>Log tail:</p>
+<pre><code>ok: waterbend prompt renders its generic mana symbol (waterbend-tap)
+ok: phone waterbend long press previews without accepting
+ok: Enter with a game in progress returns to it
+ok: Enter on the start screen starts a game
+ok: cards for the bottom toggle in their slots until confirmed
+ok: waterbend Auto Pay highlights only on hover and accepts on click
+ok: the start screen remembers the last opponent across a reload
+ok: waterbend Auto Pay keeps manual picks
+ok: the life result shows Victory and the applicable details
+ok: the life-loss result waits for the killing blow and can be put aside
+ok: the library result shows Victory and the applicable details
+ok: the effect result shows Victory and the applicable details
+ok: the concede result shows Defeat and the applicable details
+ok: a game resumed at launch gives way to a new game at one click
+ok: a new game with one in progress asks first, then concedes it
+ok: the settings concede the game once confirmed in place
+ok: a reloaded page takes up the game in progress
+ok: zone pile faces share a bottom edge: you, 0 in graveyard
+ok: zone pile faces share a bottom edge: you, 1 in graveyard
+ok: zone pile faces share a bottom edge: opponent, 0 in graveyard
+ok: zone pile faces share a bottom edge: opponent, 1 in graveyard
+ok: libraries match the other piles
+ok: cancelled frames stay cancelled across bug report freeze
+ok: a second bug report keeps thawed frames frozen
+ok: self-target is green for you
+ok: undo does not repeat an automatic target
+ok: self-target is green for opponent
+ok: bug report thaw never revives resolved arrows
+ok: tokens reach their destination before ceasing: opponent hand
+ok: tokens reach their destination before ceasing: you hand
+ok: tokens reach their destination before ceasing: you library
+ok: tokens reach their destination before ceasing: opponent library
+ok: tokens reach their destination before ceasing: you graveyard
+ok: tokens reach their destination before ceasing: opponent graveyard
+ok: tokens reach their destination before ceasing: you exile
+ok: bug report thaw preserves later player arrows
+ok: bug report thaw preserves later object arrows
+ok: tokens reach their destination before ceasing: opponent exile
+ok: bug report thaw preserves later attack arrows
+ui-test: FAILED
+ci ui-test ui-test: FAILED (exit 1) after 274.8 s; rerunning clicking a scried card sends it to the bottom once
+ok: the log names an ability&#x27;s source, cost and targets
+FAILED: clicking a scried card sends it to the bottom
+AssertionError [ERR_ASSERTION]: the card moved left of the library, to the bottom
+    at check.fixture (file:///D:/beryl/.worktrees/ci-414feee41777/ui/scripts/interactions.mjs:2639:16)
+    at async file:///D:/beryl/.worktrees/ci-414feee41777/ui/scripts/interactions.mjs:235:17
+    at async Promise.all (index 0)
+    at async file:///D:/beryl/.worktrees/ci-414feee41777/ui/scripts/interactions.mjs:11041:1
+ui-test: FAILED
+ci ui-test ui-test: FAILED (exit 1) after 4.4 s
+ci: repo 4 s (just 0 s, markdown 3 s, file-length 0 s, conventions 1 s)
+ci: python 56 s (black 3 s, pytest 52 s)
+ci: rust 263 s (build-paths 0 s, fmt 2 s, clippy 19 s, tests 241 s)
+ci: ui 10 s (prettier 5 s, tsc 5 s)
+ci: names 4 s (card-names 4 s)
+ci: app 191 s (smoke 191 s)
+ci: shots 228 s (ui-shots 228 s)
+ci: ui-test 280 s (ui-test FAILED)
+ci: oracle 177 s (oracle 177 s)
+ci: FAILED: ui-test in 282.0 s (budget 300 s)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-11T04:33:55Z" tabindex="0" data-tip="2026-11-11T04:33:55Z">2026-11-11</time></header><div class="c-prose"><p>Handoff: the user asked for this steward work to run on cygnus (the failing windows host) instead of jarvis (macOS, cannot reproduce). Released from jarvis session local_adb8db25 without changes or worktree; the '<a href="by-qz1f" data-hovercard="hc-by-qz1f"><span class="c-mono">by-qz1f</span></a> description' Remote Control session on cygnus claims it with enact claim. Second failure in comments (range af0a6039..414feee4) also to cover.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">L</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author"><span class="c-tip-target" tabindex="0" data-tip="local_adb8db25-c8db-4980-bbef-86637d8a4296">session adb8db</span></span><time class="c-time" datetime="2026-11-11T04:34:14Z" tabindex="0" data-tip="2026-11-11T04:34:14Z">2026-11-11</time></header><div class="c-prose"><p>Released by Enact: handed to the steward session on cygnus (windows) at the user's request</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author"><span class="c-tip-target" tabindex="0" data-tip="d9cae4ca-c7c1-414a-8d3f-6373d9b06723">d9cae4ca</span></span><time class="c-time" datetime="2026-11-11T04:35:42Z" tabindex="0" data-tip="2026-11-11T04:35:42Z">2026-11-11</time></header><div class="c-prose"><p>Released by Enact: Windows-only slow-CI failure handed to the steward on cygnus; jarvis vizier not respawning it</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-11T04:44:51Z" tabindex="0" data-tip="2026-11-11T04:44:51Z">2026-11-11</time></header><div class="c-prose"><p>Diagnosis (cygnus): product fine, test read a stale library. In ArrangeChoice the library anchor (.choice-library) glided via motion.div's animate prop, which Motion ran as a Web Animation on the browser's real timeline; the tray cards glide via animate() on motion values (rAF), which Playwright's paused clock drives. After page.clock.runFor(2000) the card had landed at slot 236 while the library's Animation still sat at currentTime -1174 ms (scheduled against the jumped-ahead fake clock), so its centre was still the pre-click 236 = the card's centre, failing 'left of the library'. After 3 s of real time it lands at 500. Not caused by the failing range (no UI change there); 538458f made reruns stop counting it as a flake. Fix: useGlide hook drives the library on motion values too, and DraggableCard reuses it. Kept the test: it now passes deterministically. Budget overrun (325 s) on the first run was one-off; second run was 282 s.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-11T05:28:50Z" tabindex="0" data-tip="2026-11-11T05:28:50Z">2026-11-11</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on cygnus (windows) at ef9fcece4df159b32476b1f1206bfe4e024f01c6. Failing range since last passing commit: 2072c84d06c7486aa1275d56df95c50b4d5a99d9..ef9fcece4df159b32476b1f1206bfe4e024f01c6.</p>
+<p>Log tail:</p>
+<pre><code>        monkeypatch: pytest.MonkeyPatch,
+    ) -&gt; None:
+        monkeypatch.setattr(bisect, &quot;time_left&quot;, lambda *args: 3.0)
+        monkeypatch.setattr(bisect, &quot;LEAST_PROBE&quot;, 0.0)
+        monkeypatch.setenv(&quot;HANG&quot;, &quot;1&quot;)
+        report = checks.run_all([lane(repo)], &quot;ci&quot;, 60, strict=True)
+        capsys.readouterr()
+        bisect.after(report.outcomes, time.monotonic(), repo)
+        lines = capsys.readouterr().out.splitlines()
+        commits = git(repo, &quot;rev-list&quot;, &quot;--reverse&quot;, &quot;origin/master..HEAD&quot;).split()
+        third = commits[2][:10]
+        # However far it got before the version that hangs, the range still holds the culprit.
+        said = [line for line in lines if line.startswith(&quot;bisect: ui-test:plays a land  &quot;)]
+&gt;       assert len(said) == 1 and &quot;out of time: culprit among&quot; in said[0]
+E       assert (0 == 1)
+E        +  where 0 = len([])
+
+tests\test_bisect.py:186: AssertionError
+______ test_the_agent_runs_the_main_checkouts_tools_from_three_to_eight _______
+
+    def test_the_agent_runs_the_main_checkouts_tools_from_three_to_eight() -&gt; None:
+        plist = nightly.agent_plist(Path(&quot;/repo&quot;), &quot;/bin/uv&quot;)
+&gt;       assert plist[&quot;ProgramArguments&quot;] == [
+            &quot;/bin/uv&quot;,
+            &quot;run&quot;,
+            &quot;--quiet&quot;,
+            &quot;--project&quot;,
+            &quot;/repo/tools&quot;,
+            &quot;by&quot;,
+            &quot;nightly&quot;,
+        ]
+E       AssertionError: assert [&#x27;/bin/uv&#x27;, &#x27;...s&#x27;, &#x27;by&#x27;, ...] == [&#x27;/bin/uv&#x27;, &#x27;...s&#x27;, &#x27;by&#x27;, ...]
+E         
+E         At index 4 diff: &#x27;\\repo\\tools&#x27; != &#x27;/repo/tools&#x27;
+E         Use -v to get more diff
+
+tests\test_nightly.py:103: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_bisect.py::test_bisection_names_each_culprit_flake_and_record_last
+FAILED tests/test_bisect.py::test_a_culprit_at_the_first_commit_is_checked_against_master
+FAILED tests/test_bisect.py::test_out_of_time_reports_the_range_left - Assert...
+FAILED tests/test_bisect.py::test_a_probe_that_hangs_dies_at_the_deadline_and_keeps_its_range
+FAILED tests/test_nightly.py::test_the_agent_runs_the_main_checkouts_tools_from_three_to_eight
+ci python pytest: FAILED (exit 1) after 166.1 s
+ci: repo 4 s (just 0 s, markdown 3 s, file-length 1 s, conventions 1 s)
+ci: python 251 s (black 3 s, pytest FAILED)
+ci: rust 263 s (build-paths 1 s, fmt 3 s, clippy 23 s, tests 237 s)
+ci: ui 12 s (prettier 7 s, tsc 5 s)
+ci: names 4 s (card-names 4 s)
+ci: app 169 s (smoke 169 s)
+ci: shots 224 s (ui-shots 224 s)
+ci: ui-test 275 s (ui-test 275 s)
+ci: oracle 164 s (oracle 164 s)
+verdict: ui-test ui-test:clicking a scried card sends it to the bottom catch
+ci: FAILED: python in 282.8 s (budget 300 s)
+bisect: 1 failed checks over 1 commits since origin/master (fea8c589c3), 557 s to search
+bisect: ef9fcece4d: 1 of 1 checks fail
+bisect: fea8c589c3: 1 of 1 checks fail
+bisect: python:pytest  fails at fea8c589c3 too: no commit since master to blame
+record: python:pytest  runs 8, failures 4, flaky 0, stale 0, catch 0 (30 days)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-11T05:39:04Z" tabindex="0" data-tip="2026-11-11T05:39:04Z">2026-11-11</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on cygnus (windows) at 2a938cb395dde0d50993a802fc2377d1cc193786. Failing range since last passing commit: ef9fcece4df159b32476b1f1206bfe4e024f01c6..2a938cb395dde0d50993a802fc2377d1cc193786.</p>
+<p>Log tail:</p>
+<pre><code>        lines = capsys.readouterr().out.splitlines()
+        commits = git(repo, &quot;rev-list&quot;, &quot;--reverse&quot;, &quot;origin/master..HEAD&quot;).split()
+        third = commits[2][:10]
+        # However far it got before the version that hangs, the range still holds the culprit.
+        said = [line for line in lines if line.startswith(&quot;bisect: ui-test:plays a land  &quot;)]
+&gt;       assert len(said) == 1 and &quot;out of time: culprit among&quot; in said[0]
+E       assert (0 == 1)
+E        +  where 0 = len([])
+
+tests\test_bisect.py:186: AssertionError
+______ test_the_agent_runs_the_main_checkouts_tools_from_three_to_eight _______
+
+    def test_the_agent_runs_the_main_checkouts_tools_from_three_to_eight() -&gt; None:
+        plist = nightly.agent_plist(Path(&quot;/repo&quot;), &quot;/bin/uv&quot;)
+&gt;       assert plist[&quot;ProgramArguments&quot;] == [
+            &quot;/bin/uv&quot;,
+            &quot;run&quot;,
+            &quot;--quiet&quot;,
+            &quot;--project&quot;,
+            &quot;/repo/tools&quot;,
+            &quot;by&quot;,
+            &quot;nightly&quot;,
+        ]
+E       AssertionError: assert [&#x27;/bin/uv&#x27;, &#x27;...s&#x27;, &#x27;by&#x27;, ...] == [&#x27;/bin/uv&#x27;, &#x27;...s&#x27;, &#x27;by&#x27;, ...]
+E         
+E         At index 4 diff: &#x27;\\repo\\tools&#x27; != &#x27;/repo/tools&#x27;
+E         Use -v to get more diff
+
+tests\test_nightly.py:103: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_bisect.py::test_bisection_names_each_culprit_flake_and_record_last
+FAILED tests/test_bisect.py::test_a_culprit_at_the_first_commit_is_checked_against_master
+FAILED tests/test_bisect.py::test_out_of_time_reports_the_range_left - Assert...
+FAILED tests/test_bisect.py::test_a_probe_that_hangs_dies_at_the_deadline_and_keeps_its_range
+FAILED tests/test_nightly.py::test_the_agent_runs_the_main_checkouts_tools_from_three_to_eight
+ci python pytest: FAILED (exit 1) after 162.6 s
+=== ci shots: FAILED
+beryl_cli: fixture crew: the board&#x27;s Answer { player: P0, kind: Crew, pick: Card { card: &quot;Elite Spellbinder&quot; } } was never taken
+ui-shots: FAILED
+ci shots ui-shots: FAILED (exit 125) after 98.3 s
+ci: repo 4 s (just 0 s, markdown 3 s, file-length 1 s, conventions 1 s)
+ci: python 267 s (black 3 s, pytest FAILED)
+ci: rust 403 s (build-paths 0 s, fmt 3 s, clippy 21 s, tests 378 s)
+ci: ui 11 s (prettier 6 s, tsc 5 s)
+ci: names 4 s (card-names 4 s)
+ci: app 317 s (smoke 317 s)
+ci: shots 98 s (ui-shots FAILED)
+ci: ui-test 394 s (ui-test 394 s after a rerun)
+ci: oracle 367 s (oracle 367 s)
+flaky: ui-test opponent waterbend shows benders, mana, then activation
+verdict: ui-test ui-test:opponent waterbend shows benders, mana, then activation flaky
+ci: FAILED: python shots in 407.6 s (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 2 2 2 on 20 cores; the times above are adjusted for load beyond the cores, up to 8x
+bisect: 1 failed checks over 1 commits since origin/master (6506eacc66), 432 s to search
+bisect: 2a938cb395: 1 of 1 checks fail
+bisect: 6506eacc66: 1 of 1 checks fail
+bisect: shots  not bisected: a static check, a timeout or a build that failed
+bisect: python:pytest  fails at 6506eacc66 too: no commit since master to blame
+record: python:pytest  runs 11, failures 6, flaky 0, stale 0, catch 1 (30 days)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-11T05:47:23Z" tabindex="0" data-tip="2026-11-11T05:47:23Z">2026-11-11</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on cygnus (windows) at 3a4932df5e74aa3f40621dd7b2f0d346df5ecb4a. Failing range since last passing commit: 2a938cb395dde0d50993a802fc2377d1cc193786..3a4932df5e74aa3f40621dd7b2f0d346df5ecb4a.</p>
+<p>Log tail:</p>
+<pre><code>        &quot;name&quot;: &quot;Snapcaster Mage: flashback a counterspell, then exile it&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Counterspell with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Snapcaster Mage&quot;,
+        &quot;name&quot;: &quot;Snapcaster Mage: a flashback spell returned to hand is exiled&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Counterspell with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Snapcaster Mage&quot;,
+        &quot;name&quot;: &quot;Snapcaster Mage: flashback is the one alternative cost&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;casting Damn with flashback&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Abhorrent Oculus&quot;,
+        &quot;name&quot;: &quot;Abhorrent Oculus exiles six of seven graveyard cards as it&#x27;s cast&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a choice of the cards an exile cost takes&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Abhorrent Oculus&quot;,
+        &quot;name&quot;: &quot;Manifest dread with one card in the library manifests it&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;Beryl fails it: Manifest dread with one card in the library manifests it: action 17: Controls { player: P0, card: \&quot;Island\&quot;, count: 2 }: expected 2, found 3&quot;
+      },
+      {
+        &quot;card&quot;: &quot;Generated&quot;,
+        &quot;name&quot;: &quot;Generated 28&quot;,
+        &quot;status&quot;: &quot;unsupported&quot;,
+        &quot;reason&quot;: &quot;a chosen payment plan&quot;
+      }
+    ],
+    &quot;sim&quot;: [
+      &quot;Game Result: Game 1 ended in 31795 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 2 ended in 22452 ms. Ai(1)-Beryl M1 WU Control has won!&quot;,
+      &quot;Game Result: Game 3 ended in 5771 ms. Ai(1)-Beryl M1 WU Control has won!&quot;
+    ],
+    &quot;stale_gaps&quot;: []
+  },
+  &quot;report&quot;: &quot;D:\\beryl-cache\\oracles\\logs\\oracle.json&quot;
+}
+ci oracle oracle: 244.0 s
+ci: repo 4 s (just 0 s, markdown 2 s, file-length 1 s, conventions 1 s)
+ci: python 130 s (black 3 s, pytest 127 s)
+ci: rust 363 s (build-paths 1 s, fmt 3 s, clippy 43 s, tests 318 s)
+ci: ui 12 s (prettier 6 s, tsc 6 s)
+ci: names 4 s (card-names 4 s)
+ci: app 306 s (smoke 306 s)
+ci: shots 289 s (ui-shots 289 s)
+ci: ui-test 348 s (ui-test 348 s after a rerun)
+ci: oracle 244 s (oracle 244 s)
+flaky: ui-test opponent waterbend shows benders, mana, then activation
+verdict: ui-test ui-test:opponent waterbend shows benders, mana, then activation flaky
+verdict: python python:pytest mixed: the fix touched the check and the product; say which with `just verdict &#x27;python:pytest&#x27; stale|catch`
+ci: passed in 369.9 s (budget 300 s)
+ci: over budget: speed up or delete the slowest step (this fails slow CI)
+ci: load average 3 3 3 on 20 cores; the times above are adjusted for load beyond the cores, up to 8x</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-11T06:02:54Z" tabindex="0" data-tip="2026-11-11T06:02:54Z">2026-11-11</time></header><div class="c-prose"><p>Handoff: (1) ef9fcec ChoiceOverlay.tsx: scry library glides via useGlide (JS motion value) like the tray cards, not motion.div's animate prop (a Web Animation off Playwright's paused clock); DraggableCard reuses useGlide. (2) 3a4932d: Windows test fixes: test_bisect links the base interpreter (a uv venv's python.exe needs its pyvenv.cfg); nightly.agent_plist writes POSIX paths. (3) 657993f: fast check refuses tracked symlinks checked out/committed as plain files (cygnus had core.symlinks=false until 20:43; set globally since). (4) slow budget 450 s on Windows (user's call), slow_timeout 1000. (5) test_scale follows 3ff0475's effect-data Counterspell. Slow CI passed on cygnus at e35c9c5 in 195.6 s. Seen once, not reproduced: shots crew fixture 'Crew Elite Spellbinder never taken' at 2a938cb (5 local recordings clean); ui-test 'opponent waterbend shows benders, mana, then activation' passed on rerun under load. Windows fast check runs ~118 s against its 60 s budget (non-strict).</p></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T04:36:04Z" tabindex="0" data-tip="2026-11-11T04:36:04Z">2026-11-11</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="d9cae4ca-c7c1-414a-8d3f-6373d9b06723">d9cae4ca</span></span>status changed</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T04:35:32Z" tabindex="0" data-tip="2026-11-11T04:35:32Z">2026-11-11</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:d9cae4ca-c7c1-414a-8d3f-6373d9b06723">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:d9cae4ca-c7c1-414a-8d3f-6373d9b06723">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T04:35:01Z" tabindex="0" data-tip="2026-11-11T04:35:01Z">2026-11-11</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T04:35:01Z" tabindex="0" data-tip="2026-11-11T04:35:01Z">2026-11-11</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_adb8db25-c8db-4980-bbef-86637d8a4296">session adb8db</span></span>status changed</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T04:34:04Z" tabindex="0" data-tip="2026-11-11T04:34:04Z">2026-11-11</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="local_adb8db25-c8db-4980-bbef-86637d8a4296">session adb8db</span></span>assigned <span class="c-tip-target" tabindex="0" data-tip="local_adb8db25-c8db-4980-bbef-86637d8a4296">session adb8db</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T04:33:38Z" tabindex="0" data-tip="2026-11-11T04:33:38Z">2026-11-11</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T04:30:10Z" tabindex="0" data-tip="2026-11-11T04:30:10Z">2026-11-11</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:d9cae4ca-c7c1-414a-8d3f-6373d9b06723">vizier on jarvis</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="vizier:jarvis:claude:d9cae4ca-c7c1-414a-8d3f-6373d9b06723">vizier on jarvis</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T04:28:58Z" tabindex="0" data-tip="2026-11-11T04:28:58Z">2026-11-11</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-11T04:28:58Z" tabindex="0" data-tip="2026-11-11T04:28:58Z">2026-11-11</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>thurn@users.noreply.github.com</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-11T04:28:58Z" tabindex="0" data-tip="2026-11-11T04:28:58Z">2026-11-11</time></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-qz1f</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">cygnus</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">windows</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">2a938cb395dde0d50993a802fc2377d1cc193786..3a4932df5e74aa3f40621dd7b2f0d346df5ecb4a</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">ef9fcece4df159b32476b1f1206bfe4e024f01c6 1d6314afa9f1809bbfc00e262d54e0d3157d4467 9ea29fdd2c90500e8be957a9be0fd8dbb5e3c9e2</span></dd></div><div class="c-meta-item"><dt>enact_host</dt><dd><span class="c-mono">cygnus</span></dd></div><div class="c-meta-item"><dt>enact_recovery</dt><dd><span class="c-mono">[{&quot;owner&quot;: &quot;local_adb8db25-c8db-4980-bbef-86637d8a4296&quot;, &quot;session&quot;: &quot;local_adb8db25-c8db-4980-bbef-86637d8a4296&quot;, &quot;vizier&quot;: &quot;d9cae4ca-c7c1-414a-8d3f-6373d9b06723&quot;, &quot;provider&quot;: &quot;claude&quot;, &quot;app&quot;: &quot;claude&quot;, &quot;project&quot;: &quot;/Users/dthurn/beryl&quot;, &quot;spawn_host&quot;: &quot;jarvis&quot;, &quot;host&quot;: null, &quot;path&quot;: null, &quot;branch&quot;: null, &quot;inactive&quot;: &quot;relinquished&quot;, &quot;evidence&quot;: &quot;current owner explicitly released&quot;, &quot;released&quot;: &quot;2026-11-11T04:34:04Z&quot;, &quot;reason&quot;: &quot;handed to the steward session on cygnus (windows) at the user&#x27;s request&quot;}, {&quot;owner&quot;: &quot;vizier:jarvis:claude:d9cae4ca-c7c1-414a-8d3f-6373d9b06723&quot;, &quot;session&quot;: null, &quot;vizier&quot;: &quot;d9cae4ca-c7c1-414a-8d3f-6373d9b06723&quot;, &quot;provider&quot;: &quot;claude&quot;, &quot;app&quot;: &quot;claude&quot;, &quot;project&quot;: &quot;/Users/dthurn/beryl&quot;, &quot;spawn_host&quot;: &quot;jarvis&quot;, &quot;host&quot;: null, &quot;path&quot;: null, &quot;branch&quot;: null, &quot;inactive&quot;: &quot;relinquished&quot;, &quot;evidence&quot;: &quot;current owner explicitly released&quot;, &quot;released&quot;: &quot;2026-11-11T04:35:31Z&quot;, &quot;reason&quot;: &quot;Windows-only slow-CI failure handed to the steward on cygnus; jarvis vizier not respawning it&quot;}]</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-w8gv</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-w8gv by-w8gv.20 by-w8gv.21</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">claude</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">D:\beryl\.worktrees\by-qz1f</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">cygnus</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="fd421e1e-b7b8-4c23-9f71-863a75cdcab2">fd421e1e</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-11T04:14:35Z" tabindex="0" data-tip="2026-11-11T04:14:35Z">2026-11-11</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-11T06:03:15Z" tabindex="0" data-tip="2026-11-11T06:03:15Z">2026-11-11</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-11T06:03:15Z" tabindex="0" data-tip="2026-11-11T06:03:15Z">2026-11-11</time></dd></div></dl></aside></div></div></div><template id="hc-by-qz1f"><div class="c-card-top"><span class="c-mono">by-qz1f</span><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span></div><div class="c-hovercard-title">Fix slow CI failure on windows</div><div class="c-hovercard-meta"><span class="c-dot c-tone-green">Closed</span><span>task</span></div></template>
+</main>
+</body>
+</html>

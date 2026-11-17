@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-274o</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-274o</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-274o</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#notes"><span class="c-toc-label">Notes</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>The exile stagger test now samples with a paused clock. The full local suite passed before delivery in dff1a23.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on jarvis (macos) at 222f2c84f38e2d064e5c2905c49e10eca4e159a1. Failing range since last passing commit: 30ce5492df8fe1dce73fea9b0bad7bbd2e3e78a2..222f2c84f38e2d064e5c2905c49e10eca4e159a1.</p>
+<p>Log tail:</p>
+<pre><code>ok: Adeline&#x27;s Human requires a highlighted direct attack target
+ok: attack lines sort by destination and stay present through blockers
+ok: attack targeting previews immediately, follows moving chevrons, and regroups
+ok: the defending seat draws only the resolved token attack destination once chosen
+ok: attacks lose only the link to a departing planeswalker from the you seat
+ok: the defending seat draws only the resolved token attack destination
+ok: attacks lose only the link to a departing planeswalker from the opponent seat
+ok: attack destinations use thin lines: you player
+ok: attack destinations use thin lines: you 68
+ok: attack destinations use thin lines: opponent player
+ok: the crew meter fills with the power tapped
+ok: attack destinations use thin lines: opponent 68
+ok: crewing shows the power picked against the crew cost without text
+ok: cards for the bottom toggle in their slots until confirmed
+ok: Enter on the start screen starts a game
+ok: waterbend waits for manually selected lands and benders
+ok: Enter with a game in progress returns to it
+ok: the start screen remembers the last opponent across a reload
+ok: a waterbend payable by lands waits for confirmation
+ok: the life-loss result waits for the killing blow and can be put aside
+ok: the life result shows Victory and the applicable details
+ok: the effect result shows Victory and the applicable details
+ok: the library result shows Victory and the applicable details
+ok: the concede result shows Defeat and the applicable details
+ok: a new game with one in progress asks first, then concedes it
+ok: the settings concede the game once confirmed in place
+ok: a game resumed at launch gives way to a new game at one click
+ok: a reloaded page takes up the game in progress
+ok: cancelled frames stay cancelled across bug report freeze
+ok: libraries match the other piles
+ok: a second bug report keeps thawed frames frozen
+ok: undo does not repeat an automatic target
+ok: waterbend selections are reversible until confirmation
+ok: self-target is green for you
+ok: self-target is green for opponent
+ok: bug report thaw never revives resolved arrows
+ok: tokens reach their destination before ceasing: opponent hand
+ok: tokens reach their destination before ceasing: you hand
+ok: tokens reach their destination before ceasing: you library
+ok: tokens reach their destination before ceasing: opponent library
+ok: tokens reach their destination before ceasing: you graveyard
+ok: tokens reach their destination before ceasing: opponent graveyard
+ok: tokens reach their destination before ceasing: you exile
+ok: tokens reach their destination before ceasing: opponent exile
+ok: bug report thaw preserves later attack arrows
+ok: bug report thaw preserves later player arrows
+ok: bug report thaw preserves later object arrows
+ui-test: FAILED
+ci ui-test ui-test: FAILED (exit 1) after 139.4 s (163 s on the clock, the machine loaded)
+ci: repo 1 s (just 0 s, markdown 1 s)
+ci: python 12 s (black 1 s, pyre 4 s, pytest 8 s)
+ci: rust 118 s (build-paths 0 s, fmt 1 s, clippy 39 s, tests 78 s)
+ci: ui 6 s (prettier 2 s, tsc 4 s, card-names 0 s)
+ci: app 36 s (smoke 36 s)
+ci: shots 82 s (ui-shots 82 s)
+ci: ui-test 139 s (ui-test FAILED)
+ci: oracle 52 s (oracle 52 s)
+ci: counts 30 s (count-gate 30 s)
+ci: mobile 51 s (mobile-check 51 s)
+ci: FAILED: ui-test in 147.2 s (171 s on the clock, the machine loaded) (budget 300 s)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="notes"><h2 class="c-section-title">Notes</h2><div class="c-prose"><p>The exile-stagger assertion measures positions after 150ms, but page.clock.install() continues wall-time unless paused. Under a busy browser, unpaused time can elapse between Resolve click, waiting for data-zone and bounding-box measurements. Neighboring motion tests pause the clock first and use button.evaluate(el =&gt; el.click()) to avoid Playwright actionability depending on live animation frames. The test advanced a running fake clock, with Playwright calls between its time checks. Under contention the live elapsed time used up the last card’s delay before the intermediate assertion. Pause the clock before dispatching Resolve, then explicitly advance it to measure the first departure, the last card waiting, and the last departure. The focused test passes with the production motion and thresholds unchanged.</p></div></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="01a1c416-e9b4-7a22-82f8-a9f92e3cceb8">01a1c416</span></span>closed this<span class="c-timeline-detail">The exile stagger test now samples with a paused clock. The full local suite passed before delivery in dff1a23.</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:40:03Z" tabindex="0" data-tip="2026-11-10T06:40:03Z">2026-11-10</time></div></li><li class="c-timeline-entry c-quiet"><div class="c-timeline-body">1 bookkeeping update by Enact</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:39:30Z" tabindex="0" data-tip="2026-11-10T06:39:30Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>edited the notes <span class="c-muted">×2</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:36:47Z" tabindex="0" data-tip="2026-11-10T06:36:47Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor"><span class="c-tip-target" tabindex="0" data-tip="01a1c416-e9b4-7a22-82f8-a9f92e3cceb8">01a1c416</span></span>claimed this for <span class="c-tip-target" tabindex="0" data-tip="01a1c416-e9b4-7a22-82f8-a9f92e3cceb8">01a1c416</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:35:49Z" tabindex="0" data-tip="2026-11-10T06:35:49Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:35:36Z" tabindex="0" data-tip="2026-11-10T06:35:36Z">2026-11-10</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>added label <span class="c-chip c-tone-muted">role:steward</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-10T06:35:36Z" tabindex="0" data-tip="2026-11-10T06:35:36Z">2026-11-10</time></div></li></ol></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-10T06:35:49Z" tabindex="0" data-tip="2026-11-10T06:35:49Z">2026-11-10</time></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">jarvis</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">30ce5492df8fe1dce73fea9b0bad7bbd2e3e78a2..222f2c84f38e2d064e5c2905c49e10eca4e159a1</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">dff1a239c1cbcf725b0e8feb8a6f9e0454120e53</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono"></span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1c416-e9b4-7a22-82f8-a9f92e3cceb8">01a1c416</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-10T06:35:36Z" tabindex="0" data-tip="2026-11-10T06:35:36Z">2026-11-10</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-10T06:40:03Z" tabindex="0" data-tip="2026-11-10T06:40:03Z">2026-11-10</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-10T06:40:03Z" tabindex="0" data-tip="2026-11-10T06:40:03Z">2026-11-10</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>

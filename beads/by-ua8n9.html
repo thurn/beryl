@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fix slow CI failure on macos · by-ua8n9</title>
+<meta name="description" content="Fix slow CI failure on macos">
+<meta name="cirrus-root" content="../">
+<link rel="stylesheet" href="../assets/cirrus.e25c8718a6.css">
+<script src="../assets/cirrus.6d94a8f157.js" defer></script>
+</head>
+<body>
+<div class="c-progress-bar" aria-hidden="true"></div>
+<header class="c-header" id="c-header">
+<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="../">Beryl</a><a class="c-crumb" href="../">Beads</a><span class="c-crumb" aria-current="page">by-ua8n9</span></nav>
+</header>
+<main class="c-main" id="c-main">
+<div class="c-titleblock"><div class="c-eyebrow"><span class="c-mono">by-ua8n9</span><span class="c-dot c-tone-green">Closed</span></div><h1 class="c-title">Fix slow CI failure on macos</h1></div><div class="c-toc-layout"><div class="c-toc-rail"><nav class="c-toc" aria-label="On this page"><ul><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#close-reason"><span class="c-toc-label">Close reason</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#description"><span class="c-toc-label">Description</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#acceptance-criteria"><span class="c-toc-label">Acceptance criteria</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#comments"><span class="c-toc-label">Comments</span><span class="c-toc-count">5</span></a></li><li class="c-toc-item c-toc-depth-0"><a class="c-toc-link" href="#changelog"><span class="c-toc-label">Changelog</span></a></li></ul></nav></div><div class="c-toc-main"><div class="c-layout"><div class="c-layout-main"><section class="c-section" id="close-reason"><h2 class="c-section-title">Close reason</h2><div class="c-prose"><p>Recognized generated cards in scenario interactions. Local macOS slow CI and Enact fast checks passed. Pushed 6bc400e4 to staging.</p></div></section><section class="c-section" id="description"><h2 class="c-section-title">Description</h2><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 39385ca810b23fccbec2a85a341f831e65610d53. Failing range since last passing commit: 1150ec5da588010d4d787a31f5320cfa3110d96b..39385ca810b23fccbec2a85a341f831e65610d53.</p>
+<p>Log tail:</p>
+<pre><code>running 17 tests
+.................
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 16 tests
+................
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+
+running 66 tests
+............................................... 47/66
+tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props --- FAILED
+..................
+failures:
+
+---- tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props stdout ----
+
+thread &#x27;tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props&#x27; (95730542) panicked at crates/beryl_cards/src/tests/props.rs:123:5:
+Cavern of Souls: &quot;Cavern of Souls&#x27; mana pays for a changeling of the chosen type&quot; is marked as an interaction with Universal Automaton, which it never names
+Cavern of Souls: &quot;Cavern of Souls&#x27; mana pays for a changeling of another type&quot; is marked as an interaction with Universal Automaton, which it never names
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props
+
+test result: FAILED. 65 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.15s
+
+error: test failed, to rerun pass `-p beryl_cards --lib`
+ci rust tests: FAILED (exit 101) after 0.5 s (4 s on the clock)
+ci: repo 1 s (file-length 1 s)
+ci: python 4 s (black 1 s, pyre 4 s)
+ci: rust 104 s (clippy 14 s, tests FAILED)
+ci: ui 4 s (design-tokens 0 s, tsc 4 s)
+ci: names 6 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 1 s, divergences 0 s, citations 0 s, card-headers 0 s, card-crates 0 s)
+ci: app 20 s (smoke 20 s)
+ci: ui-smoke 19 s (ui-test 19 s)
+ci: oracle 25 s (oracle 25 s)
+ci: counts 80 s (count-gate 37 s, count-gate-families 43 s)
+ci: efficiency 19 s (black 0 s, pyre 2 s, pytest 17 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 104.3 s (603 s on the clock) (budget 300 s)
+bisect: 1 failed checks over 1 commits since master (85c93e579e), 600 s to search
+bisect: 39385ca810: 1 of 1 checks fail
+bisect: 85c93e579e: 1 of 1 checks fail
+bisect: rust:tests  fails at 85c93e579e too: no commit since master to blame
+record: rust:tests  runs 335, failures 96, flaky 1, stale 1, catch 0, miss 0 (30 days)
+ci: sweep: next due in 142 min
+ci: b3d sweep: started in the background (/Users/dthurn/Library/Caches/beryl/b3d/sweep/background.log)</code></pre></div></section><section class="c-section" id="acceptance-criteria"><h2 class="c-section-title">Acceptance criteria</h2><div class="c-prose"><p><code>uv run --quiet --project tools by ci</code> passes on macos at the staging tip.</p></div></section><section class="c-section" id="comments"><h2 class="c-section-title">Comments<span class="c-count">5</span></h2><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T05:33:36Z" tabindex="0" data-tip="2026-11-16T05:33:36Z">2026-11-16</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 7f1a849f53c9e24c72110507b2c9068a45a839e4. Failing range since last passing commit: ba64a25c57feb1ddfbb2488cf2b6afb9ab7442f8..7f1a849f53c9e24c72110507b2c9068a45a839e4.</p>
+<p>Log tail:</p>
+<pre><code>
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 17 tests
+.................
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 16 tests
+................
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+
+running 66 tests
+.................................................. 50/66
+tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props --- FAILED
+...............
+failures:
+
+---- tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props stdout ----
+
+thread &#x27;tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props&#x27; (95889927) panicked at crates/beryl_cards/src/tests/props.rs:123:5:
+Cavern of Souls: &quot;Cavern of Souls&#x27; mana pays for a changeling of the chosen type&quot; is marked as an interaction with Universal Automaton, which it never names
+Cavern of Souls: &quot;Cavern of Souls&#x27; mana pays for a changeling of another type&quot; is marked as an interaction with Universal Automaton, which it never names
+
+
+failures:
+    tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props
+
+test result: FAILED. 65 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.86s
+
+error: test failed, to rerun pass `-p beryl_cards --lib`
+ci rust tests: FAILED (exit 101) after 1.2 s (5 s on the clock), after waiting 0.3 s for CPU tokenswarm: pruned 361 stale objects and 222 incremental sessions; evicted 0 unused builds (0.0 GB) to fit 15 GB
+warm: cloned /Users/dthurn/beryl/.worktrees/ci-runner/rust/target in 19.1 s
+warm: saved a copy of /Users/dthurn/beryl/.worktrees/ci-runner/rust/target without its incremental caches
+
+ci: repo 0 s (file-length 0 s)
+ci: rust 28 s (clippy 23 s, tests FAILED)
+ci: names 6 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 0 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 28.5 s (147 s on the clock) (budget 300 s)
+bisect: 1 failed checks over 0 commits since master (7f1a849f53), 600 s to search
+bisect: 7f1a849f53: 1 of 1 checks fail
+bisect: rust:tests  fails at 7f1a849f53 too: no commit since master to blame
+record: rust:tests  runs 337, failures 98, flaky 1, stale 1, catch 0, miss 0 (30 days)
+ci: sweep: next due in 131 min
+ci: b3d sweep: started in the background (/Users/dthurn/Library/Caches/beryl/b3d/sweep/background.log)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T05:53:02Z" tabindex="0" data-tip="2026-11-16T05:53:02Z">2026-11-16</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at d89dca4788f5bf49f6f41c9e8957b101638a6904. Failing range since last passing commit: 4134ad203ce82a22c714aa01b154c06b9a1059e0..d89dca4788f5bf49f6f41c9e8957b101638a6904.</p>
+<p>Log tail:</p>
+<pre><code>....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 17 tests
+.................
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 16 tests
+................
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+
+running 66 tests
+.................................................. 50/66
+tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props --- FAILED
+...............
+failures:
+
+---- tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props stdout ----
+
+thread &#x27;tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props&#x27; (96048184) panicked at crates/beryl_cards/src/tests/props.rs:123:5:
+Cavern of Souls: &quot;Cavern of Souls&#x27; mana pays for a changeling of the chosen type&quot; is marked as an interaction with Universal Automaton, which it never names
+Cavern of Souls: &quot;Cavern of Souls&#x27; mana pays for a changeling of another type&quot; is marked as an interaction with Universal Automaton, which it never names
+
+
+failures:
+    tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props
+
+test result: FAILED. 65 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.08s
+
+error: test failed, to rerun pass `-p beryl_cards --lib`
+ci rust tests: FAILED (exit 101) after 7.3 s (8 s on the clock), after waiting 0.3 s for CPU tokens
+ci: repo 0 s (file-length 0 s)
+ci: python 4 s (black 1 s, pyre 4 s)
+ci: rust 38 s (clippy 7 s, tests FAILED)
+ci: names 8 s (card-names 3 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: ui-smoke 9 s (ui-test 9 s)
+ci: oracle 41 s (oracle 41 s)
+ci: counts 133 s (count-gate 39 s, count-gate-families 94 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 133.5 s (347 s on the clock) (budget 300 s)
+bisect: 1 failed checks over 1 commits since master (4134ad203c), 600 s to search
+bisect: d89dca4788: 1 of 1 checks fail
+bisect: 4134ad203c: 1 of 1 checks fail
+bisect: rust:tests  fails at 4134ad203c too: no commit since master to blame
+record: rust:tests  runs 339, failures 100, flaky 1, stale 1, catch 0, miss 0 (30 days)
+ci: sweep: next due in 113 min
+ci: b3d sweep: started in the background (/Users/dthurn/Library/Caches/beryl/b3d/sweep/background.log)</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T06:10:12Z" tabindex="0" data-tip="2026-11-16T06:10:12Z">2026-11-16</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 3a381f5dceff13f6a910791d30a14370d4903e3c. Failing range since last passing commit: 3a381f5dceff13f6a910791d30a14370d4903e3c..3a381f5dceff13f6a910791d30a14370d4903e3c.</p>
+<p>Log tail:</p>
+<pre><code>...................................................
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 17 tests
+.................
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 16 tests
+................
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+
+running 66 tests
+.................................................. 50/66
+tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props --- FAILED
+...............
+failures:
+
+---- tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props stdout ----
+
+thread &#x27;tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props&#x27; (96291005) panicked at crates/beryl_cards/src/tests/props.rs:123:5:
+Cavern of Souls: &quot;Cavern of Souls&#x27; mana pays for a changeling of the chosen type&quot; is marked as an interaction with Universal Automaton, which it never names
+Cavern of Souls: &quot;Cavern of Souls&#x27; mana pays for a changeling of another type&quot; is marked as an interaction with Universal Automaton, which it never names
+
+
+failures:
+    tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props
+
+test result: FAILED. 65 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.63s
+
+error: test failed, to rerun pass `-p beryl_cards --lib`
+ci rust tests: FAILED (exit 101) after 3.2 s (4 s on the clock)
+ci: repo 0 s (file-length 0 s)
+ci: rust 20 s (clippy 3 s, tests FAILED)
+ci: names 7 s (card-names 2 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 19.5 s (232 s on the clock) (budget 300 s)
+bisect: 1 failed checks over 0 commits since master (3a381f5dce), 600 s to search
+bisect: 3a381f5dce: 1 of 1 checks fail
+bisect: rust:tests  fails at 3a381f5dce too: no commit since master to blame
+record: rust:tests  runs 341, failures 102, flaky 1, stale 1, catch 0, miss 0 (30 days)
+ci: sweep: next due in 96 min
+ci: b3d sweep: one is running</code></pre></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T06:31:01Z" tabindex="0" data-tip="2026-11-16T06:31:01Z">2026-11-16</time></header><div class="c-prose"><p>Handoff: In rust/crates/beryl_cards/src/tests/props.rs, scenario_strings collects setup and action strings before the test checks declared interactions. The Cavern of Souls scenarios name Universal Automaton, which is generated from the card store and absent from the handwritten card list. The handwritten list still defines which undeclared references the check flags. Applying that rule to all generated cards in a trial also flagged established setup fixtures across many card and generated scenarios, so this repair leaves that policy in place. The original focused test reproduced both failures. The focused test and local macOS slow suite passed with the fix, and Enact's fast checks passed before 6bc400e4 reached staging.</p></div></div></article><article class="c-comment"><div class="c-avatar" aria-hidden="true">D</div><div class="c-comment-main"><header class="c-comment-head"><span class="c-comment-author">Derek Thurn</span><time class="c-time" datetime="2026-11-16T06:32:23Z" tabindex="0" data-tip="2026-11-16T06:32:23Z">2026-11-16</time></header><div class="c-prose"><p>Slow CI (<code>uv run --quiet --project tools by ci</code>) failed on dereks-macbook-pro (macos) at 92746425b6d0b2181ba32c1b367633bef862b0cc. Failing range since last passing commit: 3a381f5dceff13f6a910791d30a14370d4903e3c..92746425b6d0b2181ba32c1b367633bef862b0cc.</p>
+<p>Log tail:</p>
+<pre><code>
+
+running 17 tests
+.................
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 16 tests
+................
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+
+running 66 tests
+................................................... 51/66
+tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props --- FAILED
+..............
+failures:
+
+---- tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props stdout ----
+
+thread &#x27;tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props&#x27; (96572826) panicked at crates/beryl_cards/src/tests/props.rs:123:5:
+Cavern of Souls: &quot;Cavern of Souls&#x27; mana pays for a changeling of the chosen type&quot; is marked as an interaction with Universal Automaton, which it never names
+Cavern of Souls: &quot;Cavern of Souls&#x27; mana pays for a changeling of another type&quot; is marked as an interaction with Universal Automaton, which it never names
+
+
+failures:
+    tests::props::scenarios_name_only_their_card_its_tokens_basic_lands_and_props
+
+test result: FAILED. 65 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.81s
+
+error: test failed, to rerun pass `-p beryl_cards --lib`
+ci rust tests: FAILED (exit 101) after 2.8 s (8 s on the clock)
+ci: repo 1 s (file-length 1 s)
+ci: python 6 s (black 1 s, pyre 5 s)
+ci: rust 20 s (clippy 4 s, tests FAILED)
+ci: ui 5 s (design-tokens 0 s, tsc 5 s)
+ci: names 8 s (card-names 4 s, two-player 0 s, board-door 0 s, discarded-push 0 s, plan-references 2 s, divergences 0 s, citations 1 s, card-headers 0 s, card-crates 1 s)
+ci: app 44 s (smoke 44 s)
+ci: ui-smoke 7 s (ui-test 7 s)
+ci: oracle 25 s (oracle 25 s)
+ci: counts 203 s (count-gate 53 s, count-gate-families 150 s)
+ci: efficiency 26 s (black 1 s, pyre 3 s, pytest 22 s)
+ci budget: by-fuyy by-s9jz by-xcro open to cut checks; nothing more filed
+ci: FAILED: rust in 203.3 s (543 s on the clock) (budget 300 s)
+bisect: 1 failed checks over 0 commits since master (92746425b6), 600 s to search
+bisect: 92746425b6: 1 of 1 checks fail
+bisect: rust:tests  fails at 92746425b6 too: no commit since master to blame
+record: rust:tests  runs 345, failures 105, flaky 1, stale 1, catch 0, miss 0 (30 days)
+ci: sweep: next due in 73 min
+ci: b3d sweep: one is running</code></pre></div></div></article></section><section class="c-section" id="changelog"><h2 class="c-section-title">Changelog</h2><ol class="c-timeline"><li class="c-timeline-entry"><div class="c-timeline-body">closed this<span class="c-timeline-detail">Recognized generated cards in scenario interactions. Local macOS slow CI and Enact fast checks passed. Pushed 6bc400e4 to staging.</span></div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T06:32:02Z" tabindex="0" data-tip="2026-11-16T06:32:02Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body">started work</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T06:09:04Z" tabindex="0" data-tip="2026-11-16T06:09:04Z">2026-11-16</time></div></li><li class="c-timeline-entry"><div class="c-timeline-body"><span class="c-timeline-actor">Derek Thurn</span>created this</div><div class="c-timeline-when"><time class="c-time" datetime="2026-11-16T05:19:29Z" tabindex="0" data-tip="2026-11-16T05:19:29Z">2026-11-16</time></div></li></ol><p class="c-empty">bd recorded no events for this bead; these come from its timestamps.</p></section><section class="c-section"><details class="c-disclosure"><summary>Details</summary><div class="c-disclosure-body"><dl class="c-meta"><div class="c-meta-item"><dt>Created by</dt><dd>Derek Thurn</dd></div><div class="c-meta-item"><dt>Owner</dt><dd>derek@fake.email</dd></div><div class="c-meta-item"><dt>Started</dt><dd><time class="c-time" datetime="2026-11-16T06:09:04Z" tabindex="0" data-tip="2026-11-16T06:09:04Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>enact_actor</dt><dd><span class="c-mono">01a1e2f9-d44c-7000-80f6-a04f2221db44</span></dd></div><div class="c-meta-item"><dt>enact_archived</dt><dd><span class="c-mono">True</span></dd></div><div class="c-meta-item"><dt>enact_branch</dt><dd><span class="c-mono">enact/by-ua8n9</span></dd></div><div class="c-meta-item"><dt>enact_ci_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_ci_os</dt><dd><span class="c-mono">macos</span></dd></div><div class="c-meta-item"><dt>enact_ci_range</dt><dd><span class="c-mono">3a381f5dceff13f6a910791d30a14370d4903e3c..92746425b6d0b2181ba32c1b367633bef862b0cc</span></dd></div><div class="c-meta-item"><dt>enact_commits</dt><dd><span class="c-mono">6bc400e4dbcdb0c5f4d0e136318d7b1eda7e24e6</span></dd></div><div class="c-meta-item"><dt>enact_reservation</dt><dd><span class="c-mono">88bae59da70f40a2a7ea27ef2e90c5b8</span></dd></div><div class="c-meta-item"><dt>enact_run</dt><dd><span class="c-mono">by-q44s</span></dd></div><div class="c-meta-item"><dt>enact_runs</dt><dd><span class="c-mono">by-q44s by-q44s.3</span></dd></div><div class="c-meta-item"><dt>enact_session</dt><dd><span class="c-mono">01a1e2f9-d44c-7000-80f6-a04f2221db44</span></dd></div><div class="c-meta-item"><dt>enact_spawn_app</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_spawn_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div><div class="c-meta-item"><dt>enact_spawn_project</dt><dd><span class="c-mono">/Users/dthurn/beryl</span></dd></div><div class="c-meta-item"><dt>enact_spawn_provider</dt><dd><span class="c-mono">codex</span></dd></div><div class="c-meta-item"><dt>enact_vizier</dt><dd><span class="c-mono">01a1e295-58a5-7c72-a2fc-b646a95defc1</span></dd></div><div class="c-meta-item"><dt>enact_worktree</dt><dd><span class="c-mono">/Users/dthurn/beryl/.worktrees/slot-01</span></dd></div><div class="c-meta-item"><dt>enact_worktree_host</dt><dd><span class="c-mono">dereks-macbook-pro</span></dd></div></dl></div></details></section></div><aside class="c-layout-aside"><dl class="c-meta"><div class="c-meta-item"><dt>Status</dt><dd><span class="c-dot c-tone-green">Closed</span></dd></div><div class="c-meta-item"><dt>Priority</dt><dd><span class="c-chip c-tone-red" data-tip="Critical" tabindex="0">P0</span><span class="c-muted">Critical</span></dd></div><div class="c-meta-item"><dt>Assignee</dt><dd><span class="c-tip-target" tabindex="0" data-tip="01a1e2f9-d44c-7000-80f6-a04f2221db44">01a1e2f9</span></dd></div><div class="c-meta-item"><dt>Labels</dt><dd><span class="c-chip c-tone-muted">role:steward</span></dd></div><div class="c-meta-item"><dt>Type</dt><dd>Task</dd></div><div class="c-meta-item"><dt>Created</dt><dd><time class="c-time" datetime="2026-11-16T05:19:29Z" tabindex="0" data-tip="2026-11-16T05:19:29Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>Updated</dt><dd><time class="c-time" datetime="2026-11-16T06:34:51Z" tabindex="0" data-tip="2026-11-16T06:34:51Z">2026-11-16</time></dd></div><div class="c-meta-item"><dt>Closed</dt><dd><time class="c-time" datetime="2026-11-16T06:32:02Z" tabindex="0" data-tip="2026-11-16T06:32:02Z">2026-11-16</time></dd></div></dl></aside></div></div></div>
+</main>
+</body>
+</html>
