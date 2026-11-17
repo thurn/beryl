@@ -19,6 +19,7 @@ use crate::agent::{self, Fault, Subject, hit::bounds};
 use crate::frame::Frame;
 use crate::input::Rect;
 use crate::play::record::{Plant, Planted, ScriptRecord};
+use crate::table::Camera;
 
 /// One step of a script, as `Page::steps` lists it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -136,7 +137,7 @@ impl Page {
         for script in &history {
             tally.script(script);
         }
-        let mut judged = judged(&history);
+        let mut judged = judged(&history, played.client.table().camera());
         // The frames that name the objects of the faults the segment checks found.
         let naming: BTreeSet<u64> = found.iter().map(|found| found.at).collect();
         // "Every step shown" judges the share of frames in which a step's subject is seen, so
@@ -463,8 +464,9 @@ fn sampled(judged: &[Judged], tick: u64, end: u64) -> BTreeSet<u64> {
 }
 
 /// Every step of `history` that "every step shown" judges: those with a subject whose verb it
-/// judges, in scripts that started.
-fn judged(history: &[ScriptRecord]) -> Vec<Judged> {
+/// judges, in scripts that started, except a step that brings its subject back to where it
+/// started on the window `camera` shows (`steps::rests_in_place`).
+fn judged(history: &[ScriptRecord], camera: &Camera) -> Vec<Judged> {
     let mut judged = Vec::new();
     for (number, script) in history.iter().enumerate() {
         if script.start.is_none() {
@@ -476,6 +478,7 @@ fn judged(history: &[ScriptRecord]) -> Vec<Judged> {
                     step.verb,
                     beryl_protocol::script::Verb::Fly | beryl_protocol::script::Verb::Appear
                 )
+                || steps::rests_in_place(script, index, camera)
             {
                 continue;
             }

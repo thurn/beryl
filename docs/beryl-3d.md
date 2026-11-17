@@ -3001,7 +3001,11 @@ screen, so they cover every card spec that is ever generated.
   subject time to travel moves it at least 4 logical points over at least 150
   milliseconds; a subject that jumps instead is a fault. A card that moves
   within its zone between two places out of view is drawn in no frame, and is
-  not judged.
+  not judged. Neither is a step that brings its subject back to where it started
+  on the window, its start and end less than 4 logical points apart
+  (`steps::rests_in_place`): the viewer has no change of place to follow. On the
+  phone, a card flown from a graveyard into exile does this, because exile lies
+  unseen under its owner's graveyard.
 - **Not crowded.** No more than 3 different moves begin at once in one beat.
   Taps and the steps of a turn do not count.
 - **No blank card.** Every card drawn face up, whose name the viewer knows, has

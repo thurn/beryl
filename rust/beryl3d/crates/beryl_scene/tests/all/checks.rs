@@ -7,12 +7,13 @@ use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{Side, Why, ZoneName};
 use beryl_protocol::script::Verb;
-use beryl_scene::agent::steps::{crowded, no_jumps};
+use beryl_scene::agent::steps::{crowded, no_jumps, rests_in_place};
 use beryl_scene::agent::{Context, Fault, Layout, Rule};
 use beryl_scene::driver::{Checked, Mode, Page, Recording};
 use beryl_scene::input::{Insets, Size};
 use beryl_scene::play::record::{Cause, MoveKey, Planted, ScriptRecord, SegmentRecord, StepRecord};
 use beryl_scene::pose::{Curve, Pose, Segment};
+use beryl_scene::table::Table;
 use beryl_scene::verbs::Interval;
 use glam::Vec3;
 
@@ -356,4 +357,38 @@ fn an_ability_that_goes_on_the_stack_and_resolves_has_no_fault() {
     let checked = page.check_all(Mode::AtCheckTimes);
     let printed: Vec<String> = checked.faults.iter().map(printed).collect();
     assert!(printed.is_empty(), "{}", printed.join("\n"));
+}
+
+#[test]
+fn a_flight_back_to_where_it_started_rests_in_place() {
+    let pose = |x: f32| Pose {
+        position: Vec3::new(x, 0.0, 0.0),
+        ..Pose::default()
+    };
+    let leg = |start: u64, from: f32, to: f32| SegmentRecord {
+        slot: 3,
+        cause: Cause::Verb(0),
+        segment: Segment::between(
+            pose(from),
+            pose(to),
+            Interval {
+                from: start * MS,
+                to: (start + 200) * MS,
+            },
+            Curve::LINEAR,
+        ),
+    };
+    let step = StepRecord {
+        subject: Some(3),
+        ..flight(0, ZoneName::Graveyard, Why::Exile)
+    };
+    let table = Table::default();
+    let camera = table.camera();
+    let there_and_back = script(
+        vec![step.clone()],
+        vec![leg(0, 0.0, 50.0), leg(200, 50.0, 0.0)],
+    );
+    assert!(rests_in_place(&there_and_back, 0, camera));
+    let away = script(vec![step], vec![leg(0, 0.0, 50.0)]);
+    assert!(!rests_in_place(&away, 0, camera));
 }

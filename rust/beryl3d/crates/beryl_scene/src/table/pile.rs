@@ -143,6 +143,49 @@ pub(super) fn lay_pile(
     };
 }
 
+/// Places `side`'s exile, `objects` bottom first, on the phone layout: under that side's
+/// graveyard, whose base is `at`, and never drawn, as the web's `ui/src/stage/phone.ts` places it
+/// (docs/ui-conventions.md, "The phone"). The phone keeps the third pile's place in the
+/// opponent's strip for the Revealed Cards pile, and lists exile in the graveyard's sheet. Each
+/// card lies flat beneath the graveyard's bottom card, so a card flown into exile lands under
+/// the graveyard rather than on it. The pile has no top card, so it writes no element and no
+/// side record, though `PileShown::count` still counts its cards.
+pub(super) fn lay_unseen_exile(
+    placement: &mut Placement,
+    objects: &[&ObjectView],
+    side: Side,
+    (at, scale): (Vec2, f32),
+) {
+    for object in objects {
+        let pose = Pose {
+            position: at.extend(LAYER * 0.25),
+            scale,
+            turn: turn(object),
+            ..Pose::default()
+        };
+        let place = Place::Card {
+            zone: ZoneName::Exile,
+            side,
+            row: None,
+        };
+        placement.set(
+            object.slot,
+            Rest {
+                pose,
+                place,
+                visible: false,
+                copies: 1,
+            },
+        );
+    }
+    placement.piles[PileShown::index(side, ZoneName::Exile)] = PileShown {
+        count: objects.len(),
+        base: at,
+        top: None,
+        scale,
+    };
+}
+
 impl Table {
     /// How many cards the pile numbered `index` (`PileShown::index`) holds as the table stands
     /// now, whether or not a box of the flat layer shows its top card.

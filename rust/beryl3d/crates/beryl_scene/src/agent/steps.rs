@@ -18,6 +18,7 @@ use crate::input::{Rect, Size};
 use crate::motion::pose_at;
 use crate::play::record::{Cause, ScriptRecord, SegmentRecord, StepRecord};
 use crate::pose::{Pose, Segment};
+use crate::table::Camera;
 
 /// A fault the segment and step checks found, before the frame that names its objects is
 /// known.
@@ -362,6 +363,31 @@ pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size) -> Option<Sample> 
         seen: hidden.is_none(),
         hidden,
     })
+}
+
+/// Whether the step numbered `number` of `script` moves its subject from a place on the window
+/// back to the same place: its subject's first segment for the step's verb starts, and its last
+/// ends, within `audit.step_points` of each other on the window `camera` shows. "Every step
+/// shown" does not judge such a step, as it does not judge a card that moves within its zone
+/// between two places out of view: the viewer has no change of place to follow. On the phone a
+/// card flown from a graveyard into exile does this, since exile lies unseen under the
+/// graveyard (docs/ui-conventions.md, "The phone").
+#[must_use]
+pub fn rests_in_place(script: &ScriptRecord, number: usize, camera: &Camera) -> bool {
+    let Some(subject) = script.steps.get(number).and_then(|step| step.subject) else {
+        return false;
+    };
+    let mut own = script
+        .segments
+        .iter()
+        .filter(|record| record.slot == subject && record.cause == Cause::Verb(number));
+    let Some(first) = own.next() else {
+        return false;
+    };
+    let last = own.next_back().unwrap_or(first);
+    let start = camera.to_screen(first.segment.from.position);
+    let end = camera.to_screen(last.segment.to.position);
+    start.distance(end) < audit::STEP_POINTS
 }
 
 /// Every step shown: what a step concerns is seen while it plays, and a step whose verb gives its
