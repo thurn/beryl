@@ -146,21 +146,8 @@ def points(
 
 def register_metrics(db: sqlite3.Connection) -> None:
     """Discover crate names in this store; register all three modes for each crate."""
-    from functools import partial
-
     for (crate,) in db.execute(
         "SELECT DISTINCT crate FROM compile_timings ORDER BY crate"
     ):
         for mode in MODES:
-            name = f"compile.{crate}.{mode}"
-            # Concurrent page queries may discover the same crate together.
-            metrics.METRICS.setdefault(
-                name,
-                metrics.Metric(
-                    name,
-                    f"rebuilt {crate} unit seconds ({mode})",
-                    "seconds",
-                    3,
-                    partial(points, str(crate), mode),
-                ),
-            )
+            metrics.get(f"compile.{crate}.{mode}")

@@ -7,10 +7,12 @@ its start, a per-day figure by its day. Later parts of the dashboard add their m
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from functools import partial
 
 from .facts import Facts, spread, total
 from .render import Result, describe, table
@@ -37,6 +39,31 @@ def register(metric: Metric) -> Metric:
         raise ValueError(f"metric {metric.name} is registered twice")
     METRICS[metric.name] = metric
     return metric
+
+
+def get(name: str) -> Metric | None:
+    """Resolve a crate metric even before this host has captured that crate.
+
+    Efficiency changes are validated without a private store. Compile names
+    therefore describe a metric independently of which crates have samples.
+    """
+    found = METRICS.get(name)
+    match = re.fullmatch(r"compile\.([A-Za-z0-9_-]+)\.(check|clippy|test-build)", name)
+    if found is None and match is not None:
+        from .timings import points
+
+        crate, mode = match.groups()
+        found = METRICS.setdefault(
+            name,
+            Metric(
+                name,
+                f"rebuilt {crate} unit seconds ({mode})",
+                "seconds",
+                3,
+                partial(points, crate, mode),
+            ),
+        )
+    return found
 
 
 def per_bead(
@@ -175,7 +202,7 @@ def series(
     marks: list[Mark] | None = None,
 ) -> Result:
     """The metric `name` by day, with `marks`, the efficiency changes made to it."""
-    metric = METRICS.get(name)
+    metric = get(name)
     if metric is None:
         raise KeyError(f"no metric {name}; `efficiency metrics` lists them")
     points = metric.points(db, facts, scope)

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_efficiency import cli, ingest, metrics, paths, store, timings
+from beryl_efficiency import changes, cli, facts, ingest, metrics, paths, store, timings
 from beryl_efficiency.scope import Scope, parse_since
 
 
@@ -97,3 +97,22 @@ def test_malformed_duration_is_not_a_measurement(seconds: float, fresh: bool) ->
                 }
             ).encode(),
         )
+
+
+def test_changes_resolve_crate_metrics_without_a_prior_metrics_query(
+    cache: Path,
+) -> None:
+    name = "compile.beryl_example.test-build"
+    change = changes.Change("Reduce example compile cost", name, "down", None)
+    assert changes.split_metric(name)[0] == name
+    assert changes.problems([change], [], lambda _: True) == []
+    assert metrics.get("compile.beryl_example.unknown") is None
+    db = store.open_store(paths.store())
+    try:
+        # Resolving names must not depend on any timing row or CLI call.
+        metrics.METRICS.pop(name, None)
+        mark = changes.mark(db, facts.load(db), change, None)
+        assert mark.verdict == "not on staging yet"
+        assert name in metrics.METRICS
+    finally:
+        db.close()

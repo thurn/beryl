@@ -27,7 +27,8 @@ from pathlib import Path
 from . import cards, ci, machine  # noqa: F401
 from .commits import History
 from .facts import Facts, spread
-from .metrics import METRICS, Mark, Points, fmt
+from .metrics import Mark, Points, fmt
+from .metrics import get as get_metric
 from .render import Result, describe, table
 from .rollups import day_of
 from .scope import Range, Scope, parse_time
@@ -41,7 +42,7 @@ EXPECT = ("up", "down")
 KEYS: frozenset[str] = frozenset({"label", "metric", "expect", "commit"})
 SHA: re.Pattern[str] = re.compile(r"^[0-9a-f]{40}$")
 # A metric with an optional cohort filter: `bead.dollars[tier=sonnet,role=executor]`.
-SPEC: re.Pattern[str] = re.compile(r"^([a-z0-9.-]+)(?:\[([^\]]*)\])?$")
+SPEC: re.Pattern[str] = re.compile(r"^([a-z0-9_.-]+)(?:\[([^\]]*)\])?$")
 # Where one sentence ends and another begins.
 SENTENCE_BREAK: re.Pattern[str] = re.compile(r"[.!?;]\s|\n")
 TOO_FEW = "too few samples"
@@ -152,7 +153,9 @@ def problems(
         except ValueError as e:
             found.append(f"{where} {e}")
         else:
-            if name not in known:
+            if name not in known and not (
+                name.startswith("compile.") and get_metric(name) is not None
+            ):
                 found.append(
                     f"{where} no metric {name}; `just efficiency metrics` lists them"
                 )
@@ -277,7 +280,7 @@ def mark(
     except ValueError as e:
         found = Compared(None, None, 0, 0, str(e))
     else:
-        metric = METRICS.get(name)
+        metric = get_metric(name)
         if metric is None:
             found = Compared(None, None, 0, 0, f"no metric {name}")
         elif time is not None:
@@ -368,5 +371,5 @@ def report(
 
 
 def show(value: float | None, spec: str) -> str:
-    metric = METRICS.get(base(spec))
+    metric = get_metric(base(spec))
     return fmt(value, metric.digits if metric else 2)
