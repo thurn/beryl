@@ -125,7 +125,10 @@
       "shows": "region \"BOTTOM\""
     },
     "A card a look puts in the graveyard": {
-      "open": "needs bead by-q44s.9.30: no recording found shows a looked-at card put in the graveyard from the chooser's seat."
+      "recording": "abhorrent-oculus/manifests-dread-on-each-opponents-upkeep-only",
+      "at": "870ms",
+      "still": false,
+      "shows": "card \"Counterspell\" #10 graveyard.yours 151,795 79x91 moving faded"
     },
     "A batch exile": {
       "recording": "gurmag-angler/paid-with-delve-and-cavern-of-souls-mana",
