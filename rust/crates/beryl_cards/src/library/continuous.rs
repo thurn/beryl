@@ -276,3 +276,62 @@ pub const ABILITIES_IN_TIMESTAMP_ORDER: &[Scenario] =
                 ME.tapped(props::FLIER.card, 0),
             ]),
     ];
+
+/// P0 casts Wild Nacatl, and in response Crystal Spray makes the Nacatl spell's "Mountain"
+/// read "Island". As a permanent it keeps the change, so P0's Islands give it +1/+1, until the
+/// cleanup step ends the change. It entered this turn, so P0 has no attack to declare.
+#[cfg(test)]
+pub(crate) const TEXT_CHANGE_ON_PERMANENT_SPELL: Scenario =
+    Scenario::new("a spell's text change goes on with its permanent")
+        .interaction(&[names::CRYSTAL_SPRAY, names::WILD_NACATL])
+        .battlefield(
+            P0,
+            &[names::FOREST, names::ISLAND, names::ISLAND, names::ISLAND],
+        )
+        .hand(P0, &[names::WILD_NACATL, names::CRYSTAL_SPRAY])
+        .library(P0, &[names::ISLAND, names::ISLAND, names::ISLAND])
+        .actions(&[
+            ME.casts(names::WILD_NACATL),
+            ME.casts(names::CRYSTAL_SPRAY),
+            ME.targets(names::WILD_NACATL),
+            Resolve,
+            ME.chooses_word(TextWord::LandType(Subtype::Mountain)),
+            ME.chooses_word(TextWord::LandType(Subtype::Island)),
+            Resolve,
+            ME.pt(names::WILD_NACATL, 2, 2),
+            advance_to(2, TurnStep::Upkeep),
+            ME.pt(names::WILD_NACATL, 1, 1),
+        ]);
+
+/// Deathmark already targeted the white creature. Changing its text to "blue"
+/// makes that target illegal even though there is a blue creature it could target now.
+#[cfg(test)]
+pub(crate) const TEXT_CHANGE_INVALIDATES_TARGET: Scenario =
+    Scenario::new("Crystal Spray makes a spell's chosen target illegal")
+        .interaction(&[names::DEATHMARK])
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                names::ISLAND,
+                names::ISLAND,
+                names::ISLAND,
+                props::FLIER.card,
+                props::VANILLA.card,
+            ],
+        )
+        .battlefield(P1, &[names::SWAMP])
+        .hand(P0, &[names::CRYSTAL_SPRAY])
+        .hand(P1, &[names::DEATHMARK])
+        .actions(&[
+            THEM.casts(names::DEATHMARK),
+            ME.casts(names::CRYSTAL_SPRAY),
+            ME.targets(names::DEATHMARK),
+            Resolve,
+            ME.chooses_word(TextWord::Color(Colors::WHITE)),
+            ME.chooses_word(TextWord::Color(Colors::BLUE)),
+            Resolve,
+            ME.controls(props::FLIER.card, 1),
+            ME.controls(props::VANILLA.card, 1),
+            THEM.has(Zone::Graveyard, names::DEATHMARK, 1),
+        ]);

@@ -38,6 +38,7 @@ pub static CARD: CardDef = Printed::PaintersServant
 #[cfg(feature = "scenarios")]
 pub mod scenarios {
     use crate::prelude::*;
+    use crate::tokens::FOOD_TOKEN;
 
     const PAINTER: &str = Card::PaintersServant;
     const SCIMITAR: &str = Card::LeoninScimitar;
@@ -200,6 +201,66 @@ pub mod scenarios {
                 ME.colored(Zone::Library, Card::Island, Colors::RED),
                 THEM.colored(Zone::Library, Card::Swamp, Colors::RED),
                 THEM.colored(Zone::Exile, Card::Island, Colors::RED),
+            ]),
+        // The token enters red under Painter's Servant. Oko's later effect sets its
+        // color to green and overwrites the color Painter added.
+        Scenario::new("Oko overwrites the color Painter's Servant adds to a Food token")
+            .interaction(&[Card::OkoThiefOfCrowns])
+            .battlefield(P0, &[Card::Plains, Card::Plains, Card::OkoThiefOfCrowns])
+            .hand(P0, &[PAINTER])
+            .actions(&[
+                RED[0],
+                RED[1],
+                RED[2],
+                ME.activates(Card::OkoThiefOfCrowns, 0),
+                Resolve,
+                ME.colored(Zone::Battlefield, FOOD_TOKEN, Colors::RED),
+                advance_to(3, TurnStep::PrecombatMain),
+                ME.activates(Card::OkoThiefOfCrowns, 1),
+                ME.targets(FOOD_TOKEN),
+                Resolve,
+                ME.colored(Zone::Battlefield, FOOD_TOKEN, Colors::GREEN),
+            ])
+            .library(P0, &[Card::Island, Card::Island])
+            .library(P1, &[Card::Island, Card::Island]),
+        // The artifact starts colorless in hand and is white when cast,
+        // so the Feather's cast trigger sees a white spell.
+        Scenario::new("Painter's Servant makes an artifact trigger Angel's Feather")
+            .interaction(&[Card::AngelsFeather])
+            .battlefield(P0, &[Card::Plains; 3])
+            .battlefield(P1, &[Card::AngelsFeather])
+            .hand(P0, &[PAINTER, Prop::Equipment])
+            .actions(&[
+                ME.colored(Zone::Hand, Prop::Equipment, Colors::NONE),
+                ME.casts(PAINTER),
+                Resolve,
+                ME.chooses_color(Colors::WHITE),
+                ME.casts(Prop::Equipment),
+                Resolve,
+                THEM.yes(),
+                THEM.life(21),
+                Resolve,
+                ME.colored(Zone::Battlefield, Prop::Equipment, Colors::WHITE),
+            ]),
+        // A copy on the stack gets the chosen color as well as its own red.
+        Scenario::new("Painter's Servant adds blue to Fork's spell copy")
+            .interaction(&[Card::Fork, BOLT])
+            .battlefield(P0, &[Card::Plains, Card::Plains, Card::Mountain])
+            .hand(P0, &[PAINTER, BOLT])
+            .battlefield(P1, &[Card::Mountain; 2])
+            .hand(P1, &[Card::Fork])
+            .actions(&[
+                BLUE[0],
+                BLUE[1],
+                BLUE[2],
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                THEM.casts(Card::Fork),
+                Resolve,
+                THEM.targets_player(ME),
+                THEM.colored(Zone::Stack, BOLT, Colors::RED.union(Colors::BLUE)),
+                Resolve,
+                ME.life(17),
             ]),
     ];
 }

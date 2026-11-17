@@ -89,7 +89,55 @@ pub mod scenarios {
                 ME.chooses_word(ISLAND),
                 ME.casts(SPRAY),
                 ME.targets(Card::Forest),
+                ME.controls(Card::Forest, 1),
                 ME.tapped(Card::Forest, 1),
+            ]),
+        // A permanent with no matching words is a legal target. Word choices start
+        // when the spell resolves, and the replacement menu omits the first word.
+        Scenario::new("Crystal Spray can target a permanent with no matching words")
+            .battlefield(P0, &[Card::Island; 3])
+            .battlefield(P1, &[Prop::Vanilla])
+            .hand(P0, &[SPRAY])
+            .library(P0, &[Card::Plains])
+            .actions(&[
+                ME.casts(SPRAY),
+                ME.targets(Prop::Vanilla),
+                Resolve,
+                ME.deciding(DecisionKind::ChooseObject, 10),
+                ME.chooses_word(ISLAND),
+                ME.deciding(DecisionKind::ChooseObject, 4),
+                ME.chooses_word(TextWord::LandType(Subtype::Swamp)),
+                THEM.controls(Prop::Vanilla, 1),
+                ME.has(Zone::Hand, Card::Plains, 1),
+            ]),
+        // The Lord grants islandwalk to the Merfolk, so changing the Merfolk's own text
+        // still leaves it able to attack unblocked against a player who controls an Island.
+        Scenario::new("Crystal Spray leaves a granted landwalk ability alone")
+            .interaction(&[Card::LordOfAtlantis])
+            .battlefield(
+                P0,
+                &[
+                    Card::LordOfAtlantis,
+                    Card::MerfolkOfThePearlTrident,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .battlefield(P1, &[Card::Island, Prop::Flier])
+            .hand(P0, &[SPRAY])
+            .actions(&[
+                ME.casts(SPRAY),
+                ME.targets(Card::MerfolkOfThePearlTrident),
+                Resolve,
+                ME.chooses_word(ISLAND),
+                ME.chooses_word(TextWord::LandType(Subtype::Swamp)),
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(Card::MerfolkOfThePearlTrident),
+                ME.done_attacking(),
+                advance_to(1, TurnStep::EndOfCombat),
+                THEM.life(18),
             ]),
     ];
 }

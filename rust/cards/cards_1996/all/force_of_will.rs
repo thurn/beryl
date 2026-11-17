@@ -166,5 +166,29 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, Prop::Artifact, 1),
                 ME.has(Zone::Graveyard, FORCE, 1),
             ]),
+        // Its pitch cost changes what is paid, while Mana Drain still sees mana value five.
+        Scenario::new("a pitched Force of Will gives Mana Drain five mana")
+            .interaction(&[Card::ManaDrain])
+            .battlefield(P0, &[Card::Plains, Card::Island, Card::Island])
+            .hand(P0, &[Prop::Artifact, Card::ManaDrain, Card::Plains])
+            .battlefield(P1, &[Card::Island; 2])
+            .hand(P1, &[FORCE, Prop::UntargetedSpell])
+            .actions(&[
+                ME.casts(Prop::Artifact),
+                ME.passes(),
+                Action::Cast {
+                    player: P1,
+                    card: FORCE,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                ME.casts(Card::ManaDrain),
+                ME.targets(FORCE),
+                THEM.has(Zone::Graveyard, FORCE, 1),
+                ME.controls(Prop::Artifact, 1),
+                advance_to(1, TurnStep::PostcombatMain),
+                ME.passes(),
+                ME.mana(ManaColor::Colorless, 5),
+            ]),
     ];
 }

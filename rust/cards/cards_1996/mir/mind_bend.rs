@@ -114,6 +114,7 @@ pub mod scenarios {
                 ME.chooses_word(ISLAND),
                 ME.casts(MIND_BEND),
                 ME.targets(Card::Forest),
+                ME.controls(Card::Forest, 1),
                 ME.tapped(Card::Forest, 1),
             ]),
         // Urborg's "Swamp" reads "Island": every land is an Island and no land is a Swamp, so
@@ -201,6 +202,22 @@ pub mod scenarios {
                 ME.done_attacking(),
                 advance_to(1, TurnStep::EndOfCombat),
                 THEM.life(18),
+            ]),
+        // A permanent with no matching words is a legal target. Word choices start
+        // when the spell resolves, and the replacement menu omits the first word.
+        Scenario::new("Mind Bend can target a permanent with no matching words")
+            .battlefield(P0, &[Card::Island])
+            .battlefield(P1, &[Prop::Vanilla])
+            .hand(P0, &[MIND_BEND, Card::Plains])
+            .actions(&[
+                ME.casts(MIND_BEND),
+                ME.targets(Prop::Vanilla),
+                Resolve,
+                ME.deciding(DecisionKind::ChooseObject, 10),
+                ME.chooses_word(ISLAND),
+                ME.deciding(DecisionKind::ChooseObject, 4),
+                ME.chooses_word(TextWord::LandType(Subtype::Swamp)),
+                THEM.controls(Prop::Vanilla, 1),
             ]),
     ];
 }

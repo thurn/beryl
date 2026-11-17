@@ -49,9 +49,11 @@ pub mod scenarios {
                 THEM.has_cards(Zone::Library, 4),
             ]),
         // The first Brain Freeze's copy was not cast, so the second counts two spells.
+        // Its two copies can choose different targets from each other.
         Scenario::new("Brain Freeze does not count copies")
             .battlefield(P0, &[ISLAND, ISLAND, ISLAND, ISLAND, Card::Plains])
             .hand(P0, &[SCIMITAR, FREEZE, FREEZE])
+            .library(P0, &[ISLAND; 4])
             .library(P1, &[Card::Plains; 20])
             .actions(&[
                 ME.casts(SCIMITAR),
@@ -65,13 +67,14 @@ pub mod scenarios {
                 ME.casts(FREEZE),
                 ME.targets_player(THEM),
                 Resolve,
-                ME.targets_player(THEM),
+                ME.targets_player(ME),
                 ME.targets_player(THEM),
                 stack(3),
                 Resolve,
                 Resolve,
                 Resolve,
-                THEM.has_cards(Zone::Graveyard, 15),
+                ME.has(Zone::Graveyard, ISLAND, 3),
+                THEM.has_cards(Zone::Graveyard, 12),
             ]),
         // Countering one Brain Freeze leaves the other to resolve. The opponent's spell counts
         // for storm, and they keep a second Counterspell, so they hold priority after each spell
@@ -118,6 +121,59 @@ pub mod scenarios {
                 ME.targets_player(THEM),
                 Resolve,
                 THEM.has_cards(Zone::Library, 7),
+            ]),
+        // Stifle counters the trigger, so only the original mills cards.
+        Scenario::new("countering Brain Freeze's storm trigger prevents every copy")
+            .interaction(&[Card::Stifle])
+            .battlefield(P0, &[ISLAND, ISLAND, Card::Plains])
+            .hand(P0, &[SCIMITAR, FREEZE])
+            .battlefield(P1, &[ISLAND])
+            .hand(P1, &[Card::Stifle])
+            .library(P1, &[Card::Plains; 10])
+            .actions(&[
+                ME.casts(SCIMITAR),
+                Resolve,
+                ME.casts(FREEZE),
+                ME.targets_player(THEM),
+                THEM.casts(Card::Stifle),
+                Resolve,
+                stack(0),
+                THEM.has_cards(Zone::Library, 7),
+            ]),
+        // The Diamond was cast from the graveyard and countered. Storm still counts
+        // it and the Counterspell, so Brain Freeze mills nine cards.
+        Scenario::new("Brain Freeze counts a countered spell cast from the graveyard")
+            .interaction(&[Card::UnderworldBreach, Card::LionsEyeDiamond])
+            .battlefield(P0, &[Card::UnderworldBreach, ISLAND, ISLAND])
+            .graveyard(
+                P0,
+                &[
+                    Card::LionsEyeDiamond,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .hand(P0, &[FREEZE])
+            .battlefield(P1, &[ISLAND, ISLAND])
+            .hand(P1, &[Prop::Instant])
+            .library(P1, &[Card::Plains; 10])
+            .actions(&[
+                ME.escapes(Card::LionsEyeDiamond),
+                ME.passes(),
+                THEM.casts(Prop::Instant),
+                Resolve,
+                ME.has(Zone::Graveyard, Card::LionsEyeDiamond, 1),
+                ME.casts(FREEZE),
+                ME.targets_player(THEM),
+                Resolve,
+                ME.targets_player(THEM),
+                ME.targets_player(THEM),
+                stack(3),
+                Resolve,
+                Resolve,
+                Resolve,
+                THEM.has_cards(Zone::Library, 1),
             ]),
     ];
 }

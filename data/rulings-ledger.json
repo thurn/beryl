@@ -31,6 +31,44 @@
       ]
     }
   ],
+  "Brain Freeze": [
+    {
+      "published_at": "2022-12-08",
+      "hash": "98d21bbc0042",
+      "scenario": [
+        "Brain Freeze and its copy are countered one at a time",
+        "Brain Freeze countered under its storm trigger is still copied"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "cb4eeb38b6a7",
+      "scenario": [
+        "countering Brain Freeze's storm trigger prevents every copy"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "dd6a93784907",
+      "scenario": [
+        "Brain Freeze counts a countered spell cast from the graveyard"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "2d30f76e5188",
+      "scenario": [
+        "Brain Freeze does not count copies"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "a632d71be081",
+      "scenario": [
+        "Brain Freeze does not count copies"
+      ]
+    }
+  ],
   "Chains of Mephistopheles": [
     {
       "published_at": "2004-10-04",
@@ -112,6 +150,73 @@
       "untestable": "The Opalescence scenario covers a noncreature entering as a creature. by-ptc7.2.12 tracks the converse: Beryl exiles an uncast Clever Impersonator before it can copy a noncreature permanent."
     }
   ],
+  "Crystal Spray": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "bd3621651aa3",
+      "scenario": [
+        "Crystal Spray makes a Forest an Island"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "05016333d9f7",
+      "scenario": [
+        "Crystal Spray makes a spell's chosen target illegal"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "345b2c3ca4e8",
+      "scenario": [
+        "Crystal Spray can target a permanent with no matching words"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "46748c8c95b1",
+      "scenario": [
+        "Crystal Spray leaves a granted landwalk ability alone"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "d41fe6a92e4c",
+      "scenario": [
+        "a spell's text change goes on with its permanent"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "4bc242f708ba",
+      "scenario": [
+        "Crystal Spray makes a Forest an Island",
+        "Crystal Spray changes a permanent's text until end of turn"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "361fc63c8397",
+      "scenario": [
+        "Crystal Spray makes a Forest an Island"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "26403c02eaea",
+      "scenario": [
+        "Crystal Spray can target a permanent with no matching words"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "2a1b51c74b99",
+      "scenario": [
+        "Crystal Spray can target a permanent with no matching words"
+      ]
+    }
+  ],
+  "Dandân": [],
   "Dress Down": [
     {
       "published_at": "2021-06-18",
@@ -206,6 +311,17 @@
       "hash": "a62681d8e255",
       "scenario": [
         "Underworld Breach returns after Flickerwisp dies and misses the end step trigger"
+      ]
+    }
+  ],
+  "Force of Will": [
+    {
+      "published_at": "2022-12-08",
+      "hash": "9eccab21e60d",
+      "scenario": [
+        "Force of Will for its alternative cost under Trinisphere costs three",
+        "Force of Will for mana under Thalia costs one more",
+        "a pitched Force of Will gives Mana Drain five mana"
       ]
     }
   ],
@@ -330,6 +446,69 @@
     }
   ],
   "Lightning Bolt": [],
+  "Lion's Eye Diamond": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "078f1e3d2879",
+      "scenario": [
+        "it discards the hand for three mana of one color",
+        "it can't pay for a spell cast from the hand"
+      ]
+    }
+  ],
+  "Lord of Atlantis": [],
+  "Mind Bend": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "4bc242f708ba",
+      "scenario": [
+        "Mind Bend makes a Forest an Island",
+        "Mind Bend makes Blood Moon's nonbasic lands Islands"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "bd3621651aa3",
+      "scenario": [
+        "Mind Bend makes a Forest an Island"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "345b2c3ca4e8",
+      "scenario": [
+        "Mind Bend can target a permanent with no matching words"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "46748c8c95b1",
+      "scenario": [
+        "Mind Bend on a Merfolk doesn't change the islandwalk the Lord gave"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "361fc63c8397",
+      "scenario": [
+        "Mind Bend makes a Forest an Island"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "26403c02eaea",
+      "scenario": [
+        "Mind Bend can target a permanent with no matching words"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "2a1b51c74b99",
+      "scenario": [
+        "Mind Bend can target a permanent with no matching words"
+      ]
+    }
+  ],
   "Mother of Runes": [],
   "Notion Thief": [
     {
@@ -483,6 +662,54 @@
       ]
     }
   ],
+  "Painter's Servant": [
+    {
+      "published_at": "2026-09-01",
+      "hash": "2864ab3ee2ae",
+      "scenario": [
+        "the chosen color is added to every card and permanent"
+      ]
+    },
+    {
+      "published_at": "2026-09-01",
+      "hash": "d315f39c93e0",
+      "scenario": [
+        "Oko overwrites the color Painter's Servant adds to a Food token"
+      ]
+    },
+    {
+      "published_at": "2026-09-01",
+      "hash": "8a0f004a0973",
+      "scenario": [
+        "the chosen color is added to every card and permanent",
+        "the chosen color is added to cards in libraries and exile",
+        "Painter's Servant adds blue to Fork's spell copy",
+        "Oko overwrites the color Painter's Servant adds to a Food token"
+      ]
+    },
+    {
+      "published_at": "2026-09-01",
+      "hash": "062ea8a3371d",
+      "scenario": [
+        "the chosen color is added to every card and permanent"
+      ]
+    },
+    {
+      "published_at": "2026-09-01",
+      "hash": "a6686c6f1de0",
+      "scenario": [
+        "two Painter's Servants add both their colors"
+      ]
+    },
+    {
+      "published_at": "2026-09-01",
+      "hash": "5c203ad28f39",
+      "scenario": [
+        "a spell on the stack has the chosen color too",
+        "Painter's Servant makes an artifact trigger Angel's Feather"
+      ]
+    }
+  ],
   "Rest in Peace": [
     {
       "published_at": "2018-03-16",
@@ -542,6 +769,76 @@
       "hash": "4579c8576f13",
       "scenario": [
         "kindred counts as a card type and supertypes do not"
+      ]
+    }
+  ],
+  "Underworld Breach": [
+    {
+      "published_at": "2020-01-24",
+      "hash": "b840d8e599a2",
+      "scenario": [
+        "an escaped sorcery returns to the graveyard",
+        "a creature card escapes and enters the battlefield"
+      ]
+    },
+    {
+      "published_at": "2020-01-24",
+      "hash": "99138aa6a302",
+      "untestable": "Ancestral Vision and the other suitable cards with no mana cost need suspend or another unimplemented casting permission."
+    },
+    {
+      "published_at": "2020-01-24",
+      "hash": "3c47d0521aa3",
+      "scenario": [
+        "an escaped sorcery returns to the graveyard",
+        "a sacrificed Diamond can escape before the opponent gets priority"
+      ]
+    },
+    {
+      "published_at": "2020-01-24",
+      "hash": "f038423b572e",
+      "scenario": [
+        "escape or flashback: the one chosen applies"
+      ]
+    },
+    {
+      "published_at": "2020-01-24",
+      "hash": "a80b2c1e8a53",
+      "scenario": [
+        "an instant escapes at instant speed, a sorcery doesn't"
+      ]
+    },
+    {
+      "published_at": "2020-01-24",
+      "hash": "36f704b2dd29",
+      "untestable": "Split cards and adventures need the two-face casting work tracked in milestone 7."
+    },
+    {
+      "published_at": "2020-01-24",
+      "hash": "c1bace06ef25",
+      "scenario": [
+        "a sacrificed Diamond can escape before the opponent gets priority"
+      ]
+    },
+    {
+      "published_at": "2020-01-24",
+      "hash": "d1ec6ecf6aac",
+      "scenario": [
+        "escape is the one alternative cost",
+        "an additional cost and escape exile their cards together"
+      ]
+    },
+    {
+      "published_at": "2020-01-24",
+      "hash": "8b673134fc05",
+      "untestable": "by-ptc7.2.13 tracks paying a sacrifice or discard before the escape exile cost. Beryl currently rejects Village Rites because the card table cannot pay the sacrifice to cast it."
+    },
+    {
+      "published_at": "2020-01-24",
+      "hash": "2e66b900b37f",
+      "scenario": [
+        "a cost increase applies to the escape cost",
+        "a reduced escape cost leaves the spell's mana value unchanged"
       ]
     }
   ],

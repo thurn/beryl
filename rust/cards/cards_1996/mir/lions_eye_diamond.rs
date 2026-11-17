@@ -48,6 +48,7 @@ pub mod scenarios {
             .actions(&[
                 ME.activates(LED, 0),
                 ME.chooses_color(Colors::BLUE),
+                stack(0),
                 ME.mana(ManaColor::Blue, 3),
                 ME.mana(ManaColor::White, 0),
                 ME.has_cards(Zone::Hand, 0),

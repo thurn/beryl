@@ -10,6 +10,11 @@
 //! text of a spell which is to become a permanent, the permanent will retain the text change
 //! until the effect wears off." Forge drops the change as the spell resolves.
 //!
+//! A text change can invalidate a target during resolution ([CR 608.2b]): “Other changes to the
+//! game state may cause a target to no longer be legal; for example, its characteristics may have
+//! changed or an effect may have changed the text of the spell.” Forge still destroys the
+//! creature Deathmark targeted before Crystal Spray changed its text.
+//!
 //! A text change of a land type word changes it wherever the text uses it as a land type
 //! ([CR 612.2]): "A text-changing effect changes only those words that are used in the correct
 //! way (for example, a Magic color word being used as a color word, a land type word used as a
@@ -21,6 +26,7 @@
 //! after Fork's "red" is changed to "blue".
 //!
 //! [CR 400.7a]: https://yawgatog.com/resources/magic-rules/#R4007a
+//! [CR 608.2b]: https://yawgatog.com/resources/magic-rules/#R6082b
 //! [CR 612.2]: https://yawgatog.com/resources/magic-rules/#R6122
 //! [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 
@@ -33,33 +39,13 @@ use crate::{CARDS, names};
 const ISLAND: TextWord = TextWord::LandType(Subtype::Island);
 const SWAMP: TextWord = TextWord::LandType(Subtype::Swamp);
 
-/// P0 casts Wild Nacatl, and in response Crystal Spray makes the Nacatl spell's "Mountain"
-/// read "Island". As a permanent it keeps the change, so P0's Islands give it +1/+1, until the
-/// cleanup step ends the change. It entered this turn, so P0 has no attack to declare.
-const SPELL: Scenario = Scenario::new("a spell's text change goes on with its permanent")
-    .interaction(&[names::CRYSTAL_SPRAY, names::WILD_NACATL])
-    .battlefield(
-        P0,
-        &[names::FOREST, names::ISLAND, names::ISLAND, names::ISLAND],
-    )
-    .hand(P0, &[names::WILD_NACATL, names::CRYSTAL_SPRAY])
-    .library(P0, &[names::ISLAND, names::ISLAND, names::ISLAND])
-    .actions(&[
-        ME.casts(names::WILD_NACATL),
-        ME.casts(names::CRYSTAL_SPRAY),
-        ME.targets(names::WILD_NACATL),
-        Resolve,
-        ME.chooses_word(TextWord::LandType(Subtype::Mountain)),
-        ME.chooses_word(ISLAND),
-        Resolve,
-        ME.pt(names::WILD_NACATL, 2, 2),
-        advance_to(2, TurnStep::Upkeep),
-        ME.pt(names::WILD_NACATL, 1, 1),
-    ]);
-
 #[test]
 fn a_spells_text_change_goes_on_with_its_permanent() {
-    beryl_scenario::run(&CARDS, &SPELL).unwrap_or_else(|e| panic!("{e}"));
+    beryl_scenario::run(
+        &CARDS,
+        &crate::library::continuous::TEXT_CHANGE_ON_PERMANENT_SPELL,
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
 }
 
 /// Mind Bend makes Dandân's "Island" read "Swamp": P0's Swamp keeps Dandân, and it attacks
@@ -160,4 +146,10 @@ const CRYSTAL_SPRAY_ON_FORK: Scenario = Scenario::new("Crystal Spray makes Fork'
 #[test]
 fn a_text_change_on_fork_changes_its_copys_color() {
     beryl_scenario::run(&CARDS, &CRYSTAL_SPRAY_ON_FORK).unwrap_or_else(|e| panic!("{e}"));
+}
+
+#[test]
+fn a_text_change_can_invalidate_a_spells_target() {
+    let scenario = &crate::library::continuous::TEXT_CHANGE_INVALIDATES_TARGET;
+    beryl_scenario::run(&CARDS, scenario).unwrap_or_else(|e| panic!("{e}"));
 }

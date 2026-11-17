@@ -42,6 +42,13 @@
       "Currency Converter: {T} : [-put-] {+choose+} a card exiled with ~ {+. if you do , put it+} into its owner's graveyard . if it's a land card , create a Treasure token . [-if it's a nonland card-] {+otherwise+} , create a 2/2 black Rogue creature token ."
     ]
   },
+  "Deathmark": {
+    "reason": "wording",
+    "note": "The renderer lists white before green. Either color makes a creature a legal target.",
+    "diff": [
+      "Deathmark: destroy target {+white or+} green [-or white-] creature ."
+    ]
+  },
   "Elite Spellbinder": {
     "reason": "wording",
     "note": "The definition chooses a nonland card in the hand it looked at and exiles it, which is what \"you may exile a nonland card from it\" does; the renderer writes the choice and the exile as two sentences.",

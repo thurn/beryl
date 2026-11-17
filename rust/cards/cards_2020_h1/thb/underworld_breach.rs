@@ -187,10 +187,12 @@ pub mod scenarios {
             .library(P0, &[Card::Island; 30])
             .library(P1, &[Card::Plains; 53])
             .actions(LOOP),
-        // Ruling: "If it is a permanent spell, it enters the battlefield". Its escape cost is
-        // its mana cost, {1}{U}, and the three other cards in the graveyard, which are exiled.
+        // The creature enters after it escapes and returns to the graveyard when it dies.
         Scenario::new("a creature card escapes and enters the battlefield")
+            .interaction(&[Card::LightningBolt])
             .battlefield(P0, &[BREACH, Card::Island, Card::Island])
+            .battlefield(P1, &[Card::Mountain])
+            .hand(P1, &[Card::LightningBolt])
             .graveyard(
                 P0,
                 &[Prop::Vanilla, Card::Plains, Card::Plains, Card::Plains],
@@ -202,6 +204,10 @@ pub mod scenarios {
                 ME.has(Zone::Exile, Card::Plains, 3),
                 ME.tapped(Card::Island, 2),
                 ME.has_cards(Zone::Graveyard, 0),
+                ME.passes(),
+                THEM.casts(Card::LightningBolt),
+                THEM.targets(Prop::Vanilla),
+                ME.has(Zone::Graveyard, Prop::Vanilla, 1),
             ]),
         // Ruling: "After an escaped spell resolves, it returns to its owner's graveyard if
         // it's not a permanent spell." With four other cards, P0 chooses the three to exile,
@@ -557,6 +563,50 @@ pub mod scenarios {
                 advance_to(2, TurnStep::PrecombatMain),
                 THEM.casts(Prop::Vanilla),
                 ME.deciding(DecisionKind::Priority, 2),
+            ]),
+        // The Helm reduces the mana paid for escape to two, but Mana Drain derives
+        // its mana from the spell's printed mana cost.
+        Scenario::new("a reduced escape cost leaves the spell's mana value unchanged")
+            .interaction(&[Card::HelmOfAwakening, Card::ManaDrain])
+            .battlefield(
+                P0,
+                &[BREACH, Card::HelmOfAwakening, Card::Island, Card::Island],
+            )
+            .graveyard(
+                P0,
+                &[
+                    Prop::UntargetedSpell,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .battlefield(P1, &[Card::Island; 2])
+            .hand(P1, &[Card::ManaDrain, Card::Plains])
+            .actions(&[
+                ME.escapes(Prop::UntargetedSpell),
+                ME.tapped(Card::Island, 2),
+                THEM.casts(Card::ManaDrain),
+                ME.has(Zone::Graveyard, Prop::UntargetedSpell, 1),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.passes(),
+                THEM.mana(ManaColor::Colorless, 3),
+            ]),
+        // The active player can cast Lion's Eye Diamond from the graveyard as soon as
+        // its mana ability finishes, before the opponent can cast Lightning Bolt.
+        Scenario::new("a sacrificed Diamond can escape before the opponent gets priority")
+            .interaction(&[LED, Card::LightningBolt])
+            .battlefield(P0, &[BREACH, LED])
+            .hand(P0, &[Card::Plains; 3])
+            .battlefield(P1, &[Card::Mountain])
+            .hand(P1, &[Card::LightningBolt])
+            .actions(&[
+                BLUE[0],
+                BLUE[1],
+                ME.escapes(LED),
+                ME.has(Zone::Graveyard, LED, 0),
+                ME.has(Zone::Exile, Card::Plains, 3),
+                stack(1),
             ]),
     ];
 }
