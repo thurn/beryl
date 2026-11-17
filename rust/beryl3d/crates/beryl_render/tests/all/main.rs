@@ -7,6 +7,7 @@ mod downlevel;
 mod enhanced;
 mod enhanced_boards;
 mod faces;
+mod light;
 mod render;
 mod shader_cost;
 mod shadow;

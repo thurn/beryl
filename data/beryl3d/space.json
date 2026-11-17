@@ -701,6 +701,13 @@
       "sigma": 3.0,
       "strength": 0.6
     },
+    "light": {
+      "key": 0.38,
+      "fill": 0.12,
+      "fill_elevation": 30,
+      "sheen": 0.1,
+      "sheen_power": 24.0
+    },
     "particles": {
       "ash": {
         "count": 96,

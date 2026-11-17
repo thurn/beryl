@@ -4,14 +4,13 @@
 //! panics, so a validation error fails the test.
 
 use beryl_render::{Limits, Renderer};
+use beryl_scene::data::space::enhanced::light;
 use beryl_scene::frame::{Band, Draw, sprites};
 use beryl_scene::input::Tier;
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
-use super::render::{
-    Picture, TwentyCards, card, draw_in, overhead, rectangle, renderer, twenty_cards,
-};
+use super::render::{Picture, TwentyCards, draw_in, overhead, rectangle, renderer, twenty_cards};
 
 /// How far a channel of an Enhanced pixel may be from Baseline's where the tiers agree, out of
 /// 255.
@@ -85,14 +84,32 @@ fn twenty_cards_draw_in_enhanced_as_in_baseline_away_from_edges() {
         size,
         &lit,
     );
-    let mut points: Vec<Vec3> = [0, 3, 7, 12, 19].map(|i| cards[i]).to_vec();
-    points.extend([cloth_point, Vec3::new(300.0, 200.0, -0.5)]);
-    for point in points {
+    let pixels = |point: Vec3| {
         let p = camera.to_screen(point);
         let (x, y) = (p.x as u32, p.y as u32);
-        let (found, expected) = (enhanced.at(x, y), baseline.at(x, y));
+        ((x, y), enhanced.at(x, y), baseline.at(x, y))
+    };
+    // The table, lying flat in the open, is lit to exactly its Baseline color.
+    for point in [cloth_point, Vec3::new(300.0, 200.0, -0.5)] {
+        let ((x, y), found, expected) = pixels(point);
         assert!(
             within(found, expected, TOLERANCE),
+            "at {point} (pixel {x}, {y}) Enhanced drew {found:?} and Baseline {expected:?}"
+        );
+    }
+    // So is a card lying flat, but for the sheen: the same white added to every channel, no
+    // more than the sheen's strength. The desktop camera is near where a flat card mirrors the
+    // key light, so the sheen there is near its strongest.
+    let most_sheen = (light::SHEEN * 255.0).ceil() as i16 + i16::from(TOLERANCE);
+    for point in [0, 3, 7, 12, 19].map(|i| cards[i]) {
+        let ((x, y), found, expected) = pixels(point);
+        let added: [i16; 3] = std::array::from_fn(|i| i16::from(found[i]) - i16::from(expected[i]));
+        let even = added.iter().max().zip(added.iter().min());
+        assert!(
+            added
+                .iter()
+                .all(|&channel| (-i16::from(TOLERANCE)..=most_sheen).contains(&channel))
+                && even.is_some_and(|(most, least)| most - least <= i16::from(TOLERANCE)),
             "at {point} (pixel {x}, {y}) Enhanced drew {found:?} and Baseline {expected:?}"
         );
     }
@@ -165,11 +182,13 @@ fn a_renderer_without_enhanced_draws_an_enhanced_frame_in_baseline() {
     assert_eq!(different, 0, "bytes differ between the tiers");
 }
 
-/// A flat-layer panel turned 30 degrees over a card is drawn after the resolve, with one sample:
-/// its pixels, edges included, are Baseline's.
+/// A flat-layer panel turned 30 degrees over a card-sized rectangle is drawn after the resolve,
+/// with one sample: its pixels, edges included, are Baseline's. The rectangle is of the table
+/// material, which a flat surface in the open lights to exactly its Baseline color, where a card
+/// would take the sheen.
 #[test]
 fn the_flat_layer_is_drawn_after_the_resolve() {
-    let lying = card(Vec3::new(0.0, 0.0, 1.0), 1, [255; 4]);
+    let lying = rectangle(Vec2::ZERO, Vec2::new(63.0, 88.0), 1.0, [230, 200, 120]);
     let table = rectangle(Vec2::ZERO, Vec2::splat(400.0), 0.0, [0, 0, 0]);
     let panel = turned(Vec2::splat(30.0), 500.0, [40, 180, 60]);
     let records = [
@@ -179,8 +198,8 @@ fn the_flat_layer_is_drawn_after_the_resolve() {
     ];
     let mut renderer = enhanced();
     let [baseline, enhanced] = both_tiers(&mut renderer, &records);
-    // The turned panel reaches about 20.5 pixels from the centre, and the card 31.5 and 44, so
-    // the card lies under every pixel compared.
+    // The turned panel reaches about 20.5 pixels from the centre, and the rectangle 31.5 and 44,
+    // so the rectangle lies under every pixel compared.
     for y in 79..=121 {
         for x in 79..=121 {
             let (found, expected) = (enhanced.at(x, y), baseline.at(x, y));

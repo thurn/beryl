@@ -51,11 +51,11 @@ pub const SHADER: &str = concat!(
 pub(crate) struct Lit {
     /// From the table's space to the key light's clip space, for the shadow map.
     light_view_projection: [f32; 16],
-    /// The direction toward the key light; w is unused.
+    /// The direction toward the key light times its strength, and the ambient term in w.
     key: [f32; 4],
-    /// The camera's position in the table's space; w is unused.
+    /// The camera's position in the table's space, and the sheen's strength in w.
     eye: [f32; 4],
-    /// The fill light's color and strength.
+    /// The direction toward the fill light times its strength, and the sheen's power in w.
     fill: [f32; 4],
 }
 
