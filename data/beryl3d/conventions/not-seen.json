@@ -1,1 +1,199 @@
-{ "entries": {} }
+{
+  "entries": {
+    "Notes on manual cards": {
+      "open": "Beryl 3D shows a manual card's note only in its inspection panel; a card's face on the table draws no free text, only the digits of its badges, so the one-line note with an ellipsis is not drawn (needs bead by-q44s.9.31)."
+    },
+    "A card picked face down": {
+      "recording": "show-and-tell/puts-an-artifact-and-an-enchantment",
+      "at": "step:3.0.0",
+      "still": false,
+      "seat": "opponent",
+      "shows": "card hand.theirs face-down picked"
+    },
+    "Inspecting a face-down manual card": {
+      "open": "No recording holds a face-down card on the manual table, so the face preview's rule cannot be shown (needs bead by-q44s.9.32)."
+    },
+    "Paying with permanents": {
+      "recording": "aangs-iceberg/ability-1",
+      "at": "end",
+      "shows": "button \"Auto Pay\" interactive primary"
+    },
+    "A creature that enters attacking": {
+      "recording": "adeline-resplendent-cathar/adelines-human-attacks-a-planeswalker-ask-3",
+      "at": "end",
+      "shows": "text \"Choose attack target\""
+    },
+    "A token that leaves": {
+      "recording": "blood-artist/triggers-when-a-token-creature-dies",
+      "at": "step:8.1.0",
+      "still": false,
+      "shows": "card \"Spirit Token\" battlefield.yours.creatures interactive moving faded(25%)"
+    },
+    "Choosing a replacement effect": {
+      "recording": "chains-of-mephistopheles/after-a-dredged-draw-step-draw-the-next-draw-is-the-first",
+      "at": "end",
+      "shows": "text \"Choose an effect to apply.\""
+    },
+    "Permanents entering together": {
+      "open": "No recording asks \"Choose which enters first.\", so Beryl 3D's pick prompt for it is not shown (needs bead by-q44s.9.32)."
+    },
+    "Evoke and cycling": {
+      "open": "The cast-evoke fixture records no \"Choose One\" between casting Subtlety and its exile cost, and no cycling recording opens one, so the modal is not shown for either (needs bead by-q44s.9.32)."
+    },
+    "Known cards in a library": {
+      "recording": "jace-the-mind-sculptor/0-draws-three-and-puts-two-back-in-the-order-chosen",
+      "at": "end",
+      "shows": "text \"Library\"",
+      "do": [
+        "press pile \"Your library\""
+      ]
+    },
+    "A card turning face up": {
+      "recording": "abhorrent-oculus/a-manifested-creature-turns-face-up-for-its-mana-cost-entering-no-more",
+      "at": "step:15.2.0",
+      "still": false,
+      "shows": "card \"Snapcaster Mage\" battlefield.yours.creatures interactive moving"
+    },
+    "Cards a look returns": {
+      "recording": "stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom",
+      "at": "step:4.0.0",
+      "still": false,
+      "seat": "opponent",
+      "shows": "card hand.theirs face-down moving"
+    },
+    "A linked exile returning": {
+      "open": "The Fiend Hunter and Aang's Iceberg recordings stop before the exiled card returns, so no recording plays the return (needs bead by-q44s.9.32)."
+    },
+    "Your own spell returned to hand": {
+      "recording": "stack-bounce",
+      "at": "step:3.4.0",
+      "still": false,
+      "seat": "opponent",
+      "shows": "card \"Stock Up\" hand.yours interactive moving"
+    },
+    "The opponent's draws and discards": {
+      "recording": "verbs-zones-theirs",
+      "at": "step:24.0.1",
+      "still": false,
+      "shows": "card hand.theirs face-down moving"
+    },
+    "A mulligan's hand": {
+      "recording": "greedy-turn-9",
+      "at": "step:4.1.0",
+      "still": false,
+      "shows": "card library.yours moving faded(25%)"
+    },
+    "Milled cards": {
+      "recording": "jace-wielder-of-mysteries/1-mills-the-target-player-two-then-draws",
+      "at": "step:3.2.0",
+      "still": false,
+      "shows": "card \"Plains\" graveyard.theirs moving"
+    },
+    "The Revealed Cards between reveals": {
+      "recording": "abhorrent-oculus/a-face-down-permanent-leaving-the-battlefield-is-revealed",
+      "at": "end",
+      "shows": "card \"Wetland Sambar\" revealed"
+    },
+    "Cards leaving a graveyard": {
+      "recording": "animate-dead/returns-a-creature-card-from-its-controllers-own-graveyard",
+      "at": "step:5.0.0",
+      "still": false,
+      "shows": "card \"Geist of the Moors\" battlefield.yours.creatures interactive moving"
+    },
+    "An ability with no source on the battlefield": {
+      "recording": "bloodghast/a-land-entering-returns-it-from-the-graveyard",
+      "at": "step:2.1.0",
+      "still": false,
+      "shows": "ability \"Bloodghast\" stack moving"
+    },
+    "A cost paid as a spell resolves": {
+      "recording": "mana-tithe/the-controller-pays-1",
+      "at": "step:4.0.1",
+      "still": false,
+      "shows": "card \"Plains\" battlefield.yours.lands interactive tapped moving"
+    },
+    "Mana spent from a pool": {
+      "open": "In mana-floating the pool is spent with a count step and no streak from the pool, and no other recording spends floating mana, so the streak is not shown (needs bead by-q44s.9.32)."
+    },
+    "A target that moves": {
+      "open": "animate-dead/fizzles-when-the-creature-card-is-exiled-in-response exiles a target in response, but the moment its arrow ends has not been confirmed (needs bead by-q44s.9.32)."
+    },
+    "A copy on the stack": {
+      "open": "In fork/copies-lightning-bolt-with-a-new-target the copy's appear step (step:10.0.0) seeks to the recording's last view, so no moment shows the copy on the stack yet (needs bead by-q44s.9.32)."
+    },
+    "A permanent changing sides": {
+      "recording": "thieving-skydiver/kicked-steals-mana-crypt-over-a-map",
+      "at": "step:6.2.0",
+      "still": false,
+      "shows": "card \"Mana Crypt\" battlefield.yours.lands interactive moving"
+    },
+    "Equipment": {
+      "recording": "thieving-skydiver/kicked-steals-an-equipment-and-wears-it",
+      "at": "step:3.8.0",
+      "still": false,
+      "shows": "card \"Leonin Scimitar\" battlefield.yours.creatures interactive moving"
+    },
+    "Other numbers": {
+      "recording": "mana-floating",
+      "at": "step:2.3.0",
+      "still": false,
+      "shows": "text \"{C}\""
+    },
+    "Words: what a card's text would say": {
+      "recording": "choice-search",
+      "at": "end",
+      "shows": "text \"Search for a card.\""
+    },
+    "Words: prompts Beryl folds": {
+      "recording": "choice-thirst-crowded",
+      "at": "prompt:2",
+      "shows": "text \"Discard a basic land card or two cards.\""
+    },
+    "Words: prompts the recordings lack": {
+      "recording": "jace-the-mind-sculptor/2-puts-the-top-of-an-opponents-library-on-the-bottom-ask-2",
+      "at": "end",
+      "shows": "text \"Top of Library\""
+    },
+    "The phone": {
+      "recording": "phone-main",
+      "at": "end",
+      "shows": "button \"Menu\" interactive",
+      "layout": "phone"
+    },
+    "Mutating over or under": {
+      "open": "No recording asks \"Over or Under?\"; the Gemrazer recordings show only the merged result (needs bead by-q44s.9.32)."
+    },
+    "A permanent's chosen value": {
+      "open": "Beryl 3D shows \"Chosen:\" and the value only in the inspection panel; a card's face on the table draws no free text, so the one-line value is not drawn (needs bead by-q44s.9.31)."
+    },
+    "Phased-out permanents": {
+      "recording": "teferis-protection/a-creature-phased-out-in-response-to-lightning-bolt-survives",
+      "at": "step:5.0.0",
+      "still": false,
+      "shows": "card \"Wetland Sambar\" battlefield.yours.creatures interactive phased-out faded(60%)"
+    },
+    "Cards under a merged permanent": {
+      "recording": "gemrazer/over-a-creature-a-44-gemrazer-that-mutated",
+      "at": "end",
+      "shows": "card \"Blood Artist\" merged.yours.creatures covered(53%)"
+    },
+    "Copies": {
+      "open": "A copy shows the copied card's face, and its inspection panel names the card it really is, but the face draws no \"Copy\" label, since a card's face on the table draws no free text (needs bead by-q44s.9.31)."
+    },
+    "Controlling another player": {
+      "recording": "mindslaver/the-controller-casts-the-opponents-spell-at-the-opponents-creature",
+      "at": "end",
+      "shows": "text \"For opponent\""
+    },
+    "A hand in two rows": {
+      "recording": "stress-hand",
+      "at": "end",
+      "shows": "card \"Stress 060\" hand.yours interactive"
+    },
+    "A battlefield row that scrolls": {
+      "recording": "stress-255",
+      "at": "end",
+      "shows": "text \"Your creatures right 40\""
+    }
+  }
+}

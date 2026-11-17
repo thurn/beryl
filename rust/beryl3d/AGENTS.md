@@ -194,8 +194,11 @@ project, and selects the main lanes.
   `{"open": "<why Beryl 3D cannot follow it without a numbered exception>"}`. A
   recording entry may add `do`, actions run at `at` as `just b3d tree --do` runs
   them (such as a hover); `seat: "opponent"` to see it from the opponent's seat;
-  and `still: false` to see the moment mid-animation, as `tree --at` does,
-  instead of once the table rests. Beryl 3D never edits
+  `layout: "phone"` to play it in the phone layout; and `still: false` to see
+  the moment mid-animation, as `tree --at` does, instead of once the table
+  rests. Its `shows` may leave out the line's id and box, as
+  `card "Island" battlefield.yours.lands tapped`. An open entry for work that is
+  only not done yet names its bead (`needs bead <id>`). Beryl 3D never edits
   `data/ui-conventions.json` itself. A `beryl_inspect` test checks each key and
   each recording.
 

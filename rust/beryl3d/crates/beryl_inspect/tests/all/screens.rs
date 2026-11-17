@@ -108,6 +108,12 @@ fn every_built_screen_shows_in_its_recording() {
 /// which shows a moment of an animation as `just b3d tree --at` does. `name` says which entry
 /// failed. The screens file's built screens and the conventions files' entries are both held
 /// to this.
+///
+/// Its optional `layout`, `"phone"`, plays it in the phone layout's first window instead. The
+/// whole tree is read, as `just b3d tree --full` prints it, and `shows` may name a line with
+/// or without its numeric id and box, which change with any change to the recording or the
+/// layout: `card "Island" battlefield.yours.lands interactive tapped` matches the line
+/// `card "Island" #8 battlefield.yours.lands 140,573 121x133 interactive tapped`.
 pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
     use std::str::FromStr;
 
@@ -120,9 +126,16 @@ pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
             .unwrap_or_else(|| panic!("{name} names no `{key}`"))
     };
     let (recording, at, shows) = (field("recording"), field("at"), field("shows"));
-    let size = Size {
-        width: 1600.0,
-        height: 900.0,
+    let (layout, size) = match entry["layout"].as_str() {
+        None | Some("desktop") => (
+            Layout::Desktop,
+            Size {
+                width: 1600.0,
+                height: 900.0,
+            },
+        ),
+        Some("phone") => (Layout::Phone, beryl_inspect::pages::PHONE_WINDOWS[0]),
+        Some(other) => panic!("{name}: `layout` is \"desktop\" or \"phone\", not {other:?}"),
     };
     let seat = match entry["seat"].as_str() {
         None | Some("you") => Side::You,
@@ -130,7 +143,7 @@ pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
         Some(other) => panic!("{name}: `seat` is \"you\" or \"opponent\", not {other:?}"),
     };
     let still = entry["still"].as_bool().unwrap_or(true);
-    let mut page = beryl_inspect::pages::page(recording, seat, Layout::Desktop, size)
+    let mut page = beryl_inspect::pages::page(recording, seat, layout, size)
         .unwrap_or_else(|why| panic!("{name}: {why}"));
     let moment = Moment::from_str(at).unwrap_or_else(|why| panic!("{name}: {at}: {why:?}"));
     page.seek(&moment)
@@ -151,11 +164,54 @@ pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
             page.still();
         }
     }
-    let tree = page.tree();
+    // The short tree names only the first few cards of a crowded place.
+    let options = beryl_scene::agent::TreeOptions {
+        full: true,
+        ..beryl_scene::agent::TreeOptions::default()
+    };
+    let tree =
+        beryl_scene::agent::tree(page.frame(), &options).expect("the whole tree needs no locator");
+    let bare = without_ids_and_boxes(&tree);
     assert!(
-        tree.contains(shows),
+        tree.contains(shows) || bare.lines().any(|line| line.contains(shows)),
         "{name}: {recording} at {at} shows no {shows}:\n{tree}"
     );
+}
+
+/// `tree` with each line's numeric id (`#8`) and box (`140,573 121x133`) taken out.
+fn without_ids_and_boxes(tree: &str) -> String {
+    let lines: Vec<String> = tree
+        .lines()
+        .map(|line| {
+            let indent = &line[..line.len() - line.trim_start().len()];
+            let words: Vec<&str> = line
+                .split(' ')
+                .filter(|word| {
+                    !(word.is_empty() || is_id(word) || is_pair(word, ',') || is_pair(word, 'x'))
+                })
+                .collect();
+            indent.to_owned() + &words.join(" ")
+        })
+        .collect();
+    lines.join("\n")
+}
+
+/// Whether `word` is a tree line's numeric id, as `#8`.
+fn is_id(word: &str) -> bool {
+    word.strip_prefix('#').is_some_and(is_number)
+}
+
+/// Whether `word` is two numbers joined by `between`: a box's corner (`140,-573`) or its size
+/// (`121x133`).
+fn is_pair(word: &str, between: char) -> bool {
+    word.split_once(between).is_some_and(|(a, b)| {
+        is_number(a.trim_start_matches('-')) && is_number(b.trim_start_matches('-'))
+    })
+}
+
+/// Whether `text` is one or more decimal digits.
+fn is_number(text: &str) -> bool {
+    !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 /// Every recording `data/beryl3d/parity.json` names for a verb, an effect or a mark is a

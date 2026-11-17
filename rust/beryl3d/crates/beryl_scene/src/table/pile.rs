@@ -100,7 +100,8 @@ pub(super) fn pile_scale(layout: &Layout, side: Side) -> f32 {
 
 /// Places a library, graveyard or exile pile, `objects` bottom first, on the point `at` of
 /// the table, its cards `scale` times their printed size: each card one `LAYER` above the last,
-/// and only the top two drawn. A library is always face down.
+/// and only the top two drawn. A card lies face up where its face is known to the viewer, as a
+/// known top card shows face up on its library (UI Conventions, "Known cards in a library").
 pub(super) fn lay_pile(
     placement: &mut Placement,
     objects: &[&ObjectView],
@@ -116,11 +117,7 @@ pub(super) fn lay_pile(
         let pose = Pose {
             position: at.extend(LAYER * (height as f32 + 0.5)),
             scale,
-            turn: if zone == ZoneName::Library {
-                1.0
-            } else {
-                turn(object)
-            },
+            turn: turn(object),
             ..Pose::default()
         };
         let place = Place::Card {
