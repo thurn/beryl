@@ -84,7 +84,15 @@ const COMMANDS: [Command; 2] = [
         ],
         spec: Spec {
             recording: true,
-            values: &["--from", "--to", "--frames", "--every", "--crop"],
+            values: &[
+                "--from",
+                "--to",
+                "--frames",
+                "--every",
+                "--rate",
+                "--frame-width",
+                "--crop",
+            ],
             switches: &[],
         },
         own: &[
@@ -94,6 +102,14 @@ const COMMANDS: [Command; 2] = [
             (
                 "--every <duration>",
                 "one frame each duration, instead of --frames",
+            ),
+            (
+                "--rate <frames a second>",
+                "frames at that rate across the span, instead of --frames",
+            ),
+            (
+                "--frame-width <px>",
+                "each frame scaled down to that width (default: a picture at most 2000 px wide)",
             ),
             (
                 "--crop <locator>",

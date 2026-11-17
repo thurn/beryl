@@ -31,18 +31,28 @@ fn moment(options: &Options, flag: &str, name: Name) -> Result<Moment, Usage> {
     }
 }
 
+/// The options that each say how many frames a film holds; a command line gives at most one.
+const COUNTS: [&str; 3] = ["--frames", "--every", "--rate"];
+
 /// The times of the frames, in nanoseconds since the recording's start.
 fn times(options: &Options, from: u64, to: u64) -> Result<Vec<u64>, Usage> {
     let span = to - from;
+    let given: Vec<&str> = COUNTS
+        .into_iter()
+        .filter(|flag| options.value(flag).is_some())
+        .collect();
+    if let [first, second, ..] = given[..] {
+        return Err(Usage(format!(
+            "{first} and {second} both say how many frames; give one"
+        )));
+    }
+    if let Some(text) = options.value("--rate") {
+        return rate_times(text, from, span);
+    }
     // How many frames, and how far apart when `--every` says.
     let (count, every) =
         match (options.value("--frames"), options.value("--every")) {
-            (Some(_), Some(_)) => {
-                return Err(Usage(
-                    "--frames and --every both say how many frames; give one".to_owned(),
-                ));
-            }
-            (Some(text), None) => {
+            (Some(text), _) => {
                 let count = text.parse::<u64>().ok().filter(|n| *n >= 1).ok_or_else(|| {
                 Usage(format!(
                     "--frames {text}: not a count; write a whole number from 1 to {MOST_FRAMES}"
@@ -73,6 +83,53 @@ fn times(options: &Options, from: u64, to: u64) -> Result<Vec<u64>, Usage> {
     }
     let step = every.unwrap_or(if count > 1 { span / (count - 1) } else { 0 });
     Ok((0..count).map(|i| from + step * i).collect())
+}
+
+/// The times of `--rate <text>` frames a second over `span` nanoseconds from `from`: the
+/// span's length times the rate, rounded, and at least one, as `just motion --film` cuts
+/// Arena's frames of a verb. The first frame is at `from`, so the last is one frame's time
+/// before the span's end.
+fn rate_times(text: &str, from: u64, span: u64) -> Result<Vec<u64>, Usage> {
+    let rate = text
+        .parse::<f64>()
+        .ok()
+        .filter(|rate| rate.is_finite() && *rate > 0.0)
+        .ok_or_else(|| {
+            Usage(format!(
+                "--rate {text}: not a rate; write frames a second, as 15"
+            ))
+        })?;
+    let seconds = span as f64 / 1e9;
+    let count = ((seconds * rate).round() as u64).max(1);
+    if count > MOST_FRAMES {
+        // The fastest rate that fits, rounded down to a hundredth so that it still fits.
+        let lower = (MOST_FRAMES as f64 / seconds * 100.0).floor() / 100.0;
+        return Err(Usage(format!(
+            "that span at --rate {text} would make {count} frames, and a film holds at most \
+             {MOST_FRAMES}; write --rate {lower} or lower, or a shorter span"
+        )));
+    }
+    let period = 1e9 / rate;
+    Ok((0..count)
+        .map(|i| from + (i as f64 * period).round() as u64)
+        .collect())
+}
+
+/// The width `--frame-width` asks of each frame, if it is given.
+fn frame_width(options: &Options) -> Result<Option<u32>, Usage> {
+    options
+        .value("--frame-width")
+        .map(|text| {
+            text.parse::<u32>()
+                .ok()
+                .filter(|width| *width >= 1)
+                .ok_or_else(|| {
+                    Usage(format!(
+                        "--frame-width {text}: not a width; write a whole number of pixels, as 760"
+                    ))
+                })
+        })
+        .transpose()
 }
 
 /// Plays the recording to `from` and acts, then runs the clock to each of `times` and calls
@@ -162,6 +219,7 @@ pub(super) fn film(options: &Options) -> Result<String, Error> {
         .into());
     }
     let times = times(options, from_time, to_time)?;
+    let asked_width = frame_width(options)?;
     let size = head.size();
 
     // With `--crop`, a first pass follows the element to find the box that holds it in every
@@ -187,7 +245,13 @@ pub(super) fn film(options: &Options) -> Result<String, Error> {
     let count = times.len() as u32;
     let columns = f64::from(count).sqrt().ceil() as u32;
     let rows = count.div_ceil(columns);
-    let shown_width = cell_width.min(MOST_WIDTH / columns).max(1);
+    // `--frame-width` scales each frame down to that width, never up, as Arena's frames are
+    // cut for `just motion --film`; without it, the whole picture is at most `MOST_WIDTH` wide.
+    let shown_width = match asked_width {
+        Some(width) => cell_width.min(width),
+        None => cell_width.min(MOST_WIDTH / columns),
+    }
+    .max(1);
     let shown_height = (cell_height * shown_width / cell_width).max(1);
     let (picture_width, picture_height) = (columns * shown_width, rows * shown_height);
     let mut picture = vec![0u8; (picture_width * picture_height * 4) as usize];
@@ -242,8 +306,58 @@ pub(super) fn film(options: &Options) -> Result<String, Error> {
     beryl_render::write_rgba_png(&path, &picture, picture_width, picture_height)
         .map_err(Error::Failed)?;
     Ok(format!(
-        "{}\nwrote {} ({picture_width}x{picture_height} px, {count} frames in {columns} columns)\n{lines}",
+        "{}\nwrote {} ({picture_width}x{picture_height} px, {count} frames of \
+         {shown_width}x{shown_height} px in {columns} columns)\n{lines}",
         options.command_line(),
         path.display()
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn options(args: &[&str]) -> Options {
+        let film = crate::COMMANDS
+            .iter()
+            .find(|c| c.name == "film")
+            .expect("film");
+        let args: Vec<String> = args.iter().map(|&a| a.to_owned()).collect();
+        Options::parse("film", &args, film.spec).expect("the options parse")
+    }
+
+    #[test]
+    fn a_rate_of_15_over_one_second_gives_15_frames_a_fifteenth_of_a_second_apart() {
+        let found =
+            times(&options(&["verbs-zones", "--rate", "15"]), 0, 1_000_000_000).expect("the times");
+        assert_eq!(found.len(), 15);
+        for pair in found.windows(2) {
+            let apart = pair[1] - pair[0];
+            assert!((66_666_666..=66_666_667).contains(&apart), "{found:?}");
+        }
+    }
+
+    #[test]
+    fn a_rate_and_a_frame_count_together_are_a_usage_error() {
+        let given = options(&["verbs-zones", "--rate", "15", "--frames", "6"]);
+        let Err(Usage(message)) = times(&given, 0, 1_000_000_000) else {
+            panic!("accepted both");
+        };
+        assert!(
+            message.contains("--frames") && message.contains("--rate"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn a_rate_too_fast_for_the_span_names_one_that_fits() {
+        let given = options(&["verbs-zones", "--rate", "15"]);
+        let Err(Usage(message)) = times(&given, 0, 2_000_000_000) else {
+            panic!("accepted 30 frames");
+        };
+        assert!(
+            message.contains("30 frames") && message.contains("--rate 12"),
+            "{message}"
+        );
+    }
 }

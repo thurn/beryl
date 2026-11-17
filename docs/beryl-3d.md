@@ -2454,6 +2454,7 @@ just b3d test b3d:counterspell
 | `tree <recording>`               | The resolved elements at one moment, as an indented tree.                                                                                       |
 | `png <recording>`                | The frame at one moment, drawn by the real renderer into a file. With `--tree`, the tree of the same frame as well.                             |
 | `film <recording>`               | Frames across a span of time, as one picture laid out as a grid, with one line of text for each frame.                                          |
+| `motion-film <verb> [case]`      | A verb's cases from both seats and layouts, filmed at 15 frames a second (`film --rate 15 --frame-width 760`) beside Arena's.                   |
 | `diff <recording>`               | What changed between two moments: the elements that appeared, left, moved or changed state.                                                     |
 | `check <recording>`              | Every interface check on every tick of the recording, and the faults.                                                                           |
 | `test [prefix]`                  | Every interface test whose name starts with the prefix (see [Test speed](#test-speed)). `--every-tick` checks every tick.                       |

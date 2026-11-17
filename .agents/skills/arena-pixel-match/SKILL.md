@@ -122,6 +122,19 @@ The same moment, the whole table, stepped stage time:
 - A card's moment: the `specs` skill (`just specs --film`, `--motion`).
 - A still (a prompt, a layout): `just ui-shots`, or `just specs --shots`.
 
+For Beryl 3D, the native client in `rust/beryl3d`:
+
+- A verb: `just b3d motion-film <verb> [case]` films the first step of each
+  case from both seats in both layouts at 15 frames a second and 760 px wide,
+  and cuts Arena's instances of the same case beside it. It prints each pair of
+  paths: Arena's folder of frames and Beryl 3D's grid of frames, one a
+  fifteenth of a second apart, so frame `n` of one lines up with frame `n` of
+  the other.
+- Any other span: `just b3d film <recording> --from <moment> --to <moment>
+  --rate 15 --frame-width 760`, at most 24 frames a picture.
+- One frame: `just b3d png <recording> --at <moment> --tree`, which prints the
+  tree of the same frame too, with every element's place and size.
+
 Film a second situation as well as the fixture's: another hand size, the other
 seat, a card whose id sorts elsewhere, a spell on the stack. A match that
 holds in one fixture and not in a game is not a match. Where no fixture has

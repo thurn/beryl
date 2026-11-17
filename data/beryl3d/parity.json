@@ -2,9 +2,9 @@
   "tools": [
     { "job": "specs", "web": "a card's spec moments as text, film and checks", "skills": ["specs"], "b3d": "just b3d spec <card> [moment]" },
     { "job": "ui-review", "web": "playing the interface as a player and reporting its defects", "skills": ["ui-review"], "b3d": "just b3d play; .claude/skills/ui-review/SKILL.md, section \"Beryl 3D\"" },
-    { "job": "motion-film", "web": "`just motion --film`: a verb filmed beside Arena's clips", "skills": [], "b3d": null },
-    { "job": "motion-review", "web": "a verb's motion judged by an independent reviewer", "skills": ["motion-review"], "b3d": null },
-    { "job": "arena-pixel-match", "web": "one part of the interface matched to Arena frame by frame", "skills": ["arena-pixel-match", "arena-video"], "b3d": null },
+    { "job": "motion-film", "web": "`just motion --film`: a verb filmed beside Arena's clips", "skills": [], "b3d": "just b3d motion-film" },
+    { "job": "motion-review", "web": "a verb's motion judged by an independent reviewer", "skills": ["motion-review"], "b3d": "just b3d motion-film; .claude/skills/motion-review/SKILL.md, section \"Beryl 3D\"" },
+    { "job": "arena-pixel-match", "web": "one part of the interface matched to Arena frame by frame", "skills": ["arena-pixel-match", "arena-video"], "b3d": "just b3d motion-film; .claude/skills/arena-pixel-match/SKILL.md, section \"4. Film Beryl the same way\"" },
     { "job": "bugfix", "web": "working the in-app bug reports", "skills": ["bugfix"], "b3d": null },
     { "job": "ui-perf", "web": "`just ui-perf`: frames measured in the running app", "skills": [], "b3d": "just b3d perf" }
   ],
