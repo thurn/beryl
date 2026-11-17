@@ -83,12 +83,13 @@ impl Node {
 impl Layer {
     /// Stamps the transitions found since the last frame with `now`, and works out where every
     /// node of the screen stands and how opaque it is at `now`. Returns whether any transition
-    /// is still under way. A tooltip whose wait is over shows (`tip`). The client calls it at
-    /// the start of every frame. Allocates nothing.
-    pub fn tick(&mut self, now: u64) -> bool {
-        fn visit(node: &mut Node, now: u64) -> bool {
+    /// is still under way, and whether one began at `now`. A tooltip whose wait is over shows
+    /// (`tip`). The client calls it at the start of every frame. Allocates nothing.
+    pub fn tick(&mut self, now: u64) -> Ticked {
+        fn visit(node: &mut Node, now: u64, began: &mut bool) -> bool {
             let mut moving = false;
             if let Some(motion) = &mut node.motion {
+                *began |= motion.start.is_none();
                 let start = *motion.start.get_or_insert(now);
                 // A transition lasts a fraction of a second, far inside f32's exact range.
                 #[expect(clippy::cast_precision_loss, reason = "under a second of nanoseconds")]
@@ -104,11 +105,34 @@ impl Layer {
                 }
             }
             for child in &mut node.children {
-                moving |= visit(child, now);
+                moving |= visit(child, now, began);
             }
             moving
         }
         self.tick_tip(now);
-        self.screen.as_mut().is_some_and(|node| visit(node, now))
+        let mut began = false;
+        let moving = (self.screen.as_mut()).is_some_and(|node| visit(node, now, &mut began));
+        Ticked { moving, began }
     }
+}
+
+/// How long a transition of the flat layer's screen lasts, in nanoseconds.
+#[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a fraction of a second, a whole number of nanoseconds"
+)]
+pub fn transition_nanoseconds() -> u64 {
+    (MS * 1e6) as u64
+}
+
+/// What `Layer::tick` found.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ticked {
+    /// Whether a transition of the screen is still under way.
+    pub moving: bool,
+    /// Whether a transition began at this frame: a node entered the screen or its place or
+    /// opacity changed since the last frame.
+    pub began: bool,
 }

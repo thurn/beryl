@@ -69,7 +69,14 @@ pub fn table(input: &ScreenIn) -> Element {
         .view
         .and_then(|view| view.table.as_ref())
         .map(|table| &table.log[..]);
-    let log = lines.and_then(|lines| log::log(lines, state.log_open, &state.blocked));
+    let log = lines.and_then(|lines| {
+        log::log(
+            lines,
+            state.log_open,
+            &state.blocked,
+            input.window.phone().then_some(input.window),
+        )
+    });
     let open = state.menu.as_ref().map(|open| {
         if input.window.phone() {
             bottom_sheet(open, input)

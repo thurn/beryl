@@ -318,19 +318,19 @@ fn a_fading_node_is_partway_through_its_transition() {
     let screen = |opacity: f32| region("screen").child(text("Fading").opacity(opacity));
     layer.show(Some(screen(1.0)));
     layer.tick(0);
-    assert!(!layer.tick(1_000 * MS), "the fade in has ended");
+    assert!(!layer.tick(1_000 * MS).moving, "the fade in has ended");
     layer.show(Some(screen(0.0)));
-    assert!(
-        layer.tick(2_000 * MS),
-        "the fade out begins at the next frame"
-    );
+    let begun = layer.tick(2_000 * MS);
+    assert!(begun.moving, "the fade out begins at the next frame");
+    assert!(begun.began, "the frame that begins it says so");
     let half = 2_000 * MS + 90 * MS;
-    assert!(layer.tick(half));
+    let halfway = layer.tick(half);
+    assert!(halfway.moving && !halfway.began);
     let frame = write(&mut layer);
     let opacity = frame.resolved[find_index(&frame, "Fading")].opacity;
     let want = 1.0 - Curve::EASE_OUT.ease(0.5);
     assert!(close(opacity, want), "{opacity} halfway, not {want}");
-    assert!(!layer.tick(2_000 * MS + 180 * MS));
+    assert!(!layer.tick(2_000 * MS + 180 * MS).moving);
     let frame = write(&mut layer);
     assert!(close(
         frame.resolved[find_index(&frame, "Fading")].opacity,
@@ -356,9 +356,9 @@ fn a_screen_built_again_before_its_first_frame_glides_nothing() {
     layer.show(Some(screen(0)));
     layer.show(Some(screen(2)));
     layer.tick(0);
-    assert!(layer.tick(10 * MS), "the screen is fading in");
+    assert!(layer.tick(10 * MS).moving, "the screen is fading in");
     let (_, fading) = find(&write(&mut layer), Role::Text, "Title");
-    assert!(!layer.tick(1_000 * MS), "the fade in has ended");
+    assert!(!layer.tick(1_000 * MS).moving, "the fade in has ended");
     let (_, rest) = find(&write(&mut layer), Role::Text, "Title");
     assert!(
         close(fading[1], rest[1]),

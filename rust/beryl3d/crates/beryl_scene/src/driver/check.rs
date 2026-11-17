@@ -109,8 +109,8 @@ impl Page {
     /// in nanoseconds since its start: the frame after each input; for each segment its start,
     /// its midpoint and its end, the midpoint being a flight's apex too, and when a thrown
     /// permanent first reaches its greatest height (`Segment::peak`); each step's start and end;
-    /// and the first still frame after each script, which is its end. The flat layer has no
-    /// transitions yet, so it adds no times.
+    /// the first still frame after each script, which is its end; and the middle and end of
+    /// each transition of the flat layer's screen (`Client::own_times`).
     pub fn check_times(&mut self) -> Vec<u64> {
         let (played, end) = self.played();
         times(&played.given_at, &played.client, end)

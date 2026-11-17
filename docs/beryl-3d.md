@@ -3137,7 +3137,10 @@ The **check times** of a test are:
 - the frame after each input that changes the element tree or starts a script;
 - for each segment: its start, its midpoint and its end, and for a flight the
   top of its arc;
-- the start and end of each transition of a flat-layer element;
+- the middle and end of each transition of the flat layer's screen (its first
+  frame needs none: an element fading in is wholly transparent there and cannot
+  be pressed, and an element moving still stands where the frame before judged
+  it);
 - the first frame in which everything is still after each script.
 
 Four checks need no frame at all. "No jumps", "rest equals placement", "verb

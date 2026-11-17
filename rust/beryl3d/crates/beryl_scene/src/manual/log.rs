@@ -5,8 +5,10 @@
 //! When the table refuses an undo because later lines depend on it, the log opens with those
 //! lines highlighted (`sendHistory` in `ui/src/table/tableLog.ts`). The log stays folded to a
 //! button until it is opened, as the web's desktop table always folds it (`TableLog` is given
-//! `folded` in `ui/src/stage/Chrome.tsx`), so that it never lies over the cards. This is the
-//! web's `TableLog` (`ui/src/table/TableLog.tsx`).
+//! `folded` in `ui/src/stage/Chrome.tsx`), so that it never lies over the cards. On a phone the
+//! folded log is the web's icon button (`.game-log-toggle`) in the safe area's top right corner,
+//! since the desktop's corner lies over the opponent's lands there. This is the web's
+//! `TableLog` (`ui/src/table/TableLog.tsx`).
 
 use beryl_protocol::protocol::{LogLine, TableAction};
 use glam::Vec2;
@@ -15,8 +17,9 @@ use super::TablePress;
 use super::commands;
 use crate::element::{Align, Anchor, Element, Overflow, Press, column, row, text};
 use crate::frame::Role;
+use crate::table::Window;
 use crate::tokens::{color, size, space, type_style};
-use crate::widgets::button;
+use crate::widgets::{button, icon_button, icons};
 
 /// The panel's name and its heading's words.
 pub const TITLE: &str = "Log";
@@ -35,22 +38,39 @@ pub fn rewind(to: u32) -> TableAction {
         .expect("a rewind is a table action")
 }
 
-/// The log at the table's left: a button that opens it, and the lines of `lines` under it if
-/// `open`, those numbered in `blocked` highlighted, or nothing while the log is empty. The
-/// button is named as the web's is.
+/// The log at the table's left, or on a phone (`phone` is its window) at the safe area's top
+/// right: a button that opens it, and the lines of `lines` under it if `open`, those numbered
+/// in `blocked` highlighted, or nothing while the log is empty. The button is named as the
+/// web's is.
 #[must_use]
-pub fn log(lines: &[LogLine], open: bool, blocked: &[u32]) -> Option<Element> {
+pub fn log(
+    lines: &[LogLine],
+    open: bool,
+    blocked: &[u32],
+    phone: Option<Window>,
+) -> Option<Element> {
     if lines.is_empty() {
         return None;
     }
-    let metrics = crate::data::space::flat::table::log::WIDTH;
-    let heading = button(TITLE)
-        .name(if open { "Hide log" } else { "Show log" })
+    let name = if open { "Hide log" } else { "Show log" };
+    let (heading, corner, metrics) = if let Some(window) = phone {
+        use crate::data::space::flat::phone::GUTTER;
+        let safe = window.safe_area;
+        let right = window.size.width - safe.right - GUTTER;
+        let corner = Anchor::Point(Vec2::new(right, safe.top + GUTTER), Vec2::X);
+        let width = crate::data::space::flat::table::log::WIDTH
+            .min(window.size.width - safe.left - safe.right - 2.0 * GUTTER);
+        (icon_button(icons::LOG, name), corner, width)
+    } else {
+        let left = crate::data::space::flat::table::EDGE;
+        let top = crate::data::space::flat::table::log::TOP;
+        let corner = Anchor::Point(Vec2::new(left, top), Vec2::ZERO);
+        let width = crate::data::space::flat::table::log::WIDTH;
+        (button(TITLE).name(name), corner, width)
+    };
+    let heading = heading
         .selected(open)
         .on_press(Press::Table(TablePress::ToggleLog));
-    let left = crate::data::space::flat::table::EDGE;
-    let top = crate::data::space::flat::table::log::TOP;
-    let corner = Anchor::Point(Vec2::new(left, top), Vec2::ZERO);
     if !open {
         let mut folded = heading;
         folded.anchor = Some(corner);

@@ -5,7 +5,9 @@
 //! game, or marks the guest ready. Under the deck, the deck picker (`DeckPicker.tsx`) lists the
 //! saved decks or holds a pasted decklist, and the sideboard swap (`SideboardSwap.tsx`) moves
 //! cards between the loaded deck's main deck and sideboard. The panel scrolls when it is
-//! taller than the window.
+//! taller than the window. On a phone the same sections stand in one column over the safe area
+//! (`lobby_phone`), every control at least a finger's 44 points, since the web interface has no
+//! phone lobby to follow.
 
 use beryl_protocol::ipc::LobbyView;
 use beryl_protocol::ipc::decks::SavedDeck;
@@ -43,15 +45,10 @@ const MARGIN: f32 = size::SCREEN_MARGIN;
 /// heading.
 #[must_use]
 pub fn lobby(input: &ScreenIn) -> Element {
-    let lobby = input.lobby;
-    let heading = row()
-        .name("heading")
-        .align_self(Align::Stretch)
-        .align_items(Align::Center)
-        .justify_content(Justify::SpaceBetween)
-        .child(text("Table").style(TITLE).color(color::GOLD))
-        .child(button("Leave table").on_press(Press::Lobby(LobbyPress::Leave)));
-    let mut panel = column()
+    if super::phone(input) {
+        return lobby_phone(input);
+    }
+    let panel = column()
         .name("lobby panel")
         .width(PANEL_WIDTH)
         .max_height((input.window.size.height - 2.0 * MARGIN).max(0.0))
@@ -60,25 +57,8 @@ pub fn lobby(input: &ScreenIn) -> Element {
         .gap(PANEL_GAP)
         .background(color::PANEL)
         .border((color::METAL, size::BORDER))
-        .radius(PANEL_RADIUS)
-        .child(heading);
-    if let Some(view) = &lobby.view {
-        panel = panel
-            .children(summary(view))
-            .child(deck(lobby, view))
-            .children(lobby.picker.map(|panel| picker(lobby, panel, input)))
-            .children(sideboard(lobby, view))
-            .child(assists(view))
-            .child(if lobby.hosting() {
-                settings(view, input)
-            } else {
-                settings_summary(view)
-            })
-            .child(start(lobby, view));
-    }
-    if let Some(error) = lobby.error {
-        panel = panel.child(text(error).style(BODY).color(color::EMBER));
-    }
+        .radius(PANEL_RADIUS);
+    let mut panel = sections(panel, input, Fit::Desktop);
     panel.style.padding = PANEL_PADDING;
     // The layer draws a screen's top element as a panel unless its style says otherwise; this
     // one fills the window and only holds the panel, so it is clear.
@@ -91,7 +71,86 @@ pub fn lobby(input: &ScreenIn) -> Element {
         .align_items(Align::Center)
         .justify_content(Justify::Center)
         .child(panel);
-    shortcuts(screen, lobby)
+    shortcuts(screen, input.lobby)
+}
+
+/// The lobby on a phone: the panel's sections in one column over the safe area, which scrolls
+/// when it is taller than the window, with no panel around them. Each button spans the column
+/// as the phone's other screens draw their actions, and the switches and fields stand one
+/// above the other, at least 44 points tall.
+fn lobby_phone(input: &ScreenIn) -> Element {
+    let content = column()
+        .name("lobby column")
+        .gap(crate::data::space::flat::phone::start::GAP);
+    let content = sections(content, input, Fit::Phone);
+    shortcuts(super::phone_screen("lobby", input, content), input.lobby)
+}
+
+/// Which window the lobby is laid out for.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Fit {
+    Desktop,
+    Phone,
+}
+
+impl Fit {
+    /// `button` as an action of the lobby: as the desktop draws it, or spanning a phone's
+    /// column (`phone_action`).
+    fn action(self, button: Element) -> Element {
+        match self {
+            Self::Desktop => button,
+            Self::Phone => super::phone_action(button),
+        }
+    }
+
+    /// A row of `name` holding controls side by side on the desktop, and one above the other
+    /// across a phone's column, which is too narrow for them.
+    fn group(self, name: &str) -> Element {
+        match self {
+            Self::Desktop => row().name(name),
+            Self::Phone => column().name(name).align_self(Align::Stretch),
+        }
+    }
+
+    /// The least height of a control a finger presses: none on the desktop.
+    fn least(self, element: Element) -> Element {
+        match self {
+            Self::Desktop => element,
+            Self::Phone => element.min_height(crate::data::audit::PHONE_TARGET_POINTS),
+        }
+    }
+}
+
+/// `holder` with the heading and, once the session sent the lobby, every section under it, and
+/// the table's error, laid out for `fit`.
+fn sections(holder: Element, input: &ScreenIn, fit: Fit) -> Element {
+    let lobby = input.lobby;
+    let heading = row()
+        .name("heading")
+        .align_self(Align::Stretch)
+        .align_items(Align::Center)
+        .justify_content(Justify::SpaceBetween)
+        .child(text("Table").style(TITLE).color(color::GOLD))
+        .child(button("Leave table").on_press(Press::Lobby(LobbyPress::Leave)));
+    let mut holder = holder.child(heading);
+    if let Some(view) = &lobby.view {
+        holder = holder
+            .children(summary(view))
+            .child(deck(lobby, view, fit))
+            .children(lobby.picker.map(|panel| picker(lobby, panel, input, fit)))
+            .children(sideboard(lobby, view, fit))
+            .child(assists(view, fit))
+            .child(if lobby.hosting() {
+                settings(view, input, fit)
+            } else {
+                settings_summary(view)
+            })
+            .child(fit.action(start(lobby, view)));
+    }
+    if let Some(error) = lobby.error {
+        holder = holder.child(text(error).style(BODY).color(color::EMBER));
+    }
+    holder
 }
 
 /// The lobby's keys, from `data/table-commands.json`, as the web's lobby resolves them: 'Paste
@@ -197,7 +256,7 @@ fn summary(view: &LobbyView) -> Option<Element> {
 /// The viewer's deck: the name of the one loaded, or that one is loaded or none is, its counts,
 /// the buttons that change it, open its sideboard swap and unload it, and the names the table
 /// could not read as cards.
-fn deck(lobby: &Lobby, view: &LobbyView) -> Element {
+fn deck(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Element {
     let own = lobby.own();
     let loaded = own.is_some_and(|own| own.loaded);
     let mut words = column().name("deck status").child(
@@ -213,17 +272,21 @@ fn deck(lobby: &Lobby, view: &LobbyView) -> Element {
         let counts = format!("{} main · {} sideboard", own.main_count, own.side_count);
         words = words.child(text(&counts).style(BODY).color(color::TEXT_DIM));
     }
-    let actions = row()
-        .name("deck actions")
-        .gap(space::M)
-        .child(button("Change").on_press(Press::Lobby(LobbyPress::Change)))
-        .child(
-            button("Sideboard")
-                .enabled(loaded)
-                .selected(lobby.sideboard && loaded)
-                .on_press(Press::Lobby(LobbyPress::Sideboard)),
-        )
-        .children(loaded.then(|| button("Unload deck").on_press(Press::Lobby(LobbyPress::Unload))));
+    let actions =
+        (fit.group("deck actions"))
+            .gap(space::M)
+            .child(fit.action(button("Change").on_press(Press::Lobby(LobbyPress::Change))))
+            .child(
+                fit.action(
+                    button("Sideboard")
+                        .enabled(loaded)
+                        .selected(lobby.sideboard && loaded)
+                        .on_press(Press::Lobby(LobbyPress::Sideboard)),
+                ),
+            )
+            .children(loaded.then(|| {
+                fit.action(button("Unload deck").on_press(Press::Lobby(LobbyPress::Unload)))
+            }));
     let mut deck = section("Deck").child(words).child(actions);
     if !view.unknown.is_empty() {
         deck = deck.child(text("Unknown cards").style(LABEL).color(color::EMBER));
@@ -238,21 +301,18 @@ fn deck(lobby: &Lobby, view: &LobbyView) -> Element {
 /// counts, and the buttons that open the paste field; or the paste field, with the name to
 /// save the deck under, the decklist, and 'Import'. Then why the last deck could not be read,
 /// if it could not, and 'Close'.
-fn picker(lobby: &Lobby, panel: DeckPanel, input: &ScreenIn) -> Element {
+fn picker(lobby: &Lobby, panel: DeckPanel, input: &ScreenIn, fit: Fit) -> Element {
     let mut picker = section("Choose a deck");
     picker = match panel {
         DeckPanel::Saved => picker
             .children(
                 (0u16..)
                     .zip(&lobby.saved)
-                    .map(|(at, saved)| saved_deck(at, saved)),
+                    .map(|(at, saved)| saved_deck(at, saved, fit)),
             )
-            .child(
-                row()
-                    .name("picker actions")
-                    .gap(space::M)
-                    .child(button("Paste decklist").on_press(Press::Lobby(LobbyPress::Paste))),
-            ),
+            .child((fit.group("picker actions")).gap(space::M).child(
+                fit.action(button("Paste decklist").on_press(Press::Lobby(LobbyPress::Paste))),
+            )),
         DeckPanel::Paste => {
             let name = input.fields.get(DECK_NAME);
             let mut list = input.fields.get(DECKLIST);
@@ -260,7 +320,7 @@ fn picker(lobby: &Lobby, panel: DeckPanel, input: &ScreenIn) -> Element {
             let mut list_field = field(DECKLIST, &list);
             list_field.style.min_height = Some(DECKLIST_HEIGHT);
             list_field.style.align_self = Some(Align::Stretch);
-            let mut name_field = field(DECK_NAME, &name);
+            let mut name_field = fit.least(field(DECK_NAME, &name));
             name_field.style.align_self = Some(Align::Stretch);
             let ready = !name.text.trim().is_empty() && !list.text.trim().is_empty();
             picker
@@ -269,10 +329,12 @@ fn picker(lobby: &Lobby, panel: DeckPanel, input: &ScreenIn) -> Element {
                 .child(text("Decklist").style(LABEL).color(color::TEXT_DIM))
                 .child(list_field)
                 .child(
-                    primary("Import")
-                        .align_self(Align::Start)
-                        .enabled(ready && !lobby.importing)
-                        .on_press(Press::Lobby(LobbyPress::Import)),
+                    fit.action(
+                        primary("Import")
+                            .align_self(Align::Start)
+                            .enabled(ready && !lobby.importing)
+                            .on_press(Press::Lobby(LobbyPress::Import)),
+                    ),
                 )
         }
     };
@@ -280,29 +342,30 @@ fn picker(lobby: &Lobby, panel: DeckPanel, input: &ScreenIn) -> Element {
         picker = picker.child(text(error).style(BODY).color(color::EMBER));
     }
     picker.child(
-        button("Close")
-            .align_self(Align::Start)
-            .enabled(!lobby.importing)
-            .on_press(Press::Lobby(LobbyPress::ClosePicker)),
+        fit.action(
+            button("Close")
+                .align_self(Align::Start)
+                .enabled(!lobby.importing)
+                .on_press(Press::Lobby(LobbyPress::ClosePicker)),
+        ),
     )
 }
 
 /// One saved deck of the picker's list: a button showing its name, which loads it, and its
-/// counts.
-fn saved_deck(at: u16, saved: &SavedDeck) -> Element {
+/// counts, beside it on the desktop and under it on a phone.
+fn saved_deck(at: u16, saved: &SavedDeck, fit: Fit) -> Element {
     let counts = format!("{} main · {} sideboard", saved.main_count, saved.side_count);
-    row()
-        .name(&format!("saved {}", saved.deck.name))
+    (fit.group(&format!("saved {}", saved.deck.name)))
         .gap(size::LOBBY_GAP)
         .align_items(Align::Center)
-        .child(button(&saved.deck.name).on_press(Press::Lobby(LobbyPress::Pick(at))))
+        .child(fit.action(button(&saved.deck.name).on_press(Press::Lobby(LobbyPress::Pick(at)))))
         .child(text(&counts).style(BODY).color(color::TEXT_DIM))
 }
 
 /// The sideboard swap, while it is open and a deck is loaded: the main deck's cards and then
 /// the sideboard's, each with its count and a small button that moves one copy to the other,
 /// and 'Done'.
-fn sideboard(lobby: &Lobby, view: &LobbyView) -> Option<Element> {
+fn sideboard(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Option<Element> {
     if !lobby.sideboard || !lobby.own().is_some_and(|own| own.loaded) {
         return None;
     }
@@ -318,7 +381,8 @@ fn sideboard(lobby: &Lobby, view: &LobbyView) -> Option<Element> {
             } else {
                 ("To sideboard", "sideboard")
             };
-            let move_one = small(button(label))
+            let move_one = fit
+                .least(small(button(label)))
                 .on_press(Press::Lobby(LobbyPress::Swap { from_side, at }))
                 .name(&format!("Move {name} to {to}"));
             swap = swap.child(
@@ -339,19 +403,24 @@ fn sideboard(lobby: &Lobby, view: &LobbyView) -> Option<Element> {
     }
     Some(
         swap.child(
-            button("Done")
-                .align_self(Align::Start)
-                .on_press(Press::Lobby(LobbyPress::Sideboard)),
+            fit.action(
+                button("Done")
+                    .align_self(Align::Start)
+                    .on_press(Press::Lobby(LobbyPress::Sideboard)),
+            ),
         ),
     )
 }
 
 /// The five assists' switches (`AssistSwitches.tsx`).
-fn assists(view: &LobbyView) -> Element {
+fn assists(view: &LobbyView, fit: Fit) -> Element {
     let mut boxes = row().name("assist switches").gap(space::L).wrap(true);
+    if fit == Fit::Phone {
+        boxes = fit.group("assist switches");
+    }
     for (at, (assist, label)) in (0u8..).zip(ASSISTS) {
         let on = view.assists.contains(&assist);
-        boxes = boxes.child(checkbox(label, on, Press::Lobby(LobbyPress::Assist(at))));
+        boxes = boxes.child(fit.least(checkbox(label, on, Press::Lobby(LobbyPress::Assist(at)))));
     }
     section("Assists").child(boxes)
 }
@@ -361,40 +430,47 @@ fn assists(view: &LobbyView) -> Element {
 /// is enabled while the fields ask for a change. A field that holds something other than a
 /// number of its kind is drawn in ember. Who plays first is shown, not chosen: a solo table has
 /// one seat, and a hosted table, which would have two, is not built yet.
-fn settings(view: &LobbyView, input: &ScreenIn) -> Element {
+fn settings(view: &LobbyView, input: &ScreenIn, fit: Fit) -> Element {
     let current = view.settings;
     let mut life = input.fields.get(STARTING_LIFE);
     let mut hand = input.fields.get(STARTING_HAND_SIZE);
     life.placeholder = current.starting_life.to_string();
     hand.placeholder = current.starting_hand_size.to_string();
     let changed = matches!(asked_settings(current, &life.text, &hand.text), Ok(Some(_)));
-    let fields = row()
-        .name("game fields")
+    let fields = (fit.group("game fields"))
         .gap(space::L)
-        .align_items(Align::Center)
+        .align_items(match fit {
+            Fit::Desktop => Align::Center,
+            Fit::Phone => Align::Start,
+        })
         .child(number(
             "Starting life",
             STARTING_LIFE,
             &life,
             unreadable::<i32>(&life.text),
+            fit,
         ))
         .child(number(
             "Starting hand size",
             STARTING_HAND_SIZE,
             &hand,
             unreadable::<u16>(&hand.text),
+            fit,
         ));
     section("Game").child(fields).child(first(view)).child(
-        button("Save settings")
-            .align_self(Align::Start)
-            .enabled(changed)
-            .on_press(Press::Lobby(LobbyPress::SaveSettings)),
+        fit.action(
+            button("Save settings")
+                .align_self(Align::Start)
+                .enabled(changed)
+                .on_press(Press::Lobby(LobbyPress::SaveSettings)),
+        ),
     )
 }
 
-/// A game setting's label and number field `name`, holding `state`, drawn in ember if `wrong`.
-fn number(label: &str, name: &str, state: &FieldState, wrong: bool) -> Element {
-    let mut number = field(name, state);
+/// A game setting's label and number field `name`, holding `state`, drawn in ember if `wrong`,
+/// at least a finger's height on a phone.
+fn number(label: &str, name: &str, state: &FieldState, wrong: bool, fit: Fit) -> Element {
+    let mut number = fit.least(field(name, state));
     number.style.width = Some(NUMBER_WIDTH);
     if wrong {
         number.style.border = Some((color::EMBER, size::BORDER));

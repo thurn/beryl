@@ -31,6 +31,7 @@ pub use anchor::centre_of;
 pub use edit::{Edit, Edited};
 pub use float::FloatLook;
 pub use menu::Navigation;
+pub use motion::{Ticked, transition_nanoseconds};
 pub use tip::TIP_PREFIX;
 
 use float::{Float, Prepared};

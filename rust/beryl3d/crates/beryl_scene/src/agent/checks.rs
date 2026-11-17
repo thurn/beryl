@@ -316,19 +316,22 @@ pub fn named(frame: &Frame, context: &Context) -> Vec<Fault> {
 /// `PHONE_TARGET_POINTS` square, a size a finger can press, and no line of text is smaller than
 /// `PHONE_TEXT_POINTS`, as the web interface's `phoneFaults` (`ui/scripts/phone-faults.mjs`)
 /// holds its phone shots. Cards are left to "reachable", which holds a card's uncovered part to
-/// the same square. The desktop layout has no such limits.
+/// the same square. The desktop layout has no such limits. An element is measured from its
+/// corners on the window, so one laid out at a fraction of a point measures a little less than
+/// its size, as 295.3 - 251.3 is 43.999985 in `f32`; a shortfall under `SIZE_TOLERANCE` passes.
 #[must_use]
 pub fn phone_sizes(frame: &Frame, context: &Context) -> Vec<Fault> {
     if context.layout != Layout::Phone {
         return Vec::new();
     }
     let side = audit::PHONE_TARGET_POINTS;
+    let least = side - SIZE_TOLERANCE;
     let small_targets = interactive(frame).filter_map(|index| {
         let element = &frame.resolved[index as usize];
         let rect = bounds(element);
         (element.place == Place::Layer
             && element.role != Role::Card
-            && (rect.width < side || rect.height < side))
+            && (rect.width < least || rect.height < least))
             .then(|| {
                 let subject = subject(frame, index);
                 fault(
@@ -360,6 +363,10 @@ pub fn phone_sizes(frame: &Frame, context: &Context) -> Vec<Fault> {
         });
     small_targets.chain(small_text).collect()
 }
+
+/// How much less than a size, in logical points, an element may measure and still have it:
+/// far below a pixel on any screen, and far above `f32`'s error at a window's coordinates.
+const SIZE_TOLERANCE: f32 = 0.01;
 
 /// No blank card: every card drawn face up, whose name the viewer knows, has a face layer of
 /// its own.

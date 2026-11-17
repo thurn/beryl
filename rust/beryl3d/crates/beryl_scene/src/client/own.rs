@@ -45,8 +45,9 @@ pub(super) struct Owned {
     lift: Option<(Held, TrayPoses)>,
     rests: Vec<(ObjectId, Pose, bool)>,
     /// While the client keeps a record, the times at which what the prompts draw changes: the
-    /// start, middle and end of each of their steps and of each move of the tray's cards, in
-    /// nanoseconds since the client started.
+    /// start, middle and end of each of their steps and of each move of the tray's cards, and
+    /// the middle and end of each transition of the flat layer's screen, in nanoseconds since
+    /// the client started.
     times: Vec<u64>,
 }
 
@@ -371,10 +372,27 @@ impl Client {
         );
     }
 
-    /// The times at which what the prompts draw changes, since `record` was called, in
-    /// nanoseconds since the client started: for the interface checks' check times.
+    /// The times at which what the prompts draw changes, or the flat layer's screen moves or
+    /// fades, since `record` was called, in nanoseconds since the client started: for the
+    /// interface checks' check times.
     #[must_use]
     pub fn own_times(&self) -> &[u64] {
         &self.owned.times
+    }
+
+    /// Ticks the flat layer at `now` (`Layer::tick`) and returns whether a transition of its
+    /// screen is still under way. While the client keeps a record, a transition that began at
+    /// `now` adds its middle and end to the check times: a screen fading in can be pressed from
+    /// its second frame, before the script, if any, ends. Its first frame needs no check: a
+    /// node fading in is wholly transparent there, so nothing in it can be pressed, and a node
+    /// moving stands where the frame before it judged it.
+    pub(super) fn tick_layer(&mut self, now: u64) -> bool {
+        let ticked = self.layer.tick(now);
+        if !ticked.began || self.own_record.is_none() {
+            return ticked.moving;
+        }
+        let length = crate::layout::transition_nanoseconds();
+        self.owned.times.extend([now + length / 2, now + length]);
+        ticked.moving
     }
 }

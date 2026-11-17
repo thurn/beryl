@@ -549,7 +549,7 @@ fn a_transition_allocates_nothing() {
     let mut frame = Frame::with_capacity(64, 256, 1024);
     for now in (0..12).map(|index| common::MS * (1_000 + index * 16)) {
         let before = ALLOCATIONS.load(Ordering::Relaxed);
-        let moving = layer.tick(now);
+        let moving = layer.tick(now).moving;
         let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         layer.write(&mut builder, table.camera(), true);
         builder.finish();

@@ -432,7 +432,7 @@ impl Client {
             && (self.prompt.as_ref()).is_some_and(|(_, prompt)| prompts::covers_table(prompt));
         self.show.cover_table(covers);
         let targets = self.targets(self.table_open());
-        let transitioning = self.layer.tick(now);
+        let transitioning = self.tick_layer(now);
         self.show.pointer_mut().advance(table_now);
         self.show.advance_slide(table_now);
         self.inspect();
