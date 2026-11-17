@@ -250,9 +250,10 @@ fn every_icon_and_demanded_glyph_fits_the_atlas_at_every_display_scale() {
             pages.iter().all(|&page| page < ATLAS_PAGES),
             "at scale {scale} the worker sent pages {pages:?}, past the atlas's {ATLAS_PAGES}"
         );
+        // The icons, then a cell for each layer of the life orbs' art.
         assert_eq!(
             icons,
-            beryl_assets::icons::ALL.len(),
+            beryl_assets::icons::ALL.len() + beryl_assets::orb::cells().count(),
             "every icon at scale {scale}"
         );
         for key in demanded {

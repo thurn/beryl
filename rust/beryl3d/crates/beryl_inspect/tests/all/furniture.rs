@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use beryl_scene::agent::{Layout, hit};
+use beryl_scene::art::orb::Shape;
 use beryl_scene::driver::{Moment, Page};
 use beryl_scene::frame::{Draw, Frame, Material, Role};
 use beryl_scene::input::{AssetReady, GlyphCell, Rect, Size};
@@ -354,7 +355,7 @@ fn the_gallery_buttons_are_drawn_as_the_webs_in_each_state() {
 }
 
 /// Both life orbs: the core's fill and the bezel's width of the web's `.life-orb-core` and
-/// `BEZEL`, and the active player's gold of `.life-orb-ring`.
+/// `BEZEL`, and the gold of `.life-orb-ring`, which both orbs draw toward their player's edge.
 #[test]
 fn the_life_orbs_are_drawn_in_the_webs_core_bezel_and_ring() {
     let sheet = web_file("design/components/life-orbs.css");
@@ -366,32 +367,23 @@ fn the_life_orbs_are_drawn_in_the_webs_core_bezel_and_ring() {
         player.contains(&format!("export const BEZEL = {bezel};")),
         "Player.tsx's `BEZEL` is not life-orbs.css's stroke width {bezel}"
     );
-    let mut page = page_at("pay-default", "prompt:1");
-    for (locator, active) in [
-        ("region \"your orb\"", true),
-        ("region \"opponent's orb\"", false),
-    ] {
-        let rect = page.find(locator).rect();
-        let frame = page.frame();
-        let panel = panel_on(frame, rect);
-        assert_eq!(panel.tint, core, "{locator}'s core");
-        assert!(
-            (panel.border - bezel).abs() < 0.01,
-            "{locator}'s bezel is {} points wide, not the web's {bezel}",
-            panel.border
-        );
-        if active {
-            assert_eq!(panel.edge, ring, "{locator}, the active player's, ring");
-        } else {
-            assert_ne!(panel.edge, ring, "{locator} is gold though not active");
-        }
-        // A point of the core beside the life total, which is drawn over the core's middle.
-        let beside = Vec2::new(rect.x + rect.width / 6.0, rect.y + rect.height / 2.0);
-        let (shown, over) = shown_at(frame, beside, &panel);
-        assert_eq!(
-            shown,
-            [core[0], core[1], core[2]],
-            "{locator}'s core is drawn over by {over:?}"
-        );
-    }
+    // The orbs are drawn from `art::orb`'s layers, each an icon cell, not as panels, so the
+    // colours and widths are read from the layers the cells are rasterized from.
+    let layers = &beryl_scene::art::orb::LAYERS;
+    let filled_core = layers
+        .iter()
+        .find(|layer| layer.shape == Shape::Core && layer.paint.stroke.is_none())
+        .expect("a layer fills the core");
+    assert_eq!(filled_core.color, core, "the core's fill");
+    assert!(
+        (beryl_scene::art::orb::BEZEL - bezel).abs() < 0.01,
+        "the bezel is {} points wide, not the web's {bezel}",
+        beryl_scene::art::orb::BEZEL
+    );
+    assert!(
+        layers.iter().any(|layer| {
+            layer.paint.stroke == Some((3.0, true)) && layer.color == ring && !layer.active
+        }),
+        "no layer draws `.life-orb-ring`'s {ring:?} stroke on both orbs"
+    );
 }
