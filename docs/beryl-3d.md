@@ -151,6 +151,12 @@ the client they describe, and later sections refer to them by number.
   images would double every shader, and a stored image fails on every intended
   visual change. A few renderer tests sample single pixels of known scenes.
 
+  The owner amended this on 2026-11-16 for one kind of comparison: a check may
+  compare Beryl 3D's frame with the web interface's screenshot of the same
+  moment, held by a ratchet file (see "Matching the web interface's look"). The
+  web interface as WebKit draws it is the reference, so there is still one
+  renderer of ours.
+
 - **C6. A card face is composed once into one texture.** It is held at a small
   size for every card in the match and at full size for the few being read, in a
   compressed GPU format. A card's face is then one textured shape, and a match's
@@ -4250,6 +4256,44 @@ change there and a small change in each client.
 What they do not share is placement. The web interface draws the table on a 1600
 by 900 surface and imitates perspective by shrinking and tilting each card.
 Beryl 3D's table is a real scene. Each is fitted to Arena separately.
+
+### Matching the web interface's look
+
+The owner wants Beryl 3D to look nearly pixel for pixel like the web interface,
+which he is happy with. `just b3d match` measures every difference between the
+two clients at the same moment of a recording, and `data/beryl3d/web-match.json`
+holds the counts for every interface test target, which may only go down. The
+reference is the web interface as WebKit draws it, at scale 2.
+
+- **Snapshot.** Each client's elements are written as records: role, name,
+  object, box in points, paint order, the computed CSS style of a fixed list of
+  properties, and each line of text. The web side is read by a script that
+  Playwright evaluates in the page, so nothing under `ui/` changes. A
+  mid-animation moment is reached with Playwright's clock on the web side and
+  the stepped clock in Beryl 3D.
+- **Boxes and styles.** Elements are paired by locator, then by role, name and
+  parent, then by role and the nearest box. Box differences, extra text lines,
+  overlaps only one side has, differing style values, and web style values
+  `Style` cannot express are each listed worst first.
+- **Effects.** A conformance suite draws single elements with the box shadows,
+  gradients, drop shadows, filters and masks the web interface uses, in WebKit
+  and in Beryl 3D's renderer, and holds each within a small tolerance.
+- **Pixels.** What is left after boxes and styles agree is compared as pixels,
+  with glyph pixels masked, because glyph antialiasing differs between WebKit
+  and parley with swash. Each differing region is attributed to the topmost
+  element on each side, and one element subtree can be drawn alone on both
+  sides.
+- **Motion.** Element boxes, opacity and transforms are compared frame by frame
+  over an animation.
+- **Drift.** A web change never runs Beryl 3D's checks (decision C17), so the
+  Beryl 3D sweep scores every target and files a bead for each one that drifted.
+
+Styles are not generated from the web interface's CSS. Each Beryl 3D element
+keeps its own `Style`, and the tools hold it equal to the web's computed style.
+Text is compared as data: string, font, size, weight, color, baseline and box.
+Whether the 3D table's card placement should follow the web interface's, instead
+of each client being fitted to Arena separately (below), is decided from the
+measured difference once the tools exist.
 
 ### Timeline parity
 
