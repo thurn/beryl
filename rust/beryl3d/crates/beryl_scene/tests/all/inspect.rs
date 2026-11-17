@@ -216,9 +216,10 @@ fn graveyard(count: usize) -> ViewBuilder {
     view
 }
 
-/// The faults of `rules` the checks find in the page's frame now.
+/// The faults of `rules` the checks find in the page's frame now, and no others: `Page::check`
+/// would panic on a fault of any rule, such as the viewer's title over the opponent's life
+/// total, which the `text-overlap` list in data/beryl3d/test-faults.json tracks elsewhere.
 fn faults(page: &mut Page, rules: &[Rule]) -> Vec<beryl_scene::agent::Fault> {
-    page.check();
     (page.faults().into_iter())
         .filter(|fault| rules.contains(&fault.rule))
         .collect()
