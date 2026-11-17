@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 
 from ..command import Command
-from . import boxes, snapshot
+from . import boxes, pixels, snapshot
 
 SNAPSHOT = Command(
     "snapshot",
@@ -46,9 +46,27 @@ BOXES = Command(
     boxes.box_arguments,
 )
 
+PIXELS = Command(
+    "pixels",
+    "the elements answerable for the pixels the two pictures differ in, worst first, with "
+    "magnified crops of the worst",
+    (
+        (
+            "just b3d match pixels opening-play --at prompt:1",
+            "the play-or-draw prompt, desktop, at scale 2",
+        ),
+        (
+            "just b3d match pixels opening-play --at prompt:1 --only 'button \"Play\"'",
+            "one element's own error, with nothing behind it",
+        ),
+    ),
+    pixels.run,
+    pixels.pixel_arguments,
+)
+
 # Each subcommand, in the order `just b3d match --help` lists them. A module adds one by writing
 # its `Command` and adding it here.
-SUBCOMMANDS: tuple[Command, ...] = (SNAPSHOT, BOXES)
+SUBCOMMANDS: tuple[Command, ...] = (SNAPSHOT, BOXES, PIXELS)
 
 
 def arguments(parser: argparse.ArgumentParser) -> None:

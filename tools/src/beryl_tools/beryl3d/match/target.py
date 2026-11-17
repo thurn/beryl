@@ -10,6 +10,7 @@ Every subcommand takes the same target as `just b3d compare`: `<recording> --at 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -40,6 +41,9 @@ class Target:
     scale: str
     # The moment, as `just b3d tree --at` takes it.
     at: str
+    # A Beryl 3D locator whose element `--only` draws alone on both sides, or None for the
+    # whole window.
+    only: str | None = None
 
     def width_height(self) -> tuple[int, int]:
         width, height = self.size.split("x")
@@ -60,6 +64,9 @@ class Target:
     def slug(self) -> str:
         """The snapshot directory's name: everything that tells two targets apart."""
         name = f"{self.recording}-{self.seat}-{self.layout}-{self.size}@{self.scale}-{self.at}"
+        if self.only is not None:
+            # A locator holds quotes and spaces, and may be long, so it is named by a digest.
+            name += "-only-" + hashlib.sha256(self.only.encode()).hexdigest()[:12]
         return UNSAFE.sub("_", name)
 
     def directory(self) -> Path:
@@ -99,9 +106,20 @@ def phone_under() -> float:
     return float(space["flat"]["phone_under"])
 
 
+def only_argument(parser: argparse.ArgumentParser) -> None:
+    """`--only`, for the subcommands that can draw one element alone."""
+    parser.add_argument(
+        "--only",
+        metavar="LOCATOR",
+        default=None,
+        help="draw only that Beryl 3D element and what is inside it, and its web pair, on black",
+    )
+
+
 def target(args: argparse.Namespace) -> Target:
     """The target `args` name. A test's name gives the seat, window and scale, and the layout
     follows its window as in `just b3d test`; options given beside it win."""
+    only = getattr(args, "only", None)
     found = TEST_NAME.match(args.recording)
     if found:
         size = args.size or found["size"]
@@ -116,6 +134,7 @@ def target(args: argparse.Namespace) -> Target:
             size=size,
             scale=args.scale or found["scale"] or "1",
             at=args.at,
+            only=only,
         )
     layout = args.layout or "desktop"
     return Target(
@@ -125,4 +144,5 @@ def target(args: argparse.Namespace) -> Target:
         size=args.size or DEFAULT_SIZE[layout],
         scale=args.scale or DEFAULT_SCALE,
         at=args.at,
+        only=only,
     )

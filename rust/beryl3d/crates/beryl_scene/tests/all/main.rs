@@ -26,6 +26,7 @@ mod game_phone;
 mod gesture;
 mod hud;
 mod inspect;
+mod keep_only;
 mod light;
 mod lobby;
 mod manual;

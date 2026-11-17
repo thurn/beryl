@@ -401,6 +401,8 @@ dependencies = [
  "beryl_protocol",
  "beryl_render",
  "beryl_scene",
+ "glam",
+ "serde_json",
 ]
 
 [[package]]

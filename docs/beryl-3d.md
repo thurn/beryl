@@ -4301,9 +4301,30 @@ reference is the web interface as WebKit draws it, at scale 2.
   and in Beryl 3D's renderer, and holds each within a small tolerance.
 - **Pixels.** What is left after boxes and styles agree is compared as pixels,
   with glyph pixels masked, because glyph antialiasing differs between WebKit
-  and parley with swash. Each differing region is attributed to the topmost
-  element on each side, and one element subtree can be drawn alone on both
-  sides.
+  and parley with swash. `just b3d match pixels <target> --at <moment>` takes
+  the snapshot, pairs it and runs `b3d-render pixels` on its directory. A pixel
+  differs when a color channel differs by more than 8 levels. Each text line of
+  both sides' records, shrunk to its ink in that side's picture, is left out.
+  Differing pixels that touch form regions, and regions under 4 pixels are
+  dropped as antialiasing specks. Each differing pixel is given to the topmost
+  element that paints at its point on each side (a fill, image, shadow, border,
+  text, card or icon): on the web by paint order and box, in Beryl 3D by the hit
+  test (`agent::hit`), or by paint order and box where the element it reaches
+  paints nothing. Elements, and pairs of elements counted as one, are printed
+  worst first by differing pixels, with a hint when one side has no such element
+  or no element paints over most of the pixels (where only the page's background
+  or the table's cloth shows, which are not elements). The worst ten get a crop
+  in `crops/`: the web, Beryl 3D and their difference amplified four times, side
+  by side, magnified up to four times, with glyph pixels in blue; the counts go
+  to `pixels.json`. `--only <locator>` on `snapshot` and `pixels` draws one
+  Beryl 3D element subtree and its web pair alone, on black, and gives pixels
+  only to the elements inside it. On the web an injected style hides everything
+  else with `visibility: hidden`, which keeps the layout. In Beryl 3D a looking
+  frame records which element each draw record belongs to (`Frame::owners`, the
+  element added last before the record was pushed) and `Frame::keep_only` keeps
+  the subtree's records. A record the table writes for a card after a later
+  element was added would be kept with that element instead; the flat layer
+  writes each node's records right after adding it, so its subtrees are exact.
 - **Motion.** Element boxes, opacity and transforms are compared frame by frame
   over an animation.
 - **Drift.** A web change never runs Beryl 3D's checks (decision C17), so the

@@ -363,6 +363,11 @@ pub struct Frame {
     pub looking: bool,
     /// How each flat-layer element was drawn, while `looking`.
     pub looks: Vec<ElementLook>,
+    /// While `looking`, the index in `resolved` of the element each record of `draws` belongs
+    /// to, in drawing order, so that a tool can draw one element alone (`keep_only`). A record
+    /// belongs to the element added last before it was pushed, or to none (`u32::MAX`), as the
+    /// table's cloth does.
+    pub owners: Vec<u32>,
     /// The hand cards the pointer has up out of their place in the fan (rising, raised or
     /// falling), each with the box it has resting in the fan. The pointer's hit test and the
     /// "reachable" check put these boxes in place of the drawn ones, so that a pointer over the
@@ -465,6 +470,7 @@ impl Frame {
             lines: Vec::with_capacity(elements),
             looking: false,
             looks: Vec::new(),
+            owners: Vec::new(),
             lifted: Vec::with_capacity(LIFTED),
             rings: Vec::with_capacity(RINGS),
             load: Load::default(),
@@ -517,6 +523,8 @@ impl Frame {
 pub struct FrameBuilder<'a> {
     frame: &'a mut Frame,
     clips: u8,
+    /// The element added last, which the records pushed after it belong to (`Frame::owners`).
+    owner: u32,
 }
 
 impl<'a> FrameBuilder<'a> {
@@ -536,12 +544,17 @@ impl<'a> FrameBuilder<'a> {
         frame.sounds.clear();
         frame.lines.clear();
         frame.looks.clear();
+        frame.owners.clear();
         frame.lifted.clear();
         frame.rings.clear();
         frame.load = Load::default();
         frame.work = Work::default();
         frame.scratch.clear();
-        Self { frame, clips: 0 }
+        Self {
+            frame,
+            clips: 0,
+            owner: u32::MAX,
+        }
     }
 
     /// The visual tier the frame is drawn in, which decides the records only one tier writes:
@@ -559,7 +572,8 @@ impl<'a> FrameBuilder<'a> {
         };
         self.frame.names.push_str(name);
         self.frame.resolved.push(element);
-        index(self.frame.resolved.len() - 1)
+        self.owner = index(self.frame.resolved.len() - 1);
+        self.owner
     }
 
     /// The centre of the table's element `id` as written so far (`Frame::centre`).
@@ -614,6 +628,9 @@ impl<'a> FrameBuilder<'a> {
         self.frame.load.particles += u32::from(particle);
         self.frame.scratch.push(band, self.frame.draws.len(), &draw);
         self.frame.draws.push(draw);
+        if self.frame.looking {
+            self.frame.owners.push(self.owner);
+        }
         self.frame.work.records += 1;
     }
 

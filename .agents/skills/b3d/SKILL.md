@@ -131,6 +131,15 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   lines (`WRAP n/m`), the elements only one side has, and text drawn over other
   text on one side only. `--all` runs every desktop and phone test target at
   its end; give a prefix (`--all opening-play`) to run one recording's.
+- `just b3d match pixels <recording> --at <moment>` lists the elements
+  answerable for the pixels the two pictures differ in (by more than 8 levels,
+  glyphs left out), worst first, each with the web's and Beryl 3D's box and a
+  hint when one side has no element there, and writes a magnified crop of the
+  web, Beryl 3D and their amplified difference for the worst ten into the
+  snapshot's `crops/`. Read the crops: they show what a count cannot.
+  `--only '<locator>'` (on `snapshot` too) draws that Beryl 3D element and its
+  web pair alone, on black, so its own error shows apart from what lies behind
+  it. `just b3d png --only '<locator>'` draws the Beryl 3D side alone.
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>` (1600x900 by default),

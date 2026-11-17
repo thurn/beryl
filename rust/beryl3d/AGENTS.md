@@ -121,6 +121,12 @@ through the client with no window or GPU (the `b3d` skill has the details):
   unpaired on each side, and text that overlaps in Beryl 3D but not on the web
   (or the reverse). `--all [prefix]` does it for every desktop and phone test
   target at its end (`just b3d test --list`) and prints each one's totals.
+- `just b3d match pixels <name> --at <moment>` prints the elements answerable
+  for the pixels the two pictures differ in, worst first, from
+  `b3d-render pixels`, with glyph pixels left out and a magnified crop of the
+  worst ten in the snapshot's `crops/`. `--only <locator>` (also on `snapshot`,
+  and on `just b3d png`) draws one element subtree alone on both sides, on
+  black.
 
 These tools lay the frame out at scale 1 unless `--scale` gives another, while
 the desktop app on a Retina Mac runs at scale 2, so a picture of a look you

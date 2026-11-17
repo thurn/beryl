@@ -94,12 +94,7 @@ impl Scratch {
 /// load, all but the screen areas, which `areas` measures when a gate asks for them.
 pub(super) fn finish(frame: &mut Frame) {
     let view_projection = frame.view_projection;
-    let Frame {
-        draws,
-        scratch,
-        load,
-        ..
-    } = frame;
+    let Frame { draws, scratch, .. } = frame;
     for key in &mut scratch.keys {
         let draw = &draws[(*key & INDEX_MASK) as usize];
         *key |= u64::from(depth_key(band_of(*key), draw, view_projection)) << DEPTH_SHIFT;
@@ -113,25 +108,19 @@ pub(super) fn finish(frame: &mut Frame) {
             .map(|key| draws[(*key & INDEX_MASK) as usize]),
     );
     std::mem::swap(draws, &mut scratch.draws);
-
-    for (band, start) in frame.bands.iter_mut().enumerate() {
-        *start = super::index(
-            scratch
-                .keys
-                .partition_point(|&key| (band_of(key) as usize) < band),
-        );
+    if !frame.owners.is_empty() {
+        let pushed = std::mem::take(&mut frame.owners);
+        frame.owners = (scratch.keys.iter())
+            .map(|key| pushed[(*key & INDEX_MASK) as usize])
+            .collect();
     }
-    let (opaque, layer) = (
-        frame.bands[Band::ContactShadows as usize] as usize,
-        frame.bands[Band::Layer as usize] as usize,
-    );
-    frame.opaque = super::index(opaque);
-    frame.layer = super::index(layer);
+
+    let (opaque, layer) = set_bands(frame);
 
     let records = super::index(frame.draws.len());
-    load.instances = records;
-    load.upload_bytes = records * super::index(size_of::<Draw>());
-    load.draw_calls = draw_calls(&frame.draws, opaque, layer);
+    frame.load.instances = records;
+    frame.load.upload_bytes = records * super::index(size_of::<Draw>());
+    frame.load.draw_calls = draw_calls(&frame.draws, opaque, layer);
 }
 
 /// The screen areas of a finished frame's opaque and blended records. Only the gates and tests
@@ -151,7 +140,45 @@ pub(super) fn areas(frame: &Frame) -> super::Areas {
     areas
 }
 
+/// Sets `frame.bands`, `opaque` and `layer` from its sort keys, which are in drawing order, and
+/// returns `opaque` and `layer`.
+fn set_bands(frame: &mut Frame) -> (usize, usize) {
+    for (band, start) in frame.bands.iter_mut().enumerate() {
+        *start = super::index(
+            (frame.scratch.keys).partition_point(|&key| (band_of(key) as usize) < band),
+        );
+    }
+    let (opaque, layer) = (
+        frame.bands[Band::ContactShadows as usize] as usize,
+        frame.bands[Band::Layer as usize] as usize,
+    );
+    frame.opaque = super::index(opaque);
+    frame.layer = super::index(layer);
+    (opaque, layer)
+}
+
 impl Frame {
+    /// Keeps only the records of a finished, `looking` frame whose element (`Frame::owners`)
+    /// `keep` accepts, by its index in `resolved`, so that the frame draws those elements
+    /// alone. A record that belongs to no element is dropped. The frame's load is left as it
+    /// was. `just b3d png --only` draws one element's subtree this way.
+    pub fn keep_only(&mut self, keep: impl Fn(u32) -> bool) {
+        let kept: Vec<bool> = (0..self.draws.len())
+            .map(|at| {
+                self.owners
+                    .get(at)
+                    .is_some_and(|&owner| owner != u32::MAX && keep(owner))
+            })
+            .collect();
+        let mut at = 0;
+        self.draws.retain(|_| (kept[at], at += 1).0);
+        at = 0;
+        self.scratch.keys.retain(|_| (kept[at], at += 1).0);
+        at = 0;
+        self.owners.retain(|_| (kept[at], at += 1).0);
+        set_bands(self);
+    }
+
     /// The band of the record at `index` of `draws`, once the frame is finished.
     #[must_use]
     pub fn band(&self, index: usize) -> Option<Band> {

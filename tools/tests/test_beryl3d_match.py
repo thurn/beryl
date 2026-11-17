@@ -1,13 +1,16 @@
 """`just b3d match`: the target a command line names, the element records both clients write
-(`web.json` and `b3d.json`), the fonts check's warnings, and the matcher and box diff that
-`match boxes` prints."""
+(`web.json` and `b3d.json`), the fonts check's warnings, the matcher and box diff that
+`match boxes` prints, and how `--only` finds the web element it draws alone."""
 
 from __future__ import annotations
 
 import argparse
 import copy
+import json
+from dataclasses import replace
+from pathlib import Path
 
-from beryl_tools.beryl3d.match import boxes, fonts, joined, records, target
+from beryl_tools.beryl3d.match import boxes, fonts, joined, records, snapshot, target
 
 
 def args(recording: str, *rest: str) -> argparse.Namespace:
@@ -299,3 +302,58 @@ def test_a_label_on_a_child_counts_as_its_buttons_text() -> None:
     pairs = joined.join(web, b3d)["pairs"]
     assert isinstance(pairs, list)
     assert boxes.differences(web, b3d, pairs) == []
+
+
+def test_a_target_drawn_with_only_has_a_snapshot_of_its_own_and_the_same_test_name() -> (
+    None
+):
+    parser = argparse.ArgumentParser()
+    target.arguments(parser)
+    target.only_argument(parser)
+    whole = target.target(parser.parse_args(["opening-play", "--at", "prompt:1"]))
+    only = target.target(
+        parser.parse_args(
+            ["opening-play", "--at", "prompt:1", "--only", 'button "Play"']
+        )
+    )
+    assert only.only == 'button "Play"'
+    assert replace(only, only=None) == whole
+    assert only.slug() != whole.slug() and only.slug().startswith(whole.slug())
+    assert '"' not in only.slug() and " " not in only.slug()
+    assert only.test_name() == whole.test_name()
+
+
+def bare(key: str | None, role: str, name: str, box: list[float]) -> dict[str, object]:
+    return {
+        "key": key,
+        "role": role,
+        "name": name,
+        "object": None,
+        "box": box,
+        "parent": None,
+    }
+
+
+def test_only_finds_the_web_pair_of_the_element_its_locator_names(
+    tmp_path: Path,
+) -> None:
+    b3d = [
+        bare('button "Play" #5', "button", "Play", [0, 0, 100, 40]),
+        bare('button "Play later" #6', "button", "Play later", [0, 50, 100, 40]),
+        bare('text "Alone" #7', "text", "Alone", [500, 500, 10, 10]),
+    ]
+    web = [
+        bare(None, "button", "Play later", [0, 50, 100, 40]),
+        bare(None, "button", "Play", [0, 0, 100, 40]),
+    ]
+    for side, elements in (("b3d", b3d), ("web", web)):
+        (tmp_path / f"{side}.json").write_text(
+            json.dumps({"target": "b3d:x/you/1600x900@2", "elements": elements})
+        )
+    # A locator equal to a key wins over the longer key it also starts.
+    assert snapshot.web_pair(tmp_path, 'button "Play" #5') == (1, "")
+    assert snapshot.web_pair(tmp_path, 'button "Play later"') == (0, "")
+    index, why = snapshot.web_pair(tmp_path, 'button "Play')
+    assert index is None and "names 2 Beryl 3D elements" in why
+    index, why = snapshot.web_pair(tmp_path, 'text "Alone"')
+    assert index is None and "no web element is paired" in why

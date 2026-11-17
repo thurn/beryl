@@ -37,14 +37,14 @@ import tempfile
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from ... import paths as repo_paths
 from ... import shots
 from .. import compare
-from . import fonts, records
-from .target import Target, arguments, target
+from . import fonts, joined, records
+from .target import Target, arguments, only_argument, target
 
 HERE: Path = Path(__file__).resolve().parent
 ROLES: Path = repo_paths.REPO / "data" / "beryl3d" / "match" / "roles.json"
@@ -101,6 +101,7 @@ def shared() -> Iterator[Shared | None]:
 
 def snapshot_arguments(parser: argparse.ArgumentParser) -> None:
     arguments(parser)
+    only_argument(parser)
     parser.add_argument(
         "--fresh", action="store_true", help="take it again even if nothing changed"
     )
@@ -144,6 +145,8 @@ def render_png(t: Target, art: bool, out: Path, build: bool = True) -> str | Non
             env["BERYL3D_SCANS"] = empty
         line = [str(cli.linked("b3d-render")), "png", t.recording, *t.common()]
         line += ["--at", t.at]
+        if t.only is not None:
+            line += ["--only", t.only]
         done = subprocess.run(
             line, capture_output=True, text=True, env=env, check=False
         )
@@ -165,10 +168,13 @@ def dump_web(
     art: bool,
     out: Path,
     serving: Shared | None = None,
+    only: int | None = None,
 ) -> tuple[list[str], str | None]:
     """Shoots the web interface's page of `messages` at `moment` (`b3d.json`'s) into `out`'s
     `web.png` and `web.json`, from the server `serving` names or from one started for it.
-    Returns the lines dump.mjs printed (page errors, scans missing) and, if it failed, why.
+    With `only`, the index of a web element in the records, the picture shows that element
+    alone. Returns the lines dump.mjs printed (page errors, scans missing) and, if it failed,
+    why.
     """
     width, height = t.width_height()
     # Unique among the snapshots one process takes at once on threads (`boxes --all`).
@@ -196,6 +202,7 @@ def dump_web(
         "roles": json.loads(ROLES.read_text())["roles"],
         "target": t.test_name(),
         "art_dir": str(APP_SCANS / "art") if art else None,
+        "only": only,
     }
     job_file: Path = out / "web-job.json"
 
@@ -243,6 +250,8 @@ def report(t: Target, moment: dict[str, object], warnings: list[str], out: Path)
     command = f"just b3d match snapshot {t.recording} --at {t.at} " + " ".join(
         t.common()
     )
+    if t.only is not None:
+        command += f" --only '{t.only}'"
     lines = [
         command,
         f"target {t.test_name()} ({t.layout}), view {moment['view']} of {moment['views']}, "
@@ -254,22 +263,13 @@ def report(t: Target, moment: dict[str, object], warnings: list[str], out: Path)
     return "\n".join(lines) + "\n"
 
 
-def ensure(
-    t: Target, fresh: bool = False, art: bool = False, serving: Shared | None = None
-) -> Path | None:
-    """The snapshot directory of `t`, taken now unless an up-to-date one exists; None after
-    printing why it could not be taken. The other `match` subcommands start from this. Given
-    `serving` (`shared`), it neither builds nor starts a server of its own.
+def take(
+    t: Target, out: Path, art: bool, serving: Shared | None
+) -> tuple[dict[str, object], list[str]] | None:
+    """Writes both sides' records and pictures of `t` into `out`; the moment `b3d.json`
+    describes and the lines dump.mjs printed, or None after printing why it could not.
     """
     build = serving is None
-    out = t.directory()
-    digest = inputs(t, art)
-    stamp = out / "inputs.txt"
-    whole = all((out / name).exists() for name in FILES)
-    if not fresh and whole and stamp.exists() and stamp.read_text() == digest:
-        return out
-    stamp.unlink(missing_ok=True)
-
     printed = compare.b3d(
         ["tree", t.recording, *t.common(), "--at", t.at, "--records"], build
     )
@@ -297,18 +297,107 @@ def ensure(
         print(f"match snapshot: {failed}", file=sys.stderr)
         return None
 
-    work = Path(tempfile.mkdtemp(prefix="b3d-match-"))
-    try:
-        if compare.b3d(["export", str(work), "--only", t.recording], build) is None:
-            return None
-        exported = work / f"{t.recording.replace('/', '__')}.{t.seat}.json"
-        messages = json.loads(exported.read_text())
-    finally:
-        shutil.rmtree(work, ignore_errors=True)
+    messages = exported(t, build)
+    if messages is None:
+        return None
     printed_lines, failed = dump_web(t, messages, moment, art, out, serving)
     if failed:
         print(f"match snapshot: {failed}", file=sys.stderr)
         return None
+    return moment, printed_lines
+
+
+def exported(t: Target, build: bool) -> list[dict[str, object]] | None:
+    """The recording's messages from `t`'s seat, as the web interface's fixture holds them
+    (`b3d export --only`), or None after `b3d` printed why not."""
+    work = Path(tempfile.mkdtemp(prefix="b3d-match-"))
+    try:
+        if compare.b3d(["export", str(work), "--only", t.recording], build) is None:
+            return None
+        path = work / f"{t.recording.replace('/', '__')}.{t.seat}.json"
+        messages: list[dict[str, object]] = json.loads(path.read_text())
+        return messages
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def web_pair(directory: Path, locator: str) -> tuple[int | None, str]:
+    """The index of the web element paired with the Beryl 3D element `locator` names in the
+    snapshot in `directory`, or None and why there is none. As in `b3d tree`, a locator is the
+    start of a tree line, so the element whose key equals it wins, then the only one whose key
+    starts with it."""
+    b3d = json.loads((directory / "b3d.json").read_text())["elements"]
+    keys = [str(element.get("key") or "") for element in b3d]
+    found = [at for at, key in enumerate(keys) if key == locator]
+    if not found:
+        found = [at for at, key in enumerate(keys) if key.startswith(locator)]
+    if len(found) != 1:
+        some = ", ".join(keys[at] for at in found[:5])
+        return None, (
+            f"--only: '{locator}' names {len(found)} Beryl 3D elements"
+            + (f" ({some})" if some else "; `just b3d tree --at <moment>` lists them")
+        )
+    pairs = joined.ensure(directory)["pairs"]
+    assert isinstance(pairs, list)
+    for pair in pairs:
+        if joined.index(pair, "b3d") == found[0]:
+            return joined.index(pair, "web"), ""
+    return None, (
+        f"--only: no web element is paired with {keys[found[0]]}; "
+        "`just b3d match boxes` lists the unpaired elements"
+    )
+
+
+def take_only(
+    t: Target, whole: Path, out: Path, art: bool, serving: Shared | None
+) -> tuple[dict[str, object], list[str]] | None:
+    """As `take`, for a target with `--only`: the records are those of the whole window's
+    snapshot `whole`, and both pictures show only the element `t.only` names and its web pair,
+    on black."""
+    index, why = web_pair(whole, str(t.only))
+    if index is None:
+        print(f"match snapshot: {why}", file=sys.stderr)
+        return None
+    b3d = json.loads((whole / "b3d.json").read_text())
+    (out / "b3d.json").write_text(json.dumps(b3d, indent=1) + "\n")
+    failed = render_png(t, art, out / "b3d.png", serving is None)
+    if failed:
+        print(f"match snapshot: {failed}", file=sys.stderr)
+        return None
+    messages = exported(t, serving is None)
+    if messages is None:
+        return None
+    moment = b3d["moment"]
+    printed_lines, failed = dump_web(t, messages, moment, art, out, serving, index)
+    if failed:
+        print(f"match snapshot: {failed}", file=sys.stderr)
+        return None
+    return moment, printed_lines
+
+
+def ensure(
+    t: Target, fresh: bool = False, art: bool = False, serving: Shared | None = None
+) -> Path | None:
+    """The snapshot directory of `t`, taken now unless an up-to-date one exists; None after
+    printing why it could not be taken. The other `match` subcommands start from this. Given
+    `serving` (`shared`), it neither builds nor starts a server of its own.
+    """
+    out = t.directory()
+    digest = inputs(t, art)
+    stamp = out / "inputs.txt"
+    complete = all((out / name).exists() for name in FILES)
+    if not fresh and complete and stamp.exists() and stamp.read_text() == digest:
+        return out
+    stamp.unlink(missing_ok=True)
+
+    if t.only is None:
+        took = take(t, out, art, serving)
+    else:
+        whole = ensure(replace(t, only=None), fresh, art, serving)
+        took = None if whole is None else take_only(t, whole, out, art, serving)
+    if took is None:
+        return None
+    moment, printed_lines = took
 
     for side in ("web", "b3d"):
         broken = records.faults(json.loads((out / f"{side}.json").read_text()))

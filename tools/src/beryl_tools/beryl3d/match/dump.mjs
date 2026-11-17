@@ -4,9 +4,11 @@
 //
 // Usage, from ui/ (where Playwright is installed): node <this file> <job.json>
 // The job is {base, route, fixture, width, height, scale, offset_ms, png, json, roles, target,
-// art_dir}: `fixture` is {name, file}, the file that answers the page's request for
+// art_dir, only}: `fixture` is {name, file}, the file that answers the page's request for
 // /fixtures/<name>.json; `offset_ms` is how long after the fixture's last view arrived to stop
-// the clock, or null for the view at rest; `roles` is data/beryl3d/match/roles.json's `roles`.
+// the clock, or null for the view at rest; `roles` is data/beryl3d/match/roles.json's `roles`;
+// `only` is the index of the element to draw alone (`--only`), in the records this script
+// writes, or null for the whole page.
 //
 // Node resolves a module from the file that imports it, and this file is outside ui/, so the
 // capture helpers (and through them Playwright) are imported from ui/scripts by path.
@@ -55,8 +57,9 @@ async function settle() {
 }
 
 /** The page's elements as the contract's records. It runs in the page, so it defines what it
- * calls. */
-function records(roles) {
+ * calls. With `only`, an index into the records, it marks that element's node with
+ * `data-b3d-only` (see `ONLY`). */
+function records({ roles, only }) {
     const ARIA = {
         button: "button",
         link: "button",
@@ -357,8 +360,21 @@ function records(roles) {
         for (const child of el.children) walk(child, here, opacity);
     };
     for (const child of document.body.children) walk(child, null, 1);
+    for (const [el, index] of indexOf) {
+        if (index === only) el.setAttribute("data-b3d-only", "");
+    }
     return elements;
 }
+
+/** The style that leaves only the marked node and what is inside it on the page (`--only`):
+ * everything else is hidden without changing the layout, and the page's background is black,
+ * as Beryl 3D's window is where it draws nothing. The node is made visible again, so that the
+ * nodes inside it inherit its visibility and keep their own rules. */
+const ONLY = `
+body *:not([data-b3d-only], [data-b3d-only] *) { visibility: hidden !important; }
+[data-b3d-only] { visibility: visible !important; }
+html, body { background: #000 !important; }
+`;
 
 // The page takes one of the machine's browser page slots, which every session's pages share.
 const release = await takeSlot();
@@ -427,8 +443,16 @@ try {
     } else {
         await page.clock.runFor(Math.max(0, job.offset_ms));
     }
-    await page.screenshot({ path: job.png });
-    const elements = await page.evaluate(records, job.roles);
+    // The records are read before anything is hidden, since a hidden node is not kept.
+    let elements;
+    if (job.only === null || job.only === undefined) {
+        await page.screenshot({ path: job.png });
+        elements = await page.evaluate(records, { roles: job.roles, only: null });
+    } else {
+        elements = await page.evaluate(records, { roles: job.roles, only: job.only });
+        await page.addStyleTag({ content: ONLY });
+        await page.screenshot({ path: job.png });
+    }
     await writeFile(
         job.json,
         `${JSON.stringify({ target: job.target, scale: job.scale, elements }, null, 1)}\n`,

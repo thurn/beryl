@@ -124,6 +124,21 @@ impl Headless {
         self.renderer.read(&self.target)
     }
 
+    /// Draws the present frame with only the records of the elements `keep` accepts, by their
+    /// index in the frame's `resolved`, and returns its pixels as `pixels` does. The page must
+    /// be looking (`Page::set_looking`), so that the frame knows which element each record
+    /// belongs to (`Frame::owners`); otherwise nothing is drawn.
+    pub fn pixels_keeping(&mut self, keep: impl Fn(&Frame, u32) -> bool) -> Vec<u8> {
+        self.text();
+        let mut frame = self.page.frame().clone();
+        let wanted: Vec<bool> = (0..frame.resolved.len())
+            .map(|at| keep(&frame, at as u32))
+            .collect();
+        frame.keep_only(|owner| wanted.get(owner as usize).copied().unwrap_or(false));
+        self.renderer.render(&frame, &mut self.target);
+        self.renderer.read(&self.target)
+    }
+
     /// Draws the present frame into a PNG file at `path`.
     ///
     /// # Errors

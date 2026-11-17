@@ -12,6 +12,7 @@
 mod compare;
 mod film;
 mod font;
+mod pixels;
 
 use std::fmt::Write;
 use std::io::Write as _;
@@ -21,6 +22,7 @@ use std::process::ExitCode;
 use beryl_host::{Headless, Scans};
 use beryl_inspect::cli::{self, Options, Ran, Spec, Usage, options};
 use beryl_inspect::recordings;
+use beryl_scene::agent::hit::is_within;
 use beryl_scene::agent::{TreeOptions, tree};
 use beryl_scene::input::Rect;
 
@@ -46,7 +48,7 @@ struct Command {
     run: fn(&Options) -> Result<String, Error>,
 }
 
-const COMMANDS: [Command; 3] = [
+const COMMANDS: [Command; 4] = [
     Command {
         name: "png",
         summary: "draws one moment of a recording to a PNG file",
@@ -62,11 +64,15 @@ const COMMANDS: [Command; 3] = [
         ],
         spec: Spec {
             recording: true,
-            values: &["--crop"],
+            values: &["--crop", "--only"],
             switches: &["--tree"],
         },
         own: &[
             ("--crop <locator>", "only the box around that element"),
+            (
+                "--only <locator>",
+                "draw that element and what is inside it alone, on black",
+            ),
             ("--tree", "also print the tree of the same frame"),
         ],
         run: png,
@@ -143,6 +149,42 @@ const COMMANDS: [Command; 3] = [
             "the web interface's screenshot to put on the left (`just b3d compare` takes it)",
         )],
         run: compare::compare,
+    },
+    Command {
+        name: "pixels",
+        summary: "lists, worst first, the elements answerable for the pixels a match snapshot's \
+                  two pictures differ in",
+        examples: [
+            (
+                "just b3d match pixels opening-play --at prompt:1",
+                "takes the snapshot and pairs it, then runs this",
+            ),
+            (
+                "b3d-render pixels opening-play --at prompt:1 --scale 2 --dir <snapshot>",
+                "on a snapshot directory already paired",
+            ),
+        ],
+        spec: Spec {
+            recording: true,
+            values: &["--dir", "--only", "--web-only"],
+            switches: &[],
+        },
+        own: &[
+            (
+                "--dir <directory>",
+                "the `just b3d match` snapshot directory, with web.png, b3d.png, their records \
+                 and joined.json",
+            ),
+            (
+                "--only <locator>",
+                "the snapshot shows that element alone (`just b3d match snapshot --only`)",
+            ),
+            (
+                "--web-only <index>",
+                "with --only, the index of its web pair in web.json",
+            ),
+        ],
+        run: pixels::pixels,
     },
 ];
 
@@ -336,13 +378,26 @@ pub(crate) fn crop_of(head: &mut Headless, locator: &str, scale: f32) -> Result<
 
 fn png(options: &Options) -> Result<String, Error> {
     let mut head = open(options)?;
+    let only = options.value("--only");
+    if only.is_some() {
+        // Only a looking frame knows which element each of its records belongs to.
+        head.page().set_looking(true);
+    }
     cli::seek_and_act(head.page(), options, &options.at)?;
     let region = match options.value("--crop") {
         Some(locator) => Some(crop_of(&mut head, locator, options.scale)?),
         None => None,
     };
     let (width, height) = head.size();
-    let pixels = head.pixels();
+    let pixels = match only {
+        Some(locator) => {
+            let index = (head.page().try_find(locator))
+                .map_err(|error| Usage(format!("--only: {error}")))?
+                .index;
+            head.pixels_keeping(|frame, at| at == index || is_within(frame, at, index))
+        }
+        None => head.pixels(),
+    };
     let (pixels, width, height) = match region {
         Some(region) => (cut(&pixels, width, region), region.width, region.height),
         None => (pixels, width, height),

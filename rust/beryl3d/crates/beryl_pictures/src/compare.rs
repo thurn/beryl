@@ -58,7 +58,7 @@ pub(crate) fn compare(options: &Options) -> Result<String, Error> {
 
 /// `left` and `right`, RGBA pictures of the sizes given, side by side with `GAP` between them
 /// and their tops level, and the size of the whole.
-fn beside(
+pub(crate) fn beside(
     left: &[u8],
     (left_width, left_height): (u32, u32),
     right: &[u8],

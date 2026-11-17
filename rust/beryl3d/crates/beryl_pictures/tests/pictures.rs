@@ -13,7 +13,7 @@ use beryl_assets::{MatchFaces, faces_built_on_this_thread};
 use beryl_host::{Headless, Scans};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::{Layout, uncovered};
+use beryl_scene::agent::{Layout, hit, uncovered};
 use beryl_scene::driver::Moment;
 use beryl_scene::frame::StateBits;
 use beryl_scene::input::Size;
@@ -192,6 +192,42 @@ fn the_prompt_bar_draws_text_rasterized_on_another_thread() {
         inked > 20,
         "the button's label drew {inked} near-white pixels"
     );
+}
+
+#[test]
+fn an_element_drawn_alone_leaves_the_rest_of_the_window_black() {
+    let page = pages::page("pay-default", Side::You, Layout::Desktop, WINDOW).expect("a page");
+    let mut head = Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
+    // Only a looking frame knows which element each record belongs to.
+    head.page().set_looking(true);
+    head.seek(&"prompt:1".parse::<Moment>().expect("a moment"))
+        .expect("a moment of the recording");
+    let button = head.page().find(r#"button "Next""#);
+    let (index, rect) = (button.index, button.rect());
+    let pixels = head.pixels_keeping(|frame, at| at == index || hit::is_within(frame, at, index));
+    // A point of slack around the box, for the edge's antialiasing.
+    let inside = |x: u32, y: u32| {
+        let (x, y) = (x as f32, y as f32);
+        x + 1.0 >= rect.x
+            && y + 1.0 >= rect.y
+            && x <= rect.x + rect.width + 1.0
+            && y <= rect.y + rect.height + 1.0
+    };
+    let (mut lit_inside, mut lit_outside) = (0, 0);
+    for y in 0..WINDOW.height as u32 {
+        for x in 0..WINDOW.width as u32 {
+            let at = ((y * WINDOW.width as u32 + x) * 4) as usize;
+            if pixels[at..at + 3].iter().any(|&channel| channel > 0) {
+                if inside(x, y) {
+                    lit_inside += 1;
+                } else {
+                    lit_outside += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(lit_outside, 0, "pixels drawn outside the button");
+    assert!(lit_inside > 100, "the button drew {lit_inside} pixels");
 }
 
 #[test]
