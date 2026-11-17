@@ -29,7 +29,7 @@ impl Client {
             self.inspector.pinned = None;
         }
         self.inspector.due = true;
-        self.log.folded = self.permanent_over_log();
+        self.log.folded = self.permanent_over_log() || self.pool_over_log();
         let view = self.show.latest().map(|update| &update.view);
         let occupied = self.occupied();
         let input = ScreenIn {
@@ -177,6 +177,29 @@ impl Client {
                 .latest_rest(usize::from(slot.0))
                 .is_some_and(|pose| crate::hud::log::reaches_column(&camera.card_box(&pose).0))
         })
+    }
+
+    /// A nonempty pool whose first mana symbol stands in the log's column folds the log,
+    /// just as a permanent there does. The pool must stay readable while the player pays.
+    fn pool_over_log(&self) -> bool {
+        let Some(update) = self.show.latest() else {
+            return false;
+        };
+        let layout = self.show.table().layout();
+        [&update.view.players.you, &update.view.players.opponent]
+            .into_iter()
+            .zip(&layout.players)
+            .any(|(player, anchor)| {
+                let point = crate::hud::counts::points(anchor.pool, self.window.size);
+                let size = crate::tokens::type_style::POOL.size;
+                player.mana != beryl_protocol::protocol::ManaPool::default()
+                    && crate::hud::log::reaches_column(&[
+                        point,
+                        point + Vec2::new(size, 0.0),
+                        point + Vec2::splat(size),
+                        point + Vec2::new(0.0, size),
+                    ])
+            })
     }
 
     /// The active screen's faces, which the host's asset workers prepare. A match's

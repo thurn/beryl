@@ -1,29 +1,5 @@
 {
   "tests": {
-    "b3d:adeline-resplendent-cathar/adelines-human-arrives-attacking/you/1440x900": {
-      "text-overlap": 2
-    },
-    "b3d:adeline-resplendent-cathar/adelines-human-arrives-attacking/you/1600x900@2": {
-      "text-overlap": 2
-    },
-    "b3d:adeline-resplendent-cathar/adelines-human-arrives-attacking/you/1920x1080": {
-      "text-overlap": 2
-    },
-    "b3d:adeline-resplendent-cathar/adelines-human-arrives-attacking/you/2560x1080": {
-      "text-overlap": 2
-    },
-    "b3d:adeline-resplendent-cathar/adelines-human-arrives-when-she-stays-home/you/1440x900": {
-      "text-overlap": 2
-    },
-    "b3d:adeline-resplendent-cathar/adelines-human-arrives-when-she-stays-home/you/1600x900@2": {
-      "text-overlap": 2
-    },
-    "b3d:adeline-resplendent-cathar/adelines-human-arrives-when-she-stays-home/you/1920x1080": {
-      "text-overlap": 2
-    },
-    "b3d:adeline-resplendent-cathar/adelines-human-arrives-when-she-stays-home/you/2560x1080": {
-      "text-overlap": 2
-    },
     "b3d:adeline-resplendent-cathar/adelines-human-attacks-a-planeswalker-ask-3/you/1440x900": {
       "text-overlap": 2
     },
@@ -35,30 +11,6 @@
     },
     "b3d:adeline-resplendent-cathar/adelines-human-attacks-a-planeswalker-ask-3/you/2560x1080": {
       "text-overlap": 2
-    },
-    "b3d:adeline-resplendent-cathar/adelines-human-attacks-a-planeswalker/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:adeline-resplendent-cathar/adelines-human-attacks-a-planeswalker/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:adeline-resplendent-cathar/adelines-human-attacks-a-planeswalker/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:adeline-resplendent-cathar/adelines-human-attacks-a-planeswalker/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:attack-past-walker/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:attack-past-walker/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:attack-past-walker/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:attack-past-walker/you/2560x1080": {
-      "text-overlap": 1
     },
     "b3d:attack-token/opponent/1440x900": {
       "text-overlap": 2
@@ -84,104 +36,17 @@
     "b3d:attack-token/you/2560x1080": {
       "text-overlap": 2
     },
-    "b3d:bloodghast/it-attacks-the-turn-it-returns-while-an-opponent-has-10-or-less-life/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:bloodghast/it-attacks-the-turn-it-returns-while-an-opponent-has-10-or-less-life/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:bloodghast/it-attacks-the-turn-it-returns-while-an-opponent-has-10-or-less-life/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:bloodghast/it-attacks-the-turn-it-returns-while-an-opponent-has-10-or-less-life/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:bloodghast/it-cant-block/opponent/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:bloodghast/it-cant-block/opponent/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:bloodghast/it-cant-block/opponent/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:bloodghast/it-cant-block/opponent/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:builders-blessing/a-tapped-creature-does-not-get-it/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:chains-of-mephistopheles/chains-before-dredge/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:chains-of-mephistopheles/chains-before-dredge/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:chains-of-mephistopheles/chains-before-dredge/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:chains-of-mephistopheles/chains-before-dredge/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:chains-of-mephistopheles/drawing-seven-with-a-card-in-hand-discards-and-draws-seven-times/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:chains-of-mephistopheles/drawing-seven-with-a-card-in-hand-discards-and-draws-seven-times/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:chains-of-mephistopheles/drawing-seven-with-a-card-in-hand-discards-and-draws-seven-times/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:chains-of-mephistopheles/drawing-seven-with-a-card-in-hand-discards-and-draws-seven-times/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:choice-trigger-order/you/2560x1080": {
-      "text-overlap": 3
-    },
-    "b3d:circle-of-protection-red/prevents-damage-only-to-its-controller/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:circle-of-protection-red/prevents-damage-only-to-its-controller/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:circle-of-protection-red/prevents-damage-only-to-its-controller/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:circle-of-protection-red/prevents-damage-only-to-its-controller/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:combat-attackers/opponent/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:combat-attackers/opponent/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:combat-attackers/opponent/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:combat-attackers/opponent/2560x1080": {
-      "text-overlap": 1
-    },
     "b3d:combat-attackers/you/1440x900": {
-      "text-overlap": 6
+      "text-overlap": 2
     },
     "b3d:combat-attackers/you/1600x900@2": {
-      "text-overlap": 6
+      "text-overlap": 2
     },
     "b3d:combat-attackers/you/1920x1080": {
-      "text-overlap": 6
+      "text-overlap": 2
     },
     "b3d:combat-attackers/you/2560x1080": {
-      "text-overlap": 6
+      "text-overlap": 2
     },
     "b3d:combat-blockers/you/1440x900": {
       "text-overlap": 2
@@ -196,16 +61,16 @@
       "text-overlap": 2
     },
     "b3d:combat-declare/you/1440x900": {
-      "text-overlap": 10
+      "text-overlap": 8
     },
     "b3d:combat-declare/you/1600x900@2": {
-      "text-overlap": 10
+      "text-overlap": 8
     },
     "b3d:combat-declare/you/1920x1080": {
-      "text-overlap": 10
+      "text-overlap": 8
     },
     "b3d:combat-declare/you/2560x1080": {
-      "text-overlap": 10
+      "text-overlap": 8
     },
     "b3d:combat-double-block/opponent/1440x900": {
       "text-overlap": 2
@@ -231,30 +96,6 @@
     "b3d:combat-double-block/you/2560x1080": {
       "text-overlap": 6
     },
-    "b3d:crystal-spray/leaves-a-granted-landwalk-ability-alone/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:crystal-spray/leaves-a-granted-landwalk-ability-alone/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:crystal-spray/leaves-a-granted-landwalk-ability-alone/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:crystal-spray/leaves-a-granted-landwalk-ability-alone/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:dandn/attacks-a-player-who-controls-an-island/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:dandn/attacks-a-player-who-controls-an-island/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:dandn/attacks-a-player-who-controls-an-island/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:dandn/attacks-a-player-who-controls-an-island/you/2560x1080": {
-      "text-overlap": 1
-    },
     "b3d:drudge-skeletons/a-shield-removes-an-attacker-from-combat/opponent/1440x900": {
       "text-overlap": 2
     },
@@ -266,78 +107,6 @@
     },
     "b3d:drudge-skeletons/a-shield-removes-an-attacker-from-combat/opponent/2560x1080": {
       "text-overlap": 2
-    },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/opponent/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:fork/copies-time-spiral-which-exiles-the-copy-first-1/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-combat-damage/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-combat-damage/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-combat-damage/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-combat-damage/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-damage-and-life-gained-from-griselbrand/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-damage-and-life-gained-from-griselbrand/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-damage-and-life-gained-from-griselbrand/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-damage-and-life-gained-from-griselbrand/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-trample-damage-after-assignment/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-trample-damage-after-assignment/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-trample-damage-after-assignment/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:furnace-of-rath/doubles-trample-damage-after-assignment/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:game-over/opponent/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:game-over/opponent/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:game-over/opponent/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:game-over/opponent/2560x1080": {
-      "text-overlap": 1
     },
     "b3d:game-over/you/1440x900": {
       "text-overlap": 2
@@ -351,162 +120,6 @@
     "b3d:game-over/you/2560x1080": {
       "text-overlap": 2
     },
-    "b3d:gemrazer/over-bloodghast-the-merged-creature-cant-block/opponent/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:gemrazer/over-bloodghast-the-merged-creature-cant-block/opponent/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:gemrazer/over-bloodghast-the-merged-creature-cant-block/opponent/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:gemrazer/over-bloodghast-the-merged-creature-cant-block/opponent/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:greedy-turn-9/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:greedy-turn-9/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:greedy-turn-9/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:greedy-turn-9/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life-next-turn/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life-next-turn/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life-next-turn/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life-next-turn/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life-pass/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life-pass/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life-pass/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life-pass/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:griselbrand/combat-damage-gains-life/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:humility/adeline-loses-her-power-vigilance-and-attack-trigger/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:humility/adeline-loses-her-power-vigilance-and-attack-trigger/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:humility/adeline-loses-her-power-vigilance-and-attack-trigger/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:humility/adeline-loses-her-power-vigilance-and-attack-trigger/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:jace-wielder-of-mysteries/bounced/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:jace-wielder-of-mysteries/bounced/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:jace-wielder-of-mysteries/bounced/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:jace-wielder-of-mysteries/bounced/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:late-game/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:late-game/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:late-game/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:late-game/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:lord-of-atlantis/mind-bend-on-the-lord-gives-other-merfolk-swampwalk/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:lord-of-atlantis/mind-bend-on-the-lord-gives-other-merfolk-swampwalk/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:lord-of-atlantis/mind-bend-on-the-lord-gives-other-merfolk-swampwalk/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:lord-of-atlantis/mind-bend-on-the-lord-gives-other-merfolk-swampwalk/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:lord-of-atlantis/other-merfolk-have-islandwalk/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:lord-of-atlantis/other-merfolk-have-islandwalk/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:lord-of-atlantis/other-merfolk-have-islandwalk/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:lord-of-atlantis/other-merfolk-have-islandwalk/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard-ask-12/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/malcolms-fourth-chorus-counter-casts-the-discard/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/trinisphere-raises-the-free-cast-to-three/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/trinisphere-raises-the-free-cast-to-three/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/trinisphere-raises-the-free-cast-to-three/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:malcolm-alluring-scoundrel/trinisphere-raises-the-free-cast-to-three/you/2560x1080": {
-      "text-overlap": 1
-    },
     "b3d:marks-damage/you/1440x900": {
       "text-overlap": 2
     },
@@ -518,66 +131,6 @@
     },
     "b3d:marks-damage/you/2560x1080": {
       "text-overlap": 2
-    },
-    "b3d:mind-bend/on-a-merfolk-doesnt-change-the-islandwalk-the-lord-gave/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:mind-bend/on-a-merfolk-doesnt-change-the-islandwalk-the-lord-gave/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:mind-bend/on-a-merfolk-doesnt-change-the-islandwalk-the-lord-gave/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:mind-bend/on-a-merfolk-doesnt-change-the-islandwalk-the-lord-gave/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:mother-of-runes/an-attacker-with-protection-from-white-cant-be-blocked-by-a-white-creature/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:mother-of-runes/an-attacker-with-protection-from-white-cant-be-blocked-by-a-white-creature/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:mother-of-runes/an-attacker-with-protection-from-white-cant-be-blocked-by-a-white-creature/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:mother-of-runes/an-attacker-with-protection-from-white-cant-be-blocked-by-a-white-creature/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:oko-thief-of-crowns/1-allows-abilities-granted-later/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:oko-thief-of-crowns/1-allows-abilities-granted-later/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:oko-thief-of-crowns/1-allows-abilities-granted-later/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:oko-thief-of-crowns/1-allows-abilities-granted-later/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:oko-thief-of-crowns/1s-elk-has-no-abilities/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:oko-thief-of-crowns/1s-elk-has-no-abilities/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:oko-thief-of-crowns/1s-elk-has-no-abilities/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:oko-thief-of-crowns/1s-elk-has-no-abilities/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:opalescence/an-older-enchantment-can-attack-on-the-turn-it-becomes-a-creature/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:opalescence/an-older-enchantment-can-attack-on-the-turn-it-becomes-a-creature/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:opalescence/an-older-enchantment-can-attack-on-the-turn-it-becomes-a-creature/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:opalescence/an-older-enchantment-can-attack-on-the-turn-it-becomes-a-creature/you/2560x1080": {
-      "text-overlap": 1
     },
     "b3d:order-long/opponent/1440x900": {
       "text-overlap": 2
@@ -603,45 +156,6 @@
     "b3d:order-long/you/2560x1080": {
       "text-overlap": 4
     },
-    "b3d:overlord-of-the-mistmoors/overlord-cast-in-full-then-attacking/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:overlord-of-the-mistmoors/overlord-cast-in-full-then-attacking/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:overlord-of-the-mistmoors/overlord-cast-in-full-then-attacking/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:overlord-of-the-mistmoors/overlord-cast-in-full-then-attacking/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:pay-other/opponent/2560x1080": {
-      "text-overlap": 2
-    },
-    "b3d:platinum-emperion/lifelink-damage-to-its-controller-still-gains-life/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:platinum-emperion/lifelink-damage-to-its-controller-still-gains-life/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:platinum-emperion/lifelink-damage-to-its-controller-still-gains-life/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:platinum-emperion/lifelink-damage-to-its-controller-still-gains-life/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:rest-in-peace/malcolm-finds-the-discarded-creature-that-rest-in-peace-exiled/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:rest-in-peace/malcolm-finds-the-discarded-creature-that-rest-in-peace-exiled/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:rest-in-peace/malcolm-finds-the-discarded-creature-that-rest-in-peace-exiled/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:rest-in-peace/malcolm-finds-the-discarded-creature-that-rest-in-peace-exiled/you/2560x1080": {
-      "text-overlap": 1
-    },
     "b3d:shape-declare-theirs/opponent/1440x900": {
       "text-overlap": 2
     },
@@ -666,18 +180,6 @@
     "b3d:shape-declare-theirs/you/2560x1080": {
       "text-overlap": 2
     },
-    "b3d:shape-declare/opponent/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:shape-declare/opponent/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:shape-declare/opponent/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:shape-declare/opponent/2560x1080": {
-      "text-overlap": 1
-    },
     "b3d:shape-declare/you/1440x900": {
       "text-overlap": 4
     },
@@ -690,129 +192,6 @@
     "b3d:shape-declare/you/2560x1080": {
       "text-overlap": 4
     },
-    "b3d:shape-mode/opponent/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:shape-mode/opponent/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:shape-mode/opponent/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:shape-mode/opponent/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:shape-mode/you/1440x900": {
-      "text-overlap": 2
-    },
-    "b3d:shape-mode/you/1600x900@2": {
-      "text-overlap": 2
-    },
-    "b3d:shape-mode/you/1920x1080": {
-      "text-overlap": 2
-    },
-    "b3d:shape-mode/you/2560x1080": {
-      "text-overlap": 2
-    },
-    "b3d:snapcaster-mage/flashback-a-counterspell-then-exile-it-1/opponent/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:snapcaster-mage/flashback-a-counterspell-then-exile-it-1/opponent/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:snapcaster-mage/flashback-a-counterspell-then-exile-it-1/opponent/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:snapcaster-mage/flashback-a-counterspell-then-exile-it-1/opponent/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:stack-tall/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:stack-tall/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:stack-tall/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:stack-tall/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:staff-of-the-storyteller/two-tokens-created-at-once-add-one-story-counter-pass/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:staff-of-the-storyteller/two-tokens-created-at-once-add-one-story-counter-pass/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:staff-of-the-storyteller/two-tokens-created-at-once-add-one-story-counter-pass/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:staff-of-the-storyteller/two-tokens-created-at-once-add-one-story-counter-pass/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:staff-of-the-storyteller/two-tokens-created-at-once-add-one-story-counter/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:staff-of-the-storyteller/two-tokens-created-at-once-add-one-story-counter/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:staff-of-the-storyteller/two-tokens-created-at-once-add-one-story-counter/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:staff-of-the-storyteller/two-tokens-created-at-once-add-one-story-counter/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:stress-1024/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:stress-1024/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:stress-255/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:stress-255/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:stress-verbs/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:teferi-time-raveler/combat-damage-removes-teferi-while-other-attacks-remain-pass/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:teferi-time-raveler/combat-damage-removes-teferi-while-other-attacks-remain-pass/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:teferi-time-raveler/combat-damage-removes-teferi-while-other-attacks-remain-pass/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:teferi-time-raveler/combat-damage-removes-teferi-while-other-attacks-remain-pass/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:teferi-time-raveler/combat-damage-removes-teferi-while-other-attacks-remain/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:teferi-time-raveler/combat-damage-removes-teferi-while-other-attacks-remain/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:teferi-time-raveler/combat-damage-removes-teferi-while-other-attacks-remain/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:teferi-time-raveler/combat-damage-removes-teferi-while-other-attacks-remain/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:the-wandering-emperor/flashed-in-during-combat-2-exiles-the-tapped-attacker-1/opponent/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:the-wandering-emperor/flashed-in-during-combat-2-exiles-the-tapped-attacker-1/opponent/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:the-wandering-emperor/flashed-in-during-combat-2-exiles-the-tapped-attacker-1/opponent/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:the-wandering-emperor/flashed-in-during-combat-2-exiles-the-tapped-attacker-1/opponent/2560x1080": {
-      "text-overlap": 1
-    },
     "b3d:the-wandering-emperor/flashed-in-during-combat-2-exiles-the-tapped-attacker-1/you/1440x900": {
       "text-overlap": 2
     },
@@ -824,36 +203,6 @@
     },
     "b3d:the-wandering-emperor/flashed-in-during-combat-2-exiles-the-tapped-attacker-1/you/2560x1080": {
       "text-overlap": 2
-    },
-    "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/you/1440x900": {
-      "text-overlap": 2
-    },
-    "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/you/1600x900@2": {
-      "text-overlap": 2
-    },
-    "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/you/1920x1080": {
-      "text-overlap": 2
-    },
-    "b3d:time-spiral/exiled-the-wheel-and-chosen-lands-untapped-0/you/2560x1080": {
-      "text-overlap": 2
-    },
-    "b3d:timetwister/shuffles-graveyards-away/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:timetwister/shuffles-graveyards-away/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:timetwister/shuffles-graveyards-away/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:timetwister/shuffles-graveyards-away/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:underworld-breach/a-sacrificed-diamond-can-escape-before-the-opponent-gets-priority/opponent/1920x1080": {
-      "text-overlap": 3
-    },
-    "b3d:underworld-breach/a-sacrificed-diamond-can-escape-before-the-opponent-gets-priority/opponent/2560x1080": {
-      "text-overlap": 1
     },
     "b3d:verbs-cast-stops/opponent/1440x900": {
       "text-overlap": 2
@@ -891,30 +240,6 @@
     "b3d:verbs-cast-theirs-stops/opponent/2560x1080": {
       "text-overlap": 2
     },
-    "b3d:verbs-cast-theirs-stops/you/1440x900": {
-      "text-overlap": 2
-    },
-    "b3d:verbs-cast-theirs-stops/you/1600x900@2": {
-      "text-overlap": 2
-    },
-    "b3d:verbs-cast-theirs-stops/you/1920x1080": {
-      "text-overlap": 2
-    },
-    "b3d:verbs-cast-theirs-stops/you/2560x1080": {
-      "text-overlap": 2
-    },
-    "b3d:verbs-cast-theirs/you/1440x900": {
-      "text-overlap": 2
-    },
-    "b3d:verbs-cast-theirs/you/1600x900@2": {
-      "text-overlap": 2
-    },
-    "b3d:verbs-cast-theirs/you/1920x1080": {
-      "text-overlap": 2
-    },
-    "b3d:verbs-cast-theirs/you/2560x1080": {
-      "text-overlap": 2
-    },
     "b3d:verbs-combat-theirs/opponent/1440x900": {
       "text-overlap": 4
     },
@@ -927,65 +252,41 @@
     "b3d:verbs-combat-theirs/opponent/2560x1080": {
       "text-overlap": 4
     },
-    "b3d:verbs-combat-theirs/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:verbs-combat-theirs/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:verbs-combat-theirs/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:verbs-combat-theirs/you/2560x1080": {
-      "text-overlap": 1
-    },
     "b3d:verbs-combat/you/1440x900": {
-      "text-overlap": 5
+      "text-overlap": 4
     },
     "b3d:verbs-combat/you/1600x900@2": {
-      "text-overlap": 5
+      "text-overlap": 4
     },
     "b3d:verbs-combat/you/1920x1080": {
-      "text-overlap": 5
+      "text-overlap": 4
     },
     "b3d:verbs-combat/you/2560x1080": {
-      "text-overlap": 5
+      "text-overlap": 4
     },
     "b3d:verbs-piles-theirs/opponent/1440x900": {
-      "text-overlap": 5
+      "text-overlap": 2
     },
     "b3d:verbs-piles-theirs/opponent/1600x900@2": {
-      "text-overlap": 5
+      "text-overlap": 2
     },
     "b3d:verbs-piles-theirs/opponent/1920x1080": {
-      "text-overlap": 5
+      "text-overlap": 2
     },
     "b3d:verbs-piles-theirs/opponent/2560x1080": {
-      "text-overlap": 5
-    },
-    "b3d:verbs-piles-theirs/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:verbs-piles-theirs/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:verbs-piles-theirs/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:verbs-piles-theirs/you/2560x1080": {
-      "text-overlap": 1
+      "text-overlap": 2
     },
     "b3d:verbs-piles/opponent/1440x900": {
-      "text-overlap": 3
+      "text-overlap": 2
     },
     "b3d:verbs-piles/opponent/1600x900@2": {
-      "text-overlap": 3
+      "text-overlap": 2
     },
     "b3d:verbs-piles/opponent/1920x1080": {
-      "text-overlap": 3
+      "text-overlap": 2
     },
     "b3d:verbs-piles/opponent/2560x1080": {
-      "text-overlap": 3
+      "text-overlap": 2
     },
     "b3d:verbs-piles/you/1440x900": {
       "text-overlap": 2
@@ -998,54 +299,6 @@
     },
     "b3d:verbs-piles/you/2560x1080": {
       "text-overlap": 2
-    },
-    "b3d:verbs-scry/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:verbs-scry/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/a-creature-without-the-aura-taps-to-attack/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/a-creature-without-the-aura-taps-to-attack/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/a-creature-without-the-aura-taps-to-attack/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/a-creature-without-the-aura-taps-to-attack/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/an-enchanted-creature-attacks-without-tapping/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/an-enchanted-creature-attacks-without-tapping/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/an-enchanted-creature-attacks-without-tapping/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/an-enchanted-creature-attacks-without-tapping/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/dress-down-after-the-aura-takes-vigilance-away/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/dress-down-after-the-aura-takes-vigilance-away/you/1600x900@2": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/dress-down-after-the-aura-takes-vigilance-away/you/1920x1080": {
-      "text-overlap": 1
-    },
-    "b3d:vigilance/dress-down-after-the-aura-takes-vigilance-away/you/2560x1080": {
-      "text-overlap": 1
-    },
-    "b3d:winds-of-abandon/overloaded-a-basic-per-creature-exiled/you/1440x900": {
-      "text-overlap": 1
-    },
-    "b3d:winds-of-abandon/overloaded-a-basic-per-creature-exiled/you/1600x900@2": {
-      "text-overlap": 1
     }
   }
 }

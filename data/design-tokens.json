@@ -726,6 +726,10 @@
         "value": 159,
         "note": "The height of an overlay's header, its title over its instruction: `.overlay-header`."
       },
+      "VIEWER_MIN_WIDTH": {
+        "value": 380,
+        "note": "The pile viewer's minimum panel width: `.zone-viewer` in `ui/src/screens/styles/zone-viewer.css`."
+      },
       "VIEWER_CARD": {
         "value": 150,
         "note": "The width of a card in the viewer's grid: `VIEWER_CARD` in `ui/src/game/Piles.tsx`."
@@ -757,6 +761,18 @@
       "PILL_GAP": {
         "value": 6,
         "note": "Between a pill and its cross: `.stage-revealed`'s `gap`."
+      },
+      "LIFE_CHANGE_LEFT": {
+        "value": 36,
+        "note": "The desktop life change's right edge is this far left of the orb center: `.life-change` in `ui/src/screens/styles/table.css`."
+      },
+      "LIFE_CHANGE_TOP": {
+        "value": 4,
+        "note": "A gain starts this far below the orb art's top: `.life-change-gain` in `ui/src/screens/styles/table.css`."
+      },
+      "LIFE_CHANGE_BOTTOM": {
+        "value": 14,
+        "note": "A loss starts this far above the orb art's bottom: `.life-change` in `ui/src/screens/styles/table.css`."
       },
       "ORB_WIDTH": {
         "value": 98,

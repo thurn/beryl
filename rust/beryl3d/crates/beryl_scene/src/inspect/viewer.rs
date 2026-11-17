@@ -28,7 +28,7 @@ use crate::manual::viewers::{PileViewer, SEARCH, Sort, sections};
 use crate::screens::ScreenIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, pile_name};
 use crate::tokens::{color, size, space, type_style};
-use crate::widgets::{button, field, primary};
+use crate::widgets::{button, field, icon_button, icons, primary};
 
 /// The overlay shell over a window of `window`'s size: `title` and, if given, `instruction` over
 /// `body` in the choice column, `actions` under it, and `aside` in the side column. The shell
@@ -98,16 +98,65 @@ pub fn viewer(input: &ScreenIn) -> Option<Element> {
         }
     };
     let count = boxes.len();
-    let close = button("Close")
-        .name("close")
-        .on_press(Press::Dismiss(Dismiss::Viewer));
-    Some(overlay(
+    let close = icon_button(icons::CLOSE, "close").on_press(Press::Dismiss(Dismiss::Viewer));
+    Some(viewer_dialog(
         input.window.size,
-        (&title, Some(&count_text(count, input.viewing?))),
-        None,
+        (&title, &count_text(count, input.viewing?)),
+        count,
+        size::VIEWER_MIN_WIDTH,
+        Some(close),
         grid(boxes),
-        vec![close],
+        vec![],
     ))
+}
+
+/// A pile viewer uses the web's centered `.zone-viewer` dialog, whose title shares a row
+/// with its count and close control. The full choice overlay puts a large title at the
+/// opponent's life total instead. Cards keep their existing grid and travel into its boxes.
+fn viewer_dialog(
+    window: Size,
+    (title, count): (&str, &str),
+    cards: usize,
+    minimum_width: f32,
+    close: Option<Element>,
+    body: Element,
+    actions: Vec<Element>,
+) -> Element {
+    #[expect(clippy::cast_precision_loss, reason = "at most five columns")]
+    let columns = (cards as f32).clamp(1.0, size::VIEWER_COLUMNS);
+    let width = (columns * size::VIEWER_CARD + (columns - 1.0) * size::VIEWER_GAP + 2.0 * space::L)
+        .max(minimum_width);
+    let header = row()
+        .name("header")
+        .align_items(Align::Center)
+        .gap(size::VIEWER_GAP)
+        .child(text(title).style(type_style::TITLE).color(color::GOLD))
+        .child(text(count).grow(1.0).color(color::TEXT_DIM))
+        .children(close);
+    let mut panel = column()
+        .name("viewer")
+        .width(width)
+        .gap(space::M)
+        .background(color::PANEL)
+        .radius(space::M)
+        .child(header)
+        .child(body);
+    if !actions.is_empty() {
+        panel = panel.child(row().name("actions").gap(space::M).children(actions));
+    }
+    panel.style.padding = [space::M, space::L, space::L, space::L];
+    panel.anchor = Some(Anchor::Point(
+        Vec2::new(window.width, window.height) / 2.0,
+        Vec2::splat(0.5),
+    ));
+    let mut shell = column()
+        .name("overlay")
+        .width(window.width)
+        .height(window.height)
+        .background(color::BACKDROP)
+        .child(panel);
+    shell.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
+    shell
 }
 
 /// The viewer the manual table shows, if one is open, as the web's `TablePileViewer` shows it:
@@ -161,9 +210,11 @@ pub fn table_viewer(input: &ScreenIn) -> Option<Element> {
         .gap(space::M)
         .child(controls(input, state))
         .child(body);
-    Some(overlay(
+    Some(viewer_dialog(
         input.window.size,
-        (pile_title(side, zone), Some(&count)),
+        (pile_title(side, zone), &count),
+        cards.len(),
+        size::OVERLAY_MAIN + 2.0 * space::L,
         None,
         content,
         actions,

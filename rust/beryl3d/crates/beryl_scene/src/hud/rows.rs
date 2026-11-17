@@ -14,10 +14,13 @@
 use beryl_protocol::protocol::{RowName, Side};
 use glam::{Vec2, Vec3};
 
+use super::counts::{index, points};
+use crate::art::orb;
 use crate::data::space::layout::desktop::ROW_COUNT_GAP;
 use crate::element::{Element, FloatId, floats, text};
 use crate::layout::{FloatLook, Layer};
 use crate::table::{Camera, Layout, ROWS, Rows, Scroller, Table, row_area};
+use crate::tokens::{size, type_style};
 
 /// Each side has three rows, and with the hand and the stack each has two ends.
 const COUNTS: usize = 16;
@@ -117,7 +120,23 @@ fn place(
             let (area, y) = row_area((layout, camera), side, row);
             let [left, right_end] =
                 [area.left, area.right].map(|x| camera.to_screen(Vec3::new(x, y, 0.0)));
-            beside(left.x, right_end.x, left.y)
+            let (mut point, anchor) = beside(left.x, right_end.x, left.y)?;
+            if layout.phone.is_none() {
+                // A crowded lands row can end at the life orb. Keep its count outside
+                // the orb and step stops, rather than printing it through that furniture.
+                let life = points(layout.players[index(side)].life, camera.window.size);
+                let half = Vec2::new(size::ORB_WIDTH, size::ORB_HEIGHT) * orb::DESKTOP_SCALE / 2.0;
+                let half_line = type_style::BODY.size * type_style::BODY.line_height / 2.0;
+                if (point.y - life.y).abs() < half.y + half_line {
+                    let half_width = size::STEPS_WIDTH / 2.0;
+                    point.x = if right {
+                        point.x.max(life.x + half_width + ROW_COUNT_GAP)
+                    } else {
+                        point.x.min(life.x - half_width - ROW_COUNT_GAP)
+                    };
+                }
+            }
+            Some((point, anchor))
         }
         Scroller::Stack => {
             let data = layout.phone?;

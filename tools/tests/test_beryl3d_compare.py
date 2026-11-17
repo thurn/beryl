@@ -59,3 +59,11 @@ def test_a_recording_alone_is_seen_from_the_viewers_seat_in_its_layouts_window()
         "you",
         "393x759",
     )
+
+
+def test_retina_test_names_keep_their_recording_and_scale() -> None:
+    args = namespace("b3d:stress-1024/you/1600x900@2")
+    assert compare.target(args) == ("stress-1024", "you", "1600x900")
+    assert compare.picture_scale(args) == "2"
+    assert compare.picture_scale(namespace(args.recording, scale="1")) == "1"
+    assert compare.picture_scale(namespace("opening-play")) == "1"

@@ -332,20 +332,28 @@ fn change_look(
     } else {
         (now - run.start) as f32 / run.duration as f32
     };
-    // The desktop's total is the larger `LIFE` type.
-    let half = if phone {
-        HALF_LIFE
+    // The web positions the loss from the orb art's bottom (14 points in), and the
+    // gain from its top (4 points in), rather than from the total's line box.
+    let half = orb::ART[3] * orb::SCALES[usize::from(phone)] / 2.0;
+    let height = type_style::TITLE.size * type_style::TITLE.line_height;
+    let drift = DRIFT * through;
+    let (offset, anchor) = if phone && run.effect == Effect::Gain {
+        (-HALF_LIFE - drift, Vec2::new(0.5, 1.0))
+    } else if phone {
+        (HALF_LIFE + drift, Vec2::new(0.5, 0.0))
+    } else if run.effect == Effect::Gain {
+        (-half + size::LIFE_CHANGE_TOP - drift, Vec2::new(1.0, 0.0))
     } else {
-        type_style::LIFE.size * type_style::LIFE.line_height / 2.0
+        (
+            half - size::LIFE_CHANGE_BOTTOM - height + drift,
+            Vec2::new(1.0, 0.0),
+        )
     };
-    let away = half + DRIFT * through;
-    let (offset, anchor) = if run.effect == Effect::Gain {
-        (-away, Vec2::new(0.5, 1.0))
-    } else {
-        (away, Vec2::new(0.5, 0.0))
-    };
+    // The web's `.life-change` ends left of the orb's centre, so a loss beside the
+    // opponent's total cannot drift through the Combat banner below it.
+    let left = if phone { 0.0 } else { size::LIFE_CHANGE_LEFT };
     FloatLook {
-        point: life + Vec2::new(0.0, offset),
+        point: life + Vec2::new(-left, offset),
         anchor,
         opacity: 1.0 - through,
         tint,

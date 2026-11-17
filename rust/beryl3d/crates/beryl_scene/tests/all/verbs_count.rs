@@ -69,6 +69,21 @@ fn top_and_bottom(frame: &Frame, index: usize) -> (f32, f32) {
     (min.y, max.y)
 }
 
+/// Life changes end to the left of the total, leaving the Combat notice below it clear.
+fn assert_beside_total(frame: &Frame, change: usize, player: usize) {
+    let right = frame.resolved[change]
+        .corners
+        .iter()
+        .map(|c| c.x)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let left = frame.resolved[player]
+        .corners
+        .iter()
+        .map(|c| c.x)
+        .fold(f32::INFINITY, f32::min);
+    assert!(right < left, "the change stands beside the total");
+}
+
 #[test]
 fn a_life_total_falls_as_its_step_begins_and_the_loss_sinks_away() {
     // The first beat fills the viewer's pool, and the second takes their life from 20 to 17.
@@ -93,8 +108,7 @@ fn a_life_total_falls_as_its_step_begins_and_the_loss_sinks_away() {
         let player = player(&frame, "You");
         let change = element(&frame, Role::Text, "-3").expect("the loss shows -3");
         let (top, _) = top_and_bottom(&frame, change);
-        let (_, bottom) = top_and_bottom(&frame, player);
-        assert!(top >= bottom, "the loss stands below the total");
+        assert_beside_total(&frame, change, player);
         if let Some(last) = last {
             assert!(top > last, "the loss sinks: {top} after {last}");
         }
@@ -109,7 +123,7 @@ fn a_life_total_falls_as_its_step_begins_and_the_loss_sinks_away() {
 }
 
 #[test]
-fn a_gain_rises_above_the_total() {
+fn a_gain_rises_beside_the_total() {
     let (mut client, steps) = counting(vec![life(Side::Opponent, 22)]);
     let (from, to) = steps[0];
     let mut last = None;
@@ -120,8 +134,7 @@ fn a_gain_rises_above_the_total() {
         let player = player(&frame, "Opponent");
         let change = element(&frame, Role::Text, "+2").expect("the gain shows +2");
         let (_, bottom) = top_and_bottom(&frame, change);
-        let (top, _) = top_and_bottom(&frame, player);
-        assert!(bottom <= top, "the gain stands above the total");
+        assert_beside_total(&frame, change, player);
         if let Some(last) = last {
             assert!(bottom < last, "the gain rises: {bottom} after {last}");
         }

@@ -8,6 +8,67 @@ use beryl_scene::agent::{Layout, Rule};
 use beryl_scene::driver::{Duration, Moment, Page};
 use beryl_scene::input::Size;
 
+/// These moments used to draw life changes, pile counts, row counts or the log through
+/// other text. Keep the generic text check on the reported frames, including the Retina
+/// window, independently of the recording's allowed faults.
+#[test]
+fn life_changes_and_pile_counts_leave_other_text_readable() {
+    let moments = [
+        (
+            "adeline-resplendent-cathar/adelines-human-arrives-attacking",
+            Side::You,
+            "1322ms",
+        ),
+        (
+            "gemrazer/over-bloodghast-the-merged-creature-cant-block",
+            Side::Opponent,
+            "4500ms",
+        ),
+        (
+            "furnace-of-rath/doubles-damage-and-life-gained-from-griselbrand",
+            Side::You,
+            "1369ms",
+        ),
+        (
+            "furnace-of-rath/doubles-trample-damage-after-assignment",
+            Side::You,
+            "930ms",
+        ),
+        (
+            "chains-of-mephistopheles/chains-before-dredge",
+            Side::You,
+            "4343ms",
+        ),
+        ("verbs-scry", Side::You, "3316ms"),
+        ("combat-attackers", Side::Opponent, "44522ms"),
+        ("stress-1024", Side::You, "0ms"),
+        ("choice-trigger-order", Side::You, "75704ms"),
+        (
+            "winds-of-abandon/overloaded-a-basic-per-creature-exiled",
+            Side::You,
+            "4091ms",
+        ),
+    ];
+    for (recording, side, moment) in moments {
+        for window in pages::Windows::Desktop.windows() {
+            let Size { width, height } = window.size;
+            let mut page = pages::page(recording, side, Layout::Desktop, window.size)
+                .unwrap()
+                .with_scale(window.scale);
+            page.seek(&moment.parse::<Moment>().unwrap()).unwrap();
+            let faults: Vec<_> = page
+                .faults()
+                .into_iter()
+                .filter(|fault| fault.rule == Rule::TextOverlap)
+                .collect();
+            assert!(
+                faults.is_empty(),
+                "{recording}/{side:?}/{width}x{height} at {moment}: {faults:#?}"
+            );
+        }
+    }
+}
+
 /// `pay-default` from the viewer's seat in a window of `width` by `height`, at its first prompt.
 fn pay_default(width: f32, height: f32) -> Page {
     let mut page = pages::page(

@@ -38,9 +38,9 @@ USAGE = 2
 
 # `b3d tree`'s line saying which view of the recording the frame shows.
 VIEW_LINE: re.Pattern[str] = re.compile(r"^view (\d+) of \d+", re.MULTILINE)
-# A test's name, as `just b3d test` prints it: b3d:<recording>/<seat>/<width>x<height>.
+# A test's name, including the optional Retina scale printed by `just b3d test`.
 TEST_NAME: re.Pattern[str] = re.compile(
-    r"^b3d:(?P<name>.+)/(?P<seat>you|opponent)/(?P<size>\d+x\d+)$"
+    r"^b3d:(?P<name>.+)/(?P<seat>you|opponent)/(?P<size>\d+x\d+)(?:@(?P<scale>[\d.]+))?$"
 )
 # The window each layout's pictures use when `--size` is not given (`beryl_inspect`'s options).
 DEFAULT_SIZE = {"desktop": "1600x900", "phone": "393x759"}
@@ -58,7 +58,7 @@ def arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--size", default=None, help="<width>x<height> in points")
     parser.add_argument(
         "--scale",
-        default="1",
+        default=None,
         help="pixels a point, for both pictures (the desktop app on a Retina Mac uses 2)",
     )
     parser.add_argument(
@@ -75,6 +75,12 @@ def target(args: argparse.Namespace) -> tuple[str, str, str]:
     if found:
         return found["name"], args.seat or found["seat"], args.size or found["size"]
     return args.recording, args.seat or "you", args.size or DEFAULT_SIZE[args.layout]
+
+
+def picture_scale(args: argparse.Namespace) -> str:
+    """An explicit scale, otherwise the test's Retina scale, otherwise one."""
+    found = TEST_NAME.match(args.recording)
+    return args.scale or (found["scale"] if found else None) or "1"
 
 
 def b3d(arguments: list[str], build: bool = True) -> str | None:
@@ -185,7 +191,9 @@ def run(args: argparse.Namespace) -> int:
             return 1
         exported = work / f"{name.replace('/', '__')}.{seat}.json"
         messages = json.loads(exported.read_text())
-        web = shoot(messages, int(view[1]), args.layout, size, args.scale, work)
+        web = shoot(
+            messages, int(view[1]), args.layout, size, picture_scale(args), work
+        )
         if web is None:
             return 1
         # The screenshot is kept beside the picture, since `work` is deleted.
@@ -202,7 +210,16 @@ def draw(
     cli: ModuleType, name: str, common: list[str], args: argparse.Namespace, web: str
 ) -> int:
     """Runs `b3d-render compare`, which draws the moment beside the screenshot `web`."""
-    arguments = [name, *common, "--scale", args.scale, "--at", args.at, "--web", web]
+    arguments = [
+        name,
+        *common,
+        "--scale",
+        picture_scale(args),
+        "--at",
+        args.at,
+        "--web",
+        web,
+    ]
     return cli.run_render("compare")(argparse.Namespace(arguments=arguments))
 
 

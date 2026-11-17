@@ -200,7 +200,10 @@ impl Table {
     pub fn pile(&self, side: Side, zone: ZoneName) -> Option<(usize, [Vec2; 4])> {
         let pile = self.objects.piles[PileShown::index(side, zone)];
         let top = usize::from(pile.top?.0);
-        if self.in_box(top) {
+        // A prompt may hold the top card in a tray, or a step may already have moved it
+        // elsewhere while the pile still holds its previous view's count. Match the pile
+        // element's visibility rather than following that card with a second pile label.
+        if self.in_box(top) || self.in_tray(top) || !self.lies_in(top, side, zone) {
             return None;
         }
         let top = self.rest(top)?;
