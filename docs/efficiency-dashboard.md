@@ -1137,7 +1137,7 @@ count all of its windows.
 ```text
 just efficiency summary --since 24h
 just efficiency epic by-bajq
-just efficiency bead by-bajq.6.9
+just efficiency ticket by-bajq.6.9
 just efficiency session local_ce2b4aa8
 just efficiency time --by kind --where tier=sonnet
 just efficiency dollars --by source --epic by-bajq
@@ -1181,7 +1181,7 @@ Text output is written for a model to read as well as a person. This is the
 `bead` query, on 2026-11-16:
 
 ```text
-$ just efficiency bead by-bajq.6.9
+$ just efficiency ticket by-bajq.6.9
 by-bajq.6.9  Spell copies are never scripted onto the stack, so script checks fail for Fork and Brain Freeze
 closed 2026-11-15 07:38   role:executor   tier:opus   claude on jarvis
 agent min 34.0   core min -   dollars 3.82   rework 0.00
@@ -1221,7 +1221,7 @@ serves one page. Python renders all HTML and draws the charts as inline SVG.
 - The server answers `GET` requests only and changes nothing except the store,
   through ingest.
 - Each address is a query: `/bead/by-bajq.6.9?since=7d` renders the same result
-  as `just efficiency bead by-bajq.6.9 --since 7d`.
+  as `just efficiency ticket by-bajq.6.9 --since 7d`.
 - The same address with `.json` appended returns the JSON.
 - The page needs no build step and no JavaScript beyond one small script that
   fetches a section's content the first time it is opened.
@@ -1340,7 +1340,7 @@ Start with one check that crosses every boundary, before testing anything
 broadly.
 
 - On the main development Mac, run `just efficiency ingest`, then
-  `just efficiency bead by-bajq.6.9`. The ticket is closed, ran in a Claude
+  `just efficiency ticket by-bajq.6.9`. The ticket is closed, ran in a Claude
   session on this machine, and landed two commits. Expect non-zero agent
   minutes, dollars and requests, a time split whose parts sum to the agent
   minutes, and a `more:` line.

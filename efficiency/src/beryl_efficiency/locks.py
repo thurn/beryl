@@ -61,16 +61,17 @@ def words(command: str) -> tuple[str, str | None] | None:
         if part.endswith("enact.py") and number + 1 < len(parts):
             arguments = parts[number + 2 :]
             # Prefer a prefixed ID anywhere, as legacy lock records can have flags
-            # before it. A bare ID is unambiguous as the first argument or after --bead.
+            # before it. A bare ID is unambiguous as the first argument or after a ticket flag.
             bead = next(
                 (w for w in arguments if re.fullmatch(ticket_ids.LEGACY, w)), None
             )
             if bead is None and arguments:
                 candidate = arguments[0]
-                if "--bead" in arguments and arguments.index("--bead") + 1 < len(
-                    arguments
-                ):
-                    candidate = arguments[arguments.index("--bead") + 1]
+                flag = next(
+                    (flag for flag in ("--ticket", "--bead") if flag in arguments), None
+                )
+                if flag is not None and arguments.index(flag) + 1 < len(arguments):
+                    candidate = arguments[arguments.index(flag) + 1]
                 if ticket_ids.WORKTREE_TICKET.fullmatch(candidate):
                     bead = candidate
             return parts[number + 1], bead

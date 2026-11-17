@@ -49,6 +49,7 @@ FLAGS: frozenset[str] = frozenset(
         "host",
         "provider",
         "bead",
+        "ticket",
         "by",
         "script",
         "lane",
@@ -57,7 +58,7 @@ FLAGS: frozenset[str] = frozenset(
     }
 )
 # The queries an address may name: every query that only reads the store.
-ADDRESSABLE: frozenset[str] = frozenset(cli.QUERIES) - {"ingest", "sql"}
+ADDRESSABLE: frozenset[str] = (frozenset(cli.QUERIES) | {"ticket"}) - {"ingest", "sql"}
 # How often the server looks at the store's age, in seconds.
 POLL_SECONDS = 5.0
 # How old the store may grow while the page is open before the server ingests, in seconds.
@@ -159,7 +160,7 @@ def respond(path: str, query: str) -> Answer:
     except SystemExit:
         raise Refused(HTTPStatus.BAD_REQUEST, f"bad query: {' '.join(argv)}")
     try:
-        result = cli.QUERIES[argv[0]][1](args)
+        result = cli.QUERIES[args.command][1](args)
     except argparse.ArgumentTypeError as e:
         raise Refused(HTTPStatus.BAD_REQUEST, str(e))
     except (sqlite3.Error, KeyError) as e:

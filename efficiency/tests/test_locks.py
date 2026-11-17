@@ -359,3 +359,8 @@ def test_a_command_runs_a_subcommand_by_path_variable_or_function(
     command: str, sub: str, expected: bool
 ) -> None:
     assert locks.runs(command, sub) is expected
+
+
+@pytest.mark.parametrize("flag", ["--ticket", "--bead"])
+def test_ticket_push_flags_resolve_native_ids(flag: str) -> None:
+    assert locks.words(f"{ENACT} push {flag} Tk7mq") == ("push", "Tk7mq")

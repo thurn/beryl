@@ -126,4 +126,5 @@ def test_a_store_with_a_newer_schema_is_refused(tmp_path: Path) -> None:
 def test_the_listing_names_every_query(capsys: pytest.CaptureFixture[str]) -> None:
     listed = run(capsys)
     for name in cli.QUERIES:
-        assert f"  {name} " in listed
+        public_name = "ticket" if name == "bead" else name
+        assert f"  {public_name} " in listed

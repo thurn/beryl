@@ -347,7 +347,7 @@ def test_the_bead_query_follows_the_designs_layout(
     assert lines[2].startswith("agent min ") and "core min -" in lines[2]
     assert "rework 0.00" in lines[2]
     assert lines[5].startswith("lead min  queued ")
-    assert found["more"] == ["efficiency session t1 --bead by-e.1"]
+    assert found["more"] == ["efficiency session t1 --ticket by-e.1"]
     time = found["time"]
     assert isinstance(time, list) and {p["name"] for p in time} >= {"model"}
     unknown, _ = run(capsys, "bead", "by-far")
@@ -408,3 +408,16 @@ def test_an_empty_store_answers_every_query(capsys: pytest.CaptureFixture[str]) 
     for query in (["summary"], ["epic", "by-e"], ["bead", "by-e"], ["time"]):
         shown, found = run(capsys, *query, "--since", "all")
         assert found["query"] == query[0] and shown
+
+
+@pytest.mark.parametrize("query", ["ticket", "bead"])
+def test_ticket_query_aliases_keep_the_existing_result(query: str) -> None:
+    args = cli.parser().parse_args([query, "Tk7mq", "--no-ingest"])
+    assert args.command == "bead"
+    assert args.id == "Tk7mq"
+
+
+@pytest.mark.parametrize("flag", ["--ticket", "--bead"])
+def test_ticket_session_flags_keep_the_existing_filter(flag: str) -> None:
+    args = cli.parser().parse_args(["session", "session-1", flag, "Tk7mq"])
+    assert args.bead == "Tk7mq"

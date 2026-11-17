@@ -312,7 +312,7 @@ def report_from(
         "bead",
         asdict(result),
         lines(result),
-        [f"efficiency session {s} --bead {bead}" for s in sessions[:3]]
+        [f"efficiency session {s} --ticket {bead}" for s in sessions[:3]]
         or [f"efficiency sql \"select * from windows where bead = '{bead}'\""],
         {"pushes": "the ticket's pushes, each split into its fast check and the rest"}
         | describe(

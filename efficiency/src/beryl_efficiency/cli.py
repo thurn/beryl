@@ -666,7 +666,14 @@ def parser() -> argparse.ArgumentParser:
     )
     sub = top.add_subparsers(dest="command", metavar="<query>")
     for name, (summary, _) in QUERIES.items():
-        p = sub.add_parser(name, help=summary, description=summary)
+        public_name = "ticket" if name == "bead" else name
+        p = sub.add_parser(
+            public_name,
+            aliases=["bead"] if name == "bead" else [],
+            help=summary,
+            description=summary,
+        )
+        p.set_defaults(command=name)
         p.add_argument("--json", action="store_true", help="print the result as JSON")
         if name == "ingest":
             p.add_argument(
@@ -690,9 +697,10 @@ def parser() -> argparse.ArgumentParser:
         if name == "sql":
             p.add_argument("query", metavar="'<query>'", help="a read-only SQL query")
         if name in ("epic", "bead", "session"):
-            p.add_argument("id", metavar="<id>", help=f"the {name}'s id")
+            p.add_argument("id", metavar="<id>", help=f"the {public_name}'s id")
         if name == "session":
-            p.add_argument("--bead", help="only the rows of this ticket")
+            p.add_argument("--ticket", dest="bead", help="only the rows of this ticket")
+            p.add_argument("--bead", dest="bead", help=argparse.SUPPRESS)
         if name == "time":
             p.add_argument("--by", choices=rollups.TIME_BY, default="kind")
         if name == "dollars":
@@ -751,7 +759,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             *QUERIES.items(),
             *((n, (d, None)) for n, d in PAGE_COMMANDS.items()),
         ]:
-            print(f"  {name:<10} {summary}")
+            public_name = "ticket" if name == "bead" else name
+            print(f"  {public_name:<10} {summary}")
         return 0
     try:
         result = QUERIES[str(args.command)][1](args)

@@ -50,7 +50,7 @@ naming the queries that drill further; follow those.
 ```bash
 just efficiency summary --since 24h              # beads closed, medians, time and dollar split, epics
 just efficiency epic by-ig5e                     # one epic's beads with minutes and dollars
-just efficiency bead by-ig5e.16                  # one bead: time, dollars, pushes, sessions
+just efficiency ticket by-ig5e.16                  # one bead: time, dollars, pushes, sessions
 just efficiency session local_58d77823           # one session's requests and tool calls in order (a prefix works)
 just efficiency time --by kind --tier sonnet     # --by kind|model|tier|role|lane|epic|day
 just efficiency dollars --by source --epic by-ig5e  # --by class|source|purpose|model|tier|role|lane|epic|day
@@ -106,7 +106,7 @@ just efficiency shot /bead/by-ig5e.16     # PNG under $BERYL_CACHE/efficiency/sh
 ```
 
 A page address is a query: `/bead/<id>?since=7d` is
-`efficiency bead <id> --since 7d`, `/` is `summary`, and `.json` appended
+`efficiency ticket <id> --since 7d`, `/` is `summary`, and `.json` appended
 returns the JSON. Agents don't open windows, so look at the page with `shot`
 (`--dark`, `--width N`; append `#open` to the address to open every line one
 level deep). `shot` takes one of the machine's shared browser slots, so render
