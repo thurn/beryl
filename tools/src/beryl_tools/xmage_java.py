@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
@@ -231,9 +231,35 @@ def outcome_lines(a: Json) -> list[str]:
     ]
 
 
-def assertion_code(a: Json, who: str) -> str:
+def snapshot_ref(ref: Json, player: Callable[[object], str]) -> str:
+    name = ref["name"]
+    quoted = "null" if name is None else java_string(cast(str, name))
+    zone = xmage_zone(cast(str, ref["zone"]))
+    return f"snapshotObject({player(ref['player'])}, Zone.{zone}, {quoted}, {ref['index']})"
+
+
+def permanent_assertion(a: Json, player: Callable[[object], str]) -> str:
+    obj = snapshot_ref(cast(Json, a["object"]), player)
+    state = cast(Json, a["state"])
+    attachment = state["attached_to"]
+    host = snapshot_ref(cast(Json, attachment), player) if attachment else "null"
+    arrays = [
+        java_string("|".join(cast(list[str], state[field])))
+        for field in ("colors", "types", "subtypes", "keywords")
+    ]
+    all_creature_types = str(state["all_creature_types"]).lower()
+    pt = state["pt"]
+    power_toughness = ", ".join(map(str, cast(list[int], pt))) if pt else "null, null"
+    return (
+        f"assertPermanentState((mage.game.permanent.Permanent) {obj}, {', '.join(arrays)}, {all_creature_types}, "
+        f"{state['damage']}, {host}, {power_toughness})"
+    )
+
+
+def assertion_code(a: Json, player: Callable[[object], str]) -> str:
     """A Beryl assertion as the XMage assertion of the same fact, about the player `who`."""
     what = cast(str, a["assert"])
+    who = player(a.get("player"))
     card = cast("str | None", a.get("card"))
     name = java_string(card) if card is not None else "null"
     count = a.get("count")
@@ -277,11 +303,21 @@ def assertion_code(a: Json, who: str) -> str:
     if what == "PtIn":
         zone = xmage_zone(cast(str, a["zone"]))
         return f"assertPtIn({who}, Zone.{zone}, {name}, {a['power']}, {a['toughness']})"
+    if what == "PermanentState":
+        return permanent_assertion(a, player)
+    if what == "StackObject":
+        controller = player(a["controller"])
+        spell = str(a["spell"]).lower()
+        source = java_string(cast(str, a["name"]))
+        return f"assertStackObject({a['depth']}, {controller}, {source}, {spell})"
     if what == "Stack":
         return f"assertStackSize({count})"
     if what == "Library":
         top = ", ".join(java_string(n) for n in cast(list[str], a["top"]))
         return f"assertLibraryTop({who}, {top})"
+    if what == "ManaPool":
+        amounts = ", ".join(map(str, cast(list[int], a["amounts"])))
+        return f"assertPool({who}, {amounts})"
     if what == "Mana":
         color = MANA[cast(str, a["color"])]
         return f"assertManaPool({who}, ManaType.{color}, {a['amount']})"

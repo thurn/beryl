@@ -453,3 +453,84 @@ fn the_dump_traces_where_each_action_began() {
     assert_eq!(trace[1]["mana"], serde_json::json!([white, white]));
     assert!(json[0].get("failure").is_none());
 }
+
+#[test]
+fn the_snapshot_distinguishes_permanents_with_the_same_name() {
+    const B: &str = "Test Bear";
+    const S: Scenario = Scenario::new("two bears").permanents(
+        P0,
+        &[
+            Permanent::new(B).counters(beryl_card::CounterKind::PlusOne, 1),
+            Permanent::new(B),
+        ],
+    );
+    let json: serde_json::Value = serde_json::from_str(&to_json(&CARDS, &[(B, &[S])])).unwrap();
+    let permanents = json[0]["actions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| &a["assertion"])
+        .filter(|a| a["assert"] == "PermanentState" && a["object"]["name"] == B)
+        .collect::<Vec<_>>();
+    assert_eq!(permanents.len(), 2);
+    assert_eq!(permanents[0]["object"]["index"], 0);
+    assert_eq!(permanents[0]["state"]["pt"], serde_json::json!([3, 3]));
+    assert_eq!(permanents[1]["object"]["index"], 1);
+    assert_eq!(permanents[1]["state"]["pt"], serde_json::json!([2, 2]));
+    assert!(json[0].get("failure").is_none(), "{}", json[0]["failure"]);
+}
+
+#[test]
+fn the_snapshot_keeps_a_spell_on_the_stack_and_unspent_mana() {
+    use beryl_card::prelude::{Amount, add_mana_of_kind, you};
+
+    const B: &str = "Test Bear";
+    const R: &str = "Test Ritual";
+    static RITUAL: CardDef = CardDef {
+        name: R,
+        faces: &[Face {
+            cost: ManaCost::generic(1),
+            types: Types::SORCERY,
+            abilities: &[Ability::spell().effect(&add_mana_of_kind(
+                you(),
+                ManaColor::White,
+                Amount::Fixed(3),
+            ))],
+            ..Face::EMPTY
+        }],
+        tokens: &[],
+    };
+    static SPELLS: CardTable = CardTable::new(&[&LAND, &BEAR, &CYCLER, &ISLAND, &RITUAL]);
+    const S: Scenario = Scenario::new("spell on stack")
+        .battlefield(P0, &[L])
+        .battlefield(P1, &[L])
+        .hand(P0, &[B, R])
+        .hand(P1, &["Test Cycler"])
+        .actions(&[Action::cast(P0, R), Action::Resolve, Action::cast(P0, B)]);
+    let json: serde_json::Value = serde_json::from_str(&to_json(&SPELLS, &[(B, &[S])])).unwrap();
+    assert!(json[0].get("failure").is_none(), "{}", json[0]["failure"]);
+    let actions = json[0]["actions"].as_array().unwrap();
+    assert!(actions.contains(&serde_json::json!({
+        "action": "Assert",
+        "assertion": {"assert": "StackObject", "depth": 0, "name": B, "spell": true, "controller": 0},
+    })));
+    assert!(actions.contains(&serde_json::json!({
+        "action": "Assert",
+        "assertion": {"assert": "ManaPool", "player": 0, "amounts": [1, 0, 0, 0, 0, 0]},
+    })));
+}
+
+#[test]
+fn the_snapshot_can_end_at_a_prompt() {
+    const S: Scenario = Scenario::new("before discarding").hand(P0, NINE).actions(&[
+        Action::AdvanceTo {
+            turn: 1,
+            step: TurnStep::End,
+        },
+        Action::pass(P0),
+    ]);
+    let json: serde_json::Value = serde_json::from_str(&to_json(&CARDS, &[(L, &[S])])).unwrap();
+    assert_eq!(json[0]["snapshot"], 2);
+    assert_eq!(json[0]["trace"][2]["kind"], "ChooseObject");
+    assert!(json[0].get("failure").is_none(), "{}", json[0]["failure"]);
+}

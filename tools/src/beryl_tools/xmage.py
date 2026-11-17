@@ -774,13 +774,13 @@ class Exporter:
         if p.kind != "Priority":
             self.export.skipped.append(f"{what}: in the middle of a {p.kind} decision")
             return
-        if what == "Tapped" and self.payments.left_to_xmage:
+        if what in ("Tapped", "ManaPool") and self.payments.left_to_xmage:
             # XMage paid an earlier cost from sources of its own choosing, which may not be
             # the ones Beryl tapped (Urborg and a Plains where XMage taps a Swamp and a Plains),
-            # so which permanents are tapped no longer has to match.
-            self.export.skipped.append("Tapped: after XMage chose a payment's sources")
+            # so which permanents are tapped and how much they floated can differ.
+            self.export.skipped.append(f"{what}: after XMage chose a payment's sources")
             return
-        code = assertion_code(assertion, self.player(assertion.get("player")))
+        code = assertion_code(assertion, self.player)
         who = self.retargeted or self.player(p.decider)
         self.prepare(who, p)
         self.emit(

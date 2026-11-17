@@ -7,11 +7,14 @@
 //! it reads every field it lists by name, and matches an enum's variants exhaustively.
 
 use crate::{Live, Position, facts, trace};
-use beryl_engine::card::{Castings, Colors, FaceIx, ManaColor, ObjectAbility, Purpose, Subtype};
+use beryl_engine::card::{
+    Castings, Colors, FaceIx, Keywords, ManaColor, ObjectAbility, Purpose, Subtype, Subtypes, Types,
+};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 use beryl_scenario_types::{
-    Action, Assertion, Counters, Ending, Permanent, Pick, PlayerSetup, Scenario, Setup,
+    Action, Assertion, Counters, Ending, Permanent, PermanentState, Pick, PlayerSetup, Scenario,
+    Setup, SnapshotRef,
 };
 use serde::{Serialize, Serializer};
 
@@ -43,6 +46,7 @@ macro_rules! mirrored {
 
 mirrored! {
     Action => ActionDef,
+    SnapshotRef => SnapshotRefDef,
     Counters => CountersDef,
     Permanent => PermanentDef,
     PlayerSetup => PlayerSetupDef,
@@ -227,6 +231,61 @@ fn color_names<S: Serializer>(colors: &Colors, s: S) -> Result<S::Ok, S::Error> 
 }
 
 #[derive(Serialize)]
+#[serde(remote = "SnapshotRef")]
+struct SnapshotRefDef {
+    #[serde(serialize_with = "variant")]
+    zone: Zone,
+    #[serde(serialize_with = "seat")]
+    player: Seat,
+    name: Option<&'static str>,
+    index: u16,
+}
+
+#[derive(Serialize)]
+#[serde(remote = "PermanentState")]
+struct PermanentStateDef {
+    #[serde(serialize_with = "color_names")]
+    colors: Colors,
+    #[serde(serialize_with = "type_names")]
+    types: Types,
+    #[serde(serialize_with = "subtype_names")]
+    subtypes: Subtypes,
+    all_creature_types: bool,
+    #[serde(serialize_with = "keyword_names")]
+    keywords: Keywords,
+    damage: u8,
+    #[serde(serialize_with = "optional")]
+    attached_to: Option<SnapshotRef>,
+    pt: Option<(i8, i8)>,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // the signature `serialize_with` calls
+fn type_names<S: Serializer>(types: &Types, s: S) -> Result<S::Ok, S::Error> {
+    s.collect_seq(
+        Types::NAMED
+            .iter()
+            .filter(|(flag, _)| types.contains(*flag))
+            .map(|(_, name)| name),
+    )
+}
+
+fn subtype_names<S: Serializer>(subtypes: &Subtypes, s: S) -> Result<S::Ok, S::Error> {
+    s.collect_seq(subtypes.iter().map(Subtype::name))
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // the signature `serialize_with` calls
+fn keyword_names<S: Serializer>(keywords: &Keywords, s: S) -> Result<S::Ok, S::Error> {
+    // The intrinsic abilities of basic land types have no keyword in either oracle.
+    let named = |flag| keywords.minus(Keywords::INTRINSIC_MANA).contains(flag);
+    s.collect_seq(
+        Keywords::NAMED
+            .iter()
+            .filter(|(flag, _)| named(*flag))
+            .map(|(_, name)| name),
+    )
+}
+
+#[derive(Serialize)]
 #[serde(remote = "Assertion", tag = "assert")]
 enum AssertionDef {
     Life {
@@ -325,6 +384,19 @@ enum AssertionDef {
         power: i8,
         toughness: i8,
     },
+    PermanentState {
+        #[serde(with = "SnapshotRefDef")]
+        object: SnapshotRef,
+        #[serde(with = "PermanentStateDef")]
+        state: PermanentState,
+    },
+    StackObject {
+        depth: u16,
+        name: &'static str,
+        spell: bool,
+        #[serde(serialize_with = "seat")]
+        controller: Seat,
+    },
     Stack {
         count: u8,
     },
@@ -332,6 +404,11 @@ enum AssertionDef {
         #[serde(serialize_with = "seat")]
         player: Seat,
         top: &'static [&'static str],
+    },
+    ManaPool {
+        #[serde(serialize_with = "seat")]
+        player: Seat,
+        amounts: [u8; 6],
     },
     Mana {
         #[serde(serialize_with = "seat")]

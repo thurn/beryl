@@ -3,7 +3,9 @@ package org.mage.test.beryl;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -11,15 +13,33 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import mage.MageItem;
 import mage.MageObject;
 import mage.ObjectColor;
 import mage.abilities.Ability;
+import mage.abilities.keyword.ChangelingAbility;
+import mage.abilities.keyword.DelveAbility;
+import mage.abilities.keyword.FirstStrikeAbility;
+import mage.abilities.keyword.FlashAbility;
+import mage.abilities.keyword.FlyingAbility;
+import mage.abilities.keyword.ForestwalkAbility;
+import mage.abilities.keyword.HasteAbility;
+import mage.abilities.keyword.IndestructibleAbility;
+import mage.abilities.keyword.IslandwalkAbility;
+import mage.abilities.keyword.LifelinkAbility;
+import mage.abilities.keyword.MountainwalkAbility;
+import mage.abilities.keyword.PlainswalkAbility;
+import mage.abilities.keyword.ReachAbility;
+import mage.abilities.keyword.SwampwalkAbility;
+import mage.abilities.keyword.TrampleAbility;
+import mage.abilities.keyword.VigilanceAbility;
 import mage.abilities.mana.ActivatedManaAbilityImpl;
 import mage.cards.Card;
 import mage.cards.Cards;
 import mage.choices.Choice;
+import mage.constants.ManaType;
 import mage.constants.Outcome;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
@@ -30,6 +50,7 @@ import mage.game.Game;
 import mage.game.permanent.Permanent;
 import mage.game.permanent.PermanentToken;
 import mage.game.stack.Spell;
+import mage.game.stack.StackObject;
 import mage.player.ai.PossibleTargetsSelector;
 import mage.players.Player;
 import mage.target.Target;
@@ -440,7 +461,11 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
      * else.
      */
     protected void assertColorsIn(Player player, Zone zone, String name, String... colors) {
-        ObjectColor color = objectIn(player, zone, name).getColor(currentGame);
+        Assert.assertEquals("colors of " + name + " in " + zone, Arrays.asList(colors),
+                colorNames(objectIn(player, zone, name).getColor(currentGame)));
+    }
+
+    private static List<String> colorNames(ObjectColor color) {
         List<String> names = new ArrayList<>();
         if (color.isWhite()) {
             names.add("White");
@@ -457,7 +482,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
         if (color.isGreen()) {
             names.add("Green");
         }
-        Assert.assertEquals("colors of " + name + " in " + zone, Arrays.asList(colors), names);
+        return names;
     }
 
     /**
@@ -498,6 +523,87 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                 .filter(o -> o.getName().equals(name))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError(player.getName() + " has no " + name + " in " + zone));
+    }
+
+    protected MageObject snapshotObject(Player player, Zone zone, String name, int index) {
+        Stream<? extends MageObject> objects = zone == Zone.BATTLEFIELD
+                ? currentGame.getBattlefield().getAllActivePermanents(player.getId()).stream()
+                        .filter(p -> name == null ? p.isFaceDown(currentGame)
+                                : !p.isFaceDown(currentGame) && p.getName().equals(name))
+                : player.getGraveyard().getCards(currentGame).stream().filter(card -> card.getName().equals(name));
+        return objects.skip(index).findFirst().orElseThrow(() -> new AssertionError(
+                player.getName() + " has no " + (name == null ? "face-down permanent" : name)
+                        + " in " + zone + " at index " + index));
+    }
+
+    // Beryl's keyword flags have these XMage ability classes. Other abilities are outside
+    // the snapshot's vocabulary, including the intrinsic mana abilities of basic land types.
+    private static final Map<String, Class<? extends Ability>> SNAPSHOT_KEYWORDS = new HashMap<>();
+    static {
+        SNAPSHOT_KEYWORDS.put("FIRST_STRIKE", FirstStrikeAbility.class);
+        SNAPSHOT_KEYWORDS.put("FLYING", FlyingAbility.class);
+        SNAPSHOT_KEYWORDS.put("REACH", ReachAbility.class);
+        SNAPSHOT_KEYWORDS.put("VIGILANCE", VigilanceAbility.class);
+        SNAPSHOT_KEYWORDS.put("FLASH", FlashAbility.class);
+        SNAPSHOT_KEYWORDS.put("HASTE", HasteAbility.class);
+        SNAPSHOT_KEYWORDS.put("DELVE", DelveAbility.class);
+        SNAPSHOT_KEYWORDS.put("TRAMPLE", TrampleAbility.class);
+        SNAPSHOT_KEYWORDS.put("LIFELINK", LifelinkAbility.class);
+        SNAPSHOT_KEYWORDS.put("INDESTRUCTIBLE", IndestructibleAbility.class);
+        SNAPSHOT_KEYWORDS.put("CHANGELING", ChangelingAbility.class);
+        SNAPSHOT_KEYWORDS.put("PLAINSWALK", PlainswalkAbility.class);
+        SNAPSHOT_KEYWORDS.put("ISLANDWALK", IslandwalkAbility.class);
+        SNAPSHOT_KEYWORDS.put("SWAMPWALK", SwampwalkAbility.class);
+        SNAPSHOT_KEYWORDS.put("MOUNTAINWALK", MountainwalkAbility.class);
+        SNAPSHOT_KEYWORDS.put("FORESTWALK", ForestwalkAbility.class);
+    }
+
+    private static Set<String> snapshotNames(String names) {
+        return names.isEmpty() ? Collections.emptySet() : new HashSet<>(Arrays.asList(names.split("[|]")));
+    }
+
+    protected void assertPermanentState(Permanent permanent, String colors, String types,
+            String subtypes, String keywords, boolean allCreatureTypes, int damage,
+            MageObject host, Integer power, Integer toughness) {
+        String name = permanent.getName();
+        Assert.assertEquals("colors of " + name, snapshotNames(colors),
+                new HashSet<>(colorNames(permanent.getColor(currentGame))));
+        Assert.assertEquals("types of " + name, snapshotNames(types),
+                permanent.getCardType(currentGame).stream().map(Enum::name).collect(Collectors.toSet()));
+        Assert.assertEquals("has every creature type: " + name, allCreatureTypes,
+                permanent.isAllCreatureTypes(currentGame));
+        Assert.assertEquals("subtypes of " + name, snapshotNames(subtypes),
+                permanent.getSubtype(currentGame).stream()
+                        .filter(subtype -> !allCreatureTypes || !SubType.getCreatureTypes().contains(subtype))
+                        .map(SubType::toString).collect(Collectors.toSet()));
+        Set<String> actualKeywords = SNAPSHOT_KEYWORDS.entrySet().stream()
+                .filter(entry -> permanent.getAbilities(currentGame).stream().anyMatch(entry.getValue()::isInstance))
+                .map(Map.Entry::getKey).collect(Collectors.toSet());
+        Assert.assertEquals("keywords of " + name, snapshotNames(keywords), actualKeywords);
+        Assert.assertEquals("damage marked on " + name, damage, permanent.getDamage());
+        Assert.assertEquals("attachment on " + name, host == null ? null : host.getId(), permanent.getAttachedTo());
+        if (power != null) {
+            Assert.assertEquals("power of " + name, power.intValue(), permanent.getPower().getValue());
+            Assert.assertEquals("toughness of " + name, toughness.intValue(), permanent.getToughness().getValue());
+        }
+    }
+
+    protected void assertStackObject(int depth, Player controller, String name, boolean spell) {
+        StackObject item = currentGame.getStack().stream().skip(depth).findFirst()
+                .orElseThrow(() -> new AssertionError("empty stack at depth " + depth + ": expected " + name));
+        Assert.assertEquals("is a spell at stack depth " + depth, spell, item instanceof Spell);
+        Assert.assertTrue("controller of " + name + " on the stack", item.isControlledBy(controller.getId()));
+        MageObject source = item instanceof Spell ? item : item.getStackAbility().getSourceObject(currentGame);
+        Assert.assertEquals("name at stack depth " + depth, name, source == null ? null : source.getName());
+    }
+
+    protected void assertPool(Player player, int... amounts) {
+        ManaType[] colors = {ManaType.WHITE, ManaType.BLUE, ManaType.BLACK, ManaType.RED,
+                ManaType.GREEN, ManaType.COLORLESS};
+        for (int i = 0; i < colors.length; i++) {
+            Assert.assertEquals(player.getName() + " mana pool: " + colors[i], amounts[i],
+                    player.getManaPool().get(colors[i]));
+        }
     }
 
     protected void assertSubtype(Player controller, String name, SubType subtype, boolean has) {

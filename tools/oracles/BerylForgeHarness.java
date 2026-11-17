@@ -66,6 +66,7 @@ import java.util.function.Predicate;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 
 /**
@@ -935,6 +936,107 @@ public final class BerylForgeHarness {
             return names;
         }
 
+        Card snapshotObject(JsonObject ref) {
+            Player player = player(ref);
+            ZoneType zone = ZoneType.valueOf(ref.get("zone").getAsString());
+            String name = ref.get("name").isJsonNull() ? null : ref.get("name").getAsString();
+            int left = ref.get("index").getAsInt();
+            for (Card card : player.getCardsIn(zone)) {
+                if ((card.isFaceDown() ? name == null : card.getName().equals(name)) && left-- == 0) {
+                    return card;
+                }
+            }
+            List<String> found = new ArrayList<>();
+            for (Card card : player.getCardsIn(zone)) {
+                found.add("'" + card.getName() + "' (face down: " + card.isFaceDown()
+                        + ", token: " + card.isToken() + ")");
+            }
+            throw new StepFailed("no object at " + ref + " among " + found);
+        }
+
+        // Forge models basic landwalk as a parameterized keyword. The remaining entries
+        // use its keyword enum. Mana abilities do not appear in either list.
+        static final Map<String, String> SNAPSHOT_LANDWALK = Map.of(
+                "PLAINSWALK", "Landwalk:Plains", "ISLANDWALK", "Landwalk:Island",
+                "SWAMPWALK", "Landwalk:Swamp", "MOUNTAINWALK", "Landwalk:Mountain",
+                "FORESTWALK", "Landwalk:Forest");
+        static final Set<Keyword> SNAPSHOT_KEYWORDS = Set.of(
+                Keyword.FIRST_STRIKE, Keyword.FLYING, Keyword.REACH, Keyword.VIGILANCE,
+                Keyword.FLASH, Keyword.HASTE, Keyword.DELVE, Keyword.TRAMPLE, Keyword.LIFELINK,
+                Keyword.INDESTRUCTIBLE, Keyword.CHANGELING);
+
+        static List<String> strings(JsonArray values) {
+            List<String> result = new ArrayList<>();
+            for (JsonElement value : values) {
+                result.add(value.getAsString());
+            }
+            return result;
+        }
+
+        static void snapshotEquals(String field, Object expected, Object actual) {
+            if (!expected.equals(actual)) {
+                throw new StepFailed(field + ": expected " + expected + ", Forge has " + actual);
+            }
+        }
+
+        void checkPermanentState(JsonObject assertion) {
+            Card card = snapshotObject(assertion.getAsJsonObject("object"));
+            JsonObject state = assertion.getAsJsonObject("state");
+            snapshotEquals("colors", strings(state.getAsJsonArray("colors")), colorNames(card));
+            var type = card.getType();
+            snapshotEquals("types", Set.copyOf(strings(state.getAsJsonArray("types"))),
+                    type.getCoreTypes().stream().map(t -> t.name().toUpperCase(java.util.Locale.ROOT))
+                            .collect(Collectors.toSet()));
+            boolean allCreatureTypes = state.get("all_creature_types").getAsBoolean();
+            snapshotEquals("has every creature type", allCreatureTypes, type.hasAllCreatureTypes());
+            snapshotEquals("subtypes", Set.copyOf(strings(state.getAsJsonArray("subtypes"))),
+                    type.getSubtypes().stream()
+                            .filter(subtype -> !allCreatureTypes || !forge.card.CardType.isACreatureType(subtype))
+                            .collect(Collectors.toSet()));
+            Set<String> keywords = SNAPSHOT_KEYWORDS.stream().filter(card::hasKeyword)
+                    .map(Enum::name).collect(Collectors.toSet());
+            SNAPSHOT_LANDWALK.forEach((keyword, script) -> {
+                if (card.hasKeyword(script)) {
+                    keywords.add(keyword);
+                }
+            });
+            snapshotEquals("keywords", Set.copyOf(strings(state.getAsJsonArray("keywords"))), keywords);
+            snapshotEquals("damage marked", state.get("damage").getAsInt(), card.getDamage());
+            Card host = state.get("attached_to").isJsonNull()
+                    ? null : snapshotObject(state.getAsJsonObject("attached_to"));
+            if (!java.util.Objects.equals(host, card.getEntityAttachedTo())) {
+                throw new StepFailed("attached to " + card.getEntityAttachedTo() + ", expected " + host);
+            }
+            if (!state.get("pt").isJsonNull()) {
+                JsonArray pt = state.getAsJsonArray("pt");
+                snapshotEquals("power", pt.get(0).getAsInt(), card.getNetPower());
+                snapshotEquals("toughness", pt.get(1).getAsInt(), card.getNetToughness());
+            }
+        }
+
+        void checkStackObject(JsonObject assertion) {
+            int depth = assertion.get("depth").getAsInt();
+            int left = depth;
+            for (SpellAbilityStackInstance item : game.getStack()) {
+                if (left-- == 0) {
+                    snapshotEquals("is a spell", assertion.get("spell").getAsBoolean(), item.isSpell());
+                    snapshotEquals("stack controller", assertion.get("controller").getAsInt(), seat(item.getActivatingPlayer()));
+                    snapshotEquals("stack name", assertion.get("name").getAsString(), item.getSourceCard().getName());
+                    return;
+                }
+            }
+            throw new StepFailed("empty stack at depth " + depth);
+        }
+
+        void checkManaPool(JsonObject assertion) {
+            byte[] colors = forge.card.mana.ManaAtom.MANATYPES;
+            JsonArray amounts = assertion.getAsJsonArray("amounts");
+            for (int i = 0; i < colors.length; i++) {
+                snapshotEquals("mana pool: " + colors[i], amounts.get(i).getAsInt(),
+                        player(assertion).getManaPool().getAmountOfColor(colors[i]));
+            }
+        }
+
         void check(JsonObject step) {
             JsonObject a = step.getAsJsonObject("assertion");
             String kind = a.get("assert").getAsString();
@@ -1027,6 +1129,18 @@ public final class BerylForgeHarness {
                         Card card = in(player(a), a.get("zone").getAsString(), a.get("card").getAsString());
                         expected = a.get("power").getAsInt() + "/" + a.get("toughness").getAsInt();
                         actual = card.getNetPower() + "/" + card.getNetToughness();
+                    }
+                    case "PermanentState" -> {
+                        checkPermanentState(a);
+                        return;
+                    }
+                    case "StackObject" -> {
+                        checkStackObject(a);
+                        return;
+                    }
+                    case "ManaPool" -> {
+                        checkManaPool(a);
+                        return;
                     }
                     case "Stack" -> {
                         expected = a.get("count").getAsInt();

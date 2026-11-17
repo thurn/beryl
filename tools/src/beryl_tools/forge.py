@@ -439,6 +439,7 @@ def export(
             steps: list[JsonObject] = []
             unchecked = 0
             setup_target = None
+            snapshot = cast("int | None", entry.get("snapshot"))
             paid_as_made = False
             trace = cast(list[JsonObject], entry.get("trace", []))
             actions = [
@@ -473,6 +474,16 @@ def export(
                 purpose = trace[i].get("purpose") if i < len(trace) else None
                 if replays_plan(action, paid_as_made):
                     # The payment's taps, replayed with the mana each made, chose the plan.
+                    unchecked += 1
+                    continue
+                if (
+                    snapshot is not None
+                    and i >= snapshot
+                    and trace[i].get("kind") != "Priority"
+                ):
+                    # A final assertion has no next scripted answer to bind it to a
+                    # Forge prompt. Checking it at the next priority would see a
+                    # different position, usually after the choice had resolved.
                     unchecked += 1
                     continue
                 converted = step(action, described, purpose)

@@ -13,8 +13,8 @@
 //! The actions and assertions are the ones the engine's mechanics support so far.
 
 use beryl_card::{
-    AbilityIx, Castings, Colors, CounterKind, DecisionKind, FaceIx, ManaColor, ObjectAbility, Seat,
-    Subtype, TurnStep, Zone,
+    AbilityIx, Castings, Colors, CounterKind, DecisionKind, FaceIx, Keywords, ManaColor,
+    ObjectAbility, Seat, Subtype, Subtypes, TurnStep, Types, Zone,
 };
 
 mod player;
@@ -346,6 +346,33 @@ pub enum Pick {
     },
 }
 
+/// A permanent or graveyard card identified among other objects with the same public name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SnapshotRef {
+    pub zone: Zone,
+    /// The controller of a permanent or the owner of a card in a graveyard.
+    pub player: Seat,
+    /// None for a face-down permanent.
+    pub name: Option<&'static str>,
+    /// Zero-based index in zone-entry order among the objects with this player and name.
+    pub index: u16,
+}
+
+/// A permanent's public characteristics and current state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PermanentState {
+    pub colors: Colors,
+    pub types: Types,
+    /// If it has every creature type, this holds only its other subtypes.
+    pub subtypes: Subtypes,
+    pub all_creature_types: bool,
+    pub keywords: Keywords,
+    pub damage: u8,
+    pub attached_to: Option<SnapshotRef>,
+    /// Power and toughness of a creature.
+    pub pt: Option<(i8, i8)>,
+}
+
 /// A fact about the current position.
 #[derive(Clone, Copy, Debug)]
 pub enum Assertion {
@@ -446,6 +473,18 @@ pub enum Assertion {
         power: i8,
         toughness: i8,
     },
+    /// The current state of the permanent identified by `object`.
+    PermanentState {
+        object: SnapshotRef,
+        state: PermanentState,
+    },
+    /// A spell or ability, counted from the top (zero). An ability is named by its source.
+    StackObject {
+        depth: u16,
+        name: &'static str,
+        spell: bool,
+        controller: Seat,
+    },
     /// How many spells and abilities are on the stack.
     Stack {
         count: u8,
@@ -454,6 +493,11 @@ pub enum Assertion {
     Library {
         player: Seat,
         top: &'static [&'static str],
+    },
+    /// How much unspent mana the player has, in `ManaColor::ALL` order.
+    ManaPool {
+        player: Seat,
+        amounts: [u8; 6],
     },
     /// How much unspent mana of `color` `player` has.
     Mana {

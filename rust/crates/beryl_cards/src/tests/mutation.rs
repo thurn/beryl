@@ -68,9 +68,8 @@ const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
-/// Beryl records gameplay fields that the oracle snapshot omits. Observing each scripted
-/// position also catches a trigger that resolves before the final position, or mana that
-/// is spent or empties before the scenario ends.
+/// Observes transient changes that the final snapshot cannot see, such as a trigger that
+/// resolves earlier, or mana that a player spends before the scenario ends.
 #[derive(PartialEq, Eq)]
 struct Position {
     step: Step,

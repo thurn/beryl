@@ -468,9 +468,13 @@ hand-picked witnesses. Twenty-seven abilities are listed as unreachable
   `neighbours.rs` can make, so adding a mutant kind without a way to observe it
   fails.
 - **A wider snapshot.** The final snapshot, which the oracles compare, gains
-  each permanent's colors, types, keywords and damage marked, and the stack's
-  contents, so that a mutant that changes only those is seen. The XMage and
-  Forge exporters read the same fields.
+  each permanent's colors, card types, subtypes, keywords, damage marked and
+  attachment. It records power and toughness for every creature, identifying
+  same-name permanents in battlefield entry order. It also records each mana
+  pool and the names and controllers of spells and abilities on a nonempty
+  stack. Beryl can take this snapshot at any open decision. XMage and Forge
+  compare the new fields where their harnesses can stop for the final
+  assertions.
 - **Partners by filter.** Where a card's filter names a quality (a Merfolk, an
   Aura, a creature with flying), the position includes a prop or an implemented
   card with it and one without.
