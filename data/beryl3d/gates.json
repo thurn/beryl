@@ -221,16 +221,16 @@
       "expressions": 96
     },
     "card_lit": {
-      "samples": 1,
-      "expressions": 130
+      "samples": 5,
+      "expressions": 232
     },
     "table_lit": {
-      "samples": 1,
-      "expressions": 98
+      "samples": 5,
+      "expressions": 200
     },
     "particle": {
-      "samples": 1,
-      "expressions": 97
+      "samples": 5,
+      "expressions": 199
     }
   },
   "tests": {

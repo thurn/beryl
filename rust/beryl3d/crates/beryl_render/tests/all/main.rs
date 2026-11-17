@@ -7,4 +7,5 @@ mod enhanced;
 mod faces;
 mod render;
 mod shader_cost;
+mod shadow;
 mod text;

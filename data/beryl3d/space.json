@@ -698,6 +698,13 @@
         "size": [1.0, 2.0],
         "turns": 1.5
       }
+    },
+    "shadow": {
+      "map": 2048,
+      "darkness": 0.55,
+      "bias": 2,
+      "slope_bias": 2.0,
+      "taps": 4
     }
   },
   "hand": {
