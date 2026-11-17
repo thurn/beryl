@@ -31,7 +31,7 @@
 //!   the web's places in points, converted for each window when the layout is made
 //!   (`layout`), never on the frame path.
 
-use beryl_protocol::protocol::Side;
+use beryl_protocol::protocol::{Side, ZoneName};
 use glam::{Quat, Vec2, Vec3};
 
 use super::tray_layout::{Across, Second};
@@ -42,6 +42,7 @@ use super::{
 use crate::agent::hit::CELL;
 use crate::data::audit;
 use crate::data::space::layout::phone as data;
+use crate::frame::Place;
 use crate::input::Rect;
 use crate::pose::Pose;
 
@@ -444,6 +445,32 @@ fn tray_in(window: Window, bands: &PhoneBands) -> TraySpace {
     }
 }
 
+/// The viewer's life total's anchor on a phone `window` whose bands are `bands`, while the top
+/// edge of their hand at rest is `hand_top` points from the window's top: the middle of their
+/// strip, or higher, the dock's gap over the hand, where the hand reaches higher. A hand with
+/// more cards than one fan holds stands its back row in the strip, and a total in the strip's
+/// middle would stand on that row's uncovered part and split it into pieces too narrow to
+/// press. The prompt's dock rises over the hand the same way (`prompts::bar`). A hand of three
+/// rows or more reaches over the viewer's lands, and a total over it would stand on their
+/// creatures, so the total rises only as far as it stays clear of the creatures' row.
+#[must_use]
+pub fn your_life(window: Window, bands: &PhoneBands, hand_top: f32) -> PlayerAnchor {
+    use crate::data::space::hud::phone::DOCK_GAP;
+    let half = crate::hud::counts::HALF_LIFE;
+    let middle = bands.your_strip.middle();
+    let raised = hand_top - DOCK_GAP - half;
+    let lowest_clear = bands.your_back.top + half;
+    life_anchor(window, middle.min(raised.max(lowest_clear)))
+}
+
+/// A life total's anchor on a phone `window`, across the window's middle at `y` points from its
+/// top. A phone shows no unspent mana, so a streak out of a pool starts at the
+/// life total (`anchors` in `ui/src/stage/phone.ts`).
+fn life_anchor(window: Window, y: f32) -> PlayerAnchor {
+    let life = ndc(window, window.size.width / 2.0, y);
+    PlayerAnchor { life, pool: life }
+}
+
 /// The phone layout for `window`, whose hands, piles, stack and anchors are converted from the
 /// web interface's places in points to this window's normalized device coordinates.
 #[must_use]
@@ -452,12 +479,9 @@ pub fn layout(window: Window) -> Layout {
     let camera = Camera::fit_inside(camera_data, window, battlefield(window));
     let bands = bands(&camera);
     let (piles, pile_scale) = piles(&camera, &bands);
-    // Each life total in the middle of its player's strip; a phone shows no unspent mana, so a
-    // streak out of a pool starts at the life total (`anchors` in `ui/src/stage/phone.ts`).
-    let anchor = |strip: Band| {
-        let life = ndc(window, window.size.width / 2.0, strip.middle());
-        PlayerAnchor { life, pool: life }
-    };
+    // Each life total in the middle of its player's strip, until the table raises the viewer's
+    // over a hand of several rows (`your_life`).
+    let anchor = |strip: Band| life_anchor(window, strip.middle());
     let stack = PhoneStack {
         middle: bands.middle.middle(),
         height: stack_height(&camera, bands.middle.middle()),
@@ -503,4 +527,24 @@ pub fn layout(window: Window) -> Layout {
         phone: Some(stack),
         bands: Some(bands),
     }
+}
+
+/// The top edge on the window, in logical points, of the viewer's hand at the resting places
+/// `rests` give (each a place, a pose and whether it is visible), before any card is held up in
+/// a tray; infinity for an empty hand. Allocates nothing.
+pub(super) fn hand_top(camera: &Camera, rests: impl Iterator<Item = (Place, Pose, bool)>) -> f32 {
+    let mut top = f32::INFINITY;
+    for (place, pose, visible) in rests {
+        if visible
+            && let Place::Card {
+                zone: ZoneName::Hand,
+                side: Side::You,
+                ..
+            } = place
+        {
+            let corners = camera.card_box(&pose).0;
+            top = corners.iter().fold(top, |top, corner| top.min(corner.y));
+        }
+    }
+    top
 }

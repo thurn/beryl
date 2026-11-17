@@ -368,6 +368,59 @@ fn the_hand_runs_off_the_bottom_with_every_top_edge_in_reach() {
     }
 }
 
+/// A hand of more cards than one fan holds stands its back row in the viewer's strip, where a
+/// life total in the strip's middle would split that row's uncovered part into pieces too
+/// narrow to press. The table raises the viewer's total over the hand, never onto their
+/// creatures, and every streak or strike at the viewer aims where the total stands.
+#[test]
+fn the_viewers_life_total_rises_over_a_hand_that_reaches_into_its_strip() {
+    for count in [1, 5, 9, 14] {
+        let mut view = ViewBuilder::new();
+        for index in 0..count {
+            view.card(ZoneName::Hand, Side::You, &format!("Card {index}"));
+        }
+        view.script(ScriptBuilder::reset().build());
+        for (width, height) in PHONES {
+            let window = phone(width, height);
+            let bands = phone_bands(window).expect("a phone window");
+            let mut show = Show::new(Table::new(DESKTOP, window));
+            show.push(Box::new(view.update()), Vec::new());
+            let frame = frame(&mut show, &mut Frame::with_capacity(4096, 4096, 65_536), 0);
+            let hand = Place::Card {
+                zone: ZoneName::Hand,
+                side: Side::You,
+                row: None,
+            };
+            let hand_top = (cards_at(&frame, hand).iter())
+                .map(|card| bounds(card)[1])
+                .fold(f32::INFINITY, f32::min);
+            let table = show.table();
+            let life = table
+                .camera()
+                .to_screen(table.player_pose(Side::You).position);
+            let label = format!("{count} cards at {width}x{height}: the total at {life}");
+            assert!((life.x - width / 2.0).abs() < 0.5, "{label}");
+            if hand_top >= bands.your_strip.bottom() {
+                assert!(
+                    (life.y - bands.your_strip.middle()).abs() < 0.5,
+                    "{label} stays in the strip's middle over one row"
+                );
+            } else {
+                assert!(life.y < bands.your_strip.middle(), "{label} rises");
+                assert!(
+                    life.y < hand_top - 6.0 || life.y < bands.your_back.top + 20.0,
+                    "{label} stands over the hand, whose top is at {hand_top}"
+                );
+            }
+            assert!(
+                life.y > bands.your_back.top,
+                "{label} stays off the creatures, under {}",
+                bands.your_back.top
+            );
+        }
+    }
+}
+
 #[test]
 fn the_stack_stands_in_the_middle_band_with_the_top_item_right_and_in_front() {
     for count in [1, 2, 4, 7, 20] {

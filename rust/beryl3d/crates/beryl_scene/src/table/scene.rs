@@ -18,7 +18,7 @@ use super::shadows::Floors;
 use super::shown::Shown;
 use super::tray::TrayMotion;
 use super::tray_layout::Held;
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window};
+use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, phone};
 use crate::effects;
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{
@@ -302,7 +302,13 @@ impl Table {
     /// holds, as an update with a reset script must. Cards a prompt holds up rest in its tray.
     pub fn apply(&mut self, view: &PlayerView) {
         let numbers = std::mem::take(&mut self.objects.numbers);
-        let placement = self.with_held(self.placement(view, &numbers));
+        let placement = self.placement(view, &numbers);
+        let rests = placement.rests.iter().flatten();
+        self.raise_life(phone::hand_top(
+            &self.camera,
+            rests.map(|rest| (rest.place, rest.pose, rest.visible)),
+        ));
+        let placement = self.with_held(placement);
         self.objects = Self::objects_for(view, numbers, &placement);
     }
 
@@ -311,7 +317,22 @@ impl Table {
     /// The cards a prompt holds up stay in its tray.
     pub(crate) fn swap_objects(&mut self, objects: &mut Objects) {
         std::mem::swap(&mut self.objects, objects);
+        let rests = self.objects.cards.iter().flatten();
+        self.raise_life(phone::hand_top(
+            &self.camera,
+            rests.map(|object| (object.place, object.pose, object.visible)),
+        ));
         self.rehold();
+    }
+
+    /// On the phone layout, puts the viewer's life total over their hand where the hand's top
+    /// edge, `hand_top` points from the window's top, reaches into their strip
+    /// (`phone::your_life`). Streaks and strikes at the viewer aim where the table's layout puts
+    /// the total, so they follow it.
+    fn raise_life(&mut self, hand_top: f32) {
+        if let Some(bands) = self.layout.bands {
+            self.layout.players[0] = phone::your_life(self.camera.window, &bands, hand_top);
+        }
     }
 
     /// Writes a resolved element and a draw record for every visible card, with a contact

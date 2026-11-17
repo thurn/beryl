@@ -1894,6 +1894,12 @@ window.
   pieces in the table's bands (`table::phone_bands`), with sizes from
   `hud.phone` in `space.json`:
   - Each orb is centred in its player's strip, drawn at half the desktop's size.
+    When the viewer's hand needs more than one row, its back row stands in the
+    viewer's strip, and a total in the strip's middle would split that row's
+    uncovered part into pieces too narrow to press. The table then raises the
+    viewer's total and orb over the hand's top, as the dock rises, but never
+    onto the viewer's creatures (`table::phone::your_life`). Streaks and strikes
+    at the viewer aim where the total stands.
   - A menu button at the right end of the opponent's strip opens the settings,
     which hold the Log and Report bug buttons. The log opens as a sheet below
     the opponent's strip. The phone shows no gear, log column or step stops.

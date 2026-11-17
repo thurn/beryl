@@ -3,7 +3,9 @@
 //! web's `Hud` places them (`ui/src/stage/Chrome.tsx`).
 //!
 //! - The orb is a dark core with a grey bezel, centred on the point where the table's layout
-//!   puts the player's life total (`Layout::players`). The active player's bezel is gold.
+//!   puts the player's life total (`Layout::players`), which on a phone follows the table as
+//!   it raises the viewer's total over a hand of several rows. The active player's bezel is
+//!   gold.
 //! - The total itself is not part of the orb. It is the float `floats::LIFE`, drawn over the
 //!   orb's middle (`hud::counts`), because a total changes as its `count` step begins, in the
 //!   middle of a script, and a float can show a total laid out ahead without a frame laying
@@ -15,6 +17,7 @@
 //!   player stands to take stands beside their orb, red when it would be lethal.
 
 use beryl_protocol::protocol::{Combat, PlayerView, Side, Step};
+use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use crate::data::space::hud::INCOMING_GAP;
@@ -40,7 +43,8 @@ pub fn players(input: &ScreenIn) -> Option<Element> {
 
 /// The middle of `side`'s orb in a window, in logical points: where the table's layout puts
 /// their life total, which on the phone layout is the middle of their strip
-/// (`table::phone::strip`).
+/// (`table::phone::strip`) until the viewer's hand reaches into it. The table then raises the
+/// viewer's total over the hand (`table::phone::your_life`), and their orb follows it.
 #[must_use]
 pub fn orb_centre(side: Side, window: Window) -> Vec2 {
     if window.phone() {
@@ -81,7 +85,14 @@ fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
         .selected(active)
         .passes(true)
         .children(incoming(view, side).map(|damage| incoming_text(damage, life, width)));
-    element.anchor = Some(Anchor::Point(orb_centre(side, window), Vec2::new(0.5, 0.5)));
+    // On a phone the table raises the viewer's total over a hand of several rows
+    // (`table::phone::your_life`), so the orb follows the player's anchor on every frame.
+    let middle = Vec2::new(0.5, 0.5);
+    element.anchor = Some(if window.phone() {
+        Anchor::Object(Subject::Player { player: side }, middle)
+    } else {
+        Anchor::Point(orb_centre(side, window), middle)
+    });
     element
 }
 
