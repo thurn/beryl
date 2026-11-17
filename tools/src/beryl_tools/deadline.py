@@ -75,6 +75,35 @@ def until_hard_limit(now: float | None = None) -> float | None:
     return HARD_LIMIT - ((time.time() if now is None else now) - begun)
 
 
+# The wall seconds a step that would rather run late than skip its work may take from its start,
+# however far past the target the run already is ([`step_limit`]).
+STEP_FLOOR = 45.0
+# When this process's step window ends (time.time()), fixed by the first [`step_limit`] call.
+_STEP_END: list[float] = []
+
+
+def step_limit(now: float | None = None) -> float | None:
+    """The wall seconds left in this step's window; None outside a fast check. The window ends
+    at the run's target, but no sooner than [`STEP_FLOOR`] seconds after the step first asked,
+    and never later than the hard limit. The end is fixed at the first call, so a step calls
+    this once when it starts and plans and stops against the same end.
+
+    The Beryl 3D test steps start after a shared build that takes 40-180 s, so the target has
+    nearly always passed by then. They used to plan against the hard limit instead
+    ([`until_hard_limit`]), which made every Beryl 3D fast check take the full 180 s: between
+    00:00 UTC 2026-11-16 and 02:00 UTC the next day, `beryl3d-tests` ended at a median of 180 s
+    in 407 fast checks and was the last lane in 224 of 616. The Beryl 3D sweep runs every test
+    on staging, so the tests a step leaves out still run there."""
+    begun = started()
+    if begun is None:
+        return None
+    moment = time.time() if now is None else now
+    if not _STEP_END:
+        target_end = moment + (left(moment) or 0.0)
+        _STEP_END.append(min(begun + HARD_LIMIT, max(target_end, moment + STEP_FLOOR)))
+    return _STEP_END[0] - moment
+
+
 def env() -> dict[str, str]:
     """The variable that starts the contract's clock for the steps of a fast check."""
     return {STARTED_ENV: repr(time.time())}

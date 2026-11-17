@@ -302,18 +302,22 @@ def run_shared_b3d(command: str) -> Callable[[argparse.Namespace], int]:
     return run
 
 
-# The seconds before the fast check's hard limit after which `b3d test` starts no test. The
+# The seconds before the end of the step's window (`deadline.step_limit`) after which `b3d test`
+# starts no test. The
 # tests already running finish (the slowest took 8 s at load 20 on 2026-11-16), and then the
 # step prints its report and logs each test.
 TEST_STOP = 20.0
 
 
 def stop_after(command: str, arguments: list[str]) -> list[str]:
-    """The `--stop-after` that a fast check gives `b3d test`, so that it starts no test the hard
-    limit would kill. The limit kills a step still running and reports nothing of it, and after
-    a long shared build it cut off this step in 141 of 330 fast checks on 2026-11-16. Outside a
-    fast check, or when the arguments name it already, there is none."""
-    left = deadline.until_hard_limit()
+    """The `--stop-after` that a fast check gives `b3d test`, so that it starts no test after
+    its window (`deadline.step_limit`): until the run's target, but at least
+    `deadline.STEP_FLOOR` seconds, and never past the hard limit. The limit kills a step still
+    running and reports nothing of it, and after a long shared build it cut off this step in 141
+    of 330 fast checks on 2026-11-16. Planning against the hard limit instead then made every
+    Beryl 3D fast check take 180 s; the sweep plays every test on staging. Outside a fast check,
+    or when the arguments name it already, there is none."""
+    left = deadline.step_limit()
     if (
         command != "test"
         or left is None

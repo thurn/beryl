@@ -85,8 +85,8 @@ def test_only_the_tests_that_fit_run_and_the_rest_go_to_the_sweep(
     junit: Path = tmp_path / "junit.xml"
     monkeypatch.setattr(test_fit, "JUNIT", junit)
     monkeypatch.setattr(runlog, "result", lambda c, o, s, *_: logged.append((c, o, s)))
-    # 55 s before the hard limit, less the step's 20 s margin, leaves 35 s to plan.
-    monkeypatch.setattr(test_fit.deadline, "until_hard_limit", lambda: 55.0)
+    # 55 s before the end of the step's window, less the step's 20 s margin, leaves 35 s to plan.
+    monkeypatch.setattr(test_fit.deadline, "step_limit", lambda: 55.0)
     monkeypatch.setattr(
         test_fit.tokens,
         "acquire",
@@ -251,7 +251,7 @@ def test_the_step_stops_nextest_before_the_hard_limit_and_keeps_what_finished(
     junit: Path = tmp_path / "junit.xml"
     monkeypatch.setattr(test_fit, "JUNIT", junit)
     monkeypatch.setattr(runlog, "result", lambda c, o, s, *_: logged.append((c, o, s)))
-    monkeypatch.setattr(test_fit.deadline, "until_hard_limit", lambda: 60.0)
+    monkeypatch.setattr(test_fit.deadline, "step_limit", lambda: 60.0)
     monkeypatch.setattr(
         test_fit.tokens, "acquire", lambda *_a, **_k: tokens.Lease(4, [], klass="push")
     )
@@ -296,7 +296,7 @@ def test_a_short_lease_runs_the_tests_in_waves_that_take_the_tokens_freed(
     assert lease is not None
     lease.wanted = 4
     monkeypatch.setattr(test_fit.tokens, "acquire", lambda *_a, **_k: lease)
-    monkeypatch.setattr(test_fit.deadline, "until_hard_limit", lambda: 160.0)
+    monkeypatch.setattr(test_fit.deadline, "step_limit", lambda: 160.0)
     junit: Path = tmp_path / "junit.xml"
     monkeypatch.setattr(test_fit, "JUNIT", junit)
     logged: list[tuple[str, str, float]] = []

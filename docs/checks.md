@@ -293,15 +293,20 @@ Beryl 3D, the native client in its own Cargo workspace, has checks of its own
   pyre, and only those tests; any other change to `tools/` runs it whole.
 - A step of a Beryl 3D lane that the fast check cuts off at its 180 s hard limit
   is left to the Beryl 3D sweep, not to slow CI.
+- The test steps below plan against a window (`deadline.step_limit`) that ends
+  at the run's target, but no sooner than 45 s after the step starts and never
+  after the hard limit. The shared build usually ends after the target, so the
+  window gives the tests a fixed allowance; planning against the hard limit
+  instead made every Beryl 3D fast check take the full 180 s.
 - In the fast check, `cargo-test` runs only the workspace tests that fit the
-  time left, chosen as the Rust lane's tests are (untimed tests first), and
-  names the rest as deferred to the sweep
+  window, chosen as the Rust lane's tests are (untimed tests first), and names
+  the rest as deferred to the sweep
   (`tools/src/beryl_tools/beryl3d/test_fit.py`). Each test's time goes to the
-  run log as `b3d-test:<binary>::<test>`. It stops nextest 8 s before the hard
-  limit, logs the tests that finished and defers the rest to the sweep, so a
-  plan that ran long still reports its results.
+  run log as `b3d-test:<binary>::<test>`. It stops nextest 8 s before the window
+  ends, logs the tests that finished and defers the rest to the sweep, so a plan
+  that ran long still reports its results.
 - In the fast check, the interface tests (`just b3d test`) start no test after
-  20 s before the hard limit (`--stop-after`), and name the tests they did not
+  20 s before the window ends (`--stop-after`), and name the tests they did not
   start as deferred to the sweep.
 
 ### The Beryl 3D sweep

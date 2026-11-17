@@ -74,14 +74,14 @@ def test_interface_tests_run_the_shared_builds_b3d(
     monkeypatch.setattr(cli.subprocess, "run", program)
     monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
     monkeypatch.setattr(cli, "program", lambda name: Path("/built") / name)
-    monkeypatch.setattr(cli.deadline, "until_hard_limit", lambda: None)
+    monkeypatch.setattr(cli.deadline, "step_limit", lambda: None)
     assert cli.main(["test", "verbs-"]) == 0
     assert ran == [cli.SHARED_BUILD, ["/built/b3d", "test", "verbs-"]]
 
-    # Inside a fast check the tests stop starting `TEST_STOP` seconds before the hard limit,
+    # Inside a fast check the tests stop starting `TEST_STOP` seconds before the end of the step's window,
     # which would otherwise kill the step and report none of them.
     ran.clear()
-    monkeypatch.setattr(cli.deadline, "until_hard_limit", lambda: 70.0)
+    monkeypatch.setattr(cli.deadline, "step_limit", lambda: 70.0)
     assert cli.main(["test"]) == 0
     stop = f"{70.0 - cli.TEST_STOP:.1f}"
     assert ran == [cli.SHARED_BUILD, ["/built/b3d", "test", "--stop-after", stop]]

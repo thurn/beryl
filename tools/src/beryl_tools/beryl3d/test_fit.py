@@ -1,6 +1,6 @@
 """How Beryl 3D's `cargo-test` step runs the workspace's tests under nextest: every test, each
 one's outcome and time written to the run log, and inside a fast check only the tests that
-finish before the fast check's hard limit.
+finish within the step's window (`deadline.step_limit`).
 
 The step used to run every test of the workspace however little time the run had left, and
 logged no test by name. Between 16:10 and 18:10 UTC on 2026-11-16, it started in 30 fast
@@ -15,13 +15,19 @@ those that fit, in rust_fit's order (untimed tests first, then those that caught
 those that fail most, then the cheapest). The tests it cuts are logged as skipped and named in
 the output as going to the Beryl 3D sweep, which runs every test on staging (sweep.py).
 
-It plans against the time left until the hard limit ([`deadline.until_hard_limit`]), less
-[`MARGIN`], not against the fast check's 60-90 s target as the Rust lane does. The step starts
+It plans against the time left in its window ([`deadline.step_limit`]), less [`MARGIN`]: until
+the fast check's 60-90 s target, as the Rust lane plans, but at least `deadline.STEP_FLOOR`
+seconds from the step's start and never past the hard limit. The step starts
 after the shared build and the recordings (`record`, 40-180 s in those fast checks), so the
 target had nearly always passed by then and every test would have been cut. The other Beryl 3D
 lanes run past the target anyway (`test` and `timeline-parity` do not plan), so tests that end
 before the limit cost a push no extra wait, and they caught two breaks on staging the first time
 the step ran to its end.
+
+It planned against the hard limit itself at first, which made every Beryl 3D fast check take the
+full 180 s: in the 407 Beryl 3D fast checks between 00:00 UTC 2026-11-16 and 02:00 UTC the next
+day, `beryl3d-tests` ended at a median of 180 s, and it was the last lane of 224 of 616 fast
+checks. The window gives the tests a fixed allowance after the build instead.
 
 A test that failed in the last [`RECENT`] on the same branch, or in the sweep on staging, is
 never cut: it runs first, and the rest fit the time left. On 2026-11-16 a commit's fast check
@@ -77,10 +83,10 @@ LANES: tuple[str, str] = (FAST_LANE, SWEEP_LANE)
 PREFIX = "b3d-test"
 # Where nextest's `check` profile writes its JUnit report (rust/beryl3d/.config/nextest.toml).
 JUNIT: Path = paths.WORKSPACE / "target" / "nextest" / NEXTEST_PROFILE / "junit.xml"
-# The seconds kept back before the hard limit: for nextest to start, for slow tests the
+# The seconds kept back before the end of the step's window: for nextest to start, for slow tests the
 # records underestimate, and for the step to write its results.
 MARGIN = 20.0
-# The seconds before the hard limit at which the step stops nextest: enough for nextest to stop
+# The seconds before the end of the step's window at which it stops nextest: enough for nextest to stop
 # its tests and write its report, and for the step to log the results and exit.
 STOP = 8.0
 # The seconds of tests, by their records, that one wave runs on a short lease's threads
@@ -163,7 +169,7 @@ def check_of(junit_check: str) -> str:
 def deferred_line(cut: list[str], left: float) -> str:
     return (
         f"cargo-test: {len(cut)} tests deferred to the Beryl 3D sweep: they do not fit the"
-        f" {max(left, 0):.0f} s left before the fast check's hard limit"
+        f" {max(left, 0):.0f} s left in the step's window"
     )
 
 
@@ -178,7 +184,7 @@ def kept_line(kept: list[str]) -> str:
 def stopped_line(stopped: list[str]) -> str:
     return (
         f"cargo-test: {len(stopped)} tests deferred to the Beryl 3D sweep: stopped or not"
-        f" started {STOP:.0f} s before the fast check's hard limit"
+        f" started {STOP:.0f} s before the end of the step's window"
     )
 
 
@@ -213,7 +219,9 @@ def nextest(
 def run(records: Known | None) -> int:
     """Runs the workspace's tests, those that fit when `records` are given, in a lease of CPU
     tokens whose size is the threads the plan counts on, and logs each test's result. Inside a
-    fast check it stops the tests [`STOP`] seconds before the hard limit."""
+    fast check it stops the tests [`STOP`] seconds before the end of the step's window
+    (`deadline.step_limit`), which this call fixes as it starts."""
+    deadline.step_limit()
     lease = tokens.acquire(
         tokens.named_class(), tokens.largest(tokens.pool_size()), command="nextest"
     )
@@ -223,11 +231,11 @@ def run(records: Known | None) -> int:
         env = {**os.environ, **lease.env()}
         expression = "all()"
         tests: list[str] | None = None
-        if records is not None and deadline.until_hard_limit() is not None:
+        if records is not None and deadline.step_limit() is not None:
             tests = rust_fit.listed(["--workspace"], "all()", paths.WORKSPACE, env)
             # Read after the listing, which runs every test binary and may take a while
             # under load. rust_fit.plan keeps back its own margin as well.
-            left = (deadline.until_hard_limit() or 0.0) - MARGIN + rust_fit.MARGIN
+            left = (deadline.step_limit() or 0.0) - MARGIN + rust_fit.MARGIN
             if tests is not None:
                 failed = records.failures()
                 chosen, _, cut = rust_fit.plan(
@@ -249,7 +257,7 @@ def run(records: Known | None) -> int:
         if records is not None and planned and short(lease):
             return run_waves(lease, planned, records.get())
         JUNIT.unlink(missing_ok=True)
-        limit = deadline.until_hard_limit()
+        limit = deadline.step_limit()
         code, stopped = nextest(
             expression, env, None if limit is None else limit - STOP
         )
@@ -308,7 +316,8 @@ def run_waves(lease: tokens.Lease, tests: list[str], records: dict[str, Record])
     end. While the lease is short it counts as a push's waiter, as a growing program's does
     (tokens.run_growing), so lower classes take no tokens and their elastic builds give theirs
     back. Once it is full, the rest run in one last wave. A wave stopped [`STOP`] seconds before
-    the hard limit logs the tests that finished, in every wave, and defers the rest."""
+    the end of the step's window logs the tests that finished, in every wave, and defers the rest.
+    """
     pool = tokens.Pool()
     me = pool.waiter(lease.klass)
     order = sorted(tests, key=lambda t: -seconds_of(t, records))
@@ -328,7 +337,7 @@ def run_waves(lease: tokens.Lease, tests: list[str], records: dict[str, Record])
             order = order[len(wave) :]
             sizes.append(lease.size)
             JUNIT.unlink(missing_ok=True)
-            limit = deadline.until_hard_limit()
+            limit = deadline.step_limit()
             wave_code, stopped = nextest(
                 nextest_filter(wave),
                 {**os.environ, **lease.env()},

@@ -203,5 +203,10 @@
     "label": "Push and queue cargo builds, and growing programs such as Beryl 3D's record, start at once on the CPU tokens that are free and hold lower classes back while they grow, instead of waiting up to 10 s for elastic tokens before a build or record that usually has nothing to do",
     "metric": "machine.queued-core-hours-per-day",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D's fast-check test steps stop at the run's target, after at least 45 s of tests, instead of filling the time up to the 180 s hard limit",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]

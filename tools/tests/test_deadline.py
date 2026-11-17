@@ -26,6 +26,29 @@ def test_left_counts_from_the_start_the_fast_check_set(
     assert deadline.left(now=1020) == 40
 
 
+def test_a_step_window_ends_at_the_target_but_gives_a_late_step_its_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Beryl 3D test step that starts after the target gets `STEP_FLOOR` seconds, not every
+    second up to the hard limit, and the window's end stays where its first call put it.
+    """
+    monkeypatch.setattr(deadline.system, "loadavg", lambda: (0.0, 0.0, 0.0))
+    monkeypatch.setattr(deadline.speed, "factor", lambda: 1.0)
+    monkeypatch.setenv(deadline.STARTED_ENV, "1000")
+    # Started 10 s in: the target, 50 s away, is past the floor.
+    monkeypatch.setattr(deadline, "_STEP_END", [])
+    assert deadline.step_limit(now=1010) == 50
+    # Started 100 s in, past the target: the floor.
+    monkeypatch.setattr(deadline, "_STEP_END", [])
+    assert deadline.step_limit(now=1100) == deadline.STEP_FLOOR
+    assert deadline.step_limit(now=1110) == deadline.STEP_FLOOR - 10
+    # Started 160 s in: never past the hard limit.
+    monkeypatch.setattr(deadline, "_STEP_END", [])
+    assert deadline.step_limit(now=1160) == deadline.HARD_LIMIT - 160
+    monkeypatch.delenv(deadline.STARTED_ENV)
+    assert deadline.step_limit() is None
+
+
 def test_a_step_cut_off_at_the_hard_limit_is_deferred_and_fails_nothing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
