@@ -91,11 +91,12 @@ fn a_streak_blooms_along_its_length_and_not_past_its_head() {
 }
 
 /// A frame with nothing in the Glows band costs bloom no draw call and draws every pixel as
-/// Baseline does. The table covers the whole target, so no edge of it is multisampled.
+/// Baseline does. The frame holds only a flat-layer panel: a record of the card mesh before
+/// the flat layer, such as the table, would cost the shadow map a call of its own.
 #[test]
 fn a_frame_without_glows_has_no_bloom() {
     let panel = rectangle(Vec2::ZERO, Vec2::splat(40.0), 500.0, [40, 180, 60]);
-    let records = [(Band::Opaque, table()), (Band::Layer, panel)];
+    let records = [(Band::Layer, panel)];
     let mut renderer = enhanced();
     let [(baseline, baseline_calls), (enhanced, enhanced_calls)] = [Tier::Baseline, Tier::Enhanced]
         .map(|tier| draw_in(tier, &mut renderer, overhead(), (200, 200), &records));
