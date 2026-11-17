@@ -217,6 +217,10 @@ def packaged_tests_step(*args: str, fast: bool, slow: bool = False) -> int:
     # test steps so the fast check can reuse slow CI's compiled artifacts.
     if system.WINDOWS:
         os.environ["CARGO_INCREMENTAL"] = "0"
+        # Concurrent test builds exhausted Cygnus's paging file while rustc mapped
+        # dependencies (os error 1455). Cap compilation separately from nextest threads.
+        jobs = int(os.environ.get("CARGO_BUILD_JOBS") or "4")
+        os.environ["CARGO_BUILD_JOBS"] = str(min(jobs, 4))
     named = [a.split("=", 1)[1] for a in args if a.startswith("--packages=")]
     only = [a for a in args if not a.startswith("--packages=")]
     packages = named[0].split(",") if named else None
