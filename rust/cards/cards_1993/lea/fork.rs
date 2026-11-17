@@ -49,6 +49,8 @@ pub mod scenarios {
                 ME.casts(FORK),
                 Resolve,
                 ME.targets_player(THEM),
+                ME.has(Zone::Graveyard, FORK, 1),
+                stack(2),
                 Resolve,
                 THEM.life(17),
                 Resolve,
@@ -239,6 +241,26 @@ pub mod scenarios {
                 Resolve,
                 Resolve,
                 THEM.life(11),
+            ]),
+        // The copy retains the number of targets even though a third land is available.
+        Scenario::new("Fork preserves Life from the Loam's target count")
+            .interaction(&[Card::LifeFromTheLoam])
+            .battlefield(P0, &[Card::Forest, Card::Forest, MOUNTAIN, MOUNTAIN])
+            .graveyard(P0, &[Card::Island, Card::Plains, Card::Swamp])
+            .hand(P0, &[Card::LifeFromTheLoam, FORK])
+            .actions(&[
+                ME.casts(Card::LifeFromTheLoam),
+                ME.target_count(1),
+                ME.targets(Card::Island),
+                ME.casts(FORK),
+                Resolve,
+                ME.targets(Card::Plains),
+                Resolve,
+                ME.has(Zone::Hand, Card::Plains, 1),
+                stack(1),
+                Resolve,
+                ME.has(Zone::Hand, Card::Island, 1),
+                ME.has(Zone::Graveyard, Card::Swamp, 1),
             ]),
     ];
 }

@@ -116,5 +116,81 @@ pub mod scenarios {
                 THEM.life(18),
                 ME.life(22),
             ]),
+        // Only the two spells cast before the second Tendrils count for its storm trigger.
+        Scenario::new("Tendrils of Agony does not count storm copies")
+            .battlefield(P0, &[SWAMP; 9])
+            .hand(P0, &[SCIMITAR, TENDRILS, TENDRILS])
+            .actions(&[
+                ME.casts(SCIMITAR),
+                Resolve,
+                ME.casts(TENDRILS),
+                ME.targets_player(THEM),
+                Resolve,
+                ME.targets_player(THEM),
+                Resolve,
+                Resolve,
+                ME.casts(TENDRILS),
+                ME.targets_player(THEM),
+                Resolve,
+                ME.targets_player(THEM),
+                ME.targets_player(THEM),
+                stack(3),
+                Resolve,
+                Resolve,
+                Resolve,
+                THEM.life(10),
+                ME.life(30),
+            ]),
+        // A spell that counters the storm trigger leaves the original Tendrils alone.
+        Scenario::new("countering Tendrils of Agony's storm trigger prevents every copy")
+            .interaction(&[Card::Stifle])
+            .battlefield(P0, &[SWAMP; 5])
+            .hand(P0, &[SCIMITAR, TENDRILS])
+            .battlefield(P1, &[Card::Island])
+            .hand(P1, &[Card::Stifle])
+            .actions(&[
+                ME.casts(SCIMITAR),
+                Resolve,
+                ME.casts(TENDRILS),
+                ME.targets_player(THEM),
+                THEM.casts(Card::Stifle),
+                Resolve,
+                stack(0),
+                THEM.life(18),
+                ME.life(22),
+            ]),
+        // Storm counts the Diamond that was cast with escape and then countered, and the
+        // spell that countered it.
+        Scenario::new("Tendrils of Agony counts a countered spell cast from the graveyard")
+            .interaction(&[Card::UnderworldBreach, Card::LionsEyeDiamond])
+            .battlefield(P0, &[Card::UnderworldBreach, SWAMP, SWAMP, SWAMP, SWAMP])
+            .graveyard(
+                P0,
+                &[
+                    Card::LionsEyeDiamond,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                ],
+            )
+            .hand(P0, &[TENDRILS])
+            .battlefield(P1, &[Card::Island, Card::Island])
+            .hand(P1, &[Prop::Instant])
+            .actions(&[
+                ME.escapes(Card::LionsEyeDiamond),
+                THEM.casts(Prop::Instant),
+                ME.has(Zone::Graveyard, Card::LionsEyeDiamond, 1),
+                ME.casts(TENDRILS),
+                ME.targets_player(THEM),
+                Resolve,
+                ME.targets_player(THEM),
+                ME.targets_player(THEM),
+                stack(3),
+                Resolve,
+                Resolve,
+                Resolve,
+                THEM.life(14),
+                ME.life(26),
+            ]),
     ];
 }

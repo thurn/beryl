@@ -141,5 +141,16 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, STAGE, 1),
                 THEM.counters(DEPTHS, CounterKind::Ice, 10),
             ]),
+        // The Stage remains tapped after copying a land that is still untapped.
+        Scenario::new("the Stage stays tapped after copying an untapped land")
+            .battlefield(P0, &[STAGE, Card::Island, Card::Island])
+            .battlefield(P1, &[Card::Plains])
+            .actions(&[
+                ME.activates(STAGE, 1),
+                ME.targets(Card::Plains),
+                Resolve,
+                ME.tapped(Card::Plains, 1),
+                THEM.tapped(Card::Plains, 0),
+            ]),
     ];
 }

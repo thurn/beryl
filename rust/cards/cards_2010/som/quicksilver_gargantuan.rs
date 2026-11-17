@@ -48,8 +48,14 @@ pub mod scenarios {
     pub const SCENARIOS: &[Scenario] = &[
         // The Gargantuan enters as Beza, the Bounding Spring, a 7/7 for its exception, and
         // Beza's enters ability triggers for it (CR 707.5), gaining P0 4 life.
-        copying("the Gargantuan enters as a 7/7 copy", &[BEZA, Card::Plains])
+        copying("the Gargantuan enters as a 7/7 copy", &[Card::Plains])
             .interaction(&[BEZA])
+            .permanents(
+                P1,
+                &[Permanent::new(BEZA)
+                    .tapped()
+                    .counters(CounterKind::PlusOne, 1)],
+            )
             .actions(&[
                 ME.casts(GARGANTUAN),
                 Resolve,
@@ -57,7 +63,9 @@ pub mod scenarios {
                 ME.pt(BEZA, 7, 7),
                 Resolve,
                 ME.life(14),
-                THEM.pt(BEZA, 4, 5),
+                ME.tapped(BEZA, 0),
+                ME.counters(BEZA, CounterKind::PlusOne, 0),
+                THEM.pt(BEZA, 5, 6),
             ]),
         // Declining, it enters as itself, a 7/7 Shapeshifter, and Beza's ability is not its.
         copying(
@@ -90,6 +98,62 @@ pub mod scenarios {
             ME.pt(PAINTER, 7, 7),
             ME.colored(Zone::Battlefield, PAINTER, Colors::GREEN),
             THEM.colored(Zone::Battlefield, Card::Plains, Colors::GREEN),
+        ]),
+        // The Gargantuan takes Marit Lage's name and types, with its own 7/7 exception.
+        copying(
+            "the Gargantuan copies a Marit Lage token as a 7/7 card",
+            &[],
+        )
+        .interaction(&[Card::DarkDepths])
+        .permanents(
+            P1,
+            &[Permanent::new(Card::DarkDepths).counters(CounterKind::Ice, 0)],
+        )
+        .actions(&[
+            Resolve,
+            THEM.token_pt("Marit Lage", 20, 20),
+            ME.casts(GARGANTUAN),
+            Resolve,
+            ME.picks_up_to("Marit Lage"),
+            ME.pt("Marit Lage", 7, 7),
+            ME.has_subtype("Marit Lage", Subtype::Avatar, true),
+        ]),
+        // The Gargantuan copies what the Image became, including its Illusion exception.
+        copying(
+            "a Gargantuan of an Image keeps the Image's Illusion type",
+            &[],
+        )
+        .interaction(&[Card::PhantasmalImage])
+        .at(2, P1, TurnStep::PrecombatMain)
+        .battlefield(
+            P0,
+            &[
+                Prop::Vanilla,
+                Card::Island,
+                Card::Island,
+                Card::Island,
+                Card::Island,
+                Card::Island,
+                Card::Island,
+                Card::Island,
+            ],
+        )
+        .battlefield(P1, &[Card::Island, Card::Island, Card::Plains])
+        .hand(P1, &[Card::PhantasmalImage, Prop::Artifact])
+        .actions(&[
+            THEM.casts(Card::PhantasmalImage),
+            Resolve,
+            THEM.picks_up_to(Prop::Vanilla),
+            THEM.casts(Prop::Artifact),
+            Resolve,
+            Resolve,
+            ME.controls(Prop::Vanilla, 0),
+            advance_to(3, TurnStep::PrecombatMain),
+            ME.casts(GARGANTUAN),
+            Resolve,
+            ME.picks_up_to(Prop::Vanilla),
+            ME.pt(Prop::Vanilla, 7, 7),
+            ME.has_subtype(Prop::Vanilla, Subtype::Illusion, true),
         ]),
     ];
 }

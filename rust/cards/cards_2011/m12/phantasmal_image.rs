@@ -215,7 +215,9 @@ pub mod scenarios {
             .hand(P0, &[IMAGE])
             .permanents(
                 P1,
-                &[Permanent::new(MOTHER).counters(CounterKind::PlusOne, 3)],
+                &[Permanent::new(MOTHER)
+                    .tapped()
+                    .counters(CounterKind::PlusOne, 3)],
             )
             .actions(&[
                 ME.casts(IMAGE),
@@ -223,6 +225,7 @@ pub mod scenarios {
                 ME.picks_up_to(MOTHER),
                 ME.pt(MOTHER, 1, 1),
                 ME.counters(MOTHER, CounterKind::PlusOne, 0),
+                ME.tapped(MOTHER, 0),
                 ME.has_subtype(MOTHER, Subtype::Illusion, true),
                 ME.has_subtype(MOTHER, Subtype::Human, true),
                 THEM.pt(MOTHER, 4, 4),
@@ -245,6 +248,62 @@ pub mod scenarios {
                 ME.picks_up_to("Marit Lage"),
                 ME.pt("Marit Lage", 20, 20),
                 ME.has_subtype("Marit Lage", Subtype::Illusion, true),
+            ]),
+        // When the Image copies Painter's Servant, its controller chooses a color as it enters.
+        Scenario::new("an Image of Painter's Servant chooses a color as it enters")
+            .interaction(&[Card::PaintersServant])
+            .battlefield(P0, &[Card::Island, Card::Island])
+            .battlefield(P1, &[Card::PaintersServant])
+            .hand(P0, &[IMAGE])
+            .actions(&[
+                ME.casts(IMAGE),
+                Resolve,
+                ME.picks_up_to(Card::PaintersServant),
+                ME.chooses_color(Colors::GREEN),
+                ME.colored(Zone::Battlefield, Card::PaintersServant, Colors::GREEN),
+            ]),
+        // The Gargantuan gains the subtype and sacrifice trigger from the Image it copies.
+        Scenario::new("a copy of an Image inherits its Illusion type and sacrifice trigger")
+            .interaction(&[MOTHER, GARGANTUAN])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(
+                P0,
+                &[
+                    MOTHER,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .hand(P0, &[GARGANTUAN, Prop::Equipment])
+            .battlefield(P1, &[Card::Island, Card::Island, Card::Plains])
+            .hand(P1, &[IMAGE, Prop::Artifact])
+            .actions(&[
+                THEM.casts(IMAGE),
+                Resolve,
+                THEM.picks_up_to(MOTHER),
+                THEM.casts(Prop::Artifact),
+                Resolve,
+                Resolve,
+                ME.controls(MOTHER, 0),
+                advance_to(3, TurnStep::PrecombatMain),
+                ME.casts(GARGANTUAN),
+                Resolve,
+                ME.picks_up_to(MOTHER),
+                ME.has_subtype(MOTHER, Subtype::Illusion, true),
+                ME.casts(Prop::Equipment),
+                Resolve,
+                ME.activates(Prop::Equipment, 1),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Graveyard, GARGANTUAN, 1),
+                THEM.controls(MOTHER, 1),
             ]),
     ];
 }

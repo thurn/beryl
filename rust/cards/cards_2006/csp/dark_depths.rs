@@ -157,5 +157,19 @@ pub mod scenarios {
                 stack(0),
                 ME.controls(MARIT_LAGE, 0),
             ]),
+        // With the Plains tapped, Dark Depths cannot supply mana for a Mana Tithe.
+        Scenario::new("Dark Depths cannot pay for Mana Tithe")
+            .interaction(&[Card::ManaTithe])
+            .battlefield(P0, &[Card::Plains])
+            .permanents(P0, TWO)
+            .hand(P0, &[Prop::Artifact])
+            .battlefield(P1, &[Card::Plains])
+            .hand(P1, &[Card::ManaTithe])
+            .actions(&[
+                ME.casts(Prop::Artifact),
+                THEM.casts(Card::ManaTithe),
+                ME.has(Zone::Graveyard, Prop::Artifact, 1),
+                ME.tapped(DEPTHS, 0),
+            ]),
     ];
 }

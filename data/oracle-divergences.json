@@ -264,5 +264,12 @@
     "scenario": "Malcolm finds the discarded creature that Rest in Peace exiled",
     "cr": "CR 400.7j (https://yawgatog.com/resources/magic-rules/#R4007j): \"If an effect causes an object to move to a public zone, other parts of that effect can find that object. If the cost of a spell or ability causes an object to move to a public zone, that spell or ability's effects can find that object.\"",
     "reason": "Forge does not offer to cast the discarded creature after Rest in Peace moves it to exile. The later instruction of Malcolm's resolving ability can find the card in that public zone."
+  },
+  {
+    "oracle": "forge",
+    "card": "Fork",
+    "scenario": "Fork preserves Life from the Loam's target count",
+    "cr": "CR 707.10c (https://yawgatog.com/resources/magic-rules/#R70710c): \"Some effects copy a spell or ability and state that its controller may choose new targets for the copy. The player may leave any number of the targets unchanged, even if those targets would be illegal. If the player chooses to change some or all of the targets, the new targets must be legal. Once the player has decided what the copy's targets will be, the copy is put onto the stack with those targets.\"",
+    "reason": "Forge does not let the copy replace the original Loam's Island target with a legal Plains target. The run ends before the scripted target choice."
   }
 ]

@@ -69,6 +69,7 @@
       ]
     }
   ],
+  "Braingeyser": [],
   "Chains of Mephistopheles": [
     {
       "published_at": "2004-10-04",
@@ -217,6 +218,30 @@
     }
   ],
   "Dandân": [],
+  "Dark Depths": [
+    {
+      "published_at": "2022-12-08",
+      "hash": "7bbfa32ee5c0",
+      "scenario": [
+        "Dark Depths cannot pay for Mana Tithe"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "423efd5ae678",
+      "scenario": [
+        "it doesn't trigger again while its trigger waits",
+        "countered, it triggers again"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "038a90dbdeb1",
+      "scenario": [
+        "gone before its trigger resolves, no Marit Lage"
+      ]
+    }
+  ],
   "Dress Down": [
     {
       "published_at": "2021-06-18",
@@ -323,6 +348,93 @@
         "Force of Will for mana under Thalia costs one more",
         "a pitched Force of Will gives Mana Drain five mana"
       ]
+    }
+  ],
+  "Fork": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "c52fd2362b08",
+      "untestable": "The card vocabulary has no buyback casting option or buyback replacement on resolution."
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "3542921687f4",
+      "covered": "Effect::CopySpell"
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "99a05382f6b2",
+      "covered": "Effect::CopySpell"
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "7cd0636cbff0",
+      "scenario": [
+        "Fork copies Tendrils of Agony without a second storm trigger"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "51baa38cd72e",
+      "scenario": [
+        "Fork preserves Life from the Loam's target count"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "53ce42130d41",
+      "scenario": [
+        "Fork copies Braingeyser for 3 with a new target"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "bce184f89154",
+      "covered": "Effect::CopySpell"
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "bed98cd27789",
+      "untestable": "by-ptc7.2.14 tracks the Counterspell scenario. Beryl omits the resolving Fork from the copy’s new targets."
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "dcaa9666387a",
+      "untestable": "A scenario needs a spell with a payment by its controller during its resolution. Mana Tithe and other implemented tax counters ask the controller of the target spell."
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "4fa008c4f87e",
+      "untestable": "The implemented text-changing spell Mind Bend targets permanents. The vocabulary applies its word changes to permanents on the battlefield and cannot change the text of a spell on the stack."
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "fb59f263a384",
+      "scenario": [
+        "Fork copies Braingeyser for 3 with a new target"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "eefffd1ffa27",
+      "scenario": [
+        "Fork copies Lightning Bolt with a new target"
+      ]
+    },
+    {
+      "published_at": "2004-12-01",
+      "hash": "730999df1e1a",
+      "untestable": "The card vocabulary has no splice casting option that adds another card’s text to the original spell."
+    },
+    {
+      "published_at": "2009-05-01",
+      "hash": "5250ee4b2a6e",
+      "covered": "Effect::CopySpell"
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "702dd0a8bd4c",
+      "covered": "Effect::CopySpell"
     }
   ],
   "Furnace of Rath": [
@@ -710,6 +822,113 @@
       ]
     }
   ],
+  "Phantasmal Image": [
+    {
+      "published_at": "2017-03-14",
+      "hash": "698f03743df2",
+      "untestable": "by-ptc7.2.17 tracks the Worldgorger Dragon scenario. Beryl and Forge pass, but the XMage exporter does not supply the yes/no choice for a copy entering during another card’s resolution."
+    },
+    {
+      "published_at": "2017-03-14",
+      "hash": "73d7e4e2427c",
+      "scenario": [
+        "an Image of a Gargantuan that copied Mother of Runes is a 7/7 Mother"
+      ]
+    },
+    {
+      "published_at": "2017-03-14",
+      "hash": "b205c92b3cb1",
+      "scenario": [
+        "the copy's enters ability triggers",
+        "an Image of Painter's Servant chooses a color as it enters"
+      ]
+    },
+    {
+      "published_at": "2017-03-14",
+      "hash": "7aed6ddbed59",
+      "scenario": [
+        "an Image does not copy counters",
+        "an Aura spell targeting the copy has it sacrificed"
+      ]
+    },
+    {
+      "published_at": "2017-03-14",
+      "hash": "d2123bf9300a",
+      "scenario": [
+        "an Image copies a token's characteristics but is not a token"
+      ]
+    },
+    {
+      "published_at": "2017-03-14",
+      "hash": "14645e13b516",
+      "scenario": [
+        "a copy of an Image inherits its Illusion type and sacrifice trigger"
+      ]
+    },
+    {
+      "published_at": "2017-03-14",
+      "hash": "53d80728604e",
+      "untestable": "No implemented creature has X in its printed mana cost. A scenario with an X creature such as Stonecoil Serpent needs an entry replacement whose counter count comes from the cast spell’s X."
+    }
+  ],
+  "Quicksilver Gargantuan": [
+    {
+      "published_at": "2011-01-01",
+      "hash": "ae6a93944848",
+      "scenario": [
+        "the Gargantuan enters as a 7/7 copy"
+      ]
+    },
+    {
+      "published_at": "2011-01-01",
+      "hash": "d3d1912543d6",
+      "untestable": "by-ptc7.2.16 tracks the animation scenario. The Gargantuan copies an animated artifact as a noncreature. When Oko animates the copy, Beryl makes it 7/7 instead of 3/3."
+    },
+    {
+      "published_at": "2011-01-01",
+      "hash": "068a420e8c8b",
+      "scenario": [
+        "the Gargantuan enters as a 7/7 copy",
+        "a copy of Painter's Servant chooses a color as it enters"
+      ]
+    },
+    {
+      "published_at": "2011-01-01",
+      "hash": "72fea9f533b3",
+      "scenario": [
+        "the Gargantuan copies a Marit Lage token as a 7/7 card"
+      ]
+    },
+    {
+      "published_at": "2011-01-01",
+      "hash": "4665ecccad0e",
+      "untestable": "No implemented creature has X in its printed mana cost. A scenario with an X creature such as Protean Hydra needs an entry replacement whose counter count comes from the cast spell’s X."
+    },
+    {
+      "published_at": "2011-01-01",
+      "hash": "ce95d8ced692",
+      "scenario": [
+        "a Gargantuan of an Image keeps the Image's Illusion type"
+      ]
+    },
+    {
+      "published_at": "2011-01-01",
+      "hash": "7079b0838594",
+      "scenario": [
+        "a Gargantuan that copies nothing is itself"
+      ]
+    },
+    {
+      "published_at": "2011-01-01",
+      "hash": "a50ab10fdc34",
+      "untestable": "by-ptc7.2.17 tracks the Worldgorger Dragon scenario. Beryl and Forge pass, but the XMage exporter does not supply the yes/no choice for a copy entering during another card’s resolution."
+    },
+    {
+      "published_at": "2011-06-01",
+      "hash": "fbf17eb54d64",
+      "untestable": "by-ptc7.2.15 tracks the Tarmogoyf scenario. Beryl keeps the copied ability and makes the Gargantuan 2/3 instead of 7/7."
+    }
+  ],
   "Rest in Peace": [
     {
       "published_at": "2018-03-16",
@@ -769,6 +988,74 @@
       "hash": "4579c8576f13",
       "scenario": [
         "kindred counts as a card type and supertypes do not"
+      ]
+    }
+  ],
+  "Tendrils of Agony": [
+    {
+      "published_at": "2022-12-08",
+      "hash": "a632d71be081",
+      "scenario": [
+        "Tendrils of Agony does not count storm copies"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "cb4eeb38b6a7",
+      "scenario": [
+        "countering Tendrils of Agony's storm trigger prevents every copy"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "dd6a93784907",
+      "scenario": [
+        "Tendrils of Agony counts a countered spell cast from the graveyard"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "2d30f76e5188",
+      "scenario": [
+        "Tendrils of Agony with storm 2"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "98d21bbc0042",
+      "scenario": [
+        "Tendrils of Agony countered under its storm trigger is still copied"
+      ]
+    }
+  ],
+  "Thespian's Stage": [
+    {
+      "published_at": "2018-12-07",
+      "hash": "5b648b79e647",
+      "scenario": [
+        "it copies a basic land and can copy again"
+      ]
+    },
+    {
+      "published_at": "2018-12-07",
+      "hash": "bbd480925826",
+      "scenario": [
+        "it copies an opponent's Dark Depths for Marit Lage"
+      ]
+    },
+    {
+      "published_at": "2018-12-07",
+      "hash": "b8a2f6e43f0d",
+      "scenario": [
+        "the Stage stays tapped after copying an untapped land"
+      ]
+    },
+    {
+      "published_at": "2018-12-07",
+      "hash": "ee62ce291bda",
+      "scenario": [
+        "it copies an opponent's Dark Depths for Marit Lage",
+        "it copies what is printed on a land Blood Moon made a Mountain"
       ]
     }
   ],
