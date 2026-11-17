@@ -114,6 +114,13 @@ impl Layer {
         let rect = moved(node.rect, look.point + node.offset() + sink);
         let fade = |color: [u8; 4]| faded(color, look.opacity);
         let clip = look.clip.map_or(0, |(_, entry)| entry);
+        // A menu row is drawn highlighted while it has the focus or its submenu is open.
+        let active = element.role == Role::MenuItem
+            && (state.has(StateBits::FOCUSED) || self.submenu == Some(node.id));
+        let panel = panel(node, top, state, active);
+        if panel.is_some() {
+            state.0 |= StateBits::PAINTED;
+        }
         let index = builder.resolved(
             &element.name,
             Resolved {
@@ -138,10 +145,7 @@ impl Layer {
                 really: crate::frame::NameRef::default(),
             },
         );
-        // A menu row is drawn highlighted while it has the focus or its submenu is open.
-        let active = element.role == Role::MenuItem
-            && (state.has(StateBits::FOCUSED) || self.submenu == Some(node.id));
-        if let Some(panel) = panel(node, top, state, active) {
+        if let Some(panel) = panel {
             let mut draw = Draw::panel(
                 camera.layer_transform(rect),
                 fade(panel.tint),

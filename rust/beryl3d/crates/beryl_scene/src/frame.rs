@@ -172,6 +172,10 @@ impl StateBits {
     pub const PASSES: u16 = 1 << 12;
     /// The button a prompt or screen expects to be pressed, drawn amber.
     pub const PRIMARY: u16 = 1 << 13;
+    /// A flat-layer element drawn on a panel of its own, a fill or a rim, which covers what the
+    /// layer drew before it. The "reachable" check reads it to find a panel the pointer goes
+    /// through drawn over a control, such as a scrim drawn over a prompt's buttons.
+    pub const PAINTED: u16 = 1 << 14;
 
     /// Whether every bit of `bits` is set.
     #[must_use]

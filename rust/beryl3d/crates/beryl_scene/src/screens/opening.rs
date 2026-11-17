@@ -3,8 +3,8 @@
 //! `ui/src/screens/styles/opening.css`. A dimmed table, whether the viewer is on the play, a
 //! title, the viewer's hand in a row of large cards and, while cards are being put on the
 //! bottom of the library, a row of slots under it for them. The open prompt's buttons stand in
-//! the prompt bar, which `screens::game` adds after this, and the life totals are hidden, as the
-//! web's overlay covers them.
+//! the prompt bar, which `screens::game` adds after this so that the backdrop is drawn under
+//! them, and the life totals are hidden, as the web's overlay covers them.
 //!
 //! The cards are the hand's scene objects (`Shown::Object`): the table moves each from the hand
 //! into its box and back (`table::shown`), so no card is drawn at the hand while the opening is

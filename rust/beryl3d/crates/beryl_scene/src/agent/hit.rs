@@ -30,6 +30,26 @@ pub fn hit(frame: &Frame, point: Vec2) -> Option<u32> {
     best
 }
 
+/// The first element of the flat layer that is drawn over element `index` at `point` on a
+/// panel of its own (`StateBits::PAINTED`), if any. Elements inside `index` are not counted.
+/// One the pointer goes through leaves a press at `point` reaching `index`, so `hit` misses it,
+/// but its fill still covers `index`: a scrim drawn after a prompt's buttons dims them, so
+/// they look disabled though they work.
+#[must_use]
+pub fn painted_over(frame: &Frame, index: u32, point: Vec2) -> Option<u32> {
+    let start = index as usize + 1;
+    (frame.resolved[start..].iter().enumerate())
+        .map(|(at, element)| ((start + at) as u32, element))
+        .find(|&(other, element)| {
+            element.place == Place::Layer
+                && element.state.has(StateBits::PAINTED)
+                && element.opacity > 0.0
+                && within(element, point)
+                && !is_within(frame, other, index)
+        })
+        .map(|(other, _)| other)
+}
+
 /// The largest rectangle, by area, inside element `index` where a press reaches that element
 /// or one of its descendants. `None` when no part of it can be pressed.
 #[must_use]

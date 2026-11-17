@@ -2983,8 +2983,11 @@ screen, so they cover every card spec that is ever generated.
   hands overlap them on purpose.
 - **Reachable.** A hit test at the centre of the visible part of an interactive
   flat-layer element (its box cut to its clip, so a list row scrolled partly out
-  of view is pressed where it shows) returns that element or one inside it.
-  Every interactive card at rest has an uncovered area of at least 24 by 24
+  of view is pressed where it shows) returns that element or one inside it, and
+  no later element of the flat layer that draws a fill or a rim
+  (`StateBits::PAINTED`) covers that centre. A scrim the pointer goes through
+  leaves a button pressable, but a button drawn under it looks disabled. Every
+  interactive card at rest has an uncovered area of at least 24 by 24
   points (44 by 44 on the phone layout) where a hit test returns it. The check
   judges cards only in frames where no card is moving, and a card that its
   step's own verb holds still between two of its moves (a strike's creature

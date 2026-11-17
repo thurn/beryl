@@ -23,7 +23,6 @@ pub fn game(input: &ScreenIn) -> Element {
         .prompt
         .and_then(|prompt| prompts::screen(prompt, input));
     let pieces: Vec<Element> = [
-        opening::opening(input),
         game_over::scrim(input),
         game_over::game_over(input),
         game_over::buttons(input),
@@ -36,13 +35,18 @@ pub fn game(input: &ScreenIn) -> Element {
     .into_iter()
     .flatten()
     .collect();
-    if pieces.is_empty() {
+    let opening = opening::opening(input);
+    if pieces.is_empty() && opening.is_none() {
         return prompt.unwrap_or_else(|| row().name("game"));
     }
     // The pieces are in a region that draws nothing, so the prompt keeps the panel it has as
-    // the screen's top element. It comes first, so that Tab reaches its buttons first.
+    // the screen's top element. The flat layer draws in tree order, so the opening, whose scrim
+    // dims the whole window, comes before the prompt, whose buttons would otherwise be drawn
+    // under it and look disabled. The opening has nothing Tab stops at, so Tab still reaches
+    // the prompt's buttons first.
     holder()
         .name("game")
+        .children(opening)
         .children(prompt.map(on_panel))
         .children(pieces)
 }
@@ -69,14 +73,16 @@ pub fn game_phone(input: &ScreenIn) -> Element {
             input.sheet.is_none().then(|| phone::menu(&bands)),
         ]
     });
+    // The flat layer draws in tree order. The opening's and the game over's scrims come first,
+    // as on the desktop (`game`), so that neither dims a control that still takes presses.
     let mut screen = holder()
         .name("game")
+        .children(opening::opening(input))
+        .children(game_over::scrim(input))
         .children(prompt)
         .children(furniture.into_iter().flatten().flatten())
         .children(
             [
-                opening::opening(input),
-                game_over::scrim(input),
                 game_over::game_over(input),
                 game_over::buttons(input),
                 phone::log_sheet(input, &bands),

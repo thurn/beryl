@@ -9,7 +9,7 @@ use glam::{Vec2, Vec4};
 use super::fault::{Context, Fault, Layout, Rule, Subject};
 use super::hit::{
     Overlaps, bounds, contains, covering, has_free_rect, hit, intersection, is_within,
-    visible_bounds,
+    painted_over, visible_bounds,
 };
 use super::tree::locator_of;
 use crate::data::audit;
@@ -130,7 +130,9 @@ pub fn overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
 }
 
 /// Reachable: a hit test at the centre of the visible part of an interactive flat-layer element
-/// (its box cut to its clip) returns that element (or something inside it). Every interactive card at rest has an uncovered area at
+/// (its box cut to its clip) returns that element (or something inside it), and no later
+/// element of the flat layer is drawn on a panel over that centre, which a press would go
+/// through but which would cover the element's look (`hit::painted_over`). Every interactive card at rest has an uncovered area at
 /// least `TARGET_POINTS` square (`PHONE_TARGET_POINTS` on the phone layout) where a hit test
 /// returns it. Cards are judged only on a frame where nothing on the table moves: a card passing
 /// over another covers it for a moment, which leaves no card out of reach. A hand card the
@@ -200,6 +202,15 @@ pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
         let center = Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
         let reached = hit(frame, center);
         if reached.is_some_and(|at| is_within(frame, at, index)) {
+            if let Some(over) = painted_over(frame, index, center) {
+                let subjects = vec![subject(frame, index), subject(frame, over)];
+                let message = format!(
+                    "{} is drawn under {}, which a press goes through",
+                    subjects[0].describe(),
+                    subjects[1].describe()
+                );
+                faults.push(fault(Rule::Reachable, context, message, subjects));
+            }
             continue;
         }
         let mut subjects = vec![subject(frame, index)];
