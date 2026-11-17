@@ -23,6 +23,7 @@ pub mod menus;
 pub mod opening;
 pub mod order;
 pub mod palette;
+pub mod pools;
 pub mod quit;
 pub mod selection;
 pub mod tokens;
@@ -81,6 +82,9 @@ pub enum TablePress {
     AskConfirm,
     /// The ask prompt's plus, or its minus if `false`.
     AskStep(bool),
+    /// The `n`th common counter name of the ask prompt (`ask::COUNTER_SUGGESTIONS`), which
+    /// confirms it with that name.
+    AskSuggestion(u8),
     /// The `n`th row the token search shows.
     Token(u16),
     /// The `n`th card of the library order tray, which moves it to the top.
@@ -104,6 +108,9 @@ pub enum TablePress {
     Step { at: u8, active: bool },
     /// The Next button, which advances to the next phase.
     Next,
+    /// The counter at `at` of `side`'s row of mana and player counters, which adds one
+    /// (`pools`).
+    Counter { side: Side, at: u8 },
     /// Quit's question was answered Quit.
     Quit,
     /// Close the command list, ask prompt, token search, custom token form or order tray.

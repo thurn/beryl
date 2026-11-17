@@ -126,6 +126,9 @@ pub struct CountFloats {
     pub passes: bool,
     /// Whether the window has the phone layout, where a total is drawn smaller, on a smaller orb.
     pub phone: bool,
+    /// Whether each player's unspent mana is shown: not on the manual table, whose own row of
+    /// mana and counters stands there (`manual::pools`).
+    pub pools: bool,
 }
 
 impl CountFloats {
@@ -239,6 +242,7 @@ impl CountFloats {
             let want = Shown {
                 life: counts.map(|counts| (counts.life, target, passes)),
                 pool: counts
+                    .filter(|_| self.pools)
                     .map(|counts| counts.pool)
                     .filter(|pool| *pool != ManaPool::default()),
                 change: counts.zip(run).map(|(counts, _)| counts.change),

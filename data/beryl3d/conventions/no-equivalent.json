@@ -1,7 +1,9 @@
 {
   "entries": {
     "Manual table: a click acts": {
-      "open": "Clicking a life total opens no number prompt, the table shows no mana symbols or player counters to click, and a refused action does not shake (needs bead by-q44s.9.23)"
+      "recording": "screen/table",
+      "at": "end",
+      "shows": "button \"U counter: 0\""
     },
     "Manual table log": {
       "recording": "screen/table",
@@ -169,7 +171,13 @@
       "shows": "menuitem \"Custom token\""
     },
     "Manual counters and untap flags": {
-      "open": "Not checked against named counters, player counters or the untap lock yet (needs bead by-q44s.9.23)"
+      "recording": "screen/table",
+      "at": "end",
+      "do": [
+        "menu card \"Serra Angel\" #11",
+        "press menuitem \"Add counter…\""
+      ],
+      "shows": "button \"charge\""
     }
   }
 }

@@ -63,6 +63,10 @@ enum Source {
 }
 
 /// What the app adds to the host's frame loop.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate fact about the run"
+)]
 struct AppFeed {
     source: Option<Source>,
     /// The frame log, made when the host opens and read back after the run.

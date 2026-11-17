@@ -9,6 +9,7 @@ use glam::Vec2;
 use super::{Client, Platform};
 use crate::agent::hit;
 use crate::data::space::pointer::DRAG_THRESHOLD_POINTS;
+use crate::element::Viewed;
 use crate::frame::{Place, Role};
 use crate::input::{Button, Pointer, PointerPhase};
 use crate::manual::arrows::{self, Pick};
@@ -45,6 +46,9 @@ impl Client {
         if self.manual.picking.is_some() {
             return self.pick_target(pointer);
         }
+        if self.life_clicked(pointer) {
+            return true;
+        }
         if self.sweep(pointer) {
             return true;
         }
@@ -70,6 +74,53 @@ impl Client {
             self.send_table(actions);
         }
         self.show.pointer_mut().cancel();
+        true
+    }
+
+    /// A click on a player's life total on the table, with nothing of the flat layer over it,
+    /// opens the number prompt that sets it, as the web's `registerPlayers` gives it Set life.
+    /// Returns whether it did.
+    fn life_clicked(&mut self, pointer: &Pointer) -> bool {
+        if pointer.phase != PointerPhase::Down
+            || pointer.button != Button::Primary
+            || !self.at_table()
+            || self.layer.press_at(pointer.position, self.open).is_some()
+        {
+            return false;
+        }
+        let Target::Life(side) = target_at(&self.frame, pointer.position) else {
+            return false;
+        };
+        self.run_table_command("life.set", Target::Life(side));
+        true
+    }
+
+    /// A library's pile on the manual table, at `place`, as the pile a click on it draws from:
+    /// a press on it draws a card for its player instead of opening it, as the web's
+    /// `registerClicks` runs Draw a card for a click on a library.
+    pub(super) fn table_library_at(&self, place: Place) -> Option<Viewed> {
+        let Place::Card {
+            zone: ZoneName::Library,
+            side,
+            ..
+        } = place
+        else {
+            return None;
+        };
+        self.at_table()
+            .then_some(Viewed::Pile(side, ZoneName::Library))
+    }
+
+    /// A click on `pile` let go over it: on the manual table, a library draws a card for its
+    /// player. Returns whether it did.
+    pub(super) fn table_library_clicked(&mut self, pile: Viewed) -> bool {
+        let Viewed::Pile(side, ZoneName::Library) = pile else {
+            return false;
+        };
+        if !self.at_table() {
+            return false;
+        }
+        self.run_table_command("library.draw", Target::Pile(side, ZoneName::Library));
         true
     }
 
@@ -197,18 +248,13 @@ impl Client {
         self.show_screen();
     }
 
-    /// A click on the card in `slot` on the table, one that picked nothing up: with Cmd held it
-    /// adds the card to the selection or takes it out. Returns whether it did.
-    pub(super) fn table_click(&mut self, slot: ObjectId) -> bool {
-        if self.screen != Screen::Table || !self.manual.meta {
-            return false;
-        }
+    /// A Cmd-click on the card in `slot` on the table adds it to the selection or takes it out.
+    pub(super) fn table_select(&mut self, slot: ObjectId) {
         let actionable =
             (self.show.latest()).is_some_and(|update| selection::actionable(&update.view, slot));
         if actionable {
             selection::toggle(&mut self.manual.state.selection, slot);
         }
-        true
     }
 
     /// Escape on the table, with no menu, overlay or viewer open for it to close, gives up a

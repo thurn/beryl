@@ -983,7 +983,9 @@ fn a_rectangle_over_three_permanents_selects_them_and_tap_acts_on_all_three() {
     client.handle(key(KeyCode::Escape, Modifiers::default()));
     let frame = client.frame(800 * MS).clone();
     assert!(
-        (frame.resolved.iter()).all(|element| element.state.0 & StateBits::SELECTED == 0),
+        (frame.resolved.iter())
+            .filter(|element| element.role == Role::Card)
+            .all(|element| element.state.0 & StateBits::SELECTED == 0),
         "Escape left a card selected"
     );
 }

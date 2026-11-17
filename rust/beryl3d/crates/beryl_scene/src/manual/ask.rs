@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use super::commands::{self, Asks, COMMANDS, Command, Values};
 use super::{TablePress, Target};
-use crate::element::{Align, Anchor, Element, Press, row};
+use crate::element::{Align, Anchor, Element, Press, column, row};
 use crate::input::Size;
 use crate::tokens::{color, size, space};
 use crate::widgets::{FieldState, Fields, button, field, primary};
@@ -497,8 +497,28 @@ fn relative(action: TableAction, by: i64) -> TableAction {
     serde_json::from_value(Value::Object(outer)).unwrap_or(action)
 }
 
-/// The ask prompt in the dock at the lower right of a window of `window`'s size: Cancel, the
-/// field with a minus and a plus beside a number or stats, and the confirm button.
+/// The common counter names Add counter offers above its field, as the web's
+/// `counterSuggestions` (`ui/src/table/cardState.ts`): a press on one adds that counter.
+pub const COUNTER_SUGGESTIONS: [&str; 6] = [
+    "+1/+1",
+    "\u{2212}1/\u{2212}1",
+    "loyalty",
+    "charge",
+    "lore",
+    "stun",
+];
+
+/// The common counter names of the ask prompt open for `ask`, if its command offers them: Add
+/// counter's, as the web's `TableMenu` gives the prompt `suggestions` for a named counter.
+#[must_use]
+pub fn suggestions(ask: &Ask) -> Option<&'static [&'static str]> {
+    let command = COMMANDS.get(usize::from(ask.command))?;
+    (command.id == "counter.add_named").then_some(&COUNTER_SUGGESTIONS[..])
+}
+
+/// The ask prompt in the dock at the lower right of a window of `window`'s size: Cancel, Add
+/// counter's common counter names, the field with a minus and a plus beside a number or stats,
+/// and the confirm button.
 #[must_use]
 pub fn dock(ask: &Ask, fields: &Fields, window: Size) -> Element {
     let state = fields.get(&ask.field);
@@ -520,19 +540,37 @@ pub fn dock(ask: &Ask, fields: &Fields, window: Size) -> Element {
     let cancel = button("Cancel")
         .name("close")
         .on_press(Press::Table(TablePress::Close));
-    let mut dock = row()
-        .name("ask")
+    let controls = row()
         .gap(space::M)
-        .padding(space::L)
         .align_items(Align::Center)
-        .background(color::PANEL)
-        .border((color::METAL, size::BORDER))
-        .radius(size::PANEL_RADIUS)
         .child(cancel)
         .children(step(-1, "−", "Less"))
         .child(input)
         .children(step(1, "+", "More"))
         .child(confirm);
+    // The common counter names stand in a row of small buttons above the field, as the web's
+    // `.table-ask-suggestions` does.
+    let common = suggestions(ask).map(|names| {
+        row()
+            .name("Common counters")
+            .gap(space::S)
+            .children(names.iter().enumerate().map(|(at, name)| {
+                let at = u8::try_from(at).unwrap_or(u8::MAX);
+                button(name)
+                    .min_width(0.0)
+                    .on_press(Press::Table(TablePress::AskSuggestion(at)))
+            }))
+    });
+    let mut dock = column()
+        .name("ask")
+        .gap(space::M)
+        .padding(space::L)
+        .align_items(Align::End)
+        .background(color::PANEL)
+        .border((color::METAL, size::BORDER))
+        .radius(size::PANEL_RADIUS)
+        .children(common)
+        .child(controls);
     let inset = crate::data::space::flat::table::EDGE;
     let corner = Vec2::new(window.width - inset, window.height - inset);
     dock.anchor = Some(Anchor::Point(corner, Vec2::ONE));

@@ -9,15 +9,16 @@ use glam::Vec2;
 
 use super::{Client, Platform};
 use crate::command::SessionCommand;
+use crate::element::Press;
 use crate::input::{Button, Pointer, PointerPhase};
 use crate::manual::lobby::Lobby;
 use crate::manual::menus::{self, Act};
 use crate::manual::tokens::TokenChoice;
-use crate::manual::{self, Context, Sent, TableState, Target, commands};
+use crate::manual::{self, Context, Sent, TablePress, TableState, Target, commands, pools};
 use crate::screens::Screen;
 use crate::widgets::BACK;
 use beryl_protocol::ipc::TableActReply;
-use beryl_protocol::protocol::{Answer, TableAction};
+use beryl_protocol::protocol::{Answer, ObjectId, Side, TableAction, ZoneName};
 
 /// The most table actions the client remembers sending without an answer.
 const PENDING: usize = 64;
@@ -88,13 +89,82 @@ impl Client {
         }
     }
 
-    /// A right click on the table screen, with no sheet over it, opens the context menu of
-    /// what the pointer is on where it was clicked (`open_table_menu_at`). Returns whether it
-    /// did, and so means nothing else.
+    /// A right click on the table screen, with no sheet over it, removes one from the mana or
+    /// player counter under it, or else opens the context menu of what the pointer is on where
+    /// it was clicked (`open_table_menu_at`). Returns whether it did either, and so means
+    /// nothing else.
     pub(super) fn open_table_menu(&mut self, pointer: &Pointer) -> bool {
-        pointer.phase == PointerPhase::Down
-            && pointer.button == Button::Secondary
-            && self.open_table_menu_at(pointer.position)
+        if pointer.phase != PointerPhase::Down || pointer.button != Button::Secondary {
+            return false;
+        }
+        if self.screen == Screen::Table
+            && let Some((_, Press::Table(TablePress::Counter { side, at }), _)) =
+                self.layer.press_at(pointer.position, self.open)
+        {
+            self.adjust_counter(side, at, false);
+            return true;
+        }
+        self.open_table_menu_at(pointer.position)
+    }
+
+    /// Adds one to the counter at `at` of `side`'s row of mana and player counters, or removes
+    /// one unless `add` (`manual::pools`), unless the table is frozen.
+    pub(super) fn adjust_counter(&mut self, side: Side, at: u8, add: bool) {
+        if self.table_frozen() {
+            return;
+        }
+        let Some(view) = self.show.latest().map(|update| &update.view) else {
+            return;
+        };
+        let Some(name) = pools::counter_name(view, side, at) else {
+            return;
+        };
+        let Some((_, command)) = commands::command(pools::command(at, add)) else {
+            return;
+        };
+        let mut values = commands::Values::new();
+        values.insert("text", name.into());
+        let actions = commands::actions_with(command, Target::Life(side), view, &values);
+        self.send_table(actions);
+    }
+
+    /// A click on the card in `slot` on the table, one that picked nothing up, as the web's
+    /// `registerClicks` (`ui/src/table/click.ts`) takes it: a permanent taps or untaps, with
+    /// every selected card if it is selected; a card in the viewer's hand, or in an open viewer
+    /// of a library, is played (face down with Shift); a stack entry resolves; and a library's
+    /// top card draws a card for its player. With Cmd held, a click adds the card to the
+    /// selection or takes it out instead (`table_select`). Returns whether the click was on
+    /// the manual table, and so means nothing else.
+    pub(super) fn table_click(&mut self, slot: ObjectId) -> bool {
+        if self.screen != Screen::Table {
+            return false;
+        }
+        if self.manual.meta {
+            self.table_select(slot);
+            return true;
+        }
+        let Some(view) = self.show.latest().map(|update| &update.view) else {
+            return true;
+        };
+        let Some(object) = view.objects.iter().find(|object| object.slot == slot) else {
+            return true;
+        };
+        let shift = self.manual.shift;
+        let viewed = self.viewing.open.is_some() && self.viewer_shows(slot);
+        let card = Target::Card(slot);
+        let side = object.zone_side.unwrap_or(object.owner);
+        let (id, target) = match object.zone {
+            ZoneName::Battlefield => ("permanent.tap", card),
+            ZoneName::Stack => ("stack_entry.resolve", card),
+            ZoneName::Hand if side == Side::You && shift => ("hand_card.play_face_down", card),
+            ZoneName::Hand if side == Side::You => ("hand_card.play", card),
+            ZoneName::Library if viewed && shift => ("hand_card.play_face_down", card),
+            ZoneName::Library if viewed => ("pile_card.play", card),
+            ZoneName::Library => ("library.draw", Target::Pile(side, ZoneName::Library)),
+            _ => return true,
+        };
+        self.run_table_command(id, target);
+        true
     }
 
     /// Opens the context menu of what is at `at` (`manual::target_at`) there, on the table
@@ -160,7 +230,6 @@ impl Client {
     /// The viewer's player and sideboard have no `Target`; the table stands for them. With
     /// `shift`, a token command makes its token face down.
     pub(super) fn table_key(&mut self, index: u16, shift: bool) {
-        use beryl_protocol::protocol::{Side, ZoneName};
         let Some(command) = commands::COMMANDS.get(usize::from(index)) else {
             return;
         };
@@ -207,8 +276,12 @@ impl Client {
         self.give(act, target, shift);
     }
 
-    /// Gives the table command whose id is `id` to `target`, as a key or a menu row would.
+    /// Gives the table command whose id is `id` to `target`, as a key or a menu row would,
+    /// unless the table is frozen while the other seat's connection is down.
     pub(super) fn run_table_command(&mut self, id: &str, target: Target) {
+        if self.table_frozen() {
+            return;
+        }
         let Some((_, command)) = commands::command(id) else {
             return;
         };

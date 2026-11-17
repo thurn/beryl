@@ -24,8 +24,8 @@ use crate::manual::Target;
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::menus::{MENU, OpenMenu};
 use crate::manual::{
-    TableState, ask, assists, drop, link, log, opening, order, palette, quit, selection, tokens,
-    turn,
+    TableState, ask, assists, drop, link, log, opening, order, palette, pools, quit, selection,
+    tokens, turn,
 };
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::widgets::{context_menu, menu, sheet_menu};
@@ -120,18 +120,8 @@ pub fn table(input: &ScreenIn) -> Element {
         let top = link::top(window.size, window.phone(), window.safe_area.top);
         link::banner(view, window.size, top)
     });
-    // The Next button stands in the lower right, where the ask prompt docks, so it gives way
-    // to whatever the table shows over itself.
-    let next = (input.view.and_then(|view| view.table.as_ref()))
-        .filter(|_| state.menu.is_none() && !state.overlay_open())
-        .map(|table| {
-            let inset = crate::data::space::flat::table::EDGE;
-            turn::next(table.phase, input.window.size, inset)
-        });
     screen
-        .children(players::players(input))
-        .children(steps::table_steps(input))
-        .children(next)
+        .children(controls(state, input, frozen))
         .children(log)
         .children(summary)
         .children(proposals)
@@ -144,6 +134,37 @@ pub fn table(input: &ScreenIn) -> Element {
         .children(over(state, input))
         .children(super::table_opening::table_opening(input))
         .children(connection)
+}
+
+/// The life orbs, the step tracks, the rows of mana and player counters and the Next button,
+/// none while the guided start's screen covers the table, as the game's opening covers its
+/// controls. The Next button stands in the lower right, where the ask prompt docks, so it gives
+/// way to whatever the table shows over itself, and a `frozen` table shows none.
+fn controls(state: &TableState, input: &ScreenIn, frozen: bool) -> Vec<Element> {
+    if input
+        .view
+        .and_then(crate::manual::opening::prompt)
+        .is_some()
+    {
+        return Vec::new();
+    }
+    let next = (input.view.and_then(|view| view.table.as_ref()))
+        .filter(|_| state.menu.is_none() && !state.overlay_open() && !frozen)
+        .map(|table| {
+            let inset = crate::data::space::flat::table::EDGE;
+            turn::next(table.phase, input.window.size, inset)
+        });
+    let pools =
+        (input.view).and_then(|view| pools::pools(view, input.window.size, input.window.phone()));
+    [
+        players::players(input),
+        steps::table_steps(input),
+        pools,
+        next,
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 /// The command list, ask prompt, token search, custom token form or order tray the table

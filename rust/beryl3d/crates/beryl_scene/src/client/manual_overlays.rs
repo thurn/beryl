@@ -12,7 +12,7 @@ use beryl_protocol::protocol::{Answer, ObjectId, Side};
 use super::Client;
 use crate::command::{Request, SessionCommand};
 use crate::input::{Key, KeyCode, KeyPhase};
-use crate::manual::ask::{Ask, Confirmed};
+use crate::manual::ask::{self, Ask, Confirmed};
 use crate::manual::bindings::binding_for;
 use crate::manual::commands::{self, COMMANDS, Values};
 use crate::manual::menus;
@@ -114,6 +114,14 @@ impl Client {
             TablePress::Palette(at) => self.run_palette_row(usize::from(at), shift),
             TablePress::AskConfirm => self.confirm_ask(),
             TablePress::AskStep(up) => self.step_ask(up),
+            TablePress::AskSuggestion(at) => {
+                let suggested = (self.manual.ask.as_ref())
+                    .and_then(ask::suggestions)
+                    .and_then(|names| names.get(usize::from(at)));
+                if let Some(&name) = suggested {
+                    self.confirm_ask_with(name);
+                }
+            }
             TablePress::Token(at) => self.choose_token(usize::from(at), shift),
             TablePress::OrderCard(at) => {
                 if let Some(order) = &mut self.manual.order {
@@ -145,6 +153,7 @@ impl Client {
                 let id = crate::manual::turn::step_command(view, at, active);
                 self.run_table_command(id, crate::manual::Target::Table);
             }
+            TablePress::Counter { side, at } => self.adjust_counter(side, at, true),
             TablePress::Quit => {
                 self.manual.quitting = false;
                 self.requests.push_back(crate::command::Request::Quit);
@@ -284,14 +293,22 @@ impl Client {
     /// sends what the command makes and closes the prompt. Nothing while the field holds no
     /// value.
     fn confirm_ask(&mut self) {
+        let Some(ask) = &self.manual.ask else {
+            return;
+        };
+        let text = self.fields.get(&ask.field).text;
+        self.confirm_ask_with(&text);
+    }
+
+    /// Confirms the ask prompt as if its field held `text`.
+    fn confirm_ask_with(&mut self, text: &str) {
         let Some(ask) = self.manual.ask.clone() else {
             return;
         };
         let Some(view) = self.show.latest().map(|update| &update.view) else {
             return;
         };
-        let text = self.fields.get(&ask.field).text;
-        match ask.confirm(&text, view) {
+        match ask.confirm(text, view) {
             Some(Confirmed::Next(next)) => self.show_ask(*next),
             Some(Confirmed::Send(actions)) => {
                 self.manual.ask = None;

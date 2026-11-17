@@ -372,6 +372,7 @@ impl Client {
         let targets = self.targets(true);
         self.counts.passes = self.screen == crate::screens::Screen::Game;
         self.counts.phone = self.window.phone();
+        self.counts.pools = self.screen != crate::screens::Screen::Table;
         (self.counts).prepare(
             &mut self.layer,
             self.show.counts(),

@@ -191,7 +191,9 @@ impl Client {
                     // pile that takes presses itself, as one held up in a prompt's tray does,
                     // is pressed as a card.
                     let opens = element.role == Role::Pile || !element.interactive;
-                    if let Some(pile) = self.pile_at(element.place).filter(|_| opens) {
+                    let pile = (self.pile_at(element.place))
+                        .or_else(|| self.table_library_at(element.place));
+                    if let Some(pile) = pile.filter(|_| opens) {
                         self.gesture.set_release(Some(Release::Pile(pile)));
                         return;
                     }
@@ -222,10 +224,13 @@ impl Client {
                 match self.gesture.take_release() {
                     Some(Release::Pile(pile))
                         if let Some(index) = hit(&self.frame, pointer.position)
-                            && self.pile_at(self.frame.resolved[index as usize].place)
+                            && let place = self.frame.resolved[index as usize].place
+                            && (self.pile_at(place).or_else(|| self.table_library_at(place)))
                                 == Some(pile) =>
                     {
-                        self.press(&Press::View(pile));
+                        if !self.table_library_clicked(pile) {
+                            self.press(&Press::View(pile));
+                        }
                     }
                     Some(Release::Element(pressed))
                         if let Some((id, press, true)) =
