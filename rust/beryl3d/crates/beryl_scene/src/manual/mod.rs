@@ -4,11 +4,13 @@
 //! (`target_at`), which a menu or a key acts on, and what the table shows over itself: the
 //! command list (`palette`) with the keys the player bound (`bindings`), the ask prompt
 //! (`ask`), the token search and custom token form (`tokens`), the library order tray (`order`)
-//! and the log (`log`); the pile viewers (`viewers`), the selection (`selection`), dropping
+//! and the log (`log`); what the assists show (`assists`): the proposal panel, state nudges'
+//! labels and the sorting tray; the pile viewers (`viewers`), the selection (`selection`), dropping
 //! held cards (`drop`) and the arrows a player draws (`arrows`).
 
 pub mod arrows;
 pub mod ask;
+pub mod assists;
 pub mod bindings;
 pub mod commands;
 pub mod drop;
@@ -93,6 +95,18 @@ pub enum TablePress {
     CancelCapture,
     /// Close the command list, ask prompt, token search, custom token form or order tray.
     Close,
+    /// Turn the line `line` of the proposal `id` on or off (`assists::proposals`).
+    ProposalLine { id: u32, line: u32, on: bool },
+    /// Apply the checked lines of the proposal `id`, as it stood at `revision`.
+    ApplyProposal { id: u32, revision: u32 },
+    /// Apply the state nudge whose label has this id (`assists::labels`).
+    Label(u32),
+    /// A card of the sorting tray (`assists::sort_answer`).
+    SortCard(ObjectId),
+    /// The sorting tray's Done.
+    SortDone,
+    /// The sorting tray's Cancel.
+    SortCancel,
 }
 
 /// What the client keeps of the manual table: the open context menu, command list, ask

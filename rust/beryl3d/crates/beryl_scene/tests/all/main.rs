@@ -28,6 +28,7 @@ mod inspect;
 mod light;
 mod lobby;
 mod manual;
+mod manual_assists;
 mod motion;
 mod notices;
 mod object_states;

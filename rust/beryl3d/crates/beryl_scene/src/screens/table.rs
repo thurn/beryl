@@ -3,9 +3,10 @@
 //! log at its left, and whatever the table shows over itself: the context menu a right click or
 //! a long press opens, which on a phone is a bottom sheet, the command list, the ask prompt in
 //! the dock, the token search or the library order tray; the viewer of a pile; the rectangle a
-//! sweep draws; the summary of the selected permanents; and the outline of where a held card
-//! would land. Only the solo table is built:
-//! the web interface's host and join screens come later.
+//! sweep draws; the summary of the selected permanents; the outline of where a held card would
+//! land; and what the assists show: the proposal panel, state nudges' labels and the sorting
+//! tray (`manual::assists`). Only the solo table is built: the web interface's host and join
+//! screens come later.
 
 use beryl_protocol::protocol::Facing;
 use glam::Vec2;
@@ -20,7 +21,7 @@ use crate::inspect::viewer::viewer;
 use crate::manual::Target;
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::menus::{MENU, OpenMenu};
-use crate::manual::{TableState, ask, drop, log, order, palette, selection, tokens};
+use crate::manual::{TableState, ask, assists, drop, log, order, palette, selection, tokens};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::widgets::{context_menu, menu, sheet_menu};
 
@@ -78,6 +79,14 @@ pub fn table(input: &ScreenIn) -> Element {
             input.window.phone().then_some(input.window),
         )
     });
+    let table = input.view.and_then(|view| view.table.as_ref());
+    let proposals = table.and_then(|table| assists::proposals(&table.proposals, input.window));
+    let labels = (input.view.zip(table))
+        .map(|(view, table)| assists::labels(&table.labels, view, input.window.phone()))
+        .unwrap_or_default();
+    let sort = input
+        .view
+        .and_then(|view| assists::sort_tray(view, input.window.size));
     let open = state.menu.as_ref().map(|open| {
         if input.window.phone() {
             bottom_sheet(open, input)
@@ -97,9 +106,12 @@ pub fn table(input: &ScreenIn) -> Element {
     screen
         .children(log)
         .children(summary)
+        .children(proposals)
+        .children(labels)
         .children(sweep)
         .children(landing)
         .children(viewer(input))
+        .children(sort)
         .children(open)
         .children(over(state, input))
 }

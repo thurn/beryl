@@ -7,7 +7,7 @@
 //! of these is open at a time; opening one closes the others.
 
 use beryl_protocol::ipc::decks::CardSearchHit;
-use beryl_protocol::protocol::{ObjectId, Side};
+use beryl_protocol::protocol::{Answer, ObjectId, Side};
 
 use super::Client;
 use crate::command::{Request, SessionCommand};
@@ -19,7 +19,7 @@ use crate::manual::menus;
 use crate::manual::order::LibraryOrder;
 use crate::manual::palette::{self, Palette, RESET, RESET_NOTICE};
 use crate::manual::tokens::{self, Choice, CustomToken, TokenChoice, TokenSearch};
-use crate::manual::{TablePress, Target, log};
+use crate::manual::{TablePress, Target, assists, log};
 use crate::widgets::FieldState;
 
 impl Client {
@@ -75,7 +75,7 @@ impl Client {
     }
 
     /// Shows `ask` in the dock, its field holding its starting text, selected and focused.
-    fn show_ask(&mut self, ask: Ask) {
+    pub(super) fn show_ask(&mut self, ask: Ask) {
         self.over(&ask.field, ask.field_state());
         let name = ask.field.clone();
         self.manual.ask = Some(ask);
@@ -143,6 +143,21 @@ impl Client {
                 self.layer.focus(None);
                 self.show_screen();
             }
+            TablePress::ProposalLine { id, line, on } => {
+                self.send_answer(Answer::ProposalLine { id, line, on });
+            }
+            TablePress::ApplyProposal { id, revision } => {
+                self.send_answer(Answer::ApplyProposal { id, revision });
+            }
+            TablePress::Label(id) => self.send_answer(Answer::ApplyLabel { id }),
+            TablePress::SortCard(card) => {
+                let view = self.show.latest().map(|update| &update.view);
+                if let Some(answer) = view.and_then(|view| assists::sort_answer(view, card)) {
+                    self.send_answer(answer);
+                }
+            }
+            TablePress::SortDone => self.send_answer(Answer::Done),
+            TablePress::SortCancel => self.send_answer(Answer::Cancel),
         }
     }
 
@@ -261,6 +276,12 @@ impl Client {
                 self.manual.ask = None;
                 self.layer.focus(None);
                 self.send_table(actions);
+                self.show_screen();
+            }
+            Some(Confirmed::Answer(answer)) => {
+                self.manual.ask = None;
+                self.layer.focus(None);
+                self.send_answer(answer);
                 self.show_screen();
             }
             None => {}

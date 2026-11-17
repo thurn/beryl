@@ -4,13 +4,14 @@
 //! that share a submenu folded under one row, each with its key at its end.
 
 use beryl_protocol::PlayerView;
-use beryl_protocol::protocol::{Side, TableAction, ZoneName};
+use beryl_protocol::protocol::{Answer, Side, TableAction, TableObjectRef, ZoneName};
 use glam::Vec2;
 
 use super::commands::{self, Asks, Command, Entry, Values};
 use super::{Context, Target, viewers};
 use crate::element::Viewed;
 use crate::widgets::{MenuGroup, MenuId, MenuRow};
+use beryl_protocol::script::Subject;
 
 /// The id of the table's context menu, which its rows' presses (`Press::Menu`) carry.
 pub const MENU: MenuId = MenuId(1);
@@ -32,6 +33,10 @@ pub enum Act {
     Shortcuts,
     View(Viewed),
     Pick(u16),
+    /// Answer the table: an ability from the permanent's menu (`card_rows`).
+    Answer(Answer),
+    /// Ask for X, then activate the ability at this row of the permanent the reference names.
+    AskX(TableObjectRef, usize),
     Nothing,
 }
 
@@ -132,8 +137,10 @@ const UNHEADED: [&str; 8] = [
 /// does something here (`act`).
 #[must_use]
 pub fn open(target: Target, view: &PlayerView, at: Vec2, context: &Context) -> OpenMenu {
-    let mut entries: Vec<Entry> = commands::commands_for(target.applies_to(view), view, context)
+    let kind = target.applies_to(view);
+    let mut entries: Vec<Entry> = commands::commands_for(kind, view, context)
         .into_iter()
+        .chain(commands::card_entries(kind, view))
         .filter(|entry| entry.menu.is_some())
         .collect();
     entries.sort_by_key(|entry| entry.menu.map_or(0, |menu| menu.order));
@@ -153,26 +160,31 @@ pub fn open(target: Target, view: &PlayerView, at: Vec2, context: &Context) -> O
             sections.push((heading, Vec::new()));
         }
         let section = sections.len() - 1;
-        let act = act(entry.command, target, view, context, false);
-        let mut row = MenuRow::new(&label(entry.command, target, view));
-        row.key = context.key(entry.command);
-        row.enabled = act != Act::Nothing;
-        match placement.submenu {
-            Some(folder) => {
-                let rows = &mut sections[section].1;
-                let found =
-                    (folders.iter()).position(|&(s, _, name)| s == section && name == folder);
-                let folder_index = found.unwrap_or_else(|| {
-                    rows.push((MenuRow::new(folder), Act::Nothing));
-                    submenu_acts.push(Vec::new());
-                    folders.push((section, rows.len() - 1, folder));
-                    folders.len() - 1
-                });
-                let at = folders[folder_index].1;
-                rows[at].0.submenu.push(row);
-                submenu_acts[folder_index].push(act);
+        let rows = card_rows(entry.command, target, view).unwrap_or_else(|| {
+            let act = act(entry.command, target, view, context, false);
+            let mut row = MenuRow::new(&label(entry.command, target, view));
+            row.key = context.key(entry.command);
+            vec![(row, act)]
+        });
+        for (mut row, act) in rows {
+            row.enabled = act != Act::Nothing;
+            match placement.submenu {
+                Some(folder) => {
+                    let rows = &mut sections[section].1;
+                    let found =
+                        (folders.iter()).position(|&(s, _, name)| s == section && name == folder);
+                    let folder_index = found.unwrap_or_else(|| {
+                        rows.push((MenuRow::new(folder), Act::Nothing));
+                        submenu_acts.push(Vec::new());
+                        folders.push((section, rows.len() - 1, folder));
+                        folders.len() - 1
+                    });
+                    let at = folders[folder_index].1;
+                    rows[at].0.submenu.push(row);
+                    submenu_acts[folder_index].push(act);
+                }
+                None => sections[section].1.push((row, act)),
             }
-            None => sections[section].1.push((row, act)),
         }
     }
     let mut groups = Vec::new();
@@ -198,6 +210,94 @@ pub fn open(target: Target, view: &PlayerView, at: Vec2, context: &Context) -> O
         groups,
         acts,
         page: None,
+    }
+}
+
+/// The rows of a command whose rows come from what the card's visible face prints, as the
+/// web's `availableCommands` (`ui/src/table/menuRows.ts`) makes them: Activate ability makes a
+/// row for each activated ability, labelled with its cost and text (`cardAbilities` in
+/// `ui/src/table/abilities.ts`), and Scry, Surveil and Look at top cards make one for each
+/// different count the face's library instructions print (`cardFlows` in
+/// `ui/src/table/flows.ts`), as "Scry 2". `None` for any other command, which has one row.
+fn card_rows(command: &Command, target: Target, view: &PlayerView) -> Option<Vec<(MenuRow, Act)>> {
+    let kind = match command.when? {
+        "activated_abilities" => None,
+        "card_scry" => Some("scry"),
+        "card_surveil" => Some("surveil"),
+        "card_look_at_top" => Some("look_at_top"),
+        _ => return None,
+    };
+    let Target::Card(slot) = target else {
+        return Some(Vec::new());
+    };
+    // A card the viewer cannot act on, or whose face prints nothing, has no such rows, rather
+    // than the command's own row, which would do nothing.
+    let Some(table) = view.table.as_ref() else {
+        return Some(Vec::new());
+    };
+    let action =
+        (table.object_actions.iter()).find(|action| action.subject == Subject::Object { slot });
+    let (Some(action), Some(facts)) = (action, table.card_commands.get(&slot)) else {
+        return Some(Vec::new());
+    };
+    let Some(kind) = kind else {
+        return Some(
+            (facts.abilities.iter().enumerate())
+                .map(|(row, ability)| {
+                    let act = if ability.requires_x {
+                        Act::AskX(action.reference.clone(), row)
+                    } else {
+                        Act::Answer(Answer::ActivateAbility {
+                            source: action.reference.clone(),
+                            row,
+                            x: None,
+                        })
+                    };
+                    (MenuRow::new(&ability.label), act)
+                })
+                .collect(),
+        );
+    };
+    if view.players.you.library.is_empty() {
+        return Some(Vec::new());
+    }
+    let mut counts: Vec<u16> = Vec::new();
+    // A flow's kind is compared by the name it is written with, since this crate does not
+    // name the table's own type.
+    let named = |flow: &&beryl_protocol::protocol::TableFlowOption| {
+        serde_json::to_value(flow.kind).is_ok_and(|name| name == kind)
+    };
+    for flow in facts.flows.iter().filter(named) {
+        if !counts.contains(&flow.count) {
+            counts.push(flow.count);
+        }
+    }
+    let seat = commands::seat_of(view, Side::You);
+    let rows = counts.into_iter().filter_map(|count| {
+        let json = serde_json::json!({ "flow": {
+            "seat": seat,
+            "flow": kind,
+            "count": count,
+            "source": { "id": action.reference, "in": action.zone },
+        }});
+        let action: TableAction = serde_json::from_value(json).ok()?;
+        Some((
+            MenuRow::new(&flow_label(kind, count)),
+            Act::Actions(vec![action]),
+        ))
+    });
+    Some(rows.collect())
+}
+
+/// A card flow's row label, as the web's `flowLabel` writes it.
+fn flow_label(kind: &str, count: u16) -> String {
+    match kind {
+        "scry" => format!("Scry {count}"),
+        "surveil" => format!("Surveil {count}"),
+        _ => {
+            let cards = if count == 1 { "card" } else { "cards" };
+            format!("Look at top {count} {cards}")
+        }
     }
 }
 

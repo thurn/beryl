@@ -17,6 +17,7 @@ pub use bug_report::{BugForm, BugStage, CLICK, DESCRIPTION, span};
 pub(crate) use gallery::faces as gallery_faces;
 pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
 pub use start::{SEED, StartForm, in_progress, seed};
+pub(crate) use start::{checkbox, small};
 
 pub use settings::{Concede, GEAR_INSET, gear};
 pub use table::sheet_face;

@@ -3,11 +3,16 @@
 //! `screen/<name>`, and `data/beryl3d/screens.json` lists them for the parity list. The manual
 //! table's is a view of a solo table built by hand, with a few cards in each zone, which opens
 //! the table screen itself. The lobby's is a solo table's lobby built by hand, with the sample
-//! deck loaded.
+//! deck loaded. The manual table's assists have one of their own, `screen/table-assists`: the
+//! same table with every assist on, a turn upkeep proposal, a state nudge's label on the
+//! opponent's creature and an activated ability on the viewer's first land.
 
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, LIST_AGENTS, TABLE_LOBBY};
-use beryl_protocol::protocol::{LogLine, PlayerState};
+use beryl_protocol::protocol::{
+    AssistsView, CardType, LabelView, LogLine, PlayerState, ProposalLine, ProposalView, Side,
+    TableAbilityOption, TableCardCommands, TableView, TargetRef, ZoneName,
+};
 use beryl_protocol::script::Reset;
 use beryl_protocol::{AgentView, GameUpdate, PlayerView, SessionId};
 use beryl_scene::driver::{OPEN, RECORDINGS};
@@ -17,10 +22,11 @@ use beryl_scene::testing;
 pub const PREFIX: &str = "screen/";
 
 /// The name of every screen recording.
-pub const NAMES: [&str; 7] = [
+pub const NAMES: [&str; 8] = [
     "screen/start",
     "screen/lobby",
     "screen/table",
+    "screen/table-assists",
     "screen/gallery",
     "screen/testing",
     "screen/settings",
@@ -68,10 +74,11 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
     let opens = match opened {
         "settings" | "bug-report" => vec!["start", opened],
         // A table's view opens the table screen; the start screen's press would start a table.
-        "table" => Vec::new(),
+        "table" | "table-assists" => Vec::new(),
         _ => vec![opened],
     };
-    let mut view = if opened == "table" {
+    let table_screen = opened.starts_with("table");
+    let mut view = if table_screen {
         let mut view = testing::ViewBuilder::sample().build();
         let mut table = testing::table(&view);
         // A few log lines, so that the checks see the log at the table's left with its undo
@@ -90,6 +97,9 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
             blocked_by: Vec::new(),
         })
         .into();
+        if opened == "table-assists" {
+            assists(&view, &mut table);
+        }
         view.table = Some(table);
         view
     } else {
@@ -101,7 +111,7 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         Vec::new(),
     ));
     // The table's cards have placeholder faces, as a stress board's do.
-    let records = if opened == "table" {
+    let records = if table_screen {
         crate::stress::placeholder_records(std::slice::from_ref(&view))
     } else {
         CardRecords::none()
@@ -131,4 +141,65 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         view,
     }));
     Some(messages)
+}
+
+/// Turns every assist of `table`, a table of `view`, on, with what each shows: a turn upkeep
+/// proposal of two lines, a state nudge's label on the opponent's creature, and an activated
+/// ability on the viewer's first land, each worded as the table words them.
+fn assists(view: &PlayerView, table: &mut TableView) {
+    let slot = |side: Side, zone: ZoneName| {
+        (view.objects.iter())
+            .find(|object| {
+                object.controller == side && object.zone == zone && !object.types.is_empty()
+            })
+            .map(|object| object.slot)
+    };
+    let creature = (view.objects.iter())
+        .find(|object| {
+            object.controller == Side::Opponent && object.types.contains(&CardType::Creature)
+        })
+        .map(|object| object.slot);
+    table.assists = AssistsView {
+        turn_upkeep: true,
+        combat: true,
+        state_nudges: true,
+        library_flows: true,
+        ability_menus: true,
+    };
+    table.proposals = vec![ProposalView {
+        id: 1,
+        revision: 1,
+        title: "Turn upkeep".to_owned(),
+        lines: [(1, "Untap Island", true), (2, "Draw a card", true)]
+            .map(|(id, text, on)| ProposalLine {
+                id,
+                text: text.to_owned(),
+                whose: Side::You,
+                on,
+            })
+            .into(),
+    }];
+    table.labels = creature
+        .map(|slot| LabelView {
+            id: 1,
+            on: TargetRef::Object { slot },
+            text: "Move to graveyard".to_owned(),
+        })
+        .into_iter()
+        .collect();
+    if let Some(land) = slot(Side::You, ZoneName::Battlefield) {
+        table.card_commands.insert(
+            land,
+            TableCardCommands {
+                base_stats: None,
+                counter_names: Default::default(),
+                auto_attach: false,
+                flows: Vec::new(),
+                abilities: vec![TableAbilityOption {
+                    label: "{T}: Add {U}.".to_owned(),
+                    requires_x: false,
+                }],
+            },
+        );
+    }
 }

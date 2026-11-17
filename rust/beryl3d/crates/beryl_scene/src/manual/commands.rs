@@ -162,6 +162,48 @@ pub fn commands_for(applies_to: AppliesTo, view: &PlayerView, context: &Context)
     entries
 }
 
+/// The commands offered for one card by what its visible face prints, which
+/// `commands_for` leaves out because their condition is about the card, not the table: Activate
+/// ability and the card's library instructions, each while its assist is on, with its menu
+/// placement for targets of the kind `applies_to`. The context menu makes their rows from the
+/// card (`menus::card_rows`).
+#[must_use]
+pub fn card_entries(applies_to: AppliesTo, view: &PlayerView) -> Vec<Entry> {
+    const CARD_CONDITIONS: [&str; 4] = [
+        "activated_abilities",
+        "card_scry",
+        "card_surveil",
+        "card_look_at_top",
+    ];
+    let mut entries = Vec::new();
+    for (index, command) in COMMANDS.iter().enumerate() {
+        if !command
+            .when
+            .is_some_and(|when| CARD_CONDITIONS.contains(&when))
+            || command
+                .assist
+                .is_some_and(|assist| !assist_on(view, assist))
+        {
+            continue;
+        }
+        let menu = if command.applies_to == applies_to {
+            command.menu
+        } else if let Some((_, placement)) =
+            (command.also_applies_to.iter()).find(|(target, _)| *target == applies_to)
+        {
+            *placement
+        } else {
+            continue;
+        };
+        entries.push(Entry {
+            command,
+            index: u16::try_from(index).expect("fewer than 65,536 commands"),
+            menu,
+        });
+    }
+    entries
+}
+
 /// The command whose id is `id`, if any.
 #[must_use]
 pub fn command(id: &str) -> Option<(u16, &'static Command)> {
@@ -179,7 +221,7 @@ pub fn index_of(command: &Command) -> u16 {
 }
 
 /// Whether `view`'s table has `assist` on.
-fn assist_on(view: &PlayerView, assist: Assist) -> bool {
+pub(crate) fn assist_on(view: &PlayerView, assist: Assist) -> bool {
     let Some(table) = &view.table else {
         return false;
     };

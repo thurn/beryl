@@ -9,7 +9,7 @@
 //! the per-command starts and labels of `TableCommands.run` (`ui/src/table/TableMenu.tsx`).
 
 use beryl_protocol::PlayerView;
-use beryl_protocol::protocol::{Side, TableAction, ZoneName};
+use beryl_protocol::protocol::{Answer, Side, TableAction, TableObjectRef, ZoneName};
 use glam::Vec2;
 use serde_json::Value;
 
@@ -54,6 +54,8 @@ enum Stage {
     Text,
     /// The number after `text`.
     Count { text: String },
+    /// The X of the ability at `row` of the permanent `source` names (`Ask::ability_x`).
+    X { source: TableObjectRef, row: usize },
 }
 
 /// An open ask prompt: the command it asks for (an index of `COMMANDS`), what the command acts
@@ -91,6 +93,7 @@ pub enum Entry {
 pub enum Confirmed {
     Next(Box<Ask>),
     Send(Vec<TableAction>),
+    Answer(Answer),
 }
 
 /// Reads an integer, as the web's `parse` does: digits after an optional sign, where `−`
@@ -178,6 +181,26 @@ impl Ask {
         })
     }
 
+    /// The prompt for the X of the ability at `row` of the permanent `target`, which `source`
+    /// names, as the web's `activateAbility` asks it (`ui/src/table/abilities.ts`): any number
+    /// from 0, starting at 0, confirmed as "Set X to 3".
+    #[must_use]
+    pub fn ability_x(source: TableObjectRef, row: usize, target: Target) -> Self {
+        Self {
+            command: commands::command("card.ability").map_or(u16::MAX, |(index, _)| index),
+            target,
+            kind: Kind::Number {
+                min: 0,
+                max: 65_535,
+                current: None,
+            },
+            field: "Choose X".to_owned(),
+            start: "0".to_owned(),
+            stage: Stage::X { source, row },
+            verb: "Set X to".to_owned(),
+        }
+    }
+
     /// The field's state when the prompt opens: its starting text, all selected.
     #[must_use]
     pub fn field_state(&self) -> FieldState {
@@ -256,6 +279,13 @@ impl Ask {
     #[must_use]
     pub fn confirm(&self, text: &str, view: &PlayerView) -> Option<Confirmed> {
         let entry = self.read(text)?;
+        if let (Stage::X { source, row }, Entry::Number { value, .. }) = (&self.stage, &entry) {
+            return Some(Confirmed::Answer(Answer::ActivateAbility {
+                source: source.clone(),
+                row: *row,
+                x: u16::try_from(*value).ok(),
+            }));
+        }
         let command = COMMANDS.get(usize::from(self.command))?;
         let mut values = Values::new();
         let next = |kind, field: &str, stage, verb: &str| {
@@ -311,6 +341,9 @@ impl Ask {
                 values.insert("stats", serde_json::json!([power, toughness]));
             }
         }
+        if let Some(flow) = look_flow(command, self.target, view, &values) {
+            return Some(Confirmed::Send(vec![flow]));
+        }
         let actions = commands::actions_with(command, self.target, view, &values);
         Some(Confirmed::Send(match change {
             Some(by) => actions
@@ -320,6 +353,29 @@ impl Ask {
             None => actions,
         }))
     }
+}
+
+/// With Library flows on, Look at top cards on the viewer's own library opens the shared
+/// sorting tray instead of only showing the cards: the look becomes a flow of the number asked
+/// for (`flowAction` and `usesLookSort` in `ui/src/table/flows.ts`). `None` otherwise.
+fn look_flow(
+    command: &Command,
+    target: Target,
+    view: &PlayerView,
+    values: &Values,
+) -> Option<TableAction> {
+    let flows = commands::assist_on(view, commands::Assist::LibraryFlows);
+    if command.id != "library.look_top"
+        || target != Target::Pile(Side::You, ZoneName::Library)
+        || !flows
+    {
+        return None;
+    }
+    let count = values.get("number")?.as_u64()?;
+    let seat = commands::seat_of(view, Side::You);
+    let json =
+        serde_json::json!({ "flow": { "seat": seat, "flow": "look_at_top", "count": count } });
+    serde_json::from_value(json).ok()
 }
 
 /// The prompt for a command that asks for a number, as the web starts and bounds it: a life

@@ -322,6 +322,12 @@ fn wire(command: &SessionCommand) -> (&'static str, Option<Value>) {
                 action: action.clone(),
             }),
         ),
+        SessionCommand::TableAnswer(answer) => (
+            ipc::TABLE_ANSWER,
+            value(&ipc::TableAnswerRequest {
+                answer: answer.clone(),
+            }),
+        ),
         SessionCommand::TableLeave => (ipc::TABLE_LEAVE, None),
         SessionCommand::TableLobby(change) => (
             ipc::TABLE_LOBBY_COMMAND,

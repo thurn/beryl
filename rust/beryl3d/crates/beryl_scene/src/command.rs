@@ -8,7 +8,7 @@ use beryl_protocol::ipc::{
     ChooseRequest, LobbyChange, LobbyUpdate, TableActReply, TableRefused, TableSoloRequest,
 };
 use beryl_protocol::prompt::{ClickReply, ClickRequest};
-use beryl_protocol::protocol::{Side, TableAction};
+use beryl_protocol::protocol::{Answer, Side, TableAction};
 use beryl_protocol::{DecisionId, SessionError, SessionId, StartRequest, StopsSetting};
 
 use crate::frame::ElementId;
@@ -34,6 +34,10 @@ pub enum SessionCommand {
     TableSolo(TableSoloRequest),
     /// Change the manual table (`TableConnections::act`).
     TableAct(TableAction),
+    /// Answer the table's prompt or one of its assists: a proposal's line or Apply, a state
+    /// nudge's label, an ability from a permanent's menu, or the sorting tray
+    /// (`TableConnections::answer`). The table's reply comes back as `Reply::TableAct`.
+    TableAnswer(Answer),
     /// Close the manual table (`TableConnections::leave`).
     TableLeave,
     /// Open a solo table's lobby, or change the lobby of the table open now

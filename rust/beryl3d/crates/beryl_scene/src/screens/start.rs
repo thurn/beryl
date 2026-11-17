@@ -530,7 +530,7 @@ fn fair_box(on: bool) -> Element {
 
 /// A checkbox labelled `label`, ticked if `on`, which means `press` when pressed: the start
 /// screen's "Fair deal" box and the lobby's assists.
-pub(super) fn checkbox(label: &str, on: bool, press: Press) -> Element {
+pub fn checkbox(label: &str, on: bool, press: Press) -> Element {
     let check = row()
         .name("checkbox")
         .width(CHECKBOX)
@@ -560,7 +560,7 @@ pub(super) fn checkbox(label: &str, on: bool, press: Press) -> Element {
 }
 
 /// `button` at the web's small size (`button-small`): shorter, with smaller type.
-pub(super) fn small(mut button: Element) -> Element {
+pub fn small(mut button: Element) -> Element {
     button.style.height = Some(size::BUTTON_HEIGHT * ratio::SMALL_SCALE);
     button.style.text.size = type_style::BUTTON.size * ratio::SMALL_SCALE;
     button.style.min_width = None;

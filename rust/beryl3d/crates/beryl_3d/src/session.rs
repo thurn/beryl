@@ -392,6 +392,7 @@ impl Session for Live {
             SessionCommand::Concede(session) => Reply::Done(sessions.concede(session)),
             SessionCommand::TableSolo(request) => Reply::TableSolo(self.tables.solo(request)),
             SessionCommand::TableAct(action) => Reply::TableAct(self.tables.act(action)),
+            SessionCommand::TableAnswer(answer) => Reply::TableAct(self.tables.answer(answer)),
             SessionCommand::TableLeave => {
                 Reply::TableLeave(self.tables.leave().map_err(|error| error.reason))
             }

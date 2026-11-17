@@ -22,10 +22,14 @@
       "shows": "arrow \"hostile-target\""
     },
     "Proposal panel": {
-      "open": "The manual table shows no proposal panel for turn upkeep or combat (needs bead by-q44s.9.25)"
+      "recording": "screen/table-assists",
+      "at": "end",
+      "shows": "toggle \"Draw a card · yours\""
     },
     "Assist label": {
-      "open": "State nudges put no tags on cards or life totals (needs bead by-q44s.9.25)"
+      "recording": "screen/table-assists",
+      "at": "end",
+      "shows": "button \"Move to graveyard\""
     },
     "Selection rectangle": {
       "recording": "screen/table",
@@ -90,7 +94,13 @@
       "shows": "field \"Set power and toughness\""
     },
     "Manual table library flows": {
-      "open": "The library menu offers no Scry or Surveil under Assists (needs bead by-q44s.9.25)"
+      "recording": "screen/table-assists",
+      "at": "end",
+      "do": [
+        "menu pile \"Your library\"",
+        "press menuitem \"Scry…\""
+      ],
+      "shows": "field \"Scry\""
     },
     "Manual table pile viewers": {
       "open": "The pile viewer cannot be searched, grouped or sorted, the table opens no library viewer, so a library search offers no Shuffle on closing, and the other seat sees no lifted count (needs bead by-q44s.9.40)"
@@ -121,7 +131,12 @@
       "open": "The manual table shows no banner for its announce steps (needs bead by-q44s.9.23)"
     },
     "Ability menus on a manual table": {
-      "open": "A permanent's menu lists no abilities under Assists (needs bead by-q44s.9.25)"
+      "recording": "screen/table-assists",
+      "at": "end",
+      "do": [
+        "menu card \"Island\" #8"
+      ],
+      "shows": "menuitem \"{T}: Add {U}.\""
     },
     "Creating tokens on a manual table": {
       "recording": "screen/table",

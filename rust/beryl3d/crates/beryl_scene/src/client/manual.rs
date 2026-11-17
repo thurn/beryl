@@ -17,7 +17,7 @@ use crate::manual::{self, Context, Sent, TableState, Target, commands};
 use crate::screens::Screen;
 use crate::widgets::BACK;
 use beryl_protocol::ipc::TableActReply;
-use beryl_protocol::protocol::TableAction;
+use beryl_protocol::protocol::{Answer, TableAction};
 
 /// The most table actions the client remembers sending without an answer.
 const PENDING: usize = 64;
@@ -228,6 +228,16 @@ impl Client {
         }
     }
 
+    /// Sends `answer` to the table's prompt or assist. Its reply comes back as a table action's
+    /// does, so it waits in the same queue, asking nothing of the reply but the refusal sound.
+    pub(super) fn send_answer(&mut self, answer: Answer) {
+        if self.manual.pending.len() >= PENDING {
+            self.manual.pending.pop_front();
+        }
+        self.manual.pending.push_back(Sent::Other);
+        self.commands.push_back(SessionCommand::TableAnswer(answer));
+    }
+
     /// The table answered the oldest table action not yet answered: a token it made is the one
     /// Create another token makes again, and an undo or rewind it refused because later lines
     /// depend on it opens the log with those lines highlighted. Any refusal plays the refusal
@@ -269,6 +279,10 @@ impl Client {
             Act::Shortcuts => self.open_palette(target, true),
             Act::View(viewed) => self.view(Some(viewed)),
             Act::Pick(index) => self.start_pick(index, target),
+            Act::Answer(answer) => self.send_answer(answer),
+            Act::AskX(source, row) => {
+                self.show_ask(crate::manual::ask::Ask::ability_x(source, row, target));
+            }
             Act::Leave => self.leave_table(),
             Act::Nothing => {}
         }
