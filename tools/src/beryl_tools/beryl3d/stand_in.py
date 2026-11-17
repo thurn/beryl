@@ -302,15 +302,17 @@ def wait_tree(running: Running, ready: str, limit: float = START_LIMIT_S) -> Tre
 def ready_for(tree: Tree, ready: str) -> bool:
     if ready == "start":
         return tree.region("start") is not None
+    if ready == "game":
+        return tree.region("game") is not None
     if ready == "prompt":
         return choose(tree) is not None or tree.region("game over") is not None
     raise ValueError(ready)
 
 
-def pick_opponent(running: Running) -> None:
-    """Chooses `expert` on the start screen, scrolling the list to it, and presses Start."""
+def pick_opponent(running: Running, title: str = "Expert") -> None:
+    """Chooses the opponent whose toggle is named `title` (`expert`'s is "Expert") on the start
+    screen, scrolling the list to it, and presses Start."""
     tree = wait_tree(running, "start")
-    title = "Expert"
     if title not in tree.named("toggle"):
         running.act('wheel list "Opponent" 0,-4000')
     running.act(f'press toggle "{title}"')

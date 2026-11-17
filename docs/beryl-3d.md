@@ -2891,6 +2891,13 @@ just b3d smoke
   clock, a card rests in `nowhere` (where a card goes that has left every zone)
   for a second of the app's clock with a prompt open, a `live` request fails or
   the game never ends.
+- **`play --for <duration>`** starts the windowless app on a fresh game against
+  `--opponent` (`mcts-hidden` unless another agent is named, which it offers
+  with `--offer` and chooses on the start screen), waits until `live tree` shows
+  the `game` region, and returns while the app runs. It prints the process id,
+  the socket and the `live` commands to go on with. `--for` is required and at
+  most one hour, because the app then ends itself. It is how the `ui-review`
+  skill starts a player.
 
 Release builds contain neither the socket nor the options that replay, drive,
 load, slow or play the app for the viewer.

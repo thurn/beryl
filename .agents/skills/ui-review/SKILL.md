@@ -355,3 +355,49 @@ with the coverage ledger:
 
 Do not count a harness failure (a crashed driver, a gesture the harness
 dropped) as a UI defect. Report it separately.
+
+## Beryl 3D
+
+Until the switch, the sections above are how to review the web interface. To
+review Beryl 3D, the native client, play it through its live socket
+(docs/beryl-3d.md, "Driving the running app"):
+
+```bash
+just b3d play --for 20m
+just b3d live tree --app <pid>
+just b3d live png --app <pid>
+just b3d live do 'press button "Keep"' --app <pid>
+just b3d frames
+just b3d live quit --app <pid>
+```
+
+- **Start** with `just b3d play --for <duration>` (at most 1h; `--opponent
+  <agent>` picks another, `mcts-hidden` by default). It opens the windowless app
+  on a fresh game, waits until the tree shows the `game` region and prints the
+  process id, the socket and the commands below. The app ends itself after
+  `--for`, so keep the review inside it.
+- **Read the table** with `live tree`: each line is a locator, with its place,
+  box and states, and the first line is the app's clock (`t=<ms>ms`). Look at
+  pictures with `live png` and read the PNG it names, before and after every
+  action.
+- **Act** with `live do '<action>'`: `press`, `hover`, `drag` and the other
+  actions of the doc's action notation, naming elements by the locators the tree
+  prints. Never act by coordinates when a locator exists.
+- **Measure** with the tree's clock for waits (take the `t=` before and after an
+  action, and until the next prompt appears), and `just b3d frames` for frame
+  times, late frames and the worst frames of the run.
+- **Quit** with `live quit`. Do it after a failed check too.
+
+Which measurements of the web harness have a command:
+
+- `probe.act` latencies to the first view and the decision: read `t=` from
+  `live tree` around the action. There is no command that takes the screenshots
+  and the waits for you yet.
+- `shot`: `live png`.
+- `probe.timeline` (the commands sent and the views the engine emitted): none yet.
+- `probe.compare`, `probe.sweep`, `probe.motion`: none yet; `just b3d film` and
+  `just b3d diff` show a recording, not the running app.
+- `probe.covered` and `probe.truncated`: none on the running app; `just b3d
+  check` runs the same overlap and text checks on recordings.
+- `errors`: the app's output, which `play` prints the path of, and `live` errors.
+- Window sizes other than the default and the phone layout: none yet.

@@ -1,12 +1,13 @@
 """`just b3d live`: which socket a request goes to, and how it is sent and answered."""
 
+import argparse
 import socket
 import threading
 from pathlib import Path
 
 import pytest
 
-from beryl_tools.beryl3d import live
+from beryl_tools.beryl3d import live, play, stand_in
 
 
 def running(_pid: int) -> bool:
@@ -110,3 +111,63 @@ def test_a_binary_with_the_socket_name_is_found(tmp_path: Path) -> None:
     encoded = tmp_path / "encoded"
     encoded.write_bytes(b"mod.rs\x00\x08beryl3d-\xc0\x05.sock\x00")
     assert live.release_socket_paths(encoded) == [8]
+
+
+def test_a_duration_is_a_whole_number_with_a_unit_and_at_most_an_hour() -> None:
+    assert play.seconds("90s") == 90
+    assert play.seconds("20m") == 1200
+    assert play.seconds("1h") == 3600
+    for bad in ("2h", "0s", "10", "1.5m", "m"):
+        with pytest.raises(ValueError, match="--for"):
+            play.seconds(bad)
+
+
+def test_without_for_play_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
+    args = argparse.Namespace(run_for=None, opponent="mcts-hidden", no_build=True)
+    assert play.run_play(args) == 2
+    assert "--for is required" in capsys.readouterr().err
+
+
+def test_the_follow_up_names_the_pid_the_socket_and_each_live_command() -> None:
+    text = play.follow_up(4242, Path("/tmp/beryl3d-4242.sock"))
+    assert "process id 4242, socket /tmp/beryl3d-4242.sock" in text
+    for what in ("tree", "png", "do", "quit"):
+        assert f"just b3d live {what} --app 4242" in text
+
+
+def test_play_prints_them_when_the_game_is_on_screen(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    class Process:
+        pid = 4242
+
+        def poll(self) -> None:
+            return None
+
+    pressed: list[str] = []
+
+    class Running:
+        def __init__(self, process: object, lines: list[str]) -> None:
+            self.socket = Path("/tmp/beryl3d-4242.sock")
+
+        def act(self, action: str) -> None:
+            pressed.append(action)
+
+    monkeypatch.setattr(play.paths, "cache", lambda: tmp_path)
+    monkeypatch.setattr(play, "launch", lambda *_: Process())
+    monkeypatch.setattr(play, "wait_log", lambda *_: [])
+    monkeypatch.setattr(play.stand_in, "Running", Running)
+    monkeypatch.setattr(play.stand_in, "wait_tree", lambda *_: None)
+    args = argparse.Namespace(run_for="60s", opponent="mcts-hidden", no_build=True)
+    assert play.run_play(args) == 0
+    assert pressed == ['press button "Start"']
+    assert "just b3d live tree --app 4242" in capsys.readouterr().out
+
+
+def test_another_opponent_is_found_by_the_name_of_its_toggle() -> None:
+    tree = stand_in.parse_tree(
+        't=0ms\nregion "start"\n  toggle "Searcher" #1 0,0 1x1\n  toggle "Expert" #2 0,0 1x1\n'
+    )
+    assert play.toggle_title(tree, "expert") == "Expert"
+    with pytest.raises(stand_in.StandInError, match="Searcher, Expert"):
+        play.toggle_title(tree, "random")
