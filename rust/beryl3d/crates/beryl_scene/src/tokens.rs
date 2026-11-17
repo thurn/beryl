@@ -158,4 +158,7 @@ pub mod badge {
     pub const COUNT: [u8; 4] = [0xec, 0xda, 0xb9, 0xff];
     pub const COUNT_BORDER: [u8; 4] = [0xb8, 0x92, 0x4e, 0xff];
     pub const COUNT_INK: [u8; 4] = [0x1d, 0x1b, 0x19, 0xff];
+    /// The dark ring around each symbol of a card's cost, `.mana-cost .mana-symbol`'s
+    /// `box-shadow` in `mana-symbols.css`.
+    pub const COST_RING: [u8; 4] = [0x10, 0x16, 0x1c, 0xff];
 }

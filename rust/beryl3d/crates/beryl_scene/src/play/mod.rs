@@ -70,6 +70,7 @@ use crate::pointer::Pointer;
 use crate::pose::Pose;
 use crate::table::badges::Badges;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Table, Window, ability_track};
+use crate::text::{Glyphs, Text};
 
 /// How many spans, streaks and effects the show holds before holding more allocates.
 const LIGHTS: usize = 256;
@@ -288,6 +289,15 @@ impl Show {
 
     pub fn badges_mut(&mut self) -> &mut Badges {
         &mut self.badges
+    }
+
+    /// Shapes the numbers and signs of the badges, once, at `scale`, and the mana symbols of
+    /// every cost the face list names that are not shaped yet, for the costs hand cards show.
+    pub fn shape_badges(&mut self, text: &mut Text, wanted: &mut Glyphs, scale: f32) {
+        if !self.badges.shaped() {
+            self.badges.shape(text, wanted, scale);
+        }
+        self.badges.shape_costs(text, wanted, self.faces.list());
     }
 
     /// The latest view: the last to arrive, which the table shows once every script before it

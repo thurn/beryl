@@ -1,17 +1,17 @@
-//! The badges a permanent wears on its face (docs/beryl-3d.md, "Objects and placement": marks
-//! are separate quads): its power and toughness on a plaque at the bottom right, or its loyalty
-//! there for a planeswalker; a badge for each kind of counter on it, along its foot; and, on the
-//! top card of a pile of identical permanents, how many the pile holds. They follow the web
-//! interface's `Card` (`ui/src/components/Card.tsx`): a plaque's numbers are inked up or down
-//! against the printed ones (`toneClass`), and the toughness shown is less the damage marked on
-//! the creature, inked down, as `frameFace` in `ui/src/game/faces.ts` draws it.
+//! The badges a permanent wears on its face, and a hand card's mana cost (`cost`)
+//! (docs/beryl-3d.md, "Objects and placement": marks are separate quads). A permanent wears its
+//! power and toughness on a plaque at the bottom right, or its loyalty there for a
+//! planeswalker; a badge for each kind of counter on it, along its foot; and, on the top card of
+//! a pile of identical permanents, how many the pile holds. They follow the web interface's
+//! `Card` (`ui/src/components/Card.tsx`): a plaque's numbers are inked up or down against the
+//! printed ones (`toneClass`), and the toughness shown is less the damage marked on the
+//! creature, inked down, as `frameFace` in `ui/src/game/faces.ts` draws it.
 //!
 //! Each badge is a rounded panel lying on the card's face, which moves and turns with the card,
 //! and its number is glyph records. Its sizes are the web's, in the em of a battlefield card
 //! (a tenth of its width), from `badges` in `data/beryl3d/space.json`. The digits and signs are
-//! shaped
-//! once, when the first view arrives (`Badges::shape`), so a frame only places glyphs it already
-//! has and allocates nothing.
+//! shaped once, when the first view arrives (`Badges::shape`), so a frame only places glyphs it
+//! already has and allocates nothing.
 
 use beryl_protocol::protocol::{Counter, ObjectView, ZoneName};
 use glam::{Affine3A, Quat, Vec2};
@@ -25,6 +25,8 @@ use crate::pose::Pose;
 use crate::text::fonts::Font;
 use crate::text::{Block, Glyphs, Text, TypeStyle, glyph_key};
 use crate::tokens::{badge, color};
+
+mod cost;
 
 /// The style every badge's number is shaped in: the card font's bold, at the size in points a
 /// plaque's numerals have on a battlefield card of the web interface.
@@ -47,10 +49,12 @@ const SLASH: usize = 12;
 const TIMES: usize = 13;
 const PIECES: usize = 14;
 
-/// The records one card may write besides itself, its soft edge, its contact shadow and the
-/// mark a span or a combat role puts on it: enough for a plaque of single-digit power and
-/// toughness (a panel and three glyphs) and two single-digit counter badges.
-const BUDGET: usize = RECORDS_PER_OBJECT - 4;
+/// The records a permanent's badges may write: enough for a plaque of single-digit power and
+/// toughness (a panel and three glyphs) and two single-digit counter badges. A card may write
+/// more besides itself, its soft edge, its contact shadow and a mark (`RECORDS_PER_OBJECT`), for
+/// a hand card's cost, whose hybrid symbols take more records than a permanent's badges.
+const BUDGET: usize = 8;
+const _: () = assert!(BUDGET <= RECORDS_PER_OBJECT - 4);
 /// The most pieces of text one badge holds: `-12/-34`.
 const LONGEST: usize = 7;
 
@@ -68,6 +72,8 @@ pub struct Badges {
     glyphs: Glyphs,
     /// Physical pixels per logical point, which picks the glyphs' size in the atlas.
     scale: f32,
+    /// The mana symbols of hand cards' costs (`cost`).
+    costs: cost::Costs,
 }
 
 impl Badges {
@@ -109,6 +115,7 @@ impl Badges {
         for block in &self.pieces {
             wanted.want(block, self.scale);
         }
+        self.want_costs(wanted);
     }
 }
 

@@ -635,6 +635,16 @@
       "radius": 0.3,
       "border": 0.06,
       "numerals": 1.15
+    },
+    "cost": {
+      "em": 0.08333,
+      "symbol": 1.5675,
+      "gap": 0.228,
+      "right": 0.5,
+      "sink": 0.12,
+      "ring": 0.0627,
+      "points": 26,
+      "lift": 3
     }
   },
   "effects": {

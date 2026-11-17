@@ -153,7 +153,9 @@
       "shows": "card \"Stock Up\" #8 hand.yours 630,500 273x381"
     },
     "The hand's fan": {
-      "open": "needs bead by-q44s.9.29: Beryl 3D lays the hand on one circle but draws no mana cost above each card's corner."
+      "recording": "hand-ten",
+      "at": "end",
+      "shows": "text \"{1}{W}{U}\" hand.yours"
     },
     "An arrow to the pointer": {
       "recording": "walkers",

@@ -589,6 +589,8 @@ impl Table {
         dress
             .badges
             .write((shown, listed, object.copies), &on, builder);
+        let cost = (shown, listed, at, object.place);
+        dress.badges.write_cost(cost, (&on, &self.camera), builder);
     }
 
     /// Writes the resolved element and the draw record of a card named `name` with this `id`

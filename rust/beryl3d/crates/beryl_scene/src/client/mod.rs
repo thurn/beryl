@@ -314,10 +314,8 @@ impl Client {
                     self.show.coming_notices(),
                     self.show.notices(),
                 );
-                if !self.show.badges_mut().shaped() {
-                    let (text, glyphs) = self.layer.text_and_glyphs();
-                    (self.show.badges_mut()).shape(text, glyphs, self.window.scale);
-                }
+                let (text, glyphs) = self.layer.text_and_glyphs();
+                self.show.shape_badges(text, glyphs, self.window.scale);
                 let shown = self.show.shown().map(|update| &update.view);
                 let coming = self.show.coming_counts().map(|(_, view)| view);
                 let table = self.show.table();
