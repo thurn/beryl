@@ -109,11 +109,12 @@ impl RowWindow {
     }
 }
 
-/// How a row is laid out: the least strip in millimetres, the layout's spacing, and the row's
-/// scroll offset in groups.
+/// How a row is laid out: the least strip in millimetres, the row's width in millimetres, the
+/// layout's spacing, and the row's scroll offset in groups.
 pub(super) struct RowRules<'a> {
     pub layout: &'a Layout,
     pub strip: f32,
+    pub room: f32,
     pub scroll: usize,
 }
 
@@ -164,12 +165,24 @@ impl<'a> Beneath<'a> {
     }
 }
 
-/// How far, in millimetres, each card under a permanent peeks out past the one before it: the
-/// web interface's step, `beneath_step` of a card's width, or the least strip that leaves an
+/// How far, in millimetres, each card under `host` peeks out past the one before it: the web
+/// interface's step, `beneath_step` of a card's width, or the least strip that leaves an
 /// overlapped card of the row reachable where that is wider, as it is in a small window, so
-/// that a press can still reach a card tucked under another.
-fn peek_step(rules: &RowRules) -> f32 {
-    (rules.layout.beneath_step.x * CARD_WIDTH).max(rules.strip)
+/// that a press can still reach a card tucked under another. Where the permanent and its cards
+/// at that step would be wider than the row, as six cards held in exile are on the phone, where
+/// the strip is nearly a card's width, the step closes up until they fit: a row scrolls whole
+/// groups, so it could never bring a group wider than itself into view.
+fn peek_step(host: &ObjectView, beneath: &Beneath, rules: &RowRules) -> f32 {
+    let step = (rules.layout.beneath_step.x * CARD_WIDTH).max(rules.strip);
+    let count = beneath.of(host.slot, true).count() + beneath.of(host.slot, false).count();
+    if count == 0 {
+        return step;
+    }
+    // Each side's cards reach at most `step` further per card than they do at a step of 0, so
+    // at `fits` the group is no wider than the row.
+    let fixed = card_width(host) + beneath.peek(host, 0.0, true) + beneath.peek(host, 0.0, false);
+    let fits = (rules.room - fixed) / count as f32;
+    step.min(fits).max(0.0)
 }
 
 /// Whether a card under a permanent peeks out to its left: every card but an Aura or Equipment
@@ -277,7 +290,8 @@ pub(super) fn lay_row<'a>(
     let last_width = widths[first + shown - 1];
     // A group with cards attached to it is followed that much further on, so that what peeks
     // out to its right is left uncovered as its own card is.
-    let right = |group: &[&ObjectView]| beneath.peek(group[0], peek_step(rules), false);
+    let right =
+        |group: &[&ObjectView]| beneath.peek(group[0], peek_step(group[0], beneath, rules), false);
     let extra: f32 = groups
         .iter()
         .skip(first)
@@ -398,7 +412,7 @@ fn place_group<'a>(
     laid: &mut impl FnMut(Laid<'a>),
 ) {
     let step = rules.layout.beneath_step;
-    let across_step = peek_step(rules);
+    let across_step = peek_step(group[0], beneath, rules);
     let left = left + beneath.peek(group[0], across_step, true);
     // The top card is the group's first; the copies beneath are placed first, lowest.
     for (depth, &object) in group.iter().enumerate().rev() {
@@ -522,10 +536,11 @@ fn card_width(object: &ObjectView) -> f32 {
 /// How wide a group lies: its top card, the copies peeking out beside it and the cards under a
 /// merged permanent peeking out to its left.
 fn group_width(group: &[&ObjectView], beneath: &Beneath, rules: &RowRules) -> f32 {
+    let step = peek_step(group[0], beneath, rules);
     card_width(group[0])
         + rules.layout.pile_step.x * gaps(group.len())
-        + beneath.peek(group[0], peek_step(rules), true)
-        + beneath.peek(group[0], peek_step(rules), false)
+        + beneath.peek(group[0], step, true)
+        + beneath.peek(group[0], step, false)
 }
 
 /// Whether the viewer sees a card's face: a face-up card whose name they know.

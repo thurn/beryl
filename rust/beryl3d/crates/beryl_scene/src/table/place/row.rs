@@ -72,6 +72,7 @@ pub(super) fn battlefield_row(
     let rules = RowRules {
         layout,
         strip,
+        room: area.right - area.left,
         scroll: offset,
     };
     let place = |zone| Place::Card {

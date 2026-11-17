@@ -1324,8 +1324,10 @@ flight start exactly where the card was.
   whoever controls them, peek out to its right, unless it is a land or is
   attached to something itself. Each peeks out by `beneath_step` of a card's
   width, or by the row's least strip where that is wider, so that it can still
-  be pointed at. A card held in exile is not in its exile pile or that pile's
-  count.
+  be pointed at. Where a permanent and the cards under it would then be wider
+  than the row, as six cards held in exile are on the phone, the cards peek out
+  closer together until they fit, since a row scrolls only whole groups. A card
+  held in exile is not in its exile pile or that pile's count.
 - **An overlapped card keeps a strip of at least 24 by 24 logical points
   uncovered**, 44 by 44 on the phone layout, so it can always be pointed at.
 - **A row that cannot give every card its strip scrolls.** After piling
