@@ -609,9 +609,13 @@ Not a rung yet. It is recorded so that the rungs above are built toward it.
 - **Why this differs from what failed.** It is supervised learning from a
   teacher that already beats the expert by over 137 Elo, with no value network
   and no self-play from random play.
-- **What it needs first.** The paired test and the policy-first root (rungs 2
-  and 3), which produce clean labels, and `fit` (rung 6), which shows whether
-  the search's labels improve a policy at all.
+- **What it needs first.** The paired test supplies labels for moves that beat
+  the policy. Rung 6 fitted card values and policy constants to those labels.
+  Held-out agreement rose from 2.78% to 12.15%, and fitted greedy won 65.1% of
+  20,000 games against tuned greedy. In search, the blunder suite rose from 356
+  to 381 of 400, but fitted scored 46.3% in 322 paired games at 3M steps (−30
+  Elo, 95% interval −71 to +11) and failed the stronger bar. The fit changed the
+  search's default and rollout policy together.
 - **What it keeps.** The general rules stay as hard limits on the model, so that
   a model's mistake cannot become a blunder of a known class.
 
@@ -621,8 +625,8 @@ Not a rung yet. It is recorded so that the rungs above are built toward it.
   it has never played a match.
 - How often does the paired test overrule the policy, and how much of the
   search's strength lives in those overrides? Rung 3's match and screen say.
-- Does a policy fitted to the search make stronger rollouts? Rung 6 says, and §9
-  depends on the answer.
+- How much of rung 6's match result (§9) came from changing the default move,
+  and how much came from changing the rollout policy?
 - Why does `snapcaster-sorcery-speed` fall under both `waste` and `turn72`?
 - Is the planner's small set of plans enough? `spare-jace-wielder` is the case
   it gets wrong.
