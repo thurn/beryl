@@ -70,6 +70,22 @@ pub mod scenarios {
                 THEM.controls(Prop::Vanilla, 1),
                 ME.has(Zone::Graveyard, SHOW, 1),
             ]),
+        // The opponent can respond while the spell is on the stack. Neither player picks a
+        // card until the opponent passes and the spell starts to resolve.
+        Scenario::new("Show and Tell asks for cards after the opponent can respond")
+            .hand(P0, &[SHOW, Prop::Flier])
+            .battlefield(P0, &[Card::Island; 3])
+            .hand(P1, &[Prop::Vanilla, Prop::Instant])
+            .battlefield(P1, &[Card::Island; 2])
+            .actions(&[
+                ME.casts(SHOW),
+                stack(1),
+                THEM.passes(),
+                ME.picks_up_to(Prop::Flier),
+                THEM.picks_up_to(Prop::Vanilla),
+                ME.controls(Prop::Flier, 1),
+                THEM.controls(Prop::Vanilla, 1),
+            ]),
         // A player may put nothing; the other player's card still enters.
         Scenario::new("Show and Tell when one player declines")
             .interaction(&[Card::Griselbrand])

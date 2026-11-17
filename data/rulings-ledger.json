@@ -703,6 +703,98 @@
       ]
     }
   ],
+  "Mindslaver": [
+    {
+      "published_at": "2024-04-12",
+      "hash": "b7ea36d7b4d0",
+      "untestable": "Concession is a seat action outside scenario decisions. The scenario runner cannot issue a concession for either seat."
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "eb611bad7bb3",
+      "scenario": [
+        "the controller attacks into their own blocker",
+        "the controller casts the opponent's spell at the opponent's creature"
+      ]
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "ed1740fee56e",
+      "scenario": [
+        "the controller also acts for themself during the controlled turn",
+        "the controller attacks into their own blocker"
+      ]
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "e9becc55cb47",
+      "untestable": "The scenario runner has no sideboard or choice from outside the game. Burning Wish and that scenario setup are tracked in by-ptc7.8.16."
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "a7b2cf869b43",
+      "untestable": "The scenario runner supports two opposing seats and cannot set up Two-Headed Giant teams."
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "99f762a0bedb",
+      "scenario": [
+        "the controller casts the opponent's spell at the opponent's creature",
+        "the controller attacks into their own blocker",
+        "the controller chooses the controlled player's cleanup discard"
+      ]
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "eb6689e2bb70",
+      "untestable": "The engine has no whole-turn skip. Time Vault and turn skipping are tracked in by-ptc7.6.6."
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "4d36d2c11e94",
+      "scenario": [
+        "the last player-controlling effect works"
+      ]
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "5098646e0069",
+      "covered": "Effect::ControlPlayer"
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "8adc331e73ef",
+      "scenario": [
+        "the controller casts the opponent's spell at the opponent's creature",
+        "the controller also acts for themself during the controlled turn"
+      ]
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "cccde9041105",
+      "untestable": "Tournament procedures such as calling a judge or agreeing to an intentional draw are outside the scenario runner."
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "8ef882e0aa3e",
+      "scenario": [
+        "the controller casts the opponent's spell at the opponent's creature",
+        "the controller also acts for themself during the controlled turn"
+      ]
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "70151223eeea",
+      "untestable": "The scenarios exercise the controlled player's legal choices. The precedence case needs Master Warcraft's assignment of combat decisions to another player, which the card vocabulary cannot express."
+    },
+    {
+      "published_at": "2024-04-12",
+      "hash": "daec0dbf3104",
+      "scenario": [
+        "the last player-controlling effect works"
+      ]
+    }
+  ],
   "Mother of Runes": [],
   "Notion Thief": [
     {
@@ -1071,6 +1163,28 @@
       "hash": "5d07c8cfb475",
       "scenario": [
         "Rest in Peace destroyed by a spell is exiled; the spell is not"
+      ]
+    }
+  ],
+  "Show and Tell": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "c6418194890f",
+      "untestable": "Beryl asks for simultaneous Aura attachments in card-name order, which can put the nonactive player first. See by-ptc7.2.22."
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "492549a6836a",
+      "scenario": [
+        "Show and Tell asks for cards after the opponent can respond"
+      ]
+    },
+    {
+      "published_at": "2008-04-01",
+      "hash": "82d33fe31400",
+      "scenario": [
+        "Show and Tell puts both players' creatures onto the battlefield",
+        "Show and Tell: a clone can't copy a creature entering with it"
       ]
     }
   ],
