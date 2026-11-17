@@ -366,21 +366,45 @@ The bead's close reason gives the module's non-test lines before and after each
 commit. A module whose simplification finds little says so; no number is a
 target.
 
-**The `L: Layout` parameter.** 641 rules functions are written
-`fn name<L: Layout>(game: &mut Game<'_, L>, ..)`. Every one is compiled again in
-each crate that uses the engine, for each layout that crate uses. One design
-bead measures what this costs in lines and in compile time (`cargo llvm-lines`
-on `beryl_session` and `beryl_search`) and decides between:
+**The `L: Layout` parameter.** Keep free functions in their rule modules and
+keep the engine entry points generic. The module passes follow the rules
+contract in `beryl_rules/src/lib.rs`.
 
-- inherent `impl<L: Layout> Game<'_, L>` blocks spread over the rules modules,
-  so the parameter is written once a block and a call reads `game.destroy(p)`;
-- the same, plus non-generic entry points in `beryl_rules` (`next` and `apply`
-  for `Small` and for `Large`), so the engine is compiled once, in its own
-  crate;
-- leaving it.
+At `6780191a6`, 640 of 831 non-test declarations in `beryl_rules` named
+`L: Layout`. Of those, 94 took `&mut Game` as the first argument, including 71
+whose `game` parameter was on a line of its own. The method receiver still needs
+that line in a multiline signature. Moving `destroy` and `destroy_all` into one
+`impl<L: Layout> Game<'_, L>` took `actions/destroy.rs` from 90 to 93 lines
+after formatting, with six signature lines in either version. Moving the other
+methods would also need names that distinguish `tokens::create`,
+`emblems::create` and `delayed_triggers::create` on one type.
 
-The decision is recorded in the bead and in the kernel contract, and the module
-passes apply it in their third commit.
+The second prototype used the same methods and moved the engine bodies for
+`next`, `next_in_step`, `next_within`, `apply` and `apply_decided` behind
+concrete `Small` and `Large` functions. Generic callers selected their function
+through `Layout::of`. All three runs passed the existing count gate. The
+concrete entries increased the rollout count by 0.68% over the baseline.
+
+| Prototype                                | Warm downstream check (s) | Rollout instructions |
+| ---------------------------------------- | ------------------------: | -------------------: |
+| Free functions                           |                      2.79 |          379,802,256 |
+| Methods for destroy                      |                      2.51 |          379,802,256 |
+| Methods and concrete engine entry points |                      3.57 |          382,373,878 |
+
+The check timed `cargo check -p beryl_search -p beryl_session` after a change in
+`beryl_rules`, once per prototype on a shared machine. The individual check
+units for `beryl_search` and `beryl_session` took 0.43 and 1.07 s, 0.37 and 0.89
+s, and 0.51 and 1.06 s, respectively.
+
+`cargo llvm-lines --lib` reported 1,174,938 lines for `beryl_search` and 861,026
+for `beryl_session` with free functions. With the concrete entry points, those
+totals were 583,060 and 860,946. A baseline test build for both packages,
+including dependencies and integration tests, took 148 s. The prototype took 156
+s and used 333 s of user CPU, down from 474 s. It reused more dependencies and
+waited for Cargo's build lock, so the command times are individual observations.
+Cargo timed the `beryl_rules` library unit at 3.2 s before the change and 42.7 s
+with it. The `beryl_search` library unit went from 53.4 to 43.2 s, and
+`beryl_session` from 51.9 to 52.5 s.
 
 **Rules tests.** `beryl_rules/src/tests/` is 14,150 lines of tests that define
 their own test cards and arrange boards through the kernel's test door, because
@@ -401,11 +425,11 @@ which test definition each real card's scenario now covers.
   fixes `just efficiency cards`, which did not finish in two minutes during
   planning.
 - **Then fix the largest.** One bead takes the three largest costs the series
-  shows and reduces each, with before and after in its close reason. Known
-  candidates: every downstream crate recompiles the generic engine (section C);
-  `clippy` runs with every feature, so it checks every card's scenarios;
-  `beryl_session` and `beryl_cli` have integration-test binaries that each link
-  the engine.
+  shows and reduces each, with before and after in its close reason. The known
+  candidates are downstream monomorphization in `beryl_search` (section C),
+  Clippy checking every card's scenarios with all features enabled, and the
+  integration-test binaries of `beryl_session` and `beryl_cli` each linking the
+  engine.
 - **What an engine change tests.** `every_card_has_scenarios_and_they_pass`, the
   mutation check and the generated scenarios take a card filter. The fast check
   and slow CI pass it the cards of `docs/sample-decks/`, the keystones, the

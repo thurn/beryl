@@ -36,13 +36,25 @@
 //! that only reads takes the state and the table, as the kernel's queries do
 //! ([`library::top`]).
 //!
-//! A library function is `pub`, generic over the layout, and `#[inline]` where it is a
-//! mutator and its event. It names no card, and no player but those it is given.
+//! A library function is `pub` and `#[inline]` where it is a mutator and its event. It
+//! names no card, and no player but those it is given.
 //!
 //! The engine's own code (turns, casting, combat, the event pipeline) still passes the three
 //! apart. It is not rewritten for this: a bead that touches such a function converts it, and
 //! until then a caller of the library makes the game where it calls, as `combat.rs` does to
 //! deal combat damage.
+//!
+//! ## Layout
+//!
+//! Keep rule operations as free functions in the module that owns the rule. The module path
+//! gives shared verbs their meaning, as with `tokens::create` and `emblems::create`. A
+//! layout-dependent signature declares `L: Layout`. Engine callers use the same generic
+//! [`next`] and [`apply`] with either layout.
+//!
+//! The destruction prototype moved two operations onto `Game` and added three source lines,
+//! with the same six signature lines. Concrete engine entry points halved the generated LLVM
+//! IR in `beryl_search`. They raised the `beryl_rules` test-profile library build from
+//! 3.2 s to 42.7 s and increased the rollout instruction count by 0.68%.
 //!
 //! ## Resolution
 //!
