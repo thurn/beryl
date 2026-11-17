@@ -393,6 +393,23 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
     }
 
     /**
+     * Taps an untapped permanent named `name` that `player` controls when `step` of turn 1
+     * comes, without a tap event. XMage plays turn 1 from its untap step, which untaps the
+     * active player's permanents, so one the scenario starts tapped is added untapped and
+     * tapped here.
+     */
+    protected void tapAtStart(TestPlayer player, PhaseStep step, String name) {
+        runCode("tap " + name + " at the start", 1, step, player, (info, who, game) -> {
+            Permanent untapped = controlled(who, name).stream()
+                    .filter(p -> !p.isTapped())
+                    .findFirst()
+                    .orElse(null);
+            Assert.assertNotNull(who.getName() + " controls no untapped " + name, untapped);
+            untapped.setTapped(true);
+        });
+    }
+
+    /**
      * Whether `permanent` goes by `name` in a scenario: its own name, or for a face-down
      * permanent, which has none (CR 708.2a), its card's.
      */

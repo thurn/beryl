@@ -555,6 +555,31 @@ def test_setup_answers_as_enters_choices_without_changing_the_game(
     ]
 
 
+def test_player_as_tapped_permanents_are_tapped_after_xmages_untap_step() -> None:
+    # XMage plays turn 1 from its untap step, which untapped a Thieving Skydiver the
+    # scenario started tapped, so Builder's Blessing gave it +0/+2 in XMage only.
+    entry: card_facts.Json = {
+        "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
+        "actions": [],
+    }
+    export = xmage_java.Export(card="Generated", scenario="setup", method="setup")
+    faces = xmage_java.Faces.load(card_store.STORE, ["Wetland Sambar"])
+    writer = xmage.Exporter(entry, faces, export)
+    permanent: card_facts.Json = {
+        "card": "Wetland Sambar",
+        "face": False,
+        "tapped": True,
+        "counters": None,
+    }
+    writer.permanent("playerA", permanent, "PrecombatMain")
+    writer.permanent("playerB", permanent, "PrecombatMain")
+    assert export.body == [
+        'addCard(Zone.BATTLEFIELD, playerA, "Wetland Sambar", 1, false);',
+        'tapAtStart(playerA, PhaseStep.PRECOMBAT_MAIN, "Wetland Sambar");',
+        'addCard(Zone.BATTLEFIELD, playerB, "Wetland Sambar", 1, true);',
+    ]
+
+
 def test_xmage_cards_skips_set_entries_that_are_commented_out(tmp_path: Path) -> None:
     # XMage's set files list unimplemented cards on commented-out lines. Counting them
     # exported scenarios naming Mind Bend, which XMage then could not find.

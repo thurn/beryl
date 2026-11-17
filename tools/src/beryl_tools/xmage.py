@@ -283,20 +283,20 @@ class Exporter:
                 self.cards.flips_a_coin_each_turn(cast(str, p["card"]))
                 for p in cast(list[Json], setup["battlefield"])
             )
-            if (
-                flips
-                and who == "playerA"
-                and ORDER.index(start) > ORDER.index("Upkeep")
-            ):
+            if flips and who == "playerA" and start not in ("Untap", "Upkeep"):
                 self.emit(f"setFlipCoinResult({who}, true);")
         self.emit("setStrictChooseMode(true);")
 
     def permanent(self, who: str, permanent: Json, start: str) -> None:
         card = cast(str, permanent["card"])
         name = self.faces.back[card] if permanent["face"] else card
-        tapped = "true" if permanent["tapped"] else "false"
         quoted = java_string(name)
+        # XMage plays turn 1 from its untap step, which untaps player A's permanents.
+        retap = permanent["tapped"] and who == "playerA" and start != "Untap"
+        tapped = "true" if permanent["tapped"] and not retap else "false"
         self.emit(f"addCard(Zone.BATTLEFIELD, {who}, {quoted}, 1, {tapped});")
+        if retap:
+            self.emit(f"tapAtStart({who}, PhaseStep.{STEPS[start]}, {quoted});")
         if self.cards.chooses_as_it_enters(name, "card name"):
             self.emit(f"setChoice({who}, {java_string(ANOTHER_CARD)});")
         elif self.cards.chooses_as_it_enters(name, "color", "creature type"):
