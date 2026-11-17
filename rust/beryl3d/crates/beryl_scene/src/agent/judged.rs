@@ -84,6 +84,10 @@ impl Judged {
         self.add(Rule::TextFits, frame.lines.len());
         self.add(Rule::Named, interactive);
         self.add(Rule::BlankCard, face_up);
+        self.add(
+            Rule::LayerDrawn,
+            frame.draws.len().saturating_sub(frame.layer as usize),
+        );
         // "Phone sizes" judges only the phone layout.
         if layout == Layout::Phone {
             self.add(Rule::PhoneSizes, targets + frame.lines.len());

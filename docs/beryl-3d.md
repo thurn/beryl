@@ -2944,6 +2944,10 @@ screen, so they cover every card spec that is ever generated.
 - **Clips fit.** The frame asks for no more than 15 clip rectangles. A clip
   asked for past the last entry is dropped, and the records that wanted it are
   drawn whole.
+- **Layer drawn.** A frame whose flat layer has records draws at least one of
+  them inside the window. The layer is placed for the table's camera, so a frame
+  that was not given that camera, as the start screen once was when no game was
+  going on, draws its whole layer off screen and shows a black window.
 - **Phone sizes.** On the phone layout, touch targets are at least 44 by 44
   points and text at least 11 points.
 - **No jumps.** Where one of an object's segments ends and the next begins, the

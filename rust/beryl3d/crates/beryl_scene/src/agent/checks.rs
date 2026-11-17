@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use glam::Vec2;
+use glam::{Vec2, Vec4};
 
 use super::fault::{Context, Fault, Layout, Rule, Subject};
 use super::hit::{
@@ -12,7 +12,7 @@ use super::hit::{
 };
 use super::tree::locator_of;
 use crate::data::audit;
-use crate::frame::{Frame, Place, REVEALED_FACE, Role, StateBits};
+use crate::frame::{Draw, Frame, Place, REVEALED_FACE, Role, StateBits};
 use crate::input::{Rect, Size};
 
 /// Every check that needs one frame, in the doc's order.
@@ -26,6 +26,7 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults.extend(named(frame, context));
     faults.extend(blank_cards(frame, context));
     faults.extend(clips(frame, context));
+    faults.extend(layer_drawn(frame, context));
     faults.extend(phone_sizes(frame, context));
     faults
 }
@@ -394,6 +395,35 @@ pub fn blank_cards(frame: &Frame, context: &Context) -> Vec<Fault> {
             )
         })
         .collect()
+}
+
+/// Layer drawn: a frame whose flat layer has records draws at least one of them inside the
+/// window. Each record is placed for the table's camera (`Camera::layer_transform`) and the
+/// renderer projects it with `Frame::view_projection`, so a frame that was not given that
+/// camera draws its whole layer off screen and shows a black window.
+#[must_use]
+pub fn layer_drawn(frame: &Frame, context: &Context) -> Vec<Fault> {
+    let layer = frame.draws.get(frame.layer as usize..).unwrap_or_default();
+    let projection = frame.view_projection;
+    if layer.is_empty() || layer.iter().any(|draw| in_window(draw, projection)) {
+        return Vec::new();
+    }
+    vec![fault(
+        Rule::LayerDrawn,
+        context,
+        format!(
+            "none of the flat layer's {} records is drawn inside the window",
+            layer.len()
+        ),
+        Vec::new(),
+    )]
+}
+
+/// Whether the centre of `draw` projects inside the window through `projection`.
+fn in_window(draw: &Draw, projection: glam::Mat4) -> bool {
+    let m = draw.model;
+    let clip = projection * Vec4::new(m[3], m[7], m[11], 1.0);
+    clip.w > 0.0 && clip.x.abs() <= clip.w && clip.y.abs() <= clip.w
 }
 
 /// Clips fit: the frame asked for no more clip rectangles than `Frame::clips` holds. A clip

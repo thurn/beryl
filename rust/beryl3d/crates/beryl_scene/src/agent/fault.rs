@@ -59,6 +59,7 @@ pub enum Rule {
     BlankCard,
     LinesHold,
     Clips,
+    LayerDrawn,
     PhoneSizes,
     Jump,
     RestPlacement,
@@ -69,7 +70,7 @@ pub enum Rule {
 
 impl Rule {
     /// Every rule, in the doc's order.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::OnScreen,
         Self::Overlap,
         Self::Reachable,
@@ -77,6 +78,7 @@ impl Rule {
         Self::TextFits,
         Self::Named,
         Self::Clips,
+        Self::LayerDrawn,
         Self::PhoneSizes,
         Self::Jump,
         Self::RestPlacement,
@@ -109,6 +111,7 @@ impl Rule {
             Self::BlankCard => "blank-card",
             Self::LinesHold => "lines-hold",
             Self::Clips => "clips",
+            Self::LayerDrawn => "layer-drawn",
             Self::PhoneSizes => "phone-sizes",
             Self::Jump => "no-jumps",
             Self::RestPlacement => "rest-placement",

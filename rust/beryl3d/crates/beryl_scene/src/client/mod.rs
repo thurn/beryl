@@ -439,6 +439,9 @@ impl Client {
         self.write_pill(self.screen == Screen::Game && self.sheet.is_none());
         let visible = self.hud_shown();
         let mut builder = FrameBuilder::new(&mut self.frame, self.tier);
+        // The flat layer is placed for the table's camera, so the frame takes it even when no
+        // game view writes the table, as on the start screen (the "layer drawn" check).
+        builder.camera(self.show.table().camera().view_projection);
         builder.sounds(self.manual.take_refusal());
         self.show.frame(table_now, &mut builder);
         // Elements anchored to a card, an ability or a player stand where the table drew it.
