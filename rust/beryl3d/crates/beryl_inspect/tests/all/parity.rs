@@ -2,6 +2,8 @@
 //! when the recording named for each is done. A name that is wrong would count an item done that
 //! Beryl 3D never shows.
 
+use std::collections::BTreeMap;
+
 use beryl_inspect::{pages, recordings};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
@@ -75,7 +77,7 @@ fn the_parity_file_names_recordings_of_the_pack() {
 #[test]
 fn each_verb_and_effect_plays_in_its_recording() {
     let file = parity();
-    let mut seats: std::collections::BTreeMap<String, Vec<Side>> = Default::default();
+    let mut seats: BTreeMap<String, Vec<Side>> = BTreeMap::new();
     for (name, seat) in recordings::names().expect("the recordings pack is readable") {
         let side = if seat == Seat::P0 {
             Side::You
@@ -84,7 +86,7 @@ fn each_verb_and_effect_plays_in_its_recording() {
         };
         seats.entry(name).or_default().push(side);
     }
-    let mut timelines: std::collections::BTreeMap<String, Vec<TimelineStep>> = Default::default();
+    let mut timelines: BTreeMap<String, Vec<TimelineStep>> = BTreeMap::new();
     let mut timeline = |recording: &str| -> Vec<TimelineStep> {
         timelines
             .entry(recording.to_owned())
