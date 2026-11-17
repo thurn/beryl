@@ -33,7 +33,7 @@ def write(path: Path, frames: list[dict[str, object]], summary: bool = True) -> 
     return path
 
 
-FRAMES = [
+FRAMES: list[dict[str, object]] = [
     late(100, 20.0, 1.0, ["fly"]),
     late(200, 36.0, 3.0, ["fly", "tap"]),
     late(300, 25.0, 2.0, []),

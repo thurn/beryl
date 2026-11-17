@@ -27,7 +27,7 @@ from .command import Command
 # How long past a recording's end the app keeps playing, so that its last frames are drawn.
 EXTRA_S = 1
 # One line of `b3d list`: a recording, its seat, its length and its view count.
-LISTED = re.compile(r"^(\S+)\s+--seat \S+\s+(\d+)ms, \d+ views$")
+LISTED: re.Pattern[str] = re.compile(r"^(\S+)\s+--seat \S+\s+(\d+)ms, \d+ views$")
 
 
 def fixture_names() -> list[str]:
