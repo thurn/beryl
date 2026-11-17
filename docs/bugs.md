@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A granted ability could define both power and toughness.** The card table
+  refused granted abilities that define power alone, but accepted the variant
+  that defines both values. The layer reader requires an ability from the
+  card's own face for those amounts. The table now rejects both variants, and
+  `a_granted_ability_cannot_define_power_and_toughness` checks that it
+  rejects a card definition with that grant.
+
 - **Querying zone membership for merged components panicked.** The zone
   query indexed the owner's zone table with `Zone::Merged`, which is an
   internal location for a component of a permanent. The query now returns

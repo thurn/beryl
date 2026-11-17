@@ -199,3 +199,19 @@ fn a_condition_reads_the_counters_it_compares() {
         CounterKind::Time
     ));
 }
+
+#[test]
+fn a_granted_ability_cannot_define_power_and_toughness() {
+    static SPEC: LayerSpec = LayerSpec {
+        affected: Objects::This,
+        condition: None,
+        modifications: &[Modification::SetPt(&Amount::Fixed(1), &Amount::Fixed(2))],
+    };
+    static FACES: &[Face] = &[Face::EMPTY.grants(&[beryl_card::Ability::static_ability(&SPEC)])];
+    let card = CardDef {
+        name: "Test",
+        faces: FACES,
+        tokens: &[],
+    };
+    assert_eq!(check(&card), Err(Unapplied::GrantedAmount));
+}

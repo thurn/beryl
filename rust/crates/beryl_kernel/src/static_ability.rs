@@ -454,7 +454,7 @@ pub(crate) fn check(def: &CardDef) -> Result<(), Unapplied> {
 /// two numbers.
 fn read_layer_amount(modification: Modification) -> bool {
     match modification {
-        Modification::SetPower(_) => true,
+        Modification::SetPower(_) | Modification::SetPt(..) => true,
         Modification::SetBasePt(power, toughness) => {
             !matches!((power, toughness), (Amount::Fixed(_), Amount::Fixed(_)))
         }
