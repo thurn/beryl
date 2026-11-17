@@ -190,9 +190,13 @@ fn shade_panel(
     let d = rounded_box((mesh_uv - vec2<f32>(0.5)) * size, size * 0.5, params.z);
     let outer = clamp(0.5 - d / pixel, 0.0, 1.0);
     let inner = select(1.0, clamp(0.5 - (d + params.w) / pixel, 0.0, 1.0), params.w > 0.0);
-    let color = mix(vec4<f32>(border) / 255.0, tint, inner);
-    let a = color.a * outer;
-    return vec4<f32>(color.rgb * a, a);
+    // The fill reaches under the border, which is drawn over it, as CSS's background reaches
+    // to the border box's edge (`background-clip: border-box`): a translucent rim shows the
+    // panel's fill through it, not what lies behind the panel.
+    let edge = vec4<f32>(border) / 255.0;
+    let ring = edge.a * (1.0 - inner);
+    let fill = vec4<f32>(tint.rgb, 1.0) * tint.a;
+    return (vec4<f32>(edge.rgb, 1.0) * ring + fill * (1.0 - ring)) * outer;
 }
 
 // A glyph: its coverage (the atlas's one channel) times the tint.
