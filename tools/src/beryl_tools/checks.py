@@ -73,6 +73,7 @@ from . import (
     plan_references,
     python_tests,
     rule_ownership,
+    rulings,
     runlog,
     script_checks,
     standalone,
@@ -569,7 +570,9 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
     if (
         cited
         or crates
-        or anywhere(r"^(tools|rust|ui)/|^data/card-names-allowlist\.json$")
+        or anywhere(
+            r"^(tools|rust|ui)/|^data/(card-names-allowlist|rulings-ledger)\.json$"
+        )
     ):
         lanes.append(names_lane(cited, crates=crates))
     # The browser checks the change can break, as many as fit the budget; none on
@@ -665,6 +668,7 @@ def steps() -> dict[str, Callable[..., int]]:
         "citations": citations.step,
         "rule-ownership": rule_ownership.step,
         "divergences": card_diverge.step,
+        "rulings": rulings.step,
         "conventions": conventions.step,
         "design-tokens": design_tokens.step,
         "build-paths": build_paths.step,

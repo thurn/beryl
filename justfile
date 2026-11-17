@@ -229,7 +229,8 @@ count-gate *args:
 # file, check <name> [--no-oracles] builds it, plays its scenarios in Beryl, XMage and Forge and diffs its
 # rendered text, render <name>...|--all diffs rendered text against Oracle text, path <name> its file,
 # header <name>|--all rewrites its file's generated header from the card store, diverge <name> <scenario>
-# <xmage|forge> --cr <rule> --reason <text> records an oracle's own fault when the other oracle agrees
+# <xmage|forge> --cr <rule> --reason <text> records an oracle's own fault when the other oracle agrees,
+# rulings <name> [--add] shows rulings and their ledger entries and can add drafts
 [group('data')]
 card command *args:
     {{ by }} card "$@"

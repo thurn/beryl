@@ -29,6 +29,8 @@ rulings cached, no XMage checkout) says so and the brief goes on. A name the sto
 plays its scenarios in Beryl, XMage and Forge (card_check.py). `card diverge` records that one
 oracle is wrong about a scenario, when the other agrees with Beryl (card_diverge.py).
 
+`card rulings <name> [--add]` shows each ruling with its ledger entry and can add drafts.
+
 `card render <name>...` (or `--all`) prints a card's rendered rules text and its diff against its
 Oracle text (render_diff.py).
 
@@ -46,7 +48,6 @@ from __future__ import annotations
 
 import argparse
 import difflib
-import gzip
 import json
 import re
 import sys
@@ -62,6 +63,7 @@ from . import (
     card_store,
     nearest,
     paths,
+    rulings as rulings_ledger,
     scryfall,
     set_groups,
     store_cards,
@@ -86,6 +88,7 @@ class Sources:
     vocabulary: Path = vocabulary.SOURCES
     cards: Path = card_files.CARDS
     escalations: Path = ESCALATIONS
+    ledger: Path = rulings_ledger.LEDGER
 
 
 def find(name: str, store: card_store.Store) -> Json | str:
@@ -133,16 +136,7 @@ def rulings(oracle_id: str) -> list[Json] | str:
             return (
                 f"Scryfall's rulings file is not cached and could not be fetched ({e})"
             )
-    needle = oracle_id.encode()
-    found: list[Json] = []
-    with gzip.open(path, "rb") as lines:
-        for line in lines:
-            # Most lines are other cards': look for the id before parsing.
-            if needle in line:
-                ruling = cast(Json, json.loads(line))
-                if ruling.get("oracle_id") == oracle_id:
-                    found.append(ruling)
-    return sorted(found, key=lambda r: str(r.get("published_at", "")))
+    return rulings_ledger.from_bulk(path, {oracle_id})[oracle_id]
 
 
 # Where a card file's scenarios begin: the module behind the `scenarios` feature.
@@ -205,13 +199,7 @@ def brief(record: Json, sources: Sources) -> str:
     if (escalated := escalation(name, sources.escalations)) is not None:
         parts.append(section("Escalation", escalated))
 
-    found = rulings(str(record["oracle_id"]))
-    if isinstance(found, str):
-        body = f"None shown: {found}."
-    elif not found:
-        body = "Scryfall has none."
-    else:
-        body = "\n".join(f"- {r['published_at']}: {r['comment']}" for r in found)
+    body = ruling_lines(record, sources.ledger)
     parts.append(section("Rulings", body))
 
     entries = vocabulary.entries(sources.vocabulary)
@@ -283,6 +271,44 @@ def complete_note(record: Json, sources: Sources) -> str | None:
     )
 
 
+def ruling_lines(
+    record: Json, ledger: Path, details: bool = False, add: bool = False
+) -> str:
+    found = rulings(str(record["oracle_id"]))
+    if isinstance(found, str):
+        if details:
+            raise ValueError(found)
+        return f"None shown: {found}."
+    if not found:
+        return "Scryfall has none."
+    name = str(record["name"])
+    if add:
+        entries = rulings_ledger.append(ledger, name, found)
+    else:
+        data = rulings_ledger.load(ledger) if ledger.is_file() else {}
+        entries = rulings_ledger.indexed(data.get(name, []))
+    return "\n".join(
+        rulings_ledger.describe(
+            ruling, entries.get(rulings_ledger.key(ruling)), details
+        )
+        for ruling in found
+    )
+
+
+def run_rulings(args: argparse.Namespace, sources: Sources = Sources()) -> int:
+    with card_store.Store(sources.store) as store:
+        found = find(args.name, store)
+    if isinstance(found, str):
+        print(f"card rulings: {found}", file=sys.stderr)
+        return 1
+    try:
+        print(ruling_lines(found, sources.ledger, details=True, add=args.add))
+    except (ValueError, OSError) as error:
+        print(f"card rulings: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def run_brief(args: argparse.Namespace, sources: Sources = Sources()) -> int:
     with card_store.Store(sources.store) as store:
         found = find(args.name, store)
@@ -320,7 +346,7 @@ def run_path(args: argparse.Namespace, sources: Sources = Sources()) -> int:
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser(
         "card",
-        help="the tools a card is written with: brief, new, check, render, path, header",
+        help="the tools a card is written with: brief, rulings, new, check, render, path, header",
     )
     commands = p.add_subparsers(dest="card_command", required=True)
     b = commands.add_parser(
@@ -330,6 +356,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     b.add_argument("name", help="the card's name or slug, e.g. 'Lightning Bolt'")
     b.set_defaults(func=run_brief)
+    r = commands.add_parser("rulings", help="show the rulings and their ledger entries")
+    r.add_argument("name", help="the card's name or slug")
+    r.add_argument(
+        "--add", action="store_true", help="add unfinished entries for new rulings"
+    )
+    r.set_defaults(func=run_rulings)
     w = commands.add_parser("path", help="the card's file, by its first printing")
     w.add_argument("name", help="the card's name or slug, e.g. 'Lightning Bolt'")
     w.set_defaults(func=run_path)

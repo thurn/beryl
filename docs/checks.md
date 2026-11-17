@@ -69,6 +69,13 @@ The lanes:
   - `citations`: `just citations` on the changed files, using the cached rules
     text, and skipped if none is cached. Slow CI runs it on the whole tree and
     downloads the text.
+  - `rulings` checks that every cached Scryfall ruling for a card in
+    `data/rulings-ledger.json` has an entry and that each entry still matches a
+    ruling. It rejects unfinished entries and scenario names missing from the
+    card file and rules library. An entry marked `covered` must name a
+    vocabulary entry or library scenario. The check skips when the bulk rulings
+    file is unavailable in the cache. `just card rulings <name>` shows the text
+    and entry for each ruling.
   - `rule-ownership`: an `Implements:` header in a kernel or rules module claims
     rules and their descendants. The check rejects conflicting claims, claims
     without an implementation citation, and citations outside the file's or

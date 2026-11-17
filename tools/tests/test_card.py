@@ -12,7 +12,15 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import card, card_store, oracles, scryfall, vocabulary, xmage_classes
+from beryl_tools import (
+    card,
+    card_store,
+    oracles,
+    rulings,
+    scryfall,
+    vocabulary,
+    xmage_classes,
+)
 
 BOLT_ID = "bolt-oracle"
 COUNTERSPELL_ID = "counterspell-oracle"
@@ -175,6 +183,7 @@ def sources(tmp_path: Path) -> card.Sources:
         tmp_path / "vocabulary",
         tmp_path / "cards",
         tmp_path / "card-escalations.json",
+        tmp_path / "rulings-ledger.json",
     )
 
 
@@ -236,6 +245,17 @@ def part(text: str, title: str) -> str:
 def test_an_implemented_cards_brief_has_all_five_parts(
     sources: card.Sources, cached: Path
 ) -> None:
+    date, digest = rulings.key({"published_at": "2004-10-04", "comment": "Earlier."})
+    sources.ledger.write_text(
+        json.dumps(
+            {
+                "Counterspell": [
+                    {"published_at": date, "hash": digest, "scenario": ["tested"]}
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
     text = brief_of("Counterspell", sources)
     assert sections(text) == [
         "Oracle text",
@@ -249,7 +269,7 @@ def test_an_implemented_cards_brief_has_all_five_parts(
     )
     assert (
         part(text, "Rulings").split()
-        == "- 2004-10-04: Earlier. - 2020-01-02: Later.".split()
+        == "- 2004-10-04: Earlier. [scenario] - 2020-01-02: Later. [unrecorded]".split()
     )
     vocabulary_part = part(text, "Vocabulary")
     assert vocabulary_part.index("### Effect::Counter (") < vocabulary_part.index(

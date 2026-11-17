@@ -1,0 +1,32 @@
+{
+  "Blood Moon": [
+    {
+      "published_at": "2020-08-07",
+      "hash": "a1b062b96b5b",
+      "untestable": "Bojuka Bog, a nonbasic land with its own enters-the-battlefield trigger, has no implementation."
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "1f8020aacde6",
+      "scenario": [
+        "two Urborgs under Blood Moon meet the legend rule"
+      ]
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "fce3d6dc9e99",
+      "scenario": [
+        "a nonbasic land taps for {R}",
+        "a nonbasic land loses its own mana abilities"
+      ]
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "d9ea3edca58b",
+      "scenario": [
+        "a land that asks for life as it enters enters untapped",
+        "a land that enters tapped unless few lands enters untapped"
+      ]
+    }
+  ]
+}

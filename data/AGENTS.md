@@ -30,6 +30,13 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   Oracle's words) or `escalated` (a clause is left out, and
   `card-escalations.json` has a partial entry for the card). Its `note` says
   why. Entries may only be removed, except a `wording` entry for a new card.
+- `rulings-ledger.json`: Scryfall rulings for audited cards, by full card name.
+  Each entry has the ruling's `published_at` date and `hash` (the first 12
+  lowercase hex digits of SHA-256 of the exact UTF-8 comment), plus exactly one
+  of `scenario` (a nonempty list of names from the card file or rules library),
+  `covered` (the vocabulary entry or rules-library scenario that covers it), or
+  `untestable` (the reason). `just card rulings <name> --add` adds missing
+  entries with blank reasons for the writer to fill.
 - `card-printings.csv`: the specific printing chosen for each card.
 - `rules-version.json`: the Comprehensive Rules release that every citation in
   the code is checked against.

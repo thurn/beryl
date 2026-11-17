@@ -51,7 +51,14 @@ pub mod scenarios {
         Scenario::new("a nonbasic land taps for {R}")
             .battlefield(P0, &[BLOOD_MOON, Card::Tundra, Card::Island, Card::Island])
             .hand(P0, &[BLOOD_MOON])
-            .actions(&[ME.casts(BLOOD_MOON), Resolve, ME.controls(BLOOD_MOON, 2)]),
+            .actions(&[
+                ME.has_subtype(Card::Tundra, Subtype::Mountain, true),
+                ME.has_subtype(Card::Tundra, Subtype::Island, false),
+                ME.has_subtype(Card::Tundra, Subtype::Plains, false),
+                ME.casts(BLOOD_MOON),
+                Resolve,
+                ME.controls(BLOOD_MOON, 2),
+            ]),
         // Tundra has lost the mana abilities of its rules text and its old land types, so
         // it can't pay the artifact's {W}: P0 is given no priority in the main phase.
         Scenario::new("a nonbasic land loses its own mana abilities")
@@ -90,6 +97,18 @@ pub mod scenarios {
             .actions(&[
                 ME.plays(Card::UrborgTombOfYawgmoth),
                 ME.deciding(DecisionKind::Attacker, 2),
+            ]),
+        // Urborg still has the same name and is legendary as a Mountain. Playing a second
+        // copy makes its controller choose one to keep.
+        Scenario::new("two Urborgs under Blood Moon meet the legend rule")
+            .interaction(&[Card::UrborgTombOfYawgmoth])
+            .battlefield(P0, &[BLOOD_MOON, Card::UrborgTombOfYawgmoth])
+            .hand(P0, &[Card::UrborgTombOfYawgmoth])
+            .actions(&[
+                ME.plays(Card::UrborgTombOfYawgmoth),
+                ME.picks(Card::UrborgTombOfYawgmoth),
+                ME.controls(Card::UrborgTombOfYawgmoth, 1),
+                ME.has(Zone::Graveyard, Card::UrborgTombOfYawgmoth, 1),
             ]),
         // With Urborg first, every land is a Swamp and Damn could be cast. Blood Moon arriving
         // later removes Urborg's ability all the same: the basic lands left untapped are

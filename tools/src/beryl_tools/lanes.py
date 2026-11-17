@@ -186,6 +186,7 @@ def names_lane(
         "discarded-push",
         "plan-references",
         "divergences",
+        "rulings",
     ):
         lane.step(check, [*checks, check])
     if cited != []:

@@ -141,7 +141,8 @@ a card, from the bulk file cached under `$BERYL_CACHE/scryfall/` (79,706 rulings
 for 20,080 cards). `data/rulings-ledger.json` records, for each card under
 audit, each ruling by its date and a hash of its text, with one of:
 
-- `scenario`: the names of the scenarios in the card's file that show it;
+- `scenario`: the names of the scenarios in the card's file or rules library
+  that show it;
 - `untestable`: why no scenario can show it (it restates reminder text, it is
   about a tournament procedure, it needs a card nobody has implemented and that
   card is named);
