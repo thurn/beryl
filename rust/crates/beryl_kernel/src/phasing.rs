@@ -1,17 +1,19 @@
-//! Phasing ([CR 702.26]): the mutators that phase permanents out and in.
+//! Phasing (see [CR 702.26]): the mutators that phase permanents out and in.
 //!
 //! A phased-out permanent keeps its slot, its zone (the battlefield), its incarnation and
 //! everything the stores hold about it: its counters, memos, effects and attachments. It leaves
 //! the battlefield list, its owner's battlefield zone set and so the layer results, and joins
 //! the state's set of phased-out permanents. Everything that walks the battlefield or reads a
 //! zone set therefore passes over it, and since nothing changes zone, nothing triggers as though
-//! it left or entered ([CR 702.26d]): "The phasing event doesn't actually cause a permanent to
+//! it left or entered (see [CR 702.26d]): "The phasing event doesn't actually cause a permanent to
 //! change zones or control, even though it's treated as though it's not on the battlefield and
 //! not under its controller's control while it's phased out. Zone-change triggers don't trigger
 //! when a permanent phases in or out."
 //!
 //! A game with nothing phased out reads one empty set, in the untap step and as a permanent
 //! leaves the battlefield.
+//!
+//! Implements: none. The mutators update the battlefield and phased-out records together.
 //!
 //! [CR 702.26]: https://yawgatog.com/resources/magic-rules/#R70226
 //! [CR 702.26d]: https://yawgatog.com/resources/magic-rules/#R70226d
@@ -32,11 +34,11 @@ impl<L: Layout> State<L> {
     }
 
     /// Phases out the permanents in `slots` and, with them, everything attached to them
-    /// ([CR 702.26g]): "When a permanent phases out, any Auras, Equipment, or Fortifications
+    /// (see [CR 702.26g]): "When a permanent phases out, any Auras, Equipment, or Fortifications
     /// attached to that permanent phase out at the same time. This alternate way of phasing out
-    /// is known as phasing out “indirectly.”" Each is removed from combat ([CR 702.26b]): "A
+    /// is known as phasing out “indirectly.”" Each is removed from combat (see [CR 702.26b]): "A
     /// permanent that phases out is removed from combat." No event: nothing triggers on phasing
-    /// (CR 702.26d).
+    /// (see CR 702.26d).
     ///
     /// Each permanent that phases out directly remembers who controlled it if that is not its
     /// base controller ([`Memo::PhasedOutUnder`]), since that player's untap step phases it in
@@ -52,7 +54,7 @@ impl<L: Layout> State<L> {
     pub fn phase_out(&mut self, slots: Bitboard<L::Slot>) -> Result<(), Full> {
         debug_assert!(slots.all(|slot| self.battlefield_position(slot).is_some()));
         let all = self.with_attached(slots, self.in_zone(Zone::Battlefield));
-        // CR 702.26h: "If an object would simultaneously phase out directly and indirectly, it
+        // See CR 702.26h: "If an object would simultaneously phase out directly and indirectly, it
         // just phases out indirectly." So a permanent phases out directly when what it is
         // attached to, if anything, stays.
         for slot in all.iter() {
@@ -65,7 +67,7 @@ impl<L: Layout> State<L> {
                 self.remember(slot, Memo::PhasedOutUnder(under))?;
             }
         }
-        // CR 506.4: "A creature that's removed from combat stops being an attacking,
+        // See CR 506.4: "A creature that's removed from combat stops being an attacking,
         // blocking, blocked, and/or unblocked creature." The creatures in combat with it stay
         // in combat, related to nothing, as when a permanent leaves the battlefield.
         for slot in all.iter() {
@@ -89,15 +91,15 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
-    /// Phases in the phased-out permanents in `slots` ([CR 702.26c]): "If a permanent phases
+    /// Phases in the phased-out permanents in `slots` (see [CR 702.26c]): "If a permanent phases
     /// in, its status changes to “phased in.” The game once again treats it as though it
     /// exists." Each is as it was: tapped or untapped, with its counters, attachments and
     /// timestamp. One attached to a permanent that stays phased out phases in unattached
-    /// ([CR 702.26i]): "An Aura, Equipment, or Fortification that phased out directly will phase
+    /// (see [CR 702.26i]): "An Aura, Equipment, or Fortification that phased out directly will phase
     /// in attached to the object or player it was attached to when it phased out, if that object
     /// is still in the same zone or that player is still in the game. If not, that Aura,
     /// Equipment, or Fortification phases in unattached." One whose object left the battlefield
-    /// was unattached as it left. No event (CR 702.26d).
+    /// was unattached as it left. No event (see CR 702.26d).
     ///
     /// # Panics
     ///
@@ -124,10 +126,10 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
-    /// The phased-out permanents that phase in during `player`'s untap step ([CR 502.1]):
+    /// The phased-out permanents that phase in during `player`'s untap step (see [CR 502.1]):
     /// "all phased-out permanents that the active player controlled when they phased out phase
     /// in." Those that phased out indirectly come with what they are attached to
-    /// ([CR 702.26g]): "An Aura, Equipment, or Fortification that phased out indirectly won't
+    /// (see [CR 702.26g]): "An Aura, Equipment, or Fortification that phased out indirectly won't
     /// phase in by itself, but instead phases in along with the permanent it's attached to."
     ///
     /// [CR 502.1]: https://yawgatog.com/resources/magic-rules/#R5021
@@ -167,7 +169,7 @@ impl<L: Layout> State<L> {
 }
 
 impl<L: Layout> Observation<'_, L> {
-    /// The phased-out permanents: public, as the battlefield is ([CR 400.2]): "Public zones are
+    /// The phased-out permanents: public, as the battlefield is (see [CR 400.2]): "Public zones are
     /// zones in which all players can see the cards' faces".
     ///
     /// [CR 400.2]: https://yawgatog.com/resources/magic-rules/#R4002

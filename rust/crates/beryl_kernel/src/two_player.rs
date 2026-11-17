@@ -5,7 +5,7 @@
 //! [`crate::State::next_player`], [`crate::State::defending_players`]), which say what they
 //! mean with any number of players. This module is the shortcut those replace: a seat has
 //! exactly one other seat
-//! ([CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022)): "In a two-player game, a
+//! (see [CR 102.2](https://yawgatog.com/resources/magic-rules/#R1022)): "In a two-player game, a
 //! player's opponent is the other player."
 //!
 //! Nothing here is in scope until a module imports [`TwoPlayerSeat`], so the modules that
@@ -21,9 +21,11 @@
 //!
 //! A third player would break every caller, each in its own way: a view would have several
 //! opponents to draw, an evaluation several positions to weigh, and a turn order more than
-//! alternation ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031): "The game's
+//! alternation (see [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031): "The game's
 //! default turn order begins with the starting player and proceeds clockwise"). Then this
 //! module is deleted, and the compiler lists them.
+//!
+//! Implements: none. The seat helpers represent the engine's two-seat layout.
 
 use crate::ids::Seat;
 

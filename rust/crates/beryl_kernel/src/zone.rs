@@ -4,6 +4,8 @@
 //!
 //! They are mutators of [`State`] (the crate's contract, "Mutators"), and the only code that
 //! writes the zones' membership and order.
+//!
+//! Implements: CR 400.7
 
 use crate::bitboard::Bitboard;
 use crate::chance;
@@ -46,7 +48,7 @@ impl<L: Layout> State<L> {
     /// reset, and what the stores hold about it ends ([`crate::store`]). An exhausted
     /// incarnation returns [`Full`].
     ///
-    /// [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to any
+    /// See [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003): "If an object would go to any
     /// library, graveyard, or hand other than its owner's, it goes to its owner's corresponding
     /// zone." Zones are kept by owner, so that holds by construction.
     pub fn move_object(
@@ -58,12 +60,12 @@ impl<L: Layout> State<L> {
     ) -> Result<(), Full> {
         let incarnation = self.object(slot).incarnation.checked_add(1).ok_or(Full)?;
         // A card about to be seen has its identity settled first, before anything reads it
-        // ([`chance`]): CR 400.2 below has every player see a card in a public zone, and CR 402.3
-        // its owner see one in their hand.
+        // ([`chance`]): every player sees a card in a public zone (see CR 400.2 below), and
+        // its owner sees one in their hand.
         if to.is_public() || to == Zone::Hand {
             chance::settle(self, sink, slot);
         }
-        // [CR 708.9](https://yawgatog.com/resources/magic-rules/#R7089): "If a face-down permanent
+        // See [CR 708.9](https://yawgatog.com/resources/magic-rules/#R7089): "If a face-down permanent
         // ... moves from the battlefield to any other zone, its owner must reveal it to all players
         // as they move it." Whatever zone it goes to, a hidden one included. A face-down
         // component under a merged permanent's face-up top is revealed too: its slot is known
@@ -99,7 +101,7 @@ impl<L: Layout> State<L> {
         o.base_controller = o.owner;
         o.flags = o.flags.kept_across_zones();
         o.damage = 0;
-        // [CR 122.2](https://yawgatog.com/resources/magic-rules/#R1222): "Counters on an
+        // See [CR 122.2](https://yawgatog.com/resources/magic-rules/#R1222): "Counters on an
         // object are not retained if that object moves from one zone to another." Those of
         // the table's kinds ended with what the stores hold.
         o.counters = Counters::default();
@@ -122,7 +124,7 @@ impl<L: Layout> State<L> {
             }
             Zone::Battlefield => {
                 self.enter_battlefield(slot)?;
-                // CR 302.6: a permanent that just arrived hasn't been under its controller's
+                // See CR 302.6: a permanent that just arrived hasn't been under its controller's
                 // control since their most recent turn began.
                 let timestamp = self.take_timestamp();
                 let o = self.object_mut(slot);
@@ -145,13 +147,13 @@ impl<L: Layout> State<L> {
         if matches!(to, Zone::Battlefield | Zone::Nowhere) {
             self.forget_links_to(slot);
         }
-        // CR 400.2: cards in public zones are seen by every player.
+        // See CR 400.2: cards in public zones are seen by every player.
         if to.is_public() {
             for k in self.knowledge.as_mut_slice() {
                 k.insert(slot);
             }
         }
-        // [CR 402.3](https://yawgatog.com/resources/magic-rules/#R4023): "A player may arrange
+        // See [CR 402.3](https://yawgatog.com/resources/magic-rules/#R4023): "A player may arrange
         // their hand in any convenient fashion and look at it at any time." Whatever put the
         // card there: a draw, or a return from a library.
         if to == Zone::Hand {
@@ -185,10 +187,10 @@ impl<L: Layout> State<L> {
     }
 
     /// Moves the other cards of a merged permanent that left the battlefield to the zone it
-    /// went to ([CR 731.3]): "If a merged permanent leaves the battlefield, one permanent leaves
+    /// went to (see [CR 731.3]): "If a merged permanent leaves the battlefield, one permanent leaves
     /// the battlefield and each of the individual components are put into the appropriate
     /// zone." Each becomes an object of its own there. Its owner may choose the order of those
-    /// that go to a graveyard or library ([CR 731.3a]); they go in the order they merged, above
+    /// that go to a graveyard or library (see [CR 731.3a]); they go in the order they merged, above
     /// the permanent's own card. A token that ceases to exist leaves its
     /// cards in its owner's graveyard.
     ///
@@ -216,10 +218,10 @@ impl<L: Layout> State<L> {
 
     /// Draws one card.
     ///
-    /// [CR 121.1](https://yawgatog.com/resources/magic-rules/#R1211): "A player draws a card by
+    /// See [CR 121.1](https://yawgatog.com/resources/magic-rules/#R1211): "A player draws a card by
     /// putting the top card of their library into their hand."
     ///
-    /// [CR 121.4](https://yawgatog.com/resources/magic-rules/#R1214): "A player who attempts to
+    /// See [CR 121.4](https://yawgatog.com/resources/magic-rules/#R1214): "A player who attempts to
     /// draw a card from a library with no cards in it loses the game the next time a player would
     /// receive priority."
     pub fn draw(&mut self, sink: &mut Sink<L>, player: Seat) -> Result<(), Full> {
@@ -230,7 +232,7 @@ impl<L: Layout> State<L> {
         self.move_object(sink, slot, Zone::Hand, Place::Top)
     }
 
-    /// Draws `n` cards, one at a time ([CR 121.2]): "If a player is instructed to draw multiple
+    /// Draws `n` cards, one at a time (see [CR 121.2]): "If a player is instructed to draw multiple
     /// cards, that player performs that many individual card draws."
     ///
     /// [CR 121.2]: https://yawgatog.com/resources/magic-rules/#R1212
@@ -261,14 +263,14 @@ impl<L: Layout> State<L> {
 
     /// Shuffles a library.
     ///
-    /// [CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "To shuffle a library or
+    /// See [CR 701.24a](https://yawgatog.com/resources/magic-rules/#R70124a): "To shuffle a library or
     /// a face-down pile of cards, randomize the cards within it so that no player knows their
     /// order."
     ///
     /// Slots are public handles (architecture §13), so randomizing the order of the slots alone
     /// would let a player follow a card they know through the shuffle. The identities are dealt
     /// anew among the shuffled slots and every player forgets them; then the slots are reordered.
-    /// [CR 701.20d](https://yawgatog.com/resources/magic-rules/#R70120d): "If cards in a player's
+    /// See [CR 701.20d](https://yawgatog.com/resources/magic-rules/#R70120d): "If cards in a player's
     /// library are shuffled or otherwise reordered, any revealed cards that are reordered stop
     /// being revealed and become new objects."
     pub fn shuffle_library(&mut self, player: Seat) -> Result<(), Full> {
@@ -285,7 +287,7 @@ impl<L: Layout> State<L> {
 
     /// Shuffles a player's opening hand back into their library as one mulligan operation.
     /// The moves are reported in card definition order. The shuffle takes the returned
-    /// slots in number order to reproduce its historical seeded permutation. [CR 103.5]:
+    /// slots in number order to reproduce its historical seeded permutation. see [CR 103.5]:
     /// "To take a mulligan, a player shuffles the cards in their hand back into their library,
     /// draws a new hand of cards equal to their starting hand size".
     ///
@@ -312,7 +314,7 @@ impl<L: Layout> State<L> {
     /// Deals the identities of the cards in `slots`, all in one library, anew among those slots
     /// with `rng`, and every player forgets them: the slots are public handles (architecture §13),
     /// so this is how cards come to be in an order no player knows. Each becomes a new object
-    /// ([CR 701.20d]): "If cards in a player's library are shuffled or otherwise reordered, any
+    /// (see [CR 701.20d]): "If cards in a player's library are shuffled or otherwise reordered, any
     /// revealed cards that are reordered stop being revealed and become new objects."
     ///
     /// [CR 701.20d]: https://yawgatog.com/resources/magic-rules/#R70120d
@@ -342,7 +344,7 @@ impl<L: Layout> State<L> {
     }
 
     /// A token in a zone other than the battlefield ceases to exist, and its slot returns to the
-    /// shared pool ([CR 704.5d]): "If a token is in a zone other than the battlefield, it ceases to
+    /// shared pool (see [CR 704.5d]): "If a token is in a zone other than the battlefield, it ceases to
     /// exist." The incarnation is kept and bumped, so references to the token stay stale after the
     /// slot is reused. The cards exiled with it are exiled with nothing any more.
     ///
@@ -363,7 +365,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Returns expired tokens and spell copies to the pool. The removals emit no events,
-    /// and each slot gets its own new incarnation ([`State::cease_to_exist`], CR 704.5d–e).
+    /// and each slot gets its own new incarnation ([`State::cease_to_exist`], see CR 704.5d–e).
     pub fn reclaim_tokens(&mut self, tokens: Bitboard<L::Slot>) -> Result<(), Full> {
         for slot in tokens.iter() {
             self.cease_to_exist(slot)?;
@@ -407,16 +409,16 @@ impl<L: Layout> State<L> {
 /// A card put from its owner's hand into their library unrevealed, as Brainstorm puts two back: the
 /// other player sees a card back go and cannot tell which of the hand's cards it was, so they
 /// forget it and every card still in that hand, however they came to know them (a look at the hand,
-/// a card they saw on top of the library drawn). A hand and a library are hidden zones ([CR 400.2]:
+/// a card they saw on top of the library drawn). A hand and a library are hidden zones (see [CR 400.2]:
 /// "Library and hand are hidden zones, even if all the cards in one such zone happen to be
-/// revealed"), and the owner keeps their hand in any order ([CR 402.3]: "A player may arrange their
+/// revealed"), and the owner keeps their hand in any order (see [CR 402.3]: "A player may arrange their
 /// hand in any convenient fashion").
 ///
 /// [CR 400.2]: https://yawgatog.com/resources/magic-rules/#R4002
 /// [CR 402.3]: https://yawgatog.com/resources/magic-rules/#R4023
 fn forget_hand<L: Layout>(s: &mut State<L>, owner: Seat, moved: L::Slot) {
     let hand = s.zones.members[owner.index()][Zone::Hand.index()];
-    // The player controlling the owner sees the hand as the owner does (CR 724.4).
+    // The player controlling the owner sees the hand as the owner does (see CR 724.4).
     let sharer = s.sharer(owner);
     for p in Seat::BOTH {
         if p != owner && Some(p) != sharer {
@@ -444,13 +446,13 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
             // What was tracked of it this turn ends with it (CR 400.7): the object it
             // returns as is new.
             s.trackers.forget(slot);
-            // [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A permanent is
+            // See [CR 506.4](https://yawgatog.com/resources/magic-rules/#R5064): "A permanent is
             // removed from combat if it leaves the battlefield". The creatures attacking it or
             // blocked by it stay in combat, related to nothing; the slot may soon hold
             // another object. What was attached to it is attached to nothing: the object it
             // returns as is new ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)),
             // and an Aura left unattached goes to the graveyard as a state-based action
-            // (CR 704.5m).
+            // (see CR 704.5m).
             for i in 0..s.battlefield.len() {
                 let other = s.object_mut(s.battlefield.as_slice()[i]);
                 if !matches!(other.combat, CombatRole::None) {
@@ -461,7 +463,7 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
                 }
             }
             // What phased out directly while attached to it phases in unattached
-            // ([CR 702.26i](https://yawgatog.com/resources/magic-rules/#R70226i)): "if that
+            // (see [CR 702.26i](https://yawgatog.com/resources/magic-rules/#R70226i)): "if that
             // object is still in the same zone ... If not, that Aura, Equipment, or
             // Fortification phases in unattached."
             if !s.phased_out.is_empty() {

@@ -1,4 +1,6 @@
 //! `PlayerSet`: a set of players.
+//!
+//! Implements: none. The set represents membership without an ordering.
 
 use crate::ids::Seat;
 use crate::two_player::TwoPlayerSeat as _;
@@ -87,7 +89,7 @@ impl PlayerSet {
     }
 
     /// The players in turn order from `first`
-    /// ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)): "The game's default
+    /// (see [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)): "The game's default
     /// turn order begins with the starting player and proceeds clockwise." At a table of two
     /// that is `first`, then the other.
     #[inline]

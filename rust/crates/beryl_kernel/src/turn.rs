@@ -6,6 +6,8 @@
 //! which, what a step's turn-based actions are and when a budget stalls the game are
 //! `beryl_engine`'s. Each mutator keeps what must agree: passes with priority, the per-turn
 //! counts with the turn.
+//!
+//! Implements: none. The turn record stores progress through the turn and priority.
 
 use beryl_card::TurnStep;
 
@@ -29,23 +31,23 @@ pub struct Turn {
     pub(crate) step: TurnStep,
     /// The player with priority.
     pub(crate) priority: Seat,
-    /// Players who have passed in succession (CR 117.4).
+    /// Players who have passed in succession (see CR 117.4).
     pub(crate) passes: u8,
-    /// The cleanup step is checking for state-based actions (CR 514.3a): if none are
+    /// The cleanup step is checking for state-based actions (see CR 514.3a): if none are
     /// performed, the turn ends instead of a player receiving priority.
     pub(crate) cleanup_check: bool,
     /// Creatures were declared as attackers this combat, so the declare blockers and combat
     /// damage steps happen even if none is attacking any more
-    /// ([CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088)).
+    /// (see [CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088)).
     pub(crate) attacked: bool,
     /// The player controlling the active player this turn, if another player does
-    /// ([CR 724.1]): "The affected player is controlled during the entire turn; the effect
+    /// (see [CR 724.1]): "The affected player is controlled during the entire turn; the effect
     /// doesn't end until the beginning of the next turn." [`State::begin_turn`] sets it.
     ///
     /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
     pub(crate) controller: Option<Seat>,
     /// In an extra turn, the active player of the last turn that was not one, whom the turn
-    /// order goes on from when the extra turns are over ([CR 500.7]): "Some effects can give
+    /// order goes on from when the extra turns are over (see [CR 500.7]): "Some effects can give
     /// a player extra turns. They do this by adding the turns directly after the specified
     /// turn." [`State::begin_turn`] sets it.
     ///
@@ -89,28 +91,28 @@ impl Turn {
         self.number
     }
 
-    /// The active player ([CR 102.1](https://yawgatog.com/resources/magic-rules/#R1021)):
+    /// The active player (see [CR 102.1](https://yawgatog.com/resources/magic-rules/#R1021)):
     /// "The active player is the player whose turn it is."
     #[inline]
     pub fn active(self) -> Seat {
         self.active
     }
 
-    /// The starting player ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)):
+    /// The starting player (see [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)):
     /// "The player chosen to take the first turn is the starting player."
     #[inline]
     pub fn starting_player(self) -> Seat {
         self.starting_player
     }
 
-    /// The step or phase the game is in (CR 500.1).
+    /// The step or phase the game is in (see CR 500.1).
     #[inline]
     pub fn step(self) -> TurnStep {
         self.step
     }
 
     /// The player with priority
-    /// ([CR 117.1](https://yawgatog.com/resources/magic-rules/#R1171)): "which player can
+    /// (see [CR 117.1](https://yawgatog.com/resources/magic-rules/#R1171)): "which player can
     /// take actions at any given time is determined by a system of priority."
     #[inline]
     pub fn priority(self) -> Seat {
@@ -118,14 +120,14 @@ impl Turn {
     }
 
     /// How many players have passed in succession
-    /// ([CR 117.4](https://yawgatog.com/resources/magic-rules/#R1174)).
+    /// (see [CR 117.4](https://yawgatog.com/resources/magic-rules/#R1174)).
     #[inline]
     pub fn passes(self) -> u8 {
         self.passes
     }
 
     /// Whether the cleanup step is checking for state-based actions
-    /// ([CR 514.3a](https://yawgatog.com/resources/magic-rules/#R5143a)): if none are
+    /// (see [CR 514.3a](https://yawgatog.com/resources/magic-rules/#R5143a)): if none are
     /// performed, the turn ends instead of a player receiving priority.
     #[inline]
     pub fn cleanup_check(self) -> bool {
@@ -133,16 +135,16 @@ impl Turn {
     }
 
     /// Whether creatures were declared as attackers this combat
-    /// ([CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088)).
+    /// (see [CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088)).
     #[inline]
     pub fn attacked(self) -> bool {
         self.attacked
     }
 
     /// The player controlling the active player this turn, if another player does
-    /// ([CR 724.1]): "Some cards allow a player to control another player during that
+    /// (see [CR 724.1]): "Some cards allow a player to control another player during that
     /// player's next turn." The active player is still the active player
-    /// ([CR 724.3]): "A player who's being controlled during their turn is still the active
+    /// (see [CR 724.3]): "A player who's being controlled during their turn is still the active
     /// player."
     ///
     /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
@@ -155,7 +157,7 @@ impl Turn {
 
 impl<L: Layout> State<L> {
     /// Names the starting player, whose turn the first will be
-    /// ([CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)): "The player chosen to
+    /// (see [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031)): "The player chosen to
     /// take the first turn is the starting player."
     #[inline]
     pub fn set_starting_player(&mut self, starting: Seat) {
@@ -164,18 +166,18 @@ impl<L: Layout> State<L> {
     }
 
     /// Begins the next turn and returns its active player: the starting player's first
-    /// ([CR 103.8]: "The starting player takes their first turn."), then the extra turn
-    /// created last if one is waiting ([`crate::effects::extra_turn`]; [CR 500.7]: "The most
+    /// (see [CR 103.8]: "The starting player takes their first turn."), then the extra turn
+    /// created last if one is waiting ([`crate::effects::extra_turn`]; see [CR 500.7]: "The most
     /// recently created turn will be taken first."), and otherwise the next player in turn
-    /// order after the last turn that was not extra ([CR 500.7]: "They do this by adding the
+    /// order after the last turn that was not extra (see [CR 500.7]: "They do this by adding the
     /// turns directly after the specified turn."). The per-turn counts begin again with it: the
     /// decisions offered, the lands each player has played
-    /// ([CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052)), and what the
+    /// (see [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052)), and what the
     /// Trackers store noted of the turn before ([`crate::trackers`]).
     ///
     /// A player-controlling effect waiting for the new active player's turn makes its
     /// controller the turn's controller ([`Turn::controller`]), and the control of the turn
-    /// before ends ([CR 724.1]): "This effect applies to the next turn that the affected
+    /// before ends (see [CR 724.1]): "This effect applies to the next turn that the affected
     /// player actually takes. The affected player is controlled during the entire turn; the
     /// effect doesn't end until the beginning of the next turn." An extra turn is a turn the
     /// player actually takes, so an effect waiting for them controls it.
@@ -194,7 +196,7 @@ impl<L: Layout> State<L> {
             self.turn.active = extra.unwrap_or_else(|| self.next_player(regular));
         }
         self.turn.controller = self.effects.take_control(self.turn.active);
-        // CR 724.4: the controller sees what the controlled player sees, from the turn's
+        // See CR 724.4: the controller sees what the controlled player sees, from the turn's
         // start; what they learn during it, they learn as that player does (`sharer`).
         if let Some(controller) = self.turn.controller {
             let seen = self.knowledge[self.turn.active.index()];
@@ -210,7 +212,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The player who learns what `player` learns, besides them: the player controlling them
-    /// this turn, if one does ([CR 724.4]): "If information about an object in the game would
+    /// this turn, if one does (see [CR 724.4]): "If information about an object in the game would
     /// be visible to the player being controlled, it's visible to both that player and the
     /// controller of the player." Each mutator by which a player comes to know a card tells
     /// this player too, so that [`State::knows`] stays one bit test, and what the controller
@@ -223,11 +225,11 @@ impl<L: Layout> State<L> {
     }
 
     /// The player who answers a decision that belongs to `player`: the player controlling
-    /// them this turn, or `player` themselves ([CR 724.5]): "While controlling another
+    /// them this turn, or `player` themselves (see [CR 724.5]): "While controlling another
     /// player, a player makes all choices and decisions the controlled player is allowed to
     /// make or is told to make by the rules or by any objects." Only the active player is
     /// ever controlled ([`Turn::controller`]), and a controller still makes their own
-    /// decisions ([CR 724.8]).
+    /// decisions (see [CR 724.8]).
     ///
     /// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
     /// [CR 724.8]: https://yawgatog.com/resources/magic-rules/#R7248
@@ -240,7 +242,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Begins a step or phase, the active player to receive priority in it
-    /// ([CR 117.3a](https://yawgatog.com/resources/magic-rules/#R1173a)): "The active player
+    /// (see [CR 117.3a](https://yawgatog.com/resources/magic-rules/#R1173a)): "The active player
     /// receives priority at the beginning of most steps and phases, after any turn-based
     /// actions (such as drawing a card during the draw step; see rule 703) have been dealt
     /// with".
@@ -256,7 +258,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Gives a player priority, with no player having passed since
-    /// ([CR 117.3c](https://yawgatog.com/resources/magic-rules/#R1173c)): "If a player has
+    /// (see [CR 117.3c](https://yawgatog.com/resources/magic-rules/#R1173c)): "If a player has
     /// priority when they cast a spell, activate an ability, or take a special action, that
     /// player receives priority afterward."
     #[inline]
@@ -266,11 +268,11 @@ impl<L: Layout> State<L> {
     }
 
     /// The player with priority passes it, and whether every player has now passed in
-    /// succession ([CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)): "If a
+    /// succession (see [CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)): "If a
     /// player has priority and chooses not to take any actions, that player passes. ... the
     /// next player in turn order receives priority." Once all have passed, priority stays
     /// where it is for the rules to resolve the stack's top or end the step
-    /// ([CR 117.4](https://yawgatog.com/resources/magic-rules/#R1174)).
+    /// (see [CR 117.4](https://yawgatog.com/resources/magic-rules/#R1174)).
     #[inline]
     pub fn pass_priority(&mut self) -> bool {
         self.turn.passes += 1;
@@ -282,7 +284,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Forgets the passes made in succession, priority staying where it is: something
-    /// happened between them ([CR 117.4](https://yawgatog.com/resources/magic-rules/#R1174):
+    /// happened between them (see [CR 117.4](https://yawgatog.com/resources/magic-rules/#R1174):
     /// "all players pass in succession (that is, if all players pass without taking any
     /// actions in between passing)").
     #[inline]
@@ -292,9 +294,9 @@ impl<L: Layout> State<L> {
 
     /// The active player has declared `attackers`, each made an attacking creature already
     /// ([`State::declare_attacker`]), and the declaration is whole
-    /// ([CR 508.1](https://yawgatog.com/resources/magic-rules/#R5081)). The combat's later
+    /// (see [CR 508.1](https://yawgatog.com/resources/magic-rules/#R5081)). The combat's later
     /// steps then happen even if none is attacking any more
-    /// ([CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088)): "If no creatures are
+    /// (see [CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088)): "If no creatures are
     /// declared as attackers or put onto the battlefield attacking, skip the declare blockers
     /// and combat damage steps." [`State::end_combat`] forgets it.
     #[inline]
@@ -308,7 +310,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Whether the cleanup step is checking for state-based actions and waiting triggers
-    /// ([CR 514.3a](https://yawgatog.com/resources/magic-rules/#R5143a)): "the game checks to
+    /// (see [CR 514.3a](https://yawgatog.com/resources/magic-rules/#R5143a)): "the game checks to
     /// see if any state-based actions would be performed and/or any triggered abilities are
     /// waiting to be put onto the stack ... If so, ... the active player gets priority."
     #[inline]
@@ -329,7 +331,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Counts a state-based check that performed something, and returns how many in a row
-    /// have ([CR 704.3](https://yawgatog.com/resources/magic-rules/#R7043): "If any
+    /// have (see [CR 704.3](https://yawgatog.com/resources/magic-rules/#R7043): "If any
     /// state-based actions are performed as a result of a check, the check is repeated").
     #[inline]
     pub fn count_state_based_check(&mut self) -> u8 {
@@ -343,7 +345,7 @@ impl<L: Layout> State<L> {
         self.budgets.state_based_iterations = 0;
     }
 
-    /// Ends the game ([CR 104.1](https://yawgatog.com/resources/magic-rules/#R1041): "A game
+    /// Ends the game (see [CR 104.1](https://yawgatog.com/resources/magic-rules/#R1041): "A game
     /// ends immediately when a player wins, when the game is a draw, or when the game is
     /// restarted."), or gives it up as stalled. It returns no event: the rules announce a
     /// win or a loss to each player with its cause, and a stall is not something that

@@ -1,5 +1,7 @@
 //! The state's internal invariants, which fuzzing checks after every decision (architecture
 //! §17.4). A violation is an engine bug, never a rules outcome.
+//!
+//! Implements: none. The checks validate the engine's internal state.
 
 use crate::bitboard::Bitboard;
 use crate::ids::{CardId, Seat, SlotId, SlotPlace};
@@ -83,7 +85,7 @@ impl<L: Layout> State<L> {
                     at,
                 )?;
             }
-            // An Aura may enchant a card in a graveyard (CR 303.4, Animate Dead's
+            // An Aura may enchant a card in a graveyard (see CR 303.4, Animate Dead's
             // "enchant creature card in a graveyard").
             let attachable = |link: Option<L::Slot>| {
                 link.is_some_and(|l| {
@@ -95,7 +97,7 @@ impl<L: Layout> State<L> {
                 "attached to an object off the battlefield and out of the graveyards",
                 at,
             )?;
-            // What is attached to a permanent phases out with it (CR 702.26g).
+            // What is attached to a permanent phases out with it (see CR 702.26g).
             check(
                 o.flags.has(Flag::PhasedOut)
                     || !o.attached_to.is_some_and(|l| self.phased_out.contains(l)),
@@ -120,7 +122,7 @@ impl<L: Layout> State<L> {
                     at,
                 )?;
             }
-            // A blocker blocks attackers, or nothing once they left combat (CR 506.4).
+            // A blocker blocks attackers, or nothing once they left combat (see CR 506.4).
             check(
                 o.blocked_attackers()
                     .iter()
@@ -128,7 +130,7 @@ impl<L: Layout> State<L> {
                 "a blocker blocking a nonattacker",
                 at,
             )?;
-            // CR 400.2: public zones are seen by everyone; CR 402.3: a hand by its owner; CR
+            // See CR 400.2: public zones are seen by everyone; see CR 402.3: a hand by its owner; CR
             // 708.5: a face-down permanent by its controller.
             let known_by = |p: Seat| self.knows(p, slot);
             if o.face == FaceIx::DOWN {
@@ -272,8 +274,8 @@ impl<L: Layout> State<L> {
         )?;
         // State-based actions are checked before anyone gets priority, so a player who has
         // lost has left the game by the time a priority decision is open.
-        // [CR 704.5a](https://yawgatog.com/resources/magic-rules/#R7045a): "If a player has 0
-        // or less life, that player loses the game." [CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b):
+        // See [CR 704.5a](https://yawgatog.com/resources/magic-rules/#R7045a): "If a player has 0
+        // or less life, that player loses the game." see [CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b):
         // "If a player attempted to draw a card from a library with no cards in it since the
         // last time state-based actions were checked, that player loses the game."
         if self.outcome.is_none() && self.pending == Pending::None {

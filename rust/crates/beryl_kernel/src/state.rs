@@ -1,5 +1,7 @@
 //! The game state, stored as its [`Layout`] says: in [`Small`], one flat `Copy` value with
 //! fixed capacities and no heap (architecture §4, decisions D3 and D4).
+//!
+//! Implements: none. The state stores the records and indexes used by the rules.
 
 pub use beryl_card::{CounterKind, TurnStep, Zone};
 
@@ -50,7 +52,7 @@ pub const SLOTS: usize = Slot::COUNT;
 /// Permanents on the battlefield at once.
 pub const BATTLEFIELD: usize = 128;
 
-/// Names a zone, or a player's part of one, for [`State::zone`] ([CR 400.1]): "Each player has
+/// Names a zone, or a player's part of one, for [`State::zone`] (see [CR 400.1]): "Each player has
 /// their own library, hand, and graveyard. The other zones are shared by all players."
 ///
 /// Today the kernel keeps every zone but the stack by owner, so the battlefield and exile
@@ -60,7 +62,7 @@ pub const BATTLEFIELD: usize = 128;
 /// - A zone shared by all players, as the rules see the battlefield and exile, is a variant
 ///   with no player, as [`ZoneKey::Stack`] is: add the variant, keep its membership once in
 ///   [`Zones`] and answer it in [`State::zone`].
-/// - A command zone ([CR 408.1]: "The
+/// - A command zone (see [CR 408.1]: "The
 ///   command zone is a game area reserved for certain specialized objects") is
 ///   `Of(player, Zone::Command)` for the objects a player owns there, once `beryl_card`'s
 ///   `Zone` has the variant and `Zone::OWNED` covers it, or a variant with no player if it
@@ -75,7 +77,7 @@ pub enum ZoneKey {
     /// The objects `Seat` owns in a zone other than the stack: their library, hand or
     /// graveyard, or their cards on the battlefield or in exile.
     Of(Seat, Zone),
-    /// The stack ([CR 405.1]).
+    /// The stack (see [CR 405.1]).
     ///
     /// [CR 405.1]: https://yawgatog.com/resources/magic-rules/#R4051
     Stack,
@@ -136,7 +138,7 @@ pub struct Flags {
     /// one, [`State::has_ability`] answers yes with no read of the layer results.
     pub(crate) abilities_lost: bool,
     /// Some effect that removes abilities, or changes a land's land types and so the mana
-    /// abilities they give ([CR 305.7]), applied as the layers last applied: without one,
+    /// abilities they give (see [CR 305.7]), applied as the layers last applied: without one,
     /// each permanent makes the mana its card's facts say, and the mana solver reads no layer
     /// result for it ([`State::makes_card_mana`]).
     ///
@@ -218,7 +220,7 @@ pub struct State<L: Layout = Small> {
     pub(crate) captured_words: L::Queue<beryl_card::Words, CAPTURED_WORDS>,
     /// The abilities that have triggered and wait to be put on the stack.
     pub(crate) triggers: L::Queue<PendingTrigger<L>, 64>,
-    /// Delayed triggered abilities waiting for their moment (CR 603.7), which their
+    /// Delayed triggered abilities waiting for their moment (see CR 603.7), which their
     /// ability's [`beryl_card::Trigger`], a delayed one, names.
     pub(crate) delayed: L::Queue<PendingTrigger<L>, 32>,
     /// The last-known information of permanents that left the battlefield, which abilities
@@ -558,7 +560,7 @@ impl<L: Layout> State<L> {
 
     /// Who controls an object before continuous effects, which is what the layers start from and a
     /// saved position keeps: for a permanent, the player who put it onto the battlefield, usually
-    /// its owner ([CR 110.2]): "A permanent's owner is the same as the owner of the card that
+    /// its owner (see [CR 110.2]): "A permanent's owner is the same as the owner of the card that
     /// represents it ... A permanent's controller is, by default, the player under whose control it
     /// entered the battlefield." Who controls it now is [`State::controller`].
     ///
@@ -568,9 +570,9 @@ impl<L: Layout> State<L> {
     }
 
     /// The name of the object in `slot`: its face up's, which is the card's own name everywhere but
-    /// on the stack and the battlefield ([CR 712.6a]): "While a double-faced card is outside the
+    /// on the stack and the battlefield (see [CR 712.6a]): "While a double-faced card is outside the
     /// game or in a zone other than the battlefield or stack, it has only the characteristics of
-    /// its front face." A face-down permanent, which has no name ([CR 708.2]), goes by its card's:
+    /// its front face." A face-down permanent, which has no name (see [CR 708.2]), goes by its card's:
     /// what scenarios and saves call it.
     ///
     /// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a

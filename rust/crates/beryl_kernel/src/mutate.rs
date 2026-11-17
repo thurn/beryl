@@ -6,6 +6,8 @@
 //! a permanent is untapped before it taps) and keeps what the state must agree on: the
 //! combat flags with the combat reference, a face with its timestamp and who knows it,
 //! `derived_dirty` where the layers read the field.
+//!
+//! Implements: none. The mutators update object records for actions selected by the rules.
 
 mod merge;
 
@@ -25,14 +27,14 @@ use crate::store::Duration;
 use crate::table::GameTable;
 
 /// How a permanent enters the battlefield, as the rules decided once its replacement effects
-/// applied ([CR 614.12]): "Some replacement effects modify how a permanent enters the battlefield."
+/// applied (see [CR 614.12]): "Some replacement effects modify how a permanent enters the battlefield."
 /// A record: the rules build one and [`State::arrive`] applies it.
 ///
 /// [CR 614.12]: https://yawgatog.com/resources/magic-rules/#R61412
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Arrival<L: Layout> {
     pub tapped: bool,
-    /// Put onto the battlefield attacking this player ([CR 508.4]).
+    /// Put onto the battlefield attacking this player (see [CR 508.4]).
     ///
     /// [CR 508.4]: https://yawgatog.com/resources/magic-rules/#R5084
     pub attacking: Option<Seat>,
@@ -40,18 +42,18 @@ pub struct Arrival<L: Layout> {
     pub controller: Option<Seat>,
     /// The face up.
     pub face: FaceIx,
-    /// Counters it enters with ([CR 122.6]).
+    /// Counters it enters with (see [CR 122.6]).
     ///
     /// [CR 122.6]: https://yawgatog.com/resources/magic-rules/#R1226
     pub counters: Option<(CounterKind, u8)>,
-    /// The object an Aura attaches to as it enters ([CR 608.3c]).
+    /// The object an Aura attaches to as it enters (see [CR 608.3c]).
     ///
     /// [CR 608.3c]: https://yawgatog.com/resources/magic-rules/#R6083c
     pub attach: Option<L::Slot>,
 }
 
 impl<L: Layout> State<L> {
-    /// Taps or untaps a permanent ([CR 701.26a]): "To tap a permanent, turn it sideways from an
+    /// Taps or untaps a permanent (see [CR 701.26a]): "To tap a permanent, turn it sideways from an
     /// upright position."
     ///
     /// The layer results are stale from here while a static ability on the battlefield asks
@@ -74,7 +76,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Whether a permanent has not been under its controller's control continuously since their
-    /// most recent turn began, as one a player just gained control of has not ([CR 302.6]).
+    /// most recent turn began, as one a player just gained control of has not (see [CR 302.6]).
     ///
     /// [CR 302.6]: https://yawgatog.com/resources/magic-rules/#R3026
     #[inline]
@@ -84,7 +86,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The per-turn reset of every permanent as `active`'s turn begins: theirs have now been under
-    /// their control since their most recent turn began ([CR 302.6]). Reads each permanent's
+    /// their control since their most recent turn began (see [CR 302.6]). Reads each permanent's
     /// controller, so the layer results must be current. What the Trackers store noted of the turn
     /// before went as the turn began ([`State::begin_turn`]).
     ///
@@ -101,10 +103,10 @@ impl<L: Layout> State<L> {
 
     /// Deals damage to a permanent, by its types as the layers have them.
     ///
-    /// [CR 120.3c](https://yawgatog.com/resources/magic-rules/#R1203c): "Damage dealt to a
+    /// See [CR 120.3c](https://yawgatog.com/resources/magic-rules/#R1203c): "Damage dealt to a
     /// planeswalker causes that many loyalty counters to be removed from that planeswalker."
     ///
-    /// [CR 120.3e](https://yawgatog.com/resources/magic-rules/#R1203e): "Damage dealt to a creature
+    /// See [CR 120.3e](https://yawgatog.com/resources/magic-rules/#R1203e): "Damage dealt to a creature
     /// by a source with neither wither nor infect causes that much damage to be marked on that
     /// creature."
     #[inline]
@@ -133,7 +135,7 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Removes the damage marked on every permanent, as the cleanup step does ([CR 514.2]): "all
+    /// Removes the damage marked on every permanent, as the cleanup step does (see [CR 514.2]): "all
     /// damage marked on permanents (including phased-out permanents) is removed".
     ///
     /// [CR 514.2]: https://yawgatog.com/resources/magic-rules/#R5142
@@ -145,7 +147,7 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Removes the damage marked on the permanent `object`, as it regenerates ([CR 120.6]):
+    /// Removes the damage marked on the permanent `object`, as it regenerates (see [CR 120.6]):
     /// "All damage marked on a permanent is removed when it regenerates".
     ///
     /// [CR 120.6]: https://yawgatog.com/resources/magic-rules/#R1206
@@ -156,13 +158,13 @@ impl<L: Layout> State<L> {
     }
 
     /// Turns the face-down permanent in `slot` face up. It stays the same object, with its
-    /// counters, damage and status, and does not enter again ([CR 708.8]): "As a face-down
+    /// counters, damage and status, and does not enter again (see [CR 708.8]): "As a face-down
     /// permanent is turned face up, its copiable values revert to its normal copiable values. Any
     /// effects that have been applied to the face-down permanent still apply to the face-up
     /// permanent. Any abilities relating to the permanent entering the battlefield don't trigger
     /// and don't have any effect, because the permanent has already entered the battlefield."
     ///
-    /// Every player has seen it (CR 701.40b), and it gets a new timestamp ([CR 613.7f]): "A
+    /// Every player has seen it (see CR 701.40b), and it gets a new timestamp (see [CR 613.7f]): "A
     /// permanent receives a new timestamp each time it turns face up or face down."
     ///
     /// [CR 708.8]: https://yawgatog.com/resources/magic-rules/#R7088
@@ -181,11 +183,11 @@ impl<L: Layout> State<L> {
     }
 
     /// Attaches the Equipment in `slot` to the permanent in `host`, both on the battlefield
-    /// ([CR 701.3a]): "To attach an Aura, Equipment, or Fortification to an object or player means
+    /// (see [CR 701.3a]): "To attach an Aura, Equipment, or Fortification to an object or player means
     /// to take it from where it currently is and put it onto that object or player." The rules
     /// decide that it may.
     ///
-    /// It gets a new timestamp ([CR 701.3c]): "Attaching an Aura, Equipment, or Fortification on
+    /// It gets a new timestamp (see [CR 701.3c]): "Attaching an Aura, Equipment, or Fortification on
     /// the battlefield to a different object or player causes the Aura, Equipment, or Fortification
     /// to receive a new timestamp."
     ///
@@ -203,7 +205,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Unattaches the permanent in `slot` from what it is attached to, leaving it on the
-    /// battlefield ([CR 704.5n]): "If an Equipment or Fortification is attached to an illegal
+    /// battlefield (see [CR 704.5n]): "If an Equipment or Fortification is attached to an illegal
     /// permanent or to a player, it becomes unattached from that permanent or player. It remains on
     /// the battlefield."
     ///
@@ -215,7 +217,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Makes the card just put on the stack the spell its caster chose: `face` up, under their
-    /// control ([CR 601.2a]): "It has all the characteristics of the card (or the copy of a card)
+    /// control (see [CR 601.2a]): "It has all the characteristics of the card (or the copy of a card)
     /// associated with it, and that player becomes its controller."
     ///
     /// [CR 601.2a]: https://yawgatog.com/resources/magic-rules/#R6012a
@@ -228,16 +230,16 @@ impl<L: Layout> State<L> {
     }
 
     /// Readies a free slot of the token pool to be a token with the copiable values `what`: a
-    /// predefined token's ([`Copiable::of_card`]) or a copy's ([CR 707.2]: "the copy acquires the
+    /// predefined token's ([`Copiable::of_card`]) or a copy's (see [CR 707.2]: "the copy acquires the
     /// copiable values of the original object's characteristics"), so never a hidden card's
-    /// ([`Copiable::record`]). [CR 111.2]: "The player who creates a token is its owner." The token
+    /// ([`Copiable::record`]). see [CR 111.2]: "The player who creates a token is its owner." The token
     /// exists once it is moved onto the battlefield, where it enters with the face returned up
-    /// ([CR 707.8a]): "If the token is a copy of a double-faced permanent with its back face up,
+    /// (see [CR 707.8a]): "If the token is a copy of a double-faced permanent with its back face up,
     /// the token enters the battlefield with its back face up."
     ///
     /// Values with exceptions are a copy effect on the token ([`Continuous::Copy`]), which
     /// lasts as long as it exists, so the exceptions are part of its copiable values
-    /// ([CR 707.9b]): "The final set of values for that characteristic becomes part of the
+    /// (see [CR 707.9b]): "The final set of values for that characteristic becomes part of the
     /// copiable values of the copy." [`Full`] if the Effects store has no room for it.
     ///
     /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
@@ -296,7 +298,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Starts the copy effect of the permanent that just entered in `slot` as a copy, with the
-    /// copiable values `values` ([CR 707.5]): "An object that enters the battlefield 'as a copy'
+    /// copiable values `values` (see [CR 707.5]): "An object that enters the battlefield 'as a copy'
     /// or 'that's a copy' of another object becomes a copy as it enters the battlefield." Part
     /// of its zone change, before anything reads it: no event of its own. The effect lasts
     /// while the permanent stays, and ends with what the stores hold about it as it leaves; a
@@ -339,7 +341,7 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Makes a creature an attacking creature that attacks `player` ([CR 508.1k]): "Each chosen
+    /// Makes a creature an attacking creature that attacks `player` (see [CR 508.1k]): "Each chosen
     /// creature still controlled by the active player becomes an attacking creature." It attacks
     /// that player until [`State::choose_attacked`] says otherwise.
     ///
@@ -350,7 +352,7 @@ impl<L: Layout> State<L> {
         self.object_mut(slot).combat = CombatRole::attacking(AttackTarget::Player(player));
     }
 
-    /// Has an attacking creature attack `target` ([CR 506.2]): "that player, planeswalkers they
+    /// Has an attacking creature attack `target` (see [CR 506.2]): "that player, planeswalkers they
     /// control, and battles they protect may be attacked."
     ///
     /// [CR 506.2]: https://yawgatog.com/resources/magic-rules/#R5062
@@ -366,8 +368,8 @@ impl<L: Layout> State<L> {
     }
 
     /// Has an attacker whose planeswalker is no longer one its opponent controls attack nothing
-    /// ([CR 506.4]): "A planeswalker or battle that's removed from combat stops being attacked."
-    /// The creature stays an attacking creature ([CR 506.4c]).
+    /// (see [CR 506.4]): "A planeswalker or battle that's removed from combat stops being attacked."
+    /// The creature stays an attacking creature (see [CR 506.4c]).
     ///
     /// [CR 506.4]: https://yawgatog.com/resources/magic-rules/#R5064
     /// [CR 506.4c]: https://yawgatog.com/resources/magic-rules/#R5064c
@@ -377,7 +379,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Makes a creature a blocking creature, whose attacker [`State::block`] names next
-    /// ([CR 509.1g]): "Each chosen creature still controlled by the defending player becomes a
+    /// (see [CR 509.1g]): "Each chosen creature still controlled by the defending player becomes a
     /// blocking creature."
     ///
     /// [CR 509.1g]: https://yawgatog.com/resources/magic-rules/#R5091g
@@ -390,7 +392,7 @@ impl<L: Layout> State<L> {
         };
     }
 
-    /// Has a blocking creature block `attacker`, which becomes blocked ([CR 509.1h]): "An attacking
+    /// Has a blocking creature block `attacker`, which becomes blocked (see [CR 509.1h]): "An attacking
     /// creature with one or more creatures declared as blockers for it becomes a blocked creature".
     /// [`Full`] if the blocker already blocks as many attackers as a [`SlotSet`] holds.
     ///
@@ -409,7 +411,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Records that a creature assigns its combat damage in the first-strike step, so it deals none
-    /// in the second unless it has double strike ([CR 510.4]).
+    /// in the second unless it has double strike (see [CR 510.4]).
     ///
     /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
     #[inline]
@@ -423,7 +425,7 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Removes a permanent from combat ([CR 506.4]): "A creature that's removed from combat stops
+    /// Removes a permanent from combat (see [CR 506.4]): "A creature that's removed from combat stops
     /// being an attacking, blocking, blocked, and/or unblocked creature. A planeswalker or battle
     /// that's removed from combat stops being attacked." What attacked it or blocked it stays in
     /// combat, related to nothing.
@@ -438,7 +440,7 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Removes every permanent from combat as it ends ([CR 511.3]): "As soon as the end of combat
+    /// Removes every permanent from combat as it ends (see [CR 511.3]): "As soon as the end of combat
     /// step ends, all creatures, battles, and planeswalkers are removed from combat." The turn
     /// forgets that attackers were declared ([`State::declare_attack`]).
     ///

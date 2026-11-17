@@ -1,9 +1,9 @@
-//! Merged permanents ([CR 731.2]): "That permanent becomes a merged permanent represented by
+//! Merged permanents (see [CR 731.2]): "That permanent becomes a merged permanent represented by
 //! the card or copy that represented that object in addition to any other components that were
 //! representing it."
 //!
 //! A merged permanent stays the object it was, in its slot: its incarnation, counters,
-//! attachments, timestamp and status do not change, and nothing enters ([CR 731.2c]): "Because
+//! attachments, timestamp and status do not change, and nothing enters (see [CR 731.2c]): "Because
 //! a merged permanent is the same object that it was before, it hasn't just come under a
 //! player's control, any continuous effects that affected it continue to do so, and so on."
 //! Each card that merges
@@ -13,6 +13,8 @@
 //! each other card ([`Copiable::merged_with`]), kept by a copy effect on it, so the layers, the
 //! listeners and a copy of it read them as they read any copy's. When the permanent leaves the
 //! battlefield, its cards go with it ([`State::move_object`]).
+//!
+//! Implements: none. The mutator stores a resolved merge and its component links.
 //!
 //! [CR 731.2]: https://yawgatog.com/resources/magic-rules/#R7312
 //! [CR 731.2c]: https://yawgatog.com/resources/magic-rules/#R7312c
@@ -30,7 +32,7 @@ use crate::zone::Place;
 
 impl<L: Layout> State<L> {
     /// Merges the card `card`, a mutating creature spell with its face `face` up, with the
-    /// permanent `onto`, on top of it (`top`) or under it ([CR 702.140c]): "As a mutating
+    /// permanent `onto`, on top of it (`top`) or under it (see [CR 702.140c]): "As a mutating
     /// creature spell resolves, if its target is legal, it doesn't enter the battlefield.
     /// Rather, it merges with the target creature and becomes one object represented by more
     /// than one card or token". The card leaves the stack for [`Zone::Merged`], and a copy
@@ -62,7 +64,7 @@ impl<L: Layout> State<L> {
         self.move_object(sink, card.slot, Zone::Merged, Place::Top)?;
         self.remember(card.slot, Memo::PartOf(onto.slot))?;
         // Over a face-down permanent, the merged permanent is face up and every player sees
-        // it, but its face-down card stays hidden from those who didn't know it ([CR 731.2e]):
+        // it, but its face-down card stays hidden from those who didn't know it (see [CR 731.2e]):
         // "If a merged permanent contains face-up and face-down components, the permanent's
         // status is determined by its topmost component."
         let hidden = top && self.object(onto.slot).face == FaceIx::DOWN;

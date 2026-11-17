@@ -2,6 +2,8 @@
 //! (the crate's contract, "Players"). Each answer is the two-player game's today, and each
 //! function's rustdoc says what more players would change in it. A caller that asks one of
 //! these changes with none of that.
+//!
+//! Implements: none. The queries read player sets and order from the game state.
 
 use beryl_card::Zone;
 
@@ -13,9 +15,9 @@ use crate::state::{AttackTarget, State, ZoneKey};
 use crate::two_player::TwoPlayerSeat as _;
 
 impl<L: Layout> State<L> {
-    /// Every player ([CR 102.1]): "A player is one of the people in the game."
+    /// Every player (see [CR 102.1]): "A player is one of the people in the game."
     ///
-    /// With more players some leave before the game ends ([CR 104.3a]: "A player who concedes
+    /// With more players some leave before the game ends (see [CR 104.3a]: "A player who concedes
     /// leaves the game immediately"); this is then the players still in it.
     ///
     /// [CR 102.1]: https://yawgatog.com/resources/magic-rules/#R1021
@@ -25,11 +27,11 @@ impl<L: Layout> State<L> {
         PlayerSet::seats(L::Slot::PLAYERS)
     }
 
-    /// The opponents of `player` ([CR 102.2]): "In a two-player game, a player's opponent is the
+    /// The opponents of `player` (see [CR 102.2]): "In a two-player game, a player's opponent is the
     /// other player."
     ///
     /// With more players and no teams it is every other player, as written here. Between teams,
-    /// "the player's opponents are all players not on their team" ([CR 102.3]).
+    /// "the player's opponents are all players not on their team" (see [CR 102.3]).
     ///
     /// [CR 102.2]: https://yawgatog.com/resources/magic-rules/#R1022
     /// [CR 102.3]: https://yawgatog.com/resources/magic-rules/#R1023
@@ -38,13 +40,13 @@ impl<L: Layout> State<L> {
         self.players().without(player)
     }
 
-    /// The player after `player` in turn order ([CR 103.1]): "The game's default turn order begins
+    /// The player after `player` in turn order (see [CR 103.1]): "The game's default turn order begins
     /// with the starting player and proceeds clockwise." It is who takes the next turn, and who
-    /// receives priority when `player` passes it ([CR 117.3d]): "Then the next player in turn order
+    /// receives priority when `player` passes it (see [CR 117.3d]): "Then the next player in turn order
     /// receives priority."
     ///
     /// At a table of two that is the other player. With more it is the next seat still in the game
-    /// ([CR 800.4a]: "priority passes to the next player in turn order who's still in the game").
+    /// (see [CR 800.4a]: "priority passes to the next player in turn order who's still in the game").
     ///
     /// [CR 103.1]: https://yawgatog.com/resources/magic-rules/#R1031
     /// [CR 117.3d]: https://yawgatog.com/resources/magic-rules/#R1173d
@@ -55,7 +57,7 @@ impl<L: Layout> State<L> {
         player.opponent()
     }
 
-    /// `players` in the order they act when several do ([CR 101.4]): "If multiple players would
+    /// `players` in the order they act when several do (see [CR 101.4]): "If multiple players would
     /// make choices and/or take actions at the same time, the active player ... makes any choices
     /// required, then the next player in turn order ... makes any choices required, followed by the
     /// remaining nonactive players in turn order."
@@ -70,7 +72,7 @@ impl<L: Layout> State<L> {
     }
 
     /// `players` in turn order from `first`: the order of what the rules have each player do in
-    /// turn from a named one, as the start of the game does from the starting player ([CR 103.5]):
+    /// turn from a named one, as the start of the game does from the starting player (see [CR 103.5]):
     /// "First, the starting player declares whether they will take a mulligan. Then each other
     /// player in turn order does the same."
     ///
@@ -101,11 +103,11 @@ impl<L: Layout> State<L> {
         players.in_seat_order()
     }
 
-    /// The defending players of this turn's combat ([CR 506.2]): "During the combat phase of a
+    /// The defending players of this turn's combat (see [CR 506.2]): "During the combat phase of a
     /// two-player game, the nonactive player is the defending player; that player, planeswalkers
     /// they control, and battles they protect may be attacked."
     ///
-    /// With more players it is the same set ([CR 802.2]): "all the attacking player's opponents are
+    /// With more players it is the same set (see [CR 802.2]): "all the attacking player's opponents are
     /// defending players during the combat phase."
     ///
     /// [CR 506.2]: https://yawgatog.com/resources/magic-rules/#R5062
@@ -116,10 +118,10 @@ impl<L: Layout> State<L> {
     }
 
     /// The defending player an attacking creature attacks now: the player, or the controller of the
-    /// planeswalker ([CR 508.5]): "the defending player it's referring to is the player that
+    /// planeswalker (see [CR 508.5]): "the defending player it's referring to is the player that
     /// creature is attacking, the controller of the planeswalker that creature is attacking, or the
     /// protector of the battle that creature is attacking." Nobody for a creature that is not
-    /// attacking, and for one whose planeswalker was removed from combat ([CR 506.4c]): "It
+    /// attacking, and for one whose planeswalker was removed from combat (see [CR 506.4c]): "It
     /// continues to be an attacking creature, although it is not attacking any player,
     /// planeswalker, or battle."
     ///
@@ -141,7 +143,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Every object in `zone`, whoever owns it: both libraries, say, or every card in exile
-    /// ([CR 400.1]): "Each player has their own library, hand, and graveyard. The other zones are
+    /// (see [CR 400.1]): "Each player has their own library, hand, and graveyard. The other zones are
     /// shared by all players."
     ///
     /// Components of a merged permanent have no zone of their own ([`Zone::Merged`]).

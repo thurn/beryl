@@ -2,6 +2,8 @@
 //! (the crate's contract, "Sets and orders"). A [`Bitboard`] has none of its own: the
 //! battlefield, a library and a graveyard keep theirs ([`State::battlefield`],
 //! [`State::library_from_top`], [`State::graveyard`]), and the ones here put a set in order.
+//!
+//! Implements: none. The queries expose the order kept by the state.
 
 use beryl_card::Zone;
 
@@ -14,7 +16,7 @@ use crate::table::GameTable;
 
 impl<L: Layout> State<L> {
     /// A player's library, top card first
-    /// ([CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012)): "Each library must
+    /// (see [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012)): "Each library must
     /// be kept in a single face-down pile."
     #[inline]
     pub fn library_from_top(
@@ -25,7 +27,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The cards in a hand by definition key. Each card belongs to the owner of the hand,
-    /// so a queue with room for their deck holds them all. [CR 400.3]: "If an object would
+    /// so a queue with room for their deck holds them all. see [CR 400.3]: "If an object would
     /// go to any library, graveyard, or hand other than its owner's, it goes to its owner's
     /// corresponding zone."
     ///
@@ -48,7 +50,7 @@ impl<L: Layout> State<L> {
     /// (architecture §14). A batch moves in this order, so cards put into a graveyard
     /// together lie in it in an order no seed decides, which a cost that counts from the
     /// bottom of a graveyard sees
-    /// ([CR 404.2](https://yawgatog.com/resources/magic-rules/#R4042)): "Each graveyard is kept in
+    /// (see [CR 404.2](https://yawgatog.com/resources/magic-rules/#R4042)): "Each graveyard is kept in
     /// a single face-up pile. A player can examine the cards in any graveyard at any time but
     /// normally can't change their order."
     pub fn in_game_order(
@@ -95,7 +97,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The sources of a mana payment, by definition. Within each definition the payment
-    /// keeps the slot order used by recorded games and rollout fingerprints. [CR 601.2g]
+    /// keeps the slot order used by recorded games and rollout fingerprints. see [CR 601.2g]
     /// says "If the total cost includes a mana payment, the player then has a chance
     /// to activate mana abilities."
     ///

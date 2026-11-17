@@ -1,4 +1,6 @@
 //! `Bitboard`: one bit per object slot (architecture §4.1).
+//!
+//! Implements: none. The bit set stores slots for queries and mutators.
 
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 

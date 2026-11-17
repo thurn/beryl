@@ -1,4 +1,6 @@
-//! A new game's state: each deck dealt into its slots, and the coin flip (CR 103).
+//! A new game's state: each deck dealt into its slots, and the coin flip (see CR 103).
+//!
+//! Implements: none. The constructor initializes the game's storage and random seed.
 
 use beryl_card::{TurnStep, Zone};
 
@@ -19,7 +21,7 @@ use crate::store::Store;
 use crate::table::GameTable;
 use crate::turn::Turn;
 
-/// A player before the game begins ([CR 103.4]): "Each player begins the game with a starting life
+/// A player before the game begins (see [CR 103.4]): "Each player begins the game with a starting life
 /// total of 20."
 ///
 /// [CR 103.4]: https://yawgatog.com/resources/magic-rules/#R1034
@@ -55,7 +57,7 @@ impl<L: Layout> State<L> {
     ///
     /// Each deck's cards are dealt into its slots by a permutation drawn from the hidden shuffle
     /// stream (architecture §4.2), so a slot number says nothing about the card in it. That
-    /// permutation is also the shuffle of [CR 103.3]: "each player shuffles their deck so that the
+    /// permutation is also the opening shuffle (see [CR 103.3]): "each player shuffles their deck so that the
     /// cards are in a random order." A card's place does not depend on the layout, so the same seed
     /// deals the same game in each.
     ///
@@ -95,7 +97,7 @@ impl<L: Layout> State<L> {
                 s.zones.members[player.index()][Zone::Library.index()].insert(slot);
             }
         }
-        // CR 103.1: "the players determine which one of them will choose who takes the first
+        // See CR 103.1: "the players determine which one of them will choose who takes the first
         // turn ... (flipping a coin, rolling dice, etc.)".
         let chooser =
             Seat::new(u8::try_from(s.rng.other.below(2)).expect("the chooser is seat 0 or 1"));
