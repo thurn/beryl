@@ -125,10 +125,8 @@ impl<L: Layout> State<L> {
     pub fn mana_value(&self, t: &GameTable, slot: L::Slot) -> u8 {
         let o = self.object(slot);
         if o.zone == Zone::Stack
-            && let Some(entry) = self
-                .stack()
-                .iter()
-                .find(|entry| entry.spell().is_some_and(|spell| spell.slot == slot))
+            && let Some(spell) = self.spell(self.object_ref(slot))
+            && let Some(entry) = self.spell_entry(spell)
         {
             let cost = t.def(entry.card()).face(entry.face()).cost;
             return cost
@@ -312,8 +310,10 @@ impl<L: Layout> State<L> {
     }
 
     /// Who controls the object in `slot`: a permanent's controller after continuous effects
-    /// (see [CR 110.2]), a spell's, who is the player who cast it (see [CR 601.2a]: "that player becomes
-    /// its controller"), and anywhere else its owner ([CR 108.4a]): "If anything asks for the
+    /// (see [CR 110.2]) or the player who put the spell on the stack (see [CR 112.2]):
+    /// "A spell's controller is, by default, the player who put it on the stack."
+    /// See [CR 601.2a] for casting: "that player becomes its controller". Anywhere else
+    /// the object uses its owner ([CR 108.4a]): "If anything asks for the
     /// controller of a card that doesn't have one (because it's not a permanent or spell), use its
     /// owner instead."
     ///
@@ -326,6 +326,7 @@ impl<L: Layout> State<L> {
     /// In debug builds, for a permanent while the layer results are stale.
     ///
     /// [CR 110.2]: https://yawgatog.com/resources/magic-rules/#R1102
+    /// [CR 112.2]: https://yawgatog.com/resources/magic-rules/#R1122
     /// [CR 601.2a]: https://yawgatog.com/resources/magic-rules/#R6012a
     /// [CR 108.4a]: https://yawgatog.com/resources/magic-rules/#R1084a
     #[inline]

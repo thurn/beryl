@@ -636,6 +636,22 @@ impl<L: Layout> State<L> {
         self.stack.pop()
     }
 
+    /// The entry of a spell still on the stack. A spell being resolved has already lost
+    /// its entry, even though its object is still in the stack zone.
+    #[inline]
+    pub fn spell_entry(&self, spell: Spell<L>) -> Option<&StackEntry<L>> {
+        self.spell_position(spell)
+            .map(|position| &self.stack.as_slice()[position])
+    }
+
+    #[inline]
+    fn spell_position(&self, spell: Spell<L>) -> Option<usize> {
+        let object = spell.into();
+        self.stack
+            .iter()
+            .position(|entry| entry.spell() == Some(object))
+    }
+
     /// Takes a spell's entry off the stack, wherever in it the spell is, for the rules to
     /// move its card elsewhere without its resolving: countered, returned to a hand, put
     /// into a library, exiled. Nothing if the spell is not on the stack. The ability targets
@@ -651,11 +667,7 @@ impl<L: Layout> State<L> {
         sink: &mut Sink<L>,
         spell: Spell<L>,
     ) -> Result<Option<StackEntry<L>>, Full> {
-        let Some(i) = self
-            .stack
-            .iter()
-            .position(|e| e.spell() == Some(spell.into()))
-        else {
+        let Some(i) = self.spell_position(spell) else {
             return Ok(None);
         };
         let entry = self.remove_from_stack(sink, i);

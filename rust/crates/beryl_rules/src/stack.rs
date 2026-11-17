@@ -6,31 +6,9 @@ use crate::cast;
 use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
-use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
-use crate::state::{ObjectRef, StackEntry, State, Zone};
-use crate::table::GameTable;
+use crate::state::{ObjectRef, StackEntry, Zone};
 use crate::zones;
-
-fn spell_entry<L: Layout>(s: &State<L>, spell: ObjectRef<L>) -> Option<&StackEntry<L>> {
-    s.stack().iter().find(|e| e.spell() == Some(spell))
-}
-
-/// The controller of a spell on the stack
-/// ([CR 112.2](https://yawgatog.com/resources/magic-rules/#R1122)): "A spell's controller
-/// is, by default, the player who put it on the stack."
-pub fn spell_controller<L: Layout>(s: &State<L>, spell: ObjectRef<L>) -> Option<Seat> {
-    spell_entry(s, spell).map(StackEntry::controller)
-}
-
-/// The mana value of a spell on the stack, X included
-/// ([CR 202.3e](https://yawgatog.com/resources/magic-rules/#R2023e)): "X is treated as the
-/// number chosen for it while the object is on the stack."
-pub fn spell_mana_value<L: Layout>(s: &State<L>, t: &GameTable, spell: ObjectRef<L>) -> Option<u8> {
-    let e = spell_entry(s, spell)?;
-    let cost = t.def(e.card()).face(e.face()).cost;
-    Some(cost.mana_value().saturating_add(cost.x.saturating_mul(e.x)))
-}
 
 /// Takes the spells among `objects` off the stack, for an effect that moves their cards to
 /// `to` without their resolving, and exiles those that are exiled instead

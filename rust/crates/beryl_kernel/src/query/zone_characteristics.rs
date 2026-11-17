@@ -16,7 +16,7 @@
 //! [`beryl_card::Objects::Everywhere`]. The card table admits only those whose parts change
 //! card types, subtypes and colors (layers 4 and 5, `beryl_card`'s `Malformed::Everywhere`),
 //! which this module applies, or grant escape to cards in a graveyard, which the casting
-//! rules ask of a card there ([`State::escapes`]).
+//! rules ask of a card there ([`State::escape_from`]).
 //!
 //! [CR 613.1]: https://yawgatog.com/resources/magic-rules/#R6131
 
@@ -131,22 +131,12 @@ impl<L: Layout> State<L> {
 }
 
 impl<L: Layout> State<L> {
-    /// Whether a card in a graveyard has escape from an effect that
-    /// reaches it ([`beryl_card::Modification::GrantEscape`]), as Underworld Breach's "Each
-    /// nonland card in your graveyard has escape" (see [CR 702.138a]): "Escape represents a
-    /// static ability that functions while the card with escape is in a player's
-    /// graveyard." One test of the list's length while no effect reaches other zones.
+    /// The first effect that gives this graveyard card escape (see [CR 702.138a]):
+    /// "Escape represents a static ability that functions while the card with escape is in
+    /// a player's graveyard." The filter sees the card after any changes to its types
+    /// or colors, since escape is granted in layer 6.
     ///
     /// [CR 702.138a]: https://yawgatog.com/resources/magic-rules/#R702138a
-    #[inline]
-    pub fn escapes(&self, t: &GameTable, card: CardIn<Graveyard, L>) -> bool {
-        self.reaches_elsewhere() && self.escape_from(t, card).is_some()
-    }
-
-    /// The first effect that gives this graveyard card escape,
-    /// in the order the layers apply them: [`State::escapes`]'s answer, with what said it.
-    /// The effect's filter reads the card as the effects before it in the layers left it:
-    /// escape is granted in layer 6, after any change of its types or colors.
     #[cold]
     #[inline(never)]
     pub fn escape_from(&self, t: &GameTable, card: CardIn<Graveyard, L>) -> Option<Reach<L>> {
@@ -253,7 +243,7 @@ fn apply(t: &GameTable, so_far: &mut SoFar, change: LayerChange) {
 
 /// Whether the effects that reach other zones could hold `change`: a change of card types,
 /// subtypes or colors, which [`State::elsewhere`] applies, or escape, which
-/// [`State::escapes`] reads. A land type's mana abilities (see CR 305.7) are none of these.
+/// [`State::escape_from`] reads. A land type's mana abilities (see CR 305.7) are none of these.
 pub fn reaches(change: LayerChange) -> bool {
     matches!(
         change,

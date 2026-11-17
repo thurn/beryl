@@ -306,7 +306,7 @@ fn cast_sources<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboar
 fn escaping<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
     s.zone(ZoneKey::Of(player, Zone::Graveyard)).filter(|slot| {
         s.card_in(s.object_ref(slot), Graveyard)
-            .is_some_and(|card| s.escapes(t, card))
+            .is_some_and(|card| s.escape_from(t, card).is_some())
     })
 }
 
@@ -341,7 +341,7 @@ impl Ways {
                     let o = s.object(slot);
                     o.owner() == player
                         && s.card_in(s.object_ref(slot), Graveyard)
-                            .is_some_and(|card| s.escapes(t, card))
+                            .is_some_and(|card| s.escape_from(t, card).is_some())
                 };
                 Ways {
                     plain: !escape || permission.is_some() || s.object(slot).zone() == Zone::Hand,

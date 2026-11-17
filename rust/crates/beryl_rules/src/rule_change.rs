@@ -385,7 +385,10 @@ fn countered_never<L: Layout>(
     spell: crate::state::ObjectRef<L>,
     of_kind: Rules,
 ) -> bool {
-    let on_stack = (s.stack().iter()).any(|entry| entry.spell() == Some(spell));
+    let on_stack = s
+        .spell(spell)
+        .and_then(|spell| s.spell_entry(spell))
+        .is_some();
     if !on_stack {
         return false;
     }
