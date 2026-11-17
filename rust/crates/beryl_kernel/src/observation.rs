@@ -119,7 +119,22 @@ impl<'a, L: Layout> Observation<'a, L> {
     pub fn starting_player(&self) -> Option<Seat> {
         match self.state.pending() {
             Pending::PlayOrDraw { .. } => None,
-            _ => Some(self.state.turn().starting_player),
+            Pending::None
+            | Pending::Mulligans
+            | Pending::Discard
+            | Pending::LegendRule { .. }
+            | Pending::EnterPayingLife { .. }
+            | Pending::DeclareAttackers { .. }
+            | Pending::DeclareBlockers { .. }
+            | Pending::CombatDamage { .. }
+            | Pending::Casting(_)
+            | Pending::Resolving(_)
+            | Pending::StepActions(_)
+            | Pending::CastOffer { .. }
+            | Pending::TurningFaceUp { .. }
+            | Pending::OrderEntered { .. }
+            | Pending::EnterChoosing { .. }
+            | Pending::ManaColor { .. } => Some(self.state.turn().starting_player),
         }
     }
 

@@ -256,8 +256,8 @@ impl Kinds {
 
     /// The bits of the kinds of cost in `paid`.
     #[inline]
-    const fn paid(paid: CastingKinds) -> u32 {
-        (paid.bits() as u32) << 1
+    fn paid(paid: CastingKinds) -> u32 {
+        u32::from(paid.bits()) << 1
     }
 }
 
@@ -471,7 +471,15 @@ impl<L: Layout> MemosOf<'_, L> {
     pub fn exiled_with(&self) -> Option<L::Slot> {
         self.iter().find_map(|memo| match memo {
             Memo::ExiledWith(by) => Some(by),
-            _ => None,
+            Memo::Paid(_)
+            | Memo::X(_)
+            | Memo::ExiledUntil(_)
+            | Memo::Chosen(_)
+            | Memo::Really(_)
+            | Memo::PutOntoBattlefieldWith(_)
+            | Memo::PhasedOutUnder(_)
+            | Memo::PartOf(_)
+            | Memo::FaceDownUnder(_) => None,
         })
     }
 
@@ -480,7 +488,15 @@ impl<L: Layout> MemosOf<'_, L> {
     pub fn exiled_until(&self) -> Option<L::Slot> {
         self.iter().find_map(|memo| match memo {
             Memo::ExiledUntil(by) => Some(by),
-            _ => None,
+            Memo::Paid(_)
+            | Memo::X(_)
+            | Memo::ExiledWith(_)
+            | Memo::Chosen(_)
+            | Memo::Really(_)
+            | Memo::PutOntoBattlefieldWith(_)
+            | Memo::PhasedOutUnder(_)
+            | Memo::PartOf(_)
+            | Memo::FaceDownUnder(_) => None,
         })
     }
 
@@ -489,7 +505,15 @@ impl<L: Layout> MemosOf<'_, L> {
     pub fn chosen(&self) -> Option<ChosenValue<L>> {
         self.iter().find_map(|memo| match memo {
             Memo::Chosen(value) => Some(value),
-            _ => None,
+            Memo::Paid(_)
+            | Memo::X(_)
+            | Memo::ExiledWith(_)
+            | Memo::ExiledUntil(_)
+            | Memo::Really(_)
+            | Memo::PutOntoBattlefieldWith(_)
+            | Memo::PhasedOutUnder(_)
+            | Memo::PartOf(_)
+            | Memo::FaceDownUnder(_) => None,
         })
     }
 }
@@ -542,9 +566,9 @@ impl<L: Layout> State<L> {
         self.memos
             .of(Kinds::X)
             .iter()
-            .find_map(|e| match e.memo {
-                Memo::X(x) if e.slot == slot => Some(x),
-                _ => None,
+            .find_map(|e| {
+                let Memo::X(x) = e.memo else { return None };
+                (e.slot == slot).then_some(x)
             })
             .unwrap_or(0)
     }
@@ -554,26 +578,24 @@ impl<L: Layout> State<L> {
     /// With no permanent in the game that chose one, one AND.
     #[inline]
     pub fn chosen(&self, slot: L::Slot) -> Option<ChosenValue<L>> {
-        self.memos
-            .of(Kinds::CHOSEN)
-            .iter()
-            .find_map(|e| match e.memo {
-                Memo::Chosen(value) if e.slot == slot => Some(value),
-                _ => None,
-            })
+        self.memos.of(Kinds::CHOSEN).iter().find_map(|e| {
+            let Memo::Chosen(value) = e.memo else {
+                return None;
+            };
+            (e.slot == slot).then_some(value)
+        })
     }
 
     /// The card the permanent in `slot` really is while a copy effect gives it the values of
     /// another ([`Memo::Really`]), if one does. With no such permanent in the game, one AND.
     #[inline]
     pub fn really(&self, slot: L::Slot) -> Option<L::Card> {
-        self.memos
-            .of(Kinds::REALLY)
-            .iter()
-            .find_map(|e| match e.memo {
-                Memo::Really(card) if e.slot == slot => Some(card),
-                _ => None,
-            })
+        self.memos.of(Kinds::REALLY).iter().find_map(|e| {
+            let Memo::Really(card) = e.memo else {
+                return None;
+            };
+            (e.slot == slot).then_some(card)
+        })
     }
 
     /// Whether `player` knows the card the object in `slot` really is
@@ -582,14 +604,12 @@ impl<L: Layout> State<L> {
     /// knows the object ([`State::knows`]). With no such permanent in the game, one AND.
     #[inline]
     pub fn knows_card_really_is(&self, player: Seat, slot: L::Slot) -> bool {
-        let knew = self
-            .memos
-            .of(Kinds::FACE_DOWN_UNDER)
-            .iter()
-            .find_map(|e| match e.memo {
-                Memo::FaceDownUnder(knew) if e.slot == slot => Some(knew),
-                _ => None,
-            });
+        let knew = self.memos.of(Kinds::FACE_DOWN_UNDER).iter().find_map(|e| {
+            let Memo::FaceDownUnder(knew) = e.memo else {
+                return None;
+            };
+            (e.slot == slot).then_some(knew)
+        });
         knew.map_or_else(|| self.knows(player, slot), |knew| knew.contains(player))
     }
 
@@ -691,13 +711,12 @@ impl<L: Layout> State<L> {
     /// remembers one, one AND.
     #[inline]
     pub(crate) fn phased_out_under(&self, slot: L::Slot) -> Option<Seat> {
-        self.memos
-            .of(Kinds::PHASED_OUT_UNDER)
-            .iter()
-            .find_map(|e| match e.memo {
-                Memo::PhasedOutUnder(player) if e.slot == slot => Some(player),
-                _ => None,
-            })
+        self.memos.of(Kinds::PHASED_OUT_UNDER).iter().find_map(|e| {
+            let Memo::PhasedOutUnder(player) = e.memo else {
+                return None;
+            };
+            (e.slot == slot).then_some(player)
+        })
     }
 
     /// Ends the [`Memo::PhasedOutUnder`] of the permanents in `slots` as they phase in.

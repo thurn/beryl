@@ -463,6 +463,34 @@ pub enum Modification {
 }
 
 impl Modification {
+    /// The amounts of a power or power and toughness setting.
+    pub const fn pt_amounts(self) -> Option<(&'static Amount, Option<&'static Amount>)> {
+        match self {
+            Modification::SetPower(power) => Some((power, None)),
+            Modification::SetPt(power, toughness) | Modification::SetBasePt(power, toughness) => {
+                Some((power, Some(toughness)))
+            }
+            Modification::Control
+            | Modification::AddTypes(_)
+            | Modification::RemoveTypes(_)
+            | Modification::SetTypes(_)
+            | Modification::AddSubtypeWord(_)
+            | Modification::SetSubtypeWord(_)
+            | Modification::SetLandTypeWords(_)
+            | Modification::AddKeywords(_)
+            | Modification::Grant(_)
+            | Modification::ModifyPt(..)
+            | Modification::LoseAllAbilities
+            | Modification::LoseAbility(_)
+            | Modification::SetColorWords(_)
+            | Modification::AddColorWords(_)
+            | Modification::AddChosenColor
+            | Modification::SwitchPt
+            | Modification::AddProtection(_)
+            | Modification::GrantEscape => None,
+        }
+    }
+
     /// Whether one of `modifications` asks a player to choose as its effect begins, which only
     /// a resolving spell or ability can ([`Protection::ChosenColor`]).
     pub const fn any_asks(modifications: &[Modification]) -> bool {

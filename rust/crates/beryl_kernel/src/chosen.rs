@@ -145,7 +145,7 @@ impl<L: Layout> ChosenValue<L> {
     pub fn word(self) -> Option<TextWord> {
         match self {
             ChosenValue::Word(n) => TextWord::of_number(n),
-            _ => None,
+            ChosenValue::Color(_) | ChosenValue::CreatureType(_) | ChosenValue::Name(_) => None,
         }
     }
 

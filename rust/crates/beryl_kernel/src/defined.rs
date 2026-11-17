@@ -63,7 +63,25 @@ impl<L: Layout> State<L> {
                     Modification::SetPt(p, tough) => {
                         (power, toughness) = (number(p), number(tough));
                     }
-                    _ => {}
+                    Modification::Control
+                    | Modification::AddTypes(_)
+                    | Modification::RemoveTypes(_)
+                    | Modification::SetTypes(_)
+                    | Modification::AddSubtypeWord(_)
+                    | Modification::SetSubtypeWord(_)
+                    | Modification::SetLandTypeWords(_)
+                    | Modification::AddKeywords(_)
+                    | Modification::Grant(_)
+                    | Modification::ModifyPt(..)
+                    | Modification::LoseAllAbilities
+                    | Modification::LoseAbility(_)
+                    | Modification::SetColorWords(_)
+                    | Modification::AddColorWords(_)
+                    | Modification::AddChosenColor
+                    | Modification::SetBasePt(..)
+                    | Modification::SwitchPt
+                    | Modification::AddProtection(_)
+                    | Modification::GrantEscape => {}
                 }
             }
         }
@@ -90,7 +108,20 @@ impl<L: Layout> State<L> {
                 .filter(|&&slot| filter.matches(self, t, slot, you, words))
                 .count(),
             Amount::CardTypesAmong(_) => self.card_types_in_graveyards(t),
-            _ => unreachable!(
+            Amount::X
+            | Amount::ThatMany
+            | Amount::Carried
+            | Amount::ThoseOf(_)
+            | Amount::Count(_)
+            | Amount::Power(_)
+            | Amount::Toughness(_)
+            | Amount::ManaValue(_)
+            | Amount::Counters(..)
+            | Amount::Life(_)
+            | Amount::Most(..)
+            | Amount::SpellsCast(_)
+            | Amount::CardsDrawn(_)
+            | Amount::SpellsCastBefore => unreachable!(
                 "the card table refuses an amount a characteristic-defining ability cannot read"
             ),
         }
@@ -117,6 +148,6 @@ impl<L: Layout> State<L> {
                 }
             }
         }
-        types.0.count_ones() as usize
+        usize::try_from(types.0.count_ones()).expect("a bit count fits in usize")
     }
 }

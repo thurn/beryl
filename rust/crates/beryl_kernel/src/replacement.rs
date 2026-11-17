@@ -53,7 +53,11 @@ pub fn instead_of_drawing(ability: &Ability) -> Result<Instead, Unreplaced> {
     };
     match players {
         Players::You | Players::EachOpponent | Players::EachPlayer => Ok(instead),
-        _ => Err(Unreplaced::Players),
+        Players::Target(_)
+        | Players::ControllerOf(_)
+        | Players::OwnerOf(_)
+        | Players::ThatPlayer
+        | Players::EachOther(_) => Err(Unreplaced::Players),
     }
 }
 
@@ -105,7 +109,25 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
             (Replaced::Damage, Rewrite::Multiply(n)) if n > 1 => {
                 mask = mask | ReplacementKind::Damage;
             }
-            _ => return Err(Unreplaced::Rewrite),
+            (
+                Replaced::None
+                | Replaced::ThisEnters
+                | Replaced::Draw(..)
+                | Replaced::PutInto(..)
+                | Replaced::Enters { .. }
+                | Replaced::Damage,
+                Rewrite::None
+                | Rewrite::ToZone(_)
+                | Rewrite::EntersTapped
+                | Rewrite::EntersTappedUnlessFewLands(_)
+                | Rewrite::EntersTappedUnlessPayLife(_)
+                | Rewrite::EntersWithCounters(..)
+                | Rewrite::Instead
+                | Rewrite::Dredge(_)
+                | Rewrite::Choose(_)
+                | Rewrite::Multiply(_)
+                | Rewrite::EnterAsCopy { .. },
+            ) => return Err(Unreplaced::Rewrite),
         }
     }
     Ok(mask)

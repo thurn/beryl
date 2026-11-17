@@ -1,3 +1,13 @@
+// Name every enum case so new vocabulary cannot silently use an old fallback. Check
+// numeric conversions so changing layouts cannot silently discard bits or change a sign.
+#![deny(
+    clippy::wildcard_enum_match_arm,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
+
 //! Beryl's kernel: the game state and the only code that writes it.
 //!
 //! The kernel owns [`State`] and its storage [`Layout`]s, the slots and references that name
@@ -703,20 +713,14 @@
 //! by its number among [`LargeSlot`]s whatever layout its game is in ([`SlotId::num`]). A
 //! layout with other deck sizes is a new slot type and a new `impl Layout`.
 //!
-//! A game index means the same card in every layout, and only its width differs
-//! ([`CardId::to`]). Every record of a state that names a card stores `L::Card`, so those
-//! records are generic over the layout ([`Copiable`], `Derived`, `LastKnown`, `GrantRef`). What is
-//! kept outside any state names a card by the widest index ([`CardId::wide`]): a
-//! [`chance::Random`] reveal. [`GameTable`] is not generic over the layout: it takes a game
-//! index of any width and gives one of the width its caller stores, which is sound because
-//! a state of a layout exists only for a table that layout's index numbers.
+//! A game index names the same card in every layout ([`CardId::to`]). State records
+//! store `L::Card`. A record outside the state, such as a [`chance::Random`] reveal, uses
+//! the widest index ([`CardId::wide`]). [`GameTable`] can return the caller's index type
+//! because a state exists only when that type can index its whole table.
 //!
-//! A game that does not fit a layout is refused where a state of that layout is made, with
-//! a [`Misfit`] and never a panic: [`State::deal`] refuses a deck with more cards than the
-//! layout's `DECK_SLOTS` and a table of more distinct cards than its game index numbers, and
-//! [`State::try_relayout`] a game with a deck, a token, a list or a table past what the
-//! target holds. [`GameTable`] refuses no deck for its size and no decks for how many
-//! distinct cards they name.
+//! [`State::deal`] returns [`Misfit`] if the layout cannot hold a deck or the table.
+//! [`State::try_relayout`] returns it if the target cannot hold a deck, token, list or
+//! table. [`GameTable`] has no layout-specific capacity checks.
 //!
 //! [CR 611.2c]: https://yawgatog.com/resources/magic-rules/#R6112c
 //! [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007

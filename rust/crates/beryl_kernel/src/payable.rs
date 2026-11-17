@@ -45,7 +45,9 @@ pub fn pays_for_ability(part: &CostPart) -> bool {
                 ..
             }
         ),
-        _ => false,
+        CostPart::This(_) | CostPart::Chosen(..) | CostPart::OneOf(_) | CostPart::DiscardHand => {
+            false
+        }
     }
 }
 

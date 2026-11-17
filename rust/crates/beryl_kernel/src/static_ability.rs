@@ -80,13 +80,10 @@ impl Inputs {
             if spec.condition.as_ref().is_some_and(condition_reads_life) {
                 inputs = inputs.union(Inputs::LIFE);
             }
-            let graveyards = spec.modifications.iter().any(|m| match *m {
-                Modification::SetPower(amount) => reads_graveyards(amount),
-                Modification::SetPt(power, toughness)
-                | Modification::SetBasePt(power, toughness) => {
-                    reads_graveyards(power) || reads_graveyards(toughness)
-                }
-                _ => false,
+            let graveyards = spec.modifications.iter().any(|m| {
+                m.pt_amounts().is_some_and(|(power, toughness)| {
+                    reads_graveyards(power) || toughness.is_some_and(reads_graveyards)
+                })
             });
             if graveyards {
                 inputs = inputs.union(Inputs::GRAVEYARDS);
@@ -116,7 +113,18 @@ fn mentions_tapped(filter: Filter) -> bool {
         Filter::All(filters) | Filter::AnyOf(filters) => {
             filters.iter().any(|&filter| mentions_tapped(filter))
         }
-        _ => false,
+        Filter::Any
+        | Filter::Types(_)
+        | Filter::Supertypes(_)
+        | Filter::SubtypeWord(_)
+        | Filter::ColorWords(_)
+        | Filter::Whose(_)
+        | Filter::Owned(_)
+        | Filter::Token
+        | Filter::ManaValueAtMost(_)
+        | Filter::PowerAtMost(_)
+        | Filter::ManaValueAtMostX
+        | Filter::InZone(_) => false,
     }
 }
 
@@ -169,7 +177,22 @@ fn reads_graveyards(amount: &Amount) -> bool {
             ..
         }) => true,
         Amount::Times(_, amount) | Amount::Plus(_, amount) => reads_graveyards(amount),
-        _ => false,
+        Amount::Fixed(_)
+        | Amount::X
+        | Amount::ThatMany
+        | Amount::Carried
+        | Amount::ThoseOf(_)
+        | Amount::Count(_)
+        | Amount::CardTypesAmong(_)
+        | Amount::Power(_)
+        | Amount::Toughness(_)
+        | Amount::ManaValue(_)
+        | Amount::Counters(..)
+        | Amount::Life(_)
+        | Amount::Most(..)
+        | Amount::SpellsCast(_)
+        | Amount::CardsDrawn(_)
+        | Amount::SpellsCastBefore => false,
     }
 }
 
@@ -297,24 +320,17 @@ fn found_by_the_layers(affected: Objects) -> bool {
 /// equal to its mana value" ([`reads_each`]).
 pub fn read_amounts(spec: &LayerSpec) -> Result<(), Unapplied> {
     for modification in spec.modifications {
-        match *modification {
-            Modification::SetPower(amount) => {
-                defines(spec)?;
+        let Some((power, toughness)) = modification.pt_amounts() else {
+            continue;
+        };
+        let base = matches!(modification, Modification::SetBasePt(..));
+        if !base {
+            defines(spec)?;
+        }
+        for amount in [Some(power), toughness].into_iter().flatten() {
+            if !(base && is_its_mana_value(amount)) {
                 read_as_the_layer_applies(amount)?;
             }
-            Modification::SetPt(power, toughness) => {
-                defines(spec)?;
-                read_as_the_layer_applies(power)?;
-                read_as_the_layer_applies(toughness)?;
-            }
-            Modification::SetBasePt(power, toughness) => {
-                for amount in [power, toughness] {
-                    if !is_its_mana_value(amount) {
-                        read_as_the_layer_applies(amount)?;
-                    }
-                }
-            }
-            _ => {}
         }
     }
     Ok(())
@@ -340,25 +356,19 @@ fn defines(spec: &LayerSpec) -> Result<(), Unapplied> {
 ///
 /// For a part that reads no amount, which the layers list as a settled change instead.
 pub fn amounts_of(spec: &LayerSpec, part: u8) -> (&'static Amount, Option<&'static Amount>) {
-    match spec.modifications[usize::from(part)] {
-        Modification::SetPower(amount) => (amount, None),
-        Modification::SetPt(power, toughness) | Modification::SetBasePt(power, toughness) => {
-            (power, Some(toughness))
-        }
-        _ => unreachable!("the layers read the amounts of a part that has some"),
-    }
+    spec.modifications[usize::from(part)]
+        .pt_amounts()
+        .expect("the layers read the amounts of a part that has some")
 }
 
 /// Whether the amounts of the part at `part` of a static ability read each permanent it
 /// affects ([`read_amounts`]), so that the part changes each permanent its own way and is
 /// read once for each.
 pub fn reads_each(spec: &LayerSpec, part: u8) -> bool {
-    match spec.modifications[usize::from(part)] {
-        Modification::SetBasePt(power, toughness) => {
-            is_its_mana_value(power) || is_its_mana_value(toughness)
-        }
-        _ => false,
-    }
+    let Modification::SetBasePt(power, toughness) = spec.modifications[usize::from(part)] else {
+        return false;
+    };
+    is_its_mana_value(power) || is_its_mana_value(toughness)
 }
 
 /// "Its mana value", said of each permanent a static ability affects ([`read_amounts`]).
@@ -384,7 +394,21 @@ fn read_as_the_layer_applies(amount: &Amount) -> Result<(), Unapplied> {
             zone: Zone::Graveyard,
             filter: Filter::Any,
         }) => Ok(()),
-        _ => Err(Unapplied::Amount),
+        Amount::X
+        | Amount::ThatMany
+        | Amount::Carried
+        | Amount::ThoseOf(_)
+        | Amount::Count(_)
+        | Amount::CardTypesAmong(_)
+        | Amount::Power(_)
+        | Amount::Toughness(_)
+        | Amount::ManaValue(_)
+        | Amount::Counters(..)
+        | Amount::Life(_)
+        | Amount::Most(..)
+        | Amount::SpellsCast(_)
+        | Amount::CardsDrawn(_)
+        | Amount::SpellsCastBefore => Err(Unapplied::Amount),
     }
 }
 
@@ -417,11 +441,11 @@ pub fn read_by_the_layers(filter: Filter) -> bool {
 
 /// Whether an instruction, or one inside it, sets a power to an amount.
 fn sets_power(effect: &Effect) -> bool {
-    effect.any(&|effect| match effect {
-        Effect::Modify { modifications, .. } => modifications
+    effect.any(&|effect| {
+        effect
+            .modifications()
             .iter()
-            .any(|m| matches!(m, Modification::SetPower(_) | Modification::SetPt(..))),
-        _ => false,
+            .any(|m| matches!(m, Modification::SetPower(_) | Modification::SetPt(..)))
     })
 }
 
@@ -450,16 +474,17 @@ pub(crate) fn check(def: &CardDef) -> Result<(), Unapplied> {
 }
 
 /// Whether the layers read the amount of `modification` as its layer applies, rather than
-/// settling it as the ability is listed: a power, or a base power and toughness that is not
-/// two numbers.
+/// settling it as the ability is listed. A characteristic-defining amount is always read
+/// as the layer applies. Base power and toughness can be settled when both are numbers.
 fn read_layer_amount(modification: Modification) -> bool {
-    match modification {
-        Modification::SetPower(_) | Modification::SetPt(..) => true,
-        Modification::SetBasePt(power, toughness) => {
-            !matches!((power, toughness), (Amount::Fixed(_), Amount::Fixed(_)))
-        }
-        _ => false,
-    }
+    let Some((power, toughness)) = modification.pt_amounts() else {
+        return false;
+    };
+    !matches!(modification, Modification::SetBasePt(..))
+        || !matches!(
+            (power, toughness),
+            (Amount::Fixed(_), Some(Amount::Fixed(_)))
+        )
 }
 
 /// Whether [`holds`] reads `condition`.
@@ -531,7 +556,23 @@ fn counted(amount: &Amount) -> Option<Counted> {
         Amount::Life(players @ (Players::You | Players::EachOpponent)) => {
             Some(Counted::Life(*players))
         }
-        _ => None,
+        Amount::X
+        | Amount::ThatMany
+        | Amount::Carried
+        | Amount::ThoseOf(_)
+        | Amount::Count(_)
+        | Amount::Times(..)
+        | Amount::Plus(..)
+        | Amount::CardTypesAmong(_)
+        | Amount::Power(_)
+        | Amount::Toughness(_)
+        | Amount::ManaValue(_)
+        | Amount::Counters(..)
+        | Amount::Life(_)
+        | Amount::Most(..)
+        | Amount::SpellsCast(_)
+        | Amount::CardsDrawn(_)
+        | Amount::SpellsCastBefore => None,
     }
 }
 
@@ -587,7 +628,13 @@ pub fn holds<L: Layout>(
             let controller = s.base_controller(slot);
             let who = match players {
                 Players::You => PlayerSet::only(controller),
-                _ => s.opponents_of(controller),
+                Players::EachOpponent
+                | Players::EachPlayer
+                | Players::Target(_)
+                | Players::ControllerOf(_)
+                | Players::OwnerOf(_)
+                | Players::ThatPlayer
+                | Players::EachOther(_) => s.opponents_of(controller),
             };
             s.players_in_seat_order(who)
                 .map(|p| i32::from(s.player(p).life()))

@@ -18,7 +18,7 @@
 //! 'removed'; they simply cease to exist."). The zone move pays for the table the bit test
 //! of the keyed slots it pays for every store.
 
-use beryl_card::CounterKind;
+use beryl_card::{CounterKind, counter_kinds};
 
 use crate::bitboard::Bitboard;
 use crate::event::Event;
@@ -61,28 +61,43 @@ impl Counters {
         loyalty: 0,
     };
 
-    /// The count of a kind kept in a field; `None` for a kind kept in the table.
+    /// The count of a kind kept in a field. Other kinds are kept in the table.
     #[inline]
-    fn field(self, kind: CounterKind) -> Option<u8> {
-        match kind {
-            CounterKind::PlusOne => Some(self.plus_one),
-            CounterKind::MinusOne => Some(self.minus_one),
-            CounterKind::Loyalty => Some(self.loyalty),
-            _ => None,
-        }
-    }
-
-    /// The same, to change.
-    #[inline]
-    fn field_mut(&mut self, kind: CounterKind) -> Option<&mut u8> {
-        match kind {
-            CounterKind::PlusOne => Some(&mut self.plus_one),
-            CounterKind::MinusOne => Some(&mut self.minus_one),
-            CounterKind::Loyalty => Some(&mut self.loyalty),
-            _ => None,
-        }
+    fn field(mut self, kind: CounterKind) -> Option<u8> {
+        self.field_mut(kind).copied()
     }
 }
+
+// Only these three kinds have fields. New kinds from the catalog use the table.
+macro_rules! counter_field {
+    ($counters:ident, PlusOne) => {
+        Some(&mut $counters.plus_one)
+    };
+    ($counters:ident, MinusOne) => {
+        Some(&mut $counters.minus_one)
+    };
+    ($counters:ident, Loyalty) => {
+        Some(&mut $counters.loyalty)
+    };
+    ($counters:ident, $other:ident) => {
+        None
+    };
+}
+
+macro_rules! counter_fields {
+    ($($(#[$doc:meta])* $kind:ident = $name:literal),* $(,)?) => {
+        impl Counters {
+            #[inline]
+            fn field_mut(&mut self, kind: CounterKind) -> Option<&mut u8> {
+                match kind {
+                    $(CounterKind::$kind => counter_field!(self, $kind)),*
+                }
+            }
+        }
+    };
+}
+
+counter_kinds!(counter_fields);
 
 /// A row: the counters of one kind on the object now in a slot. Never 0 of them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

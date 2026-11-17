@@ -201,7 +201,7 @@ impl<L: Layout> Resolving<L> {
             .enumerate()
             // `hidden` has a bit for each of the first 32 entries only; a record in the
             // `Large` layout may grow past them, with no hidden pick there (`record_answer`).
-            .take(u32::BITS as usize)
+            .take(usize::try_from(u32::BITS).expect("a bit count fits in usize"))
             .filter(|&(i, _)| self.hidden & (1 << i) != 0)
             .filter_map(|(_, &answer)| hidden_pick_of::<L>(answer))
     }
@@ -346,7 +346,22 @@ impl<L: Layout> State<L> {
     ) {
         let (knowledge, hidden) = match &self.pending {
             Pending::Resolving(r) => (r.knowledge.clone(), r.hidden),
-            _ => (self.knowledge.clone(), 0),
+            Pending::None
+            | Pending::PlayOrDraw { .. }
+            | Pending::Mulligans
+            | Pending::Discard
+            | Pending::LegendRule { .. }
+            | Pending::EnterPayingLife { .. }
+            | Pending::DeclareAttackers { .. }
+            | Pending::DeclareBlockers { .. }
+            | Pending::CombatDamage { .. }
+            | Pending::Casting(_)
+            | Pending::StepActions(_)
+            | Pending::CastOffer { .. }
+            | Pending::TurningFaceUp { .. }
+            | Pending::OrderEntered { .. }
+            | Pending::EnterChoosing { .. }
+            | Pending::ManaColor { .. } => (self.knowledge.clone(), 0),
         };
         self.pending = Pending::Resolving(Resolving {
             record,
@@ -365,7 +380,22 @@ impl<L: Layout> State<L> {
     pub fn pause_step_actions(&mut self, record: L::Queue<L::Index, 32>, question: Decision<L>) {
         let knowledge = match &self.pending {
             Pending::StepActions(r) => r.knowledge.clone(),
-            _ => self.knowledge.clone(),
+            Pending::None
+            | Pending::PlayOrDraw { .. }
+            | Pending::Mulligans
+            | Pending::Discard
+            | Pending::LegendRule { .. }
+            | Pending::EnterPayingLife { .. }
+            | Pending::DeclareAttackers { .. }
+            | Pending::DeclareBlockers { .. }
+            | Pending::CombatDamage { .. }
+            | Pending::Casting(_)
+            | Pending::Resolving(_)
+            | Pending::CastOffer { .. }
+            | Pending::TurningFaceUp { .. }
+            | Pending::OrderEntered { .. }
+            | Pending::EnterChoosing { .. }
+            | Pending::ManaColor { .. } => self.knowledge.clone(),
         };
         self.pending = Pending::StepActions(Resolving {
             record,
@@ -389,7 +419,21 @@ impl<L: Layout> State<L> {
                 let knowledge = r.knowledge.clone();
                 self.restore_knowledge(knowledge)
             }
-            _ => Bitboard::EMPTY,
+            Pending::None
+            | Pending::PlayOrDraw { .. }
+            | Pending::Mulligans
+            | Pending::Discard
+            | Pending::LegendRule { .. }
+            | Pending::EnterPayingLife { .. }
+            | Pending::DeclareAttackers { .. }
+            | Pending::DeclareBlockers { .. }
+            | Pending::CombatDamage { .. }
+            | Pending::Casting(_)
+            | Pending::CastOffer { .. }
+            | Pending::TurningFaceUp { .. }
+            | Pending::OrderEntered { .. }
+            | Pending::EnterChoosing { .. }
+            | Pending::ManaColor { .. } => Bitboard::EMPTY,
         };
         self.pending = Pending::None;
         revealed

@@ -202,7 +202,21 @@ impl<L: Layout> State<L> {
             Pending::Resolving(paused) | Pending::StepActions(paused) => {
                 Self::fits_paused::<M>(paused)
             }
-            _ => Ok(()),
+            Pending::None
+            | Pending::PlayOrDraw { .. }
+            | Pending::Mulligans
+            | Pending::Discard
+            | Pending::LegendRule { .. }
+            | Pending::EnterPayingLife { .. }
+            | Pending::DeclareAttackers { .. }
+            | Pending::DeclareBlockers { .. }
+            | Pending::CombatDamage { .. }
+            | Pending::Casting(_)
+            | Pending::CastOffer { .. }
+            | Pending::TurningFaceUp { .. }
+            | Pending::OrderEntered { .. }
+            | Pending::EnterChoosing { .. }
+            | Pending::ManaColor { .. } => Ok(()),
         }
     }
 

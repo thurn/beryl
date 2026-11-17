@@ -170,14 +170,16 @@ impl<L: Layout> State<L> {
         let Objects::Everywhere(filter) = spec.affected else {
             unreachable!("the layers list only abilities that reach every zone");
         };
-        let change = match spec.modifications[usize::from(reach.part)] {
-            Modification::AddChosenColor => LayerChange::AddColors(self.chosen_color(reach.source)),
-            modification => LayerChange::resolve(
+        let modification = spec.modifications[usize::from(reach.part)];
+        let change = if let Modification::AddChosenColor = modification {
+            LayerChange::AddColors(self.chosen_color(reach.source))
+        } else {
+            LayerChange::resolve(
                 modification,
                 self.controller(reach.source),
                 &self.words_of(reach.source),
             )
-            .expect("the card table admits only changes of types and colors, and escape, here"),
+            .expect("the card table admits only changes of types and colors, and escape, here")
         };
         (filter, change)
     }
@@ -226,7 +228,22 @@ fn apply(t: &GameTable, so_far: &mut SoFar, change: LayerChange) {
         // CR 613.1e: "Layer 5: Color-changing effects are applied."
         LayerChange::SetColors(colors) => so_far.colors = colors,
         LayerChange::AddColors(colors) => so_far.colors = so_far.colors.union(colors),
-        _ => unreachable!("the card table admits only changes of types and colors here"),
+        LayerChange::Control(_)
+        | LayerChange::SetLandTypes(_)
+        | LayerChange::AddKeywords(_)
+        | LayerChange::Grant(_)
+        | LayerChange::LoseAllAbilities
+        | LayerChange::LoseAbility(_)
+        | LayerChange::DefinedPower(_)
+        | LayerChange::SetBasePt(..)
+        | LayerChange::ModifyPt(..)
+        | LayerChange::SwitchPt
+        | LayerChange::Read { .. }
+        | LayerChange::DefinedPt(..)
+        | LayerChange::AddProtection(_)
+        | LayerChange::GrantEscape => {
+            unreachable!("the card table admits only changes of types and colors here")
+        }
     }
 }
 

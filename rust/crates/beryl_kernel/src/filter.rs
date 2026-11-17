@@ -155,7 +155,19 @@ fn combined<L: Layout>(
         Filter::Not(f) => !f.matches_x(s, t, slot, you, words, x),
         Filter::All(fs) => fs.iter().all(|f| f.matches_x(s, t, slot, you, words, x)),
         Filter::AnyOf(fs) => fs.iter().any(|f| f.matches_x(s, t, slot, you, words, x)),
-        _ => filter.matches_x(s, t, slot, you, words, x),
+        Filter::Any
+        | Filter::Types(_)
+        | Filter::Supertypes(_)
+        | Filter::SubtypeWord(_)
+        | Filter::ColorWords(_)
+        | Filter::Whose(_)
+        | Filter::Owned(_)
+        | Filter::Tapped
+        | Filter::Token
+        | Filter::ManaValueAtMost(_)
+        | Filter::PowerAtMost(_)
+        | Filter::ManaValueAtMostX
+        | Filter::InZone(_) => filter.matches_x(s, t, slot, you, words, x),
     }
 }
 
@@ -229,7 +241,13 @@ pub fn is_for(players: &Players, player: Seat, you: Seat) -> bool {
         Players::EachOpponent => is_an_opponent(player, you),
         // CR 102.1: "A player is one of the people in the game."
         Players::EachPlayer => true,
-        _ => unreachable!("the card table refuses these players outside a resolution"),
+        Players::Target(_)
+        | Players::ControllerOf(_)
+        | Players::OwnerOf(_)
+        | Players::ThatPlayer
+        | Players::EachOther(_) => {
+            unreachable!("the card table refuses these players outside a resolution")
+        }
     }
 }
 

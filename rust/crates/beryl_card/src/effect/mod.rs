@@ -34,6 +34,7 @@ mod condition;
 mod operands;
 mod reference;
 mod terms;
+mod traversal;
 
 pub use amount::Amount;
 pub use condition::{Comparison, Condition};
@@ -636,24 +637,6 @@ pub enum Effect {
 impl Effect {
     /// No instruction: what an ability that never resolves does, such as a static ability.
     pub const NOTHING: Effect = Effect::Sequence(&[]);
-
-    /// Whether `test` holds of this instruction or of one inside it, whichever of them a
-    /// resolution comes to.
-    pub fn any(&self, test: &impl Fn(&Effect) -> bool) -> bool {
-        if test(self) {
-            return true;
-        }
-        match *self {
-            Effect::Sequence(effects) => effects.iter().any(|effect| effect.any(test)),
-            Effect::If {
-                then, otherwise, ..
-            } => then.any(test) || otherwise.is_some_and(|otherwise| otherwise.any(test)),
-            Effect::May { effect, .. }
-            | Effect::Unless { effect, .. }
-            | Effect::ForEachPlayer { effect, .. } => effect.any(test),
-            _ => false,
-        }
-    }
 
     /// Whether this takes what was chosen for the `target`th instance of the word "target"
     /// from where it is in the way `how` names, whatever else it does and whatever it asks

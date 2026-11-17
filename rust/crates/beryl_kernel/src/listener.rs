@@ -109,12 +109,19 @@ pub fn listens_to(trigger: &Trigger, zones: ZoneSet) -> Result<Option<EventKind>
         (About::This | About::Either, Subject::This)
         | (About::Filtered | About::Either, Subject::A(_))
         | (About::Nothing, Subject::A(Filter::Any)) => Ok(()),
-        _ => Err(Unmatched::Subject),
+        (About::Filtered | About::Nothing, Subject::This)
+        | (About::This | About::Nothing, Subject::A(_)) => Err(Unmatched::Subject),
     };
     let whose = match trigger.whose {
         Players::EachPlayer => Ok(()),
         ref players if has_player && reads(players) => Ok(()),
-        _ => Err(Unmatched::Whose),
+        Players::You
+        | Players::EachOpponent
+        | Players::Target(_)
+        | Players::ControllerOf(_)
+        | Players::OwnerOf(_)
+        | Players::ThatPlayer
+        | Players::EachOther(_) => Err(Unmatched::Whose),
     };
     subject.and(whose)?;
     match (trigger.delayed, kind) {
