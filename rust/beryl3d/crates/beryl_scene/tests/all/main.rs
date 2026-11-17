@@ -41,6 +41,7 @@ mod relay;
 mod screens;
 mod screens_phone;
 mod scroll;
+mod scroll_phone;
 mod settings_sheet;
 mod shadows;
 mod sound;

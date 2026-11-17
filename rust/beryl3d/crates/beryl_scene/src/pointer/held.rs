@@ -26,16 +26,28 @@ pub(super) struct Grip {
     /// Where the press began and where the pointer is now, in logical points.
     pub start: Vec2,
     pub at: Vec2,
-    /// Whether the open prompt lets this card be picked up (`Client`'s `holdable`).
-    pub holdable: bool,
+    /// Which drags pick the card up.
+    pub hold: Hold,
     /// Whether the press has travelled `DRAG_THRESHOLD_POINTS` from where it began. A press
     /// that has is a drag, which is never a click on its card, whether or not it picked the
     /// card up: a drag across a battlefield row scrolls the row (`rows`).
     pub moved: bool,
-    /// Whether the press has picked the card up: it is holdable and has `moved`.
+    /// Whether the press has picked the card up: its `hold` let it, and it has `moved`.
     pub held: bool,
     /// What made the press.
     pub by: By,
+}
+
+/// Which drags of a press pick its card up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hold {
+    /// None: the open prompt does not let the card be picked up (`Client`'s `holdable`).
+    Never,
+    /// Any drag.
+    Drag,
+    /// A drag that first goes more up or down than sideways, since one that goes sideways
+    /// scrolls the card's hand (`rows`).
+    UpOrDown,
 }
 
 /// What made a press on a card.
@@ -54,9 +66,13 @@ impl Grip {
     /// `DRAG_THRESHOLD_POINTS` from where it began, as the web interface's `Pointer` has it.
     pub fn moved(&mut self, at: Vec2) {
         self.at = at;
-        if self.start.distance(at) >= data::DRAG_THRESHOLD_POINTS {
+        if let Some(sideways) = super::rows::sideways(self.start, at) {
+            // Whether the drag scrolls is settled where it first passes the threshold.
+            if !self.moved && self.hold == Hold::UpOrDown && sideways {
+                self.hold = Hold::Never;
+            }
             self.moved = true;
-            self.held |= self.holdable && self.by != By::Finger { ready: false };
+            self.held |= self.hold != Hold::Never && self.by != By::Finger { ready: false };
         }
     }
 }

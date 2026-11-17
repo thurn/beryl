@@ -5,7 +5,7 @@
 use beryl_protocol::protocol::{CardType, ObjectId, PlayerView, RowName, Side, ZoneName};
 use beryl_scene::frame::Place;
 use beryl_scene::input::{Insets, Size};
-use beryl_scene::table::{Camera, DESKTOP, Placement, Window, place};
+use beryl_scene::table::{Camera, DESKTOP, Placement, Scroll, Window, place};
 use beryl_scene::testing::ViewBuilder;
 
 fn placed(view: &PlayerView) -> Placement {
@@ -18,7 +18,7 @@ fn placed(view: &PlayerView) -> Placement {
         safe_area: Insets::default(),
     };
     let camera = Camera::fit(DESKTOP.camera, window);
-    place(view, &[], &DESKTOP, &camera, &Default::default())
+    place(view, &[], &DESKTOP, &camera, &Scroll::default())
 }
 
 fn creature(builder: &mut ViewBuilder, side: Side, name: &str) -> ObjectId {

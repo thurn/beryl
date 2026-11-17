@@ -10,7 +10,9 @@ use beryl_scene::agent::{Context, Layout};
 use beryl_scene::frame::{Frame, Place, Role};
 use beryl_scene::input::{Input, Insets, Size};
 use beryl_scene::pose::Pose;
-use beryl_scene::table::{ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Window, place};
+use beryl_scene::table::{
+    ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Scroll, Window, place,
+};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, script};
 use beryl_scene::{Client, Config};
 use glam::{Vec2, Vec3};
@@ -90,7 +92,7 @@ fn every_zone_of_both_sides_gets_its_cards() {
     // Each side's library lies in its own corner of the window, as the web interface's piles
     // do: the viewer's at the bottom left, the opponent's at the top right.
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
+    let placement = place(&view, &[], &DESKTOP, &camera, &Scroll::default());
     let library = |side: Side| {
         let player = match side {
             Side::You => &view.players.you,
@@ -110,8 +112,8 @@ fn every_zone_of_both_sides_gets_its_cards() {
 fn placement_is_the_same_for_the_same_view_and_window() {
     let view = ViewBuilder::sample().build();
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let first = place(&view, &[], &DESKTOP, &camera, &Default::default());
-    let again = place(&view, &[], &DESKTOP, &camera, &Default::default());
+    let first = place(&view, &[], &DESKTOP, &camera, &Scroll::default());
+    let again = place(&view, &[], &DESKTOP, &camera, &Scroll::default());
     assert_eq!(first, again);
 }
 
@@ -133,7 +135,7 @@ fn plain_twins_pile_in_an_uncrowded_row_with_the_lowest_slot_on_top() {
     let mut view = builder.build();
     view.battlefield.reverse();
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
+    let placement = place(&view, &[], &DESKTOP, &camera, &Scroll::default());
     let top = placement.get(top).unwrap();
     let copy = placement.get(copy).unwrap();
     assert_eq!((top.copies, copy.copies), (2, 0));
@@ -151,13 +153,7 @@ fn tapped_and_untapped_twins_stand_apart() {
     tapped.tapped = true;
     let tapped = tapped.slot;
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(
-        &builder.build(),
-        &[],
-        &DESKTOP,
-        &camera,
-        &Default::default(),
-    );
+    let placement = place(&builder.build(), &[], &DESKTOP, &camera, &Scroll::default());
     assert_eq!(placement.get(tapped).unwrap().copies, 1);
     assert_eq!(placement.get(untapped).unwrap().copies, 1);
 }
@@ -173,7 +169,7 @@ fn the_lands_row_piles_at_seven_lands_including_lands_in_other_rows() {
         .types = vec![CardType::Land];
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
     let sizes = |view: &PlayerView| {
-        let placement = place(view, &[], &DESKTOP, &camera, &Default::default());
+        let placement = place(view, &[], &DESKTOP, &camera, &Scroll::default());
         [ObjectId(0), ObjectId(1)].map(|slot| placement.get(slot).unwrap().copies)
     };
     assert_eq!(sizes(&builder.build()), [1, 1]);
@@ -199,7 +195,7 @@ fn a_permanent_targeted_on_the_stack_stands_apart_from_its_twins() {
     };
     targets.push(TargetRef::Object { slot: targeted });
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
+    let placement = place(&view, &[], &DESKTOP, &camera, &Scroll::default());
     assert_eq!(placement.get(first).unwrap().copies, 1);
     assert_eq!(placement.get(targeted).unwrap().copies, 1);
 }
@@ -228,7 +224,7 @@ fn crowded() -> PlayerView {
 fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovered() {
     let view = crowded();
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
+    let placement = place(&view, &[], &DESKTOP, &camera, &Scroll::default());
     let [low, high] = DESKTOP.camera.required;
     let mut drawn = 0;
     for object in &view.objects {
@@ -397,7 +393,7 @@ fn lands_stand_untapped_first_with_each_name_together_in_first_appearance_order(
     }
     let view = builder.build();
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
+    let placement = place(&view, &[], &DESKTOP, &camera, &Scroll::default());
     let mut slots: Vec<u16> = view.objects.iter().map(|object| object.slot.0).collect();
     slots.sort_by(|&a, &b| {
         let x = |slot: u16| placement.get(ObjectId(slot)).unwrap().pose.position.x;
@@ -479,7 +475,7 @@ fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
 
     // The spell is the stack's bottom item and the abilities its second and third.
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[3, 4], &DESKTOP, &camera, &Default::default());
+    let placement = place(&view, &[3, 4], &DESKTOP, &camera, &Scroll::default());
     let spell = view.objects.iter().find(|o| o.zone == ZoneName::Stack);
     let spell = placement.get(spell.expect("a spell").slot).expect("placed");
     let depths = [
@@ -532,7 +528,7 @@ fn corners(pose: &Pose, camera: &Camera) -> [Vec2; 4] {
 
 /// The poses of `side`'s hand in `view`, in the order the view lists the cards.
 fn hand_poses(view: &PlayerView, side: Side, camera: &Camera) -> Vec<Pose> {
-    let placement = place(view, &[], &DESKTOP, camera, &Default::default());
+    let placement = place(view, &[], &DESKTOP, camera, &Scroll::default());
     view.objects
         .iter()
         .filter(|object| {
@@ -707,7 +703,7 @@ fn stacks_of_any_size_stay_on_screen_with_the_newest_item_nearest() {
         let view = builder.build();
         for (width, height) in DESKTOP_WINDOWS {
             let camera = Camera::fit(DESKTOP.camera, window(width, height));
-            let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
+            let placement = place(&view, &[], &DESKTOP, &camera, &Scroll::default());
             let poses: Vec<Pose> = view
                 .stack
                 .iter()
@@ -791,7 +787,7 @@ fn a_spell_that_exiled_itself_rests_in_exile_while_the_view_still_lists_it() {
     object.expect("the spell's card").zone = ZoneName::Exile;
 
     let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &DESKTOP, &camera, &Default::default());
+    let placement = place(&view, &[], &DESKTOP, &camera, &Scroll::default());
     let rest = placement.get(spell).expect("placed");
     assert_eq!(
         rest.place,

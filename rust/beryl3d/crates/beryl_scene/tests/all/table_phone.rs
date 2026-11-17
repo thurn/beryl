@@ -386,28 +386,37 @@ fn the_stack_stands_in_the_middle_band_with_the_top_item_right_and_in_front() {
                 row: None,
             };
             let items = cards_at(&frame, stack);
-            assert_eq!(items.len(), count);
             let label = format!("a stack of {count} at {width}x{height}");
+            // One row, about the middle band, the top item at the right. A stack too long for
+            // the row shows its top items and scrolls.
+            let drawn = items.len();
+            assert!(drawn > 0 && drawn <= count, "{label}: {drawn} drawn");
             if count <= 4 {
-                // One row, about the middle band, the top item at the right.
-                let mut lefts: Vec<f32> = items.iter().map(|item| bounds(item)[0]).collect();
-                for item in &items {
-                    let y = centre(item).y;
-                    assert!(
-                        (y - bands.middle.middle()).abs() < 1.0,
-                        "{label}: {y} is off the middle band {:?}",
-                        bands.middle
-                    );
-                }
-                let sorted = {
-                    let mut sorted = lefts.clone();
-                    sorted.sort_by(f32::total_cmp);
-                    sorted
-                };
-                lefts.dedup();
-                assert_eq!(lefts.len(), count, "{label}: no two items share a place");
-                assert!(sorted.windows(2).all(|pair| pair[1] - pair[0] >= 44.0));
+                assert_eq!(drawn, count, "{label}: a short stack shows every item");
             }
+            assert!(count < 20 || drawn < count, "{label}: a long stack scrolls");
+            if drawn < count {
+                let names: Vec<&str> = items.iter().map(|item| frame.name(item.name)).collect();
+                let top = format!("Spell {}", count - 1);
+                assert!(names.contains(&top.as_str()), "{label}: {names:?}");
+            }
+            let mut lefts: Vec<f32> = items.iter().map(|item| bounds(item)[0]).collect();
+            for item in &items {
+                let y = centre(item).y;
+                assert!(
+                    (y - bands.middle.middle()).abs() < 1.0,
+                    "{label}: {y} is off the middle band {:?}",
+                    bands.middle
+                );
+            }
+            let sorted = {
+                let mut sorted = lefts.clone();
+                sorted.sort_by(f32::total_cmp);
+                sorted
+            };
+            lefts.dedup();
+            assert_eq!(lefts.len(), drawn, "{label}: no two items share a place");
+            assert!(sorted.windows(2).all(|pair| pair[1] - pair[0] >= 44.0));
             assert_eq!(
                 card_faults(&frame, window, reachable)
                     .into_iter()

@@ -74,7 +74,7 @@ pub(super) fn place_stack(
     placement: &mut Placement,
     spells: &[&ObjectView],
     stack: &[OnStack],
-    pose: impl Fn(usize, usize) -> Pose,
+    pose: impl Fn(usize, usize) -> (Pose, bool),
 ) {
     placement.abilities.clear();
     // `spells` lists the spells of `stack` in its order, leaving out any whose card the table
@@ -91,18 +91,15 @@ pub(super) fn place_stack(
             OnStack::Ability { side, .. } => (0.0, side),
             OnStack::Unnumbered => continue,
         };
-        let pose = Pose {
-            turn,
-            ..pose(index, stack.len())
-        };
+        let (pose, visible) = pose(index, stack.len());
         let rest = Rest {
-            pose,
+            pose: Pose { turn, ..pose },
             place: Place::Card {
                 zone: ZoneName::Stack,
                 side,
                 row: None,
             },
-            visible: true,
+            visible,
             copies: 1,
         };
         match *item {

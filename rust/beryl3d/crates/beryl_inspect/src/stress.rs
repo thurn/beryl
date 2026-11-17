@@ -614,7 +614,7 @@ fn stack() -> Stress {
 pub(crate) const STACK_REST_FRAMES: usize = 120;
 
 /// A four-second round trip along the inner edge of the fan in its resting frame, card by card
-/// in hand order, so through each row of a hand laid in two. The position follows the curvature
+/// in hand order through the cards in view, so through each row of a hand laid in several. The position follows the curvature
 /// of the edge across window shapes.
 pub(crate) fn pointer_moves(
     frame: &beryl_scene::frame::Frame,
@@ -649,7 +649,8 @@ pub(crate) fn pointer_moves(
             top_left.lerp(top_right, 0.09) + 0.08 * (bottom_left - top_left)
         })
         .collect();
-    assert_eq!(points.len(), 60);
+    // A phone shows as many of the 60 cards as keep a strip to press, and scrolls the rest.
+    assert!(points.len() > 1, "the hand shows its cards");
     // A point, or the nearest point below it where a hit test finds a card of the viewer's
     // hand: a step stop beside the viewer's life orb covers the top of a few cards of a hand
     // this large, and the pointer crosses the hand, not the stops.
@@ -675,7 +676,7 @@ pub(crate) fn pointer_moves(
         }
         point
     };
-    let gaps = u16::try_from(points.len() - 1).expect("60 points");
+    let gaps = u16::try_from(points.len() - 1).expect("at most 60 points");
     (1..=2 * HALF)
         .map(|step| {
             let (distance, length) = if step <= HALF {

@@ -53,13 +53,44 @@ pub struct Placement {
     pub abilities: Vec<(u32, Rest)>,
     /// Each library, graveyard and exile pile, by `PileShown::index`.
     pub piles: [PileShown; 6],
-    /// Which groups of each battlefield row are in view, as `Scroll` orders the rows.
+    /// Which groups of each battlefield row, and which cards of the viewer's hand and the
+    /// stack, are in view.
     pub rows: Rows,
 }
 
-/// Which groups of each battlefield row are in view: for the viewer and then the opponent, each
-/// in the order of `ROWS`.
-pub type Rows = [[RowWindow; 3]; 2];
+/// A line of cards that scrolls when it holds more than fit with their least strip: a
+/// battlefield row, the viewer's hand or the stack (docs/beryl-3d.md, "Objects and placement").
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Scroller {
+    Row(Side, RowName),
+    /// The viewer's hand. The opponent's is not theirs to press, so it closes up instead.
+    Hand,
+    Stack,
+}
+
+/// Which groups of each battlefield row, and which cards of the viewer's hand and items of the
+/// stack, are in view.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Rows {
+    /// For the viewer and then the opponent, each in the order of `ROWS`.
+    pub battlefield: [[RowWindow; 3]; 2],
+    /// The viewer's hand, its cards in order from the left.
+    pub hand: RowWindow,
+    /// The stack, its items in order from the bottom.
+    pub stack: RowWindow,
+}
+
+impl Rows {
+    /// Which groups of `scroller` are in view.
+    #[must_use]
+    pub fn get(&self, scroller: Scroller) -> RowWindow {
+        match scroller {
+            Scroller::Row(side, row) => self.battlefield[side_index(side)][row_index(row)],
+            Scroller::Hand => self.hand,
+            Scroller::Stack => self.stack,
+        }
+    }
+}
 
 impl Placement {
     #[must_use]
@@ -92,9 +123,18 @@ impl Placement {
     }
 }
 
-/// The scroll offset of each row, in groups from its left end: for the viewer and then the
-/// opponent, each in the order of `ROWS`.
-pub type Scroll = [[usize; 3]; 2];
+/// The scroll offset of each line of cards that scrolls.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Scroll {
+    /// Each battlefield row's, in groups from its left end: for the viewer and then the
+    /// opponent, each in the order of `ROWS`.
+    pub battlefield: [[usize; 3]; 2],
+    /// The viewer's hand's, in cards from its left end.
+    pub hand: usize,
+    /// The stack's, in items from its top, so that an item cast while the stack is scrolled to
+    /// its top comes into view.
+    pub stack: usize,
+}
 
 /// Every object's resting place in `view`, seen through `camera`. `abilities` numbers the
 /// abilities on the view's stack, bottom first, which the view does not name; an ability past
@@ -667,14 +707,14 @@ fn lay(
             hand(
                 placement,
                 objects,
-                side,
+                (side, scroll.hand),
                 (data, layout.strip),
                 camera,
                 hands,
             );
         }
         Group::Row { side, row } => {
-            let offset = scroll[side_index(side)][row_index(row)];
+            let offset = scroll.battlefield[side_index(side)][row_index(row)];
             battlefield_row(
                 placement,
                 objects,
@@ -685,11 +725,15 @@ fn lay(
             );
         }
         Group::Stack => match &layout.phone {
-            Some(data) => place_stack(placement, objects, &zones.stack, |index, count| {
-                phone::stack_pose(index, count, data, camera)
-            }),
+            Some(data) => {
+                let window = phone::stack_window(zones.stack.len(), scroll.stack, data);
+                placement.rows.stack = window;
+                place_stack(placement, objects, &zones.stack, |index, _| {
+                    phone::stack_pose(index, window, data, camera)
+                });
+            }
             None => place_stack(placement, objects, &zones.stack, |index, count| {
-                stack_pose(index, count, &layout.stack, camera)
+                (stack_pose(index, count, &layout.stack, camera), true)
             }),
         },
     }

@@ -49,7 +49,12 @@ pub struct RowWindow {
 impl RowWindow {
     /// A window of `shown` of `groups` groups from `first`, with `before` and `after` cards off
     /// the two ends.
-    fn new(groups: usize, first: usize, shown: usize, (before, after): (usize, usize)) -> Self {
+    pub(super) fn new(
+        groups: usize,
+        first: usize,
+        shown: usize,
+        (before, after): (usize, usize),
+    ) -> Self {
         let small = |number: usize| u16::try_from(number).unwrap_or(u16::MAX);
         Self {
             groups: small(groups),
@@ -64,6 +69,18 @@ impl RowWindow {
     #[must_use]
     pub fn first(&self) -> usize {
         usize::from(self.first)
+    }
+
+    /// How many groups the row holds.
+    #[must_use]
+    pub fn groups(&self) -> usize {
+        usize::from(self.groups)
+    }
+
+    /// How many groups are in view.
+    #[must_use]
+    pub fn shown(&self) -> usize {
+        usize::from(self.shown)
     }
 
     /// How many cards are off the left end.

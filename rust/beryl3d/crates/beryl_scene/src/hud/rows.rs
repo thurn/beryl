@@ -1,7 +1,10 @@
-//! The number of cards scrolled off each end of a battlefield row, shown as a float of the flat
-//! layer just outside that end of the row, as "+12" (`floats::ROW_COUNT`; docs/beryl-3d.md,
-//! "Floats"). A row with no cards off an end shows no count there. Arena's recordings show no
-//! board large enough to scroll, so this is listed among the behaviors not seen in Arena.
+//! The number of cards scrolled off each end of a battlefield row, the viewer's hand or the
+//! stack, shown as a float of the flat layer by that end, as "+12" (`floats::ROW_COUNT`,
+//! `floats::HAND_COUNT` and `floats::STACK_COUNT`; docs/beryl-3d.md, "Floats"). A row's count
+//! stands just outside its end, and the stack's in the room the phone keeps beside its row. The
+//! hand's stand over the hand's top corners, since a hand that scrolls fills the window from
+//! side to side. A line with no cards off an end shows no count there. Arena's recordings show
+//! no board large enough to scroll, so this is listed among the behaviors not seen in Arena.
 //!
 //! A count changes when a row scrolls or when the table takes the view a script leads to. Every
 //! count the table shows now or will show at the end of a script still to play is laid out
@@ -14,10 +17,14 @@ use glam::{Vec2, Vec3};
 use crate::data::space::layout::desktop::ROW_COUNT_GAP;
 use crate::element::{Element, FloatId, floats, text};
 use crate::layout::{FloatLook, Layer};
-use crate::table::{ROWS, Rows, Table, row_area};
+use crate::table::{Camera, Layout, ROWS, Rows, Scroller, Table, row_area};
 
-/// Each side has three rows, each with two ends.
-const COUNTS: usize = 12;
+/// Each side has three rows, and with the hand and the stack each has two ends.
+const COUNTS: usize = 16;
+
+/// The first of the battlefield rows' ends that are not; the hand's two come before the
+/// stack's.
+const ROW_ENDS: usize = 12;
 
 /// The floats that show each row end's count, and the count each shows now.
 #[derive(Debug, Default)]
@@ -58,7 +65,7 @@ impl RowCounts {
         let layout = table.layout();
         let camera = table.camera();
         for index in 0..COUNTS {
-            let (side, row, right) = end_of(index);
+            let (scroller, right) = end_of(index);
             let want = Some(count_in(table.rows(), index)).filter(|&count| visible && count > 0);
             let id = float(index);
             if want != self.shown[index] {
@@ -71,15 +78,9 @@ impl RowCounts {
             if want.is_none() {
                 continue;
             }
-            let (area, y) = row_area((layout, camera), side, row);
-            let x = if right { area.right } else { area.left };
-            let end = camera.to_screen(Vec3::new(x, y, 0.0));
-            // Beside the end, on the row's middle line: the left count ends a gap before the
-            // row starts, and the right count starts a gap after it ends.
-            let (point, anchor) = if right {
-                (end + Vec2::new(ROW_COUNT_GAP, 0.0), Vec2::new(0.0, 0.5))
-            } else {
-                (end - Vec2::new(ROW_COUNT_GAP, 0.0), Vec2::new(1.0, 0.5))
+            let Some((point, anchor)) = place(scroller, right, (layout, camera), table.rows())
+            else {
+                continue;
             };
             layer.set_float_look(
                 id,
@@ -93,37 +94,105 @@ impl RowCounts {
     }
 }
 
-/// The row end at `index`: the side, the row and whether it is the right end. The viewer's rows
-/// come first, each in the order of `ROWS`, the left end before the right.
-fn end_of(index: usize) -> (Side, RowName, bool) {
-    let side = if index < COUNTS / 2 {
-        Side::You
-    } else {
-        Side::Opponent
+/// Where the count of the cards off `scroller`'s `right` or left end stands, in logical points,
+/// and the anchor of the float there, as `layout` and `camera` show `rows`. `None` for a line
+/// the layout gives no room for a count.
+fn place(
+    scroller: Scroller,
+    right: bool,
+    (layout, camera): (&Layout, &Camera),
+    rows: &Rows,
+) -> Option<(Vec2, Vec2)> {
+    // Beside the end, on the line's middle: the left count ends a gap before the line starts,
+    // and the right count starts a gap after it ends.
+    let beside = |left: f32, right_end: f32, y: f32| {
+        Some(if right {
+            (Vec2::new(right_end + ROW_COUNT_GAP, y), Vec2::new(0.0, 0.5))
+        } else {
+            (Vec2::new(left - ROW_COUNT_GAP, y), Vec2::new(1.0, 0.5))
+        })
     };
-    (side, ROWS[index % 6 / 2], index % 2 == 1)
+    match scroller {
+        Scroller::Row(side, row) => {
+            let (area, y) = row_area((layout, camera), side, row);
+            let [left, right_end] =
+                [area.left, area.right].map(|x| camera.to_screen(Vec3::new(x, y, 0.0)));
+            beside(left.x, right_end.x, left.y)
+        }
+        Scroller::Stack => {
+            let data = layout.phone?;
+            let shown = rows.stack.shown().max(1);
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "a stack holds far fewer than 2^24 items"
+            )]
+            let half = (shown as f32 - 1.0) / 2.0 * data.step + data.width() / 2.0;
+            let middle = f32::midpoint(data.left, data.right);
+            beside(middle - half, middle + half, data.middle)
+        }
+        Scroller::Hand => {
+            // Over the corners of the column at the hand's top edge, inside it.
+            let window = camera.window.size;
+            let y = (1.0 - layout.hand.edge) / 2.0 * window.height - ROW_COUNT_GAP;
+            let (left, right_end) = layout
+                .bands
+                .map_or((0.0, window.width), |bands| (bands.left, bands.right));
+            Some(if right {
+                (Vec2::new(right_end, y), Vec2::new(1.0, 1.0))
+            } else {
+                (Vec2::new(left, y), Vec2::new(0.0, 1.0))
+            })
+        }
+    }
 }
 
-/// How many cards `rows` has off the row end at `index`.
+/// The line end at `index`: the line, and whether it is the right end. The viewer's rows come
+/// first, each in the order of `ROWS`, then the opponent's, then the hand and the stack, the
+/// left end before the right.
+fn end_of(index: usize) -> (Scroller, bool) {
+    let scroller = match index / 2 {
+        6 => Scroller::Hand,
+        7 => Scroller::Stack,
+        _ => {
+            let side = if index < ROW_ENDS / 2 {
+                Side::You
+            } else {
+                Side::Opponent
+            };
+            Scroller::Row(side, ROWS[index % 6 / 2])
+        }
+    };
+    (scroller, index % 2 == 1)
+}
+
+/// How many cards `rows` has off the line end at `index`.
 fn count_in(rows: &Rows, index: usize) -> usize {
-    let window = rows[index / 6][index % 6 / 2];
-    if index % 2 == 1 {
+    let (scroller, right) = end_of(index);
+    let window = rows.get(scroller);
+    if right {
         window.after()
     } else {
         window.before()
     }
 }
 
-/// The float that shows the count of the row end at `index`. `floats::ROW_COUNT` orders the rows
-/// as `RowName` does, which `ROWS` does not.
+/// The float that shows the count of the line end at `index`. `floats::ROW_COUNT` orders the
+/// rows as `RowName` does, which `ROWS` does not.
 fn float(index: usize) -> FloatId {
-    let (side, row, right) = end_of(index);
-    let row = match row {
-        RowName::Creatures => 0,
-        RowName::Others => 1,
-        RowName::Lands => 2,
-    };
-    floats::ROW_COUNT[usize::from(side == Side::Opponent)][row][usize::from(right)]
+    let (scroller, right) = end_of(index);
+    let right = usize::from(right);
+    match scroller {
+        Scroller::Row(side, row) => {
+            let row = match row {
+                RowName::Creatures => 0,
+                RowName::Others => 1,
+                RowName::Lands => 2,
+            };
+            floats::ROW_COUNT[usize::from(side == Side::Opponent)][row][right]
+        }
+        Scroller::Hand => floats::HAND_COUNT[right],
+        Scroller::Stack => floats::STACK_COUNT[right],
+    }
 }
 
 /// The key a count is prepared under.
@@ -136,22 +205,30 @@ fn count_of(key: u64) -> usize {
     usize::try_from(key).unwrap_or(usize::MAX)
 }
 
-/// The count of the row end at `index`: text that shows "+" and the number, named for the row,
-/// the end and the number, as "Your creatures right 12", so that the tree's line says all three.
+/// The count of the line end at `index`: text that shows "+" and the number, named for the
+/// line, the end and the number, as "Your creatures right 12", "Your hand left 3" or "Stack
+/// right 2", so that the tree's line says all three.
 fn count_text(index: usize, count: usize) -> Element {
-    let (side, row, right) = end_of(index);
-    let whose = match side {
-        Side::You => "Your",
-        Side::Opponent => "Opponent's",
-    };
-    let row = match row {
-        RowName::Creatures => "creatures",
-        RowName::Lands => "lands",
-        RowName::Others => "others",
+    let (scroller, right) = end_of(index);
+    let line = match scroller {
+        Scroller::Row(side, row) => {
+            let whose = match side {
+                Side::You => "Your",
+                Side::Opponent => "Opponent's",
+            };
+            let row = match row {
+                RowName::Creatures => "creatures",
+                RowName::Lands => "lands",
+                RowName::Others => "others",
+            };
+            format!("{whose} {row}")
+        }
+        Scroller::Hand => "Your hand".to_owned(),
+        Scroller::Stack => "Stack".to_owned(),
     };
     let end = if right { "right" } else { "left" };
-    // It lets the pointer through to the cards of the row under it.
+    // It lets the pointer through to the cards under it.
     let mut element = text(&format!("+{count}")).passes(true);
-    element.name = format!("{whose} {row} {end} {count}");
+    element.name = format!("{line} {end} {count}");
     element
 }

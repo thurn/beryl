@@ -1,11 +1,11 @@
-//! A battlefield row that scrolls (docs/beryl-3d.md, "Objects and placement"). A row with
-//! more cards than fit at the least strip shows as many groups as fit from its scroll offset,
-//! which the table keeps for each row of each side. When the pointer changes an offset, every
-//! object is placed again; each card that stays in view slides to its new place over
-//! `slide.regroup_ms`, and each card that comes into view fades in where it rests. A card that
-//! leaves the view is no longer drawn.
+//! A battlefield row, the viewer's hand or the stack, scrolling (docs/beryl-3d.md, "Objects and
+//! placement"). A line of cards with more than fit at the least strip shows as many groups as
+//! fit from its scroll offset, which the table keeps for each row of each side, the hand and
+//! the stack. When the pointer changes an offset, every object is placed again; each card that
+//! stays in view slides to its new place over `slide.regroup_ms`, and each card that comes into
+//! view fades in where it rests. A card that leaves the view is no longer drawn.
 
-use beryl_protocol::protocol::{RowName, Side, ZoneName};
+use beryl_protocol::protocol::{Side, ZoneName};
 
 use super::{SceneObject, Table};
 use crate::data::space::slide::REGROUP_MS;
@@ -13,16 +13,16 @@ use crate::frame::Place;
 use crate::motion::between;
 use crate::pose::{Curve, Pose};
 use crate::table::place::{row_index, side_index};
-use crate::table::{RowWindow, Rows};
+use crate::table::{RowWindow, Rows, Scroller};
 
 /// Nanoseconds in a millisecond.
 const MILLISECOND: f32 = 1_000_000.0;
 
-/// The cards of the row scrolled last, and where each was drawn when it scrolled.
+/// The cards of the line scrolled last, and where each was drawn when it scrolled.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Slide {
-    /// The row's place, or `None` before any row has scrolled.
-    place: Option<Place>,
+    /// The line scrolled, or `None` before any has scrolled.
+    place: Option<Scroller>,
     /// By slot, for each card of the row: its pose when the row scrolled, and whether it was
     /// drawn then.
     from: Vec<Option<(Pose, bool)>>,
@@ -44,44 +44,47 @@ impl Slide {
 }
 
 impl Table {
-    /// Which groups of each battlefield row are in view, as the table shows the view at rest.
+    /// Which groups of each line of cards that scrolls are in view, as the table shows the
+    /// view at rest.
     #[must_use]
     pub fn rows(&self) -> &Rows {
         &self.objects.rows
     }
 
-    /// Which groups of `side`'s `row` are in view, as the table shows the view at rest.
+    /// Which groups of `scroller` are in view, as the table shows the view at rest.
     #[must_use]
-    pub fn row_window(&self, side: Side, row: RowName) -> RowWindow {
-        self.objects.rows[side_index(side)][row_index(row)]
+    pub fn row_window(&self, scroller: Scroller) -> RowWindow {
+        self.objects.rows.get(scroller)
     }
 
-    /// Scrolls `side`'s `row` so that the first group in view is `first`, or the group nearest
-    /// it that keeps the row's ends in view. Returns whether the offset changed. The caller
-    /// then places every object again (`Show::scroll_row`). A row that fits never scrolls.
-    pub(crate) fn scroll_row(&mut self, (side, row): (Side, RowName), first: isize) -> bool {
-        let window = self.row_window(side, row);
+    /// Scrolls `scroller` so that the first group in view, from its left end or the stack's
+    /// bottom, is `first`, or the group nearest it that keeps its ends in view. Returns whether
+    /// the offset changed. The caller then places every object again (`Show::scroll_row`). A
+    /// line that fits never scrolls.
+    pub(crate) fn scroll_row(&mut self, scroller: Scroller, first: isize) -> bool {
+        let window = self.row_window(scroller);
         let first = window.clamp(first);
         if !window.scrolls() || first == window.first() {
             return false;
         }
-        self.scroll[side_index(side)][row_index(row)] = first;
-        let place = Place::Card {
-            zone: ZoneName::Battlefield,
-            side,
-            row: Some(row),
-        };
+        match scroller {
+            Scroller::Row(side, row) => {
+                self.scroll.battlefield[side_index(side)][row_index(row)] = first;
+            }
+            Scroller::Hand => self.scroll.hand = first,
+            Scroller::Stack => self.scroll.stack = window.groups() - window.shown() - first,
+        }
         // A card part of the way through a slide begins the next one from where it is drawn.
         let now = self.slide.now;
         let from = (self.objects.cards.iter().enumerate())
             .map(|(slot, object)| {
-                let mut object = object.filter(|object| object.place == place)?;
+                let mut object = object.filter(|object| holds(scroller, object.place))?;
                 self.slide_look(slot, &mut object, now);
                 Some((object.pose, object.visible))
             })
             .collect();
         self.slide = Slide {
-            place: Some(place),
+            place: Some(scroller),
             from,
             since: None,
             now,
@@ -116,7 +119,7 @@ impl Table {
         else {
             return false;
         };
-        if slide.place != Some(object.place) || !object.visible {
+        if !slide.place.is_some_and(|line| holds(line, object.place)) || !object.visible {
             return false;
         }
         object.pose = if seen {
@@ -128,5 +131,17 @@ impl Table {
             }
         };
         true
+    }
+}
+
+/// Whether a card at `place` is one of `scroller`'s.
+fn holds(scroller: Scroller, place: Place) -> bool {
+    let Place::Card { zone, side, row } = place else {
+        return false;
+    };
+    match scroller {
+        Scroller::Row(on, line) => zone == ZoneName::Battlefield && side == on && row == Some(line),
+        Scroller::Hand => zone == ZoneName::Hand && side == Side::You,
+        Scroller::Stack => zone == ZoneName::Stack,
     }
 }

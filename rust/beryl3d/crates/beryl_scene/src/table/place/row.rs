@@ -96,7 +96,7 @@ pub(super) fn battlefield_row(
         );
     };
     let beneath = Beneath::new(under, cards);
-    placement.rows[side_index(side)][row_index(row)] = lay_row(
+    placement.rows.battlefield[side_index(side)][row_index(row)] = lay_row(
         (cards, &beneath),
         (names, ids, stack_slots),
         area,

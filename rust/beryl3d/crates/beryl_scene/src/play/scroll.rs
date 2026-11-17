@@ -1,18 +1,17 @@
-//! A battlefield row that scrolls under the pointer, as the show plays scripts over it
-//! (docs/beryl-3d.md, "Objects and placement"). A scroll changes where the row's cards rest, so
+//! A battlefield row, the viewer's hand or the stack, scrolling under the pointer as the show
+//! plays scripts over it (docs/beryl-3d.md, "Objects and placement"). A scroll changes where
+//! the line's cards rest, so
 //! the show works out every resting place again and compiles every script not yet ended again,
 //! as it does when the window changes shape. A script that moves a card out of view then moves
 //! it from the nearer end of the row, where placement rests it.
 
-use beryl_protocol::protocol::{RowName, Side};
-
 use super::Show;
-use crate::table::Rows;
+use crate::table::{Rows, Scroller};
 
 impl Show {
-    /// Scrolls `side`'s `row` so that the first group in view is `first`, or as near to it as
-    /// the row's ends allow. Returns whether the row scrolled; a row that fits never does.
-    pub fn scroll_row(&mut self, row: (Side, RowName), first: isize) -> bool {
+    /// Scrolls `row` so that the first group in view is `first`, or as near to it as the row's
+    /// ends allow. Returns whether the row scrolled; a row that fits never does.
+    pub fn scroll_row(&mut self, row: Scroller, first: isize) -> bool {
         if !self.table.scroll_row(row, first) {
             return false;
         }

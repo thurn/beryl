@@ -1285,12 +1285,17 @@ that a tapped card in the far row keeps a 44-point square even at 375 by 647.
 Each side has two rows, as on the desktop, because the web's separate lands and
 other-permanents bands are too short for the phone's touch target. The middle
 band between the creatures' rows stays the same height whether or not the stack
-holds anything, and the stack's items stand side by side about its middle, in
-rows over the battlefield when there are more than fit across. The rows never
-move for the stack, so an item keeps the web's size, 68 points wide, only where
-the band is tall enough: at 375 by 647 it is 51 points wide, so that a tapped
-creature under it, 56 points tall there, keeps an uncovered strip of 44 points
-and a cell of the hit test's grid at each edge (`stack_height`).
+holds anything, and the stack's items stand side by side about its middle in one
+row. A stack with more items than fit across shows its top items, as many as fit
+beside room at each end for a count (`stack.count_room`), and scrolls as a
+battlefield row does: rows of items stacked over the battlefield would cover the
+creatures' rows past what a press can reach. The viewer's hand, too, shows only
+as many cards as keep their strips in rows under the top safe inset, and scrolls
+(below, "How a row scrolls"). The rows never move for the stack, so an item
+keeps the web's size, 68 points wide, only where the band is tall enough: at 375
+by 647 it is 51 points wide, so that a tapped creature under it, 56 points tall
+there, keeps an uncovered strip of 44 points and a cell of the hit test's grid
+at each edge (`stack_height`).
 
 ### Objects and placement
 
@@ -1350,6 +1355,18 @@ flight start exactly where the card was.
   end moves to the row's end, is not drawn at all. Each end with cards off it
   shows their number, as "+12", in a float just outside that end
   (`floats::ROW_COUNT`).
+- **The phone's hand and stack scroll as a row does.** The table keeps a scroll
+  offset for the viewer's hand, in cards from its left end, and for the stack,
+  in items from its top, so that an item cast while the stack shows its top
+  comes into view. The wheel over either scrolls it, and so does a drag on a
+  stack item. A hand card can be picked up by a drag, so a drag on a hand that
+  scrolls scrolls it only when it first travels the drag threshold more sideways
+  than up or down, and then picks no card up; a card is played by dragging it
+  up. A card out of view rests undrawn where the nearer end card in view does.
+  The stack's counts stand beside its row's ends (`floats::STACK_COUNT`) and the
+  hand's over the corners of the column at the hand's top edge
+  (`floats::HAND_COUNT`), since a hand that scrolls fills the window from side
+  to side.
 - **An ability on the stack is a scene object like a spell.** It is drawn as a
   card showing its source's face, at its place among the stack's items, and
   arrows, marks and steps reach it by its number, which the session's scripts
@@ -1368,25 +1385,28 @@ flight start exactly where the card was.
   past the window's sides is laid in two or more rows, each fanned the same way,
   in hand order from the back row to the front, and each row stands high enough
   above the one in front of it to leave every card a square of `strip` above it.
-  Sixty cards take two rows in every desktop window. The stack's items stand at
-  the right of the screen, the top item in front and each item beneath peeking
-  out above and to its left, and a tall stack shrinks to fit. Each item beneath
-  is pressed through the strip it shows at its left. A stack so tall that this
-  strip would be narrower than the reachable check's square (8 items in a 1440
-  by 900 window) stands in rows instead, which the web interface does not do:
-  each row stands a little above the one in front of it, and each item a little
-  to the left of the one in front of it in its row, so every item keeps an
-  uncovered corner `stack.spare` times the square's side. Each row holds as many
-  items as lets the items be largest while the rows fit under the stack's top
-  and reach left no further than the leaning stack ever does, to no less than
-  0.4 of their full size: past that the rows grow longer. As the web interface
-  ends the permanents' rows left of its stack (`ROOM.end`), a battlefield row
-  whose cards the stack's band of the screen would cover past the reachable
-  check's square (both creatures' rows) ends a gap left of the furthest the
-  leaning stack ever reaches, however tall the stack is, so no card under the
-  stack loses its square and no row moves as the stack grows. A spell that is
-  resolving, which the game has taken off its stack while its card stays in the
-  stack's zone, stays the top item until it leaves.
+  Sixty cards take two rows in every desktop window. On the phone, where the
+  rows may rise no higher than the top safe inset, a hand too large for the rows
+  that fit there shows as many cards as keep their strips and scrolls; 60 cards
+  at 375 by 647 would need about 12 rows where 10 fit. The stack's items stand
+  at the right of the screen, the top item in front and each item beneath
+  peeking out above and to its left, and a tall stack shrinks to fit. Each item
+  beneath is pressed through the strip it shows at its left. A stack so tall
+  that this strip would be narrower than the reachable check's square (8 items
+  in a 1440 by 900 window) stands in rows instead, which the web interface does
+  not do: each row stands a little above the one in front of it, and each item a
+  little to the left of the one in front of it in its row, so every item keeps
+  an uncovered corner `stack.spare` times the square's side. Each row holds as
+  many items as lets the items be largest while the rows fit under the stack's
+  top and reach left no further than the leaning stack ever does, to no less
+  than 0.4 of their full size: past that the rows grow longer. As the web
+  interface ends the permanents' rows left of its stack (`ROOM.end`), a
+  battlefield row whose cards the stack's band of the screen would cover past
+  the reachable check's square (both creatures' rows) ends a gap left of the
+  furthest the leaning stack ever reaches, however tall the stack is, so no card
+  under the stack loses its square and no row moves as the stack grows. A spell
+  that is resolving, which the game has taken off its stack while its card stays
+  in the stack's zone, stays the top item until it leaves.
 - **Cards a prompt holds up lie in the tray.** `table::tray_layout` ports the
   web interface's `laidOut` for one pile (rows about the middle of the space)
   and two (boxes side by side), in the space `desktopTray` gives, placed

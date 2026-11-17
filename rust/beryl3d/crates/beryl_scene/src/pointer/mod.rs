@@ -15,6 +15,7 @@
 //! gesture is one.
 
 mod held;
+pub use held::Hold;
 
 pub mod rows;
 pub mod touch;
@@ -161,14 +162,14 @@ impl Pointer {
         };
     }
 
-    /// Starts a press at `at` on the card in `slot`, which the pointer may pick up if
-    /// `holdable`. The client calls this as the button goes down over a card.
-    pub fn press(&mut self, slot: usize, at: Vec2, holdable: bool) {
+    /// Starts a press at `at` on the card in `slot`, which the pointer may pick up by the drags
+    /// `hold` names. The client calls this as the button goes down over a card.
+    pub fn press(&mut self, slot: usize, at: Vec2, hold: Hold) {
         self.grip = Some(Grip {
             slot,
             start: at,
             at,
-            holdable,
+            hold,
             moved: false,
             held: false,
             by: By::Mouse,

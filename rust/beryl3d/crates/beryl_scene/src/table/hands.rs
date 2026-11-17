@@ -8,7 +8,7 @@ use glam::{Quat, Vec2};
 use crate::pose::Pose;
 
 use super::place::{Placement, Rest, turn};
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData};
+use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, RowWindow};
 use crate::frame::Place;
 
 /// A hand, fanned along an edge of the screen and placed relative to the camera so that it
@@ -21,11 +21,14 @@ use crate::frame::Place;
 /// mostly out of view, as `heldPlacements` has it. A card its player picked in a hidden pick
 /// lies apart from the fan (`lifted::lay_picked`). A viewer's hand too large for one fan that
 /// leaves each card a strip to press is laid in several fans, one behind and above another
-/// (`Fan::rows`).
+/// (`Fan::rows`). One too large for as many fans as fit under the layout's ceiling shows as
+/// many cards as do from its scroll offset, `scroll` cards from its left end, and scrolls as a
+/// battlefield row does (`Fan::shown`); a card out of view rests undrawn where the nearer end
+/// card in view does.
 pub(super) fn hand(
     placement: &mut Placement,
     objects: &[&ObjectView],
-    side: Side,
+    (side, scroll): (Side, usize),
     (data, strip): (HandData, f32),
     camera: &Camera,
     cache: Option<&mut HandFits>,
@@ -45,31 +48,49 @@ pub(super) fn hand(
         side,
         row: None,
     };
-    let mut place_card = |object: &ObjectView, pose: Pose| {
-        placement.set(
-            object.slot,
-            Rest {
-                pose: Pose {
-                    turn: turn(object),
-                    ..pose
-                },
-                place,
-                visible: true,
-                copies: 1,
-            },
-        );
+    let shown = match side {
+        Side::You => Fan::new(side, data, strip, camera).shown(count),
+        Side::Opponent => count,
     };
-    if let Some(cache) = cache.filter(|_| count <= HandFits::MAX_CACHED) {
-        for (object, &pose) in objects
+    let last = count - shown;
+    let first = scroll.min(last);
+    if side == Side::You {
+        placement.rows.hand = RowWindow::new(count, first, shown, (first, last - first));
+    }
+    // The card `at` places from the left of those in view, and with the first and the last the
+    // cards off the end beside it, undrawn.
+    let mut lay = |at: usize, pose: Pose| {
+        let start = if at == 0 { 0 } else { first + at };
+        let end = if at + 1 == shown {
+            count
+        } else {
+            first + at + 1
+        };
+        for (index, object) in objects.iter().enumerate().take(end).skip(start) {
+            placement.set(
+                object.slot,
+                Rest {
+                    pose: Pose {
+                        turn: turn(object),
+                        ..pose
+                    },
+                    place,
+                    visible: index == first + at,
+                    copies: 1,
+                },
+            );
+        }
+    };
+    if let Some(cache) = cache.filter(|_| shown <= HandFits::MAX_CACHED) {
+        for (at, &pose) in cache
+            .poses(side, shown, data, strip, camera)
             .iter()
-            .zip(cache.poses(side, count, data, strip, camera))
+            .enumerate()
         {
-            place_card(object, pose);
+            lay(at, pose);
         }
     } else {
-        fan_poses(count, side, data, strip, camera, |index, pose| {
-            place_card(objects[index], pose);
-        });
+        fan_poses(shown, side, data, strip, camera, &mut lay);
     }
     super::lifted::lay_picked(&picked, side, camera, placement);
 }
@@ -123,27 +144,8 @@ fn fan_poses(
     if count == 0 {
         return;
     }
-    let window = camera.window.size;
-    let aspect = window.width / window.height;
-    // Distances on screen are in half the window's height, the vertical unit of normalized
-    // device coordinates, so that a turn on screen is a true turn.
-    let tall = data.height * 2.0;
-    let wide = tall * CARD_WIDTH / CARD_HEIGHT;
-    // The viewer presses their own cards, so each keeps a strip to press; the opponent's are
-    // not theirs to press, and close up within `data.room`, as the web interface's do.
-    let strip = match side {
-        Side::You => strip * 2.0 / window.height,
-        Side::Opponent => 0.0,
-    };
-    let fan = Fan {
-        data,
-        wide,
-        strip,
-        aspect,
-        // Four points to spare on each side of a strip, so that a square of `strip` fits in it
-        // with room left where the strip's slanted sides meet the square's corners.
-        margin: SPARE * 2.0 / window.height,
-    };
+    let fan = Fan::new(side, data, strip, camera);
+    let (tall, wide, aspect) = (data.height * 2.0, fan.wide, fan.aspect);
     let (rows, spacing) = fan.rows(count);
     let radius = data.fan_radius * wide;
     let bias = data.bias_degrees.to_radians();
@@ -224,14 +226,63 @@ struct Fan {
 }
 
 impl Fan {
+    /// The measures of `side`'s hand, laid out by `data` with the layout's least `strip` in
+    /// logical points, seen through `camera`.
+    fn new(side: Side, data: HandData, strip: f32, camera: &Camera) -> Self {
+        let window = camera.window.size;
+        // Distances on screen are in half the window's height, the vertical unit of normalized
+        // device coordinates, so that a turn on screen is a true turn.
+        let wide = data.height * 2.0 * CARD_WIDTH / CARD_HEIGHT;
+        // The viewer presses their own cards, so each keeps a strip to press; the opponent's
+        // are not theirs to press, and close up within `data.room`, as the web interface's do.
+        let strip = match side {
+            Side::You => strip * 2.0 / window.height,
+            Side::Opponent => 0.0,
+        };
+        Self {
+            data,
+            wide,
+            strip,
+            aspect: window.width / window.height,
+            // Four points to spare on each side of a strip, so that a square of `strip` fits in
+            // it with room left where the strip's slanted sides meet the square's corners.
+            margin: SPARE * 2.0 / window.height,
+        }
+    }
+
+    /// How many cards of a hand of `count` are in view: every card while each keeps its strip
+    /// in rows under `data.ceiling`, and otherwise as many as do, so that every card in view
+    /// can be pressed and the rest scroll into view. A hand with no strip to keep, or no
+    /// ceiling to keep under, shows every card.
+    fn shown(&self, count: usize) -> usize {
+        if self.strip <= 0.0 || !self.data.ceiling.is_finite() {
+            return count;
+        }
+        (2..=count)
+            .rev()
+            .find(|&shown| self.search(shown).is_ok())
+            .unwrap_or(count.min(1))
+    }
+
     /// How many rows a hand of `count` cards is laid in: one while every card keeps its strip
     /// inside the window, and otherwise as few as let each row's cards keep theirs. A row of
     /// cards that cannot all keep a strip would leave some out of reach, so the cards fill a
     /// second row before they close up past their strips. Sixty cards take two rows in every
     /// desktop window. Rows that would rise past `data.ceiling` are not added: the most rows
-    /// under it close up instead.
+    /// under it close up instead, which only the opponent's hand does, since the viewer's shows
+    /// fewer cards (`shown`).
     fn rows(&self, count: usize) -> (usize, f32) {
-        // The most rows that fit under the ceiling, closed up to stay inside the window.
+        match self.search(count) {
+            Ok(fit) => fit,
+            Err(Some(closest)) if self.data.ceiling.is_finite() => closest,
+            Err(_) => (count.max(1), 0.0),
+        }
+    }
+
+    /// The fewest rows, under the ceiling, in which a hand of `count` cards keeps every strip
+    /// inside the window, with their spacing; or, if no count of rows does, the most rows that
+    /// fit under the ceiling, closed up to stay inside the window, if any do.
+    fn search(&self, count: usize) -> Result<(usize, f32), Option<(usize, f32)>> {
         let mut closest = None;
         for rows in 1..count {
             let length = count.div_ceil(rows);
@@ -242,14 +293,11 @@ impl Fan {
                 continue;
             }
             if needed <= widest {
-                return (rows, needed);
+                return Ok((rows, needed));
             }
             closest = Some((rows, widest));
         }
-        match closest {
-            Some(closest) if self.data.ceiling.is_finite() => closest,
-            _ => (count.max(1), 0.0),
-        }
+        Err(closest)
     }
 
     /// Whether `rows` rows of `length` cards `spacing` apart keep the back row's inner edge

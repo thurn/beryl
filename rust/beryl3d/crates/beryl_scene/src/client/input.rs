@@ -14,9 +14,11 @@ use crate::element::{Chord, Dismiss, Press};
 use crate::frame::{ElementId, Place, Role};
 use crate::input::{Button, Input, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
 use crate::layout::{Edit, Navigation};
+use crate::pointer::Hold;
+use crate::pointer::rows::scroller_of;
 use crate::prompts;
 use crate::screens::{Screen, Sheet};
-use crate::table;
+use crate::table::{self, Scroller};
 use crate::widgets::{STEP, level_at};
 
 impl Client {
@@ -193,8 +195,15 @@ impl Client {
                     }
                     if element.role == Role::Card {
                         let slot = element.id.0 as usize;
-                        let holdable = self.holdable(slot, element.place);
-                        (self.show.pointer_mut()).press(slot, pointer.position, holdable);
+                        // A drag sideways on a hand that scrolls scrolls it.
+                        let scrolls = scroller_of(element.place) == Some(Scroller::Hand)
+                            && self.show.table().row_window(Scroller::Hand).scrolls();
+                        let hold = match (self.holdable(slot, element.place), scrolls) {
+                            (false, _) => Hold::Never,
+                            (true, false) => Hold::Drag,
+                            (true, true) => Hold::UpOrDown,
+                        };
+                        (self.show.pointer_mut()).press(slot, pointer.position, hold);
                         if pointer.kind == PointerKind::Touch {
                             self.touch_pressed();
                         }

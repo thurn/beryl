@@ -557,6 +557,7 @@
       "stack": {
         "width": 68,
         "step": 52,
+        "count_room": 32,
         "depth": 400,
         "step_depth": 1.5
       },
