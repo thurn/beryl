@@ -82,15 +82,34 @@ impl<'a> Zones<'a> {
         host_slot(object, |slot| self.get(slot)).and_then(|slot| self.get(slot))
     }
 
-    /// The cards that lie under the permanents among `permanents`, in the order the table lists
-    /// them.
+    /// The cards that lie under the permanents among `permanents`: first the cards held in
+    /// exile or merged, in the order the table lists them, then the attached permanents in
+    /// battlefield order, as `all_members` lists them and the web interface tucks attachments
+    /// (`attachments` in `ui/src/game/zoneViews.ts`). Slot order is not battlefield order: an
+    /// Aura cast onto a creature after an Equipment was attached to it can have the lower slot.
     pub(super) fn under(&self, permanents: &[&ObjectView]) -> Vec<&'a ObjectView> {
-        self.possible_tucks()
+        let mut under: Vec<&'a ObjectView> = self
+            .possible_tucks()
             .filter(|object| {
                 self.host(object)
                     .is_some_and(|host| permanents.iter().any(|p| p.slot == host.slot))
             })
-            .collect()
+            .collect();
+        let attached = under
+            .iter()
+            .filter(|object| object.zone == ZoneName::Battlefield)
+            .count();
+        if attached > 1 {
+            // Stable, so the held cards keep their order before the attached ones.
+            under.sort_by_key(|object| {
+                (object.zone == ZoneName::Battlefield).then(|| {
+                    self.battlefield
+                        .iter()
+                        .position(|&slot| slot == object.slot)
+                })
+            });
+        }
+        under
     }
 
     /// The objects that name the permanent in `slot` as one they could lie under (`host_slot`),
