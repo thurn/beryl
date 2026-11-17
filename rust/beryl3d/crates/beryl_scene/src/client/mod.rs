@@ -427,8 +427,7 @@ impl Client {
         self.own(table_now);
         self.set_aims(self.table_open());
         self.table_frame(table_now);
-        let covers = self.table_open()
-            && (self.prompt.as_ref()).is_some_and(|(_, prompt)| prompts::covers_table(prompt));
+        let covers = self.prompt_covers_table();
         self.show.cover_table(covers);
         let targets = self.targets(self.table_open());
         let transitioning = self.tick_layer(now);
@@ -439,6 +438,7 @@ impl Client {
         let visible = self.hud_shown();
         // The guided start's opening covers the table's life totals and pile counts, not notices.
         let counted = visible && !self.guided_start();
+        let rows_counted = self.rows_counted(visible, covers);
         let mut builder = FrameBuilder::new(&mut self.frame, self.tier);
         // The flat layer is placed for the table's camera, so the frame takes it even when no
         // game view writes the table, as on the start screen (the "layer drawn" check).
@@ -459,7 +459,7 @@ impl Client {
             self.window.size,
             (counted && !self.viewing.opening, targets),
         );
-        (self.piles).write(&mut self.layer, self.show.table(), counted);
+        (self.piles).write(&mut self.layer, self.show.table(), counted && !covers);
         (self.notices).write(
             &mut self.layer,
             self.show.notices(),
@@ -467,7 +467,7 @@ impl Client {
             (self.show.table().layout(), self.window.size),
             visible,
         );
-        (self.row_counts).write(&mut self.layer, self.show.table(), visible);
+        (self.row_counts).write(&mut self.layer, self.show.table(), rows_counted);
         let at_rest = self.show.shown().map(|update| &update.view);
         (self.banner).write(&mut self.layer, at_rest, table_now, self.window, visible);
         let (layout_nodes, text_runs) = self.layer.take_work();

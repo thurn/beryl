@@ -67,10 +67,24 @@ pub fn game_phone(input: &ScreenIn) -> Element {
         .prompt
         .and_then(|prompt| prompts::screen(prompt, input))
         .or_else(|| prompts::waiting(input));
-    let furniture = input.view.filter(|_| !opening).map(|view| {
+    let middle = input
+        .view
+        .filter(|_| !opening)
+        .map(|view| phone::middle(view, input.settings.full_control, &bands));
+    // A prompt that lists what it asks about over the table, such as a catalog's entries, may
+    // reach into the middle band. The middle band's furniture then lies under the prompt's shade
+    // with the table, so that it is not drawn over the list's buttons, as the web's middle band
+    // lies under its `.stage-tray`.
+    let covers = input.prompt.is_some_and(prompts::covers_table);
+    let (middle_under, middle_over) = if covers {
+        (middle, None)
+    } else {
+        (None, middle)
+    };
+    let furniture = input.view.filter(|_| !opening).map(|_| {
         [
             players::players(input),
-            Some(phone::middle(view, input.settings.full_control, &bands)),
+            middle_over,
             // A sheet drawn over the screen, the bug report, has its own controls there.
             input.sheet.is_none().then(|| phone::menu(&bands)),
         ]
@@ -81,6 +95,7 @@ pub fn game_phone(input: &ScreenIn) -> Element {
         .name("game")
         .children(opening::opening(input))
         .children(game_over::scrim(input))
+        .children(middle_under)
         .children(prompt)
         .children(furniture.into_iter().flatten().flatten())
         .children(

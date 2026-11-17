@@ -243,4 +243,22 @@ impl Client {
     pub(super) fn viewer_shows(&self, slot: ObjectId) -> bool {
         (self.viewing.boxes.iter()).any(|(shown, ..)| *shown == slot)
     }
+
+    /// Whether the open prompt lists what it asks about over the table on a shade of its own
+    /// (`prompts::covers_table`). The table then takes no press, and the piles' and the rows'
+    /// counts, which would stand over its list and its pill, are hidden under the shade, as the
+    /// web's `.stage-tray` covers them.
+    pub(super) fn prompt_covers_table(&self) -> bool {
+        self.table_open()
+            && (self.prompt.as_ref())
+                .is_some_and(|(_, prompt)| crate::prompts::covers_table(prompt))
+    }
+
+    /// Whether the rows' counts are shown, given whether the hud is `visible` and the table
+    /// `covered` by a prompt: not under a prompt's shade (`prompt_covers_table`), nor while a
+    /// manual table is frozen, whose banner and Lobby stand over the opponent's rows, which
+    /// take no scroll until it thaws.
+    pub(super) fn rows_counted(&self, visible: bool, covered: bool) -> bool {
+        visible && !covered && !self.table_frozen()
+    }
 }
