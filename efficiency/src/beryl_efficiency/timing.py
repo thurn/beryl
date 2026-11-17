@@ -14,6 +14,7 @@ in this order wins:
   parts by the share its `Finished` lines name. An Enact command's seconds waiting for
   Enact's ownership lock and syncing beads under it are the kinds `enact lock wait` and
   `enact sync` (`locks.py` joins each line of Enact's lock-wait log to the call that ran it).
+  A push's wait for the ticket server's staging lease counts as `enact lease wait`.
 - `model`: the model is generating. This is every second no other category claims.
 - `background`: the session ended its turn and the next prompt reports that a background
   command or another session finished, by the kind of that command (`session` for another
@@ -56,6 +57,7 @@ VERSION = 2
 TOOL_STOP = "tool_use"
 # The kinds an Enact command's lock waits and syncs move to.
 LOCK_WAIT = "enact lock wait"
+LEASE_WAIT = "enact lease wait"
 SYNC = "enact sync"
 
 Key = tuple[str, str, str]  # category, kind, part
@@ -76,6 +78,7 @@ class Span:
     queued_seconds: float = 0.0
     lock_seconds: float = 0.0
     sync_seconds: float = 0.0
+    lease_seconds: float = 0.0
 
 
 def seconds(value: str) -> float:
@@ -107,10 +110,11 @@ def spans_of(
         key,
     ):
         waits[str(call)].append((seconds(str(wait_start)), seconds(str(wait_end))))
-    locked: dict[str, tuple[float, float]] = {
-        str(r[0]): (float(r[1]), float(r[2]))
-        for r in db.execute(
-            "SELECT call, sum(waited_seconds), sum(sync_seconds) FROM lock_waits "
+    locked: dict[str, tuple[float, float, float]] = {
+        str(call): (float(ownership), float(sync), float(staging))
+        for call, ownership, sync, staging in db.execute(
+            "SELECT call, sum(waited_seconds * (1 - staging_lease)), sum(sync_seconds), "
+            "sum(waited_seconds * staging_lease) FROM lock_waits "
             "WHERE host = ? AND provider = ? AND transcript = ? AND call != '' "
             "GROUP BY call",
             key,
@@ -132,7 +136,7 @@ def spans_of(
                 str(call),
                 float(compiled) if str(kind) in heavy else 0.0,
                 covered(waits.get(str(call), []), low, high),
-                *locked.get(str(call), (0.0, 0.0)),
+                *locked.get(str(call), (0.0, 0.0, 0.0)),
             )
         )
     # Every record before a prompt, as (time, ends a turn).
@@ -251,6 +255,7 @@ def split(spans: list[Span], start: float, end: float) -> dict[Key, float]:
             (("queued", span.kind, ""), span.queued_seconds),
             (("tool", LOCK_WAIT, ""), span.lock_seconds),
             (("tool", SYNC, ""), span.sync_seconds),
+            (("tool", LEASE_WAIT, ""), span.lease_seconds),
         ):
             fraction = min(part_seconds / length, left)
             left -= fraction

@@ -395,7 +395,10 @@ could apply, the first in this list wins.
   ownership lock and syncing beads under it are the kinds `enact lock wait` and
   `enact sync`, taken from its kind in proportion: each line of the lock-wait
   log is joined to the top-level tool call that ran its command and was running
-  for the whole of its wait and hold, preferring one that names its bead.
+  for the whole of its wait and hold, preferring one that names its bead. When
+  the ticket server queues a push for the staging lease, its local log records
+  the wait against the push's ticket. Those seconds move from `enact push` to
+  `enact lease wait`.
 - **Model**: the model is generating, from a tool result or a message to the
   next assistant message. This applies whether or not a background command is
   also running.
@@ -1089,8 +1092,8 @@ run log, the CPU sampler and git, which are the machine's own.
 - **cpu**, **cpu_minutes** and **leases**: the sampler's rows by minute, owner,
   kind and worktree; its rows by minute alone; and one row per CPU lease, joined
   to the tool call that waited for it.
-- **lock_waits**: one row per acquisition of Enact's ownership lock, joined to
-  the tool call that ran the command.
+- **lock_waits**: one row per acquisition of Enact's ownership lock or wait for
+  the server's staging lease, joined to the tool call that ran the command.
 - **codex_marks**: the lines of a Codex log that give a request its model and a
   turn its end.
 - **sources**, **ingests** and **settings**: for each source file, the byte

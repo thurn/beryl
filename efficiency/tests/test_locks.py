@@ -190,6 +190,54 @@ def test_each_line_joins_the_call_that_ran_its_command(root: Path) -> None:
     ]
 
 
+def test_staging_wait_is_charged_once_to_the_integrating_ticket(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    projects = root / "projects" / PROJECT
+    for ticket, transcript, start in (
+        ("by-c.1", "integrator", 0),
+        ("by-c.10", "other-push", 5),
+    ):
+        (
+            Transcript(projects / f"{transcript}.jsonl")
+            .bash(at(11, 0, start), "m1", "start", f"{ENACT} start {ticket}")
+            .result(at(11, 0, start + 1), "start", json.dumps({"bead": ticket}))
+            .bash(at(11, 0, start + 2), "m2", "push", f"{ENACT} push --bead {ticket}")
+            .result(at(11, 1), "push")
+            .save()
+        )
+    state = root / "enact"
+    record = json.dumps(
+        {
+            "time": "2026-11-15T11:00:10.500+00:00",
+            "pid": 401,
+            "bead": "c.1",
+            "outcome": "acquired",
+            "waited_s": 36.0,
+        }
+    )
+    (state / "staging-lease-waits.jsonl").write_text(record + "\n")
+    assert cli.main(["ingest"]) == 0
+    # Re-read the same record under a different path, as log rotation can cause.
+    (state / "staging-lease-waits.1.jsonl").write_text(record + "\n")
+    assert cli.main(["ingest"]) == 0
+    with db() as found:
+        joined = found.execute(
+            "SELECT transcript, call, waited_seconds FROM lock_waits WHERE staging_lease = 1"
+        ).fetchall()
+        waits = found.execute(
+            "SELECT w.bead, t.seconds FROM window_time AS t "
+            "JOIN windows AS w USING (host, provider, transcript, start) "
+            "WHERE t.kind = 'enact lease wait'"
+        ).fetchall()
+    assert joined == [("integrator", "push", 36.0)]
+    assert waits == [("by-c.1", 36.0)]
+    breakdown = query(capsys, "time", "--by", "kind")
+    assert "enact lease wait" in json.dumps(breakdown)
+    assert query(capsys, "enact")["lines"] == 6
+    assert "enact lease wait" in checked(get("/bead/by-c.1?since=all").body.decode())
+
+
 def test_lock_waits_and_syncs_move_out_of_the_call_s_kind(root: Path) -> None:
     with db() as found:
         rows = found.execute(

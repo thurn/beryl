@@ -506,6 +506,10 @@ MIGRATIONS: tuple[str, ...] = (
         ticket TEXT
     );
     """,
+    """
+    -- The ticket-server log measures staging lease waits inside pushes.
+    ALTER TABLE lock_waits ADD COLUMN staging_lease INTEGER NOT NULL DEFAULT 0;
+    """,
 )
 
 

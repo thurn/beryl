@@ -18,6 +18,10 @@ One command can take the lock several times; each line is joined on its own to t
 tool call that ran the command, and `timing.py` moves the joined lines' waited and sync seconds
 out of the call's kind into `enact lock wait` and `enact sync`. Lines from commands other than
 `enact.py`, such as Enact's own unit tests, are not read.
+
+The ticket-server merge queue writes `staging-lease-waits.jsonl` and rotates it in the same
+directory. Each record gives the first busy reply's UTC time, the push's pid and bead,
+the outcome and waited_s. The time split records these seconds as `enact lease wait`.
 """
 
 from __future__ import annotations
@@ -41,6 +45,7 @@ from .scope import Scope
 
 # How a holder's command reads when the wait was too short to look.
 UNSEEN = "(not seen)"
+STAGING_LOG = "staging-lease-waits"
 
 
 def folder(checkout: Path) -> Path:
@@ -108,16 +113,25 @@ class LockLog(LineSource):
         self.host = host
 
     def files(self) -> list[Path]:
-        names = ("lock-waits.1.jsonl", "lock-waits.jsonl")
+        names = [
+            stem + suffix
+            for stem in ("lock-waits", STAGING_LOG)
+            for suffix in (".1.jsonl", ".jsonl")
+        ]
         return [p for p in (self.folder / n for n in names) if p.exists()]
 
     def parse(self, path: Path, line: bytes) -> list[Row]:
         record = json.loads(line)
-        command = str(record["command"])
-        found = words(command)
-        if found is None:
-            return []
-        acquired = str(record["outcome"]) == "acquired"
+        staging = path.name.startswith(STAGING_LOG)
+        if staging:
+            command = "enact.py push"
+            found = ("push", record["bead"])
+        else:
+            command = str(record["command"])
+            found = words(command)
+            if found is None:
+                return []
+        acquired = not staging and str(record["outcome"]) == "acquired"
         holder = record.get("holder")
         return [
             (
@@ -135,6 +149,7 @@ class LockLog(LineSource):
                     "sync_seconds": float(record["sync_s"]) if acquired else 0.0,
                     "syncs": int(record["syncs"]) if acquired else 0,
                     "holder": str(holder) if holder else None,
+                    "staging_lease": int(staging),
                 },
             )
         ]
@@ -158,7 +173,7 @@ def join(db: sqlite3.Connection, host: str) -> set[tuple[str, str]]:
     next ingest, until the store's latest tool call on the host is `GIVE_UP` later. Returns
     the transcripts of the calls joined, as (provider, transcript)."""
     pending = db.execute(
-        "SELECT rowid, time, subcommand, bead, waited_seconds + held_seconds "
+        "SELECT rowid, time, subcommand, bead, waited_seconds + held_seconds, staging_lease "
         "FROM lock_waits WHERE host = ? AND call IS NULL",
         (host,),
     ).fetchall()
@@ -168,9 +183,10 @@ def join(db: sqlite3.Connection, host: str) -> set[tuple[str, str]]:
         "SELECT max(start) FROM tool_calls WHERE host = ?", (host,)
     ).fetchone()[0]
     joined: set[tuple[str, str]] = set()
-    for rowid, time, sub, bead, length in pending:
+    for rowid, time, sub, bead, length, staging in pending:
         start = parse(str(time))
         end = start + timedelta(seconds=float(length))
+        ticket = ticket_ids.stored(db, str(bead)) if bead is not None else None
         found = None
         best = (False, False, "")
         for provider, transcript, call, call_start, command, owner in db.execute(
@@ -189,13 +205,15 @@ def join(db: sqlite3.Connection, host: str) -> set[tuple[str, str]]:
             shown = runs(str(command), str(sub))
             if not shown and len(str(command)) < claude.COMMAND_CHARACTERS:
                 continue
+            call_ticket = (
+                ticket_ids.stored(db, str(owner)) if owner is not None else None
+            )
+            # The batch's other pushes can overlap this wait. Only the integrator waits
+            # for the server lease, and its own ticket is in the log.
+            if staging and ticket != call_ticket:
+                continue
             named = bead is not None and (
-                str(bead) in str(command)
-                or (
-                    owner is not None
-                    and ticket_ids.stored(db, str(bead))
-                    == ticket_ids.stored(db, str(owner))
-                )
+                str(bead) in str(command) or ticket == call_ticket
             )
             rank = (shown, named, str(call_start))
             if found is None or rank > best:
@@ -276,7 +294,7 @@ def held_up(
         f"""SELECT l.holder, c.bead, l.waited_seconds, c.provider FROM lock_waits AS l
         JOIN tool_calls AS c ON c.host = l.host AND c.provider = l.provider
             AND c.transcript = l.transcript AND c.call = l.call
-        WHERE l.call != '' AND l.waited_seconds > 0{clause}""",
+        WHERE l.staging_lease = 0 AND l.call != '' AND l.waited_seconds > 0{clause}""",
         given,
     ):
         if scope.provider and str(provider) != scope.provider:
@@ -311,7 +329,7 @@ def report(db: sqlite3.Connection, facts: Facts, scope: Scope) -> Result:
         FROM lock_waits AS l LEFT JOIN tool_calls AS c ON c.host = l.host
             AND c.provider = l.provider AND c.transcript = l.transcript
             AND c.call = l.call
-        WHERE 1{clause}""",
+        WHERE l.staging_lease = 0{clause}""",
         given,
     ):
         sub, outcome, waited, held, synced, holder, call = row[:7]
@@ -381,7 +399,7 @@ def report(db: sqlite3.Connection, facts: Facts, scope: Scope) -> Result:
         [
             "efficiency time --by kind " + flags,
             "efficiency findings --rule enact-lock-wait " + flags,
-            "efficiency sql 'select * from lock_waits order by time desc limit 20'",
+            "efficiency sql 'select * from lock_waits where staging_lease = 0 order by time desc limit 20'",
         ],
         describe("since", "lock_wait_minutes", "sync_minutes", "lock_lines"),
     )

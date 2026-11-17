@@ -71,7 +71,9 @@ store" and "Isolation" before changing anything here.
   `enact lock wait` and `enact sync`. `locks.report` is the `enact` query: those
   agent minutes, the log's lines by subcommand and the commands seen holding the
   lock; the `enact-lock-wait` finding ranks waits by holder. Lines from commands
-  other than `enact.py` are not read.
+  other than `enact.py` are not read. The ticket-server merge queue writes
+  `staging-lease-waits.jsonl` in the same directory. Its waits join the push for
+  the ticket recorded in the line and count as `enact lease wait`.
 - `cilog.py`: CI's sources. The run log is added up as it is read into one
   `checks` row per check per local day per host and script and one `lane_runs`
   row per run of a check lane (a `LineSource` whose `merges` add each row to the
