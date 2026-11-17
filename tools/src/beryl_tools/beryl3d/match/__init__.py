@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 
 from ..command import Command
-from . import boxes, gaps, motion, pixels, snapshot, styles
+from . import boxes, gaps, motion, pixels, samples, snapshot, styles
 
 SNAPSHOT = Command(
     "snapshot",
@@ -118,9 +118,29 @@ GAPS = Command(
     gaps.gap_arguments,
 )
 
+SAMPLES = Command(
+    "samples",
+    "the conformance suite: single elements with the web's CSS effects, shot in WebKit and "
+    "drawn by Beryl 3D, each scored against its tolerance",
+    (
+        ("just b3d match samples", "every sample, with its score or what Style lacks"),
+        ("just b3d match samples shadow", "the samples whose names start with shadow"),
+    ),
+    samples.run,
+    samples.sample_arguments,
+)
+
 # Each subcommand, in the order `just b3d match --help` lists them. A module adds one by writing
 # its `Command` and adding it here.
-SUBCOMMANDS: tuple[Command, ...] = (SNAPSHOT, BOXES, PIXELS, MOTION, STYLES, GAPS)
+SUBCOMMANDS: tuple[Command, ...] = (
+    SNAPSHOT,
+    BOXES,
+    PIXELS,
+    MOTION,
+    STYLES,
+    GAPS,
+    SAMPLES,
+)
 
 
 def arguments(parser: argparse.ArgumentParser) -> None:

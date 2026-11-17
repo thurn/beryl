@@ -1,7 +1,7 @@
 //! The picture commands of `just b3d` (docs/beryl-3d.md, "The agent interface"): `png` draws one
 //! moment of a recording with the real renderer, offscreen, `film` draws a span of it as a
 //! grid of frames in one picture, and `compare` puts a moment beside the web interface's
-//! screenshot of it. The crate is this one program, with no library, and links no
+//! screenshot of it. `sample` draws the conformance samples of `just b3d match samples`. The crate is this one program, with no library, and links no
 //! engine, so that it rebuilds and relinks fast after an edit (docs/beryl-3d.md,
 //! "Edit-to-output time"). Its tests run the program.
 //!
@@ -13,6 +13,7 @@ mod compare;
 mod film;
 mod font;
 mod pixels;
+mod sample;
 
 use std::fmt::Write;
 use std::io::Write as _;
@@ -48,7 +49,7 @@ struct Command {
     run: fn(&Options) -> Result<String, Error>,
 }
 
-const COMMANDS: [Command; 4] = [
+const COMMANDS: [Command; 5] = [
     Command {
         name: "png",
         summary: "draws one moment of a recording to a PNG file",
@@ -185,6 +186,30 @@ const COMMANDS: [Command; 4] = [
             ),
         ],
         run: pixels::pixels,
+    },
+    Command {
+        name: "sample",
+        summary: "draws the conformance samples of a job and scores each against the web's picture",
+        examples: [
+            (
+                "just b3d match samples",
+                "every sample, shot in WebKit and drawn here",
+            ),
+            (
+                "just b3d match samples shadow",
+                "the samples whose names start with shadow",
+            ),
+        ],
+        spec: Spec {
+            recording: false,
+            values: &["--job"],
+            switches: &[],
+        },
+        own: &[(
+            "--job <json>",
+            "the samples to draw and the web's pictures of them (`just b3d match samples` writes it)",
+        )],
+        run: sample::sample,
     },
 ];
 

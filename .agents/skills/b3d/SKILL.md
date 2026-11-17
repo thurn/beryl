@@ -164,6 +164,15 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   by screen area, with three example elements each, and writes them to
   `gaps.json`. Start a style-vocabulary change from it, and add each shape you
   teach `Style` to `data/beryl3d/match/supported.json`.
+- `just b3d match samples [prefix]` draws each conformance sample (one element
+  with a CSS effect the web uses, from `data/beryl3d/match/samples.json`) in
+  WebKit and in Beryl 3D's renderer and prints, per sample, `pass` or `FAIL`
+  with `p995` (the difference 99.5% of pixels are within; at most 4 passes),
+  the largest and mean difference and a picture of web, Beryl 3D and their
+  difference amplified. A sample `Style` cannot say yet prints `unsupported`
+  with what it lacks and the web's picture. Use it to tune a shadow, gradient,
+  filter or mask without replaying a recording; `--update` records the new
+  values in `data/beryl3d/web-match.json`, which may only go down.
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>` (1600x900 by default),

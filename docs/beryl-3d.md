@@ -4311,9 +4311,18 @@ reference is the web interface as WebKit draws it, at scale 2.
   difference: `just b3d match gaps` groups those values by property and shape
   and ranks the groups by the screen area of the elements that use them, which
   is the order the style vocabulary is taught in.
-- **Effects.** A conformance suite draws single elements with the box shadows,
-  gradients, drop shadows, filters and masks the web interface uses, in WebKit
-  and in Beryl 3D's renderer, and holds each within a small tolerance.
+- **Effects.** `just b3d match samples` is a conformance suite: each sample in
+  `data/beryl3d/match/samples.json` is one element with a box shadow, gradient,
+  drop shadow, filter, mask, border or plain color the web interface uses,
+  centred on a page color. WebKit shoots it at scale 2, and `b3d-render sample`
+  lays it out as a flat-layer element with the `Style` its CSS stands for and
+  draws it with the real renderer. A sample passes when 99.5% of its pixels are
+  within 4 levels in every channel; text glyph pixels are to be masked out
+  (decision M2) once a sample with text can be drawn. A sample using a property
+  `Style` cannot say is recorded as unsupported. `web-match.json`'s `samples`
+  holds each sample's result under the ratchet rule. The suite's first run found
+  that a translucent border was blended over what lay behind the panel, where
+  CSS blends it over the panel's own fill.
 - **Pixels.** What is left after boxes and styles agree is compared as pixels,
   with glyph pixels masked, because glyph antialiasing differs between WebKit
   and parley with swash. `just b3d match pixels <target> --at <moment>` takes

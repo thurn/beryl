@@ -10,7 +10,15 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from beryl_tools.beryl3d.match import boxes, fonts, joined, records, snapshot, target
+from beryl_tools.beryl3d.match import (
+    boxes,
+    fonts,
+    joined,
+    records,
+    samples,
+    snapshot,
+    target,
+)
 
 
 def args(recording: str, *rest: str) -> argparse.Namespace:
@@ -357,3 +365,45 @@ def test_only_finds_the_web_pair_of_the_element_its_locator_names(
     assert index is None and "names 2 Beryl 3D elements" in why
     index, why = snapshot.web_pair(tmp_path, 'text "Alone"')
     assert index is None and "no web element is paired" in why
+
+
+def sample(**style: str) -> dict[str, object]:
+    return {"name": "s", "box": [10, 10], "page": "#000", "style": style}
+
+
+def test_css_colors_read_as_beryl_3d_colors() -> None:
+    assert samples.color("#e4a242") == [228, 162, 66, 255]
+    assert samples.color("#fff") == [255, 255, 255, 255]
+    assert samples.color("rgb(12 10 9 / 70%)") == [12, 10, 9, 178]
+    assert samples.color("rgba(1, 2, 3, 0.5)") == [1, 2, 3, 128]
+    assert samples.color("transparent") == [0, 0, 0, 0]
+
+
+def test_a_sample_lists_what_style_cannot_say_and_draws_what_it_can() -> None:
+    plain = sample(
+        **{
+            "background-color": "#211f1c",
+            "border": "2px solid rgb(214 192 150 / 42%)",
+            "border-radius": "8px",
+            "opacity": "0.5",
+        }
+    )
+    assert samples.lacking(plain) == []
+    assert samples.native_style(plain["style"]) == {  # pyre-ignore[6]
+        "background": [33, 31, 28, 255],
+        "border": [[214, 192, 150, 107], 2.0],
+        "radius": 8.0,
+        "opacity": 0.5,
+    }
+    shadowed = sample(**{"box-shadow": "0 6px 16px #000", "filter": "blur(1px)"})
+    assert samples.lacking(shadowed) == ["box-shadow", "filter"]
+    assert samples.lacking({**sample(), "text": {"string": "Pass"}}) == ["text"]
+
+
+def test_the_ratchet_lets_a_sample_improve_or_become_supported_but_not_worsen() -> None:
+    assert samples.judge(3, 3).kind == "same"
+    assert samples.judge(2, 3).kind == "lower"
+    assert samples.judge(2, "unsupported").kind == "lower"
+    assert samples.judge(4, 3).kind == "raise"
+    assert samples.judge("unsupported", 0).kind == "raise"
+    assert samples.judge(0, None).kind == "add"

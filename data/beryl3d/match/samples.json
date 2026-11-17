@@ -1,0 +1,399 @@
+{
+ "about": "The conformance samples of `just b3d match samples` (tools/src/beryl_tools/beryl3d/match/samples.py): each is one element of `box` points with the CSS `style` (and an optional run of `text`), centred on the `page` color, shot in WebKit and drawn by Beryl 3D's renderer. The values are those ui/src's CSS uses.",
+ "samples": [
+  {
+   "name": "plain-surface",
+   "about": "the panel color (--surface) on the table color",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#211f1c"
+   }
+  },
+  {
+   "name": "plain-raised",
+   "about": "--surface-raised on the table color",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#2e2c29"
+   }
+  },
+  {
+   "name": "plain-translucent",
+   "about": "a translucent dark panel, as the opening's scrim",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "rgb(12 10 9 / 70%)"
+   }
+  },
+  {
+   "name": "plain-gold",
+   "about": "the gold accent, on the panel color",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#211f1c",
+   "style": {
+    "background-color": "#e4a242"
+   }
+  },
+  {
+   "name": "border-square",
+   "about": "a 2px gold border on a square panel",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#1b1a18",
+    "border": "2px solid #e4a242"
+   }
+  },
+  {
+   "name": "border-radius-8",
+   "about": "the metal rim on an 8px radius, as a panel's",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#211f1c",
+    "border": "2px solid rgb(214 192 150 / 42%)",
+    "border-radius": "8px"
+   }
+  },
+  {
+   "name": "border-radius-24",
+   "about": "a 1px gold rim on a 24px radius",
+   "box": [
+    250,
+    48
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#2e2c29",
+    "border": "1px solid #e4a242",
+    "border-radius": "24px"
+   }
+  },
+  {
+   "name": "radius-24",
+   "about": "a pill without a border, as a button's",
+   "box": [
+    250,
+    48
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#211f1c",
+    "border-radius": "24px"
+   }
+  },
+  {
+   "name": "opacity-panel",
+   "about": "a gold panel at half opacity",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#e4a242",
+    "opacity": "0.5"
+   }
+  },
+  {
+   "name": "shadow-outer-r0",
+   "about": "an outer shadow on a square panel (0 6px 16px)",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#211f1c",
+    "box-shadow": "0 6px 16px rgb(0 0 0 / 50%)"
+   }
+  },
+  {
+   "name": "shadow-outer-r8",
+   "about": "an outer shadow on an 8px radius (0 8px 24px), the lifted panel's",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#211f1c",
+    "border-radius": "8px",
+    "box-shadow": "0 8px 24px rgb(0 0 0 / 55%)"
+   }
+  },
+  {
+   "name": "shadow-outer-r24",
+   "about": "an outer shadow on a pill",
+   "box": [
+    250,
+    48
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#211f1c",
+    "border-radius": "24px",
+    "box-shadow": "0 6px 16px rgb(0 0 0 / 50%)"
+   }
+  },
+  {
+   "name": "shadow-spread",
+   "about": "a 3px spread ring and a glow, as a chosen target's",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#211f1c",
+    "border-radius": "8px",
+    "box-shadow": "0 0 0 3px #e4a242, 0 0 26px rgb(233 173 74 / 55%)"
+   }
+  },
+  {
+   "name": "shadow-layers",
+   "about": "a ring and a drop shadow, two layers",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#211f1c",
+    "border-radius": "8px",
+    "box-shadow": "0 0 0 2px #e4a242, 0 18px 30px rgb(0 0 0 / 60%)"
+   }
+  },
+  {
+   "name": "shadow-inset",
+   "about": "an inset glow",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#211f1c",
+    "border-radius": "8px",
+    "box-shadow": "inset 0 0 20px rgb(233 173 74 / 35%)"
+   }
+  },
+  {
+   "name": "shadow-inset-ring",
+   "about": "an inset 1px ring, the menu's",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#211f1c",
+    "border-radius": "8px",
+    "box-shadow": "inset 0 0 0 1px rgb(214 192 150 / 30%)"
+   }
+  },
+  {
+   "name": "gradient-linear-2",
+   "about": "a two-stop vertical gradient, the stone button's",
+   "box": [
+    250,
+    48
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-image": "linear-gradient(180deg, #3a3631, #1c1a17)",
+    "border-radius": "24px"
+   }
+  },
+  {
+   "name": "gradient-linear-3",
+   "about": "a three-stop gold gradient with stop positions",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-image": "linear-gradient(180deg, #fbe2ab 15%, #e2a75a 60%, #a8692a)"
+   }
+  },
+  {
+   "name": "gradient-linear-90",
+   "about": "a horizontal gradient from transparent",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#211f1c",
+   "style": {
+    "background-image": "linear-gradient(90deg, transparent, #f7b95d 70%, #ffe0a0)"
+   }
+  },
+  {
+   "name": "gradient-linear-45",
+   "about": "a hard-stop gradient at 45 degrees",
+   "box": [
+    80,
+    80
+   ],
+   "page": "#211f1c",
+   "style": {
+    "background-image": "linear-gradient(45deg, transparent 50%, #e4a242 50%)"
+   }
+  },
+  {
+   "name": "gradient-radial-ellipse",
+   "about": "an elliptical radial gradient off centre, the table's",
+   "box": [
+    300,
+    160
+   ],
+   "page": "#211f1c",
+   "style": {
+    "background-image": "radial-gradient(ellipse at 50% 75%, #67584f, #594c44 60%, #51453f)"
+   }
+  },
+  {
+   "name": "gradient-radial-circle",
+   "about": "a circular glow fading to transparent",
+   "box": [
+    120,
+    120
+   ],
+   "page": "#211f1c",
+   "style": {
+    "background-image": "radial-gradient(circle, rgb(255 236 190 / 85%), rgb(255 150 80 / 0%) 72%)"
+   }
+  },
+  {
+   "name": "opacity-gradient",
+   "about": "a gradient at 60% opacity",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-image": "linear-gradient(180deg, #fbf0d8, #dcc49a)",
+    "opacity": "0.6"
+   }
+  },
+  {
+   "name": "drop-shadow-text",
+   "about": "a drop shadow on a run of text, a label's",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "filter": "drop-shadow(0 1px 1px rgb(0 0 0 / 70%))"
+   },
+   "text": {
+    "string": "Pass",
+    "color": "#fbf0d8",
+    "font-size": "24px"
+   }
+  },
+  {
+   "name": "drop-shadow-icon",
+   "about": "a three-layer glow on an icon",
+   "box": [
+    48,
+    48
+   ],
+   "page": "#211f1c",
+   "style": {
+    "background-image": "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l3 7h7l-5.5 4.5 2 7.5-6.5-4.5-6.5 4.5 2-7.5L2 9h7z' fill='%23fbf0d8'/%3E%3C/svg%3E\")",
+    "filter": "drop-shadow(0 0 1.5px rgb(255 170 50)) drop-shadow(0 0 3px rgb(255 130 20)) drop-shadow(0 0 5px rgb(230 100 10 / 65%))"
+   }
+  },
+  {
+   "name": "brightness",
+   "about": "a hovered button's brightness(1.1)",
+   "box": [
+    250,
+    48
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#2e2c29",
+    "border-radius": "24px",
+    "filter": "brightness(1.1)"
+   }
+  },
+  {
+   "name": "grayscale",
+   "about": "grayscale(0.85) brightness(0.55) on a gold gradient",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-image": "linear-gradient(180deg, #fbe2ab 15%, #e2a75a 60%, #a8692a)",
+    "filter": "grayscale(0.85) brightness(0.55)"
+   }
+  },
+  {
+   "name": "blur",
+   "about": "blur(2.5px) brightness(0.68) saturate(0.85) on a gradient",
+   "box": [
+    200,
+    80
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-image": "linear-gradient(180deg, #fbe2ab 15%, #e2a75a 60%, #a8692a)",
+    "filter": "blur(2.5px) brightness(0.68) saturate(0.85)"
+   }
+  },
+  {
+   "name": "mask-horizontal",
+   "about": "a mask fading both ends, the banner's",
+   "box": [
+    300,
+    48
+   ],
+   "page": "#211f1c",
+   "style": {
+    "background-color": "#e4a242",
+    "mask-image": "linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent)"
+   }
+  },
+  {
+   "name": "mask-bottom",
+   "about": "a mask fading in over the top 40px, a scroller's",
+   "box": [
+    200,
+    120
+   ],
+   "page": "#211f1c",
+   "style": {
+    "background-color": "#e4a242",
+    "mask-image": "linear-gradient(to bottom, transparent, #000 40px)"
+   }
+  }
+ ]
+}

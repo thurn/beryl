@@ -152,6 +152,16 @@ through the client with no window or GPU (the `b3d` skill has the details):
   using it, with three examples each. It writes the snapshot's `gaps.json`, or
   `$BERYL_CACHE/b3d/match/gaps.json` with `--all`. A change that teaches `Style`
   a new shape adds it to `data/beryl3d/match/supported.json` in the same commit.
+- `just b3d match samples [prefix]` is the conformance suite for CSS effects:
+  each sample of `data/beryl3d/match/samples.json` is one element with the web
+  interface's CSS (shadows, gradients, drop shadows, filters, masks, borders,
+  plain panels), shot in WebKit at scale 2 and drawn by `b3d-render sample`
+  through the flat layer and the real renderer. It prints each sample's `p995`
+  (the difference in levels that 99.5% of pixels are within), its largest and
+  mean difference and a picture of web, Beryl 3D and the difference amplified; a
+  sample passes at a `p995` of 4 or less. A sample whose CSS `Style` cannot say
+  yet is `unsupported`, with what it lacks and the web's picture.
+  `data/beryl3d/web-match.json` holds the results; `--update` lowers them.
 
 These tools lay the frame out at scale 1 unless `--scale` gives another, while
 the desktop app on a Retina Mac runs at scale 2, so a picture of a look you
@@ -247,6 +257,18 @@ project, and selects the main lanes.
   `just b3d match snapshot` gives the web's element records. The first selector
   an element matches wins; an element matching none takes its ARIA role, then
   its tag's.
+
+- `data/beryl3d/match/samples.json`: the conformance samples of
+  `just b3d match samples`, each `{"name", "about", "box", "page", "style"}`
+  with an optional `text`, written with the values `ui/src`'s CSS uses. Adding a
+  sample is adding an entry; `--update` then records it.
+
+- `data/beryl3d/web-match.json`:
+  `{"targets": {...}, "samples": {"<sample>": p995 | "unsupported"}}`, the
+  ratchet of the match tools. A sample's value may only go down, and a supported
+  sample never becomes unsupported: `just b3d match samples --update` lowers and
+  adds entries, and raises one only with `--raise`, whose commit says why in its
+  body.
 
 - `data/beryl3d/screens.json`: Beryl 3D's screens, each with the recording, the
   moment (`at`) and the tree line (`shows`) that show it once it is `built`, and

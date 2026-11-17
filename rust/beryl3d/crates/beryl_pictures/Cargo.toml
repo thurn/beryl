@@ -26,8 +26,8 @@ beryl_inspect = { path = "../beryl_inspect" }
 beryl_scene = { path = "../beryl_scene", features = ["driver"] }
 # The point `pixels` asks Beryl 3D's hit test about, a type `beryl_scene` takes.
 glam = "0.34.3"
-# Reads a `just b3d match` snapshot's element records and pairs (`pixels`), which `beryl_inspect`
-# writes with the same crate, in place of a parser of our own.
+# Reads a `just b3d match` snapshot's element records and pairs (`pixels`) and `sample`'s job
+# file, which `beryl_inspect` writes with the same crate, in place of a parser of our own.
 serde_json = "1.0.154"
 
 [dev-dependencies]
