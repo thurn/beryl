@@ -372,7 +372,7 @@ class Beads:
 
     def add_comment(self, issue: str, comment: str) -> tuple[int, str]:
         return self.tracker(
-            lambda tk: tickets.invoke(tk, "comment", issue, "--", comment),
+            lambda tk: tickets.invoke(tk, "comments", "add", issue, "--", comment),
             "comments",
             "add",
             issue,
@@ -491,7 +491,7 @@ class Beads:
                 request_key=bead_id(check),
             )
             known[check] = issue
-        tickets.invoke(tk, "comment", issue, "--", json.dumps(entry))
+        tickets.invoke(tk, "comments", "add", issue, "--", json.dumps(entry))
 
     def record(self, check: str, lane: str, entry: Entry) -> bool:
         try:
