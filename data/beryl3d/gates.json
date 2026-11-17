@@ -222,11 +222,11 @@
     },
     "card_lit": {
       "samples": 5,
-      "expressions": 282
+      "expressions": 280
     },
     "table_lit": {
       "samples": 5,
-      "expressions": 225
+      "expressions": 224
     },
     "particle": {
       "samples": 5,

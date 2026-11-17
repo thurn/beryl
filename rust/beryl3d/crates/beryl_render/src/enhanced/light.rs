@@ -1,6 +1,7 @@
 //! The Enhanced tier's lights (docs/beryl-3d.md, "The Enhanced tier": "Per-pixel lighting"),
 //! which `shade_card_lit` and `shade_table_lit` in `light.wgsl` shade with: an ambient term,
-//! the key light, which casts the shadow map's shadows, a soft fill from the side opposite the
+//! the key light, which casts the shadow map's shadows and shines from `shadow::key_direction`,
+//! so that the lit side of a card and its shadow agree, a soft fill from the side opposite the
 //! key, and a faint sheen. Their strengths are `enhanced.light` in `data/beryl3d/space.json`.
 //!
 //! The ambient term is not stored there but computed, so that it cannot drift from the rule it
@@ -8,9 +9,11 @@
 //! color, `ambient + key * up·key_direction + fill * up·fill_direction == 1`. The fill reaches a
 //! flat card as well as the key does, so it is part of the rule.
 
-use beryl_scene::data::space::{enhanced::light, shadow};
+use beryl_scene::data::space::enhanced::light;
 use beryl_scene::frame::Frame;
 use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
+
+use super::shadow::key_direction;
 
 /// The lights a frame is shaded with, in the table's space, where z is height. Each light's
 /// strength is folded into its direction's length, which leaves the w components free for the
@@ -34,15 +37,6 @@ pub(crate) fn lighting(frame: &Frame) -> Lighting {
         eye: eye(frame).extend(light::SHEEN),
         fill: (fill * light::FILL).extend(light::SHEEN_POWER),
     }
-}
-
-/// The unit direction toward the key light: the direction along which the Baseline tier's
-/// contact shadows fall (`shadow.light` in `data/beryl3d/space.json`, which `cast` in
-/// `beryl_scene`'s `table/shadows.rs` applies), reversed, so that the lit side of a card and its
-/// shadow agree. A shadow falls `(light.x, -light.y)` millimetres across the table for each
-/// millimetre of height, so the light is up and the other way.
-fn key_direction() -> Vec3 {
-    Vec3::new(-shadow::LIGHT.x, shadow::LIGHT.y, 1.0).normalize()
 }
 
 /// The unit direction toward the fill light: from the side of the table opposite the key,

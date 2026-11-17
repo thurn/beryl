@@ -6,7 +6,8 @@
 //! negated, so 20 mm up puts it 2.8 mm right of and 10 mm below the card's centre.
 
 use beryl_render::{BACK_LAYER, ENHANCED_SHADER, Limits, Renderer};
-use beryl_scene::data::space::{enhanced::shadow as data, shadow as baseline};
+use beryl_scene::data::space::enhanced::{light, shadow as data};
+use beryl_scene::data::space::shadow as baseline;
 use beryl_scene::frame::{Band, Draw};
 use beryl_scene::input::{FaceSize, Tier};
 use glam::{Affine3A, Quat, Vec2, Vec3};
@@ -114,8 +115,9 @@ fn a_lifted_card_shadows_the_card_below_it() {
 }
 
 /// A card lying on the table casts onto nothing it can see but its own face, which the depth
-/// biases keep it from shadowing. The frame drawn with no shadow at all is the Baseline tier's:
-/// the Enhanced lighting draws a card lying flat and unshadowed within 3/255 of it.
+/// biases keep it from shadowing: no pixel of its face is darker than in the Baseline tier. The
+/// Enhanced lighting draws a card lying flat and unshadowed in its Baseline color but for the
+/// sheen, which may add up to its strength in white.
 #[test]
 fn a_card_lying_flat_does_not_shadow_its_own_face() {
     let mut renderer = enhanced();
@@ -123,10 +125,14 @@ fn a_card_lying_flat_does_not_shadow_its_own_face() {
     let records = [lying, table()];
     let enhanced = draw(&mut renderer, Tier::Enhanced, &records);
     let baseline = draw(&mut renderer, Tier::Baseline, &records);
+    let most_sheen = (light::SHEEN * 255.0).ceil() as i16 + 3;
     for (x, y) in [(0.0, 0.0), (-20.0, 30.0), (20.0, -30.0), (25.0, 35.0)] {
         let (found, expected) = (enhanced.overhead(x, y), baseline.overhead(x, y));
         assert!(
-            found.iter().zip(expected).all(|(&a, b)| a.abs_diff(b) <= 3),
+            found
+                .iter()
+                .zip(expected)
+                .all(|(&a, b)| (-3..=most_sheen).contains(&(i16::from(a) - i16::from(b)))),
             "the card's face at ({x}, {y}) is {found:?} in Enhanced and {expected:?} in Baseline"
         );
     }
