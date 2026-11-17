@@ -4249,7 +4249,8 @@ launch tests  macOS pass, Windows, iOS and Android not required
   and its timelines agreeing with the web interface's. **A verb, effect, mark or
   prompt shape is done** when the recording named for it is done:
   `data/beryl3d/parity.json` names one recording for each verb, effect and mark
-  of `data/ui-conventions.json`.
+  of `data/ui-conventions.json`, and a test fails when the recording named for a
+  verb or effect does not play it.
 - **A tool is done** when a job that a skill or a `just` command does for the
   web interface can be done for Beryl 3D. The jobs are listed by hand in
   `data/beryl3d/parity.json`, beside a map from every skill to its job (or to
@@ -4261,8 +4262,8 @@ launch tests  macOS pass, Windows, iOS and Android not required
 - **A UI Conventions entry is done** when `data/beryl3d/conventions/<kind>.json`
   (one file per section kind of `data/ui-conventions.json`, which Beryl 3D does
   not edit) names a recording, a moment and a tree line that show Beryl 3D
-  following it. An entry it cannot follow without a new numbered exception is
-  recorded as open, with the reason, for the owner.
+  following it, and that recording is done. An entry it cannot follow without a
+  new numbered exception is recorded as open, with the reason, for the owner.
 - **A launch test** (only macOS's is required in this epic; Windows, iOS and
   Android are not tested) starts the app on one platform with no window shown
   and passes when the app draws a frame.
@@ -4274,11 +4275,12 @@ launch tests  macOS pass, Windows, iOS and Android not required
   game over, settings, the bug report, the card gallery, the testing screen and
   each of the manual table's screens. Each screen marked built names a moment of
   its recording (`at`) and a line of the tree printout there (`shows`), and a
-  test fails when the recording does not show it. `parity.json` maps every
-  screen file of the web interface to a screen of that list, or to `missing`.
+  test fails when the recording does not show it. A built screen counts once its
+  recording is done. `parity.json` maps every screen file of the web interface
+  to a screen of that list, or to `missing`.
 - **New web interface work adds to the list** automatically where it adds a
-  fixture or a spec. A new web screen file or skill makes the sweep's
-  `parity-list` step fail until `parity.json` maps it.
+  fixture or a spec. Adding a web screen file or a skill makes a sweep due, and
+  its `parity-list` step fails until `parity.json` maps the new file or skill.
 
 ### The switch
 
