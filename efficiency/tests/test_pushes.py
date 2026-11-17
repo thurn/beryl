@@ -25,7 +25,7 @@ from tests.test_ci import check_bead, line, verdict
 HOST = "jarvis"
 ENACT = "python3 ~/enact/scripts/enact.py"
 
-pytestmark = pytest.mark.usefixtures("utc_days")
+pytestmark: pytest.MarkDecorator = pytest.mark.usefixtures("utc_days")
 
 
 def at(hour: int, minute: int, second: int = 0) -> str:

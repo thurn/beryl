@@ -20,7 +20,7 @@ HOST = "jarvis"
 PROVIDER = "claude"
 WEEK = Scope(Range("2026-11-08T00:00:00", "2026-11-15T00:00:00", "7d"))
 
-pytestmark = pytest.mark.usefixtures("utc_days")
+pytestmark: pytest.MarkDecorator = pytest.mark.usefixtures("utc_days")
 
 
 def at(day: int, hour: int, minute: int = 0, second: int = 0) -> str:

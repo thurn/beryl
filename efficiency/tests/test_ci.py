@@ -18,7 +18,7 @@ from tests.synthetic import listing
 HOST = "jarvis"
 CORES = 8
 
-pytestmark = pytest.mark.usefixtures("utc_days")
+pytestmark: pytest.MarkDecorator = pytest.mark.usefixtures("utc_days")
 
 
 def line(
