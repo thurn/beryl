@@ -353,9 +353,14 @@ impl Table {
                 self.fights.forget(slot);
                 continue;
             }
+            // A card its step's own act holds still for a moment is drawn as one at rest, but
+            // reads as moving, mid-verb (`Track::paused`).
+            let paused = motion.is_some_and(|motion| {
+                (motion.tracks.get(slot)).is_some_and(|track| track.paused(motion.t))
+            });
             self.write_card(
                 slot,
-                (&object, drawn, under_way),
+                (&object, drawn, (under_way, paused)),
                 (view, faces),
                 (back, dress, self.handed_waiting(motion)),
                 builder,
@@ -464,13 +469,13 @@ impl Table {
     }
 
     /// Writes the resolved element and the draw record of the card in `slot`: `object` as
-    /// `view` shows it, moving if `under_way`. Its face comes from `faces`, its back from layer
+    /// `view` shows it, moving if `under_way`, and marked moving too if `paused`. Its face comes from `faces`, its back from layer
     /// `back`, and how it looks is changed by `dress`. `shown_view` is the view the table shows
     /// before the script, whose face a `cover` shows until half way; `waiting` is `pressable`'s.
     fn write_card(
         &self,
         slot: usize,
-        (object, view, under_way): (&SceneObject, &PlayerView, bool),
+        (object, view, (under_way, paused)): (&SceneObject, &PlayerView, (bool, bool)),
         (shown_view, faces): (&PlayerView, &Faces),
         (back, dress, waiting): (u16, &Dress<'_>, bool),
         builder: &mut FrameBuilder,
@@ -494,7 +499,7 @@ impl Table {
         if object.pose.turn > 0.5 {
             state |= StateBits::FACE_DOWN;
         }
-        if under_way {
+        if under_way || paused {
             state |= StateBits::MOVING;
         }
         state |= u16::from(shown.phased_out) * StateBits::PHASED_OUT;

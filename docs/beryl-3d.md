@@ -2925,7 +2925,10 @@ screen, so they cover every card spec that is ever generated.
   flat-layer element (its box cut to its clip, so a list row scrolled partly out
   of view is pressed where it shows) returns that element or one inside it.
   Every interactive card at rest has an uncovered area of at least 24 by 24
-  points (44 by 44 on the phone layout) where a hit test returns it.
+  points (44 by 44 on the phone layout) where a hit test returns it. The check
+  judges cards only in frames where no card is moving, and a card that its
+  step's own verb holds still between two of its moves (a strike's creature
+  where its blow lands) counts as moving (`Track::paused`).
 - **No duplicates.** No two elements share an id, a game object has exactly one
   scene object, and no two sibling elements of the flat layer share a role and a
   name. Arrows are left out of that last rule, since two arrows of one kind from

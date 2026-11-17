@@ -11,7 +11,7 @@ use beryl_scene::beat::{Laid, Opens, beat};
 use beryl_scene::motion::{Full, SEGMENTS, Track, pose_at};
 use beryl_scene::pose::{Curve, Pose, Segment};
 use beryl_scene::testing::object;
-use beryl_scene::verbs::Interval;
+use beryl_scene::verbs::{Follows, Interval, StepTime};
 use glam::{Quat, Vec3};
 
 const MS: u64 = 1_000_000;
@@ -113,6 +113,32 @@ fn a_track_keeps_its_segments_in_start_order() {
     }
     let starts: Vec<u64> = track.segments().iter().map(|s| s.start / MS).collect();
     assert_eq!(starts, [100, 100, 200, 300]);
+}
+
+/// A step's own act that holds its card still between two of its moves, as a strike holds its
+/// creature where the blow lands, pauses the card there: the checks that judge only cards at
+/// rest skip it. A pause between two steps, or after a step's last move, does not.
+#[test]
+fn a_card_held_within_its_steps_act_is_paused() {
+    let of = |number, mut segment: Segment| {
+        segment.step = Some(StepTime {
+            number,
+            follows: Follows::Start,
+        });
+        segment
+    };
+    let mut track = Track::default();
+    for segment in [
+        of(1, segment(0, 100 * MS, at(0.0), at(1.0))),
+        of(1, segment(200 * MS, 100 * MS, at(1.0), at(2.0))),
+        of(2, segment(500 * MS, 100 * MS, at(2.0), at(3.0))),
+    ] {
+        track.push(segment, 0).unwrap();
+    }
+    assert!(track.paused(150 * MS), "held between two moves of step 1");
+    assert!(!track.moving(150 * MS), "nothing moves it at 150 ms");
+    assert!(!track.paused(400 * MS), "between step 1 and step 2");
+    assert!(!track.paused(700 * MS), "after the last move");
 }
 
 /// A full track drops only segments that have ended, keeping the latest of them, which still

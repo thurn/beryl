@@ -564,6 +564,26 @@ impl Track {
             .any(|segment| segment.start <= t && t < segment.end() && segment.moves())
     }
 
+    /// Whether a step's own act holds the object still at `t` between two of the segments it
+    /// moves the object along, as a strike holds its creature at its poise and where its blow
+    /// lands. The object is drawn at rest there, but it is still in the middle of its verb, so
+    /// the checks that judge only cards at rest skip it. A pause between two steps, or after a
+    /// step's last move, does not count.
+    #[must_use]
+    pub fn paused(&self, t: u64) -> bool {
+        let segments = self.segments();
+        segments.iter().any(|before| {
+            before.end() <= t
+                && before.moves()
+                && before
+                    .step
+                    .is_some_and(|step| step.follows == Follows::Start)
+                && segments
+                    .iter()
+                    .any(|after| t < after.start && after.moves() && after.step == before.step)
+        })
+    }
+
     /// Whether a segment that changes the object's pose has begun by `t`. Until one has, the
     /// object holds the pose it started the track in, or one only a layer higher or lower
     /// (`Segment::shifts`).
