@@ -25,8 +25,8 @@ use crate::event::Sink;
 use crate::fixed::Full;
 use crate::layout::{Layout, Table};
 use crate::memos::Memo;
-use crate::object::ObjectRef;
 use crate::query::Copiable;
+use crate::reference::{Permanent, Spell};
 use crate::state::{State, Zone};
 use crate::zone::Place;
 
@@ -45,37 +45,35 @@ impl<L: Layout> State<L> {
     pub fn merge(
         &mut self,
         sink: &mut Sink<L>,
-        card: ObjectRef<L>,
+        card: Spell<L>,
         face: FaceIx,
-        onto: ObjectRef<L>,
+        onto: Permanent<L>,
         top: bool,
     ) -> Result<(), Full> {
-        debug_assert!(self.is_current(card) && self.is_current(onto));
-        debug_assert_eq!(self.object(onto.slot).zone, Zone::Battlefield);
-        let definition = self.object(card.slot).card;
+        let definition = self.object(card.slot()).card;
         let values: Copiable<L> = self
-            .copiable(onto.slot)
+            .copiable(onto.slot())
             .merged_with(definition, face, top)?;
-        let values = if top || !self.has_copied_face(onto.slot) {
+        let values = if top || !self.has_copied_face(onto.slot()) {
             values.with_component_face()
         } else {
             values
         };
-        self.move_object(sink, card.slot, Zone::Merged, Place::Top)?;
-        self.remember(card.slot, Memo::PartOf(onto.slot))?;
+        self.move_object(sink, card.slot(), Zone::Merged, Place::Top)?;
+        self.remember(card.slot(), Memo::PartOf(onto.slot()))?;
         // Over a face-down permanent, the merged permanent is face up and every player sees
         // it, but its face-down card stays hidden from those who didn't know it (see [CR 731.2e]):
         // "If a merged permanent contains face-up and face-down components, the permanent's
         // status is determined by its topmost component."
-        let hidden = top && self.object(onto.slot).face == FaceIx::DOWN;
+        let hidden = top && self.object(onto.slot()).face == FaceIx::DOWN;
         if hidden {
-            let knew = self.who_knows(onto.slot);
-            self.remember(onto.slot, Memo::FaceDownUnder(knew))?;
+            let knew = self.who_knows(onto.slot());
+            self.remember(onto.slot(), Memo::FaceDownUnder(knew))?;
         }
-        self.become_copy(definition, onto, values)?;
+        self.become_copy(definition, onto.into(), values)?;
         if hidden {
             for k in self.knowledge.as_mut_slice() {
-                k.insert(onto.slot);
+                k.insert(onto.slot());
             }
         }
         Ok(())

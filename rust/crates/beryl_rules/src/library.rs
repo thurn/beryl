@@ -18,13 +18,17 @@ use crate::resolution::Resolution;
 use crate::state::{ObjectRef, State, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::zones;
+use beryl_kernel::reference::Library;
 
 /// The top `n` cards of a player's library, or all of it if it has fewer.
+/// A token waiting for state-based actions is skipped (see [CR 111.6]):
+/// "A token isn't a card".
+///
+/// [CR 111.6]: https://yawgatog.com/resources/magic-rules/#R1116
 pub fn top<L: Layout>(s: &State<L>, player: Seat, n: u8) -> Bitboard<L::Slot> {
-    let library = s.library(player);
-    library[library.len().saturating_sub(usize::from(n))..]
-        .iter()
-        .copied()
+    s.library_from_top(player)
+        .filter(|&slot| s.card_in(s.object_ref(slot), Library).is_some())
+        .take(usize::from(n))
         .collect()
 }
 
@@ -48,7 +52,12 @@ pub fn put_into<L: Layout>(
         return Ok(());
     }
     match game.state.object(object.slot).zone() {
-        Zone::Library => return game.state.reorder_library(object.slot, place),
+        Zone::Library => {
+            if let Some(card) = game.state.card_in(object, Library) {
+                game.state.reorder_library(card, place)?;
+            }
+            return Ok(());
+        }
         Zone::Stack => {
             let Some(spell) = game.state.spell(object) else {
                 return Ok(());
@@ -135,8 +144,8 @@ pub fn put_back<L: Layout>(
     // The batch lands in game order; each card then goes on top of those picked before it.
     let s = &mut *game.state;
     for &slot in order.as_slice() {
-        if s.object(slot).zone() == Zone::Library {
-            s.reorder_library(slot, Place::Top)?;
+        if let Some(card) = s.card_in(s.object_ref(slot), Library) {
+            s.reorder_library(card, Place::Top)?;
         }
     }
     Ok(put)

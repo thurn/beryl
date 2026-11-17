@@ -102,7 +102,8 @@ pub(crate) fn begin_damage<L: Layout>(
         for i in 0..s.battlefield().len() {
             let slot = s.battlefield()[i];
             if assigns_now(s, slot) {
-                s.mark_struck_first(slot);
+                let permanent = s.permanent_at(slot).expect("a combat damage dealer");
+                s.mark_struck_first(permanent);
             }
         }
     }

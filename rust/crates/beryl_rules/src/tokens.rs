@@ -144,8 +144,12 @@ pub fn create_attacking<L: Layout>(
         };
         if let Some(walker) = walker {
             for &slot in game.state.in_game_order(game.table, tokens)?.iter() {
+                let token = game
+                    .state
+                    .permanent_at(slot)
+                    .expect("a token created attacking");
                 game.state
-                    .choose_attacked(slot, AttackTarget::Planeswalker(walker));
+                    .choose_attacked(token, AttackTarget::Planeswalker(walker));
             }
         }
     }

@@ -61,9 +61,12 @@ pub(crate) fn arrive<L: Layout>(
     slot: L::Slot,
     entry: Entry<L>,
 ) -> Result<(), Full> {
+    let permanent = s
+        .permanent_at(slot)
+        .expect("an object just moved onto the battlefield");
     s.track(t, Tracker::EnteredThisTurn, slot);
     s.arrive(
-        slot,
+        permanent,
         Arrival {
             tapped: entry.tapped,
             attacking: entry.attacking,
@@ -96,7 +99,10 @@ fn start_copy<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, slot: L::Slot) ->
         return Ok(());
     };
     let (_, values) = sink.copies.remove(i);
-    s.enter_as_copy(slot, values)
+    let permanent = s
+        .permanent_at(slot)
+        .expect("a copy entering the battlefield");
+    s.enter_as_copy(permanent, values)
 }
 
 /// Has each permanent that chose a value as it entered remember it ([`Memo::Chosen`]), once
@@ -350,6 +356,7 @@ fn unattach_from<L: Layout>(s: &mut State<L>, slot: L::Slot) {
     for i in 0..s.battlefield().len() {
         let aura = s.battlefield()[i];
         if s.object(aura).attached_to() == Some(slot) {
+            let aura = s.permanent_at(aura).expect("an Aura on the battlefield");
             s.unattach(aura);
         }
     }
@@ -370,9 +377,12 @@ pub(crate) fn set_tapped<L: Layout>(
     object: ObjectRef<L>,
     tapped: bool,
 ) -> Result<(), Full> {
-    if !s.is_current(object) || s.object(object.slot).is_tapped() == tapped {
+    let Some(permanent) = s.permanent(object) else {
+        return Ok(());
+    };
+    if s.object(permanent.slot()).is_tapped() == tapped {
         return Ok(());
     }
-    let e = s.set_tapped(object, tapped);
+    let e = s.set_tapped(permanent, tapped);
     settle(s, t, sink, e)
 }

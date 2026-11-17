@@ -42,16 +42,17 @@ fn what_is_attached_phases_out_and_in_with_its_permanent() {
     g.s.board().attach(crypt, bear);
     settled(&mut g);
 
-    g.s.phase_out(Bitboard::single(bear)).unwrap();
+    g.s.phase_out(g.s.permanents_in(Bitboard::single(bear)))
+        .unwrap();
     settled(&mut g);
     let both = Bitboard::single(bear) | Bitboard::single(crypt);
     assert_eq!(g.s.phased_out(), both);
     assert!(g.s.in_zone(Zone::Battlefield).is_empty());
     assert_eq!(g.s.object(bear).zone(), Zone::Battlefield);
     assert!(g.s.phasing_in_for(g.them).is_empty());
-    assert_eq!(g.s.phasing_in_for(g.me), both);
+    assert_eq!(g.s.phasing_in_for(g.me).slots(), both);
 
-    g.s.phase_in(both).unwrap();
+    g.s.phase_in(g.s.phasing_in_for(g.me)).unwrap();
     settled(&mut g);
     assert_eq!(
         g.s.zone(ZoneKey::Of(g.me, Zone::Battlefield)),
@@ -75,7 +76,8 @@ fn what_phased_out_alone_phases_in_unattached_once_its_permanent_left() {
     g.s.board().attach(crypt, bear);
     settled(&mut g);
 
-    g.s.phase_out(Bitboard::single(crypt)).unwrap();
+    g.s.phase_out(g.s.permanents_in(Bitboard::single(crypt)))
+        .unwrap();
     settled(&mut g);
     assert_eq!(g.s.phased_out(), Bitboard::single(crypt));
     assert_eq!(g.s.object(crypt).attached_to(), Some(bear));
@@ -113,17 +115,18 @@ fn a_permanent_phases_in_for_who_controlled_it_as_it_phased_out() {
     settled(&mut g);
     assert_eq!(g.s.controller(bear), g.me);
 
-    g.s.phase_out(Bitboard::single(bear)).unwrap();
+    g.s.phase_out(g.s.permanents_in(Bitboard::single(bear)))
+        .unwrap();
     g.s.expire(Duration::EndOfTurn);
     settled(&mut g);
-    assert_eq!(g.s.phasing_in_for(g.me), Bitboard::single(bear));
+    assert_eq!(g.s.phasing_in_for(g.me).slots(), Bitboard::single(bear));
     assert!(g.s.phasing_in_for(g.them).is_empty());
 
     let wide = g.s.widen();
     check(&wide, &g.t);
     assert_eq!(wide.phased_out().count(), 1);
 
-    g.s.phase_in(Bitboard::single(bear)).unwrap();
+    g.s.phase_in(g.s.phasing_in_for(g.me)).unwrap();
     settled(&mut g);
     assert_eq!(g.s.controller(bear), g.them);
     assert!(g.s.memos(bear).iter().next().is_none());
@@ -146,7 +149,9 @@ fn a_board_with_a_phased_out_or_merged_permanent_is_not_rebuilt() {
     g.s.board().set_step(TurnStep::Upkeep);
     assert_eq!(g.s.off_board(&g.t), None);
 
-    let (card, onto) = (g.s.object_ref(other), g.s.object_ref(bear));
+    g.s.board().place(other, Zone::Stack).unwrap();
+    let card = g.s.spell(g.s.object_ref(other)).unwrap();
+    let onto = g.s.permanent_at(bear).unwrap();
     g.s.merge(&mut Sink::off(), card, FaceIx::FRONT, onto, true)
         .unwrap();
     settled(&mut g);
@@ -155,7 +160,8 @@ fn a_board_with_a_phased_out_or_merged_permanent_is_not_rebuilt() {
         Some("Test Bear merged with other cards")
     );
 
-    g.s.phase_out(Bitboard::single(bear)).unwrap();
+    g.s.phase_out(g.s.permanents_in(Bitboard::single(bear)))
+        .unwrap();
     settled(&mut g);
     assert_eq!(g.s.off_board(&g.t).as_deref(), Some("Test Bear phased out"));
 }

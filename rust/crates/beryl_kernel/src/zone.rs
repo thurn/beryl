@@ -13,6 +13,7 @@ use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
+use crate::reference::{CardIn, Library};
 use crate::rng::SplitMix64;
 use crate::state::{CombatRole, Counters, Derived, Flag, Object, State, Tracked, Zone, ZoneKey};
 use crate::store::{Store, Stored};
@@ -246,7 +247,8 @@ impl<L: Layout> State<L> {
     /// Moves a card within its owner's library to its top or bottom. Not a zone change, so the
     /// card stays the same object and whoever knew it still does: a player who scries or looks
     /// knows where they put each card.
-    pub fn reorder_library(&mut self, slot: L::Slot, place: Place) -> Result<(), Full> {
+    pub fn reorder_library(&mut self, card: CardIn<Library, L>, place: Place) -> Result<(), Full> {
+        let slot = card.slot();
         let library = &mut self.zones.library[self.objects[slot.index()].owner.index()];
         let i = library
             .position(slot)

@@ -170,7 +170,8 @@ pub(crate) fn attack<L: Layout>(
         Opt::Attack(slot) => {
             // CR 508.1k: "Each chosen creature still controlled by the active player becomes
             // an attacking creature."
-            s.declare_attacker(slot, defender(s));
+            let attacker = s.permanent_at(slot).expect("a declared attacker");
+            s.declare_attacker(attacker, defender(s));
             s.ask(Pending::DeclareAttackers {
                 attacker: Some(slot),
             });
@@ -187,6 +188,7 @@ pub(crate) fn attack<L: Layout>(
                 AttackTarget::Player(defender(s)),
                 AttackTarget::Planeswalker,
             );
+            let attacker = s.permanent_at(attacker).expect("a declared attacker");
             s.choose_attacked(attacker, target);
             s.ask(Pending::DeclareAttackers { attacker: None });
             Ok(())
@@ -284,7 +286,7 @@ fn declare_attack<L: Layout>(
     if attackers.is_empty() {
         return Ok(());
     }
-    let declared = s.declare_attack(attackers);
+    let declared = s.declare_attack(s.permanents_in(attackers));
     event::settle(s, t, sink, declared)
 }
 
@@ -468,7 +470,8 @@ pub(crate) fn choose_blocker<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, op
 /// [CR 509.1g](https://yawgatog.com/resources/magic-rules/#R5091g): "Each chosen creature still
 /// controlled by the defending player becomes a blocking creature."
 pub(crate) fn block_with<L: Layout>(s: &mut State<L>, blocker: L::Slot) {
-    s.declare_blocker(blocker);
+    let permanent = s.permanent_at(blocker).expect("a declared blocker");
+    s.declare_blocker(permanent);
     s.ask(Pending::DeclareBlockers {
         blocker: Some(blocker),
     });
@@ -487,6 +490,8 @@ pub(crate) fn block_attacker<L: Layout>(s: &mut State<L>, attacker: L::Slot) -> 
     else {
         unreachable!("a block target without a blocker");
     };
+    let blocker = s.permanent_at(blocker).expect("a declared blocker");
+    let attacker = s.permanent_at(attacker).expect("a declared attacker");
     s.block(blocker, attacker)?;
     s.ask(Pending::DeclareBlockers { blocker: None });
     Ok(())
@@ -556,12 +561,14 @@ pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
             }
         };
         if !is_creature(s, slot) || changed(s.controller(slot)) {
-            s.remove_from_combat(slot);
+            let permanent = s.permanent_at(slot).expect("a permanent in combat");
+            s.remove_from_combat(permanent);
         } else if let Some(walker) = walker
             && (!defending.contains(s.controller(walker))
                 || !s.derived(walker).types.contains(Types::PLANESWALKER))
         {
-            s.forget_attacked(slot);
+            let attacker = s.permanent_at(slot).expect("an attacking permanent");
+            s.forget_attacked(attacker);
         }
     }
 }

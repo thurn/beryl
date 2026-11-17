@@ -13,6 +13,7 @@ use crate::layout::{Layout, Queue};
 use crate::library;
 use crate::resolution::Resolution;
 use crate::zone::Place;
+use beryl_kernel::reference::Library;
 
 /// `player` scries `n`
 /// ([CR 701.22a](https://yawgatog.com/resources/magic-rules/#R70122a)): "To 'scry N' means
@@ -44,7 +45,11 @@ pub fn scry<L: Layout>(
         let Some(slot) = choices::pick_or_end(game, resolution, player, left, bottom_pick)? else {
             break;
         };
-        game.state.reorder_library(slot, Place::Bottom)?;
+        let s = &mut *game.state;
+        let card = s
+            .card_in(s.object_ref(slot), Library)
+            .expect("a card selected from the library");
+        s.reorder_library(card, Place::Bottom)?;
         left.remove(slot);
         bottom += 1;
     }
@@ -58,7 +63,11 @@ pub fn scry<L: Layout>(
         order.push(slot)?;
     }
     for &slot in order.iter().rev() {
-        game.state.reorder_library(slot, Place::Top)?;
+        let s = &mut *game.state;
+        let card = s
+            .card_in(s.object_ref(slot), Library)
+            .expect("a card selected from the library");
+        s.reorder_library(card, Place::Top)?;
     }
     if n > 0 {
         game.sink.note(Event::Scry {

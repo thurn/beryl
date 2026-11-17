@@ -867,7 +867,7 @@ fn attack_triggers_fire_per_attacker_and_whenever_you_attack_once() {
     let attackers: Bitboard = [a, b, adeline].into_iter().collect();
     // Each pick of the declaration is marked on its own, with no event.
     for slot in crate::tests::fixture_slots(attackers) {
-        s.declare_attacker(slot, p.opponent());
+        s.declare_attacker(s.permanent_at(slot).unwrap(), p.opponent());
     }
     event::settle(
         &mut s,

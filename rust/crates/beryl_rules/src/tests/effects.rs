@@ -580,7 +580,7 @@ fn gaining_control_as_data_changes_the_controller_and_says_so() {
     );
     let (t, mut s, mut x, p, source) = game_with_source();
     let bear = put(&t, &mut s, &mut x, p.opponent(), "Test Bear");
-    s.set_summoning_sick(bear, false);
+    s.set_summoning_sick(s.permanent_at(bear).unwrap(), false);
     let targets = [Target::object(SpecIx::new(0), s.object_ref(bear))];
     assert!(resolve(&t, &mut s, &mut x, source, &STEAL, &targets, &[]).is_none());
     assert_eq!(s.controller(bear), p);

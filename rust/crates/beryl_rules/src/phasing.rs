@@ -35,7 +35,7 @@ pub(crate) fn instruction<L: Layout>(
     }
     let game = run.game();
     layers::refresh(game.state, game.table, game.sink)?;
-    game.state.phase_out(permanents.slots())?;
+    game.state.phase_out(permanents)?;
     Ok(Outcome::acted_on(permanents.slots()))
 }
 

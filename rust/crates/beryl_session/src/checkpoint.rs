@@ -355,7 +355,10 @@ impl Checkpoint {
                         values.with_addition(a)
                     })
                     .map_err(full)?;
-                s.enter_as_copy(slot, values).map_err(full)?;
+                let permanent = s
+                    .permanent_at(slot)
+                    .expect("a permanent placed by the checkpoint");
+                s.enter_as_copy(permanent, values).map_err(full)?;
             }
             s.board().set_tapped(slot, b.tapped);
             s.board().set_sick(slot, b.sick);

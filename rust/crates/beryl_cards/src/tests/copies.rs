@@ -66,9 +66,9 @@ fn a_card_copying_a_transformed_back_face_has_mana_value_zero() {
         state
             .merge(
                 &mut scratch.events,
-                state.object_ref(component),
+                state.spell(state.object_ref(component)).unwrap(),
                 FaceIx::FRONT,
-                state.object_ref(permanent),
+                state.permanent_at(permanent).unwrap(),
                 false,
             )
             .unwrap();

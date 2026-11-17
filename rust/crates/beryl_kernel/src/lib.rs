@@ -116,7 +116,10 @@
 //! Ability entries use stack places. At an old caller use
 //! `let Some(permanent) = s.permanent(raw) else { return Ok(()); };`.
 //! Check [`State::current`] immediately before mutating through a stored reference. Phasing
-//! keeps the same incarnation, so battlefield actions also check for phased-in presence.
+//! keeps the same incarnation, so validate a stored battlefield reference with
+//! [`State::permanent`] before use. For a slot from the current battlefield or a new arrival,
+//! [`State::permanent_at`] gets the current reference.
+//! [`State::phasing_in_for`] selects phased-out permanents for [`State::phase_in`].
 //! [`reference::Permanents`] and [`reference::Cards`] select slots for one instruction.
 //! Use `.slots()` for batch events and unconverted calls. For sequential actions on permanents
 //! use [`State::next_permanent`] to read them in battlefield order.

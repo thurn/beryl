@@ -82,10 +82,10 @@ pub fn deal<L: Layout>(
                 .damage_player(source, p, amount, combat, loses_life)
         }
         Recipient::Permanent(r) => {
-            if !game.on_battlefield(r) {
+            let Some(permanent) = game.state.permanent(r) else {
                 return Ok(0);
-            }
-            game.state.mark_damage(source, r, amount, combat)
+            };
+            game.state.mark_damage(source, permanent, amount, combat)
         }
     };
     game.settle(e)?;

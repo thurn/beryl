@@ -11,11 +11,11 @@
 
 use beryl_card::TurnStep;
 
-use crate::bitboard::Bitboard;
 use crate::decision::Outcome;
 use crate::event::Event;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Table};
+use crate::reference::Permanents;
 use crate::state::{Budgets, State};
 
 /// Where the game is in its turns (architecture §4.4).
@@ -301,11 +301,11 @@ impl<L: Layout> State<L> {
     /// and combat damage steps." [`State::end_combat`] forgets it.
     #[inline]
     #[must_use]
-    pub fn declare_attack(&mut self, attackers: Bitboard<L::Slot>) -> Event<L> {
+    pub fn declare_attack(&mut self, attackers: Permanents<L>) -> Event<L> {
         self.turn.attacked = true;
         Event::Attack {
             player: self.turn.active,
-            attackers,
+            attackers: attackers.slots(),
         }
     }
 

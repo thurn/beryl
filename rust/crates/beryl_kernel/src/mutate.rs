@@ -21,6 +21,7 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Table};
 use crate::object::{AttackTarget, CombatRole, Flag, ObjectFlags, ObjectRef, SlotSet};
 use crate::query::Copiable;
+use crate::reference::{Permanent, Spell};
 use crate::state::State;
 use crate::static_ability::Inputs;
 use crate::store::Duration;
@@ -62,9 +63,11 @@ impl<L: Layout> State<L> {
     /// [CR 701.26a]: https://yawgatog.com/resources/magic-rules/#R70126a
     #[inline]
     #[must_use]
-    pub fn set_tapped(&mut self, object: ObjectRef<L>, tapped: bool) -> Event<L> {
-        debug_assert!(self.is_current(object));
-        self.object_mut(object.slot).flags.set(Flag::Tapped, tapped);
+    pub fn set_tapped(&mut self, permanent: Permanent<L>, tapped: bool) -> Event<L> {
+        let object = ObjectRef::from(permanent);
+        self.object_mut(permanent.slot())
+            .flags
+            .set(Flag::Tapped, tapped);
         if self.layer_inputs.contains(Inputs::TAPPED) {
             self.flags.derived_dirty = true;
         }
@@ -80,8 +83,8 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 302.6]: https://yawgatog.com/resources/magic-rules/#R3026
     #[inline]
-    pub fn set_summoning_sick(&mut self, slot: L::Slot, sick: bool) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
+    pub fn set_summoning_sick(&mut self, permanent: Permanent<L>, sick: bool) {
+        let slot = permanent.slot();
         self.object_mut(slot).flags.set(Flag::SummoningSick, sick);
     }
 
@@ -114,13 +117,12 @@ impl<L: Layout> State<L> {
     pub fn mark_damage(
         &mut self,
         source: ObjectRef<L>,
-        to: ObjectRef<L>,
+        to: Permanent<L>,
         amount: u8,
         combat: bool,
     ) -> Event<L> {
-        debug_assert!(self.is_current(to));
-        let types = self.derived(to.slot).types;
-        let o = self.object_mut(to.slot);
+        let types = self.derived(to.slot()).types;
+        let o = self.object_mut(to.slot());
         if types.contains(Types::PLANESWALKER) {
             o.counters.loyalty = o.counters.loyalty.saturating_sub(amount);
         }
@@ -129,7 +131,7 @@ impl<L: Layout> State<L> {
         }
         Event::Damage {
             source,
-            to: Recipient::Permanent(to),
+            to: Recipient::Permanent(to.into()),
             amount,
             combat,
         }
@@ -147,14 +149,13 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Removes the damage marked on the permanent `object`, as it regenerates (see [CR 120.6]):
+    /// Removes the damage marked on a permanent, as it regenerates (see [CR 120.6]):
     /// "All damage marked on a permanent is removed when it regenerates".
     ///
     /// [CR 120.6]: https://yawgatog.com/resources/magic-rules/#R1206
     #[inline]
-    pub fn remove_damage(&mut self, object: ObjectRef<L>) {
-        debug_assert!(self.is_current(object));
-        self.object_mut(object.slot).damage = 0;
+    pub fn remove_damage(&mut self, permanent: Permanent<L>) {
+        self.object_mut(permanent.slot()).damage = 0;
     }
 
     /// Turns the face-down permanent in `slot` face up. It stays the same object, with its
@@ -170,8 +171,8 @@ impl<L: Layout> State<L> {
     /// [CR 708.8]: https://yawgatog.com/resources/magic-rules/#R7088
     /// [CR 613.7f]: https://yawgatog.com/resources/magic-rules/#R6137f
     #[inline]
-    pub fn turn_face_up(&mut self, slot: L::Slot) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
+    pub fn turn_face_up(&mut self, permanent: Permanent<L>) {
+        let slot = permanent.slot();
         let timestamp = self.take_timestamp();
         let o = self.object_mut(slot);
         o.face = FaceIx::FRONT;
@@ -194,9 +195,8 @@ impl<L: Layout> State<L> {
     /// [CR 701.3a]: https://yawgatog.com/resources/magic-rules/#R7013a
     /// [CR 701.3c]: https://yawgatog.com/resources/magic-rules/#R7013c
     #[inline]
-    pub fn attach(&mut self, slot: L::Slot, host: L::Slot) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
-        debug_assert_eq!(self.object(host).zone, Zone::Battlefield);
+    pub fn attach(&mut self, attachment: Permanent<L>, host: Permanent<L>) {
+        let (slot, host) = (attachment.slot(), host.slot());
         let timestamp = self.take_timestamp();
         let o = self.object_mut(slot);
         o.attached_to = Some(host);
@@ -211,8 +211,8 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 704.5n]: https://yawgatog.com/resources/magic-rules/#R7045n
     #[inline]
-    pub fn unattach(&mut self, slot: L::Slot) {
-        self.object_mut(slot).attached_to = None;
+    pub fn unattach(&mut self, permanent: Permanent<L>) {
+        self.object_mut(permanent.slot()).attached_to = None;
         self.flags.derived_dirty = true;
     }
 
@@ -222,9 +222,8 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 601.2a]: https://yawgatog.com/resources/magic-rules/#R6012a
     #[inline]
-    pub fn become_spell(&mut self, slot: L::Slot, face: FaceIx, controller: Seat) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Stack);
-        let o = self.object_mut(slot);
+    pub fn become_spell(&mut self, spell: Spell<L>, face: FaceIx, controller: Seat) {
+        let o = self.object_mut(spell.slot());
         o.face = face;
         o.base_controller = controller;
     }
@@ -308,10 +307,14 @@ impl<L: Layout> State<L> {
     /// [CR 707.5]: https://yawgatog.com/resources/magic-rules/#R7075
     #[cold]
     #[inline(never)]
-    pub fn enter_as_copy(&mut self, slot: L::Slot, values: Copiable<L>) -> Result<(), Full> {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
+    pub fn enter_as_copy(
+        &mut self,
+        permanent: Permanent<L>,
+        values: Copiable<L>,
+    ) -> Result<(), Full> {
+        let slot = permanent.slot();
         let source = self.card_behind(slot).unwrap_or(self.object(slot).card);
-        let copy = Continuous::Copy(self.object_ref(slot), values);
+        let copy = Continuous::Copy(permanent.into(), values);
         self.start_effect(source, copy, Duration::Indefinite)
     }
 
@@ -320,8 +323,8 @@ impl<L: Layout> State<L> {
     /// results stale. [`Full`] if it enters with counters of a kind the table has no room
     /// for a row of ([`crate::counters`]).
     #[inline]
-    pub fn arrive(&mut self, slot: L::Slot, how: Arrival<L>) -> Result<(), Full> {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
+    pub fn arrive(&mut self, permanent: Permanent<L>, how: Arrival<L>) -> Result<(), Full> {
+        let slot = permanent.slot();
         debug_assert!(self.flags.derived_dirty);
         let o = self.object_mut(slot);
         o.flags.set(Flag::Tapped, how.tapped);
@@ -347,9 +350,9 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 508.1k]: https://yawgatog.com/resources/magic-rules/#R5081k
     #[inline]
-    pub fn declare_attacker(&mut self, slot: L::Slot, player: Seat) {
-        debug_assert_eq!(self.object(slot).zone, Zone::Battlefield);
-        self.object_mut(slot).combat = CombatRole::attacking(AttackTarget::Player(player));
+    pub fn declare_attacker(&mut self, attacker: Permanent<L>, player: Seat) {
+        self.object_mut(attacker.slot()).combat =
+            CombatRole::attacking(AttackTarget::Player(player));
     }
 
     /// Has an attacking creature attack `target` (see [CR 506.2]): "that player, planeswalkers they
@@ -357,10 +360,10 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 506.2]: https://yawgatog.com/resources/magic-rules/#R5062
     #[inline]
-    pub fn choose_attacked(&mut self, attacker: L::Slot, target: AttackTarget<L>) {
+    pub fn choose_attacked(&mut self, attacker: Permanent<L>, target: AttackTarget<L>) {
         let CombatRole::Attacking {
             target: current, ..
-        } = &mut self.object_mut(attacker).combat
+        } = &mut self.object_mut(attacker.slot()).combat
         else {
             unreachable!("an attack target for a creature that is not attacking");
         };
@@ -374,7 +377,7 @@ impl<L: Layout> State<L> {
     /// [CR 506.4]: https://yawgatog.com/resources/magic-rules/#R5064
     /// [CR 506.4c]: https://yawgatog.com/resources/magic-rules/#R5064c
     #[inline]
-    pub fn forget_attacked(&mut self, attacker: L::Slot) {
+    pub fn forget_attacked(&mut self, attacker: Permanent<L>) {
         self.choose_attacked(attacker, AttackTarget::Removed);
     }
 
@@ -384,9 +387,8 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 509.1g]: https://yawgatog.com/resources/magic-rules/#R5091g
     #[inline]
-    pub fn declare_blocker(&mut self, blocker: L::Slot) {
-        debug_assert_eq!(self.object(blocker).zone, Zone::Battlefield);
-        self.object_mut(blocker).combat = CombatRole::Blocking {
+    pub fn declare_blocker(&mut self, blocker: Permanent<L>) {
+        self.object_mut(blocker.slot()).combat = CombatRole::Blocking {
             attackers: SlotSet::EMPTY,
             struck_first: false,
         };
@@ -398,12 +400,14 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 509.1h]: https://yawgatog.com/resources/magic-rules/#R5091h
     #[inline]
-    pub fn block(&mut self, blocker: L::Slot, attacker: L::Slot) -> Result<(), Full> {
-        let CombatRole::Blocking { attackers, .. } = &mut self.object_mut(blocker).combat else {
+    pub fn block(&mut self, blocker: Permanent<L>, attacker: Permanent<L>) -> Result<(), Full> {
+        let CombatRole::Blocking { attackers, .. } = &mut self.object_mut(blocker.slot()).combat
+        else {
             unreachable!("a creature blocking that was not declared as a blocker");
         };
-        attackers.insert(attacker)?;
-        let CombatRole::Attacking { blocked, .. } = &mut self.object_mut(attacker).combat else {
+        attackers.insert(attacker.slot())?;
+        let CombatRole::Attacking { blocked, .. } = &mut self.object_mut(attacker.slot()).combat
+        else {
             unreachable!("a creature blocked that is not attacking");
         };
         *blocked = true;
@@ -415,8 +419,8 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
     #[inline]
-    pub fn mark_struck_first(&mut self, slot: L::Slot) {
-        match &mut self.object_mut(slot).combat {
+    pub fn mark_struck_first(&mut self, permanent: Permanent<L>) {
+        match &mut self.object_mut(permanent.slot()).combat {
             CombatRole::Attacking { struck_first, .. }
             | CombatRole::Blocking { struck_first, .. } => {
                 *struck_first = true;
@@ -432,7 +436,8 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 506.4]: https://yawgatog.com/resources/magic-rules/#R5064
     #[inline]
-    pub fn remove_from_combat(&mut self, slot: L::Slot) {
+    pub fn remove_from_combat(&mut self, permanent: Permanent<L>) {
+        let slot = permanent.slot();
         self.object_mut(slot).combat = CombatRole::None;
         for i in 0..self.battlefield.len() {
             let other = self.battlefield.as_slice()[i];

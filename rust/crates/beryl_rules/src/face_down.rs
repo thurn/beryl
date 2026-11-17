@@ -102,7 +102,10 @@ pub(crate) fn begin_turning_face_up<L: Layout>(
                 &plans.as_slice()[0],
                 mana::Paying::NOTHING,
             )?;
-            s.turn_face_up(slot);
+            let permanent = s
+                .permanent_at(slot)
+                .expect("a permanent paid to turn face up");
+            s.turn_face_up(permanent);
             return Ok(());
         }
     }
@@ -226,7 +229,10 @@ pub(crate) fn perform<L: Layout>(
     };
     if remaining.is_zero() {
         s.settle_question();
-        s.turn_face_up(slot);
+        let permanent = s
+            .permanent_at(slot)
+            .expect("a permanent paid to turn face up");
+        s.turn_face_up(permanent);
     } else {
         s.ask(Pending::TurningFaceUp { slot, remaining });
     }

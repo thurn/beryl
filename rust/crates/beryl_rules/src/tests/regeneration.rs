@@ -50,7 +50,7 @@ fn a_shield_replaces_one_destruction_and_the_next_destroys() {
 fn a_shield_saves_a_creature_with_lethal_damage_and_removes_the_damage() {
     let (t, mut s, mut x, _, bear) = shielded_bear();
     let bear_ref = s.object_ref(bear);
-    let _ = s.mark_damage(bear_ref, bear_ref, 2, false);
+    let _ = s.mark_damage(bear_ref, s.permanent(bear_ref).unwrap(), 2, false);
     // CR 704.5g destroys it, which the shield replaces; with its damage removed, the repeated
     // check finds nothing more.
     resolve_all(&t, &mut s, &mut x);

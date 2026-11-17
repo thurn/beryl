@@ -222,6 +222,16 @@ impl<L: Layout> State<L> {
             .then_some(Permanent(reference))
     }
 
+    /// The phased-in permanent currently in this slot, if any.
+    #[inline]
+    pub fn permanent_at(&self, slot: L::Slot) -> Option<Permanent<L>> {
+        let object = self.object(slot);
+        object.on_battlefield().then_some(Permanent(ObjectRef {
+            slot,
+            incarnation: object.incarnation(),
+        }))
+    }
+
     /// Checks that the reference still names an object in the stack zone (see [CR 112.1]).
     /// Use [`State::take_off_stack`] to check for an entry available to remove.
     ///

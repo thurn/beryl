@@ -152,6 +152,8 @@ pub(crate) fn instruction<L: Layout>(
     if game.state.object(attached).attached_to() == Some(host) || !may {
         return Outcome::NOTHING;
     }
-    game.state.attach(attached, host);
+    let attachment = s.permanent_at(attached).expect("a selected attachment");
+    let target = s.permanent_at(host).expect("a selected host");
+    game.state.attach(attachment, target);
     Outcome::acted_on(crate::bitboard::Bitboard::single(attached))
 }

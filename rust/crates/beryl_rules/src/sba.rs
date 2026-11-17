@@ -58,7 +58,8 @@ pub(crate) fn check<L: Layout>(
         for index in 0..s.battlefield().len() {
             let slot = s.battlefield()[index];
             if loose.contains(slot) {
-                s.unattach(slot);
+                let equipment = s.permanent_at(slot).expect("Equipment on the battlefield");
+                s.unattach(equipment);
             }
         }
     }

@@ -108,7 +108,7 @@ fn token(t: &GameTable, s: &mut State, owner: Seat, what: Copiable) -> Slot {
     s.move_object(&mut Sink::off(), slot, Battlefield, Place::Top)
         .unwrap();
     s.arrive(
-        slot,
+        s.permanent_at(slot).unwrap(),
         Arrival {
             tapped: false,
             attacking: None,
@@ -314,7 +314,11 @@ fn mana_value_counts_x_on_the_stack_and_a_copied_back_face_as_nothing() {
     let blast = put(&t, &mut s, Seat::P0, "Test Blast", Hand);
     assert_eq!(s.mana_value(&t, blast), 1);
     s.board().place(blast, Stack).unwrap();
-    s.become_spell(blast, FaceIx::FRONT, Seat::P0);
+    s.become_spell(
+        s.spell(s.object_ref(blast)).unwrap(),
+        FaceIx::FRONT,
+        Seat::P0,
+    );
     let (card, face) = s.copiable(blast).record(&t);
     let entry = StackEntry {
         x: 3,
@@ -353,7 +357,11 @@ fn a_controller_is_a_permanents_a_spells_or_else_the_owner() {
     // CR 601.2a: a spell's is the player who cast it, whoever owns the card.
     let blast = put(&t, &mut s, Seat::P0, "Test Blast", Stack);
     assert_eq!(s.controller(blast), Seat::P0);
-    s.become_spell(blast, FaceIx::FRONT, Seat::P1);
+    s.become_spell(
+        s.spell(s.object_ref(blast)).unwrap(),
+        FaceIx::FRONT,
+        Seat::P1,
+    );
     assert_eq!(s.controller(blast), Seat::P1);
     // And once it has left the stack, its owner again.
     s.board().place(blast, Graveyard).unwrap();

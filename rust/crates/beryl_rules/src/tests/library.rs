@@ -62,6 +62,30 @@ fn tapped(s: &State, slot: Slot) -> bool {
     s.object(slot).is_tapped()
 }
 
+/// A token waiting for the next state-based check is not a card (CR 111.6).
+#[test]
+fn top_cards_skip_a_token_waiting_to_cease_to_exist() {
+    let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
+    let card = *s.library(Seat::P0).last().unwrap();
+    let mut scratch = Scratch::new();
+    let token = tokens::create(
+        &mut Game::new(&mut s, &t, &mut scratch.events),
+        Seat::P0,
+        tokens::predefined(&t, &INSECT),
+        1,
+        tokens::TokenEntry::default(),
+    )
+    .unwrap()
+    .sole()
+    .unwrap();
+    s.move_object(&mut scratch.events, token, Zone::Library, Place::Top)
+        .unwrap();
+
+    assert_eq!(s.library(Seat::P0).last(), Some(&token));
+    assert_eq!(library::top(&s, Seat::P0, 1).sole(), Some(card));
+}
+
 /// [CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "Only tapped permanents
 /// can be untapped." Here an opponent of the ability's controller untaps a creature: neither
 /// the lands nor the controller the helper was first written for.

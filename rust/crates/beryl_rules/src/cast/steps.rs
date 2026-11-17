@@ -55,7 +55,10 @@ pub(crate) fn begin_cast<L: Layout>(
     }
     event::move_one(s, t, sink, slot, Zone::Stack, Reason::Cast)?;
     let (card, _) = s.definition(slot).record(t);
-    s.become_spell(slot, face, player);
+    let spell = s
+        .spell(s.object_ref(slot))
+        .expect("a card just put on the stack");
+    s.become_spell(spell, face, player);
     s.put_on_stack(
         sink,
         StackEntry::new(StackItem::Spell {

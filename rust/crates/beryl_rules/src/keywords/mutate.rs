@@ -39,7 +39,11 @@ pub(crate) fn instruction<L: Layout>(
     let over = Prompt::new(Purpose::Mutate).places(prompt::Place::Battlefield, prompt::Place::None);
     let about = Bitboard::single(spell.slot) | Bitboard::single(onto.slot());
     let top = choices::yes_no(game, resolution, controller, over, about)?;
-    game.state.merge(game.sink, spell, face, onto.into(), top)?;
+    let spell = game
+        .state
+        .spell(spell)
+        .expect("the resolving mutating spell");
+    game.state.merge(game.sink, spell, face, onto, top)?;
     layers::refresh(game.state, game.table, game.sink)?;
     let mutated = Event::Mutated {
         object: onto.into(),

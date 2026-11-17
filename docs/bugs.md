@@ -6,6 +6,12 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Scry could offer a token as a library card.** A token put into a library can
+  still be there until state-based actions run. The top-card query now skips
+  tokens and spell copies, and library reordering requires a `CardIn<Library>`.
+  `top_cards_skip_a_token_waiting_to_cease_to_exist` covers the interval before
+  the token disappears.
+
 - **A spell could still affect a player who gained protection after it was
   cast.** Target selection checked protection from everything, but resolution
   only checked the target's player filter. Resolution now checks protection

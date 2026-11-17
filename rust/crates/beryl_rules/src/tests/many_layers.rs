@@ -160,7 +160,10 @@ fn equipment_attached_after_the_effect_grants_its_ability_and_before_it_only_its
     let (t, mut s) = game();
     let golem = enters(&t, &mut s, "Test Golem");
     let banner = enters(&t, &mut s, "Test Banner");
-    s.attach(banner, golem);
+    s.attach(
+        s.permanent_at(banner).unwrap(),
+        s.permanent_at(golem).unwrap(),
+    );
     refresh(&t, &mut s);
     assert!(s.derived(golem).keywords.contains(Keywords::VIGILANCE));
     elk(&t, &mut s, golem);
@@ -172,7 +175,10 @@ fn equipment_attached_after_the_effect_grants_its_ability_and_before_it_only_its
     let golem = enters(&t, &mut s, "Test Golem");
     let banner = enters(&t, &mut s, "Test Banner");
     elk(&t, &mut s, golem);
-    s.attach(banner, golem);
+    s.attach(
+        s.permanent_at(banner).unwrap(),
+        s.permanent_at(golem).unwrap(),
+    );
     refresh(&t, &mut s);
     let d = s.derived(golem);
     assert_eq!((d.power, d.toughness), (4, 4));

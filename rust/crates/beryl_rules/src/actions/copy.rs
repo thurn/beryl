@@ -242,7 +242,10 @@ fn put_copy<L: Layout>(
     let face = s.make_token(t, slot, controller, what)?;
     // It is put on the stack, not cast (CR 707.10): no Cast event follows.
     event::move_one(s, t, game.sink, slot, Zone::Stack, Reason::Effect)?;
-    s.become_spell(slot, face, controller);
+    let spell = s
+        .spell(s.object_ref(slot))
+        .expect("a spell copy just put on the stack");
+    s.become_spell(spell, face, controller);
     let (card, _) = s.definition(slot).record(t);
     copy.item = StackItem::Spell {
         object: s.object_ref(slot),

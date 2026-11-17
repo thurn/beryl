@@ -24,7 +24,27 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::memos::Memo;
 use crate::observation::Observation;
+use crate::reference::Permanents;
 use crate::state::{CombatRole, Flag, State, Zone};
+
+/// Phased-out slots selected to phase in. Use within the current instruction.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct PhasedOut<L: Layout>(Bitboard<L::Slot>);
+
+impl<L: Layout> PhasedOut<L> {
+    /// Whether there are any permanents to phase in.
+    #[inline]
+    pub fn is_empty(self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// The selected slots, for a batch event or a query.
+    #[inline]
+    pub fn slots(self) -> Bitboard<L::Slot> {
+        self.0
+    }
+}
 
 impl<L: Layout> State<L> {
     /// The phased-out permanents.
@@ -33,7 +53,7 @@ impl<L: Layout> State<L> {
         self.phased_out
     }
 
-    /// Phases out the permanents in `slots` and, with them, everything attached to them
+    /// Phases out the selected permanents and, with them, everything attached to them
     /// (see [CR 702.26g]): "When a permanent phases out, any Auras, Equipment, or Fortifications
     /// attached to that permanent phase out at the same time. This alternate way of phasing out
     /// is known as phasing out “indirectly.”" Each is removed from combat (see [CR 702.26b]): "A
@@ -46,13 +66,12 @@ impl<L: Layout> State<L> {
     ///
     /// # Panics
     ///
-    /// In debug builds, for a slot that is no phased-in permanent, or while the layer results
-    /// are stale.
+    /// In debug builds, while the layer results are stale.
     ///
     /// [CR 702.26g]: https://yawgatog.com/resources/magic-rules/#R70226g
     /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
-    pub fn phase_out(&mut self, slots: Bitboard<L::Slot>) -> Result<(), Full> {
-        debug_assert!(slots.all(|slot| self.battlefield_position(slot).is_some()));
+    pub fn phase_out(&mut self, permanents: Permanents<L>) -> Result<(), Full> {
+        let slots = permanents.slots();
         let all = self.with_attached(slots, self.in_zone(Zone::Battlefield));
         // See CR 702.26h: "If an object would simultaneously phase out directly and indirectly, it
         // just phases out indirectly." So a permanent phases out directly when what it is
@@ -91,7 +110,7 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
-    /// Phases in the phased-out permanents in `slots` (see [CR 702.26c]): "If a permanent phases
+    /// Phases in the selected permanents (see [CR 702.26c]): "If a permanent phases
     /// in, its status changes to “phased in.” The game once again treats it as though it
     /// exists." Each is as it was: tapped or untapped, with its counters, attachments and
     /// timestamp. One attached to a permanent that stays phased out phases in unattached
@@ -101,14 +120,10 @@ impl<L: Layout> State<L> {
     /// Equipment, or Fortification phases in unattached." One whose object left the battlefield
     /// was unattached as it left. No event (see CR 702.26d).
     ///
-    /// # Panics
-    ///
-    /// In debug builds, for a slot that is not phased out.
-    ///
     /// [CR 702.26c]: https://yawgatog.com/resources/magic-rules/#R70226c
     /// [CR 702.26i]: https://yawgatog.com/resources/magic-rules/#R70226i
-    pub fn phase_in(&mut self, slots: Bitboard<L::Slot>) -> Result<(), Full> {
-        debug_assert!(slots.all(|slot| self.phased_out.contains(slot)));
+    pub fn phase_in(&mut self, permanents: PhasedOut<L>) -> Result<(), Full> {
+        let slots = permanents.slots();
         self.phased_out &= !slots;
         for slot in slots.iter() {
             self.enter_battlefield(slot)?;
@@ -134,17 +149,17 @@ impl<L: Layout> State<L> {
     ///
     /// [CR 502.1]: https://yawgatog.com/resources/magic-rules/#R5021
     /// [CR 702.26g]: https://yawgatog.com/resources/magic-rules/#R70226g
-    pub fn phasing_in_for(&self, player: Seat) -> Bitboard<L::Slot> {
+    pub fn phasing_in_for(&self, player: Seat) -> PhasedOut<L> {
         let out = self.phased_out;
         if out.is_empty() {
-            return out;
+            return PhasedOut(out);
         }
         let direct = out.filter(|slot| {
             let o = self.object(slot);
             !o.attached_to.is_some_and(|host| out.contains(host))
                 && self.phased_out_under(slot).unwrap_or(o.base_controller) == player
         });
-        self.with_attached(direct, out)
+        PhasedOut(self.with_attached(direct, out))
     }
 
     /// `slots` and every object among `among` attached to one of them, or to one attached to

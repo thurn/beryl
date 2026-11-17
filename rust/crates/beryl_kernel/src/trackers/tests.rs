@@ -175,12 +175,12 @@ fn phasing_preserves_a_permanents_turn_trackers() {
     let slots = Bitboard::single(a);
     derive(&t, &mut s);
 
-    s.phase_out(slots).unwrap();
+    s.phase_out(s.permanents_in(slots)).unwrap();
     derive(&t, &mut s);
     assert_eq!(s.trackers(a), tracked);
     assert_eq!(s.check_invariants(&t), Ok(()));
 
-    s.phase_in(slots).unwrap();
+    s.phase_in(s.phasing_in_for(s.object(a).owner())).unwrap();
     derive(&t, &mut s);
     assert_eq!(s.trackers(a), tracked);
     assert_eq!(s.check_invariants(&t), Ok(()));

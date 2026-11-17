@@ -67,12 +67,15 @@ fn regenerate<L: Layout>(
     sink: &mut Sink<L>,
     object: ObjectRef<L>,
 ) -> Result<(), Full> {
+    let Some(permanent) = s.permanent(object) else {
+        return Ok(());
+    };
     let used = s.use_regeneration_shield(object);
     debug_assert!(used, "a permanent regenerated with no shield");
-    s.remove_damage(object);
+    s.remove_damage(permanent);
     let o = s.object(object.slot);
     if o.is_attacking() || o.is_blocking() {
-        s.remove_from_combat(object.slot);
+        s.remove_from_combat(permanent);
     }
     event::set_tapped(s, t, sink, object, true)
 }

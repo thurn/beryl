@@ -99,13 +99,13 @@ pub fn gain_control<L: Layout>(
     object: ObjectRef<L>,
     duration: Duration,
 ) -> Result<(), Full> {
-    if !game.on_battlefield(object) {
+    let Some(permanent) = game.state.permanent(object) else {
         return Ok(());
-    }
+    };
     let player = resolution.entry.controller();
     let control = Continuous::Layer(object, LayerChange::Control(player));
     start(game, resolution, control, duration)?;
-    game.state.set_summoning_sick(object.slot, true);
+    game.state.set_summoning_sick(permanent, true);
     game.settle(Event::GainControl { object, player })
 }
 
@@ -254,7 +254,11 @@ pub(crate) fn exchange_instruction<L: Layout>(
     (game.state).start_effects(resolution.entry.card(), &exchange, Duration::Indefinite)?;
     layers::refresh(game.state, game.table, game.sink)?;
     for (object, player) in [(a, b_controller), (b, a_controller)] {
-        game.state.set_summoning_sick(object.slot, true);
+        let permanent = game
+            .state
+            .permanent(object)
+            .expect("a permanent changing control");
+        game.state.set_summoning_sick(permanent, true);
         game.settle(Event::GainControl { object, player })?;
     }
     let mut exchanged = Bitboard::single(a.slot);
