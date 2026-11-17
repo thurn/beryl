@@ -60,10 +60,10 @@ def test_files_reaching_the_change_go_first_and_edited_files_always_run(
         "python:tests/test_paths.py::test_a": Record(0, 0, 10, 2.0),
         "python:tests/test_alone.py::test_a": Record(0, 0, 10, 1.0),
     }
-    # deep.py changed: test_top (80 s, 40 s on 2 workers) and test_new reach it; test_new has
+    # deep.py changed: test_top (80 s, 20 s on 4 workers) and test_new reach it; test_new has
     # never been timed. Of the rest, which do not reach it, the cheaper test_alone fits.
     chosen = python_fit.choose(
-        ["tools/src/beryl_tools/deep.py"], known, 42.0 + python_fit.MARGIN, tools
+        ["tools/src/beryl_tools/deep.py"], known, 21.0 + python_fit.MARGIN, tools
     )
     assert chosen == (
         ["tests/test_alone.py", "tests/test_new.py", "tests/test_top.py"],

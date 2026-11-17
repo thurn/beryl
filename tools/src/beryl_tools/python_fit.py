@@ -39,10 +39,11 @@ if TYPE_CHECKING:
 
 # The seconds the plan keeps back for pytest-xdist to start its workers and collect.
 MARGIN = 6.0
-# The test-seconds pytest_step's four xdist workers (`-n 4`) get through per wall second. The
-# run log's 30-day mean test times sum to about 200 s, and on 2026-11-17 the whole suite took
-# 104 s at load 25, so four workers ran about two tests' worth at a time.
-WORKERS = 2
+# The workers pytest_step runs (`-n 4`). The plan takes them as four tests at a time, which is
+# optimistic under load (on 2026-11-17 the whole suite, about 200 test-seconds by the run log,
+# took 104 s at load 25), because the step stops pytest at the window's end anyway: planning at
+# two workers deferred 42 of 107 files in a push whose tests then ended in 20 s of a 46 s window.
+WORKERS = 4
 TESTS_DIR = "tests"
 
 
