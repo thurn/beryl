@@ -221,7 +221,8 @@ def linked_crates(rust: Path = repo_paths.RUST) -> list[str]:
 def inputs(rust: Path = repo_paths.RUST) -> re.Pattern[str]:
     """The paths a change to which makes a sweep due: Beryl 3D's own (its workspace, its data
     and its tools), the main workspace's manifest (whose lints Beryl 3D's must match), the
-    [`linked_crates`], and the data files Beryl 3D reads from the rest of the project.
+    [`linked_crates`], the data files Beryl 3D reads from the rest of the project, and the
+    folders whose listing `parity --check` reads, so a new skill or web screen is caught soon.
     """
     names = "|".join(re.escape(c) for c in linked_crates(rust))
     crates = rf"|^rust/({names})/" if names else ""
@@ -231,6 +232,7 @@ def inputs(rust: Path = repo_paths.RUST) -> re.Pattern[str]:
         rf"{crates}"
         r"|^data/ui-conventions\.json$|^data/card-store\.tsv$|^ui/fixtures\.json$"
         r"|^data/design-tokens\.json$"
+        r"|^(\.claude/skills|ui/src/screens|ui/src/table|ui/src/table/lobby)/$"
     )
 
 
@@ -241,10 +243,18 @@ def due(changed: list[str], pattern: re.Pattern[str]) -> list[str]:
 
 def changed_since(since: str, commit: str) -> list[str] | None:
     """The paths changed from `since` to `commit`, or None when there is no `since` or
-    `commit` does not descend from it, so nothing says what changed."""
+    `commit` does not descend from it. A file added or removed also gives `<its folder>/`.
+    """
     if not since or run_git("merge-base", "--is-ancestor", since, commit) is None:
         return None
-    return git("diff", "--name-only", since, commit).splitlines()
+    found: list[str] = []
+    listed = git("diff", "--name-status", "--no-renames", since, commit)
+    for line in listed.splitlines():
+        status, path = line.split("\t", 1)
+        found.append(path)
+        if status in ("A", "D"):
+            found.append(f"{os.path.dirname(path)}/")
+    return found
 
 
 def not_due(commit: str, swept: str, pattern: re.Pattern[str]) -> str | None:

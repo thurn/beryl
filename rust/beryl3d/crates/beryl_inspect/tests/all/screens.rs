@@ -214,33 +214,6 @@ fn is_number(text: &str) -> bool {
     !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
 }
 
-/// Every recording `data/beryl3d/parity.json` names for a verb, an effect or a mark is a
-/// recording of the pack, so the parity list counts each by a recording the tests play.
-#[test]
-fn the_parity_file_names_recordings_of_the_pack() {
-    let path = recordings::root().join("data/beryl3d/parity.json");
-    let text = std::fs::read_to_string(&path).expect("the parity file is readable");
-    let file: serde_json::Value = serde_json::from_str(&text).expect("the parity file is JSON");
-    let names: Vec<String> = recordings::names()
-        .expect("the recordings pack is readable")
-        .into_iter()
-        .map(|(name, _)| name)
-        .collect();
-    for key in ["verbs", "effects", "marks"] {
-        let mapped = file[key]
-            .as_object()
-            .unwrap_or_else(|| panic!("the parity file maps {key}"));
-        assert!(!mapped.is_empty(), "the parity file maps no {key}");
-        for (item, recording) in mapped {
-            let recording = recording.as_str().expect("each item names a recording");
-            assert!(
-                names.iter().any(|name| name == recording),
-                "{key}: {item} names {recording:?}, which `just b3d list` does not list"
-            );
-        }
-    }
-}
-
 #[test]
 fn the_lobby_recording_shows_the_loaded_deck() {
     let tree = Page::fixture("screen/lobby", Side::You, Layout::Desktop).tree();

@@ -14,6 +14,7 @@ mod hud;
 mod log;
 mod opening;
 mod pack;
+mod parity;
 mod pointer_held;
 mod prompts;
 mod prompts_declare;

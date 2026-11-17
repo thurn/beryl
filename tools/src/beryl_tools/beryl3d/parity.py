@@ -244,19 +244,24 @@ def mapped_kind(kind: str, mapping: Mapping[str, str], done: set[str]) -> Kind:
     return Kind(kind, len(mapping) - len(missing), len(mapping), missing)
 
 
-def screens_kind(sources: Sources) -> Kind:
-    """Beryl 3D's screens marked built, out of those and the web screens it has none for."""
+def screens_kind(sources: Sources, done: set[str]) -> Kind:
+    """Beryl 3D's screens marked built whose recording is done, out of those and the web
+    screens it has none for."""
     screens = sources.screens["screens"]
-    unbuilt = [s["name"] for s in screens if s.get("built") is not True]
+    unbuilt = [
+        s["name"]
+        for s in screens
+        if s.get("built") is not True or s.get("recording") not in done
+    ]
     absent = [f for f, s in sources.parity["web_screens"].items() if s == MISSING]
     missing = [*unbuilt, *absent]
     total = len(screens) + len(absent)
     return Kind("screens", total - len(missing), total, missing)
 
 
-def conventions_kind(sources: Sources) -> Kind:
-    """The UI Conventions entries that a conventions file shows Beryl 3D following. An entry
-    recorded as open is named with its reason."""
+def conventions_kind(sources: Sources, done: set[str]) -> Kind:
+    """The UI Conventions entries that a conventions file shows Beryl 3D following, in a
+    recording that is done. An entry recorded as open is named with its reason."""
     total = 0
     missing: list[str] = []
     for entry in sources.ui_conventions["entries"]:
@@ -264,7 +269,7 @@ def conventions_kind(sources: Sources) -> Kind:
             continue
         total += 1
         recorded = sources.conventions.get(entry["kind"], {}).get(entry["name"])
-        if isinstance(recorded, dict) and "recording" in recorded:
+        if isinstance(recorded, dict) and recorded.get("recording") in done:
             continue
         if isinstance(recorded, dict) and "open" in recorded:
             missing.append(f"{entry['name']} (open: {recorded['open']})")
@@ -299,8 +304,8 @@ def report(sources: Sources) -> list[Kind]:
         timelines_kind(sources),
         *(mapped_kind(key, parity[key], done) for key in PLAYED),
         mapped_kind("prompt shapes", sources.screens["prompt_shapes"], done),
-        screens_kind(sources),
-        conventions_kind(sources),
+        screens_kind(sources, done),
+        conventions_kind(sources, done),
         tools_kind(sources),
         launch_kind(sources.sweep_records),
     ]

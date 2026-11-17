@@ -63,8 +63,8 @@ def parity_file() -> dict[str, Any]:
 def screens_file() -> dict[str, Any]:
     return {
         "screens": [
-            {"name": "game", "built": True},
-            {"name": "testing", "built": False},
+            {"name": "game", "built": True, "recording": "screen/start"},
+            {"name": "testing", "built": False, "recording": "screen/start"},
         ],
         "prompt_shapes": {"pick": "shape-pick"},
     }
@@ -145,6 +145,15 @@ def test_screens_conventions_tools_and_launch_are_counted_from_their_files() -> 
     ]
     launch = parity.launch_kind(records)
     assert launch.done == 1 and "macOS pass at abcdef0123" in launch.note
+
+
+def test_a_screen_or_convention_whose_recording_fails_is_not_done() -> None:
+    found = kinds(sources(failing=("screen/start", "verbs-zones")))
+    assert found["screens"].missing == ["game", "testing"]
+    assert found["conventions"].missing == [
+        "Phase icons",
+        "Hand fan (open: needs a numbered exception)",
+    ]
 
 
 def test_the_printed_lines_follow_the_docs_format() -> None:

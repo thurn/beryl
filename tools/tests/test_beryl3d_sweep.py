@@ -79,6 +79,17 @@ def test_the_real_due_rule_follows_the_sessions_path_dependencies() -> None:
     assert not found.search("rust/crates/beryl_app/src/main.rs")
 
 
+def test_a_new_skill_or_web_screen_file_makes_a_sweep_due_but_an_edit_does_not() -> (
+    None
+):
+    found = sweep.inputs()
+    assert found.search(".claude/skills/")
+    assert found.search("ui/src/screens/")
+    assert found.search("ui/src/table/lobby/")
+    assert not found.search("ui/src/screens/Game.tsx")
+    assert not found.search(".agents/skills/specs/SKILL.md")
+
+
 def test_the_sweep_runs_every_step_of_the_lane_each_as_a_lane_of_its_own() -> None:
     names = [s.name for s in sweep.chosen(None, sweep.MAC)]
     assert names[: len(lane.steps())] == [s.name for s in lane.steps()]
