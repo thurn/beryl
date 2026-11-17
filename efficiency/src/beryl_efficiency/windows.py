@@ -1,14 +1,14 @@
-"""Bead windows: which bead each request and tool call of a session belongs to
-(docs/efficiency-dashboard.md, "Attributing sessions to beads").
+"""Ticket windows: which ticket each request and tool call of a session belongs to
+(docs/efficiency-dashboard.md, "Attributing sessions to tickets").
 
 A window opens at a session's `enact start <bead>` or `enact claim <bead>`, and at the result
-of `enact close --continue` for the bead it claimed. It closes at the result of `enact close
-<bead>`, at the opening of another bead's window, or at the end of the transcript. When the
-result of `enact close --continue` names no bead (its output was cut short), the next bead the
+of `enact close --continue` for the ticket it claimed. It closes at the result of `enact close
+<bead>`, at the opening of another ticket's window, or at the end of the transcript. When the
+result of `enact close --continue` names no ticket (its output was cut short), the next ticket the
 session closes or creates a worktree for opens at that close. Rows before the first window
-belong to it. Stretches outside every bead window are windows of kind `none`, so a top-level
+belong to it. Stretches outside every ticket window are windows of kind `none`, so a top-level
 transcript's windows cover it from its first record to its last. A transcript that opens no
-window is one window: `orchestration`, charged to its epic, when beads name it as their
+window is one window: `orchestration`, charged to its epic, when tickets name it as their
 vizier, otherwise `none`. A subagent's rows all belong to the parent's window that holds the
 subagent's first record.
 
@@ -44,12 +44,12 @@ class Event:
 
 
 def bead_spans(events: list[Event], last: str) -> tuple[list[Window], int]:
-    """The bead windows that `events` open and close, in order, and how many closes named a
-    bead with no open window."""
+    """The ticket windows that `events` open and close, in order, and how many closes named a
+    ticket with no open window."""
     closing = {e.call for e in events if e.verb == "close"}
     continuing = {e.call for e in events if e.verb == "continue"}
-    # `enact close --continue` closes its bead where the next one opens, at its result, so
-    # that the two windows meet with no gap. A "next" bead printed by any other command is
+    # `enact close --continue` closes its ticket where the next one opens, at its result, so
+    # that the two windows meet with no gap. A "next" ticket printed by any other command is
     # not a claim.
     claimed = {e.call: e.time for e in events if e.verb == "next" and e.call in closing}
     ordered = sorted(
@@ -63,8 +63,8 @@ def bead_spans(events: list[Event], last: str) -> tuple[list[Window], int]:
     )
     spans: list[Window] = []
     current: Window | None = None
-    # When a continued close's result named no bead (its output was cut short, say), the
-    # time of that close: the next bead the session names opens there.
+    # When a continued close's result named no ticket (its output was cut short, say), the
+    # time of that close: the next ticket the session names opens there.
     unclaimed: str | None = None
     stray = 0
     for event in ordered:
@@ -91,7 +91,7 @@ def bead_spans(events: list[Event], last: str) -> tuple[list[Window], int]:
                 if event.call in continuing and event.call not in claimed:
                     unclaimed = event.time
             elif not spans or spans[-1].bead != event.bead or current is not None:
-                stray += 1  # A repeated close of the bead just closed is not stray.
+                stray += 1  # A repeated close of the ticket just closed is not stray.
     if current is not None:
         spans.append(current)
     return spans, stray
@@ -141,7 +141,7 @@ def session_of(db: Connection, host: str, provider: str, transcript: str) -> str
 
 
 def orchestrated_epic(db: Connection, transcript: str, session: str) -> str | None:
-    """The epic of the beads that name this session or transcript as their vizier: each one's
+    """The epic of the tickets that name this session or transcript as their vizier: each one's
     run epic, else its parent, whichever is most common."""
     epics = Counter(
         ticket_ids.stored(db, str(r[0]))
@@ -162,7 +162,7 @@ def windows_of(
     if first is None or last is None:
         return [], 0
     # A close ends its window when the command returns, so the request that ran it, and the
-    # bead's own close, belong to the bead.
+    # ticket's own close, belong to the ticket.
     rows = db.execute(
         """SELECT CASE WHEN e.verb = 'close' THEN coalesce(r.end, e.time) ELSE e.time END,
             e.call, e.verb, e.bead

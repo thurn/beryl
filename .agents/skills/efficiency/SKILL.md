@@ -1,6 +1,6 @@
 ______________________________________________________________________
 
-## name: efficiency description: Find out where agent time, CPU, LLM tokens (dollars) or CI cost went for a bead, epic, session, cohort or day, and find savings opportunities, with `just efficiency` and its local page. Use when asked what a bead or epic cost, why a session was slow or expensive, what CI or pushes cost, which models or roles spend the most, or what to cut to save time or tokens.
+## name: efficiency description: Find out where agent time, CPU, LLM tokens (dollars) or CI cost went for a ticket, epic, session, cohort or day, and find savings opportunities, with `just efficiency` and its local page. Use when asked what a ticket or epic cost, why a session was slow or expensive, what CI or pushes cost, which models or roles spend the most, or what to cut to save time or tokens.
 
 # Efficiency tools
 
@@ -9,15 +9,15 @@ from the logs that sessions and tools already leave behind. Nothing records
 anything at the time; ingest reads these sources afterwards:
 
 - Claude Code transcripts and the desktop app's session records, and Codex logs
-  (`~/.codex/sessions`, `.jsonl` only). Bead windows (the stretch of a session
-  spent on one bead) come from the Enact commands a session ran.
+  (`~/.codex/sessions`, `.jsonl` only). Ticket windows (the stretch of a session
+  spent on one ticket) come from the Enact commands a session ran.
 - Tickets (`tk list`), and `git log` and `master`'s reflog from the main
   checkout.
 - The CPU sampler, the CPU token pool's lease log, the CI run log and the
-  verdicts on `ci-check` beads.
+  verdicts on `ci-check` tickets.
 - Enact's lock-wait log (`.git/enact/lock-waits.jsonl` in the main checkout):
   one line per acquisition of Enact's ownership lock, with the seconds waited,
-  held and spent syncing beads, joined to the tool call that ran the command.
+  held and spent syncing tickets, joined to the tool call that ran the command.
 
 The store is `$BERYL_CACHE/efficiency/store.sqlite`
 (`~/Library/Caches/beryl/efficiency/`). It holds only what ran on this machine.
@@ -73,9 +73,9 @@ just efficiency sql "select count(*) from requests where model like 'claude-opus
 `tier-gap`, `queued`, `enact-lock-wait`, `compile-share`, `repeated-command`,
 `chained-commands`, `never-caught` and `flake-cost`;
 `just efficiency findings --help` lists them all. Each item names its evidence
-query and example beads.
+query and example tickets.
 
-`tier-gap` (move beads to a cheaper model) is not a useful finding to report:
+`tier-gap` (move tickets to a cheaper model) is not a useful finding to report:
 the user already knows it is an option. When asked for savings, leave it out and
 recommend from the other rules.
 
@@ -119,23 +119,23 @@ questions.
 The user schedules work on purpose, so these are never reported as
 opportunities, in answers about velocity or in findings:
 
-- Time a bead waits before anyone schedules it: a ready bead that no active
-  Enact run owns, or the wait from a bead's creation to the start of the run
+- Time a ticket waits before anyone schedules it: a ready ticket that no active
+  Enact run owns, or the wait from a ticket's creation to the start of the run
   that picks it up.
-- Hours when no bead session is running, such as the gaps between Enact runs or
-  while a run is paused or stopped.
+- Hours when no ticket session is running, such as the gaps between Enact runs
+  or while a run is paused or stopped.
 - An "always-on worker pool" or dispatcher that drains `tk ready` without a run.
 - Sessions stopped by a usage limit (the weekly limit or a model's limit), and
   advice to avoid hitting one.
 
-When asked about velocity (wall-clock time to shipped beads), measure only work
-the user has scheduled, usually the beads of active Enact runs, and only the
-time while their run was going.
+When asked about velocity (wall-clock time to shipped tickets), measure only
+work the user has scheduled, usually the tickets of active Enact runs, and only
+the time while their run was going.
 
 ## Cross-checking findings against fixes
 
 The store looks back over days, and the code changes faster than that. A finding
-built on last week's data may already be fixed, or already have a bead. Check
+built on last week's data may already be fixed, or already have a ticket. Check
 each finding before reporting it:
 
 1. **Date the evidence.** Note when the waits, runs or commands behind the
@@ -148,11 +148,11 @@ each finding before reporting it:
    subjects and bodies (`-i --grep=<term>`). Read the body of each likely fix.
    It says what someone saw and what changed, so you can tell whether it covers
    this finding or only a nearby one.
-3. **Look for beads.** Search the open and in-progress beads, descriptions as
-   well as titles: `tk list --json`, filtered for the tool's name, the command
-   and the symptom. A finding can also come from a bead's own text: for example,
-   the acceptance criteria that a tool writes into the beads it files can send
-   workers to run a slow command.
+3. **Look for tickets.** Search the open and in-progress tickets, descriptions
+   as well as titles: `tk list --json`, filtered for the tool's name, the
+   command and the symptom. A finding can also come from a ticket's own text:
+   for example, the acceptance criteria that a tool writes into the tickets it
+   files can send workers to run a slow command.
 4. **Read the code as it is now** (`git show origin/staging:<path>`), not the
    main checkout, which may lag behind. Confirm that the cause you inferred
    still exists, such as a lock, a priority class or a retry loop.
@@ -162,23 +162,23 @@ each finding before reporting it:
    so, and report the finding as "fixed, not yet measured".
 
 Report each finding as one of: **fixed** (name the commit), **covered** (name
-the bead and say what it leaves out), or **open** (no fix or bead). Only an open
-finding is a new opportunity. Offer to file a bead for it.
+the ticket and say what it leaves out), or **open** (no fix or ticket). Only an
+open finding is a new opportunity. Offer to file a ticket for it.
 
 ### Pitfalls found while cross-checking
 
 - A command run in the background ends, in `tool_calls`, when it was launched.
   Its real end is the session's `notifications` row for that call, or the next
   `prompts` row of kind `background` that names it.
-- Vizier sessions can appear inside bead windows. Before blaming workers, drop
+- Vizier sessions can appear inside ticket windows. Before blaming workers, drop
   sessions whose commands include `enact.py next --epic`.
 - `just efficiency sql` ingests first unless given `--no-ingest`, which can take
   minutes on a loaded machine.
 
 ## Reading the numbers
 
-- **"no data"**: beads that ran on another host or provider whose rows aren't in
-  this store (Cygnus, Codex on the MacBook). `summary` shows how many, and
+- **"no data"**: tickets that ran on another host or provider whose rows aren't
+  in this store (Cygnus, Codex on the MacBook). `summary` shows how many, and
   `coverage` lists them by host. Their figures are missing, not zero; import
   that machine's export to fill them in.
 - An unknown value prints as `-`, never `0`. A dollar sum marked `+` is a lower
@@ -189,18 +189,18 @@ finding is a new opportunity. Offer to file a bead for it.
   minutes, never in them. Tool and queued time are split by command kind, from
   `data/efficiency-command-kinds.json`; a command that matches no pattern is
   "other", and `coverage` lists the longest ones.
-- **Core minutes** are the CPU used in a bead's worktree, from the sampler.
+- **Core minutes** are the CPU used in a ticket's worktree, from the sampler.
 - **Dollars** split three ways, each summing to the total: by class (cache read,
   cache write, output, uncached input); by source (output, the fixed prefix of
   each request, new content, and content carried from earlier turns, split by
   the tool that added it); and by purpose (working against wake-up requests,
   which found nothing to do and went back to waiting).
-- **Rework** is what later beads spent fixing a bead's work: a Steward bead's
-  cost when the bead's commit broke slow CI, and later `fix` commits to a card
-  it added. That money is already another bead's direct cost, so rework is shown
-  beside direct cost and never added to it.
+- **Rework** is what later tickets spent fixing a ticket's work: a Steward
+  ticket's cost when the ticket's commit broke slow CI, and later `fix` commits
+  to a card it added. That money is already another ticket's direct cost, so
+  rework is shown beside direct cost and never added to it.
 - In roll-ups, "orchestration" is the cost of an Enact run's orchestrator
-  session, charged to its epic but to no bead, and "(no bead)" is every other
-  session's time outside a bead window. The lines sum to the total.
-- A window counts toward `--since` when it starts in the range and a bead when
-  it closed in it; a closed bead's own figures include all its windows.
+  session, charged to its epic but to no ticket, and "(no ticket)" is every
+  other session's time outside a ticket window. The lines sum to the total.
+- A window counts toward `--since` when it starts in the range and a ticket when
+  it closed in it; a closed ticket's own figures include all its windows.

@@ -3,7 +3,7 @@
 *The plan for the second half of Project 50k: an engine structure and a card
 workflow that would still work with a full implementation of the Comprehensive
 Rules and 50,000 card definitions. Decided 2026-11-15 in a design interview. The
-work is the Enact epic `by-ptc7`, whose beads are written against this
+work is the Enact epic `by-ptc7`, whose tickets are written against this
 document.*
 
 Part I (`by-w8gv`) rebuilt the engine around a kernel crate, card behavior as
@@ -27,13 +27,13 @@ This is an engine and tooling plan. The game UI is moving to Beryl 3D
 documentation pass were closed unrun on 2026-11-15 and moved here, so that one
 audit looks at the keystones as built and at what Part II is about to change:
 
-- The baseline audit (the first bead of this plan) answers the six questions the
-  closing audit was to answer: whether decisions R4 to R13 of
+- The baseline audit (the first ticket of this plan) answers the six questions
+  the closing audit was to answer: whether decisions R4 to R13 of
   [rules-coverage.md](rules-coverage.md) were built as decided; which variants,
   fields, branches and prompt purposes exist for exactly one keystone; whether
   each question of that plan's principle 7 is answered in one place; which five
   vocabulary entries the census says would unblock the most cards; the numbers
-  (the count gate from that epic's first bead to its last, `State<Small>`'s
+  (the count gate from that epic's first ticket to its last, `State<Small>`'s
   size, each family's present-cost ratio, the stall rate under random play); and
   that epic's acceptance, line by line. It rewrites "Where the engine stands" in
   that document from the code. Its list of one-card logic goes to the module
@@ -105,7 +105,7 @@ testing the result. The card workflow below attacks those two costs.
 | P12 | Compile and check time is measured per crate and kept as a series. The largest costs are fixed from the measurement. An engine change tests the deck cards, the keystones and a sample fixed by the commit; the whole pool runs in the nightly.                      | Nobody has per-crate numbers. Per-card tests cost about 0.1 CPU-seconds a card, which is over an hour at 50,000.                                                                     |
 | P13 | New keystones have no UI bar. The session's views and animation scripts cover a new object state with existing prompt shapes and verbs, so the script checks keep passing.                                                                                           | The UI is moving to Beryl 3D.                                                                                                                                                        |
 | P14 | The performance bars of `by-bajq` carry over: the count gate is never raised for a mechanism, a family's rollout step stays within 1.25 times the same step without it, and `State<Small>` stays within 20,480 bytes. Subgames live only in the `Large` layout.      | A mechanic the WU mirror does not use must cost it nothing.                                                                                                                          |
-| P15 | Design, foundation, keystone and review beads are `tier:opus`. The rulings ledger, partner cards, lint sweeps and measurements are `tier:sonnet`. Nothing is `tier:fable`.                                                                                           | The designs here come from the one session that planned this.                                                                                                                        |
+| P15 | Design, foundation, keystone and review tickets are `tier:opus`. The rulings ledger, partner cards, lint sweeps and measurements are `tier:sonnet`. Nothing is `tier:fable`.                                                                                         | The designs here come from the one session that planned this.                                                                                                                        |
 | P16 | Out of scope: dexterity cards, un-cards, Alchemy cards, and cards that only matter during a draft. Ante is designed below and not built. Omen and Station cards are left to set work.                                                                                | The target is every other known card. Omens follow the adventure pattern and Stations are counters.                                                                                  |
 
 ## From the bug log to guards
@@ -130,9 +130,9 @@ class, or says why none can.
 
 ## Designs
 
-Each section is the proposed design for one group of beads. A group's first bead
-may amend its section where the code proves it wrong, and records the change
-here in the same push.
+Each section is the proposed design for one group of tickets. A group's first
+ticket may amend its section where the code proves it wrong, and records the
+change here in the same push.
 
 ### A. Auditing the first keystones
 
@@ -166,8 +166,8 @@ Breach, Painter's Servant with Mother of Runes. A pool of every keystone and
 partner makes those pairings the common case. `just fuzz --pool keystones` deals
 both decks from it, and `just exhaust --pool keystones` searches from positions
 cut from those games, with the invariants, the references and the both-layout
-comparison (section B) at every decision. The nightly runs both and files a bead
-for a failure, as the browser sweep does. A failure shrinks to a scenario
+comparison (section B) at every decision. The nightly runs both and files a
+ticket for a failure, as the browser sweep does. A failure shrinks to a scenario
 (`beryl_search/tests/shrink.rs`). Each keystone of this plan joins the pool with
 its card.
 
@@ -261,8 +261,8 @@ pub struct Permanents<L: Layout = Small>(Bitboard<L::Slot>);
   in `Affects::Object`) are listed in the kernel contract with the reason each
   is safe, or become references.
 
-The contract bead lands the types, the queries and the conversion of the kernel
-mutators and of three rules modules as the pattern (`zones.rs`,
+The contract ticket lands the types, the queries and the conversion of the
+kernel mutators and of three rules modules as the pattern (`zones.rs`,
 `actions/destroy.rs`, `counters.rs`). The module passes of section C convert the
 rest.
 
@@ -349,8 +349,8 @@ to. The root `lib.rs` keeps the crate contract.
 | 20. Casting and payment tests                                                                         | `tests/`                            | `tests/{any_target.rs,banned.rs,cast.rs,casting.rs,chosen.rs,life_costs.rs,payment.rs,remembered_mana.rs,spell_copies.rs,spell_costs.rs}`                                                                                                                                                                                                           |
 | 21. Combat, library, and other tests                                                                  | `tests/`                            | `tests/{combat.rs,effects.rs,game.rs,graveyard_return.rs,library.rs,mulligan.rs,phasing.rs,regeneration.rs,rules.rs,trackers.rs}`, `tests/combat/keywords.rs`                                                                                                                                                                                       |
 
-**One pass per module (P11).** Each bead of the module pass takes one row of the
-table and makes three commits:
+**One pass per module (P11).** Each ticket of the module pass takes one row of
+the table and makes three commits:
 
 1. **Move.** Files go to their rule-owned place with `Implements:` headers, with
    no change to behavior. `rule-ownership` passes for the module.
@@ -362,8 +362,8 @@ table and makes three commits:
    Behavior is held by the scenarios, `just fuzz`, the frozen saves,
    `rollouts_never_change` and the count gate.
 
-The bead's close reason gives the module's non-test lines before and after each
-commit. A module whose simplification finds little says so; no number is a
+The ticket's close reason gives the module's non-test lines before and after
+each commit. A module whose simplification finds little says so; no number is a
 target.
 
 **The `L: Layout` parameter.** Keep free functions in their rule modules and
@@ -421,10 +421,10 @@ which test definition each real card's scenario now covers.
   crate and per day, the seconds of `cargo check`, `cargo clippy` and the test
   build, read from `cargo --timings` output that the `rust` lane's steps write
   when run with a flag, and from the scale rehearsal. `just efficiency metrics`
-  gains `compile.<crate>.check`, `.clippy` and `.test-build`. The same bead
+  gains `compile.<crate>.check`, `.clippy` and `.test-build`. The same ticket
   fixes `just efficiency cards`, which did not finish in two minutes during
   planning.
-- **Then fix the largest.** One bead takes the three largest costs the series
+- **Then fix the largest.** One ticket takes the three largest costs the series
   shows and reduces each, with before and after in its close reason. The known
   candidates are downstream monomorphization in `beryl_search` (section C),
   Clippy checking every card's scenarios with all features enabled, and the
@@ -435,7 +435,7 @@ which test definition each real card's scenario now covers.
   and slow CI pass it the cards of `docs/sample-decks/`, the keystones, the
   cards whose files changed and a sample of the rest fixed by the commit hash,
   as the `oracle` lane already does (`oracle_selection.py`). The nightly plays
-  every card and files a bead for a failure.
+  every card and files a ticket for a failure.
 - **The rehearsal follows the workflow.** `just scale` clones today's card
   files, scenarios and all. Once simple cards carry no hand-written scenarios
   (section E), the rehearsal's mix is three quarters cards without a scenarios
@@ -578,8 +578,8 @@ in a set. `just set plan <code>` sorts them:
 | `store`      | Complete from the card store (keyword-only creatures)                         | Nobody                                 |
 | `drafted`    | Every sentence drafted by the brief                                           | A `tier:haiku` writer checks the draft |
 | `composed`   | The keywords and layout are supported, with clauses to compose by hand        | A `tier:sonnet` writer                 |
-| `vocabulary` | A missing Phase node kind or a clause with distant examples, grouped by cards | One `tier:opus` bead a group           |
-| `mechanism`  | A keyword, layout or rule the engine lacks                                    | A design bead                          |
+| `vocabulary` | A missing Phase node kind or a clause with distant examples, grouped by cards | One `tier:opus` ticket a group         |
+| `mechanism`  | A keyword, layout or rule the engine lacks                                    | A design ticket                        |
 
 It writes `$BERYL_CACHE/set-plan-<code>.json` and prints the table. A card can
 need several vocabulary groups. Cards with Phase parse gaps go through the
@@ -604,9 +604,9 @@ whose generated scenarios kill every mutant loses its hand-written scenarios,
 except those the rulings ledger names, and its doc comment keeps only
 card-specific rulings (P3). Then a dozen cards nobody has implemented, picked by
 `just set plan` from one set's `drafted` and `composed` tiers, are written by
-`tier:sonnet` sessions with the new skill. The bead reports, from the efficiency
-store, tokens and minutes per card against the 121 cards before, the share that
-passed `just card check` first time, and the lines per card file.
+`tier:sonnet` sessions with the new skill. The ticket reports, from the
+efficiency store, tokens and minutes per card against the 121 cards before, the
+share that passed `just card check` first time, and the lines per card file.
 
 ### F. The shape of a game
 
@@ -870,7 +870,7 @@ multiset of card indices. They have no slots.
 | I                   | Lurrus of the Dream-Den   |                                                 |
 
 Mana matters: only Island, Plains and Swamp are basic lands with files, so the
-first bead of each family that needs {R} or {G} writes Mountain's and Forest's
+first ticket of each family that needs {R} or {G} writes Mountain's and Forest's
 scenarios' missing producer, as the card-writing skill already directs.
 
 ## Designed, not built
@@ -892,7 +892,7 @@ scenarios' missing producer, as the card-writing skill already directs.
 
 ## Bars and validation
 
-Every bead of the epic holds these, and says so in its close reason where it
+Every ticket of the epic holds these, and says so in its close reason where it
 measured one.
 
 | Check               | What it proves                                                                                | Command                           |
@@ -910,7 +910,7 @@ measured one.
 | Fuzzing, exhaustion | Long random games, and every short line from a scenario's end, break no invariant             | `just fuzz`, `just exhaust`       |
 | Script checks       | Each keystone's spec moments pass from both seats with existing verbs and prompt shapes       | `beryl_cli script-check`          |
 
-A bead whose change cannot hold the count gate after three attempts stops and
+A ticket whose change cannot hold the count gate after three attempts stops and
 says so on the epic, as in `by-bajq`: that is the one thing that stops the run.
 A family's present-cost miss after three attempts is recorded and files a
 follow-up.
@@ -930,12 +930,12 @@ The whole epic waits for `by-bajq` to close.
    generator, the prelude functions, the brief, the planner, the skill, the
    proof.
 4. **The module passes**, after the contracts and the sweeps: about fifteen
-   beads, one a module group, in parallel, each with a Warden for its area.
+   tickets, one a module group, in parallel, each with a Warden for its area.
 5. **A Mason** audits the kernel and rules contracts after the passes.
 6. **The three keystone families**, in parallel, after the Mason. Each starts
    with its foundation (`Format` and the turn plan; casting inside a resolution
    and `combat::assigner`; `Shape`), then its keystones, then its present-cost
-   measurement, its agents bead and its Warden.
+   measurement, its agents ticket and its Warden.
 7. **A final Mason**, and the Archivist, who retires this document into the
    architecture document.
 

@@ -10,10 +10,10 @@ from beryl_efficiency.ingest import LineSource, Row
 
 
 def bead(id: str, **fields: object) -> dict[str, object]:
-    """A bead record as `bd list --json` prints one, with `fields` over the defaults."""
+    """A ticket record as `bd list --json` prints one, with `fields` over the defaults."""
     return {
         "id": id,
-        "title": f"Bead {id}",
+        "title": f"Ticket {id}",
         "status": "open",
         "priority": 2,
         "issue_type": "task",
@@ -28,7 +28,7 @@ def listing(*beads: Mapping[str, object]) -> bytes:
 
 class Lines(LineSource):
     """A line source over `folder`'s `*.jsonl` files: each line is an object with `id` and
-    `n`, written to the `beads` table as a bead `id` with priority `n`."""
+    `n`, written to the `beads` table as a ticket `id` with priority `n`."""
 
     name = "lines"
 

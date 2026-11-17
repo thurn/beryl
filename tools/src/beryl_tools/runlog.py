@@ -1,7 +1,7 @@
 """The run log: every run of every check `by check` and `by ci` make
 appends one JSON line to the current hour's file in `$BERYL_CACHE/ci/runs/` (runstore.py), under
 a file lock, since worktrees and slow CI write at once. It is this machine's record, never committed. `by ci-report` sums it,
-with the verdicts on each check's failures that verdicts.py records in beads.
+with the verdicts on each check's failures that verdicts.py records in tickets.
 
 A check is the finest thing a step can report: one Rust test (`rust:<binary>::<test path>`), one
 browser check (`ui-test:<title>`, `verb:<verb>/<seat>/<layout>` for one of the stage's verbs,
@@ -183,13 +183,13 @@ class Run:
     host: str = field(default_factory=platform.node)
     # The name of the checkout directory the run was made in (a worktree's name under
     # `.worktrees/`, or the main checkout's), which the efficiency dashboard joins to the CPU
-    # sampler's worktrees and to a bead's `enact_worktree`.
+    # sampler's worktrees and to a ticket's `enact_worktree`.
     worktree: str = paths.REPO.name
     # Why a check ran, unless its step says (`label`): slow CI runs them all.
     chosen: str = "all"
     logged: list[dict[str, object]] = field(default_factory=list)
     # The output of the failed attempt of each check that then passed on its rerun, by check
-    # (checks.lane_steps). flaky.py quotes it on the check's bead, since the rerun's passing
+    # (checks.lane_steps). flaky.py quotes it on the check's ticket, since the rerun's passing
     # output is all the run prints of that step.
     failures: dict[str, str] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -403,7 +403,7 @@ def tally(
     lane: str = "",
 ) -> tuple[dict[str, Tally], dict[str, Tally]]:
     """Per check and per lane, costliest first: runs and seconds from the run log, verdicts
-    since `since` from the checks' beads (verdicts.py). A bisection's reruns at older commits
+    since `since` from the checks' tickets (verdicts.py). A bisection's reruns at older commits
     (bisect.py, script `bisect`) say nothing of the check's own record and are left out.
     `counted` holds tallies already summed from the log (runstore.lane_tallies) for `lane`.
     """
@@ -526,12 +526,12 @@ def pending_report(records: list[dict[str, object]], as_json: bool) -> int:
         return 0
     passing = sum(r["last"] == "pending-pass" for r in rows)
     print(
-        f"ci-report: {len(rows)} pending checks, {passing} now passing: the bead that makes"
+        f"ci-report: {len(rows)} pending checks, {passing} now passing: the ticket that makes"
         " one pass removes it from verdicts.PENDING"
     )
     for r in rows:
         now = "  NOW PASSES" if r["last"] == "pending-pass" else ""
-        print(f"{r['check']}  board {r['board']}  bead {r['bead']}  {r['last']}{now}")
+        print(f"{r['check']}  board {r['board']}  ticket {r['bead']}  {r['last']}{now}")
     return 0
 
 

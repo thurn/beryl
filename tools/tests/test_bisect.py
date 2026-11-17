@@ -292,7 +292,7 @@ def test_narrowing_arguments_name_their_checks() -> None:
 
 
 class Store(verdicts.Tickets):
-    """The ci-check beads and the Enact beads' delivered commits, in memory."""
+    """The ci-check tickets and the Enact tickets' delivered commits, in memory."""
 
     def __init__(self, delivered: dict[str, list[str]]) -> None:
         self.delivered_by = delivered

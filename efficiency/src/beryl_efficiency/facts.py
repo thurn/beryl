@@ -1,8 +1,8 @@
-"""The rows every query adds up: beads with their labels, and bead windows with their seconds
+"""The rows every query adds up: tickets with their labels, and ticket windows with their seconds
 by category (`window_time`) and their dollars by split (`window_dollars`).
 
-A window is a stretch of a session spent on one bead (kind `bead`), a whole orchestrator
-session charged to its epic (kind `orchestration`) or a stretch on no bead (kind `none`).
+A window is a stretch of a session spent on one ticket (kind `bead`), a whole orchestrator
+session charged to its epic (kind `orchestration`) or a stretch on no ticket (kind `none`).
 The windows of a top-level transcript cover it with no gap and no overlap, and a subagent's
 seconds and dollars are already inside its parent's window, so summing windows counts
 everything once. Queries choose windows with a `Scope` and add up these rows, so that every
@@ -22,8 +22,8 @@ from . import commits, cpu, rework, ticket_ids
 from .scope import Range, Scope
 from .timing import AGENT_CATEGORIES
 
-# The names of roll-up lines that are not a bead or an epic.
-NO_BEAD = "(no bead)"
+# The names of roll-up lines that are not a ticket or an epic.
+NO_BEAD = "(no ticket)"
 ORCHESTRATION = "orchestration"
 NO_EPIC = "(no epic)"
 
@@ -42,12 +42,12 @@ class Bead:
     enact: dict[str, object]
 
     def label(self, key: str) -> str | None:
-        """The value of the bead's first `key:value` label, if any."""
+        """The value of the ticket's first `key:value` label, if any."""
         found = sorted(l for l in self.labels if l.startswith(f"{key}:"))
         return found[0].split(":", 1)[1] if found else None
 
     def began(self) -> str | None:
-        """When the bead's work began, which dates its samples in a metric
+        """When the ticket's work began, which dates its samples in a metric
         (docs/efficiency-dashboard.md, "Efficiency changes"): its start, else its creation,
         else its close."""
         return self.started or self.created or self.closed
@@ -157,7 +157,7 @@ def spread(values: Sequence[float], digits: int) -> dict[str, object]:
 
 
 class Facts:
-    """Every bead and every window in the store, loaded once per query, and the store itself
+    """Every ticket and every window in the store, loaded once per query, and the store itself
     for the CPU, which is read per worktree when a query asks for it."""
 
     def __init__(
@@ -185,7 +185,7 @@ class Facts:
         return cpu.worktree_name(bead.enact.get("enact_worktree"))
 
     def claims(self, worktree: str) -> list[cpu.Claim]:
-        """The beads that may own CPU in `worktree`, with their windows."""
+        """The tickets that may own CPU in `worktree`, with their windows."""
         by_worktree = self._worktrees
         if by_worktree is None:
             by_worktree = defaultdict(list)
@@ -210,9 +210,9 @@ class Facts:
         ]
 
     def core_minutes(self, bead: str) -> float | None:
-        """The CPU minutes of the bead's worktree that belong to it ("CPU accounting");
-        `None` when the bead names no worktree, or the sampler was not running on its host
-        when the bead started."""
+        """The CPU minutes of the ticket's worktree that belong to it ("CPU accounting");
+        `None` when the ticket names no worktree, or the sampler was not running on its host
+        when the ticket started."""
         found = self.beads.get(bead)
         db = self.db
         if found is None or db is None:
@@ -245,7 +245,7 @@ class Facts:
         return minutes_of(self._cpu[name].get(bead, 0.0))
 
     def history(self) -> commits.History:
-        """The commits in the store, each with the bead that landed it."""
+        """The commits in the store, each with the ticket that landed it."""
         found = self._history
         if found is None:
             beads = {b.id: b.enact for b in self.beads.values()}
@@ -258,7 +258,7 @@ class Facts:
         return found
 
     def direct(self, bead: str) -> float:
-        """The bead's direct dollars: every window of it, at any time, on any host."""
+        """The ticket's direct dollars: every window of it, at any time, on any host."""
         found = self._direct
         if found is None:
             found = defaultdict(float)
@@ -269,7 +269,7 @@ class Facts:
         return found.get(bead, 0.0)
 
     def rework(self) -> rework.Rework:
-        """Every bead's rework, from the whole history ("Rework"): a bead's rework counts
+        """Every ticket's rework, from the whole history ("Rework"): a ticket's rework counts
         fixes made at any time, and never changes its direct cost."""
         found = self._rework
         if found is None:
@@ -293,8 +293,8 @@ class Facts:
         )
 
     def top_epic(self, bead: str | None) -> str | None:
-        """The bead's topmost ancestor, or the bead itself when it is an epic with no
-        parent; `None` for a bead under no epic."""
+        """The ticket's topmost ancestor, or the ticket itself when it is an epic with no
+        parent; `None` for a ticket under no epic."""
         if bead is None:
             return None
         seen: set[str] = set()
@@ -314,7 +314,7 @@ class Facts:
         return ticket_ids.stored(self.db, value) if self.db is not None else value
 
     def under(self, epic: str) -> set[str]:
-        """The epic and every bead under it."""
+        """The epic and every ticket under it."""
         found: set[str] = set()
         stack = [self.resolve(epic)]
         while stack:
@@ -325,7 +325,7 @@ class Facts:
         return found
 
     def cohort(self, scope: Scope) -> set[str] | None:
-        """The beads `scope`'s filters choose, or `None` when no filter chooses beads."""
+        """The tickets `scope`'s filters choose, or `None` when no filter chooses tickets."""
         if not scope.chooses_beads():
             return None
         ids = set(self.under(scope.epic)) if scope.epic else set(self.beads)
@@ -334,7 +334,7 @@ class Facts:
 
     def chosen(self, scope: Scope) -> list[Window]:
         """The windows that start in `scope`'s range, ran on its host and provider, and
-        belong to beads its filters choose."""
+        belong to tickets its filters choose."""
         when = scope.range
         beads = self.cohort(scope)
         return [
@@ -347,7 +347,7 @@ class Facts:
         ]
 
     def closed(self, scope: Scope, within: Range | None = None) -> list[Bead]:
-        """The beads in `scope`'s cohort, not epics, closed inside `within` (the scope's
+        """The tickets in `scope`'s cohort, not epics, closed inside `within` (the scope's
         range by default)."""
         when = scope.range if within is None else within
         beads = self.cohort(scope)
@@ -361,8 +361,8 @@ class Facts:
         ]
 
     def bead_windows(self, scope: Scope) -> dict[str, list[Window]]:
-        """Every window of kind `bead` that `scope`'s host and provider allow, by bead, at
-        any time: a bead's cost counts wherever its windows fall."""
+        """Every window of kind `bead` that `scope`'s host and provider allow, by ticket, at
+        any time: a ticket's cost counts wherever its windows fall."""
         found: dict[str, list[Window]] = defaultdict(list)
         for w in self.windows:
             if (

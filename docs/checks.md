@@ -187,20 +187,21 @@ The lanes slow CI adds to the fast check's:
   count against the limit in `rust/crates/beryl_bench/count-gate.toml`. That
   file's comments say when the limit may go up. Each staging commit's count goes
   in `$BERYL_CACHE/ci/counts.jsonl`, and the step prints the change since the
-  last commit measured. Without failing anything, it files a `count-creep` bead
-  when one tested range adds more than 0.25%, or when the count is more than
-  0.5% above the lowest it reached since the limit last moved, and a
-  `count-lower` bead when the count is more than 0.5% under the limit
+  last commit measured. Without failing anything, it files a `count-creep`
+  ticket when one tested range adds more than 0.25%, or when the count is more
+  than 0.5% above the lowest it reached since the limit last moved, and a
+  `count-lower` ticket when the count is more than 0.5% under the limit
   (`count_trend.py`). Its second step, `count-gate-families`, runs
   `just count-gate --family <name>` for each family with a bar in that file,
   failing a family whose present cost passes its ratio (`docs/benchmarking.md`,
   "The present-cost gate").
 
 Slow CI runs on two machines: this Mac and Cygnus, a Windows PC. A pass on
-either one moves `master` forward. A failure's Steward bead (the P0 bead Enact
-files to get a slow-CI failure fixed) goes first to a machine on the OS that
-failed, and to any machine after two hours. Slow CI doesn't run on a timer: each
-machine tests `staging` whenever it's free and fixes failures as they appear.
+either one moves `master` forward. A failure's Steward ticket (the P0 ticket
+Enact files to get a slow-CI failure fixed) goes first to a machine on the OS
+that failed, and to any machine after two hours. Slow CI doesn't run on a timer:
+each machine tests `staging` whenever it's free and fixes failures as they
+appear.
 
 Windows leaves `app`, `ui-smoke`, `oracle` and `counts` to the Mac, and its fast
 check skips the browser checks and `motion` (see `WINDOWS_SKIPS` in
@@ -256,12 +257,12 @@ A firing skips when staging has not moved since the last sweep, when the load is
 over 8 times the cores, or while another sweep runs. A sweep failure never
 blocks `master`. The sweep bisects each failed check over the commits since the
 last sweep that passed (up to 30 minutes), then files one P1 `sweep-failure`
-Steward bead per lane naming the checks, the culprit commit or range and how to
-replay them. A check an open sweep bead already names gets a comment instead.
-Its steps' hang limit is 2 hours, because with a quarter of the cores they can
-run several times slower than in a check. The sweeps used to run at utility
-priority, where at a load of 40 to 70 they got almost no CPU and took 2 to 3.5
-hours, past their interval. Work that still runs at low priority sets
+Steward ticket per lane naming the checks, the culprit commit or range and how
+to replay them. A check an open sweep ticket already names gets a comment
+instead. Its steps' hang limit is 2 hours, because with a quarter of the cores
+they can run several times slower than in a check. The sweeps used to run at
+utility priority, where at a load of 40 to 70 they got almost no CPU and took 2
+to 3.5 hours, past their interval. Work that still runs at low priority sets
 `BERYL_LOW_PRIORITY=1`, and its Playwright waits time out after 3 minutes
 instead of 30 s (`WAIT_MS` in `ui/scripts/hang.mjs`): at a load of 50 to 70, a
 shot that takes 2 s in a check ran past 30 s, passed on its rerun and was filed
@@ -345,25 +346,25 @@ folders both apps share or a data file Beryl 3D reads can land without Beryl
   the Mac only) counts the gated boards' instructions per frame under Callgrind
   in the `beryl3d-bench` machine and holds them to `data/beryl3d/gates.json`.
 - A failed step is bisected over the commits since the last sweep that passed,
-  for at most 15 minutes, and filed as a P1 `b3d-sweep` bead under Beryl 3D's
-  epic. A check an open sweep bead already names gets a comment. Nothing holds
+  for at most 15 minutes, and filed as a P1 `b3d-sweep` ticket under Beryl 3D's
+  epic. A check an open sweep ticket already names gets a comment. Nothing holds
   `master`.
 - After its build passes, it saves the workspace's build directory to
   `$BERYL_CACHE/b3d/target`, which `just b3d` clones into new worktrees.
 - `--step <name>` runs one step, `--commit` sweeps another commit, and
-  `--dry-run` prints the beads it would file instead of filing them. The record
-  is in `$BERYL_CACHE/b3d/sweep`: `log.jsonl` and `last-output.txt`.
+  `--dry-run` prints the tickets it would file instead of filing them. The
+  record is in `$BERYL_CACHE/b3d/sweep`: `log.jsonl` and `last-output.txt`.
 
 ## Tickets the checks file
 
-The checks file beads by themselves: `flaky-check`, `ci-cut` and `check-budget`
-(below), `sweep-failure` (above), `nightly-failure`, and the P0 `role:steward`
-bead for a failed slow-CI run. `just beads` leaves them all out, and the `cifix`
-skill works them as one Enact run, grouped by shared cause. The Beryl 3D sweep's
-`b3d-sweep` beads are not among them: they are Beryl 3D's own work, filed under
-its epic.
+The checks file tickets by themselves: `flaky-check`, `ci-cut` and
+`check-budget` (below), `sweep-failure` (above), `nightly-failure`, and the P0
+`role:steward` ticket for a failed slow-CI run. `just beads` leaves them all
+out, and the `cifix` skill works them as one Enact run, grouped by shared cause.
+The Beryl 3D sweep's `b3d-sweep` tickets are not among them: they are Beryl 3D's
+own work, filed under its epic.
 
-A `nightly-failure` bead quotes the end of its own step's output, not of the
+A `nightly-failure` ticket quotes the end of its own step's output, not of the
 whole night's, and names the file in `$BERYL_CACHE/nightly/failures` that keeps
 that step's whole output for two weeks. `last-output.txt` holds only the latest
 firing.
@@ -380,29 +381,30 @@ ticket-backed reports with fixtures.
   check that passes on the rerun is flaky: its lane passes, it prints a
   `flaky: <lane> <check>` line, and its `flaky` verdict is recorded. When the
   same check also flaked in another run (another commit or machine) in the last
-  7 days, it files a P1 `flaky-check` bead (`flaky.py`) to delete the check. A
+  7 days, it files a P1 `flaky-check` ticket (`flaky.py`) to delete the check. A
   first flake files nothing: most single flakes came from the run, not the check
   (a loaded sweep, a shared fixture directory, code changing between the
-  attempts). Each check has at most one open bead; a later flake comments on it.
-- The bead, and each later comment, quotes the last 40 lines of the failed
+  attempts). Each check has at most one open ticket; a later flake comments on
+  it.
+- The ticket, and each later comment, quotes the last 40 lines of the failed
   attempt's output, and the whole output is kept for 14 days in
   `$BERYL_CACHE/ci/flakes` on the machine that ran it. Without this, a step that
-  names no checks of its own left its bead nothing to go on: the run prints only
-  the rerun's passing output, and the Beryl 3D sweep overwrites its output file
-  on every firing.
-- The agent working that bead first asks whether a fast, deterministic test (a
+  names no checks of its own left its ticket nothing to go on: the run prints
+  only the rerun's passing output, and the Beryl 3D sweep overwrites its output
+  file on every firing.
+- The agent working that ticket first asks whether a fast, deterministic test (a
   Rust unit test, a Node test with no browser, a check against a recorded
   fixture) could keep most of what the check protects. If so, it writes that
   test and deletes the check. If not, it deletes the check when it has never
   caught a bug, or moves it to the nightly when it has.
 - There is no quarantine. Every check that runs can fail CI, except those on
-  `verdicts.PENDING`, each tied to the bead whose work will make it pass.
+  `verdicts.PENDING`, each tied to the ticket whose work will make it pass.
 
 ## Budgets and hang limits
 
 - A run that goes over budget still passes. No timer fails a run for being slow.
   A fast check over its 60 s target, or over 90 wall seconds, files a
-  `check-budget` bead (`budget.py`) to speed up, move or delete its slowest
+  `check-budget` ticket (`budget.py`) to speed up, move or delete its slowest
   steps instead of raising the budget. A step the fast check's 180 s hard limit
   cuts off is deferred to slow CI, not failed.
 - Slow CI's budget is in CPU seconds (`budget.SLOW_CPU_BUDGET`, 800), because
@@ -412,12 +414,12 @@ ticket-backed reports with fixtures.
   median CPU seconds, summed over the checks that ran in one of their lane's
   last 10 runs (`check_value.full_run`). The oracle lane plays a sample of cards
   that changes with each commit, so it counts the median CPU seconds of one of
-  its runs instead, and no cut bead names its cards (`check_value.SAMPLED`).
-  When that is over the budget, it files one P1 `ci-cut` bead per lane naming
+  its runs instead, and no cut ticket names its cards (`check_value.SAMPLED`).
+  When that is over the budget, it files one P1 `ci-cut` ticket per lane naming
   the lowest-value checks (see below) whose removal brings a full run under the
   budget, with each check's runs, catches and CPU seconds. The agent working a
-  bead deletes each check that caught nothing in 30 days and moves each one that
-  caught something to the nightly, after first asking whether a fast,
+  ticket deletes each check that caught nothing in 30 days and moves each one
+  that caught something to the nightly, after first asking whether a fast,
   deterministic test could keep what the check protects. A check the fast check
   also runs leaves slow CI alone: it joins `verdicts.FAST_ONLY`, which slow CI's
   lanes leave out (a Rust or Python test, a script check, or a whole step such
@@ -425,7 +427,7 @@ ticket-backed reports with fixtures.
   should play is marked `#[ignore]`. The checks in `budget.KEEP` (the app
   starting, the `ui-smoke` checks, clippy, the UI's typecheck, the `names` lane,
   and `rust:tests`, the record that stands for every Rust test where
-  cargo-nextest is missing) are never named. While a `ci-cut` bead is open
+  cargo-nextest is missing) are never named. While a `ci-cut` ticket is open
   nothing more is filed; once the last one closes, only runs that started after
   it count, and slow CI waits for 10 of them.
 - Each step has a hang limit (`hang.py`): 4x its slowest pass on this machine in

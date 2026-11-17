@@ -1,4 +1,4 @@
-"""CI accounting: the run log and the verdicts on the checks' beads, read into the store and
+"""CI accounting: the run log and the verdicts on the checks' tickets, read into the store and
 reported as the `ci` tree, over small synthetic sources."""
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ def line(
 def verdict(
     comment: str, moment: str, verdict_name: str, script: str = "ci", **more: object
 ) -> dict[str, object]:
-    """A verdict comment as verdicts.py records one on a check's bead."""
+    """A verdict comment as verdicts.py records one on a check's ticket."""
     entry: dict[str, object] = {
         "time": moment,
         "host": "JARVIS.local",
@@ -69,7 +69,7 @@ def verdict(
 
 
 def check_bead(check: str, lane: str, *comments: Mapping[str, object]) -> str:
-    """A `ci-check` bead as `bd export` prints it."""
+    """A `ci-check` ticket as `bd export` prints it."""
     return json.dumps(
         {
             "id": "by-ci-" + check.replace(":", "-")[:10],

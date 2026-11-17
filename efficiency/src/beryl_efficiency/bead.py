@@ -1,6 +1,6 @@
-"""`just efficiency bead <id>`: one bead's agent minutes by what the sessions were doing, its
+"""`just efficiency bead <id>`: one ticket's agent minutes by what the sessions were doing, its
 dollars split each way, its requests and tokens, and the sessions that worked it. An epic's
-figures include the orchestration charged to it. A bead that ran on a host the store has no
+figures include the orchestration charged to it. A ticket that ran on a host the store has no
 data from says so instead of showing zeros."""
 
 from __future__ import annotations
@@ -52,8 +52,8 @@ class Detail:
 
 @dataclass
 class Stretch:
-    """A stretch of the bead's timeline in one category or kind, `at` minutes after the
-    start of its first window. The bead's windows are laid end to end, so the strip is as
+    """A stretch of the ticket's timeline in one category or kind, `at` minutes after the
+    start of its first window. The ticket's windows are laid end to end, so the strip is as
     long as its wall minutes."""
 
     at: float
@@ -63,7 +63,7 @@ class Stretch:
 
 @dataclass
 class Context:
-    """The context a request read, `at` minutes along the bead's timeline."""
+    """The context a request read, `at` minutes along the ticket's timeline."""
 
     at: float
     tokens: int
@@ -71,7 +71,7 @@ class Context:
 
 @dataclass
 class Caused:
-    """Rework charged to the bead: part of `fixer`'s direct dollars, by `rule`."""
+    """Rework charged to the ticket: part of `fixer`'s direct dollars, by `rule`."""
 
     fixer: str
     rule: str
@@ -173,7 +173,7 @@ def joined(found: list[Stretch]) -> list[Stretch]:
 def timeline(
     db: sqlite3.Connection, bead: str, windows: list[Window]
 ) -> tuple[list[Stretch], list[Context]]:
-    """The bead's windows laid end to end in order of start: what each stretch was spent on,
+    """The ticket's windows laid end to end in order of start: what each stretch was spent on,
     as time accounting splits it, and the context of each of the windows' requests."""
     stretches: list[Stretch] = []
     contexts: list[Context] = []
@@ -314,7 +314,7 @@ def report_from(
         lines(result),
         [f"efficiency session {s} --bead {bead}" for s in sessions[:3]]
         or [f"efficiency sql \"select * from windows where bead = '{bead}'\""],
-        {"pushes": "the bead's pushes, each split into its fast check and the rest"}
+        {"pushes": "the ticket's pushes, each split into its fast check and the rest"}
         | describe(
             "agent_minutes",
             "person_minutes",

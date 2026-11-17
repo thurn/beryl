@@ -1,7 +1,6 @@
----
-name: specs
-description: Reproduce, debug, verify or QA a card's behavior in Beryl's UI through its spec — every UI moment of the card (stops, prompts, ability choosers, tokens, exile links, stack interactions, payments) as a live game from both seats at /scenarios/<card>/<moment>. Gives text descriptions, filmstrips, an animation audit and a Playwright driver for any moment. Use when implementing or fixing a card's UI, checking that what happens is animated clearly for both players, reproducing a UI bug report about a card, or extending what specs generate.
----
+______________________________________________________________________
+
+## name: specs description: Reproduce, debug, verify or QA a card's behavior in Beryl's UI through its spec — every UI moment of the card (stops, prompts, ability choosers, tokens, exile links, stack interactions, payments) as a live game from both seats at /scenarios/<card>/<moment>. Gives text descriptions, filmstrips, an animation audit and a Playwright driver for any moment. Use when implementing or fixing a card's UI, checking that what happens is animated clearly for both players, reproducing a UI bug report about a card, or extending what specs generate.
 
 # Card specs
 
@@ -18,15 +17,14 @@ went, where a token came from, what lies exiled under a permanent.
 ## Server lifecycle
 
 Use `--port 0` whenever you start a long-running `just specs`, `just scenarios`,
-or `just playground` session, including with `--release`. Use the URL it
-prints. This gives parallel sessions separate ports and leaves 1430 available
-for manual use.
+or `just playground` session, including with `--release`. Use the URL it prints.
+This gives parallel sessions separate ports and leaves 1430 available for manual
+use.
 
 Keep the terminal session or record the PID of your `by specs` process. When
-finished, including after a failed check, stop your session with Ctrl-C or
-send SIGTERM to that process so it cleans up its children. Verify that its
-printed UI and driver ports no longer have listeners. Leave other sessions
-alone.
+finished, including after a failed check, stop your session with Ctrl-C or send
+SIGTERM to that process so it cleans up its children. Verify that its printed UI
+and driver ports no longer have listeners. Leave other sessions alone.
 
 ## The loop
 
@@ -52,39 +50,38 @@ show the mechanics it shares.
    `streak`, ...; `&` joins a step to the beat above, `<-` names its cause;
    `beryl_session`'s `script/text.rs` documents the form). Read it first for any
    wrong motion, arrow, combat line or mana flow, before filming: a wrong script
-   (a missing, extra or misordered step, a wrong cause, an arrow ended late) is a
-   session bug, fixed in the builder (`beryl_session/src/script/`); a right
+   (a missing, extra or misordered step, a wrong cause, an arrow ended late) is
+   a session bug, fixed in the builder (`beryl_session/src/script/`); a right
    script played wrongly is a stage bug (`ui/src/stage/`).
 
 3. **Audit its motion.** `just specs --motion <card> [--moment M]` plays each
    moment from both seats with motion on and judges it by what each view's
-   script said should happen (`ui/scripts/stage-audit.mjs`): one finding a
-   step, measured at every tick of the stage's own clock, which it holds and
-   steps. `ok` (the stage played the step and the page showed it, for as long
-   as its verb takes), `still` (the stage played no such step, or nothing shows
-   it), `instant` (a jump where the verb gives time to travel), `unseen` (off
-   screen, covered or transparent the while) and `crowded` (more than three
-   different moves begun at once in one beat). An arrow or line's `jump` (a new
-   shape while both its ends stood still) is read from the stage's model.
-   `duplicate` flags two painted instances of one object in a tick, face-down
-   cards, browsers and prompts included; hover inspection is exempt, as is
-   what the design language shows twice (the cards of a `mode` prompt: UI
-   Conventions, "Choosing how to cast"). A token that appears and an ability
-   that is gone in no time are `ok`. About 20 s a card; the JSON with every
-   step, ok ones too, lands in `$BERYL_CACHE/spec-motion/`. Taps and untaps
-   are `minor`: printed only with `--minor`. A finding is a lead, not a
-   verdict: look at the film, and at Arena's motion at the same moment, before
-   fixing.
+   script said should happen (`ui/scripts/stage-audit.mjs`): one finding a step,
+   measured at every tick of the stage's own clock, which it holds and steps.
+   `ok` (the stage played the step and the page showed it, for as long as its
+   verb takes), `still` (the stage played no such step, or nothing shows it),
+   `instant` (a jump where the verb gives time to travel), `unseen` (off screen,
+   covered or transparent the while) and `crowded` (more than three different
+   moves begun at once in one beat). An arrow or line's `jump` (a new shape
+   while both its ends stood still) is read from the stage's model. `duplicate`
+   flags two painted instances of one object in a tick, face-down cards,
+   browsers and prompts included; hover inspection is exempt, as is what the
+   design language shows twice (the cards of a `mode` prompt: UI Conventions,
+   "Choosing how to cast"). A token that appears and an ability that is gone in
+   no time are `ok`. About 20 s a card; the JSON with every step, ok ones too,
+   lands in `$BERYL_CACHE/spec-motion/`. Taps and untaps are `minor`: printed
+   only with `--minor`. A finding is a lead, not a verdict: look at the film,
+   and at Arena's motion at the same moment, before fixing.
 
 4. **Watch it.** `just specs --film <card> [--moment M]` writes one sheet per
    moment, `$BERYL_CACHE/spec-film/<checkout>/<card>/<moment>.png`: the bursts
    of motion as frames, each your seat over theirs, labelled with ms of stage
    time since play (frames are 120 ms of it apart, whatever the machine's
-   speed).
-   Every frame, full size, is beside it in `<moment>/` (`<ms>-yours.jpg`,
-   `<ms>-theirs.jpg`) for a closer look. Read the sheet, not every frame. A run
-   replaces only its own cards' folders. `--viewport 1180x820` films (and shoots
-   and audits) at another size: some faults show only in a small window.
+   speed). Every frame, full size, is beside it in `<moment>/`
+   (`<ms>-yours.jpg`, `<ms>-theirs.jpg`) for a closer look. Read the sheet, not
+   every frame. A run replaces only its own cards' folders.
+   `--viewport 1180x820` films (and shoots and audits) at another size: some
+   faults show only in a small window.
 
 5. **Drive it.** `just specs --drive --port 0` serves the pages and a headless
    WebKit page that runs Playwright snippets POSTed to the printed driver URL
@@ -106,13 +103,12 @@ show the mechanics it shares.
 
    `spec.ordered(patterns, { seat, action })` asserts the order things showed
    in: each pattern (a substring, any case, or a RegExp) takes the first entry
-   of the seat's timeline it matches, and each must show no earlier than the
-   one before. It reads the last `spec.audit`, or runs one (with `action`), and
+   of the seat's timeline it matches, and each must show no earlier than the one
+   before. It reads the last `spec.audit`, or runs one (with `action`), and
    returns `ok`, each match's ms, why not, and the whole timeline
-   (`spec.timeline(seat)`): event lines as `--motion` words them, and `ui`
-   lines for what a click opens (`choice-card «Island»: appeared over 244 ms`).
-   From their seat on Winds of Abandon, the search waits for the cast and the
-   exile:
+   (`spec.timeline(seat)`): event lines as `--motion` words them, and `ui` lines
+   for what a click opens (`choice-card «Island»: appeared over 244 ms`). From
+   their seat on Winds of Abandon, the search waits for the cast and the exile:
 
    ```js
    const m = "exiles-a-creature-its-controller-fetches-a-tapped-basic-0";
@@ -126,15 +122,15 @@ show the mechanics it shares.
 
    `spec.fixture(name, at, { clock, viewport })` opens a ui-test or ui-shots
    fixture (`ui/fixtures.json`, recorded on first use) at its view `at` in a
-   page of its own, which becomes `page`; `clock` installs Playwright's clock
-   as ui-test does. `spec.fixtureViews(name)` lists its views with the index
-   `at` takes, as `just ui-shots --views <name>` prints them.
-   `spec.gestures()` drags each of the viewer's permanents (which must not
-   follow the pointer or act) and a playable hand card onto the table (which
-   must), and reports `faults`; `probe.drag(from, to)` is one drag, with what
-   followed and what the page sent. `probe.audit(action)` audits whatever the
-   action sets going; `probe.act`, `probe.motion`, `probe.covered`,
-   `probe.timeline` and `probe.compare` are the ui-review skill's.
+   page of its own, which becomes `page`; `clock` installs Playwright's clock as
+   ui-test does. `spec.fixtureViews(name)` lists its views with the index `at`
+   takes, as `just ui-shots --views <name>` prints them. `spec.gestures()` drags
+   each of the viewer's permanents (which must not follow the pointer or act)
+   and a playable hand card onto the table (which must), and reports `faults`;
+   `probe.drag(from, to)` is one drag, with what followed and what the page
+   sent. `probe.audit(action)` audits whatever the action sets going;
+   `probe.act`, `probe.motion`, `probe.covered`, `probe.timeline` and
+   `probe.compare` are the ui-review skill's.
 
    The driver reloads itself: a change under `rust/crates` rebuilds beryl_cli
    and restarts the spec server, a change to `ui/scripts` restarts the driver
@@ -150,42 +146,46 @@ show the mechanics it shares.
 
 - `/scenarios/<card>`: every moment, yours, then theirs.
 - `/scenarios/<card>/<moment>`: one moment, both seats side by side.
-- `/scenarios/<card>/<moment>/<yours|theirs>`: one seat full size, a fresh game each
-  load, which plays a beat after it shows; with `?hold` it waits for its spec
-  server instance's `play` (`spec.play()`, or `POST <live>/play` where `<live>`
-  is the page's `?live=` URL).
+- `/scenarios/<card>/<moment>/<yours|theirs>`: one seat full size, a fresh game
+  each load, which plays a beat after it shows; with `?hold` it waits for its
+  spec server instance's `play` (`spec.play()`, or `POST <live>/play` where
+  `<live>` is the page's `?live=` URL).
 
 `just scenarios --port 0 [card]` (or `just specs --port 0`) serves the scenario
-viewer. `/scenarios/<card>` groups named scenarios with a checkpoint selector; direct moment and
-seat URLs continue to work. The headless describe, film, motion and drive tools remain.
+viewer. `/scenarios/<card>` groups named scenarios with a checkpoint selector;
+direct moment and seat URLs continue to work. The headless describe, film,
+motion and drive tools remain.
 
-`just playground --port 0 [card]` serves the same host with `/playground`
-for human card review.
-Each card page stacks its examples, starting with play from hand, and each example has
-independent full-width boards for both perspectives. The viewer answers their own prompts;
-the unseen player is automated. Play releases opponent playback; Reset affects only its
-board. Every variation has its own visible board pair, discovered by scrolling; Playground
-has no example selector. A board's bug button
-captures its current game. Reviewed is manual, independent of open bugs, and never expires;
-existing marks remain in `~/Library/Application Support/ca.thurn.beryl/spec-reviews.json`.
+`just playground --port 0 [card]` serves the same host with `/playground` for
+human card review. Each card page stacks its examples, starting with play from
+hand, and each example has independent full-width boards for both perspectives.
+The viewer answers their own prompts; the unseen player is automated. Play
+releases opponent playback; Reset affects only its board. Every variation has
+its own visible board pair, discovered by scrolling; Playground has no example
+selector. A board's bug button captures its current game. Reviewed is manual,
+independent of open bugs, and never expires; existing marks remain in
+`~/Library/Application Support/ca.thurn.beryl/spec-reviews.json`.
 
-Playground generation lives in `rust/crates/beryl_cli/src/specs/playground.rs`. It reuses
-scenario setup data and ability definitions, adding support cards through the engine's target
-filters. Change a general generator capability first; use a scenario in the card's file for
-a missing interaction. The scenario viewer's replay setups are not modified by Playground.
+Playground generation lives in `rust/crates/beryl_cli/src/specs/playground.rs`.
+It reuses scenario setup data and ability definitions, adding support cards
+through the engine's target filters. Change a general generator capability
+first; use a scenario in the card's file for a missing interaction. The scenario
+viewer's replay setups are not modified by Playground.
 
-To audit Playground itself, use `await spec.playground(card)` to list its examples, then
-`spec.open(card, variant.name, seat)` or `spec.both(card, variant.name)`. Names starting
-with `playground-` open the real independent Playground sessions. `spec.play()` releases
-an opponent-play board; the viewer's own cast and choices stay interactive. Use
-`spec.audit(action)` for those gestures. A fully scripted Scenarios replay alone does not
-prove that a human Playground board offers the same interaction.
+To audit Playground itself, use `await spec.playground(card)` to list its
+examples, then `spec.open(card, variant.name, seat)` or
+`spec.both(card, variant.name)`. Names starting with `playground-` open the real
+independent Playground sessions. `spec.play()` releases an opponent-play board;
+the viewer's own cast and choices stay interactive. Use `spec.audit(action)` for
+those gestures. A fully scripted Scenarios replay alone does not prove that a
+human Playground board offers the same interaction.
 
-When checking a historical bug, verify its distinguishing conditions, not just the card:
-token versus ordinary target, a lower stack item, known library top, both casting costs
-affordable, and the affected seat's prompt. The unseen player retains scenario choices,
-including originally automatic targets, and waits for the scenario's stack context before
-responding. New scenario data needs no card-specific viewer code and appears by scrolling.
+When checking a historical bug, verify its distinguishing conditions, not just
+the card: token versus ordinary target, a lower stack item, known library top,
+both casting costs affordable, and the affected seat's prompt. The unseen player
+retains scenario choices, including originally automatic targets, and waits for
+the scenario's stack context before responding. New scenario data needs no
+card-specific viewer code and appears by scrolling.
 
 `just specs --shots --port 0 [card...]` screenshots every moment settled from
 both seats, for a quick look at end states: `--moment M` one moment,
@@ -193,12 +193,12 @@ both seats, for a quick look at end states: `--moment M` one moment,
 `--crop .prompt` (or `--crop X,Y,W,H`) only that element's box or region.
 
 For ui-test and ui-shots: `just ui-test <filter...>` runs only the checks whose
-titles contain a filter, and `just ui-shots --views <fixture>` lists a
-fixture's views with the index a route's `&at=` takes, each with its script's
-steps in brief. A scripted board that
-stalls names the actions still waiting and the last decision one fit no
-candidate of (a target that resolved to nothing offered). A board's fixture
-records from seat 1 with `"until": "first <kind> decision for seat 1"`.
+titles contain a filter, and `just ui-shots --views <fixture>` lists a fixture's
+views with the index a route's `&at=` takes, each with its script's steps in
+brief. A scripted board that stalls names the actions still waiting and the last
+decision one fit no candidate of (a target that resolved to nothing offered). A
+board's fixture records from seat 1 with
+`"until": "first <kind> decision for seat 1"`.
 
 ## How a spec is generated
 
@@ -243,8 +243,8 @@ capability to add when it is not:
    not: an affordable instant-speed ability stops them; one that would do
    nothing (`Needs`) must not, though it stays activatable.
 2. **Each ability's path.** Clicking it (a permanent never drags); two or more
-   non-mana activated abilities open the side-by-side chooser, unaffordable
-   ones dimmed.
+   non-mana activated abilities open the side-by-side chooser, unaffordable ones
+   dimmed.
 3. **Costs and payments.** Mana, X, alternate and additional costs, life,
    sacrifice, tapping creatures, loyalty.
 4. **Prompts.** Each question the card asks: may, choose, target, order,
@@ -290,9 +290,9 @@ Fix it in this order, preferring the general fix:
    or a scripted-seat rule in `boards.rs`'s `Scripted`. Say which other cards'
    moments it changed.
 3. **A general fix in the UI**: a prompt, layout or wording belongs to a shape
-   or a zone, never to one card, so fix it where every card with that shape
-   gets it, and audit a few other cards that open it. A wrong motion, arrow or
-   combat line is the script's (the session's builder) or the stage's
+   or a zone, never to one card, so fix it where every card with that shape gets
+   it, and audit a few other cards that open it. A wrong motion, arrow or combat
+   line is the script's (the session's builder) or the stage's
    (`ui/src/stage/`): the `bugfix` skill, step 3, says how to tell.
 
 There are no hand-written moments: a case only one card has is a scenario in its
@@ -307,18 +307,18 @@ what words, with which buttons, what is highlighted, and what moves where and
 for how long. Beryl differs only where UI Conventions lists a numbered
 exception; any other difference is a finding, cited with the recording id and
 time. Where the recordings show nothing, judge by the design philosophy in
-`.agents/skills/ui-review/SKILL.md`; never file a bead asking the user to look
-at something. Report what each moment
-shows from each seat, what you fixed, which other cards' moments
-changed, and any moment you could not get and why.
+`.agents/skills/ui-review/SKILL.md`; never file a ticket asking the user to look
+at something. Report what each moment shows from each seat, what you fixed,
+which other cards' moments changed, and any moment you could not get and why.
 
 ## Beryl 3D
 
 The web instructions above stay the way to look at the web interface. Beryl 3D
 records every spec moment as `<card>/<moment>` in its recordings pack, and
 `just b3d spec` shows a card's moments as text, with no window and no GPU. For
-each moment and seat it prints the prompts of `just b3d info`, the `just b3d
-tree` at each prompt (cut to 40 lines) and the result of `just b3d check`.
+each moment and seat it prints the prompts of `just b3d info`, the
+`just b3d tree` at each prompt (cut to 40 lines) and the result of
+`just b3d check`.
 
 ```bash
 just b3d spec counterspell

@@ -1,5 +1,5 @@
 """Codex logs: per-request tokens, the log's own project filter, tool calls from a script's
-shell commands, and bead windows found from them."""
+shell commands, and ticket windows found from them."""
 
 from __future__ import annotations
 
@@ -179,7 +179,7 @@ def test_windows_are_found_from_the_scripts_shell_commands(tmp_path: Path) -> No
     found = db.execute(
         "SELECT start, end, bead, kind FROM windows ORDER BY start"
     ).fetchall()
-    # The first window reaches back to the first request; the rest of the log is no bead.
+    # The first window reaches back to the first request; the rest of the log is no ticket.
     assert [(w[2], w[3]) for w in found] == [("by-a", "bead"), (None, "none")]
     assert found[0][:2] == ("2026-11-15T10:00:05.000Z", "2026-11-15T10:10:03.000Z")
     calls = db.execute(
@@ -222,5 +222,5 @@ def test_a_bead_that_ran_on_codex_here_has_data(tmp_path: Path) -> None:
         ),
     )
     db = run(tmp_path, beads)
-    # Claude has no transcript here, so only the Claude bead has no data.
+    # Claude has no transcript here, so only the Claude ticket has no data.
     assert cli.gaps(db)["beads_no_data"] == {HOST: 1}

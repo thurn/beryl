@@ -24,7 +24,7 @@ def prefixed(value: str) -> str:
 
 
 def stored(db: sqlite3.Connection, value: str) -> str:
-    """Resolve a ticket spelling, retaining a moved ticket's original Beads ID."""
+    """Resolve a ticket spelling, retaining a moved ticket's original Tickets ID."""
     if not IDENTIFIER.fullmatch(value):
         return value
     name = prefixed(value)

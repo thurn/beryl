@@ -1,5 +1,5 @@
 """CPU accounting (docs/efficiency-dashboard.md, "CPU accounting"): the CPU sampler's rows, the
-CPU token pool's log of leases, and which bead each minute of a worktree's CPU belongs to.
+CPU token pool's log of leases, and which ticket each minute of a worktree's CPU belongs to.
 
 Both files are written by the repository's tools and read here by their documented formats:
 
@@ -160,7 +160,7 @@ class Leases(LineSource):
 def call_worktrees(
     db: sqlite3.Connection, host: str
 ) -> tuple[dict[str, str], dict[tuple[str, str], list[tuple[str, str, str]]]]:
-    """Each bead's worktree, and each transcript's windows on no bead that name the worktree
+    """Each ticket's worktree, and each transcript's windows on no ticket that name the worktree
     the session made, as (start, end, worktree)."""
     beads = {
         str(r[0]): worktree_name(r[1])
@@ -245,7 +245,7 @@ def join(db: sqlite3.Connection, host: str) -> set[tuple[str, str]]:
 
 @dataclass(frozen=True)
 class Claim:
-    """A bead that may own CPU in its worktree: when it started and closed (`None` while
+    """A ticket that may own CPU in its worktree: when it started and closed (`None` while
     open), and its windows as (start, end), with `None` for a window still open."""
 
     bead: str
@@ -256,9 +256,9 @@ class Claim:
 
 
 def owner_of(claims: Iterable[Claim], moment: str) -> str | None:
-    """The bead a minute of its worktree's CPU belongs to: the bead with a window open at
+    """The ticket a minute of its worktree's CPU belongs to: the ticket with a window open at
     that minute, or else the one whose start and close contain it, the latest started if
-    several do; `None` when no bead claims it, which makes it shared."""
+    several do; `None` when no ticket claims it, which makes it shared."""
     found = list(claims)
     for c in found:
         if any(s <= moment and (e is None or moment < e) for s, e in c.windows):
@@ -304,8 +304,8 @@ def worktree_minutes(
 def attribute(
     minutes: Iterable[tuple[str, str, float]], claims: list[Claim]
 ) -> tuple[dict[str, float], float]:
-    """A worktree's CPU seconds by the bead each minute belongs to, and the seconds no bead
-    claims. A bead that names the host it ran on claims only that host's minutes."""
+    """A worktree's CPU seconds by the ticket each minute belongs to, and the seconds no ticket
+    claims. A ticket that names the host it ran on claims only that host's minutes."""
     by_bead: dict[str, float] = defaultdict(float)
     shared = 0.0
     for host, moment, seconds in minutes:

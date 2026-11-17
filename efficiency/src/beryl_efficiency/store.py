@@ -16,7 +16,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 # Each entry moves the schema up one version (`PRAGMA user_version`). The tables are the
-# design's; the columns of those no source fills yet are a first draft that the beads which
+# design's; the columns of those no source fills yet are a first draft that the tickets which
 # fill them may change with a new entry.
 MIGRATIONS: tuple[str, ...] = (
     """

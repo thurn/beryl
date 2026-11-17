@@ -66,8 +66,8 @@ BEADS: bytes = listing(
 
 @pytest.fixture
 def root(tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A store with a lane of two beads in one epic, a stretch on no bead, an orchestrator
-    charged to the epic, an old bead outside the recent range, and one request by a model
+    """A store with a lane of two tickets in one epic, a stretch on no ticket, an orchestrator
+    charged to the epic, an old ticket outside the recent range, and one request by a model
     with no price."""
     (
         transcript(tmp_path, "t1")
@@ -217,7 +217,7 @@ def test_the_summarys_lines_sum_to_its_total_and_the_store(
         "by-e",
         "(no epic)",
         "orchestration",
-        "(no bead)",
+        "(no ticket)",
     ]
     for key in ("dollars", "agent_minutes", "person_minutes", "idle_minutes"):
         parts = sum(float(l[key]) for l in lines)
@@ -262,7 +262,7 @@ def test_time_and_dollars_by_anything_sum_to_the_same_total(
         "opus",
         "sonnet",
         "orchestration",
-        "(no bead)",
+        "(no ticket)",
     }
 
 
@@ -273,10 +273,10 @@ def test_a_cohort_filter_on_a_label_chooses_its_beads(
     _, opus = run(capsys, "summary", "--since", "all", "--tier", "opus")
     _, sonnet = run(capsys, "summary", "--since", "all", "--where", "tier=sonnet")
     assert (opus["beads_closed"], sonnet["beads_closed"]) == (2, 1)
-    # Work on no bead and orchestration fall outside a cohort chosen by label.
+    # Work on no ticket and orchestration fall outside a cohort chosen by label.
     for found in (opus, sonnet):
         tail = {str(l["name"]): float(l["dollars"]) for l in lines_of(found)}
-        assert tail["(no bead)"] == 0 and tail["orchestration"] == 0
+        assert tail["(no ticket)"] == 0 and tail["orchestration"] == 0
     assert number(opus, "total", "dollars") + number(
         sonnet, "total", "dollars"
     ) < number(everything, "total", "dollars")
@@ -288,7 +288,7 @@ def test_a_cohort_filter_on_a_label_chooses_its_beads(
     assert loaded.cohort(Scope()) is None
     _, epic = run(capsys, "summary", "--since", "all", "--epic", "by-e")
     tail = {str(l["name"]): float(l["dollars"]) for l in lines_of(epic)}
-    assert tail["orchestration"] > 0 and tail["(no bead)"] == 0
+    assert tail["orchestration"] > 0 and tail["(no ticket)"] == 0
 
 
 def test_since_bounds_every_part_of_a_result(
@@ -331,7 +331,7 @@ def test_the_epic_lists_its_closed_beads_and_orchestration(
     )
     assert "+" in shown and "no price for claude-unknown-9" in shown
     assert found["more"] == [
-        "efficiency bead by-e.1",
+        "efficiency ticket by-e.1",
         "efficiency time --by kind --since all --epic by-e",
         "efficiency dollars --by source --since all --epic by-e",
     ]
@@ -342,7 +342,7 @@ def test_the_bead_query_follows_the_designs_layout(
 ) -> None:
     shown, found = run(capsys, "bead", "by-e.1")
     lines = shown.splitlines()
-    assert lines[0] == "by-e.1  Bead by-e.1"
+    assert lines[0] == "by-e.1  Ticket by-e.1"
     assert lines[1].startswith("closed 2026-11-15 10:30   role:executor   tier:opus")
     assert lines[2].startswith("agent min ") and "core min -" in lines[2]
     assert "rework 0.00" in lines[2]
@@ -382,7 +382,7 @@ def test_metrics_lists_and_draws_its_series(
     _, series = run(capsys, "metrics", "bead.dollars", "--since", "all")
     days = series["series"]
     assert isinstance(days, list)
-    # A bead is dated by when it began; these beads have no start, so by their creation.
+    # A ticket is dated by when it began; these tickets have no start, so by their creation.
     assert [(d["day"], d["count"]) for d in days] == [("2026-11-01", 3)]
     # Marks come from the checkout's own data/efficiency-changes.json, so only their metric is fixed.
     marks = series["marks"]

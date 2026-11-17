@@ -374,7 +374,7 @@ def records(
     found: Coverage | None,
     since: datetime,
 ) -> dict[str, Record]:
-    """Each check's record from its tally in the run log (runstore.lane_tallies) and its bead's
+    """Each check's record from its tally in the run log (runstore.lane_tallies) and its ticket's
     verdicts, timed by its mean run in the log, or the coverage run's."""
     tallies, _ = runlog.tally([], history, since, counted)
     measured = found.checks if found else {}

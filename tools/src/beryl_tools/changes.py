@@ -66,7 +66,7 @@ def changed_paths(base: str) -> list[str] | None:
 
 
 def markdown_files() -> list[str]:
-    """Every Markdown file but the beads' and the agent skills' (whose YAML front matter
+    """Every Markdown file but the tickets' and the agent skills' (whose YAML front matter
     mdformat would rewrite)."""
     return [
         p

@@ -1,5 +1,5 @@
 """CI's sources (docs/efficiency-dashboard.md, "CI accounting"): the run log, and the verdicts
-on the checks' beads. Both are written by the repository's tools and read here by their
+on the checks' tickets. Both are written by the repository's tools and read here by their
 documented formats:
 
 - The run log (tools/src/beryl_tools/runlog.py and runstore.py), the hour files
@@ -13,12 +13,12 @@ documented formats:
   left out. The file is hundreds of megabytes, so its lines are added up as they are read into
   one `checks` row per check per day and one `lane_runs` row per run of a check lane; no line
   is kept.
-- The verdicts are JSON comments on the beads labeled `ci-check`, one bead per check that has
+- The verdicts are JSON comments on the tickets labeled `ci-check`, one ticket per check that has
   ever failed, titled with the check (tools/src/beryl_tools/verdicts.py, `entries`). A comment
   holds the failure's `time`, `host`, `commit`, `script`, `lane`, its `verdict` (`catch`,
-  `stale`, `flaky`, `mixed` or `miss`) and, when a Steward bead fixed it, `steward`. A later
+  `stale`, `flaky`, `mixed` or `miss`) and, when a Steward ticket fixed it, `steward`. A later
   comment with `corrects` set to an earlier comment's id replaces that one's verdict. They are
-  read from `tk export`, which prints every bead with its comments.
+  read from `tk export`, which prints every ticket with its comments.
 
 A check belongs to a family ([`family`]), which groups related checks in the tree the `ci`
 query shows: script, check lane, family, check.
@@ -185,7 +185,7 @@ class RunLog(LineSource):
 def verdict_rows(
     issue: dict[str, object], comment_aliases: Mapping[str, str] | None = None
 ) -> list[Row]:
-    """The `verdicts` rows of one `ci-check` bead, each corrected by any later comment that
+    """The `verdicts` rows of one `ci-check` ticket, each corrected by any later comment that
     names it, as verdicts.py's `entries` reads them; comments that are not verdicts are
     left out."""
     check = issue.get("title")
@@ -232,7 +232,7 @@ def verdict_rows(
 
 
 class Verdicts(SnapshotSource):
-    """The verdicts on the checks' beads, from `tk export`."""
+    """The verdicts on the checks' tickets, from `tk export`."""
 
     name = "verdicts"
     owns = ("verdicts",)
@@ -259,7 +259,7 @@ class Verdicts(SnapshotSource):
             except (ValueError, TypeError):
                 skipped += 1
         if skipped and not rows:
-            raise SourceError("tk export printed no beads")
+            raise SourceError("tk export printed no tickets")
         return rows, skipped
 
 

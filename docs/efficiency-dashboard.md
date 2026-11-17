@@ -30,7 +30,7 @@ what the first measurements found.
 
 ## Related information
 
-- Epic `by-ig5e` (`bd show by-ig5e`) tracks the work and records the decisions
+- Epic `by-ig5e` (`tk show Tig5e`) tracks the work and records the decisions
   taken with the user on 2026-11-15.
 - [`docs/checks.md`](checks.md) describes the fast check, slow CI, the run log
   and the CPU sampler that this design reads.
@@ -45,7 +45,7 @@ what the first measurements found.
   `just ci-report` (each check's runs, failures and seconds).
 - `~/enact/docs/design.md` describes Enact, the tool that manages worktrees, the
   task queue and CI.
-- Epic `by-bajq` (109 beads) is the example project used throughout.
+- Epic `by-bajq` (109 tickets) is the example project used throughout.
 
 ## Background: how work is organized
 
@@ -54,26 +54,27 @@ project can skip it.
 
 Tasks and sessions:
 
-- A **bead** is one task in the project's task tracker (`bd`). An **epic** is a
-  bead that groups child beads into a project.
-- Beads carry labels. `tier:<name>` picks which of three Claude models works the
-  bead: `fable`, `opus` or `sonnet`, from largest and dearest to smallest and
-  cheapest. `role:<name>` says what the session does: an `executor` implements,
-  a `warden` reviews, a `steward` repairs CI. `lane:<name>` groups beads that
-  one session works through in order.
+- A **ticket** is one task in the project's task tracker (`tk`). An **epic** is
+  a ticket that groups child tickets into a project.
+- Tickets carry labels. `tier:<name>` picks which of three Claude models works
+  the ticket: `fable`, `opus` or `sonnet`, from largest and dearest to smallest
+  and cheapest. `role:<name>` says what the session does: an `executor`
+  implements, a `warden` reviews, a `steward` repairs CI. `lane:<name>` groups
+  tickets that one session works through in order.
 - A **provider** is the agent program that runs a session. There are two: Claude
   Code and Codex. Each keeps its own log of every session, called a
   **transcript** here.
-- **Enact** starts one agent session per bead or per group of beads. It records
-  on the bead which session worked it (`enact_session`), which worktree it used
-  (`enact_worktree`) and which commits it landed (`enact_commits`).
+- **Enact** starts one agent session per ticket or per group of tickets. It
+  records on the ticket which session worked it (`enact_session`), which
+  worktree it used (`enact_worktree`) and which commits it landed
+  (`enact_commits`).
 - An **orchestrator session** runs an epic: it starts worker sessions, waits for
   them and does no implementation itself. Enact calls it the vizier, and records
-  its id on each bead it started as `enact_vizier`.
+  its id on each ticket it started as `enact_vizier`.
 - A **worktree** is a separate checkout under `.worktrees/` in which one session
-  makes one change. Its directory name is usually the bead's id.
+  makes one change. Its directory name is usually the ticket's id.
 - A **host** is a machine. Work happens on three: the main development Mac
-  (named `jarvis` in bead records), a second Mac and a Windows PC.
+  (named `jarvis` in ticket records), a second Mac and a Windows PC.
 
 Checks:
 
@@ -82,7 +83,7 @@ Checks:
   when it passes.
 - Both are split into **check lanes**, one per kind of file or test (`rust`,
   `ui`, `oracle` and so on). This document always says "check lane" for these,
-  to keep them apart from the `lane:` label on beads.
+  to keep them apart from the `lane:` label on tickets.
 - A check lane is a sequence of **steps**, each one command, such as "run the
   Rust tests". A step reports the individual **checks** it ran, such as one Rust
   test or one screenshot.
@@ -96,9 +97,9 @@ Checks:
   field says which of those five programs made the run: `check` for the fast
   check, `ci` for slow CI, and one value each for the sweep, the nightly and
   bisection.
-- Every check that has ever failed has its own closed bead, labeled `ci-check`,
-  on which each failure is recorded as a comment.
-- A **Steward bead** is filed automatically when slow CI fails. It names the
+- Every check that has ever failed has its own closed ticket, labeled
+  `ci-check`, on which each failure is recorded as a comment.
+- A **Steward ticket** is filed automatically when slow CI fails. It names the
   range of commits that broke it (`enact_ci_range`) and a session with the role
   `steward` fixes it.
 
@@ -117,8 +118,8 @@ These figures are the tool's own, from `just efficiency` on the main development
 Mac on 2026-11-16, over everything it holds (transcripts from 2026-11-04). They
 show where the large costs are.
 
-Token volume across 119,154 model requests, 2,226 closed beads, with dollars at
-API prices (`just efficiency dollars --by class --since all`):
+Token volume across 119,154 model requests, 2,226 closed tickets, with dollars
+at API prices (`just efficiency dollars --by class --since all`):
 
 ```text
 class        dollars       %       tokens
@@ -133,7 +134,7 @@ Almost all token volume is the model reading its own earlier context again.
 Output is under a third of one percent of the tokens and a fifth of the dollars.
 A request's context has a median of 182,118 tokens (90th percentile 383,754;
 `just efficiency metrics request.context-tokens --since all`). The levers are
-therefore the size of the context and the number of requests per bead, not how
+therefore the size of the context and the number of requests per ticket, not how
 much the model writes. By model, Opus 5.5 is 68% of the dollars, Fable 5.2 23%,
 Codex's two models 6% and Sonnet 5.5 3%.
 
@@ -183,7 +184,7 @@ with a named query over it, and renders each query's result as text, JSON or
 HTML.
 
 - **Sources** are files that other tools already write: session transcripts,
-  bead records, the git history, the run log, the CPU sampler's rows.
+  ticket records, the git history, the run log, the CPU sampler's rows.
 - **Ingest** reads only the bytes added to each source since the last ingest and
   writes rows to the store.
 - **The store** is one SQLite file in the Beryl cache directory. It is the
@@ -208,41 +209,41 @@ that changing it can affect nothing else.
 
 Efficiency is resources divided by output. This section fixes both.
 
-The unit of output is the **closed bead**. Every number can be shown per bead,
-and rolled up by epic, by label or over the whole project.
+The unit of output is the **closed ticket**. Every number can be shown per
+ticket, and rolled up by epic, by label or over the whole project.
 
-- A **cohort** is a set of beads chosen by filters, such as "closed in the last
-  7 days, `tier:sonnet`, `role:executor`". Any bead label can be a filter, so a
-  label such as `exp:short-brief` on some beads is enough to compare an
-  experiment against the rest.
-- **Cards** are a cohort: the beads whose commits add a file under
-  `rust/cards/`. For those beads the tool also divides by the number of card
+- A **cohort** is a set of tickets chosen by filters, such as "closed in the
+  last 7 days, `tier:sonnet`, `role:executor`". Any ticket label can be a
+  filter, so a label such as `exp:short-brief` on some tickets is enough to
+  compare an experiment against the rest.
+- **Cards** are a cohort: the tickets whose commits add a file under
+  `rust/cards/`. For those tickets the tool also divides by the number of card
   files added, to give cost per card.
-- Work done in a session that names no bead is reported under "(no bead)", so
-  totals always add up to the whole.
+- Work done in a session that names no ticket is reported under "(no ticket)",
+  so totals always add up to the whole.
 
-Four resources are measured for each bead:
+Four resources are measured for each ticket:
 
 - **Agent minutes**: wall-clock time during which a session was working on the
-  bead, split by what the session was doing. See
+  ticket, split by what the session was doing. See
   [Time accounting](#time-accounting).
-- **Core minutes**: CPU time used in the bead's worktree. See
+- **Core minutes**: CPU time used in the ticket's worktree. See
   [CPU accounting](#cpu-accounting).
 - **Dollars**: every request's tokens multiplied by that model's published API
   price. See [Token accounting](#token-accounting). The figure is a common unit
   for comparing models, whether or not the account is billed that way.
-- **Rework**: the cost of later fixes that the bead's commits caused, shown
+- **Rework**: the cost of later fixes that the ticket's commits caused, shown
   beside the direct cost and never added into it. See [Rework](#rework).
 
 Two further measures describe the flow of work and not its cost:
 
-- **Lead time**: from a bead's creation to its start (time in the queue), from
+- **Lead time**: from a ticket's creation to its start (time in the queue), from
   start to close (time being worked), and from its last commit reaching
   `staging` to that commit reaching `master`.
-- **Throughput**: beads closed per day.
+- **Throughput**: tickets closed per day.
 
 Medians are used for per-bead figures, with the 90th percentile available on
-drill-down, because a few very large beads dominate any mean.
+drill-down, because a few very large tickets dominate any mean.
 
 ## Sources
 
@@ -254,24 +255,21 @@ The sources use data that other tools already record.
   classes. Each tool call and each tool result has a timestamp, the tool's name
   and its input, such as a shell command.
 - **Claude desktop session records** (one JSON file per session in the desktop
-  app's data directory). Each maps the session id that Enact records on a bead
+  app's data directory). Each maps the session id that Enact records on a ticket
   (`local_<uuid>`) to its current transcript id (`cliSessionId`) and its earlier
   ones (`priorCliSessionIds`, with the time each ended). A session that Enact
-  clears between beads gets a new transcript each time.
+  clears between tickets gets a new transcript each time.
 - **Codex session logs** (`~/.codex/sessions/<date>/rollout-*.jsonl`, and
   `archived_sessions`; compressed `.zst` files are not read). The `session_meta`
   line gives the working directory and each `token_count` event gives the tokens
   of the last request and the running total. Tool calls and their outputs are
   timestamped.
-- **Beads**, read with `bd list --all -n 0 --json`: ids, parents, labels,
-  creation, start and close times, and the Enact metadata named above.
-- **Native Enact tickets**, when the main checkout's `.enact.toml` selects the
-  ticket backend. `enact backend` follows the project's cutover state and
-  provides the managed `tk` executable. One `tk export` supplies tickets,
-  aliases, and verdict comments. `tk events --since` supplies session starts and
-  closes and slow-CI results, with the last sequence saved in SQLite. The local
-  store keeps these results after the server expires them. Unconfigured projects
-  and configured projects before cutover read from Beads.
+- **Tickets**, read through the managed `tk` executable returned by
+  `enact backend`. One `tk export` supplies IDs, parents, labels, creation and
+  close times, aliases, metadata, and verdict comments. `tk events --since`
+  supplies session starts, closes, and slow-CI results, with the last sequence
+  saved in SQLite. The local store retains these results after the service
+  expires them.
 - **Git history** of `staging` and `master`: each commit's time, subject and
   changed paths.
 - **The run log** (the hour files in `ci/runs/` in the cache, and the old single
@@ -285,20 +283,20 @@ The sources use data that other tools already record.
   worktree), `peak_cores` and `load`. The sampler's name for "who asked for the
   work" is the context; this document calls it the **owner**, to keep "context"
   for what a model reads. Owners include a session, the fast check and slow CI.
-- **Check verdicts**. On the bead of a check that has failed, each failure is a
-  comment holding a JSON object with the commit and a `verdict`. See
+- **Check verdicts**. On the ticket of a check that has failed, each failure is
+  a comment holding a JSON object with the commit and a `verdict`. See
   [CI accounting](#ci-accounting) for the verdicts.
 - **Enact's lock-wait log** (`.git/enact/lock-waits.jsonl` in the main checkout,
   rotated to `lock-waits.1.jsonl` at 8 MB). Enact writes one line per
   acquisition of its ownership lock: `time` (when the wait began), `pid`,
   `command`, `outcome` (`acquired` or `gave_up`), `waited_s`, `held_s`, `sync_s`
-  (seconds syncing beads with the remote while holding the lock), `syncs` and
+  (seconds syncing tickets with the remote while holding the lock), `syncs` and
   `holder` (the command holding the lock once a wait passed a second).
 
 The design adds two things to what is collected, and three small data files.
 
 - The run log gains a `worktree` field on each line: the name of the checkout
-  the run was made in. Without it a fast-check run cannot be tied to a bead.
+  the run was made in. Without it a fast-check run cannot be tied to a ticket.
 - The CPU token pool appends one line per lease when the lease is released. See
   [CPU accounting](#cpu-accounting) for the format.
 - `data/efficiency-prices.json` holds model prices,
@@ -320,39 +318,40 @@ and may cost any other command nothing.
   and wall seconds of each ingest and of the sampler, as a share of the
   machine's total.
 
-## Attributing sessions to beads
+## Attributing sessions to tickets
 
-A session often works several beads one after another, and an orchestrator works
-none. This section says which bead each second and each request belongs to.
+A session often works several tickets one after another, and an orchestrator
+works none. This section says which ticket each second and each request belongs
+to.
 
-A **bead window** is the span of one transcript during which the session was
-working one bead. Ingest finds windows from the session's own shell commands.
+A **ticket window** is the span of one transcript during which the session was
+working one ticket. Ingest finds windows from the session's own shell commands.
 
-- A window for a bead opens at the first tool call that runs
-  `enact start <bead>` or `enact claim <bead>`. A later `start` or `claim` of
-  the same bead inside its open window changes nothing.
-- A window closes when `enact close <bead>` returns, at the opening of another
-  bead's window, or at the end of the transcript, whichever comes first.
-- `enact close <bead> --continue` closes that bead and claims the next bead in
-  its lane. Enact prints the claimed bead's id in the command's result, and the
-  next window opens at that result.
-- When that result names no bead, because the session cut its output short, the
-  next bead the session closes or creates a worktree for opens its window at the
-  close.
+- A window for a ticket opens at the first tool call that runs
+  `enact start <ticket>` or `enact claim <ticket>`. A later `start` or `claim`
+  of the same ticket inside its open window changes nothing.
+- A window closes when `enact close <ticket>` returns, at the opening of another
+  ticket's window, or at the end of the transcript, whichever comes first.
+- `enact close <ticket> --continue` closes that ticket and claims the next
+  ticket in its lane. Enact prints the claimed ticket's id in the command's
+  result, and the next window opens at that result.
+- When that result names no ticket, because the session cut its output short,
+  the next ticket the session closes or creates a worktree for opens its window
+  at the close.
 - Requests and tool calls before the first window in a transcript belong to that
   first window, since they are the session reading its instructions for it.
 - Activity after a window closes and before another opens belongs to "(no
-  bead)".
-- A close with no open window for that bead is ignored and counted by
+  ticket)".
+- A close with no open window for that ticket is ignored and counted by
   `coverage`.
 - A subagent's transcript belongs to the window that contains the tool call
-  which started it. Its requests add to the bead's dollars. Its time adds
+  which started it. Its requests add to the ticket's dollars. Its time adds
   nothing: it runs inside the parent's `Agent` tool call, which is already
   counted, and is shown as a breakdown of that call.
-- A bead worked by several sessions, or by one session in several transcripts,
+- A ticket worked by several sessions, or by one session in several transcripts,
   has several windows. Its cost is their sum.
 
-Here is one transcript that worked two beads in a lane:
+Here is one transcript that worked two tickets in a lane:
 
 ```text
 07:03:45  enact start by-bajq.6.9             window by-bajq.6.9 opens
@@ -364,20 +363,20 @@ Here is one transcript that worked two beads in a lane:
 
 Sessions that never open a window are attributed in this order:
 
-- An orchestrator session, recognised by `enact_vizier` on the beads it started.
-  Its whole cost goes to that epic under the heading **orchestration**, not to
-  any one bead.
-- A session that ran `enact worktree create <name>` is listed under "(no bead)"
-  with that name.
-- Any other session is listed under "(no bead)" with its title.
+- An orchestrator session, recognised by `enact_vizier` on the tickets it
+  started. Its whole cost goes to that epic under the heading **orchestration**,
+  not to any one ticket.
+- A session that ran `enact worktree create <name>` is listed under "(no
+  ticket)" with that name.
+- Any other session is listed under "(no ticket)" with its title.
 
 Every row in the store carries the host and the provider (`claude` or `codex`).
-A bead whose metadata says it ran on a host with no data in the store is shown
+A ticket whose metadata says it ran on a host with no data in the store is shown
 as "no data", never as zero. See [Other machines](#other-machines).
 
 ## Time accounting
 
-This section splits each bead window so that every second falls in exactly one
+This section splits each ticket window so that every second falls in exactly one
 category, and the categories sum to the window's length.
 
 At any instant a window is in exactly one of six categories. Where more than one
@@ -392,13 +391,13 @@ could apply, the first in this list wins.
   [Command kinds](#command-kinds).
 - **Tool**: a tool call is running, from the call to its result. It is
   subdivided by kind of command. An Enact command's seconds waiting for Enact's
-  ownership lock and syncing beads under it are the kinds `enact lock wait` and
-  `enact sync`, taken from its kind in proportion: each line of the lock-wait
-  log is joined to the top-level tool call that ran its command and was running
-  for the whole of its wait and hold, preferring one that names its bead. When
-  the ticket server queues a push for the staging lease, its local log records
-  the wait against the push's ticket. Those seconds move from `enact push` to
-  `enact lease wait`.
+  ownership lock and syncing tickets under it are the kinds `enact lock wait`
+  and `enact sync`, taken from its kind in proportion: each line of the
+  lock-wait log is joined to the top-level tool call that ran its command and
+  was running for the whole of its wait and hold, preferring one that names its
+  ticket. When the ticket server queues a push for the staging lease, its local
+  log records the wait against the push's ticket. Those seconds move from
+  `enact push` to `enact lease wait`.
 - **Model**: the model is generating, from a tool result or a message to the
   next assistant message. This applies whether or not a background command is
   also running.
@@ -446,7 +445,7 @@ what to optimise:
   `pushes` query and the `bead` query's push lines show this split; it is not in
   `window_time`.
 
-The `time` lines of the `bead` query show one bead's split, largest first. A
+The `time` lines of the `bead` query show one ticket's split, largest first. A
 wait on background work carries the prefix `background:`, so `push` is the
 seconds a session spent in the command and `background: push` the seconds it
 spent waiting for a push it had started in the background to finish:
@@ -593,15 +592,15 @@ carrying cost: 1,090,600 x the cache-read price per token
 
 Carrying cost is an estimate attached to the tool call that produced the result,
 wherever the later requests fall. It is used to rank tool results and by the
-findings. It is not a fourth way of dividing a bead's dollars: those are always
-the actual dollars of the requests in the bead's windows.
+findings. It is not a fourth way of dividing a ticket's dollars: those are
+always the actual dollars of the requests in the ticket's windows.
 
-This is the number that explains expensive beads. A long test log printed early
-in a long session costs far more than the test run itself.
+This is the number that explains expensive tickets. A long test log printed
+early in a long session costs far more than the test run itself.
 
 ### Three ways to split dollars
 
-Dollars for any bead or cohort can be split in three independent ways. Each
+Dollars for any ticket or cohort can be split in three independent ways. Each
 split sums to the total.
 
 - **By class**: cache read, cache write, output, uncached input.
@@ -639,23 +638,23 @@ input less cached input as uncached input, and the same three splits apply.
 Core minutes come from the CPU sampler, which attributes each minute's CPU to an
 owner, a kind of work (compile, test, browser, oracle) and a worktree.
 
-Each minute of a worktree's CPU is given to one bead by these rules, in order:
+Each minute of a worktree's CPU is given to one ticket by these rules, in order:
 
-- The bead whose `enact_worktree` names that worktree and which had a window
+- The ticket whose `enact_worktree` names that worktree and which had a window
   open at that minute.
-- Otherwise, the bead whose `enact_worktree` names that worktree and whose start
-  and close times contain that minute. This covers a command still running after
-  the session ended its turn. If several beads qualify, the one that started
-  most recently gets it.
+- Otherwise, the ticket whose `enact_worktree` names that worktree and whose
+  start and close times contain that minute. This covers a command still running
+  after the session ended its turn. If several tickets qualify, the one that
+  started most recently gets it.
 - Otherwise it is **shared** CPU, reported under the worktree's name.
 
 The worktree decides, not the owner: the CPU of a fast check that ran in a
-bead's worktree belongs to that bead.
+ticket's worktree belongs to that ticket.
 
-Shared CPU also includes everything outside a bead's worktree: slow CI, the
+Shared CPU also includes everything outside a ticket's worktree: slow CI, the
 browser sweep, the nightly, bisection, editors and the desktop apps. It is
-reported per day, by owner and kind, and also divided by beads closed that day.
-The sampler's own CPU and each ingest's CPU are listed as their own lines.
+reported per day, by owner and kind, and also divided by tickets closed that
+day. The sampler's own CPU and each ingest's CPU are listed as their own lines.
 
 The machine being busy is measured two ways, since a busy machine is what stops
 more sessions running in parallel.
@@ -688,9 +687,9 @@ more sessions running in parallel.
 
 From these the tool reports a **parallel capacity estimate** for a cohort: the
 machine's cores divided by the mean cores a session of that cohort uses, rounded
-down. A bead's cores are its core minutes divided by its agent minutes. For the
-card cohort this says how many card-writing sessions the machine can run at once
-before they queue, which is the figure that matters for running thirty in
+down. A ticket's cores are its core minutes divided by its agent minutes. For
+the card cohort this says how many card-writing sessions the machine can run at
+once before they queue, which is the figure that matters for running thirty in
 parallel. The `machine` query shows the saturation, the time queued and the
 estimate for the whole project; the `cards` query shows the estimate for cards.
 
@@ -769,8 +768,8 @@ At every level of the tree the same figures are shown:
   "never", with the date of its first run so that a new check is not judged too
   early.
 - **Flake cost**: the CPU and wall seconds of the reruns that flaky failures
-  caused. The cost of the sessions that worked the beads filed for flaky checks
-  is shown beside it, in dollars.
+  caused. The cost of the sessions that worked the tickets filed for flaky
+  checks is shown beside it, in dollars.
 
 Failures count under the script that recorded them, so a catch by the fast check
 is not counted in slow CI's tree. This differs from `just ci-value`, which
@@ -828,7 +827,7 @@ This is the `ci` query for one check lane, `rust`, over seven days.
 
 ### The fast check
 
-The fast check runs on every push, so its cost is paid by each bead.
+The fast check runs on every push, so its cost is paid by each ticket.
 
 - **Per push**: wall seconds, CPU seconds, seconds queued for cores, and which
   check lanes ran.
@@ -843,7 +842,7 @@ The fast check runs on every push, so its cost is paid by each bead.
 
 A failure of slow CI has costs that no check's own figures show.
 
-- **The Steward bead**: the agent minutes, core minutes and dollars of the
+- **The Steward ticket**: the agent minutes, core minutes and dollars of the
   session that fixed it.
 - **Bisection**: the CPU of the reruns that found the commit at fault.
 - **Time behind**: the time during which `master` stayed behind `staging`
@@ -853,40 +852,40 @@ A failure of slow CI has costs that no check's own figures show.
   what the fast check selects.
 
 These are summed per failure and per day. The Steward's cost is also shown as
-rework on the beads at fault, as the next section describes.
+rework on the tickets at fault, as the next section describes.
 
 ## Rework
 
-A bead's direct cost says what it took to land. Rework says what it cost
+A ticket's direct cost says what it took to land. Rework says what it cost
 afterwards. Only cases that can be traced without guessing are counted.
 
 Rework is a second view of costs that are already counted once as some other
-bead's direct cost. Project totals sum direct costs only, so nothing is counted
-twice.
+ticket's direct cost. Project totals sum direct costs only, so nothing is
+counted twice.
 
-**Slow-CI breakages.** A Steward bead names a commit range. The beads with
+**Slow-CI breakages.** A Steward ticket names a commit range. The tickets with
 commits in that range are the candidates.
 
-- The Steward's fixing commits are the commits the Steward bead landed. A
-  Steward bead is never itself a candidate.
+- The Steward's fixing commits are the commits the Steward ticket landed. A
+  Steward ticket is never itself a candidate.
 - The candidates at fault are those whose commits in the range changed at least
   one file that the fixing commits also changed.
 - If no candidate qualifies, all candidates are at fault.
-- The Steward bead's whole cost is divided equally among the beads at fault.
+- The Steward ticket's whole cost is divided equally among the tickets at fault.
 
 **Fixes to cards.** A later commit whose subject begins with `fix` and that
-changes a card file is rework for the bead whose commit added that file. Commits
-landed by a Steward bead are counted only under the first rule.
+changes a card file is rework for the ticket whose commit added that file.
+Commits landed by a Steward ticket are counted only under the first rule.
 
-- The fixing bead may have done other work too. The part of its cost that is
+- The fixing ticket may have done other work too. The part of its cost that is
   rework is its cost multiplied by the card files its `fix` commits changed,
   divided by all files its commits changed. A file counts once however many
   commits changed it.
 - That part is divided equally among those card files, and each share goes to
-  the bead that added the file.
+  the ticket that added the file.
 
-A bead is never charged with rework from its own commits. A bead's rework can
-grow after it closes. Its direct cost cannot.
+A ticket is never charged with rework from its own commits. A ticket's rework
+can grow after it closes. Its direct cost cannot.
 
 The example compares cards written on two tiers. Rework is shown per card in
 dollars, and `fixed later` is the share of cards that a later `fix` commit
@@ -933,9 +932,9 @@ what the change was, the metric it was meant to move and the direction:
   median of the samples in the seven days before the moment the commit reached
   `staging` and in the seven days after it, with the number of samples on each
   side.
-- A sample is dated by when its unit began: a bead by its start time, a push or
-  a CI run by its start, a request by its time, a per-day figure by its day. A
-  bead that started before the change and closed after it counts as before.
+- A sample is dated by when its unit began: a ticket by its start time, a push
+  or a CI run by its start, a request by its time, a per-day figure by its day.
+  A ticket that started before the change and closed after it counts as before.
 - With fewer than five samples on either side, the entry is shown as "too few
   samples" and no direction is given.
 - A change whose metric did not move in the expected direction is listed as
@@ -975,7 +974,7 @@ Every finding has the same shape:
   wider query it draws on.
 - Findings are listed in three groups, one per unit, each sorted by saving. No
   unit is converted into another.
-- Findings never file beads. An agent is told to work one.
+- Findings never file tickets. An agent is told to work one.
 
 The rules, each with its unit and its reference:
 
@@ -989,11 +988,11 @@ The rules, each with its unit and its reference:
   consecutive requests whose only tool calls are of kind "read and search".
   Reference: the cost of the last request of each run.
 - **tier-gap** (dollars): for two cohorts that differ only in tier, the direct
-  cost plus rework of the dearer one. Reference: the same number of beads at the
-  cheaper cohort's direct cost plus rework. Reported only when each cohort has
-  at least twenty beads.
-- **outlier-beads** (dollars): beads costing more than five times their cohort's
-  median. Reference: the cohort's median for each.
+  cost plus rework of the dearer one. Reference: the same number of tickets at
+  the cheaper cohort's direct cost plus rework. Reported only when each cohort
+  has at least twenty tickets.
+- **outlier-beads** (dollars): tickets costing more than five times their
+  cohort's median. Reference: the cohort's median for each.
 - **queued** (agent hours): time queued for cores, by command kind. Reference:
   zero.
 - **enact-lock-wait** (agent hours): time sessions' Enact commands waited for
@@ -1001,10 +1000,10 @@ The rules, each with its unit and its reference:
 - **compile-share** (agent hours): compile time inside tests and checks.
   Reference: the same commands at the 10th percentile compile time of commands
   of the same kind in the range.
-- **repeated-command** (agent hours): time in a command kind in beads that ran
+- **repeated-command** (agent hours): time in a command kind in tickets that ran
   it more often than the 90th percentile of their cohort. Reference: the same
-  beads at the cohort's median count, at each bead's own mean duration for that
-  command.
+  tickets at the cohort's median count, at each ticket's own mean duration for
+  that command.
 - **waiting-on-person** (agent hours, although outside agent minutes): time
   spent waiting on a person. Reference: zero.
 - **chained-commands** (agent hours): time in commands flagged as chained. This
@@ -1027,19 +1026,19 @@ How the rules are built:
   is left out.
 - The range defaults to the last seven days. Over any other range every figure
   is divided by the range's length in weeks.
-- A cohort for outlier-beads and repeated-command is the beads with the same
-  role and tier labels, and needs at least five closed beads. Tier-gap compares
-  tiers within one role by their mean cost per bead.
+- A cohort for outlier-beads and repeated-command is the tickets with the same
+  role and tier labels, and needs at least five closed tickets. Tier-gap
+  compares tiers within one role by their mean cost per ticket.
 - Compile-share counts only kinds the command kinds table marks heavy, because
   `cat` or `grep` over a build log prints cargo's `Finished ... in` lines too.
-  Repeated-command compares only kinds that the cohort's median bead runs at
-  least once; otherwise a bead that ran a rare command once would count all of
+  Repeated-command compares only kinds that the cohort's median ticket runs at
+  least once; otherwise a ticket that ran a rare command once would count all of
   it.
 - Small-reads counts the read tools (Read, Grep, Glob) as well as shell reads
   and searches, since a run of either is the same waste.
 - Never-caught looks at slow CI, the fast check, the sweep and the nightly by
   family, and counts a `mixed` verdict as a catch. Misses counts the slow-CI
-  runs with a failure on any commit in the Steward bead's range.
+  runs with a failure on any commit in the Steward ticket's range.
 
 ## The store
 
@@ -1053,7 +1052,7 @@ run log, the CPU sampler and git, which are the machine's own.
 - **requests**: one row per model request, with its transcript, time, model, the
   four token classes (cache writes also by the 1-hour part), dollars in total
   and by class, context size, prefix size, new content size, stop reason and the
-  bead.
+  ticket.
 - **tool_calls** and **tool_results**: one row per tool call, with start and end
   times, the tool, the command kind, the first 300 characters of the command,
   the size of its result, whether it was chained, its compile seconds and the
@@ -1066,23 +1065,23 @@ run log, the CPU sampler and git, which are the machine's own.
 - **sessions** and **transcripts**: the desktop app's session records (title,
   model, the session it was spawned from) and each transcript's span, parent and
   session.
-- **windows**: one row per bead window, or per span of a session with no bead
-  (kind `none`, or `orchestration`), with its `label`.
+- **windows**: one row per ticket window, or per span of a session with no
+  ticket (kind `none`, or `orchestration`), with its `label`.
 - **window_time** and **window_dollars**: the split of each window's seconds by
   category, kind and part, and of its dollars by class, source, purpose and
   model. Every query adds these up, so they are derived again when the command
   kinds or the price table change.
-- **beads** and **labels**: the latest state of each bead or ticket, with its
-  Enact metadata and labels. **ticket_aliases** resolves the native and prefixed
-  spellings, preserving the existing identifier for migrated tickets and their
-  historical records. Either spelling works in `bead` and `epic` queries and the
-  `--epic` filter.
+- **tickets** and **labels**: the latest state of each ticket or ticket, with
+  its Enact metadata and labels. **ticket_aliases** resolves the native and
+  prefixed spellings, preserving the existing identifier for migrated tickets
+  and their historical records. Either spelling works in `bead` and `epic`
+  queries and the `--epic` filter.
 - **ticket_session_events** and **ticket_ci_events**: session boundaries and
   slow-CI results from Enact. Transcript commands supply session boundaries when
   available, and events supply missing boundaries and CI results.
 - **commits**: each commit on `staging` and `master`, its parents, subject,
-  changed paths and added paths. The bead that landed it is read from the beads'
-  `enact_commits` at query time.
+  changed paths and added paths. The ticket that landed it is read from the
+  tickets' `enact_commits` at query time.
 - **ref_moves**: each move of `master` from its reflog, which is the only record
   of when a commit reached `master`, since Enact fast-forwards it. Rows are kept
   after git expires the reflog.
@@ -1121,7 +1120,7 @@ Privacy:
 
 - The store holds commands and file paths. It holds no message text, no file
   contents and no tool output beyond its size.
-- The repository is public, so tests use synthetic transcripts and beads. No
+- The repository is public, so tests use synthetic transcripts and tickets. No
   real session data is ever committed.
 
 ## The command
@@ -1132,8 +1131,8 @@ result as JSON, which is exactly what the page renders. All queries take
 (`--where key=value` for the label `key:value`, `--epic`, `--role`, `--tier`,
 `--host`, `--provider`). Roll-ups default to the last 7 days and drill-downs
 (`epic`, `bead`, `session`) to everything. A window counts when it starts in the
-range, and a bead when it closed in it; a closed bead's per-bead figures count
-all of its windows.
+range, and a ticket when it closed in it; a closed ticket's per-bead figures
+count all of its windows.
 
 ```text
 just efficiency summary --since 24h
@@ -1155,14 +1154,14 @@ just efficiency metrics request.context-tokens
 just efficiency coverage
 ```
 
-- `summary` is the first screen: beads closed, the four per-bead medians with
+- `summary` is the first screen: tickets closed, the four per-bead medians with
   their trends, the time split, the dollar split and the epics.
 - `epic`, `bead` and `session` are the drill-down levels. `session` lists each
   request and tool call in order.
 - `time` takes `--by` with any of: `kind`, `model`, `tier`, `role`, `lane`,
   `epic`, `day`. `dollars` takes those and `class`, `source` and `purpose`.
 - `machine` shows cores in use, saturation, queued core hours and shared CPU.
-  `enact` shows time waiting for Enact's ownership lock and syncing beads, by
+  `enact` shows time waiting for Enact's ownership lock and syncing tickets, by
   subcommand and by the command holding the lock.
 - `ci` shows the tree described under [CI accounting](#ci-accounting).
 - `pushes` shows [the fast check](#the-fast-check) per push, and `failures`
@@ -1204,7 +1203,7 @@ push 2026-11-15T07:17  536 s, not split (no run-log lines)
 session                                     title                                         kind  start                     minutes
 local_ce2b4aa8-b291-4649-9a86-f3862695d15f  ✅ [by-bajq.9.5] Review the decision protocol  bead  2026-11-15T07:04:31.826Z    34.00
 
-more: efficiency session local_ce2b4aa8-b291-4649-9a86-f3862695d15f --bead by-bajq.6.9
+more: efficiency session local_ce2b4aa8-b291-4649-9a86-f3862695d15f --ticket by-bajq.6.9
 ```
 
 Every result ends with a `more:` line naming the queries that drill into it. The
@@ -1231,14 +1230,14 @@ What the first screen shows, top to bottom:
 
 - A time range control with three choices: 24 hours, 7 days, all. It applies to
   everything on the page.
-- Beads closed in the range.
+- Tickets closed in the range.
 - Four numbers, each a per-bead median with a small trend line under it: agent
   minutes, core minutes, dollars, and rework as a share of direct cost.
 - One horizontal bar showing where agent time went, and one showing where
   dollars went, by source. Segments are labelled only when wide enough. The rest
   are named on hover.
-- The epics active in the range, one line each: id, title, beads closed out of
-  total, dollars, agent hours. "(no bead)" and "orchestration" are lines too.
+- The epics active in the range, one line each: id, title, tickets closed out of
+  total, dollars, agent hours. "(no ticket)" and "orchestration" are lines too.
 - Six words that lead to the other views: Cards, Machine, Enact, CI, Changes,
   Findings.
 
@@ -1249,7 +1248,7 @@ Rules that keep the page quiet:
 - Nothing is explained on screen. Each heading has a definition that appears on
   hover, taken from the query's own description.
 - Every line that has more detail opens in place when clicked. Opening an epic
-  shows its time bar, its dollar bar and its beads. Opening a bead shows its
+  shows its time bar, its dollar bar and its tickets. Opening a ticket shows its
   bars, a strip of its timeline and its sessions. Opening a session shows its
   requests and commands.
 - A trend line that has an efficiency change on it shows a mark at that commit.
@@ -1260,18 +1259,18 @@ Rules that keep the page quiet:
 - The page follows the system's light or dark appearance and uses one accent
   colour per category, the same colour for a category everywhere.
 
-The bead view's timeline strip is one bar, as wide as the bead's wall-clock
+The ticket view's timeline strip is one bar, as wide as the ticket's wall-clock
 time, coloured by category from left to right. Under it, a line shows the
 context size at each request. Together they show at a glance a session that sat
 in a long test run, or one whose context climbed to the limit and was compacted.
 
 ## Other machines
 
-Beads are also worked on a second Mac and on a Windows PC. The store on each
+Tickets are also worked on a second Mac and on a Windows PC. The store on each
 machine holds only what ran there.
 
-- Every row carries its host. A query over beads that ran elsewhere reports them
-  as "no data" and says how many, so no total is silently short.
+- Every row carries its host. A query over tickets that ran elsewhere reports
+  them as "no data" and says how many, so no total is silently short.
 - `just efficiency export --since <date>` writes the store's rows for this host
   to one compressed file. `just efficiency import <file>` on another machine
   adds them. Rows are keyed by host and source, so importing a file twice
@@ -1302,9 +1301,9 @@ What the lane's tests cover, all against small synthetic sources:
 
 - **Ingest**: windows are found, parallel tool calls are divided, repeated
   message lines are counted once, and a second ingest reads zero bytes.
-- **Sums**: for every bead in the fixture, the six time categories sum to the
+- **Sums**: for every ticket in the fixture, the six time categories sum to the
   window length, the three context parts sum to each request's context, and each
-  of the three dollar splits sums to the bead's dollars.
+  of the three dollar splits sums to the ticket's dollars.
 - **Parity**: for every query, each number in the rendered HTML and in the text
   output equals the number in the JSON.
 - **Pages**: every page and every section renders as well-formed HTML for the
@@ -1326,13 +1325,13 @@ and is not part of any check.
   knows.
 - **A route inside the game's own web UI.** Rejected: it would put developer
   tooling into the game's bundle, its check lanes and its screenshots.
-- **A static report file.** Rejected: detail below bead level would have to be
+- **A static report file.** Rejected: detail below ticket level would have to be
   left out or embedded in full, and the report would be stale when opened.
 - **Raw token counts instead of dollars.** Rejected as the main unit: a raw sum
   is 98.7% cache reads and cannot show a move from a large model to a small one.
   Raw counts remain available by class.
-- **Filing beads automatically from findings.** Rejected for now by decision:
-  the rules will be imprecise at first, and weak beads would cost tokens to
+- **Filing tickets automatically from findings.** Rejected for now by decision:
+  the rules will be imprecise at first, and weak tickets would cost tokens to
   work.
 
 ## Manual QA
@@ -1341,7 +1340,7 @@ Start with one check that crosses every boundary, before testing anything
 broadly.
 
 - On the main development Mac, run `just efficiency ingest`, then
-  `just efficiency bead by-bajq.6.9`. The bead is closed, ran in a Claude
+  `just efficiency bead by-bajq.6.9`. The ticket is closed, ran in a Claude
   session on this machine, and landed two commits. Expect non-zero agent
   minutes, dollars and requests, a time split whose parts sum to the agent
   minutes, and a `more:` line.
@@ -1353,23 +1352,23 @@ Then check each area.
 Totals and attribution:
 
 - `just efficiency summary --since all` followed by `just efficiency coverage`.
-  The dollars of all epics, "(no bead)" and "orchestration" must sum to the
+  The dollars of all epics, "(no ticket)" and "orchestration" must sum to the
   total. Coverage must list the second Mac and the Windows PC as hosts with no
-  data, with a count of their beads.
-- Pick a session that worked several beads in a lane. `efficiency session` must
-  show one window per bead with no overlap, each opening where the one before it
-  closed.
+  data, with a count of their tickets.
+- Pick a session that worked several tickets in a lane. `efficiency session`
+  must show one window per ticket with no overlap, each opening where the one
+  before it closed.
 - Pick an orchestrator session. Its cost must appear under its epic's
-  "orchestration" line and under no bead.
+  "orchestration" line and under no ticket.
 - Run `just efficiency sql 'select count(*) from requests'`, run
   `just efficiency ingest` again, and repeat. The count must not change.
 
 Time:
 
-- For a bead that pushed, the `bead` query's push line must split the push into
-  the fast check and the rest. The fast check's seconds must match
+- For a ticket that pushed, the `bead` query's push line must split the push
+  into the fast check and the rest. The fast check's seconds must match
   `just ci-report` for that worktree and time.
-- For a bead that ran Rust tests after an edit, the tests must show a compile
+- For a ticket that ran Rust tests after an edit, the tests must show a compile
   part and a run part.
 - Start a heavy command while the machine is saturated, then find it with
   `efficiency session`. It must show seconds queued for cores, and
@@ -1385,8 +1384,8 @@ Tokens:
   include it must be marked as lower bounds. Restore it.
 - Find a session whose context was compacted. Its context line on the page must
   drop, and carrying costs must stop at the drop.
-- For one bead, `efficiency dollars --by class`, `--by source` and
-  `--by purpose` must each sum to the bead's dollars.
+- For one ticket, `efficiency dollars --by class`, `--by source` and
+  `--by purpose` must each sum to the ticket's dollars.
 
 CI:
 
@@ -1397,8 +1396,8 @@ CI:
   "oracle" line of CPU by kind of process must be close to their sum.
 - Find a check with a `flaky` verdict in `just ci-report`. It must appear under
   flake cost with its reruns.
-- Find a closed Steward bead. Its cost must appear under "what a slow-CI failure
-  costs" and as rework on at least one bead in its commit range.
+- Find a closed Steward ticket. Its cost must appear under "what a slow-CI
+  failure costs" and as rework on at least one ticket in its commit range.
 
 Changes and findings:
 

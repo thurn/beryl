@@ -375,6 +375,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     planner = commands.add_parser("plan", help="sort unwritten cards into tiers")
     planner.add_argument("code")
     planner.add_argument(
-        "--beads", action="store_true", help="print draft bead commands"
+        "--tickets",
+        dest="beads",
+        action="store_true",
+        help="print draft ticket commands",
+    )
+    planner.add_argument(
+        "--beads", dest="beads", action="store_true", help=argparse.SUPPRESS
     )
     planner.set_defaults(func=run_plan)

@@ -12,7 +12,7 @@ in this order wins:
 - `tool`: a tool call is running, by kind of command. Seconds when several run at once are
   divided equally among them. A cargo command's seconds are split into `compile` and `run`
   parts by the share its `Finished` lines name. An Enact command's seconds waiting for
-  Enact's ownership lock and syncing beads under it are the kinds `enact lock wait` and
+  Enact's ownership lock and syncing tickets under it are the kinds `enact lock wait` and
   `enact sync` (`locks.py` joins each line of Enact's lock-wait log to the call that ran it).
   A push's wait for the ticket server's staging lease counts as `enact lease wait`.
 - `model`: the model is generating. This is every second no other category claims.

@@ -1,5 +1,5 @@
 """The fast check per push and the cost of a slow-CI failure, over small synthetic sources:
-a session's `enact push` calls split by the run log, and a Steward bead's failure costed from
+a session's `enact push` calls split by the run log, and a Steward ticket's failure costed from
 slow CI's runs and bisection."""
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ OUTPUT = (
 
 @pytest.fixture
 def root(tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """One bead pushes twice. The first push, 10:10 to 10:15, runs the fast check, loses the
+    """One ticket pushes twice. The first push, 10:10 to 10:15, runs the fast check, loses the
     race to staging and checks again on a new commit. The second runs in the background from
     10:20 until the session is told at 10:24 that it finished, and its run-log lines are from
     before the run log recorded worktrees."""

@@ -34,7 +34,7 @@ PRIORITY = "2"
 
 
 def open_bead(script: str, store: verdicts.Tickets) -> str | None:
-    """The open budget bead filed for `script`, if any."""
+    """The open budget ticket filed for `script`, if any."""
     beads = store.list_issues("--label", LABEL)
     for b in beads if isinstance(beads, list) else []:
         if not isinstance(b, dict) or b.get("status") == "closed":
@@ -79,7 +79,7 @@ def report(
     load: str,
     store: verdicts.Tickets | None = None,
 ) -> str:
-    """Files a bead for a run of `script` over `budget`, unless one is open; returns a line
+    """Files a ticket for a run of `script` over `budget`, unless one is open; returns a line
     saying which."""
     store = store or verdicts.STORE
     known = open_bead(script, store)
@@ -94,7 +94,7 @@ def report(
         metadata={SCRIPT_KEY: script},
     )
     if code != 0:
-        return f"{script}: over budget: bead not filed"
+        return f"{script}: over budget: ticket not filed"
     return f"{script}: over budget: filed {out.strip()} to audit it"
 
 
@@ -107,7 +107,7 @@ SLOW_CPU_BUDGET = 800
 CUT_LABEL = "ci-cut"
 LANE_KEY = "beryl_cut_lane"
 CUT_PRIORITY = "1"
-# Checks no cut bead names, each guarding something no other check does; `<lane>:*` keeps a
+# Checks no cut ticket names, each guarding something no other check does; `<lane>:*` keeps a
 # whole lane.
 KEEP: dict[str, str] = {
     "app:smoke": "the desktop app builds and starts at all",
@@ -129,7 +129,7 @@ def kept(check: str) -> bool:
 
 
 def cut_beads(store: verdicts.Tickets) -> tuple[list[str], str]:
-    """The open cut beads, and the latest time a closed one closed (`""` when none has)."""
+    """The open cut tickets, and the latest time a closed one closed (`""` when none has)."""
     beads = store.list_issues("--label", CUT_LABEL, include_closed=True)
     opened: list[str] = []
     closed = ""
@@ -158,7 +158,7 @@ def verdict(g: check_value.Group) -> str:
 
 
 def check_line(g: check_value.Group) -> str:
-    """One group's line in a cut bead."""
+    """One group's line in a cut ticket."""
     names = ", ".join(f"`{c}`" for c in g.checks)
     together = " (failing together, one group)" if len(g.checks) > 1 else ""
     estimated = " (estimated from wall seconds)" if g.estimated else ""
@@ -194,7 +194,7 @@ def cut_body(
         " runs and go together. Make the cuts without asking anyone, and record on this bead"
         " what you did with each check and why."
         + verdicts.SKILL_NOTE
-        + "\n\nNo cut bead names these checks, which guard"
+        + "\n\nNo cut ticket names these checks, which guard"
         f" something no other check does:\n{keep}"
     )
 
@@ -212,14 +212,14 @@ def file_cut(
         title=f"Cut {count} checks from slow CI's {lane} lane",
         body=cut_body(lane, groups, whole, budget, host),
         acceptance="Every check listed no longer runs in slow CI: deleted, replaced by a fast"
-        " deterministic test, or moved to the nightly; this bead records which for each and"
+        " deterministic test, or moved to the nightly; this ticket records which for each and"
         " why.",
         priority=CUT_PRIORITY,
         labels=f"{CUT_LABEL},tier:opus",
         metadata={LANE_KEY: lane},
     )
     if code != 0:
-        return f"ci budget: {lane}: cut bead not filed"
+        return f"ci budget: {lane}: cut ticket not filed"
     return f"ci budget: {lane}: filed {out.strip()} to cut {count} checks"
 
 
@@ -230,8 +230,9 @@ def slow_report(
     budget: float = SLOW_CPU_BUDGET,
     host: str | None = None,
 ) -> list[str]:
-    """Compares this host's slow CI with its CPU budget after a run, and files a cut bead per
-    lane when it is over and no cut bead is open; returns lines saying what it found."""
+    """Compares this host's slow CI with its CPU budget after a run, and files a cut ticket per
+    lane when it is over and no cut ticket is open; returns lines saying what it found.
+    """
     if system.WINDOWS:
         return [
             "ci budget: CPU time is not measured on Windows; the Mac checks the budget"
@@ -249,7 +250,7 @@ def slow_report(
         history = store.history(store.checks())
     scores = check_value.score(mine, history, since).since(closed)
     if len(scores.runs) < check_value.RUNS:
-        after = f" since a cut bead closed at {closed}" if closed else ""
+        after = f" since a cut ticket closed at {closed}" if closed else ""
         return [
             f"ci budget: {len(scores.runs)} of {check_value.RUNS} runs{after}; not measured yet"
         ]

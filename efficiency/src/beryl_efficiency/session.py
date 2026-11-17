@@ -137,7 +137,7 @@ def report(
         "session",
         asdict(result),
         lines(result),
-        [f"efficiency bead {b}" for b in result.beads][:3],
+        [f"efficiency ticket {b}" for b in result.beads][:3],
         describe("requests", "dollars", "lower_bound", "rows"),
     )
 
@@ -147,7 +147,7 @@ def lines(s: Session) -> list[str]:
     return [
         f"session {s.session}" + (f"  {s.title}" if s.title else ""),
         f"requests {s.requests}   tool calls {s.tool_calls}   "
-        + f"dollars {s.dollars:.2f}{mark(s.lower_bound)}   beads "
+        + f"dollars {s.dollars:.2f}{mark(s.lower_bound)}   tickets "
         + (", ".join(s.beads) or "none"),
         "",
         *table(

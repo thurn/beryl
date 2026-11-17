@@ -12,7 +12,7 @@ REPORT = """---
 id: 20261108-143012-arrow-jumps
 title: "Arrow jumps: on block"
 status: open
-bead:
+ticket:
 created: 2026-11-08T14:30:12.000Z
 commit: abc123
 url: "http://localhost/#/game"

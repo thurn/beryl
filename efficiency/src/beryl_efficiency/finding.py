@@ -23,16 +23,16 @@ DOLLARS = "dollars"
 AGENT_HOURS = "agent_hours"
 CORE_HOURS = "core_hours"
 UNITS: tuple[str, ...] = (DOLLARS, AGENT_HOURS, CORE_HOURS)
-# The role of a bead that has no `role:` label.
+# The role of a ticket that has no `role:` label.
 NO_ROLE = "(no role)"
-# A cohort needs this many closed beads before its beads are compared with each other.
+# A cohort needs this many closed tickets before its tickets are compared with each other.
 MIN_COHORT = 5
 
 
 @dataclass
 class Item:
     """One line of a rule's detail, such as one role or one kind of command. `saving` is
-    None when the rule cannot estimate it. `beads` is each bead's share of the saving (or
+    None when the rule cannot estimate it. `beads` is each ticket's share of the saving (or
     of the cost, when the saving is unknown), used only to pick examples."""
 
     name: str
@@ -75,7 +75,7 @@ class Rule:
 
 
 def examples(beads: Iterable[dict[str, float]], count: int = 3) -> list[str]:
-    """The `count` beads with the largest shares across `beads`."""
+    """The `count` tickets with the largest shares across `beads`."""
     merged: dict[str, float] = defaultdict(float)
     for shares in beads:
         for bead, value in shares.items():
@@ -99,8 +99,8 @@ def median(values: Sequence[float]) -> float:
 
 
 def role_of(facts: Facts, bead: str | None) -> str:
-    """A bead's role for grouping: its `role:` label, `orchestration` for an epic (the
-    bead an orchestrator session's work is charged to), `(no bead)` for none."""
+    """A ticket's role for grouping: its `role:` label, `orchestration` for an epic (the
+    ticket an orchestrator session's work is charged to), `(no bead)` for none."""
     if bead is None:
         return NO_BEAD
     found = facts.beads.get(bead)
@@ -121,7 +121,7 @@ def window_role(facts: Facts, w: Window) -> str:
 
 
 def cohort_of(facts: Facts, bead: str) -> str:
-    """A bead's cohort for comparing beads with each other: its role and tier."""
+    """A ticket's cohort for comparing tickets with each other: its role and tier."""
     found = facts.beads.get(bead)
     tier = found.label("tier") if found is not None else None
     return f"{role_of(facts, bead)} {'tier:' + tier if tier else '(no tier)'}"
@@ -131,7 +131,7 @@ def bounds(
     column: str, scope: Scope, provider: bool = True
 ) -> tuple[str, list[object]]:
     """A `WHERE` clause (starting with `AND`) keeping `column` in the scope's range and
-    rows on its host and, for a table of sessions' rows (`provider`), its provider. Bead
+    rows on its host and, for a table of sessions' rows (`provider`), its provider. Ticket
     filters are applied by `wanted`."""
     clause = ""
     given: list[object] = []
@@ -151,7 +151,7 @@ def bounds(
 
 
 def wanted(facts: Facts, scope: Scope) -> Callable[[str | None], bool]:
-    """Whether a row on a bead belongs to the scope's cohort."""
+    """Whether a row on a ticket belongs to the scope's cohort."""
     cohort = facts.cohort(scope)
     return lambda bead: cohort is None or bead in cohort
 
@@ -159,7 +159,7 @@ def wanted(facts: Facts, scope: Scope) -> Callable[[str | None], bool]:
 def grouped(
     rows: Iterable[tuple[str, str | None, float, float, float | None]],
 ) -> list[Item]:
-    """Items from (item name, bead, cost, reference, saving) rows, one per name, costliest
+    """Items from (item name, ticket, cost, reference, saving) rows, one per name, costliest
     saving first."""
     items: dict[str, Item] = {}
     for name, bead, cost, reference, saving in rows:

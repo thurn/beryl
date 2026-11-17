@@ -33,9 +33,9 @@ CARRIED_LOG_TOKENS = 2000
 SMALL_READ_RUN = 3
 # The kinds of tool call that only read: shell reads and searches, and the read tools.
 READ_KINDS: frozenset[str] = frozenset({"read and search", "Read", "Grep", "Glob"})
-# Each tier's cohort needs this many beads before tiers are compared.
+# Each tier's cohort needs this many tickets before tiers are compared.
 TIER_COHORT = 20
-# A bead costing more than this many times its cohort's median is an outlier.
+# A ticket costing more than this many times its cohort's median is an outlier.
 OUTLIER_FACTOR = 5.0
 
 
@@ -57,7 +57,7 @@ def priced_requests(
     c: Context,
 ) -> list[tuple[str, str, str, str, str, float, float, int, int, str | None]]:
     """The priced requests in the scope: host, provider, transcript, message, time,
-    dollars, input-side dollars, context tokens, prefix tokens and bead, oldest first.
+    dollars, input-side dollars, context tokens, prefix tokens and ticket, oldest first.
     """
     clause, given = bounds("time", c.scope)
     keep = wanted(c.facts, c.scope)
@@ -195,7 +195,7 @@ def small_reads(c: Context) -> list[Item]:
 
 
 def bead_costs(facts: Facts, scope: Scope) -> dict[str, float]:
-    """Each bead closed in the scope with windows in the store: its direct dollars plus its
+    """Each ticket closed in the scope with windows in the store: its direct dollars plus its
     rework."""
     windows = facts.bead_windows(scope)
     found = facts.rework()
@@ -207,8 +207,8 @@ def bead_costs(facts: Facts, scope: Scope) -> dict[str, float]:
 
 
 def tier_gap(c: Context) -> list[Item]:
-    """For each role, every tier dearer per bead than the role's cheapest tier, against the
-    same number of beads at the cheapest tier's mean cost; only tiers with twenty beads or
+    """For each role, every tier dearer per ticket than the role's cheapest tier, against the
+    same number of tickets at the cheapest tier's mean cost; only tiers with twenty tickets or
     more are compared."""
     costs = bead_costs(c.facts, c.scope)
     tiers: dict[str, dict[str, dict[str, float]]] = {}
@@ -243,7 +243,7 @@ def tier_gap(c: Context) -> list[Item]:
 
 
 def outlier_beads(c: Context) -> list[Item]:
-    """Beads costing more than five times their cohort's median (same role and tier),
+    """Tickets costing more than five times their cohort's median (same role and tier),
     against that median, by cohort."""
     costs = bead_costs(c.facts, c.scope)
     cohorts: dict[str, dict[str, float]] = defaultdict(dict)
@@ -294,8 +294,8 @@ def say_small_reads(items: list[Item]) -> str:
 
 def say_tier_gap(items: list[Item]) -> str:
     return (
-        f"Beads at dearer tiers cost {money(total_saving(items))} a week more than the "
-        f"same beads at their role's cheapest tier, direct cost plus rework; the largest "
+        f"Tickets at dearer tiers cost {money(total_saving(items))} a week more than the "
+        f"same tickets at their role's cheapest tier, direct cost plus rework; the largest "
         f"gap is {top(items)}, {money(items[0].saving if items else 0.0)}"
     )
 
@@ -303,7 +303,7 @@ def say_tier_gap(items: list[Item]) -> str:
 def say_outlier_beads(items: list[Item]) -> str:
     count = sum(i.count for i in items)
     return (
-        f"{count} beads cost over {OUTLIER_FACTOR:g} times their cohort's median, "
+        f"{count} tickets cost over {OUTLIER_FACTOR:g} times their cohort's median, "
         f"{money(total_saving(items))} a week above it"
     )
 
@@ -346,8 +346,8 @@ RULES: tuple[Rule, ...] = (
     Rule(
         "tier-gap",
         DOLLARS,
-        "the dearer tier's beads at the cheapest tier's mean direct cost plus rework, for "
-        f"tiers of one role with at least {TIER_COHORT} closed beads each",
+        "the dearer tier's tickets at the cheapest tier's mean direct cost plus rework, for "
+        f"tiers of one role with at least {TIER_COHORT} closed tickets each",
         tier_gap,
         say_tier_gap,
         "efficiency cards --by tier",
@@ -355,8 +355,8 @@ RULES: tuple[Rule, ...] = (
     Rule(
         "outlier-beads",
         DOLLARS,
-        f"the median direct cost plus rework of the bead's cohort (role and tier, at least "
-        f"{MIN_COHORT} beads), for beads over {OUTLIER_FACTOR:g} times it",
+        f"the median direct cost plus rework of the ticket's cohort (role and tier, at least "
+        f"{MIN_COHORT} tickets), for tickets over {OUTLIER_FACTOR:g} times it",
         outlier_beads,
         say_outlier_beads,
         "efficiency summary",

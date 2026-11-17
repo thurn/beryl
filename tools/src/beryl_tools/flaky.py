@@ -40,9 +40,9 @@ from . import paths, verdicts
 LABEL = "flaky-check"
 CHECK_KEY = "beryl_flaky_check"
 PRIORITY = "1"
-# How recent an earlier flake of the same check must be for a flake to file a bead.
+# How recent an earlier flake of the same check must be for a flake to file a ticket.
 REPEAT_DAYS = 7
-# How much of the failed attempt's output a bead or comment quotes.
+# How much of the failed attempt's output a ticket or comment quotes.
 TAIL_LINES = 40
 TAIL_CHARS = 3000
 # How long a failed attempt's whole output is kept.
@@ -59,7 +59,7 @@ class Flake:
 
 
 def open_beads(store: verdicts.Tickets) -> dict[str, str]:
-    """The open flaky-check beads, by the check each was filed for."""
+    """The open flaky-check tickets, by the check each was filed for."""
     beads = store.list_issues("--label", LABEL)
     found: dict[str, str] = {}
     for b in beads if isinstance(beads, list) else []:
@@ -100,7 +100,7 @@ def earlier(
 
 
 def tail(output: str) -> str:
-    """The end of a failed attempt's output, short enough for a bead."""
+    """The end of a failed attempt's output, short enough for a ticket."""
     return "\n".join(output.rstrip().splitlines()[-TAIL_LINES:])[-TAIL_CHARS:]
 
 
@@ -138,7 +138,7 @@ def keep(check: str, output: str, where: Path | None = None) -> Path | None:
 
 
 def quoted(output: str, kept: Path | None, host: str) -> str:
-    """The failed attempt's output as a bead quotes it: its tail and where the rest is."""
+    """The failed attempt's output as a ticket quotes it: its tail and where the rest is."""
     if not output.strip():
         return "The failed attempt printed nothing."
     where = f" The whole output is in `{kept}` on {host}." if kept else ""
@@ -152,9 +152,9 @@ def title(check: str, flake: Flake) -> str:
 
 
 def acceptance(check: str, flake: Flake) -> str:
-    """What closes the bead. A step's own record stands for every test in it, so the step stays
+    """What closes the ticket. A step's own record stands for every test in it, so the step stays
     and only the flaky test inside it goes."""
-    done = "or it is replaced by a deterministic test, and this bead records which and why."
+    done = "or it is replaced by a deterministic test, and this ticket records which and why."
     if flake.whole:
         return f"The flaky test inside `{check}` no longer runs in CI, {done} The step stays."
     return f"`{check}` no longer runs in CI, {done}"
@@ -210,9 +210,9 @@ def report(
     host: str | None = None,
     failures: dict[str, str] | None = None,
 ) -> list[str]:
-    """Comments on the open bead of each check in `flakes` that has one, and files a bead for
+    """Comments on the open ticket of each check in `flakes` that has one, and files a ticket for
     each other check that flaked in another run in the last `REPEAT_DAYS` (`earlier`); returns
-    a line for each. Each comment and bead quotes the check's failed attempt from `failures`
+    a line for each. Each comment and ticket quotes the check's failed attempt from `failures`
     ([`quoted`]), whose whole output is kept ([`keep`])."""
     if not flakes:
         return []
@@ -220,7 +220,7 @@ def report(
     host = host or socket.gethostname()
     known = open_beads(store)
     where = seen(script, commit, host)
-    # One `tk export` for all of them, and none when every flaky check has its bead open.
+    # One `tk export` for all of them, and none when every flaky check has its ticket open.
     history = store.history([c for c in flakes if c not in known])
     lines: list[str] = []
     short = host.split(".")[0]

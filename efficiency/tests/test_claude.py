@@ -1,5 +1,5 @@
 """Claude Code transcripts: requests counted once, tool calls with their results, and every row
-placed in the bead window it belongs to."""
+placed in the ticket window it belongs to."""
 
 from __future__ import annotations
 
@@ -252,7 +252,7 @@ def test_a_close_with_no_open_window_is_ignored_and_counted(tmp_path: Path) -> N
     ).bash("2026-11-15T09:01:00.000Z", "m2", "c2", f"{ENACT} start by-y").bash(
         "2026-11-15T09:02:00.000Z", "m3", "c3", f"{ENACT} close by-y --reason r"
     ).bash(
-        # A retried close of the bead just closed is not counted.
+        # A retried close of the ticket just closed is not counted.
         "2026-11-15T09:03:00.000Z",
         "m4",
         "c4",
@@ -308,7 +308,7 @@ def test_session_records_name_transcripts_and_the_bead_query_reads_them(
     assert isinstance(sessions, list) and sessions[0]["session"] == "local_s1"
     assert sessions[0]["title"] == "Work by-a"
 
-    # A bead that ran where the store has no data says so, never zero.
+    # A ticket that ran where the store has no data says so, never zero.
     other = bead.report(db, "by-q")
     assert other.data["no_data"] and other.data["requests"] is None
     assert "no data" in other.lines[1]

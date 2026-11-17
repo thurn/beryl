@@ -1,10 +1,10 @@
 ______________________________________________________________________
 
-## name: cifix description: Work the open beads that Beryl's CI files by itself — flaky checks, checks to cut for slow CI's budget, fast-check budget audits, browser-sweep failures, nightly failures and unclaimed slow-CI Steward beads — as an Enact run. Groups them by shared cause, routes them into lanes and model tiers, then runs them through /enact-plan's vizier loop, where worker sessions fix the cause, replace a check with a deterministic test, delete it or move it to the nightly. Use when asked to work, fix or clear the CI beads, flaky checks, CI cuts or sweep or nightly failures, or to run /cifix.
+## name: cifix description: Work the open tickets that Beryl's CI files by itself — flaky checks, checks to cut for slow CI's budget, fast-check budget audits, browser-sweep failures, nightly failures and unclaimed slow-CI Steward tickets — as an Enact run. Groups them by shared cause, routes them into lanes and model tiers, then runs them through /enact-plan's vizier loop, where worker sessions fix the cause, replace a check with a deterministic test, delete it or move it to the nightly. Use when asked to work, fix or clear the CI tickets, flaky checks, CI cuts or sweep or nightly failures, or to run /cifix.
 
-# Fixing the beads CI files
+# Fixing the tickets CI files
 
-Beryl's checks file beads by themselves. Each kind has its own label, and
+Beryl's checks file tickets by themselves. Each kind has its own label, and
 `just beads` leaves all of them out:
 
 | Label             | Filed by                 | What it asks for                                                                                    |
@@ -16,24 +16,24 @@ Beryl's checks file beads by themselves. Each kind has its own label, and
 | `nightly-failure` | `nightly_failures.py`    | The nightly (fuzz, motion capture, oracle sweep) failed checks on staging. Fix the break.           |
 | `role:steward`    | Enact's slow-CI runner   | Slow CI failed (P0, titled "Fix slow CI failure on …"). `master` stays put until it is fixed.       |
 
-The sweep and nightly beads also carry `role:steward`. `docs/checks.md`
+The sweep and nightly tickets also carry `role:steward`. `docs/checks.md`
 describes each source ("Flaky checks", "Budgets and hang limits", the browser
 sweep and the nightly).
 
 `/cifix` is an Enact run, shaped like `/bugfix`. The session that runs it is the
 🔮 **vizier** of `/enact-plan` (`~/enact/skills/enact-plan/SKILL.md`). It plans
-the run, then hands every bead to worker sessions, and it never fixes or closes
-a bead itself. Workers are Enact sessions. A `role:steward` bead runs as a
-Steward (`steward.md` in Enact's roles) and every other bead as an executor;
-each also follows [Worker: one CI bead](#worker-one-ci-bead) below.
+the run, then hands every ticket to worker sessions, and it never fixes or
+closes a ticket itself. Workers are Enact sessions. A `role:steward` ticket runs
+as a Steward (`steward.md` in Enact's roles) and every other ticket as an
+executor; each also follows [Worker: one CI ticket](#worker-one-ci-bead) below.
 
 `/enact-plan` cannot be invoked as a skill by a model, so read its `SKILL.md`
 (resolve `ENACT` from it as it says) and follow it. The user's `/cifix`
 invocation is the invocation `/enact-plan` expects. It authorizes the run's
 sessions, and any parallelism, **light** keyword or other instructions given
-with `/cifix` pass straight through. The input is the beads chosen in
+with `/cifix` pass straight through. The input is the tickets chosen in
 [Vizier: planning the run](#vizier-planning-the-run), handled as "Several
-beads". Everything `/enact-plan` says about pre-flight, permission mode, the
+tickets". Everything `/enact-plan` says about pre-flight, permission mode, the
 Claude Desktop session pool, registering the run, the loop, titles and the final
 report applies unchanged. In Claude Desktop the pool can only be started in the
 turn the user invoked you, so do all of the planning below in that turn.
@@ -46,32 +46,33 @@ ticket commands below.
 ## One group in one session
 
 The scheduled routine `beryl-ci-steward-watch` runs every 30 minutes on this
-Mac. A scheduled run cannot start other sessions, so it works the CI beads
-itself, one group per run, instead of running the vizier. Slow-CI Steward beads
-come first; the routine handles those before it reaches this section. A session
-working alone this way:
+Mac. A scheduled run cannot start other sessions, so it works the CI tickets
+itself, one group per run, instead of running the vizier. Slow-CI Steward
+tickets come first; the routine handles those before it reaches this section. A
+session working alone this way:
 
-1. **Chooses one group.** Take the beads that are waiting for a session (open
+1. **Chooses one group.** Take the tickets that are waiting for a session (open
    with no assignee, no parent, not deferred). Group them as in planning step 2
-   and pick the group with the highest-priority bead, at most four beads. Read
-   only as far as grouping needs.
-2. **Claims them** with `enact claim <bead>` for each. Exit code 3 means another
-   session got that bead first: drop it from the group, and stop if none are
-   left.
-3. **Works them** as [Worker: one CI bead](#worker-one-ci-bead) says, in one
+   and pick the group with the highest-priority ticket, at most four tickets.
+   Read only as far as grouping needs.
+2. **Claims them** with `enact claim <ticket>` for each. Exit code 3 means
+   another session got that ticket first: drop it from the group, and stop if
+   none are left.
+3. **Works them** as [Worker: one CI ticket](#worker-one-ci-bead) says, in one
    worktree, then lands the change with `enact push`. There is no vizier, so
    when the output includes `watch_ci`, watch slow CI with
-   `enact ci --wait <sha>` until it passes, and fix any Steward bead it files as
-   `steward.md` says.
-4. **Closes** each bead with `enact close <bead> --reason "<cause and action>"`,
-   or releases it as "Closing" below says.
-5. **Leaves notes for the next run.** On each waiting bead outside its group
+   `enact ci --wait <sha>` until it passes, and fix any Steward ticket it files
+   as `steward.md` says.
+4. **Closes** each ticket with
+   `enact close <ticket> --reason "<cause and action>"`, or releases it as
+   "Closing" below says.
+5. **Leaves notes for the next run.** On each waiting ticket outside its group
    whose cause it noticed while grouping, it appends the suspected cause and
    group, so the next run starts there. Use the notes commands below.
 
 ## Where the evidence is
 
-- The bead: the checks it names (in its description and in its metadata:
+- The ticket: the checks it names (in its description and in its metadata:
   `beryl_flaky_check`, `beryl_nightly_checks`, or for a cut, its checks with
   their runs, catches and CPU seconds), the host, the commit or range, and an
   output tail. Its comments list later runs that failed or flaked again.
@@ -95,20 +96,20 @@ working alone this way:
 This is `/enact-plan`'s pre-flight. Start with its steps 1 to 3 (title, update
 Enact, project setup, permission mode), then:
 
-1. **Choose the beads.** List each label above with
-   `tk list --label <label> --status open --json`. Leave out beads another
-   session or vizier is working (in progress or assigned), and Steward beads
+1. **Choose the tickets.** List each label above with
+   `tk list --label <label> --status open --json`. Leave out tickets another
+   session or vizier is working (in progress or assigned), and Steward tickets
    whose `enact_ci_host` is another machine, since only that machine can
-   reproduce them. Name both in your summary. A bead filed by hand with one of
+   reproduce them. Name both in your summary. A ticket filed by hand with one of
    these labels belongs here too.
 
-2. **Find the shared causes.** A day of CI beads usually has far fewer causes
-   than beads. Read each bead and its run-log records, then group beads that
-   share a cause. Typical groups:
+2. **Find the shared causes.** A day of CI tickets usually has far fewer causes
+   than tickets. Read each ticket and its run-log records, then group tickets
+   that share a cause. Typical groups:
 
-   - **One break, several reports.** A sweep bead, a nightly bead and a Steward
-     bead whose checks fail at the same commit usually share one culprit. Fix it
-     once.
+   - **One break, several reports.** A sweep ticket, a nightly ticket and a
+     Steward ticket whose checks fail at the same commit usually share one
+     culprit. Fix it once.
    - **Several flaky checks in one feature**, for example every check of the
      pile viewer. Suspect one race in the product or in that feature's test
      helper before suspecting each check.
@@ -118,8 +119,8 @@ Enact, project setup, permission mode), then:
      run, a temporary path or cache shared between worktrees, or a tool that
      downloads something. The fix goes in the step or in `tools/`, and the step
      stays. Never delete a lint step.
-   - **A cut or budget bead and a flaky bead naming the same check.** Taking the
-     check out of the run settles both.
+   - **A cut or budget ticket and a flaky ticket naming the same check.** Taking
+     the check out of the run settles both.
    - **One check alone:** a test that depends on timing (a wall-clock threshold,
      a sleep, a first animation frame, a short `until`), on order (a hash map's
      iteration order, two processes writing one file), or on the machine (free
@@ -128,20 +129,20 @@ Enact, project setup, permission mode), then:
    Read the code only as far as you need to name the suspected cause and where
    it is. Do not edit code, open a worktree or start reproducing.
 
-3. **Write each bead's context packet.** Add its group, the suspected cause, the
-   files and tests involved, the run-log records that show it, and the line
-   "Follow the `cifix` skill's 'Worker: one CI bead' section." For tickets, read
-   the existing notes and version with `tk show <id> --json`. Append the packet
-   to those notes and save with
+3. **Write each ticket's context packet.** Add its group, the suspected cause,
+   the files and tests involved, the run-log records that show it, and the line
+   "Follow the `cifix` skill's 'Worker: one CI ticket' section." For tickets,
+   read the existing notes and version with `tk show <id> --json`. Append the
+   packet to those notes and save with
    `tk update <id> --notes "<combined notes>" --if-version <version>`.
 
-4. **Group, route and lane.** The beads of one group share a `lane:<name>` so
-   one session finds the cause once and closes each bead against it. Give every
-   bead a tier:
+4. **Group, route and lane.** The tickets of one group share a `lane:<name>` so
+   one session finds the cause once and closes each ticket against it. Give
+   every ticket a tier:
 
    - `tier:opus` for an unknown or shared cause, a suspected race in the
      product, a break in rules or UI code, a group of browser checks, and every
-     `ci-cut` and `check-budget` bead (choosing what a replacement test must
+     `ci-cut` and `check-budget` ticket (choosing what a replacement test must
      keep is judgment).
    - `tier:sonnet` for a single check whose cause you could already name, such
      as a sleep to replace with a wait on an event.
@@ -149,27 +150,27 @@ Enact, project setup, permission mode), then:
      nothing else depends on.
 
    Never use `tier:fable` unless the user asked for it. Then run `/enact-plan`'s
-   "Lane and tier pass": two to four beads of one tier on the same code share a
-   lane, and a group larger than four becomes two lanes with a dependency
-   between them (`tk dep add <dependent> <prerequisite>`). A Steward bead is P0
-   and blocks `master`: give it no dependency on anything else, and put it first
-   in its lane.
+   "Lane and tier pass": two to four tickets of one tier on the same code share
+   a lane, and a group larger than four becomes two lanes with a dependency
+   between them (`tk dep add <dependent> <prerequisite>`). A Steward ticket is
+   P0 and blocks `master`: give it no dependency on anything else, and put it
+   first in its lane.
 
-5. **Run them.** Continue with `/enact-plan` at "A bead", case "Several beads":
-   create the run epic (title `CI beads <date>`; its description lists the
-   groups, their suspected causes and the tier policy above), reparent each bead
-   into it, then "Finish planning" and the loop. Add no Wardens, Masons, Sages
-   or Archivist unless the invocation asks.
+5. **Run them.** Continue with `/enact-plan` at "A ticket", case "Several
+   tickets": create the run epic (title `CI beads <date>`; its description lists
+   the groups, their suspected causes and the tier policy above), reparent each
+   ticket into it, then "Finish planning" and the loop. Add no Wardens, Masons,
+   Sages or Archivist unless the invocation asks.
 
 6. **Report.** When the loop returns `done` (or the run stops), give a short
-   outcome for every bead: the cause, and what changed (the product or a step
+   outcome for every ticket: the cause, and what changed (the product or a step
    fixed; a check replaced, deleted or moved to the nightly), or that it was
    handed back unfinished.
 
-## Worker: one CI bead
+## Worker: one CI ticket
 
 Your Enact role files still apply: worktree, `enact push`, the handoff comment
-and `enact close` (a Steward also follows `steward.md`). Read the bead's notes
+and `enact close` (a Steward also follows `steward.md`). Read the ticket's notes
 first: the vizier recorded the suspected cause and its group. Then follow the
 part for its kind.
 
@@ -177,8 +178,8 @@ part for its kind.
 
 These report checks that really failed on staging, so something broke.
 
-1. **Reproduce** with the command the bead gives (its acceptance names it), on
-   the culprit commit the bead names and on the staging tip.
+1. **Reproduce** with the command the ticket gives (its acceptance names it), on
+   the culprit commit the ticket names and on the staging tip.
 2. **Find the cause.** When the product broke, fix the product: a rules engine
    bug also gets an entry in `docs/bugs.md`, and a UI break adds the broken
    state as a fixture or spec moment (AGENTS.md, Checks). When the check is
@@ -192,10 +193,10 @@ These report checks that really failed on staging, so something broke.
 These name checks that pass but cost too much: a flake, CPU time in slow CI, or
 seconds in the fast check.
 
-1. **Find the check.** When a flaky bead names a whole step (its title says "the
-   flaky test in step"), the step reported no checks of its own. Find which test
-   or command inside it failed from the evidence above. A `check-budget` bead
-   lists each lane's slowest steps.
+1. **Find the check.** When a flaky ticket names a whole step (its title says
+   "the flaky test in step"), the step reported no checks of its own. Find which
+   test or command inside it failed from the evidence above. A `check-budget`
+   ticket lists each lane's slowest steps.
 
 2. **For a flake, find the cause.** Look for the patterns in planning step 2.
    Try to reproduce it under load: run the check 10 to 20 times beside
@@ -204,7 +205,7 @@ seconds in the fast check.
    cannot reproduce may still have a cause you can see in the code.
 
 3. **Choose one of these, in this order,** for each check, and record which and
-   why on the bead:
+   why on the ticket:
 
    - **Fix the product** when a flake comes from a race in Beryl itself, such as
      a view that arrives before the state it shows. Players hit it too.
@@ -233,18 +234,18 @@ seconds in the fast check.
 
 4. **Verify.** Run a replaced or changed check 10 times under the same load as
    step 2 and record the passes. A deleted or moved check needs no runs. For a
-   `check-budget` bead, record the step's seconds before and after.
+   `check-budget` ticket, record the step's seconds before and after.
 
 ### Closing
 
 Land the change with `enact push`. Then post the handoff comment and run
-`enact close <bead> --reason "<cause and action>"` (with `--continue` in a
-lane). When one cause closes several beads in your lane, close each with the
+`enact close <ticket> --reason "<cause and action>"` (with `--continue` in a
+lane). When one cause closes several tickets in your lane, close each with the
 same reason and name the commit. Enact's vizier waits for slow CI, so ignore
 `watch_ci`.
 
-A bead you cannot finish goes back to the queue. Record what you tried, the
+A ticket you cannot finish goes back to the queue. Record what you tried, the
 cause you suspect and the next step with `tk comment <id> "..."`. Run
 `enact release <id> --reason "..."`, then detach it with
 `tk update <id> --parent ""`. Retitle ⛔ as Enact's role files say for a release,
-and end your turn with a summary of where the bead stands.
+and end your turn with a summary of where the ticket stands.

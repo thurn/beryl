@@ -6,7 +6,7 @@ waste, over the scope's range, and the saving is the difference scaled to a week
 are listed in three groups, one per unit (dollars, agent hours, core hours), each sorted by
 saving; no unit is converted into another. A finding's `evidence` is the command that prints
 the numbers behind it: `findings --rule <rule>`, which lists the rule's items with their
-cost, reference and saving. Findings never file beads.
+cost, reference and saving. Findings never file tickets.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ FIELDS: dict[str, str] = {
     "reference": "the level the cost would fall to if the waste were removed",
     "evidence": "the command that prints the numbers behind the finding",
     "see": "the query with the wider breakdown the rule draws on",
-    "examples": "beads with the largest share of the saving",
+    "examples": "tickets with the largest share of the saving",
     "items": "the rule's lines, such as one role or one kind of command: their count, "
     "cost, reference and saving per week",
 }

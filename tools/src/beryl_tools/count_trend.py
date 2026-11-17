@@ -1,4 +1,4 @@
-"""The instruction-count gate's trend: small rises file beads while they are fresh.
+"""The instruction-count gate's trend: small rises file tickets while they are fresh.
 
 The gate (`bench.count_gate`, slow CI's `counts` lane) fails only past its tolerance, and its
 bar is the total since the bar last moved. Between 2026-11-11 and 2026-11-13 the count rose
@@ -9,13 +9,13 @@ Slow CI already measures each staging tip it tests, so watching the trend costs 
 count it measures on a staging commit goes in [`history_path`], and `report`
 
 - prints the change since the previous measured tip, naming the commits between them;
-- files one "count creep" bead ([`CREEP_LABEL`]) when one tested range adds more than
+- files one "count creep" ticket ([`CREEP_LABEL`]) when one tested range adds more than
   [`STEP_PERCENT`], or the count sits more than [`DRIFT_PERCENT`] above the lowest it reached
   since the bar last moved, so creep made of steps too small to flag is still caught;
-- files one "lower the bar" bead ([`LOWER_LABEL`]) when the count is more than
+- files one "lower the bar" ticket ([`LOWER_LABEL`]) when the count is more than
   [`LOWER_PERCENT`] below the bar, so a gain isn't left as slack for later rises to use up.
 
-While a bead of either kind is open, a later finding of that kind is added to it as a comment.
+While a ticket of either kind is open, a later finding of that kind is added to it as a comment.
 Nothing here fails a run: the gate's own verdict does that.
 """
 
@@ -29,14 +29,14 @@ from typing import Callable
 
 from . import paths, verdicts
 
-# One tested range adding more than this files a creep bead. Unrelated changes move the count
+# One tested range adding more than this files a creep ticket. Unrelated changes move the count
 # by inlining and layout drift of up to about 0.05%; the steps that added up to the 2026-11-13
 # failure were 0.18% to 0.64% each.
 STEP_PERCENT = 0.25
 # The count more than this above the lowest it reached since the bar last moved files a creep
-# bead, catching steps that are each under STEP_PERCENT.
+# ticket, catching steps that are each under STEP_PERCENT.
 DRIFT_PERCENT = 0.5
-# The count more than this below the bar files a bead to lower it.
+# The count more than this below the bar files a ticket to lower it.
 LOWER_PERCENT = 0.5
 
 CREEP_LABEL = "count-creep"
@@ -87,8 +87,8 @@ class Findings:
     previous: Record | None  # the latest earlier measurement of an ancestor commit
     floor: int | None  # the lowest count measured under the same bar, before this one
     step: float | None  # percent change since `previous`
-    creep: str | None  # why a creep bead is due, if one is
-    lower: str | None  # why a lower-the-bar bead is due, if one is
+    creep: str | None  # why a creep ticket is due, if one is
+    lower: str | None  # why a lower-the-bar ticket is due, if one is
 
 
 def judge(
@@ -184,7 +184,7 @@ def creep_body(head: str, why: str, f: Findings) -> str:
         f"`callgrind_annotate` on the two `callgrind.rollouts.corpus.out` files in the "
         f"`beryl-bench` VM) and win it back: keep paths these decks never take `#[cold]` "
         f"and out of line, and avoid compiling shared code twice. If the work itself "
-        f"changed (`rollouts_never_change` was updated), say so here and close this bead. "
+        f"changed (`rollouts_never_change` was updated), say so here and close this ticket. "
         f"The rules for moving the bar are in rust/crates/beryl_bench/count-gate.toml."
     )
 
@@ -215,13 +215,13 @@ def file_or_comment(
         priority=PRIORITY,
         labels=f"{label},{tier}",
     )
-    return f"filed {out.strip()}" if code == 0 else "bead not filed"
+    return f"filed {out.strip()}" if code == 0 else "ticket not filed"
 
 
 def report(
     measured: int, bar: int, passed: bool, store: verdicts.Tickets | None = None
 ) -> list[str]:
-    """Records a staging tip's count and files the beads its trend calls for; returns lines
+    """Records a staging tip's count and files the tickets its trend calls for; returns lines
     to print. A count measured elsewhere is only compared, never recorded or filed on.
     """
     store = store or verdicts.STORE
@@ -243,7 +243,7 @@ def report(
     except OSError as e:
         verdicts.warn(f"count history: {e}")
     lines = [step_line(f)] if f.previous else []
-    # A failing gate files a Steward bead of its own.
+    # A failing gate files a Steward ticket of its own.
     if passed and f.creep:
         said = file_or_comment(
             CREEP_LABEL,

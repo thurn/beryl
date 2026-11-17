@@ -181,28 +181,29 @@ omniscient twin) and the search anchored to the expert (`anchor+expert+guard`).
 - **Cygnus only.** Every suite, screen, match and audit runs on Cygnus, the
   Windows PC (20 threads, `BERYL_CACHE=D:\beryl-cache`). The position set is at
   `D:\beryl-cache\ladder\positions`.
-- **One match at a time.** Each measure bead depends on the one before it, so no
-  two matches run at once. The beads are the children of the epic by-ix1t.
-- **The session that works a measure bead judges.** It reads each table and each
-  match report and decides: promote, drop, stack with another rung, or measure
-  again. It writes its reasoning with the numbers in the bead's notes. §4.4 is
-  guidance for that judgement, not a rule that overrides it.
-- **It never waits for a person** and never files a bead asking one to look.
-  Where a step fails in a way the bead does not cover, it writes what happened,
-  chooses the sensible course and goes on.
-- **Builds run ahead of matches.** A match takes 6 to 18 hours. Build beads are
-  in lanes of their own and are worked on the Mac while a match runs, since an
-  option that is off changes no move. Nothing else heavy runs on Cygnus beside a
-  match.
+- **One match at a time.** Each measure ticket depends on the one before it, so
+  no two matches run at once. The tickets are the children of the epic by-ix1t.
+- **The session that works a measure ticket judges.** It reads each table and
+  each match report and decides: promote, drop, stack with another rung, or
+  measure again. It writes its reasoning with the numbers in the ticket's notes.
+  §4.4 is guidance for that judgement, not a rule that overrides it.
+- **It never waits for a person** and never files a ticket asking one to look.
+  Where a step fails in a way the ticket does not cover, it writes what
+  happened, chooses the sensible course and goes on.
+- **Builds run ahead of matches.** A match takes 6 to 18 hours. Build tickets
+  are in lanes of their own and are worked on the Mac while a match runs, since
+  an option that is off changes no move. Nothing else heavy runs on Cygnus
+  beside a match.
 
-### 4.2 A rung is two beads
+### 4.2 A rung is two tickets
 
 - **Build.** Adds the change as an option that is off by default, with its
-  tests, and pushes it. Its bead names the files, the exact rule and the tests.
+  tests, and pushes it. Its ticket names the files, the exact rule and the
+  tests.
 - **Measure.** Runs §4.3 on the pushed build, judges and records. It needs
   judgement, so it is not labeled `tier:light`.
 
-### 4.3 What the measure bead runs
+### 4.3 What the measure ticket runs
 
 `CHALLENGER` is the champion's family plus the rung's option.
 
@@ -270,8 +271,8 @@ first, at 10M over 200 games, and unsets the first one that scores under 45%.
 - `docs/ladder.md` is the log: a `Champion:` line, then one row for each match,
   audit or dropped rung, newest first, as `just ladder` prints it. A row for a
   rung dropped before a match gives both agents' suite totals and the verdict
-  `dropped`, with the reason in the bead.
-- The bead's notes hold the command lines, the tables, the printed result and
+  `dropped`, with the reason in the ticket.
+- The ticket's notes hold the command lines, the tables, the printed result and
   the reasoning. Logs, transcripts and position files are never committed.
 - **To promote:** in a worktree, set `DEEP_SEARCHER`'s options in
   `rust/crates/beryl_search/src/lib.rs` to the challenger's; update §3's table
@@ -342,7 +343,7 @@ each entry.
 
 In order. First the tools. Then what is already built is played, stacked. Then
 the root is rebuilt around the policy. Then the two strength rungs. The session
-may reorder rungs when a result suggests it, and says why in the bead.
+may reorder rungs when a result suggests it, and says why in the ticket.
 
 | Order | Rung                       | Aim      | Changes         | Built  |
 | ----- | -------------------------- | -------- | --------------- | ------ |
@@ -358,7 +359,7 @@ may reorder rungs when a result suggests it, and says why in the bead.
 
 ### 6.1 Tools
 
-Two beads, before rung 1.
+Two tickets, before rung 1.
 
 - **`just gate` reports and does not veto.** It runs 10 seeds, prints each
   entry's runs passed of 20 for both agents, marks an entry whose counts differ
@@ -383,7 +384,7 @@ small. They change different things, so one match judges all three. If it fails,
 `DecisionKind::ChooseUpTo` the root plays the policy's answer without searching.
 These are the choices of lands to untap and of a card to find. Three entries
 depend on them. The champion passes them today, and four of the gates of
-2026-11-12 and 2026-11-13 saw one of them fall by noise. The build bead reads
+2026-11-12 and 2026-11-13 saw one of them fall by noise. The build ticket reads
 how `decline-mana-crypt` reaches its find: if a yes-or-no question is asked
 before it, `sure` answers that with the policy too.
 
@@ -477,9 +478,9 @@ score of it, in place of UCB1's equal bonus.
   first visit goes to the child with the highest `P`.
 - **Why.** Weighting exploration aims to make a node's mean reflect sensible
   play by both players. An attack's score should depend less on weak blocks.
-- **`C`.** The build bead tries three values of `C` on `just why --tree` at the
-  four clear-lead entries and takes the one whose tree lead is closest to the
-  paired rollouts' lead.
+- **`C`.** The build ticket tries three values of `C` on `just why --tree` at
+  the four clear-lead entries and takes the one whose tree lead is closest to
+  the paired rollouts' lead.
 - **Tests.** A child the policy scores far below its siblings gets fewer visits
   than under UCB1 at the same budget. At `beza-trinket-into-blockers`, the
   tree's lead for the attack is under 0.02.
@@ -498,7 +499,7 @@ targeted enters abilities, so with nothing worth targeting it scores 0. Alone it
 fixed both evoke entries and took `snapcaster-sorcery-speed` from 9 of 10 to 3.
 `turn72` did the same to that entry, so the fall is real. With `hold` in the
 champion the Snapcaster cast is held by rule. If the entry still falls, the
-measure bead reads it with `just why` before a match.
+measure ticket reads it with `just why` before a match.
 
 - **Claims:** `evoke-subtlety-no-target`, `evoke-subtlety-empty-stack-hunt`.
 - **Measure:** a policy rung, 1M, `plausible`.
@@ -517,7 +518,7 @@ The policy's card values (`values.rs`) and the constants of its rules
   candidates' visits and means and its override test (`DecisionRecord`,
   `AnchorRecord` in `beryl_cli/src/match_log`). A decision where the paired test
   overruled the policy says the policy's score order was wrong there. A match
-  holds a few thousand of these. If that is too few, the build bead adds a
+  holds a few thousand of these. If that is too few, the build ticket adds a
   labelling run: paired rollouts of the policy's top three candidates at
   positions sampled from match games.
 - **The fit.** `just fit <match-dir>... --seed 0 --out <file>` replays the

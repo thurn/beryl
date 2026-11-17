@@ -87,7 +87,7 @@ The mechanism above fits the numbers but has not been measured. A rerun with
 
 ## Follow-ups
 
-Each needs a bead and a measurement against this replay.
+Each needs a ticket and a measurement against this replay.
 
 1. **Confirm the mechanism.** Rerun turn 7 with never-cast cards pruned from the
    tree's priority candidates, and compare "done" against "Mana Crypt".

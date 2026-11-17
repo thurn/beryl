@@ -1,5 +1,5 @@
 """Bug reports from the app's bug button (beryl_session's `bugs` module writes them): `by bugs`
-lists them, `by bugs file` files a bead for each open one and `by bugs done` marks them
+lists them, `by bugs file` files a ticket for each open one and `by bugs done` marks them
 fixed.
 
 Each report is a folder under $BERYL_BUGS, else
@@ -44,7 +44,7 @@ BUNDLE_FILES: frozenset[str] = frozenset(
         "journal.jsonl",
     )
 )
-# Every bead filed from a report carries it, so `tk list --label bug-report` finds them.
+# Every ticket filed from a report carries it, so `tk list --label bug-report` finds them.
 LABEL = "bug-report"
 # And a report of a questionable play of the AI's (`kind: ai`) carries this one too.
 AI_LABEL = "ai-play"
@@ -156,7 +156,7 @@ def reports(root: Path, done: bool = False) -> list[Report]:
 
 
 def find(root: Path, key: str) -> Report | None:
-    """The report with id `key` (or a unique prefix of it), or filed as bead `key`."""
+    """The report with id `key` (or a unique prefix of it), or filed as ticket `key`."""
     everything = reports(root, done=True)
     for r in everything:
         if key in (r.id, r.bead) or (
@@ -374,7 +374,7 @@ def stage_bundle(archive: zipfile.ZipFile, staging: Path) -> list[str]:
         if report is None or report.fields.get("id") != key:
             raise ValueError(f"missing or invalid report {key}")
         # Sender-side filing state has no authority in this tracker; `import_cmd`
-        # restores `filed` only for a report this tracker has a bead for.
+        # restores `filed` only for a report this tracker has a ticket for.
         update(report, status="open", bead="", fixed="", fix="")
     return ids
 
@@ -434,7 +434,7 @@ def import_cmd(args: argparse.Namespace) -> int:
                 keys = stage_bundle(archive, staging)
             beads = filed_beads()
             for key in keys:
-                # The sender's `bead:` field isn't trusted, but a bead in this tracker
+                # The sender's `bead:` field isn't trusted, but a ticket in this tracker
                 # whose external ref names the report is: the report was filed already.
                 bead = beads.get(key, "")
                 if bead:
@@ -479,24 +479,26 @@ def finish_reports(args: argparse.Namespace, root: Path) -> int:
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    p = sub.add_parser("bugs", help="the app's bug reports: list, file as beads, done")
+    p = sub.add_parser(
+        "bugs", help="the app's bug reports: list, file as tickets, done"
+    )
     p.set_defaults(func=list_cmd, all=False)
     verbs = p.add_subparsers(dest="verb")
     v = verbs.add_parser("list", help="the open and filed reports")
     v.add_argument("--all", action="store_true", help="the done ones too")
     v.set_defaults(func=list_cmd)
-    v = verbs.add_parser("file", help="file a bead for each open report")
+    v = verbs.add_parser("file", help="file a ticket for each open report")
     v.add_argument("reports", nargs="*", help="report ids (default: every open one)")
-    v.add_argument("--priority", default="1", help="the beads' priority (0-4)")
+    v.add_argument("--priority", default="1", help="the tickets' priority (0-4)")
     v.add_argument("--dry-run", action="store_true")
     v.set_defaults(func=file_cmd)
     v = verbs.add_parser(
         "import",
-        help="save reports from a ZIP for local triage, keeping beads filed here",
+        help="save reports from a ZIP for local triage, keeping tickets filed here",
     )
     v.add_argument("bundle", type=Path)
     v.set_defaults(func=import_cmd)
     v = verbs.add_parser("done", help="mark reports fixed and move them to done/")
-    v.add_argument("reports", nargs="+", help="report ids or their beads")
+    v.add_argument("reports", nargs="+", help="report ids or their tickets")
     v.add_argument("--commit", help="the fixing commit")
     v.set_defaults(func=done_cmd)

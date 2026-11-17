@@ -1,7 +1,6 @@
----
-name: card-writing
-description: Write one card's definition in Beryl from its brief, using only the existing card vocabulary (beryl_card), then check it with just card check and commit it, or escalate the card by recording the mechanic it needs in data/card-escalations.json. Use when asked to implement, write or add a card, or to work through cards one at a time.
----
+______________________________________________________________________
+
+## name: card-writing description: Write one card's definition in Beryl from its brief, using only the existing card vocabulary (beryl_card), then check it with just card check and commit it, or escalate the card by recording the mechanic it needs in data/card-escalations.json. Use when asked to implement, write or add a card, or to work through cards one at a time.
 
 # Writing one card
 
@@ -23,39 +22,37 @@ and builders a card definition is made of.
 - **Every clause, always.** Implement every sentence of the Oracle text, even
   one that no card in the decks makes happen today. "No Equipment is among the
   cards, so attaching never comes up" is how Thieving Skydiver shipped without
-  its attach: the decks change, and the definition must already be right. If
-  the vocabulary can't say a clause, escalate (below); never leave it out with
-  a comment.
+  its attach: the decks change, and the definition must already be right. If the
+  vocabulary can't say a clause, escalate (below); never leave it out with a
+  comment.
 - **No new vocabulary.** Use only entries that exist. If the card needs one that
   doesn't, escalate (below).
 - **No Rust body.** A definition is `static` and `const` data built from
-  vocabulary constructors (`draw(you(), 1)`, `Ability::triggered(...)`). Write no
-  `fn` in the definition and no `impl`. Small `const fn` helpers inside the
+  vocabulary constructors (`draw(you(), 1)`, `Ability::triggered(...)`). Write
+  no `fn` in the definition and no `impl`. Small `const fn` helpers inside the
   `scenarios` module are fine.
 - **Write it in the house style.** One `use crate::prelude::*;` at the top and
   one in `scenarios`. Name cards as `Card::Counterspell`, faces as
   `Printed::Counterspell`, tokens as `Token::Clue` and props as
   `Prop::Artifact`. A card of one face is
   `pub static CARD: CardDef = Printed::X.abilities(&[..]).card();`. Write each
-  effect inline in `CARD`, and explain the abilities in `CARD`'s doc comment, one
-  paragraph each; name an effect as a separate `static` only when it is used
+  effect inline in `CARD`, and explain the abilities in `CARD`'s doc comment,
+  one paragraph each; name an effect as a separate `static` only when it is used
   twice or is too long to read inline. `rust/cards/cards_2010/wwk/` has Jace,
   the Mind Sculptor as a model.
-- **Never from Forge.** Don't read Forge's card scripts or code. The
-  brief's XMage class is a reference for what the card does, never code to
-  translate.
+- **Never from Forge.** Don't read Forge's card scripts or code. The brief's
+  XMage class is a reference for what the card does, never code to translate.
 - **Never weaken a check.** Don't skip a step, delete a failing scenario, or add
   an entry to any allowlist to make a check pass, apart from a `wording` entry
   and an oracle fault as "Reading failures" describes. Never edit
-  `data/oracle-divergences.json` by hand. A failing
-  scenario, oracle or render diff means your definition is wrong until you have
-  shown otherwise.
+  `data/oracle-divergences.json` by hand. A failing scenario, oracle or render
+  diff means your definition is wrong until you have shown otherwise.
 
 ## Steps
 
-1. **Worktree.** From the main checkout, run
-   `enact worktree create <card-slug>` (`enact` is defined in the root
-   `AGENTS.md`) and work only in the path it prints.
+1. **Worktree.** From the main checkout, run `enact worktree create <card-slug>`
+   (`enact` is defined in the root `AGENTS.md`) and work only in the path it
+   prints.
 2. **Brief.** Run `just card brief "<name>"` and read all of it: the Oracle
    text, the rulings, the vocabulary entries, the nearest implemented cards and
    the XMage class. If it has an "Escalation" section, the card is blocked:
@@ -95,31 +92,32 @@ and builders a card definition is made of.
    whose outcome it changes, or a witness to the generator
    (`beryl_cards/src/derive/witness.rs`) when the change is to a vocabulary
    entry every card using it shares. A part is only checked against XMage and
-   Forge if a scenario shows what it does. Copy the model card's scenarios. In scenarios:
+   Forge if a scenario shows what it does. Copy the model card's scenarios. In
+   scenarios:
    - Only implemented cards exist: cards with a file under `rust/cards`, or
      complete from the store, named by `Card::<Card>`, plus the stand-ins in
      `Prop::` (`Prop::Flier`, `Prop::Vanilla`, `Prop::FlashCreature`,
      `Prop::Artifact`, `Prop::Equipment`, ...).
    - A prop stands for its role. Everything a scenario may rely on about it is
-     in its contract in `beryl_card_shared/src/props.rs` (cost, types,
-     subtypes, power and toughness, keywords, a summary of its text), which a
-     test checks against the card. Don't write which card a prop is or restate
-     its stats in a comment: write `ME.pt(Prop::Flier, 3, 1)`, not a comment
-     saying the flier is a 3/1. If a scenario needs something a contract
-     doesn't promise (an enters trigger, a creature type no prop has), name
-     that card and mark it with `Scenario::interaction`, or add a prop.
-     If a scenario needs a card nobody has implemented, implement one (see
-     "Cards for scenarios") rather than leave the part untested. Today only
-     Island, Plains and Swamp are basic lands with files, so a card that needs
-     {G} or {R} to cast cannot be cast in a scenario: escalate it with the
-     mechanic "no implemented land makes {G}" (or {R}).
+     in its contract in `beryl_card_shared/src/props.rs` (cost, types, subtypes,
+     power and toughness, keywords, a summary of its text), which a test checks
+     against the card. Don't write which card a prop is or restate its stats in
+     a comment: write `ME.pt(Prop::Flier, 3, 1)`, not a comment saying the flier
+     is a 3/1. If a scenario needs something a contract doesn't promise (an
+     enters trigger, a creature type no prop has), name that card and mark it
+     with `Scenario::interaction`, or add a prop. If a scenario needs a card
+     nobody has implemented, implement one (see "Cards for scenarios") rather
+     than leave the part untested. Today only Island, Plains and Swamp are basic
+     lands with files, so a card that needs {G} or {R} to cast cannot be cast in
+     a scenario: escalate it with the mechanic "no implemented land makes {G}"
+     (or {R}).
    - `ME.casts(card)` puts the spell on the stack, and each `Resolve` resolves
      the top object: a creature spell, then its enters trigger.
    - A player whose library the scenario doesn't set starts with one Island.
      Give a player who draws more than once a longer library, or they lose for
      drawing from an empty one. `.library(P0, &[])` is an empty library.
-   - `.battlefield(P0, &[..])` takes plain card names; tapped permanents,
-     tokens and permanents with counters go in `.permanents(P0, &[..])`.
+   - `.battlefield(P0, &[..])` takes plain card names; tapped permanents, tokens
+     and permanents with counters go in `.permanents(P0, &[..])`.
    - Generated scenarios (cast it, activate it) are added for you; they don't
      count as hand-written.
 6. **Check fast.** Run `just card check "<name>" --no-oracles` (seconds once
@@ -127,13 +125,13 @@ and builders a card definition is made of.
 7. **Check fully.** Run `just card check "<name>"`, which also plays the
    scenarios in XMage and Forge (about a minute; it waits for the shared oracle
    lock). Then run `just citations`.
-8. **Commit and push.** Commit the card file, with any card file written for
-   its scenarios, as `feat: <card name>`, and run `enact push` in the worktree.
-   If it exits with code 2, fix what it reports and run it again. If a test
-   outside your card files fails, and passes once your files are moved aside,
-   the card exposed a bug in that test or the engine, not in your definition.
-   Leave the card uncommitted, file a bead naming the test, the card and the
-   failure, and stop.
+8. **Commit and push.** Commit the card file, with any card file written for its
+   scenarios, as `feat: <card name>`, and run `enact push` in the worktree. If
+   it exits with code 2, fix what it reports and run it again. If a test outside
+   your card files fails, and passes once your files are moved aside, the card
+   exposed a bug in that test or the engine, not in your definition. Leave the
+   card uncommitted, file a ticket naming the test, the card and the failure,
+   and stop.
 
 ## Cards for scenarios
 
@@ -153,8 +151,8 @@ steal, a creature with a particular ability, a spell to counter):
 - If other cards will need the same role, add it to `props.rs` in
   `beryl_card_shared`: a `Contract` constant naming the role, its entry in
   `ALL`, and its `Prop::` name. Prefer a creature whose text is only keywords
-  (its set crate builds it from the card store, with no file), and name the
-  role by what it is, not by the card.
+  (its set crate builds it from the card store, with no file), and name the role
+  by what it is, not by the card.
 - Name another card in your scenario with `Scenario::interaction`, unless it is
   a prop.
 
@@ -170,17 +168,17 @@ steal, a creature with a particular ability, a spell to counter):
 - `oracles` fails in one oracle only, while the other passes the same scenario,
   and the Comprehensive Rules say the failing oracle is wrong (XMage requires a
   search to find a card that CR 701.23b lets the player not find): record it
-  with `just card diverge "<name>" "<scenario>" <xmage|forge> --cr <rule>
-  --reason "<what that oracle does>"`, then run `just card check` again. The
-  command plays the scenarios itself and refuses unless that oracle fails, the
-  other passes and the rule is in the pinned release; it fills in the rule's
-  quotation. Never edit `data/oracle-divergences.json` by hand: the
-  `divergences` check fails a hand-written entry, and the oracle run fails an
-  entry whose oracle now passes.
+  with
+  `just card diverge "<name>" "<scenario>" <xmage|forge> --cr <rule> --reason "<what that oracle does>"`,
+  then run `just card check` again. The command plays the scenarios itself and
+  refuses unless that oracle fails, the other passes and the rule is in the
+  pinned release; it fills in the rule's quotation. Never edit
+  `data/oracle-divergences.json` by hand: the `divergences` check fails a
+  hand-written entry, and the oracle run fails an entry whose oracle now passes.
 - `render` fails: it prints the rendered text against the Oracle text, with
-  `[-removed-]` and `{+added+}` words. Oracle words the render lacks (a `[-...-]`
-  with no matching `{+...+}`) mean a clause is missing: implement it, or
-  escalate it as partial (below). Different instructions, amounts, targets,
+  `[-removed-]` and `{+added+}` words. Oracle words the render lacks (a
+  `[-...-]` with no matching `{+...+}`) mean a clause is missing: implement it,
+  or escalate it as partial (below). Different instructions, amounts, targets,
   conditions or order also mean the definition is wrong: fix it. Only when the
   definition does exactly what the card says and the difference is the
   renderer's wording for the same instructions (for example
@@ -193,8 +191,8 @@ steal, a creature with a particular ability, a spell to counter):
 
 ## Escalating
 
-Escalate when the vocabulary cannot express an ability: no entry in
-`beryl_card` says it. To tell a missing mechanic from your own mistake:
+Escalate when the vocabulary cannot express an ability: no entry in `beryl_card`
+says it. To tell a missing mechanic from your own mistake:
 
 - Search the vocabulary itself, not only the brief's list, which shows the ten
   closest entries by word overlap. Search `rust/crates/beryl_card/src` for the
@@ -208,6 +206,7 @@ Escalate when the vocabulary cannot express an ability: no entry in
 To escalate:
 
 1. Delete the card file.
+
 2. Add the card to `data/card-escalations.json`, keyed by its name as the brief
    prints it, keeping the keys sorted:
 

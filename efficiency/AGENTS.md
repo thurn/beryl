@@ -1,7 +1,7 @@
 # The efficiency dashboard
 
 This directory is a standalone Python project, `beryl_efficiency`, that shows
-where agent sessions' time, the machine's CPU and LLM tokens go, per bead. The
+where agent sessions' time, the machine's CPU and LLM tokens go, per ticket. The
 design is `docs/efficiency-dashboard.md`; read its "Design overview", "The
 store" and "Isolation" before changing anything here.
 
@@ -15,7 +15,7 @@ store" and "Isolation" before changing anything here.
 - Pyre is strict and code is formatted by black.
 - The repository is public. Tests use small synthetic sources built in the test
   or kept in `tests/synthetic.py`. Never commit a real transcript, session
-  record, bead dump or command line from a machine.
+  record, ticket dump or command line from a machine.
 - Collection must cost agent sessions nothing: no hook, wrapper or prompt text
   in any session, and ingest never runs inside another command.
 
@@ -40,7 +40,7 @@ store" and "Isolation" before changing anything here.
   tickets.
 - `claude.py`: Claude Code transcripts (requests, tool calls, their results and
   the Enact commands a session ran) and the desktop app's session records.
-  `windows.py` derives bead windows from those commands and sets the `bead` of
+  `windows.py` derives ticket windows from those commands and sets the `bead` of
   each request and tool call.
 - `codex.py`: Codex logs (`~/.codex/sessions` and `archived_sessions`, `.jsonl`
   only; the `.zst` ones are not read), as rows in the same tables with provider
@@ -59,14 +59,14 @@ store" and "Isolation" before changing anything here.
 - `cpu.py`: the CPU sampler's rows (`cpu`, `cpu_minutes`) and the CPU token
   pool's log of leases (`leases`), each lease joined to the top-level tool call
   running in its worktree while it waited, which `timing.py` counts as queued
-  for cores. It also gives each minute of a worktree's CPU to a bead.
-  `facts.Facts.core_minutes` uses it per bead, and `machine.py` is the `machine`
-  query and the CPU metrics.
+  for cores. It also gives each minute of a worktree's CPU to a ticket.
+  `facts.Facts.core_minutes` uses it per ticket, and `machine.py` is the
+  `machine` query and the CPU metrics.
 - `locks.py`: Enact's lock-wait log (`.git/enact/lock-waits.jsonl` in the main
   checkout, and `lock-waits.1.jsonl` it is rotated to), one line per acquisition
   of Enact's ownership lock, into `lock_waits`. Each line is joined to the
-  top-level tool call that ran its command (one that names its bead first), and
-  `timing.py` moves the call's waited and sync seconds into the kinds
+  top-level tool call that ran its command (one that names its ticket first),
+  and `timing.py` moves the call's waited and sync seconds into the kinds
   `enact lock wait` and `enact sync`. `locks.report` is the `enact` query: those
   agent minutes, the log's lines by subcommand and the commands seen holding the
   lock; the `enact-lock-wait` finding ranks waits by holder. Lines from commands
@@ -81,30 +81,30 @@ store" and "Isolation" before changing anything here.
   `ci` query (the tree script, check lane, family, check, with CPU by kind of
   process from the sampler) and the CI metrics. `pushes.py` is the `pushes`
   query: each `enact push` tool call split by the fast check's `lane_runs` in
-  the bead's worktree inside the call, with repeats after losing the race to
+  the ticket's worktree inside the call, with repeats after losing the race to
   `staging`, the steps the push's output says were left to slow CI
   (`tool_calls.deferred`), and the fast check's failures by verdict; the `bead`
   query shows the same split for its pushes. A push run in the background ends
   at its `notifications` row (or `prompts` row), when the session was told it
-  finished. `failures.py` is the `failures` query: per Steward bead
+  finished. `failures.py` is the `failures` query: per Steward ticket
   (`enact_ci_range`) its sessions' cost, bisection's CPU and the minutes
   `master` stayed behind.
 - `commits.py`: the commits source, `git log` of `staging` and `master` run in
   the main checkout, with `master`'s reflog in `ref_moves` (kept after git
   expires it), which says when each commit reached `master`. `History` gives
-  each commit's bead (from the beads' `enact_commits`, at query time), the bead
-  that first added each card file, commit ranges and lead times. `rework.py`
-  applies the two rework rules of "Rework" and is cached by `Facts.rework`;
-  rework is a share of another bead's direct dollars, so it is shown beside
-  direct cost and never summed into it. `cards.py` is the `cards` query and the
-  card, rework and lead-time metrics.
+  each commit's ticket (from the tickets' `enact_commits`, at query time), the
+  ticket that first added each card file, commit ranges and lead times.
+  `rework.py` applies the two rework rules of "Rework" and is cached by
+  `Facts.rework`; rework is a share of another ticket's direct dollars, so it is
+  shown beside direct cost and never summed into it. `cards.py` is the `cards`
+  query and the card, rework and lead-time metrics.
 - `changes.py`: the efficiency changes in `data/efficiency-changes.json`, each
   entry's commit (its `commit`, else the commit that added it, from the file's
   history on `staging`), the `changes` query, and the marks that `metrics`
   series carry: each metric's median over the seven days before and after the
-  commit reached `staging`. Metrics date a sample by when its unit began, a bead
-  by its start, so that a bead open across a change counts as before it. Its
-  test also validates the file.
+  commit reached `staging`. Metrics date a sample by when its unit began, a
+  ticket by its start, so that a ticket open across a change counts as before
+  it. Its test also validates the file.
 - `findings.py` is the `findings` query: the rules of "Findings", ranked in one
   group per unit, with `--rule` for one rule's items. `finding.py` holds what
   every rule shares (`Rule`, `Item`, the scope helpers), and the rules
@@ -112,9 +112,9 @@ store" and "Isolation" before changing anything here.
   function each with its reference in its docstring. A rule returns its items
   over the range; `findings.py` scales them to a week.
 - The query layer: `scope.py` parses `--since` and the cohort filters into a
-  `Scope`; `facts.py` loads beads and windows with their `window_time` and
+  `Scope`; `facts.py` loads tickets and windows with their `window_time` and
   `window_dollars` rows, which every query adds up, so that a roll-up's lines
-  (epics, "(no bead)", "orchestration") sum to its total. `rollups.py` holds
+  (epics, "(no ticket)", "orchestration") sum to its total. `rollups.py` holds
   `summary`, `epic`, `time --by` and `dollars --by`; `bead.py`, `session.py` and
   `metrics.py` (the registry of named series, which later queries extend with
   `register`) hold the others.
@@ -181,11 +181,11 @@ store" and "Isolation" before changing anything here.
   roll-ups default to `7d`, drill-downs to `all`) and the cohort filters
   `--where key=value` (the label `key:value`), `--epic`, `--role`, `--tier`,
   `--host` and `--provider`. A window counts when it starts in the range, a
-  request or tool call when it happened in it, and a bead when it closed in it;
-  a closed bead's per-bead figures count all its windows. A query ingests first
-  when the store's last ingest is over a minute old, unless given `--no-ingest`
-  or another ingest is already running, in which case it answers from the store
-  as it is. The store is `$BERYL_CACHE/efficiency/store.sqlite`.
+  request or tool call when it happened in it, and a ticket when it closed in
+  it; a closed ticket's per-bead figures count all its windows. A query ingests
+  first when the store's last ingest is over a minute old, unless given
+  `--no-ingest` or another ingest is already running, in which case it answers
+  from the store as it is. The store is `$BERYL_CACHE/efficiency/store.sqlite`.
 - The `efficiency` check lane (`tools/src/beryl_tools/efficiency.py`) runs
   black, pyre and pytest here. Only a change under `efficiency/` or to
   `data/efficiency-*.json` selects it, and such a change selects no other lane

@@ -77,8 +77,8 @@ def ids(records: list[dict[str, object]]) -> dict[str, str]:
             if isinstance(aliases, list)
             else []
         )
-        # tk import supplies the original Beads ID. Prefer the ordinary prefixed spelling
-        # if it is itself an alias, or if this ticket has no imported Beads ID.
+        # tk import supplies the original Tickets ID. Prefer the ordinary prefixed spelling
+        # if it is itself an alias, or if this ticket has no imported Tickets ID.
         prefixed = ticket_ids.prefixed(ticket)
         bead = prefixed if prefixed in legacy else next(iter(legacy), prefixed)
         for alias in (ticket, f"T{ticket}", prefixed, *legacy):

@@ -327,7 +327,7 @@ def test_equal_compile_times_save_nothing(db: sqlite3.Connection) -> None:
 
 
 def commands(db: sqlite3.Connection, repeats: int) -> None:
-    """Five beads of one cohort; by-0 runs the tests `repeats` times, the others once,
+    """Five tickets of one cohort; by-0 runs the tests `repeats` times, the others once,
     each run a minute long."""
     for b in range(5):
         bead(db, f"by-{b}", "role:executor", "tier:opus")
@@ -441,7 +441,7 @@ def lane_run(db: sqlite3.Connection, script: str, fails: int, cpu: float) -> Non
 
 
 def failed_range(db: sqlite3.Connection, kind: str) -> None:
-    """A Steward bead for the range a1..b2, whose slow-CI run failed at a check with
+    """A Steward ticket for the range a1..b2, whose slow-CI run failed at a check with
     verdict `kind`, with an hour of failed slow CI and half an hour of bisection."""
     bead(db, "by-st", "role:steward", enact={"enact_ci_range": "a1..b2"})
     db.execute(

@@ -1,6 +1,6 @@
 """`just efficiency metrics [<name>]`: named series of values over time, which trends and the
 page draw. A metric is a function from the store, its facts and a scope to points, each a
-UTC time and a value. A point is dated by when its unit began: a bead by its start, a run by
+UTC time and a value. A point is dated by when its unit began: a ticket by its start, a run by
 its start, a per-day figure by its day. Later parts of the dashboard add their metrics with
 `register`. A series carries a mark for each efficiency change made to its metric, which
 `changes.py` computes."""
@@ -42,7 +42,7 @@ def register(metric: Metric) -> Metric:
 def per_bead(
     measure: Callable[[float, float], float],
 ) -> Callable[[sqlite3.Connection, Facts, Scope], Points]:
-    """Points at each bead closed in the scope that has windows in the store, valued by
+    """Points at each ticket closed in the scope that has windows in the store, valued by
     `measure(agent seconds, dollars)` over all its windows and dated by when it began.
     """
 
@@ -61,7 +61,7 @@ def per_bead(
 
 def context_tokens(db: sqlite3.Connection, facts: Facts, scope: Scope) -> Points:
     """Each request's context, for requests in the scope's range, hosts and providers, and
-    on the beads its filters choose."""
+    on the tickets its filters choose."""
     beads = facts.cohort(scope)
     found: Points = []
     for time, context, bead, host, provider in db.execute(
@@ -81,7 +81,7 @@ def context_tokens(db: sqlite3.Connection, facts: Facts, scope: Scope) -> Points
 register(
     Metric(
         "bead.dollars",
-        "dollars per closed bead",
+        "dollars per closed ticket",
         "dollars",
         2,
         per_bead(lambda _, dollars: dollars),
@@ -90,7 +90,7 @@ register(
 register(
     Metric(
         "bead.agent-minutes",
-        "agent minutes per closed bead",
+        "agent minutes per closed ticket",
         "minutes",
         1,
         per_bead(lambda seconds, _: seconds / 60),

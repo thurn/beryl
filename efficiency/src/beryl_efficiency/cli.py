@@ -50,7 +50,7 @@ MAX_AGE = 60.0
 
 
 def sources() -> list[ingest.Source]:
-    """Every source, in the order ingest reads them: beads and session records first, since
+    """Every source, in the order ingest reads them: tickets and session records first, since
     deriving windows from transcripts reads both, and the CPU token pool's leases and Enact's
     lock-wait log after the transcripts, since they are joined to the transcripts' tool
     calls."""
@@ -214,8 +214,8 @@ def unread(db: sqlite3.Connection, found: Sequence[ingest.Source]) -> dict[str, 
 
 
 def gaps(db: sqlite3.Connection) -> dict[str, object]:
-    """What attribution could not place: top-level transcripts with no bead window (by the
-    kind of their one window), closes with no open window, and beads that ran on a host the
+    """What attribution could not place: top-level transcripts with no ticket window (by the
+    kind of their one window), closes with no open window, and tickets that ran on a host the
     store has no data from, by host, and Enact lock-wait lines joined to a tool call, joined
     to none (run outside any session) and not looked at yet."""
     lock_lines = {
@@ -241,7 +241,7 @@ def gaps(db: sqlite3.Connection) -> dict[str, object]:
             0
         ]
     )
-    # A bead ran with a provider (Claude unless the bead says otherwise): it has no data when
+    # A ticket ran with a provider (Claude unless the ticket says otherwise): it has no data when
     # the store holds no transcript of that provider from its host.
     elsewhere = {
         str(r[0]): int(r[1])
@@ -377,10 +377,10 @@ def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> R
         "rows      " + " | ".join(f"{k} {v}" for k, v in counts.items()),
         "skipped   "
         + (" | ".join(f"{k} {v}" for k, v in skipped.items()) or "no source read yet"),
-        "no bead   sessions with no bead window: "
+        "no ticket   sessions with no ticket window: "
         + (", ".join(f"{k} {v}" for k, v in without.items()) or "none")
         + f" | closes with no open window {missing['stray_closes']}",
-        "no data   beads that ran on hosts with no data: "
+        "no data   tickets that ran on hosts with no data: "
         + (", ".join(f"{k} {v}" for k, v in elsewhere.items()) or "none"),
         "enact     lock-wait lines: "
         + (", ".join(f"{k} {v}" for k, v in lock_lines.items()) or "none"),
@@ -583,11 +583,11 @@ def run_changes(args: argparse.Namespace) -> Result:
 
 QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
     "summary": (
-        "beads closed, per-bead medians, where time and dollars went, epics",
+        "tickets closed, per-ticket medians, where time and dollars went, epics",
         run_summary,
     ),
-    "epic": ("one epic's beads with their minutes and dollars", run_epic),
-    "bead": ("one bead's minutes, dollars, requests and sessions", run_bead),
+    "epic": ("one epic's tickets with their minutes and dollars", run_epic),
+    "bead": ("one ticket's minutes, dollars, requests and sessions", run_bead),
     "session": ("one session's requests and tool calls in order", run_session),
     "time": ("agent minutes by kind, model, tier, role, lane, epic or day", run_time),
     "dollars": (
@@ -615,7 +615,7 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
         run_pushes,
     ),
     "failures": (
-        "what each slow-CI failure cost: its Steward bead, bisection, time behind",
+        "what each slow-CI failure cost: its Steward ticket, bisection, time behind",
         run_failures,
     ),
     "findings": (
@@ -662,7 +662,7 @@ SCOPED: dict[str, str] = {
 def parser() -> argparse.ArgumentParser:
     top = argparse.ArgumentParser(
         prog="just efficiency",
-        description="Where agent time, CPU and tokens go, per bead.",
+        description="Where agent time, CPU and tokens go, per ticket.",
     )
     sub = top.add_subparsers(dest="command", metavar="<query>")
     for name, (summary, _) in QUERIES.items():
@@ -692,7 +692,7 @@ def parser() -> argparse.ArgumentParser:
         if name in ("epic", "bead", "session"):
             p.add_argument("id", metavar="<id>", help=f"the {name}'s id")
         if name == "session":
-            p.add_argument("--bead", help="only the rows of this bead")
+            p.add_argument("--bead", help="only the rows of this ticket")
         if name == "time":
             p.add_argument("--by", choices=rollups.TIME_BY, default="kind")
         if name == "dollars":

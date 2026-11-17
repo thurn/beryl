@@ -40,7 +40,7 @@ ENACT: re.Pattern[str] = re.compile(
     r"(?:(?P<verb>start|claim|close)\s+(?P<bead>" + ticket_ids.ID + r")(?=$|[\s;&|])"
     r"|worktree\s+create\s+(?P<name>[\w.-]+))"
 )
-# The bead `enact close --continue` claimed, in its printed result: the first `"id"` key in
+# The ticket `enact close --continue` claimed, in its printed result: the first `"id"` key in
 # its `"next"` object, which may follow other keys. A quote inside a JSON string is escaped,
 # so text in a description cannot match.
 NEXT: re.Pattern[str] = re.compile(
@@ -436,7 +436,7 @@ def iso_from_milliseconds(value: object) -> str | None:
 
 class Sessions(FileSource):
     """The desktop app's session records whose working directory is the main checkout or
-    below it. Each maps a session id (`local_<uuid>`, what Enact records on a bead as
+    below it. Each maps a session id (`local_<uuid>`, what Enact records on a ticket as
     `enact_session`) to its current transcript (`cliSessionId`) and its earlier ones."""
 
     name = "claude-sessions"

@@ -131,7 +131,7 @@ attack at all.
 
 ## Follow-ups
 
-Each needs a bead and a measurement against this replay and the arena.
+Each needs a ticket and a measurement against this replay and the arena.
 
 1. **Jace, Wielder in the rollouts.** Add its +1 to `FRIENDLY` so a rollout
    mills its own library. Value it as `appraise` does when its controller's

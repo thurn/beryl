@@ -50,7 +50,7 @@ from .slow_only import (
 # An unresolved failure whose check has not passed since is forgotten after this long: the
 # check was deleted or renamed, or the diff to a pass would be too wide to say anything.
 UNRESOLVED_DAYS = 14
-# Set to "off" to keep verdicts out of the beads (the tests do).
+# Set to "off" to keep verdicts out of the tickets (the tests do).
 TICKETS_ENV = "BERYL_CI_TICKETS"
 # The verdicts `by verdict` sets; `mixed` is only ever inferred, as a question.
 VERDICTS = ("flaky", "stale", "catch", "miss")
@@ -85,10 +85,10 @@ CHECK_SIDE: dict[str, Side] = {
     "names": Side(("data/card-names-allowlist.json",)),
     "repo": Side(("data/file-length-allowlist.json",)),
 }
-# Neither side of any check: prose and the beads.
+# Neither side of any check: prose and the tickets.
 NEUTRAL = ("docs/*", "*.md")
 # Lanes whose checks lint files of every kind (file length, Markdown and justfile format), so
-# prose, other lanes' checks and test code are all their product. Only the beads are neutral:
+# prose, other lanes' checks and test code are all their product. Only the tickets are neutral:
 # a fix that shortened an over-long `ui/scripts` file once read as a flake of `repo:file-length`.
 WHOLE_TREE: frozenset[str] = frozenset({"repo"})
 
@@ -96,7 +96,7 @@ WHOLE_TREE: frozenset[str] = frozenset({"repo"})
 @dataclass(frozen=True)
 class Pending:
     """A check that shows a known fault, the board in beryl_cli's boards.rs that reproduces it,
-    and the fault's bead. The bead that makes it pass removes the entry, and the check becomes
+    and the fault's ticket. The ticket that makes it pass removes the entry, and the check becomes
     a normal one."""
 
     check: str
@@ -276,7 +276,7 @@ def judge(touched: set[str]) -> str:
     return "mixed" if touched else "flaky"
 
 
-# The record: one closed bead per check that has ever failed, one comment per verdict.
+# The record: one closed ticket per check that has ever failed, one comment per verdict.
 
 Entry = dict[str, object]
 DESCRIPTION = (
@@ -287,7 +287,7 @@ DESCRIPTION = (
 
 
 def bead_id(check: str) -> str:
-    """The check's bead, named after the check so that every machine finds the same one and a
+    """The check's ticket, named after the check so that every machine finds the same one and a
     second create of it fails instead of making a twin."""
     return "by-ci-" + hashlib.sha256(check.encode()).hexdigest()[:10]
 
@@ -301,7 +301,7 @@ def stamp(when: datetime) -> str:
 
 
 def entries(comments: Iterable[object]) -> list[Entry]:
-    """A check bead's verdicts, oldest first, each corrected by any later `corrects` comment
+    """A check ticket's verdicts, oldest first, each corrected by any later `corrects` comment
     naming it; comments that are not verdicts are skipped."""
     found: list[Entry] = []
     by_id: dict[str, Entry] = {}
@@ -320,7 +320,7 @@ def entries(comments: Iterable[object]) -> list[Entry]:
                 corrected["verdict"] = entry["verdict"]
                 corrected["corrected"] = True
             continue
-        # Imported corrections still name the original Beads comment ID.
+        # Imported corrections still name the original Tickets comment ID.
         entry["comment"] = str(
             c.get("legacy_id") or c.get("id") or f"ticket:{c.get('n')}"
         )
@@ -416,7 +416,7 @@ class Tickets:
         return found
 
     def checks(self) -> list[str]:
-        """Every check that has a ticket or bead."""
+        """Every check that has a ticket or ticket."""
         issues = self.list_issues("--label", "ci-check", include_closed=True)
         return [
             str(i["title"])
@@ -454,19 +454,19 @@ class Tickets:
         return code == 0
 
     def steward(self, commits: set[str]) -> tuple[str, list[str]]:
-        """The Steward bead that delivered one of `commits`, with those of its commits among
+        """The Steward ticket that delivered one of `commits`, with those of its commits among
         them; empty when none did."""
         return self.delivered(commits, "--label", "role:steward")
 
     def delivered(self, commits: set[str], *only: str) -> tuple[str, list[str]]:
-        """The bead whose Enact metadata lists one of `commits` as delivered, of those `tk list`
+        """The ticket whose Enact metadata lists one of `commits` as delivered, of those `tk list`
         selects with `only`, with those of its commits among them; empty when none does.
         """
         bead, theirs = self.delivering(commits, *only)
         return bead, [c for c in theirs if c in commits]
 
     def delivering(self, commits: set[str], *only: str) -> tuple[str, list[str]]:
-        """As `delivered`, but with every commit the bead delivered."""
+        """As `delivered`, but with every commit the ticket delivered."""
         if not commits:
             return "", []
         beads = self.list_issues(*only, include_closed=True)
@@ -515,10 +515,10 @@ class DryRun(Tickets):
 
 STORE: Tickets = Tickets()
 
-# The sentence every bead the checks file ends its instructions with (flaky.py, budget.py,
+# The sentence every ticket the checks file ends its instructions with (flaky.py, budget.py,
 # sweep.py, nightly_failures.py), so the session that picks it up finds the procedure.
 SKILL_NOTE = (
-    " The `cifix` skill (`.agents/skills/cifix/SKILL.md`) says how to work this bead."
+    " The `cifix` skill (`.agents/skills/cifix/SKILL.md`) says how to work this ticket."
 )
 
 
@@ -549,7 +549,7 @@ def cached_history() -> dict[str, list[Entry]]:
 
 
 def refresh_history() -> int:
-    """Fetches every check's verdicts from the beads and keeps them (`save_history`)."""
+    """Fetches every check's verdicts from the tickets and keeps them (`save_history`)."""
     history = STORE.history(STORE.checks())
     if not history:
         # the ticket service unavailable reads as no checks; keeping that would erase the last good
@@ -591,7 +591,7 @@ def settle(
 ) -> list[str]:
     """Gives a verdict to each failure this run resolves: its flakes, and the earlier failures
     from the same `place` of checks that now pass. Keeps the failures that stand for a later
-    run, records each verdict on its check's bead, and returns a line for each."""
+    run, records each verdict on its check's ticket, and returns a line for each."""
     found: list[tuple[str, str, Entry]] = []
     flaked = {str(r["check"]) for r in records if r.get("flaky")}
 
@@ -694,6 +694,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.set_defaults(func=correct)
     p = sub.add_parser(
         "ci-history",
-        help="keep the checks' verdicts from the beads for the fast check's ordering",
+        help="keep the checks' verdicts from the tickets for the fast check's ordering",
     )
     p.set_defaults(func=lambda args: refresh_history())

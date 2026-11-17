@@ -9,7 +9,7 @@ in `commit` instead. The moment a commit reached `staging` is its committer time
 
 For each entry, the metric's samples in the seven days before that moment and in the seven
 days after it give two medians. Samples are dated as `metrics.py` dates them, by when their
-unit began, so a bead that started before the change and closed after it counts as before.
+unit began, so a ticket that started before the change and closed after it counts as before.
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ def load(path: Path | None = None) -> list[Change]:
 def split_metric(spec: str) -> tuple[str, Scope]:
     """A metric's name and the cohort its filter chooses, over all time. A filter is
     `key=value` pairs separated by commas: `epic`, `host` and `provider` set those filters
-    and any other key chooses beads with the label `key:value`, as `--where` does. Raises
+    and any other key chooses tickets with the label `key:value`, as `--where` does. Raises
     ValueError for a malformed spec."""
     found = SPEC.match(spec)
     if not found:

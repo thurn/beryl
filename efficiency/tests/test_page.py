@@ -59,8 +59,8 @@ def checked(html: str) -> str:
     return " ".join(parser.shown)
 
 
-# Efficiency changes on the per-bead dollars and on requests' context, made between the
-# fixture's old bead and its recent ones, so that both trends over all time carry a mark.
+# Efficiency changes on the per-ticket dollars and on requests' context, made between the
+# fixture's old ticket and its recent ones, so that both trends over all time carry a mark.
 LABEL = "Sessions read smaller logs"
 CONTEXT_LABEL = "Requests carry less context"
 SHA = "c" * 40
@@ -197,7 +197,7 @@ def test_the_bead_strip_is_as_long_as_its_wall_minutes(root: Path) -> None:
     )
     names = {s["name"] for s in strip}
     assert "model" in names and any("test" in n or "cargo" in n for n in names), names
-    # One mark per request of the bead, in order.
+    # One mark per request of the ticket, in order.
     contexts = found["contexts"]
     assert len(contexts) == found["requests"]
     assert [c["at"] for c in contexts] == sorted(c["at"] for c in contexts)

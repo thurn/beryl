@@ -1,7 +1,7 @@
 """Hang limits: how long a step of `by check` or `by ci` may run before it is killed as hung.
 
 A timer in the checks is a safety net for a step that is stuck (a deadlock, a browser that never
-answers), never a gate meaning "this took too long": a slow run files a bead (budget.py) and
+answers), never a gate meaning "this took too long": a slow run files a ticket (budget.py) and
 fails nothing. So each step's limit sits far above anything a healthy run of it takes on a
 loaded machine: [`FACTOR`] times its slowest pass in the last [`DAYS`] days, never under
 [`FLOOR`], and [`UNKNOWN`] for a step with no pass on record (a new step, a new machine). The

@@ -1,4 +1,4 @@
-"""Over-budget checks file beads and fail nothing (budget.py): the fast check one per overrun,
+"""Over-budget checks file tickets and fail nothing (budget.py): the fast check one per overrun,
 slow CI one per lane naming the checks to cut."""
 
 from __future__ import annotations
@@ -151,7 +151,7 @@ def test_slow_ci_over_its_cpu_budget_files_a_bead_per_lane_naming_the_cuts() -> 
     )
     assert "rust:cheap`:" not in str(rust["description"])
     assert ui["title"] == "Cut 1 checks from slow CI's ui lane"
-    # The app is costlier than anything named, but no cut bead names it.
+    # The app is costlier than anything named, but no cut ticket names it.
     assert "- delete: `app:smoke`" not in str(rust["description"]) + str(
         ui["description"]
     )
@@ -200,7 +200,7 @@ def test_after_a_cut_closes_only_runs_since_count() -> None:
     gone = {c: s for c, s in CHECKS.items() if c not in ("rust:costly", "ui:drag")}
     after = [r for i in range(10, 13) for r in run(i, gone)]
     assert slow(store, runs() + after, 100) == [
-        "ci budget: 3 of 10 runs since a cut bead closed at 2026-11-13T10:09:30+00:00;"
+        "ci budget: 3 of 10 runs since a cut ticket closed at 2026-11-13T10:09:30+00:00;"
         " not measured yet"
     ]
     after = [r for i in range(10, 20) for r in run(i, gone)]

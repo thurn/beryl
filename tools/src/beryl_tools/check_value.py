@@ -1,7 +1,7 @@
 """What each slow-CI check is worth: the real bugs it caught per CPU-second it costs.
 
 `by ci-value` reads slow CI's records in the run log (runlog.py, script `ci`) and the verdicts on
-the checks' beads (verdicts.py), and reports for every check slow CI ran in the window: its runs,
+the checks' tickets (verdicts.py), and reports for every check slow CI ran in the window: its runs,
 its catches (failures judged `catch`: a fix to product code made it pass), the median CPU seconds
 of one run of it, and its value, catches per CPU-second. Lowest value first, so the top of the
 list is what slow CI should drop first.

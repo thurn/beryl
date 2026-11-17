@@ -8,7 +8,7 @@ for your judgement of it.
 Independent means two things:
 
 - You judge only what the films show. Do not read the stage's code
-  (`ui/src/stage`), the verb's bead, the git log or anything the implementer
+  (`ui/src/stage`), the verb's ticket, the git log or anything the implementer
   wrote about it, and do not ask why it is as it is.
 - You judge Beryl's motion on its own merits for Beryl's cards. Beryl shows full
   cards that tap, in its own frames, at its own sizes and distances on the

@@ -2,7 +2,7 @@
 
 A log is `sessions/<yyyy>/<mm>/<dd>/rollout-<time>-<id>.jsonl` (or the same file name in
 `archived_sessions/`), one JSON object per line with `timestamp`, `type` and `payload`. The
-`<id>` is the thread id, which Enact records on a bead as `enact_session`, so it is the
+`<id>` is the thread id, which Enact records on a ticket as `enact_session`, so it is the
 transcript's id. Lines that matter:
 
 - `session_meta` (the first line) has the working directory, `cwd`. Only logs whose `cwd` is

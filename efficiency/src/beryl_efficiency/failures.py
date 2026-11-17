@@ -1,28 +1,28 @@
 """`just efficiency failures`: what each slow-CI failure costs beyond the failing check's own
 run (docs/efficiency-dashboard.md, "What a slow-CI failure costs").
 
-When slow CI fails on `staging`, Enact files a Steward bead naming the commit range that
+When slow CI fails on `staging`, Enact files a Steward ticket naming the commit range that
 broke it (`enact_ci_range`, `A..B`), and `master` stops moving forward until a later run
 passes. A failure's costs are:
 
-- The Steward bead: the agent minutes, core minutes and dollars of the sessions that worked
+- The Steward ticket: the agent minutes, core minutes and dollars of the sessions that worked
   it, from all its windows.
 - Bisection: the CPU of the runs of the script `bisect` on commits in the range, which look
   for the commit at fault, estimated from wall seconds where unmeasured as the `ci` query
-  estimates CPU. Ranges can overlap, so each run counts for the earliest Steward bead whose
+  estimates CPU. Ranges can overlap, so each run counts for the earliest Steward ticket whose
   range holds its commit. Where the store has no commits for the range, the bisection runs
   between the failure and the next passing run are counted instead.
 - Time behind: from the end of the first failing slow-CI run on the range's last commit to
   the end of the next slow-CI run that passed, on any host the run log covers. It is unknown
   when the failing run is not in this machine's run log (the other CI machine failed) and
   while no run has passed since.
-- The failed checks, from the verdicts whose `steward` is the bead, with each `miss` (a check
+- The failed checks, from the verdicts whose `steward` is the ticket, with each `miss` (a check
   the fast check did not choose to run for the commit at fault) listed apart.
 
 Units are never converted into one another: the Steward's core minutes and bisection's are
 added into the failure's core minutes, and dollars and minutes behind stay figures of their
 own. A failure is in the range when it happened in it: its failing run's end, or the Steward
-bead's creation when the run log has no failing run.
+ticket's creation when the run log has no failing run.
 
 Its metrics are `slow-ci.failure-cost-per-day` and `staging.minutes-to-master`.
 """
@@ -72,7 +72,7 @@ class FailedCheck:
 
 @dataclass
 class StewardCost:
-    """The Steward bead's sessions' cost; dollars and agent minutes are None when the bead
+    """The Steward ticket's sessions' cost; dollars and agent minutes are None when the ticket
     ran on a host the store has no sessions from."""
 
     dollars: float | None
@@ -192,7 +192,7 @@ def failure(
     checks: list[FailedCheck],
     paid: StewardCost,
 ) -> Failure:
-    """One failure's costs: the Steward bead's, bisection's CPU and the time behind."""
+    """One failure's costs: the Steward ticket's, bisection's CPU and the time behind."""
     failed_at, host, bisect_cpu, behind = cost_of(
         spec, created, runs, bisect, in_range, steward
     )
@@ -253,7 +253,7 @@ def bisect_runs(db: sqlite3.Connection) -> list[BisectRun]:
 
 
 def failed_checks(db: sqlite3.Connection) -> dict[str, list[FailedCheck]]:
-    """Each Steward bead's failed checks, once each however many runs and hosts recorded
+    """Each Steward ticket's failed checks, once each however many runs and hosts recorded
     the failure."""
     found: dict[str, list[FailedCheck]] = defaultdict(list)
     for steward, check, lane, verdict in db.execute(
@@ -266,7 +266,7 @@ def failed_checks(db: sqlite3.Connection) -> dict[str, list[FailedCheck]]:
 
 
 def all_failures(db: sqlite3.Connection, facts: Facts) -> list[Failure]:
-    """Every Steward bead's failure, oldest first."""
+    """Every Steward ticket's failure, oldest first."""
     runs = ci_runs(db)
     bisect = bisect_runs(db)
     checks = failed_checks(db)
@@ -274,7 +274,7 @@ def all_failures(db: sqlite3.Connection, facts: Facts) -> list[Failure]:
     hosts = {w.host for w in facts.windows}
     found: list[Failure] = []
     # Steward ranges can overlap, so each bisection run is counted once, for the earliest
-    # Steward bead whose range holds its commit.
+    # Steward ticket whose range holds its commit.
     claimed: set[str] = set()
     stewards = sorted(
         (
@@ -322,7 +322,7 @@ def all_failures(db: sqlite3.Connection, facts: Facts) -> list[Failure]:
 
 
 def chosen(db: sqlite3.Connection, facts: Facts, scope: Scope) -> list[Failure]:
-    """The failures that happened in the range, of Steward beads the filters choose."""
+    """The failures that happened in the range, of Steward tickets the filters choose."""
     cohort = facts.cohort(scope)
     since, until = scope.range.since, scope.range.until
     return [
@@ -377,7 +377,7 @@ def report(db: sqlite3.Connection, facts: Facts, scope: Scope) -> Result:
     flags = scope.flags()
     more = [f"efficiency metrics slow-ci.failure-cost-per-day {flags}"]
     if result.rows:
-        more.insert(0, f"efficiency bead {result.rows[0].steward}")
+        more.insert(0, f"efficiency ticket {result.rows[0].steward}")
     return Result(
         "failures",
         asdict(result),
@@ -453,21 +453,21 @@ def lines(f: Failures) -> list[str]:
 
 
 FIELDS: dict[str, str] = {
-    "failures": "slow-CI failures in the range: one per Steward bead, by when the failing "
-    "run ended, or when the bead was made if the run log has no failing run",
-    "steward": "the Steward bead filed to fix the failure",
+    "failures": "slow-CI failures in the range: one per Steward ticket, by when the failing "
+    "run ended, or when the ticket was made if the run log has no failing run",
+    "steward": "the Steward ticket filed to fix the failure",
     "failed_at": "the end of the first failing slow-CI run on the range's last commit, or "
-    "the Steward bead's creation",
-    "no_data": "failures whose Steward bead ran on a host the store has no sessions "
+    "the Steward ticket's creation",
+    "no_data": "failures whose Steward ticket ran on a host the store has no sessions "
     "from, whose dollars and agent minutes are unknown",
-    "dollars": "dollars of the Steward bead's sessions; null when it ran on a host with no "
+    "dollars": "dollars of the Steward ticket's sessions; null when it ran on a host with no "
     "data, and the totals count the known ones",
-    "agent_minutes": "agent minutes of the Steward bead's sessions; null when it ran on a "
+    "agent_minutes": "agent minutes of the Steward ticket's sessions; null when it ran on a "
     "host with no data",
-    "steward_core_minutes": "CPU minutes in the Steward bead's worktree while it was open; "
+    "steward_core_minutes": "CPU minutes in the Steward ticket's worktree while it was open; "
     "null where the sampler was not running",
     "bisect_core_minutes": "CPU minutes of bisection runs on commits in the range",
-    "core_minutes": "the Steward bead's CPU minutes and bisection's, added",
+    "core_minutes": "the Steward ticket's CPU minutes and bisection's, added",
     "behind_minutes": "minutes from the failing run's end to the next passing slow-CI "
     "run's end, while master could not move forward; null when either is not in this "
     "machine's run log",
@@ -508,7 +508,7 @@ def to_master(_: sqlite3.Connection, facts: Facts, scope: Scope) -> Points:
 register(
     Metric(
         "slow-ci.failure-cost-per-day",
-        "dollars of the Steward beads of each day's slow-CI failures",
+        "dollars of the Steward tickets of each day's slow-CI failures",
         "dollars",
         2,
         cost_per_day,

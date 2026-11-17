@@ -42,7 +42,7 @@ def chain(*commits: Commit) -> list[Commit]:
 
 
 def steward_history(fix_path: str) -> History:
-    """Beads A, B and C land a commit each after a base commit; the Steward S then lands a
+    """Tickets A, B and C land a commit each after a base commit; the Steward S then lands a
     fix that changes `fix_path`."""
     commits = chain(
         commit("base", None, 0, "feat: base", "README.md"),
@@ -144,7 +144,7 @@ def total_of(found: dict[str, object]) -> dict[str, object]:
 def add_commits(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Ingests the beads again with their commits, and the commits source."""
+    """Ingests the tickets again with their commits, and the commits source."""
     old = cli.sources()
     sources = [Beads(lambda: with_commits(BEADS)), *old[1:], Commits(lambda: SNAPSHOT)]
     monkeypatch.setattr(cli, "sources", lambda: sources)

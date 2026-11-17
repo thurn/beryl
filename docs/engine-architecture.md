@@ -6,18 +6,18 @@ way [benchmarking.md](benchmarking.md) describes.*
 
 This is the design of the Rust rules engine and of the boundaries that search
 and the desktop UI build on. It is not an implementation plan: milestone plans
-are Enact epics in beads, written against this document. It was written when the
-target was cube draft, and the project has since moved to fixed decklists, so
-some examples and comments name cards from the earlier target. Milestone 1 built
-the engine, the game UI and the first AI opponents for a mirror match of the
-deck in `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, a mythic
-drafter's WU Control deck from the cube's Arena run. It built the structures
-described here, but only the mechanics its cards use. More decks come in later
-milestones. The twenty-two decisions it rests on are marked **D1** to **D22**
-where they apply and listed again in the first appendix. On 2026-11-10 the
-structure was rebuilt so that it would hold every Magic card (Project 50k): a
-kernel crate that owns the state, card behavior as effect data, set crates and a
-card store for the whole pool. The decisions of that rebuild are marked **K1**
+are Enact epics in tickets, written against this document. It was written when
+the target was cube draft, and the project has since moved to fixed decklists,
+so some examples and comments name cards from the earlier target. Milestone 1
+built the engine, the game UI and the first AI opponents for a mirror match of
+the deck in `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, a
+mythic drafter's WU Control deck from the cube's Arena run. It built the
+structures described here, but only the mechanics its cards use. More decks come
+in later milestones. The twenty-two decisions it rests on are marked **D1** to
+**D22** where they apply and listed again in the first appendix. On 2026-11-10
+the structure was rebuilt so that it would hold every Magic card (Project 50k):
+a kernel crate that owns the state, card behavior as effect data, set crates and
+a card store for the whole pool. The decisions of that rebuild are marked **K1**
 to **K29** and listed in the second appendix, with the measurements behind them.
 
 ## 1. Goals
@@ -1536,7 +1536,7 @@ missing from the list were about how the rebuild was run.
 | K18 | Every run of every check is logged, and each failure gets an inferred verdict: flaky, stale test, caught a bug or selection miss (`verdicts.py`). `just ci-report --prune` lists the checks a fixed pruning rule deletes or moves on that record (`prune.py`).                                   | A verdict an agent must write costs tokens and drifts toward "caught a bug"; the fix's diff already says which it was.                                                                       |
 | K19 | The fast check and slow CI run the browser checks a change can affect, chosen by measured coverage ([checks.md](checks.md)).                                                                                                                                                                     | `Board.tsx` changed in a quarter of all commits, so choosing by file would choose everything.                                                                                                |
 | K20 | A UI fix adds the broken state to what the generic audits run over. A scripted check is the exception and says in a comment why no audit can express it.                                                                                                                                         | Audits found most of the real UI bugs, and scripted checks caused nearly all the stale and racy failures. Only audits scale to generated specs for every card.                               |
-| K21 | A failed check reruns once; one that passes on the rerun fails no lane and files a bead to delete it. A slow-CI failure is bisected before its Steward bead is filed.                                                                                                                            | A racy test should not charge an unrelated change.                                                                                                                                           |
+| K21 | A failed check reruns once; one that passes on the rerun fails no lane and files a ticket to delete it. A slow-CI failure is bisected before its Steward ticket is filed.                                                                                                                        | A racy test should not charge an unrelated change.                                                                                                                                           |
 | K22 | MTG Arena is the reference for flow, motion, timing, table layout and wording; Beryl keeps its own skin. Beryl differs only by a numbered exception in [ui-conventions.md](ui-conventions.md).                                                                                                   | Prose rules were read differently each time; a recording can be measured.                                                                                                                    |
 | K23 | For each update the session builds, per seat, a script of steps of a closed list of motion verbs covering every visible change, arrows, combat lines and marks included (`beryl_session/src/script`). Engine events carry their cause and group (§8.1). The UI plays scripts and infers nothing. | The UI rebuilt a timeline from snapshots and guessed causes the engine knew.                                                                                                                 |
 | K24 | Scripts are held to invariants: replaying a script on the previous view gives the next view, and no arrow points at an object that is moving or gone. Text snapshots exist only where a person wrote the expectation.                                                                            | Invariants scale to the pool; a snapshot per card is a change detector that one verb change rewrites everywhere.                                                                             |

@@ -2,15 +2,15 @@
 "The fast check" and "Inside a push").
 
 `enact push` rebases onto `staging`, runs the fast check and pushes. Its tool call is split by
-the run log: the `lane_runs` rows of the fast check (script `check`) in the bead's worktree
+the run log: the `lane_runs` rows of the fast check (script `check`) in the ticket's worktree
 that started and ended inside the call give the seconds of each check lane, and what remains
 of the call is rebase, waiting and push. How the figures are made:
 
 - A push is a tool call of kind `push`. One run in the background ends when the session is
   told it finished (a `prompts` row, or a `notifications` row for a notice that came while
   the session was busy), not when the call returned.
-- The worktree is the directory name of the bead's `enact_worktree`. Run-log lines written
-  before the run log recorded worktrees name none, so their pushes, and pushes with no bead,
+- The worktree is the directory name of the ticket's `enact_worktree`. Run-log lines written
+  before the run log recorded worktrees name none, so their pushes, and pushes with no ticket,
   cannot be joined and are reported as not split.
 - Check lanes run at once, so the fast check's part of a push is the time covered by at least
   one of its lane runs, not their sum; each lane's seconds divide that part and are not added
@@ -394,7 +394,7 @@ def report(db: sqlite3.Connection, facts: Facts, scope: Scope) -> Result:
         f"efficiency metrics push.wall-seconds {flags}",
     ]
     if result.rows and result.rows[0].bead:
-        more.insert(0, f"efficiency bead {result.rows[0].bead}")
+        more.insert(0, f"efficiency ticket {result.rows[0].bead}")
     return Result(
         "pushes",
         asdict(result),
@@ -461,7 +461,7 @@ def lines(f: FastCheck) -> list[str]:
         [
             [
                 p.start[:16],
-                p.bead or "(no bead)",
+                p.bead or "(no ticket)",
                 p.seconds,
                 p.fast_check_seconds,
                 p.rest_seconds,
@@ -479,7 +479,7 @@ def lines(f: FastCheck) -> list[str]:
 FIELDS: dict[str, str] = {
     "pushes": "tool calls that ran `enact push` and started in the range; one run in the "
     "background ends when the session was told it finished",
-    "split": "pushes whose fast check the run log could join: lane runs in the bead's "
+    "split": "pushes whose fast check the run log could join: lane runs in the ticket's "
     "worktree inside the call. Older run-log lines name no worktree",
     "median_wall_seconds": "median seconds of a push, from the call to its end",
     "median_fast_check_seconds": "median seconds of a split push covered by at least one "

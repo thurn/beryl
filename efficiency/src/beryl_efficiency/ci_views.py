@@ -172,7 +172,7 @@ def pushes(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
     lines = [
         (
             [
-                text(p["bead"] or "(no bead)"),
+                text(p["bead"] or "(no ticket)"),
                 number(p["seconds"], 0),
                 number(p["fast_check_seconds"], 0),
                 number(p["cpu_seconds"], 0),

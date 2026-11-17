@@ -3517,10 +3517,10 @@ them, and after that the rule is the engine count gate's:
   element on every screen, a verb a gated board plays) also runs
   `just b3d gate --counts` and moves the instruction limits in the same commit,
   since that work moves them too. Otherwise the sweep finds the instruction
-  counts past their limits an hour later and files a bead for another session to
-  re-pin them. On 2026-11-16 nine such beads were filed in one day, most of them
-  because the native gate, behind the workspace's tests in one lane, had given a
-  result in only 100 of 327 fast checks.
+  counts past their limits an hour later and files a ticket for another session
+  to re-pin them. On 2026-11-16 nine such tickets were filed in one day, most of
+  them because the native gate, behind the workspace's tests in one lane, had
+  given a result in only 100 of 327 fast checks.
 
 #### During the build-out
 
@@ -3594,7 +3594,7 @@ thousands of measurements, so the gate finds its candidates first.
   pushing, except one that adds work to every board, which moves the instruction
   limits itself (see above). A session checks a change's frame cost on the Mac
   with the native gate and the `frame_abba` timing, and a sweep that finds a
-  count past its limit files a bead like any other sweep failure.
+  count past its limit files a ticket like any other sweep failure.
 - **The work counters are also limited natively**, on every tick, in the check
   that runs before each push. That catches most regressions without the virtual
   machine.
@@ -3836,7 +3836,7 @@ ranked frames, in screens of 2880 by 1800 (Mesa's llvmpipe Vulkan driver in
   `beryl3d: first frame shown` line. The first run paid for loading the
   executable from disk.
 
-**What earlier beads measured**, given in full in their own sections:
+**What earlier tickets measured**, given in full in their own sections:
 
 | Measure                                            | Result                                                      | Budget       |
 | -------------------------------------------------- | ----------------------------------------------------------- | ------------ |
@@ -4347,7 +4347,8 @@ reference is the web interface as WebKit draws it, at scale 2.
   later than Beryl 3D's, because the page takes a frame to react to the views it
   is handed.
 - **Drift.** A web change never runs Beryl 3D's checks (decision C17), so the
-  Beryl 3D sweep scores every target and files a bead for each one that drifted.
+  Beryl 3D sweep scores every target and files a ticket for each one that
+  drifted.
 
 Styles are not generated from the web interface's CSS. Each Beryl 3D element
 keeps its own `Style`, and the tools hold it equal to the web's computed style.

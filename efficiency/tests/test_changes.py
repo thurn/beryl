@@ -96,7 +96,7 @@ def test_a_metric_filter_chooses_a_cohort() -> None:
     assert scope.labels == ("tier:sonnet",)
     assert (scope.host, scope.epic, scope.provider) == ("jarvis", "by-1", None)
     assert scope.range.since is None
-    for bad in ("bead.dollars[]", "bead.dollars[tier]", "Bead dollars"):
+    for bad in ("bead.dollars[]", "bead.dollars[tier]", "Ticket dollars"):
         with pytest.raises(ValueError):
             split_metric(bad)
 
@@ -147,7 +147,7 @@ def test_too_few_samples_on_one_side_gives_no_verdict() -> None:
 
 
 def test_a_bead_is_dated_by_its_start() -> None:
-    """A bead that started before a change and closed after it counts as before."""
+    """A ticket that started before a change and closed after it counts as before."""
     bead = facts.Bead(
         "by-1",
         None,

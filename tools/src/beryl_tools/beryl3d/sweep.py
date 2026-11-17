@@ -6,7 +6,7 @@ the image cache can land and leave Beryl 3D broken without its author being told
 finds that afterwards. It is modelled on the browser sweep (beryl_tools/sweep.py), with three
 differences: it runs only when something it depends on has changed ([`due`]), it runs on every
 machine that runs slow CI, and it files its failures under Beryl 3D's epic for Beryl 3D's own
-work to fix, never as Steward beads.
+work to fix, never as Steward tickets.
 
 - **When.** Slow CI starts it in the background after each run ([`start_background`]) when
   staging holds a commit, since the last sweep on this machine, that changes one of
@@ -25,12 +25,12 @@ work to fix, never as Steward beads.
   when the build is broken, its failures would only repeat the quick part's.
 - **Failures.** A failed step is bisected over the commits since the last sweep whose part
   passed, for at most [`SEARCH`] seconds per part (bisect.py, in a tree of its own), and filed
-  as one P1 bead per step, labelled [`LABEL`], under the epic (`paths.EPIC`). A check that an
-  open sweep bead already names gets a comment instead. Nothing here holds `master`. A new
-  bead records the machine that ran the step in `enact_ci_host`, as the nightly's do. It is not
-  pinned with `enact_host`: Enact hands a pinned bead only to a vizier whose host name matches,
+  as one P1 ticket per step, labelled [`LABEL`], under the epic (`paths.EPIC`). A check that an
+  open sweep ticket already names gets a comment instead. Nothing here holds `master`. A new
+  ticket records the machine that ran the step in `enact_ci_host`, as the nightly's do. It is not
+  pinned with `enact_host`: Enact hands a pinned ticket only to a vizier whose host name matches,
   and the sweep's process can see a different host name (`dereks-macbook-pro`) from the shell
-  the viziers run in (`jarvis`), so no vizier ever started a pinned bead. The sweep runs only
+  the viziers run in (`jarvis`), so no vizier ever started a pinned ticket. The sweep runs only
   on the Mac, so the pin was not needed to keep other machines' workers off it.
 - **Cost.** Its steps run at normal priority and take CPU tokens of the `sweep` class, at most a
   quarter of the cores, as the browser sweep's do (tokens.py), and
@@ -39,11 +39,11 @@ work to fix, never as Steward beads.
 - **Fixed on the tip.** A sweep runs for tens of minutes, so when origin/staging has moved
   past the swept commit by the time a step has failed and been bisected, the step is replayed
   once at the new tip ([`still_failing`]) in a tree of its own, as a worker's replay is. A
-  step that passes there is logged as fixed on the tip and files no bead.
+  step that passes there is logged as fixed on the tip and files no ticket.
 - **Replays.** `just b3d sweep --step <step>` replays one step for whoever fixes it, in a tree
   of its own: it takes neither part's lock, so it never waits for a running sweep, it bisects
   and files nothing, and its steps take CPU tokens as a session's own ([`REPLAY_SCRIPT`]). A
-  bead the sweep files asks for the step's own command to pass in the worker's worktree.
+  ticket the sweep files asks for the step's own command to pass in the worker's worktree.
 - **Cache.** As soon as the quick part's build steps ([`BUILDS`]) pass, it saves the
   workspace's build directory to `$BERYL_CACHE/b3d/target` ([`save_target`]), which `just b3d`
   clones into a new worktree.
@@ -108,7 +108,7 @@ BUDGET = 6 * 3600
 MAC = "darwin"
 WINDOWS = "win32"
 # The machines that run the sweep: this Mac only. Beryl 3D is not tested on Windows, so
-# Cygnus neither starts a sweep nor files beads for one.
+# Cygnus neither starts a sweep nor files tickets for one.
 EVERY_MACHINE: tuple[str, ...] = (MAC,)
 # The main workspace's crates whose changes can break Beryl 3D, with every crate they depend
 # on by path ([`inputs`]): the session, the fixture recorder, the image cache and the data
@@ -350,7 +350,7 @@ class Request:
     step: str | None = None
     # Only this part ([`PARTS`]), which also sweeps whether or not one is due.
     part: str | None = None
-    # Print the beads it would file instead of filing them, and bisect nothing.
+    # Print the tickets it would file instead of filing them, and bisect nothing.
     dry_run: bool = False
     # Sweep even when none is due or the machine is overloaded.
     force: bool = False
@@ -539,7 +539,7 @@ def own_command(step: str) -> str:
 
 
 def acceptance(step: str) -> str:
-    """What closes a bead the sweep files for `step`. The worker checks the step in its own
+    """What closes a ticket the sweep files for `step`. The worker checks the step in its own
     worktree, rebased on the staging tip, at the priority of its own work. A replay through
     `just b3d sweep --commit origin/staging` used to wait for the background sweep's lock and
     then bisect and file again: on 2026-11-15 workers waited 16 to 91 minutes in retry loops
@@ -576,7 +576,7 @@ def body(
         "workspace (the session, the fixture recorder, the image cache, the data files) can "
         "break Beryl 3D without its author being told. Fix the break in Beryl 3D's code, not "
         "by reverting the commit that exposed it (docs/beryl-3d.md, 'Checks and isolation'); "
-        "whoever is working on Beryl 3D takes this bead first.\n\n"
+        "whoever is working on Beryl 3D takes this ticket first.\n\n"
         f"Output tail:\n```\n{tail}\n```"
     )
 
@@ -589,8 +589,8 @@ def file(
     output_by_lane: dict[str, str],
     store: verdicts.Tickets | None = None,
 ) -> list[str]:
-    """Files the sweep's failed checks, by step: a comment on each open sweep bead that names
-    one of them already, and a new bead per step for the rest. Returns a line per bead
+    """Files the sweep's failed checks, by step: a comment on each open sweep ticket that names
+    one of them already, and a new ticket per step for the rest. Returns a line per ticket
     touched."""
     store = store or verdicts.STORE
     known = nightly_failures.open_beads(store, LABEL) if failed else {}
@@ -628,7 +628,7 @@ def file(
         lines.append(
             f"b3d sweep: {out.strip()}: filed {', '.join(new)}"
             if code == 0
-            else f"b3d sweep: {step}: bead not filed for {', '.join(new)}"
+            else f"b3d sweep: {step}: ticket not filed for {', '.join(new)}"
         )
     return lines
 
@@ -668,8 +668,8 @@ def still_failing(
 ) -> dict[str, list[str]]:
     """The steps of `failed` that also fail at origin/staging's tip when it has moved past
     `commit`. A sweep runs for tens of minutes, and in that time another session often lands
-    the fix, so a bead filed for the step would start a session that rebuilt and replayed it
-    only to close the bead as already fixed. A step that passes at the tip is logged as fixed
+    the fix, so a ticket filed for the step would start a session that rebuilt and replayed it
+    only to close the ticket as already fixed. A step that passes at the tip is logged as fixed
     there, and a step whose replay cannot say stays in the result. When the tip is `commit`,
     cannot be fetched or does not descend from it, nothing is replayed."""
     newer = tip()
@@ -683,7 +683,7 @@ def still_failing(
     for lane_name, names in failed.items():
         step = step_of(lane_name)
         if replay(newer, step) == 0:
-            print(f"b3d sweep: {step}: fixed on the tip {newer[:12]}, no bead filed")
+            print(f"b3d sweep: {step}: fixed on the tip {newer[:12]}, no ticket filed")
         else:
             kept[lane_name] = names
     return kept
@@ -752,7 +752,7 @@ def sweep_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="print the steps and the beads it would file, filing and bisecting nothing",
+        help="print the steps and the tickets it would file, filing and bisecting nothing",
     )
     parser.add_argument(
         "--force",

@@ -121,7 +121,7 @@ The registry description now drops the claim.
 
 ## Follow-ups
 
-Each needs a bead and a measurement against this replay and the arena.
+Each needs a ticket and a measurement against this replay and the arena.
 
 1. **Measure the trees.** Record, for each search, the depth it reaches and how
    often an iteration gets past the opponent's next decision.

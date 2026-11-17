@@ -20,7 +20,7 @@ out of the call's kind into `enact lock wait` and `enact sync`. Lines from comma
 `enact.py`, such as Enact's own unit tests, are not read.
 
 The ticket-server merge queue writes `staging-lease-waits.jsonl` and rotates it in the same
-directory. Each record gives the first busy reply's UTC time, the push's pid and bead,
+directory. Each record gives the first busy reply's UTC time, the push's pid and ticket,
 the outcome and waited_s. The time split records these seconds as `enact lease wait`.
 """
 
@@ -54,7 +54,7 @@ def folder(checkout: Path) -> Path:
 
 
 def words(command: str) -> tuple[str, str | None] | None:
-    """The Enact subcommand a lock line's command ran and the first bead it names; None for
+    """The Enact subcommand a lock line's command ran and the first ticket it names; None for
     a command that is not `enact.py`."""
     parts = command.split()
     for number, part in enumerate(parts):
@@ -169,7 +169,7 @@ def join(db: sqlite3.Connection, host: str) -> set[tuple[str, str]]:
     for the whole of its wait and hold and whose command runs its subcommand, or whose
     command mentions Enact but was cut to `claude.COMMAND_CHARACTERS` before the store kept
     it (a later part of a long command may have run it). One whose command shows the
-    subcommand wins, then one that names its bead, then the latest to start. A line with no such call is tried again at the
+    subcommand wins, then one that names its ticket, then the latest to start. A line with no such call is tried again at the
     next ingest, until the store's latest tool call on the host is `GIVE_UP` later. Returns
     the transcripts of the calls joined, as (provider, transcript)."""
     pending = db.execute(
@@ -285,7 +285,7 @@ def held_up(
     db: sqlite3.Connection, facts: Facts, scope: Scope
 ) -> list[tuple[str, str | None, float]]:
     """The waits of the scope's lines joined to a tool call in its cohort, as (holder, the
-    call's bead, waited seconds): only joined lines count, since only they are agent time.
+    call's ticket, waited seconds): only joined lines count, since only they are agent time.
     """
     clause, given = in_range(scope)
     keep = wanted(facts, scope)

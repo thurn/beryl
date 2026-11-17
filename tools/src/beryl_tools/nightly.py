@@ -11,7 +11,7 @@ agent tokens and needs no session open. Its record is this machine's,
 in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and
 `last-output.txt` (the last run's output), and in `failures/` each failed step's whole output
 for two weeks. A check a step fails on origin/staging also goes to
-a Steward bead (nightly_failures.py), so it reaches someone. More nightly work joins as another
+a Steward ticket (nightly_failures.py), so it reaches someone. More nightly work joins as another
 [`Step`] in [`STEPS`].
 
 The agent fires at 03:00 and hourly until 08:00. Each firing runs only if the last success is
@@ -89,7 +89,7 @@ def coverage_step(commit: str, out: IO[str]) -> int:
 
 
 def history_step(commit: str, out: IO[str]) -> int:
-    """The checks' verdicts from the beads, kept for the fast check's ordering (verdicts.py)."""
+    """The checks' verdicts from the tickets, kept for the fast check's ordering (verdicts.py)."""
     command = [sys.executable, "-m", "beryl_tools.cli", "ci-history"]
     return subprocess.run(
         command,
@@ -379,10 +379,10 @@ def last_passed_commit(records: list[dict[str, object]]) -> str:
 def file_failures(
     commit: str, since: datetime, output: str, by_step: dict[str, str]
 ) -> None:
-    """Files the checks the night's steps failed in beads (nightly_failures.py), printing a
-    line for each bead touched. `by_step` holds each failed step's own output: each is kept
+    """Files the checks the night's steps failed in tickets (nightly_failures.py), printing a
+    line for each ticket touched. `by_step` holds each failed step's own output: each is kept
     whole in a file of its own (`flaky.keep`), since the next firing overwrites
-    `last-output.txt`, and a lane's bead quotes the tail of its step's output, not of the
+    `last-output.txt`, and a lane's ticket quotes the tail of its step's output, not of the
     night's, which ends with whatever step ran last."""
     from . import (
         flaky,

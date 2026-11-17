@@ -1,22 +1,22 @@
-"""Rework: the cost of later fixes that a bead's commits caused (docs/efficiency-dashboard.md,
+"""Rework: the cost of later fixes that a ticket's commits caused (docs/efficiency-dashboard.md,
 "Rework").
 
-Rework is a second view of costs already counted once as the fixing bead's direct cost, so
+Rework is a second view of costs already counted once as the fixing ticket's direct cost, so
 it is reported beside direct cost and never added into a total. Only two traceable cases
 count:
 
-- Slow-CI breakages. A Steward bead (one with `enact_ci_range`) names the commit range that
-  broke slow CI. The beads with commits in the range are the candidates, never the Steward
+- Slow-CI breakages. A Steward ticket (one with `enact_ci_range`) names the commit range that
+  broke slow CI. The tickets with commits in the range are the candidates, never the Steward
   itself. Those whose commits in the range changed a file that the Steward's own commits
   also changed are at fault; when none did, all are. The Steward's whole cost is shared
-  equally among the beads at fault.
-- Fixes to cards. A `fix` commit that changes a card file is rework for the bead that first
-  added the file. The part of the fixing bead's cost that is rework is its cost times the
+  equally among the tickets at fault.
+- Fixes to cards. A `fix` commit that changes a card file is rework for the ticket that first
+  added the file. The part of the fixing ticket's cost that is rework is its cost times the
   card files its `fix` commits changed, over every file its commits changed; that part is
-  shared equally among those card files. Steward beads are counted only by the first rule.
+  shared equally among those card files. Steward tickets are counted only by the first rule.
 
-A bead is never charged for its own commits: a card file a bead fixes after adding it
-itself is not rework, and does not count in the fixing bead's rework part.
+A ticket is never charged for its own commits: a card file a ticket fixes after adding it
+itself is not rework, and does not count in the fixing ticket's rework part.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ class Rework:
 
 
 def slow_ci(history: History, steward: str, spec: str, cost: float) -> list[Charge]:
-    """The Steward bead's cost shared among the beads at fault for the range `spec`."""
+    """The Steward ticket's cost shared among the tickets at fault for the range `spec`."""
     fixed = {p for c in history.by_bead.get(steward, []) for p in c.paths}
     candidates: dict[str, set[str]] = defaultdict(set)
     for c in history.range(spec):
@@ -77,7 +77,7 @@ def slow_ci(history: History, steward: str, spec: str, cost: float) -> list[Char
 
 def card_fixes(history: History, fixer: str, cost: float) -> list[Charge]:
     """The rework part of `fixer`'s cost, shared among the card files its `fix` commits
-    changed that another bead added."""
+    changed that another ticket added."""
     commits = history.by_bead.get(fixer, [])
     changed = {p for c in commits for p in c.paths}
     fixed: dict[str, str] = {}
@@ -105,7 +105,7 @@ def card_fixes(history: History, fixer: str, cost: float) -> list[Charge]:
 
 
 def fixed_later(history: History) -> set[str]:
-    """Card files that a later `fix` commit changed, other than one landed by the bead that
+    """Card files that a later `fix` commit changed, other than one landed by the ticket that
     added the file."""
     found: set[str] = set()
     for c in history.commits.values():
@@ -125,8 +125,8 @@ def fixed_later(history: History) -> set[str]:
 def compute(
     history: History, stewards: Mapping[str, str], cost: Mapping[str, float]
 ) -> Rework:
-    """Every bead's rework. `stewards` gives each Steward bead's `enact_ci_range`, and
-    `cost` each bead's direct dollars."""
+    """Every ticket's rework. `stewards` gives each Steward ticket's `enact_ci_range`, and
+    `cost` each ticket's direct dollars."""
     charges: list[Charge] = []
     for steward, spec in sorted(stewards.items()):
         charges += slow_ci(history, steward, spec, cost.get(steward, 0.0))

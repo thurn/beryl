@@ -7,7 +7,7 @@ gives every commit with its parents, time, subject and changed files. The reflog
 git keeps no other record of that, because Enact fast-forwards `master` to commits made
 earlier on `staging`. Reflog entries are kept in the store after git expires them.
 
-A commit's bead is not stored: it is read at query time from the beads' `enact_commits`,
+A commit's ticket is not stored: it is read at query time from the tickets' `enact_commits`,
 which can change after the commit is ingested.
 """
 
@@ -59,7 +59,7 @@ def is_card(path: str) -> bool:
 
 
 def utc(moment: str) -> str:
-    """An ISO time with any offset as UTC, in the form the beads use."""
+    """An ISO time with any offset as UTC, in the form the tickets use."""
     found = datetime.fromisoformat(moment.replace("Z", "+00:00"))
     if found.tzinfo is None:
         found = found.replace(tzinfo=timezone.utc)
@@ -185,7 +185,7 @@ class Commit:
 
 
 class History:
-    """The commits, the bead that landed each, when each reached `master`, and which bead
+    """The commits, the ticket that landed each, when each reached `master`, and which ticket
     added each card file."""
 
     def __init__(
@@ -194,7 +194,7 @@ class History:
         landed: Mapping[str, Iterable[str]],
         moves: Iterable[tuple[str, str]],
     ) -> None:
-        """`landed` is each bead's `enact_commits`; `moves` is each (time, sha) `master`
+        """`landed` is each ticket's `enact_commits`; `moves` is each (time, sha) `master`
         moved to."""
         self.commits: dict[str, Commit] = {c.sha: c for c in commits}
         self.bead_of: dict[str, str] = {}
@@ -241,25 +241,25 @@ class History:
         return [self.commits[s] for s in self.ancestors(end, excluded)]
 
     def adder(self, path: str) -> str | None:
-        """The bead whose commit first added the card file `path`."""
+        """The ticket whose commit first added the card file `path`."""
         found = self.card_added.get(path)
         return self.bead_of.get(found.sha) if found else None
 
     def cards_added(self, bead: str) -> list[str]:
-        """The card files the bead's commits added first."""
+        """The card files the ticket's commits added first."""
         return sorted(
             p for p, c in self.card_added.items() if self.bead_of.get(c.sha) == bead
         )
 
 
 def landed(enact: Mapping[str, object]) -> list[str]:
-    """The commits a bead's `enact_commits` names."""
+    """The commits a ticket's `enact_commits` names."""
     value = enact.get("enact_commits")
     return str(value).split() if value else []
 
 
 def load(db: sqlite3.Connection, beads: Mapping[str, Mapping[str, object]]) -> History:
-    """The history in the store, with each bead's `enact_*` metadata from `beads`."""
+    """The history in the store, with each ticket's `enact_*` metadata from `beads`."""
     commits = [
         Commit(
             str(r[0]),
@@ -282,7 +282,7 @@ def load(db: sqlite3.Connection, beads: Mapping[str, Mapping[str, object]]) -> H
 
 @dataclass(frozen=True)
 class Lead:
-    """A bead's lead time in minutes, each part null where a time is missing: from creation
+    """A ticket's lead time in minutes, each part null where a time is missing: from creation
     to start (`queue`), from start to close (`work`), and from its last commit's time on
     `staging` to that commit reaching `master` (`to_master`). `whole` runs from creation to
     the last commit reaching `master`."""

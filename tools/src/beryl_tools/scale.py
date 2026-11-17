@@ -23,7 +23,7 @@ Seconds are wall-clock seconds on this machine with all its cores, load-adjusted
 clocks are (`clock.Clock`: wall time over the load beyond the cores and the speed factor). The
 CPU-seconds beside each are what scales with machines. With `--assert`, a measure over its
 budget makes the run exit non-zero. A budget missed after three recorded attempts holds that
-measure to its recorded value plus 10% instead, naming the follow-up bead that owns it.
+measure to its recorded value plus 10% instead, naming the follow-up ticket that owns it.
 `--assert-memory` asserts only the largest compiler process, which the machine's load does not
 move.
 
@@ -38,7 +38,7 @@ budget, and one-edit medians ranged from 2.2 to 3.2 s against 2 s. So:
   it with the change's base in alternating runs (A B B A) on two workspaces rather than against
   the budget alone.
 - The nightly (nightly.py) passes `--assert-memory`, not `--assert`. A nightly failure files a
-  Steward bead, so it asserts only the measure whose night-to-night spread is far below its
+  Steward ticket, so it asserts only the measure whose night-to-night spread is far below its
   margin. The times are printed in its log, where their trend shows.
 
 The rehearsal holds the machine for minutes, so it runs in the nightly, never in a check. It
@@ -93,7 +93,7 @@ SCRIPT_SUMMARY: re.Pattern[str] = re.compile(
 
 @dataclass(frozen=True)
 class Budget:
-    """A measure's bar: the plan's value, in seconds or bytes. `held` names the follow-up bead
+    """A measure's bar: the plan's value, in seconds or bytes. `held` names the follow-up ticket
     that owns a budget missed after three attempts, and `limit` is then the recorded value
     plus 10%, which `--assert` holds the measure to meanwhile."""
 

@@ -343,9 +343,9 @@ def test_a_failed_step_files_one_bead_under_the_epic_and_a_repeat_comments(
         "b3d-release-socket": "error: release-socket failure",
     }
     found = ["bisect: b3d-cargo-test:cargo-test  culprit 1234567890 feat: session"]
-    # Each new bead records the machine that ran the step, without pinning it there.
+    # Each new ticket records the machine that ran the step, without pinning it there.
     monkeypatch.setenv("ENACT_HOST", "cygnus")
-    # A dry run reads the open beads and prints the ones it would file.
+    # A dry run reads the open tickets and prints the ones it would file.
     dry = verdicts.DryRun(store, "b3d sweep")
     sweep.file("bad1", failed, "good", found, output, dry)
     printed = capsys.readouterr().out
@@ -377,7 +377,7 @@ def test_a_failed_step_files_one_bead_under_the_epic_and_a_repeat_comments(
     assert "just b3d sweep --step cargo-test --commit origin/staging" in accept
     assert "last sweep that passed on this machine was at good" in text
 
-    # The same check failing again comments on that bead, in a dry run too.
+    # The same check failing again comments on that ticket, in a dry run too.
     sweep.file("bad2", failed, "good", [], output, dry)
     assert "would add to by-1 the comment" in capsys.readouterr().out
     sweep.file("bad2", failed, "good", [], output, store)

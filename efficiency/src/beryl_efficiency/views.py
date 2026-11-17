@@ -233,13 +233,13 @@ def machine(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
         + '<div class="figs">'
         + figure("core h", number(data["core_hours"], 2), fields, "core_hours")
         + figure(
-            "in beads", number(data["bead_core_hours"], 2), fields, "bead_core_hours"
+            "in tickets", number(data["bead_core_hours"], 2), fields, "bead_core_hours"
         )
         + figure(
             "shared", number(data["shared_core_hours"], 2), fields, "shared_core_hours"
         )
         + figure("per day", number(data["shared_per_day"], 2), fields, "shared")
-        + figure("per bead", number(data["shared_per_bead"], 2), fields, "shared")
+        + figure("per ticket", number(data["shared_per_bead"], 2), fields, "shared")
         + figure("sampler cores", number(own["sampler_cores"], 3), fields, "own")
         + figure("ingest cpu s", number(own["ingest_cpu_seconds"], 1), fields, "own")
         + "</div>"

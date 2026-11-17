@@ -114,7 +114,7 @@ def text(opened: Opened) -> str:
 
 def bug_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "report", help="a report folder, or an id, id prefix or bead of one"
+        "report", help="a report folder, or an id, id prefix or ticket of one"
     )
 
 
@@ -134,7 +134,7 @@ COMMANDS: tuple[Command, ...] = (
         "bug",
         "a bug report: its words, element tree, frame log and the commands that reproduce it",
         (
-            ("just b3d bug by-abcd", "the report filed as bead by-abcd"),
+            ("just b3d bug by-abcd", "the report filed as ticket by-abcd"),
             (
                 "just b3d bug ~/Library/Application\\ Support/ca.thurn.beryl/bugs/<folder>",
                 "one report folder",

@@ -1,5 +1,5 @@
 """The checks the fast check leaves to slow CI alone (verdicts.py re-exports them): the
-pruning rule's moves (prune.py) and those a bead placed there, each with its fast-check record
+pruning rule's moves (prune.py) and those a ticket placed there, each with its fast-check record
 when it moved. Also the reverse, [`FAST_ONLY`]: the checks slow CI leaves to the fast check
 alone."""
 
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class SlowOnly:
     """A check the pruning rule moved to slow CI alone (prune.py: never failed, and in the
-    costliest tenth of the fast check by seconds per run), or that its bead placed there, on
+    costliest tenth of the fast check by seconds per run), or that its ticket placed there, on
     `date`: checks.fast() leaves it out and slow CI runs it as before. `seconds` (a run) and
     `runs` are its fast-check record when it moved, which keeps it in the ranking of later
     prunes."""

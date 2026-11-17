@@ -1,8 +1,8 @@
 """What every query takes (docs/efficiency-dashboard.md, "The command"): a time range from
-`--since`, and cohort filters that choose beads by label, epic, host or provider.
+`--since`, and cohort filters that choose tickets by label, epic, host or provider.
 
 The range bounds every part of a result the same way: a window belongs to it when the window
-starts inside it, a request or tool call when it happened inside it, and a bead when it was
+starts inside it, a request or tool call when it happened inside it, and a ticket when it was
 closed inside it. Stored times are UTC ISO strings, so a bound is one too and compares as a
 string.
 """
@@ -85,9 +85,9 @@ def parse_since(value: str, at: datetime | None = None) -> Range:
 
 @dataclass(frozen=True)
 class Scope:
-    """A time range and cohort filters. `labels` holds labels a bead must all carry: from
+    """A time range and cohort filters. `labels` holds labels a ticket must all carry: from
     `--where key=value` (the label `key:value`), `--where label` (that label exactly),
-    `--role` and `--tier`. `epic` keeps the epic and the beads under it. `host` and
+    `--role` and `--tier`. `epic` keeps the epic and the tickets under it. `host` and
     `provider` keep windows that ran there."""
 
     range: Range = field(default_factory=lambda: Range(None, None, "all"))
@@ -97,7 +97,7 @@ class Scope:
     provider: str | None = None
 
     def chooses_beads(self) -> bool:
-        """Whether a filter chooses beads, so that work on no bead falls outside it."""
+        """Whether a filter chooses tickets, so that work on no ticket falls outside it."""
         return bool(self.labels) or self.epic is not None
 
     def describe(self) -> str:
@@ -133,11 +133,11 @@ def add_arguments(p: argparse.ArgumentParser, default_since: str) -> None:
         action="append",
         default=[],
         metavar="label=value",
-        help="beads with the label label:value (or a whole label); repeatable",
+        help="tickets with the label label:value (or a whole label); repeatable",
     )
-    p.add_argument("--epic", help="the epic and the beads under it")
-    p.add_argument("--role", help="beads with the label role:<role>")
-    p.add_argument("--tier", help="beads with the label tier:<tier>")
+    p.add_argument("--epic", help="the epic and the tickets under it")
+    p.add_argument("--role", help="tickets with the label role:<role>")
+    p.add_argument("--tier", help="tickets with the label tier:<tier>")
     p.add_argument("--host", help="work done on this host")
     p.add_argument("--provider", help="work done with this provider (claude, codex)")
 

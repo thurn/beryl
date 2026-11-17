@@ -1,8 +1,8 @@
 """`just efficiency cards --by <key>`: the card cohort's cost per card (docs/efficiency-
-dashboard.md, "Units" and "Rework"). The card cohort is the closed beads whose commits first
-added a card file under `rust/cards/`. Per card is over the card files those beads added:
+dashboard.md, "Units" and "Rework"). The card cohort is the closed tickets whose commits first
+added a card file under `rust/cards/`. Per card is over the card files those tickets added:
 direct dollars and agent minutes, rework dollars beside them, and the share of the cards a
-later `fix` commit by another bead changed. The metrics of cards, rework and lead time are
+later `fix` commit by another ticket changed. The metrics of cards, rework and lead time are
 registered here too."""
 
 from __future__ import annotations
@@ -22,9 +22,9 @@ NO_LABEL = "-"
 
 @dataclass
 class CardGroup:
-    """One line of the cards query. `cards` counts every card file the line's beads added;
-    the per-card figures are over the cards of beads with windows in the store, and
-    `no_data` counts the beads without."""
+    """One line of the cards query. `cards` counts every card file the line's tickets added;
+    the per-card figures are over the cards of tickets with windows in the store, and
+    `no_data` counts the tickets without."""
 
     name: str
     beads: int
@@ -84,7 +84,7 @@ def key_of(facts: Facts, bead: Bead, by: str) -> str:
 
 
 def card_beads(facts: Facts, scope: Scope) -> list[tuple[Bead, list[str]]]:
-    """The closed beads in the scope that added card files, with the files."""
+    """The closed tickets in the scope that added card files, with the files."""
     history = facts.history()
     found = [(b, history.cards_added(b.id)) for b in facts.closed(scope)]
     return [(b, cards) for b, cards in found if cards]
@@ -184,7 +184,7 @@ def lines(c: Cards) -> list[str]:
         ),
         "",
         f"capacity  cores per session {number(k.mean_cores, 1)} mean, "
-        f"{number(k.p90_cores, 1)} p90 over {k.beads} beads; parallel capacity "
+        f"{number(k.p90_cores, 1)} p90 over {k.beads} tickets; parallel capacity "
         f"{number(k.sessions, 0)} sessions",
     ]
 
@@ -215,7 +215,7 @@ def per_card(dollars: bool) -> Metric:
 
 
 def rework_share(_: sqlite3.Connection, facts: Facts, scope: Scope) -> Points:
-    """Each closed bead's rework as a percent of its direct dollars, for beads with
+    """Each closed ticket's rework as a percent of its direct dollars, for tickets with
     dollars in the store."""
     windows = facts.bead_windows(scope)
     rework = facts.rework()
@@ -229,7 +229,7 @@ def rework_share(_: sqlite3.Connection, facts: Facts, scope: Scope) -> Points:
 
 
 def lead_minutes(_: sqlite3.Connection, facts: Facts, scope: Scope) -> Points:
-    """Each closed bead's minutes from creation to its last commit reaching master."""
+    """Each closed ticket's minutes from creation to its last commit reaching master."""
     found: Points = []
     for b in facts.closed(scope):
         whole = facts.lead(b.id).whole
@@ -244,7 +244,7 @@ register(per_card(False))
 register(
     Metric(
         "bead.rework-share",
-        "rework as a percent of direct dollars per closed bead",
+        "rework as a percent of direct dollars per closed ticket",
         "percent",
         0,
         rework_share,
@@ -253,7 +253,7 @@ register(
 register(
     Metric(
         "bead.lead-minutes",
-        "minutes from a closed bead's creation to its last commit reaching master",
+        "minutes from a closed ticket's creation to its last commit reaching master",
         "minutes",
         0,
         lead_minutes,

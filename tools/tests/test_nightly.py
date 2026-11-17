@@ -301,7 +301,7 @@ def bd(monkeypatch: pytest.MonkeyPatch) -> FakeTickets:
 
 
 def filed_for(issue: dict[str, object]) -> list[str]:
-    """The checks a bead was filed for, from its metadata."""
+    """The checks a ticket was filed for, from its metadata."""
     meta = issue["metadata"]
     assert isinstance(meta, dict)
     return str(meta[nightly_failures.CHECKS_KEY]).splitlines()
@@ -427,7 +427,7 @@ def test_no_verdicts_found_keeps_the_last_history(
 
 
 def test_a_lane_quotes_its_own_steps_output_and_keeps_it_whole(bd: FakeTickets) -> None:
-    # The night's output ends with whatever step ran last. A fuzz bead once quoted the oracle
+    # The night's output ends with whatever step ran last. A fuzz ticket once quoted the oracle
     # and iroh steps' output, and the next firing overwrote `last-output.txt`, so the fuzz
     # failure could only be seen by running the fuzz again.
     steps = [

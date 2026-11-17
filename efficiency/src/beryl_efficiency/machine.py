@@ -1,6 +1,6 @@
 """`just efficiency machine`: how busy the machine was and where its CPU went
 (docs/efficiency-dashboard.md, "CPU accounting"): cores in use, saturation, the time commands
-queued for CPU tokens, leases narrower than they wanted, the CPU no bead claims, the tool's
+queued for CPU tokens, leases narrower than they wanted, the CPU no ticket claims, the tool's
 own cost, and how many sessions of the cohort the machine could run at once.
 
 Its metrics are `machine.saturation`, `machine.queued-core-hours-per-day` and
@@ -62,7 +62,7 @@ class Own:
 
 @dataclass
 class Capacity:
-    """The cohort's closed beads with both core and agent minutes: their cores per session
+    """The cohort's closed tickets with both core and agent minutes: their cores per session
     (core minutes over agent minutes), and the machine's cores over the mean, rounded down.
     """
 
@@ -155,8 +155,8 @@ def queued(db: sqlite3.Connection, scope: Scope) -> tuple[list[Queued], list[Nar
 def shared_cpu(
     db: sqlite3.Connection, facts: Facts, scope: Scope
 ) -> tuple[float, dict[str, float]]:
-    """The range's CPU seconds that beads claim, and the rest by owner and kind, or by
-    worktree for a worktree's minutes that no bead claims."""
+    """The range's CPU seconds that tickets claim, and the rest by owner and kind, or by
+    worktree for a worktree's minutes that no ticket claims."""
     clause, given = bounds("time", scope)
     shared: dict[str, float] = defaultdict(float)
     for owner, kind, seconds in db.execute(
@@ -192,7 +192,7 @@ def machine_cores(db: sqlite3.Connection) -> int | None:
 def capacity(
     facts: Facts, scope: Scope, cores: int | None, beads: list[Bead] | None = None
 ) -> Capacity:
-    """The capacity estimate over `beads`, by default the beads closed in the range."""
+    """The capacity estimate over `beads`, by default the tickets closed in the range."""
     windows = facts.bead_windows(scope)
     per_session: list[float] = []
     for b in facts.closed(scope) if beads is None else beads:
@@ -343,9 +343,9 @@ def lines(m: Machine) -> list[str]:
         )
     found.append("")
     found.append(
-        f"cpu       {m.core_hours:.2f} core h: beads {m.bead_core_hours:.2f} | shared "
+        f"cpu       {m.core_hours:.2f} core h: tickets {m.bead_core_hours:.2f} | shared "
         f"{m.shared_core_hours:.2f} ({number(m.shared_per_day, 2)} per day, "
-        f"{number(m.shared_per_bead, 2)} per bead closed)"
+        f"{number(m.shared_per_bead, 2)} per ticket closed)"
     )
     found += split_lines("shared    ", m.shared, 2)
     own = m.own
@@ -357,7 +357,7 @@ def lines(m: Machine) -> list[str]:
     c = m.capacity
     found.append(
         f"capacity  cores per session {number(c.mean_cores, 1)} mean, "
-        f"{number(c.p90_cores, 1)} p90 over {c.beads} beads; parallel capacity "
+        f"{number(c.p90_cores, 1)} p90 over {c.beads} tickets; parallel capacity "
         f"{number(c.sessions, 0)} sessions"
     )
     return found
@@ -437,7 +437,7 @@ def queued_per_day(db: sqlite3.Connection, _: Facts, scope: Scope) -> Points:
 register(
     Metric(
         "bead.core-minutes",
-        "CPU minutes used in each closed bead's worktree",
+        "CPU minutes used in each closed ticket's worktree",
         "minutes",
         1,
         bead_core_minutes,

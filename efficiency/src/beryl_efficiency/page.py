@@ -336,7 +336,9 @@ def summary(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
         )
     return (
         '<div class="figs">'
-        + figure("beads closed", integer(data["beads_closed"]), fields, "beads_closed")
+        + figure(
+            "tickets closed", integer(data["beads_closed"]), fields, "beads_closed"
+        )
         + "".join(figures)
         + "</div>"
         + bar(
@@ -425,7 +427,7 @@ def epic(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
 
 
 def strip(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
-    """The bead's timeline: one bar as long as its wall minutes, coloured by what each
+    """The ticket's timeline: one bar as long as its wall minutes, coloured by what each
     stretch went to, and under it the context of each request."""
     stretches = rows(data["strip"])
     wall = data.get("wall_minutes")

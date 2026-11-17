@@ -4,7 +4,7 @@ generated from it. `by conventions` writes the page; the repo lane fails when it
 
 Each entry has a kind: a numbered Beryl `exception`, a rule `settled` as Arena, one with
 `no-equivalent` in Arena, one `not-seen` in the recordings, or one still `open`. It states the
-rule, the report beads behind it, and what Arena does with the recording moments that show it.
+rule, the report tickets behind it, and what Arena does with the recording moments that show it.
 One that shows a prompt's cards a second time names that prompt's shape as `twice`: the
 duplicate audit lets the cards such a prompt is about show again while it is open
 (`ui/scripts/stage-audit.mjs`). A verb whose step holds up a second face of its card, the card
@@ -330,7 +330,7 @@ def problems(data: dict[str, Any]) -> list[str]:
             numbers.append(entry["number"])
         for report in entry.get("reports", []):
             if not REPORT.match(report):
-                found.append(f"{where}: {report!r} is not a bead id")
+                found.append(f"{where}: {report!r} is not a ticket id")
         if "twice" in entry and not SHAPE.match(str(entry["twice"])):
             found.append(f"{where}: twice {entry['twice']!r} is not a prompt shape")
         found += evidence_problems(where, entry)

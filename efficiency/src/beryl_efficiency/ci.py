@@ -11,11 +11,11 @@ How the figures are made:
   in the range, or every lane's where its lane has none, as `just ci-value` estimates it.
 - Runs count lines that ran a check; a skipped line is counted apart. A script's runs are
   its distinct runs, one per host and commit, as `just ci-value` counts slow-CI runs.
-- Failures are counted by the verdict recorded on the check's bead, under the script and
+- Failures are counted by the verdict recorded on the check's ticket, under the script and
   lane that recorded it, in the range by the failure's time.
 - The flake cost is one rerun per flaky failure, at the check's mean CPU and wall seconds per
-  run, and beside it the dollars of the sessions that worked the beads labeled `flaky-check`
-  for those checks, from those beads' windows in the range. The run log keeps each check per
+  run, and beside it the dollars of the sessions that worked the tickets labeled `flaky-check`
+  for those checks, from those tickets' windows in the range. The run log keeps each check per
   day added up, so a median per run cannot be had; the mean is shown instead.
 - The CPU by kind of process joins the sampler's minutes for the script's context (`slow_ci`
   for slow CI, `fast_check` for the fast check) to the check-lane runs that overlap each
@@ -53,7 +53,7 @@ SCRIPTS: dict[str, str] = {
 }
 # The CPU sampler's context for a script's processes (tools/src/beryl_tools/cpu.py).
 CONTEXTS: dict[str, str] = {"ci": "slow_ci", "check": "fast_check"}
-# The titles flaky.py gives the beads it files to delete a flaky check.
+# The titles flaky.py gives the tickets it files to delete a flaky check.
 FLAKY_TITLES: tuple[str, ...] = (
     "Delete flaky check ",
     "Delete the flaky test in step ",

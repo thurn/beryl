@@ -349,7 +349,7 @@ def account(
 ) -> int:
     """Accounts a top-level transcript and its subagents, and writes `window_dollars` for
     its windows: a subagent's requests go to the window that holds its first record, as its
-    rows' beads do. Returns how many rows it wrote."""
+    rows' tickets do. Returns how many rows it wrote."""
     windows = [
         str(r[0])
         for r in db.execute(

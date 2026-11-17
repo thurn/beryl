@@ -1,5 +1,5 @@
 """Shared fixtures: a store in a temporary cache, and small synthetic sources. The repository
-is public, so no test reads a real transcript, bead or command line from a machine."""
+is public, so no test reads a real transcript, ticket or command line from a machine."""
 
 from __future__ import annotations
 

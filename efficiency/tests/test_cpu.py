@@ -1,5 +1,5 @@
 """CPU accounting: the sampler's rows and the token pool's leases, read into the store and
-reported per bead and for the machine, over small synthetic sources."""
+reported per ticket and for the machine, over small synthetic sources."""
 
 from __future__ import annotations
 
@@ -77,9 +77,9 @@ def lease(released: str, worktree: str, waited: float, held: float) -> str:
 
 @pytest.fixture
 def root(tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """One bead in its own worktree: a session runs `just test-rust` for two minutes, of
+    """One ticket in its own worktree: a session runs `just test-rust` for two minutes, of
     which its lease waited 30 seconds, and the sampler saw the worktree's CPU before the
-    bead started, inside its window, after its window but before its close, and after it
+    ticket started, inside its window, after its window but before its close, and after it
     closed."""
     (
         Transcript(tmp_path / "projects" / PROJECT / "t1.jsonl")
@@ -218,7 +218,7 @@ def test_the_machine_query(root: Path, capsys: pytest.CaptureFixture[str]) -> No
             "mean_wanted": 12.0,
         }
     ]
-    # The bead claims 180 s; its worktree's 94 s before it started and after it closed are
+    # The ticket claims 180 s; its worktree's 94 s before it started and after it closed are
     # shared, beside the system's 616 s.
     assert found["bead_core_hours"] == 0.05
     shared = {p["name"]: p["value"] for p in found["shared"]}  # type: ignore[union-attr]

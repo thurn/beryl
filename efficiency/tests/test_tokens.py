@@ -168,7 +168,7 @@ def test_a_beads_splits_each_sum_to_its_dollars(tmp_path: Path) -> None:
             JOIN windows AS w ON w.host = d.host AND w.provider = d.provider
                 AND w.transcript = d.transcript AND w.start = d.start
             WHERE w.bead = 'by-a' GROUP BY d.split""").fetchall())
-    # The `enact start` request is by a model with no price, so the bead's dollars are a
+    # The `enact start` request is by a model with no price, so the ticket's dollars are a
     # lower bound, and every split leaves that request out alike.
     assert set(splits) == {"class", "source", "purpose", "model", "unpriced"}
     assert splits.pop("unpriced") == 0

@@ -23,8 +23,8 @@ hours old.
 
 A sweep failure never blocks master. `sweep-run` bisects each failed check over the commits
 since the last sweep that passed (bisect.py, in a tree of its own), and files one P1 Steward
-bead per lane, labeled [`LABEL`], naming the failed checks and the culprit commit or range. A
-check that an open sweep bead already names gets a comment instead. Its record is this
+ticket per lane, labeled [`LABEL`], naming the failed checks and the culprit commit or range. A
+check that an open sweep ticket already names gets a comment instead. Its record is this
 machine's, in `$BERYL_CACHE/sweep`: `log.jsonl` (one line per firing) and `last-output.txt`.
 """
 
@@ -305,8 +305,8 @@ def file(
     output: str,
     store: verdicts.Tickets | None = None,
 ) -> list[str]:
-    """Files the sweep's failed checks: a comment on each open sweep bead that names one of
-    them already, and a new bead per lane for the rest. Returns a line per bead touched.
+    """Files the sweep's failed checks: a comment on each open sweep ticket that names one of
+    them already, and a new ticket per lane for the rest. Returns a line per ticket touched.
     """
     store = store or verdicts.STORE
     known = nightly_failures.open_beads(store, LABEL) if failed else {}
@@ -342,7 +342,7 @@ def file(
         lines.append(
             f"sweep: {out.strip()}: filed {', '.join(new)}"
             if code == 0
-            else f"sweep: {lane}: bead not filed for {', '.join(new)}"
+            else f"sweep: {lane}: ticket not filed for {', '.join(new)}"
         )
     return lines
 

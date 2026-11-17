@@ -361,7 +361,7 @@ def test_a_check_files_its_delete_bead_when_it_flakes_in_a_second_run(
     assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
     [(bead, filed)] = bd.filed.items()
     assert filed["title"] == "Delete flaky check ui-test:scry"
-    # The bead quotes the failed attempt, whose rerun's passing output is all the run printed,
+    # The ticket quotes the failed attempt, whose rerun's passing output is all the run printed,
     # and the whole of it is kept.
     assert "first attempt broke" in str(filed["body"])
     kept = sorted(flakes_folder().glob("*-ui-test_scry*.txt"))
@@ -369,7 +369,7 @@ def test_a_check_files_its_delete_bead_when_it_flakes_in_a_second_run(
     assert filed["priority"] == "1"
     assert filed["metadata"] == {"beryl_flaky_check": "ui-test:scry"}
     assert f"flaky: ui-test:scry: filed {bead} to delete it" in capsys.readouterr().out
-    # A second flake while the bead is open comments on it instead of filing another.
+    # A second flake while the ticket is open comments on it instead of filing another.
     (tmp_path / "ran").unlink()
     assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
     assert list(bd.filed) == [bead]

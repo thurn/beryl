@@ -109,8 +109,8 @@ def compile_share(c: Context) -> list[Item]:
 
 def repeated_command(c: Context) -> list[Item]:
     """For each cohort (role and tier) and kind of shell command that the cohort's median
-    bead runs, the beads that ran it more often than the cohort's 90th percentile, against
-    the cohort's median count at each bead's own mean duration for that command."""
+    ticket runs, the tickets that ran it more often than the cohort's 90th percentile, against
+    the cohort's median count at each ticket's own mean duration for that command."""
     closed = [b.id for b in c.facts.closed(c.scope)]
     cohorts: dict[str, list[str]] = defaultdict(list)
     for bead in closed:
@@ -138,7 +138,7 @@ def repeated_command(c: Context) -> list[Item]:
             found = [float(counts.get((b, kind), 0)) for b in beads]
             high = percentile(found, 0.9)
             middle = median(found)
-            # A kind most of the cohort never runs has no usual count to repeat: a bead
+            # A kind most of the cohort never runs has no usual count to repeat: a ticket
             # that ran it at all would count its whole time.
             if middle < 1:
                 continue
@@ -185,7 +185,7 @@ def say_compile_share(items: list[Item]) -> str:
 def say_repeated_command(items: list[Item]) -> str:
     count = len({b for i in items for b in i.beads})
     return (
-        f"{count} beads ran a command more often than 90% of their cohort; at the "
+        f"{count} tickets ran a command more often than 90% of their cohort; at the "
         f"cohort's median count they would save {hours(total_saving(items))} a week, most "
         f"in {top(items)}"
     )
@@ -235,10 +235,10 @@ RULES: tuple[Rule, ...] = (
     Rule(
         "repeated-command",
         AGENT_HOURS,
-        "for beads that ran a kind of shell command more often than the 90th percentile "
-        f"of their cohort (role and tier, at least {MIN_COHORT} closed beads), the "
-        "cohort's median count at the bead's own mean duration for it; only kinds the "
-        "cohort's median bead runs at least once",
+        "for tickets that ran a kind of shell command more often than the 90th percentile "
+        f"of their cohort (role and tier, at least {MIN_COHORT} closed tickets), the "
+        "cohort's median count at the ticket's own mean duration for it; only kinds the "
+        "cohort's median ticket runs at least once",
         repeated_command,
         say_repeated_command,
         "efficiency time --by kind",

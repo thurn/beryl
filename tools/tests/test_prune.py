@@ -115,7 +115,7 @@ def test_each_row_of_the_rule_with_keeps_pending_and_gone_checks(
     history = {
         "ui-test:stale": [verdict("stale")],
         "ui-test:stale and caught long ago": [verdict("catch", 200)],
-        # Flakes are no row: each files its own bead to delete the check (flaky.py).
+        # Flakes are no row: each files its own ticket to delete the check (flaky.py).
         "ui-test:flaky twice": flakes,
         "ui-test:flaky once": flakes[:1],
         "rust:beryl_rules::tests::kept_test": [],

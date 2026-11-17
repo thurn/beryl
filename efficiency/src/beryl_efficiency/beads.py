@@ -1,7 +1,7 @@
-"""The beads source: the stored format used by older imported ticket snapshots
+"""The tickets source: the stored format used by older imported ticket snapshots
 (docs/efficiency-dashboard.md, "Sources").
 
-Later queries use each bead's id, parent, labels, status, its creation, start and close
+Later queries use each ticket's id, parent, labels, status, its creation, start and close
 times, and the Enact metadata (`enact_*`) that ties it to sessions, worktrees and commits.
 """
 
@@ -16,7 +16,7 @@ from .ingest import Row, SnapshotSource, SourceError
 
 
 def main_checkout(start: Path) -> Path:
-    """The main checkout of the repository at `start`, where the beads database lives; `start`
+    """The main checkout of the repository at `start`, where the tickets database lives; `start`
     itself when git cannot say."""
     try:
         found = subprocess.run(
@@ -56,8 +56,8 @@ def text(record: dict[str, object], key: str) -> str | None:
 
 
 def rows_of(record: object) -> list[Row]:
-    """The `beads` row and `labels` rows of one bead record. Raises TypeError or KeyError for
-    a record that is not a bead."""
+    """The `beads` row and `labels` rows of one ticket record. Raises TypeError or KeyError for
+    a record that is not a ticket."""
     if not isinstance(record, dict):
         raise TypeError("not an object")
     bead = record["id"]
@@ -108,7 +108,7 @@ class Beads(SnapshotSource):
         except ValueError as e:
             raise SourceError(f"the snapshot contains no JSON: {e}") from e
         if not isinstance(records, list):
-            raise SourceError("the snapshot contains no list of beads")
+            raise SourceError("the snapshot contains no list of tickets")
         rows: list[Row] = []
         skipped = 0
         for record in records:

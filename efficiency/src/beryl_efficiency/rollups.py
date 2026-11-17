@@ -3,7 +3,7 @@
 
 Each query adds up `facts` rows into a typed result whose numbers are already rounded to
 what the text shows, and a renderer that only formats them, so that the text, the JSON and
-the page cannot disagree. Work on no bead and orchestration are lines of every roll-up, so
+the page cannot disagree. Work on no ticket and orchestration are lines of every roll-up, so
 the lines sum to the total.
 """
 
@@ -66,7 +66,7 @@ class Part:
 
 @dataclass
 class Line:
-    """One line of a roll-up: a bead, an epic, or work on no bead or orchestration."""
+    """One line of a roll-up: a ticket, an epic, or work on no ticket or orchestration."""
 
     name: str
     title: str | None
@@ -81,7 +81,7 @@ class Line:
 
 @dataclass
 class Point:
-    """The median of a per-bead figure over the beads that closed in one local hour or
+    """The median of a per-ticket figure over the tickets that closed in one local hour or
     day, which the page draws as the figure's trend line."""
 
     at: str
@@ -91,7 +91,7 @@ class Point:
 
 @dataclass
 class Figure:
-    """A per-bead figure over the closed beads: its median and 90th percentile, the median
+    """A per-ticket figure over the closed tickets: its median and 90th percentile, the median
     over the range of the same length before, and its median by hour (in a range of two days
     or less) or by day. All are null where nothing measures the figure yet. `marks` are the
     efficiency changes made to the metric that measures the same figure (`FIGURE_METRICS`).
@@ -162,15 +162,15 @@ def agent_parts(windows: Iterable[Window]) -> dict[str, float]:
     return found
 
 
-# A per-bead value at the time its bead closed.
+# A per-ticket value at the time its ticket closed.
 Valued = list[tuple[str, float]]
 
 
 def bead_figures(
     facts: Facts, scope: Scope, closed: list[Bead]
 ) -> tuple[Valued, Valued, bool, int]:
-    """Each closed bead's agent minutes and dollars, over its windows at any time; whether a
-    model with no price makes any of the dollars a lower bound; and how many beads have no
+    """Each closed ticket's agent minutes and dollars, over its windows at any time; whether a
+    model with no price makes any of the dollars a lower bound; and how many tickets have no
     window in the store."""
     by_bead = facts.bead_windows(scope)
     agent: Valued = []
@@ -190,7 +190,7 @@ def bead_figures(
 
 
 def core_figures(facts: Facts, closed: list[Bead]) -> Valued:
-    """The core minutes of each closed bead the sampler measured."""
+    """The core minutes of each closed ticket the sampler measured."""
     found = ((str(b.closed), facts.core_minutes(b.id)) for b in closed)
     return [(at, m) for at, m in found if m is not None]
 
@@ -229,7 +229,7 @@ def figure(
 
 
 def rework_figures(facts: Facts, scope: Scope, closed: list[Bead]) -> Valued:
-    """The rework of each closed bead with windows in the store, the beads whose direct
+    """The rework of each closed ticket with windows in the store, the tickets whose direct
     dollars the summary's dollars figure measures."""
     by_bead = facts.bead_windows(scope)
     found = facts.rework()
@@ -276,7 +276,7 @@ class Summary:
     unpriced: list[str]
 
 
-# The metric that measures each of the summary's per-bead figures, whose efficiency changes
+# The metric that measures each of the summary's per-ticket figures, whose efficiency changes
 # the figure's trend line marks.
 FIGURE_METRICS: dict[str, str] = {
     "agent_minutes": "bead.agent-minutes",
@@ -463,9 +463,9 @@ def summary_lines(s: Summary) -> list[str]:
     t = s.total
     return [
         head + (f"  {s.filters}" if s.filters else ""),
-        f"beads closed {s.beads_closed}   per day {number(s.per_day, 1)}"
+        f"tickets closed {s.beads_closed}   per day {number(s.per_day, 1)}"
         + f"   no data {s.no_data}",
-        "per bead, median   "
+        "per ticket, median   "
         + "   ".join(
             [
                 figure_text("agent min", s.agent_minutes, 1),
@@ -502,7 +502,7 @@ class Epic:
 
 
 def epic(facts: Facts, scope: Scope, epic_id: str) -> Result:
-    """The epic's beads, each with its agent minutes and dollars in the range, and the
+    """The epic's tickets, each with its agent minutes and dollars in the range, and the
     orchestration charged to it."""
     epic_id = facts.resolve(epic_id)
     within = Scope(scope.range, scope.labels, epic_id, scope.host, scope.provider)
@@ -549,7 +549,7 @@ def epic(facts: Facts, scope: Scope, epic_id: str) -> Result:
         "epic",
         asdict(result),
         epic_lines(result),
-        ([f"efficiency bead {top}"] if top else [])
+        ([f"efficiency ticket {top}"] if top else [])
         + [
             f"efficiency time --by kind {flags}",
             f"efficiency dollars --by source {flags}",
@@ -573,7 +573,7 @@ def epic_lines(e: Epic) -> list[str]:
     return [
         f"epic {e.epic}" + (f"  {e.title}" if e.title else ""),
         f"{e.status or 'not in the store'}   since {e.since or 'the start'} ({e.range})"
-        + f"   beads closed {e.beads_closed}",
+        + f"   tickets closed {e.beads_closed}",
         f"agent min {t.agent_minutes:.1f}   dollars {t.dollars:.2f}{mark(t.lower_bound)}"
         + f"   rework {t.rework:.2f}",
         *split_lines("time      ", e.time, 1),

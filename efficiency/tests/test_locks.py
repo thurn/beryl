@@ -68,10 +68,10 @@ BEADS: bytes = listing(
 
 @pytest.fixture
 def root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A bead whose session runs `enact meta` through a variable for 62 seconds, which took
+    """A ticket whose session runs `enact meta` through a variable for 62 seconds, which took
     the lock twice: once after waiting 30 seconds while a vizier's `enact next` held it,
     syncing for 12 of its 20 seconds, then at once, syncing for all of its 6. Another
-    session runs `enact meta` on another bead over the same stretch, and starts later.
+    session runs `enact meta` on another ticket over the same stretch, and starts later.
     """
     projects = tmp_path / "projects" / PROJECT
     (
@@ -177,7 +177,7 @@ def test_each_line_joins_the_call_that_ran_its_command(root: Path) -> None:
         joined = found.execute(
             "SELECT subcommand, bead, transcript, call FROM lock_waits ORDER BY time"
         ).fetchall()
-    # Both of `meta by-c.1`'s lines join the call that names its bead, although the other
+    # Both of `meta by-c.1`'s lines join the call that names its ticket, although the other
     # session's `meta` started later, and `close by-e.9` joins the long command whose stored
     # text was cut before it; the others join nothing.
     assert joined == [

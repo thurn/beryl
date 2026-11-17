@@ -192,7 +192,7 @@ def test_the_report_totals_each_check_and_lane_costliest_first(
     now: datetime = datetime.now(timezone.utc)
 
     class Verdicts(verdicts.Tickets):
-        """The checks' beads hold one recent flake and one catch from before the window."""
+        """The checks' tickets hold one recent flake and one catch from before the window."""
 
         def checks(self) -> list[str]:
             return ["rust:beryl_rules::tests::a"]
@@ -250,7 +250,7 @@ def test_backfilled_failures_count_as_runs_and_rewrites_as_stale_updates(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class Verdicts(verdicts.Tickets):
-        """The failure's verdict, backfilled into its bead."""
+        """The failure's verdict, backfilled into its ticket."""
 
         def checks(self) -> list[str]:
             return ["ui-test:drag"]

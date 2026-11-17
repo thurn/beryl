@@ -28,34 +28,34 @@ class Result:
 # What each field of a query's result means, by name.
 FIELDS: dict[str, str] = {
     "since": "the start of the range, in UTC; null for no start. A window counts when it "
-    "starts in the range, a request or tool call when it happened in it, and a bead when "
+    "starts in the range, a request or tool call when it happened in it, and a ticket when "
     "it closed in it",
-    "beads_closed": "beads, not epics, closed in the range",
-    "per_day": "beads closed per day of the range",
-    "no_data": "closed beads with no session window in the store, such as beads that ran "
+    "beads_closed": "tickets, not epics, closed in the range",
+    "per_day": "tickets closed per day of the range",
+    "no_data": "closed tickets with no session window in the store, such as tickets that ran "
     "on another host",
     "agent_minutes": "wall-clock minutes a session worked: running tools, generating, "
-    "queued for cores or waiting on background work. Per bead: the median over closed "
-    "beads, with the 90th percentile and the median over the range before",
-    "core_minutes": "CPU minutes used in the bead's worktree while the bead was open, from "
-    "the CPU sampler; null where the sampler was not running. Per bead: the median over "
-    "closed beads the sampler measured, with the 90th percentile and the median before",
-    "dollars": "tokens times each model's published API price. Per bead: the median over "
-    "closed beads, with the 90th percentile and the median over the range before",
-    "rework": "dollars of later fixes the bead's commits caused: a share of a Steward "
-    "bead's cost for a slow-CI failure in a range with its commits, and a share of a later "
-    "bead's cost for `fix` commits to card files it added. Part of the fixing bead's direct "
-    "dollars, so never added to a total. Per bead: the median over closed beads",
-    "rework_percent": "rework as a percent of the bead's direct dollars",
-    "rework_from": "the beads whose direct dollars the rework is part of, and by which rule",
-    "commits": "commits the bead landed, from its enact_commits",
-    "cards": "card files under rust/cards/ that the bead's commits added first",
-    "queue_minutes": "minutes from the bead's creation to its start",
-    "work_minutes": "minutes from the bead's start to its close",
-    "to_master_minutes": "minutes from the bead's last commit on staging to that commit "
+    "queued for cores or waiting on background work. Per ticket: the median over closed "
+    "tickets, with the 90th percentile and the median over the range before",
+    "core_minutes": "CPU minutes used in the ticket's worktree while the ticket was open, from "
+    "the CPU sampler; null where the sampler was not running. Per ticket: the median over "
+    "closed tickets the sampler measured, with the 90th percentile and the median before",
+    "dollars": "tokens times each model's published API price. Per ticket: the median over "
+    "closed tickets, with the 90th percentile and the median over the range before",
+    "rework": "dollars of later fixes the ticket's commits caused: a share of a Steward "
+    "ticket's cost for a slow-CI failure in a range with its commits, and a share of a later "
+    "ticket's cost for `fix` commits to card files it added. Part of the fixing ticket's direct "
+    "dollars, so never added to a total. Per ticket: the median over closed tickets",
+    "rework_percent": "rework as a percent of the ticket's direct dollars",
+    "rework_from": "the tickets whose direct dollars the rework is part of, and by which rule",
+    "commits": "commits the ticket landed, from its enact_commits",
+    "cards": "card files under rust/cards/ that the ticket's commits added first",
+    "queue_minutes": "minutes from the ticket's creation to its start",
+    "work_minutes": "minutes from the ticket's start to its close",
+    "to_master_minutes": "minutes from the ticket's last commit on staging to that commit "
     "reaching master, from master's reflog",
-    "lead_minutes": "minutes from the bead's creation to its last commit reaching master",
-    "fixed_later": "percent of the card files that a later fix commit by another bead "
+    "lead_minutes": "minutes from the ticket's creation to its last commit reaching master",
+    "fixed_later": "percent of the card files that a later fix commit by another ticket "
     "changed",
     "per_card": "direct dollars, rework dollars and agent minutes over the card files "
     "added",
@@ -76,13 +76,13 @@ FIELDS: dict[str, str] = {
     "hours that held up",
     "narrow": "leases that got fewer CPU tokens than they wanted, by class and command",
     "core_hours": "CPU hours the sampler saw in the range",
-    "bead_core_hours": "CPU hours in beads' worktrees that belong to the beads",
-    "shared_core_hours": "CPU hours no bead claims, per day sampled and per bead closed",
-    "shared": "CPU hours no bead claims, by owner and kind of work, or by worktree for a "
-    "worktree's minutes outside its bead",
+    "bead_core_hours": "CPU hours in tickets' worktrees that belong to the tickets",
+    "shared_core_hours": "CPU hours no ticket claims, per day sampled and per ticket closed",
+    "shared": "CPU hours no ticket claims, by owner and kind of work, or by worktree for a "
+    "worktree's minutes outside its ticket",
     "lock_wait_minutes": "agent minutes Enact commands waited for Enact's ownership lock, "
     "from Enact's lock-wait log joined to the tool calls that ran each command",
-    "sync_minutes": "agent minutes Enact commands spent syncing beads with the remote "
+    "sync_minutes": "agent minutes Enact commands spent syncing tickets with the remote "
     "while holding the ownership lock",
     "lock_lines": "the lock-wait log's lines in the range: joined to a session's tool call, "
     "joined to none (such as a vizier's loop run outside a session) and not looked at "
@@ -102,7 +102,7 @@ FIELDS: dict[str, str] = {
     "dollars_by_source": "dollars by where they came from: output, the fixed prefix, and "
     "new and carried context by what added it",
     "lines": "the roll-up's lines, which sum to its total; orchestration is an "
-    "orchestrator session's cost charged to its epic, and (no bead) is work in no bead",
+    "orchestrator session's cost charged to its epic, and (no ticket) is work in no ticket",
     "lower_bound": "true when a model with no price makes the dollars a lower bound; the "
     "text marks such a number with +",
     "unpriced": "models with no price, with their tokens",
@@ -120,7 +120,7 @@ FIELDS: dict[str, str] = {
     "data/efficiency-changes.json, with its metric's median over the seven days before "
     "and after its commit reached staging. A sample is dated by when its unit began. With "
     "fewer than five samples on a side the verdict is too few samples",
-    "strip": "the bead's windows end to end: what each stretch of wall-clock time went to, "
+    "strip": "the ticket's windows end to end: what each stretch of wall-clock time went to, "
     "and the context of each request",
 }
 

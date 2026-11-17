@@ -35,7 +35,7 @@ def core_hours(value: float | None) -> str:
 
 
 def worktree_beads(c: Context) -> dict[str, str]:
-    """The bead each worktree name belongs to: the last one to start there."""
+    """The ticket each worktree name belongs to: the last one to start there."""
     found: dict[str, tuple[str, str]] = {}
     for b in c.facts.beads.values():
         name = c.facts.worktree(b)

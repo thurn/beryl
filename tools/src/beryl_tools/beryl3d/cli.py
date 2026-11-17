@@ -481,7 +481,7 @@ OWN_COMMANDS: tuple[Command, ...] = (
             ("just b3d sweep", "sweep the staging tip if one is due"),
             (
                 "just b3d sweep --dry-run --commit HEAD --step cargo-test",
-                "run one step at HEAD and print the bead it would file",
+                "run one step at HEAD and print the ticket it would file",
             ),
         ),
         sweep.sweep_command,

@@ -12,7 +12,7 @@ from beryl_efficiency.beads import Beads
 from tests.synthetic import bead, listing
 
 # The tables "The store" in docs/efficiency-dashboard.md lists, and those that serve them:
-# labels for the beads table, ingests for the tool's own cost, and the four that bead
+# labels for the tickets table, ingests for the tool's own cost, and the four that ticket
 # windows are derived from.
 TABLES = {
     "requests",

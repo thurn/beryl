@@ -11,15 +11,15 @@ search. It probes the tip first: a check that passes there is a flake and blames
 
 The search has [`SEARCH`] wall seconds, less if Enact would kill `by ci` at its `slow_timeout`
 (.enact.toml) sooner, so each probe dies in time to report the range the search narrowed to.
-The log ends with the answer, which Enact copies into the Steward bead with the log's tail: per
+The log ends with the answer, which Enact copies into the Steward ticket with the log's tail: per
 check a `bisect:` line with its culprit and a `record:` line with its record over 30 days
-(runlog.py's Tally, with the verdicts in its ci-check bead). Each probe's checks go to the run
+(runlog.py's Tally, with the verdicts in its ci-check ticket). Each probe's checks go to the run
 log with script `bisect` and the probe's commit.
 
 A culprit's fast check says whether the failure was a selection miss (K18; verdicts.py): `enact
 push` runs it at the tip it pushes, so it is the first fast check in this host's run log at the
-culprit or a later commit its bead delivered. A check that fast check did not run (not chosen, or
-`cut` by its time box) is a miss, recorded on the check's bead once per culprit and printed in a
+culprit or a later commit its ticket delivered. A check that fast check did not run (not chosen, or
+`cut` by its time box) is a miss, recorded on the check's ticket once per culprit and printed in a
 `miss:` line; with no fast check of the culprit here (it ran on another host, say) the line says
 the miss is unknown and records nothing.
 
@@ -56,7 +56,7 @@ SEARCH = 600.0
 MARGIN = 60.0
 # Less than this left, a probe would only be killed: the search stops.
 LEAST_PROBE = 20.0
-# Enact copies the last 60 lines of the log into the Steward bead; the answer keeps to these.
+# Enact copies the last 60 lines of the log into the Steward ticket; the answer keeps to these.
 LINES = 25
 # A check's record lines past these are summed up in one.
 RECORDS_EACH = 3
@@ -156,7 +156,7 @@ class Tree:
     def at(self, commit: str) -> bool:
         """Checks out `commit`, making the worktree first where git does not know it; whether
         it could. Ignored files, such as the builds, stay. No hook runs: one that syncs state,
-        such as the beads', must not see an old commit."""
+        such as the tickets', must not see an old commit."""
         quiet = ("-c", f"core.hooksPath={os.devnull}")
         if (self.path / ".git").exists() and git(
             self.path, "rev-parse"
@@ -322,7 +322,7 @@ def search(
 def delivering(
     found: list[Found], commits: list[str]
 ) -> dict[str, tuple[str, list[str]]]:
-    """Each culprit's bead, with every commit it delivered (verdicts.Tickets.delivering)."""
+    """Each culprit's ticket, with every commit it delivered (verdicts.Tickets.delivering)."""
     beads: dict[str, tuple[str, list[str]]] = {}
     for f in found:
         sha = commits[f.low] if f.verdict == "culprit" else ""
@@ -339,7 +339,7 @@ def fast_run(
     repo: Path,
 ) -> tuple[str, list[dict[str, object]]]:
     """The fast check that saw `culprit`, with its records: the first in `log` at the culprit or
-    a later commit among `commits` that its bead `delivered`, matched by commit or by tree; none
+    a later commit among `commits` that its ticket `delivered`, matched by commit or by tree; none
     when no such commit has one."""
     at = commits.index(culprit)
     mine = set(delivered)
@@ -391,7 +391,7 @@ def misses(
     fast_lane: Callable[[str], str] | None = None,
 ) -> dict[str, str]:
     """A `miss:` line for each culprit's check that its fast check did not run, recording the
-    miss on the check's bead (and in `history`) unless one names the culprit already, and an
+    miss on the check's ticket (and in `history`) unless one names the culprit already, and an
     unknown one for each check whose culprit has no fast check in `log`. `fast_lane` names the
     fast check's lane for a lane of this run whose lanes the fast check names differently
     (the Beryl 3D sweep's, sweep.py); without it the names are the same."""
@@ -469,7 +469,7 @@ def answer(
             sha = commits[f.low]
             subject = out(repo, "log", "-1", "--format=%s", sha)
             name = beads.get(sha, ("", []))[0]
-            bead = f"  bead {name}" if name else ""
+            bead = f"  ticket {name}" if name else ""
             said = f"culprit {sha[:10]} {subject}  {since}{bead}"
         elif f.verdict == "flaky":
             said = "flaky: passed at the tip on its bisection rerun"
