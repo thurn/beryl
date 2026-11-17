@@ -1,7 +1,9 @@
 {
   "entries": {
     "Notes on manual cards": {
-      "open": "Beryl 3D shows a manual card's note only in its inspection panel; a card's face on the table draws no free text, only the digits of its badges, so the one-line note with an ellipsis is not drawn (needs bead by-q44s.9.31)."
+      "recording": "screen/table",
+      "at": "end",
+      "shows": "card \"Serra Angel\" battlefield.yours.creatures interactive note(\"Blocks the first attacker each turn\")"
     },
     "A card picked face down": {
       "recording": "show-and-tell/puts-an-artifact-and-an-enchantment",
@@ -188,7 +190,9 @@
       "shows": "button \"OVER\" interactive primary"
     },
     "A permanent's chosen value": {
-      "open": "Beryl 3D shows \"Chosen:\" and the value only in the inspection panel; a card's face on the table draws no free text, so the one-line value is not drawn (needs bead by-q44s.9.31)."
+      "recording": "painters-servant/with-red-chosen-a-colorless-artifact-is-a-red-source",
+      "at": "end",
+      "shows": "card \"Painter's Servant\" battlefield.yours.creatures interactive note(\"Red\")"
     },
     "Phased-out permanents": {
       "recording": "teferis-protection/a-creature-phased-out-in-response-to-lightning-bolt-survives",
@@ -202,7 +206,9 @@
       "shows": "card \"Blood Artist\" merged.yours.creatures covered(53%)"
     },
     "Copies": {
-      "open": "A copy shows the copied card's face, and its inspection panel names the card it really is, but the face draws no \"Copy\" label, since a card's face on the table draws no free text (needs bead by-q44s.9.31)."
+      "recording": "glasspool-mimic/the-mimic-enters-as-a-shapeshifter-rogue-copy",
+      "at": "end",
+      "shows": "card \"Dandân\" battlefield.yours.creatures interactive copy(\"Glasspool Mimic\")"
     },
     "Controlling another player": {
       "recording": "mindslaver/the-controller-casts-the-opponents-spell-at-the-opponents-creature",

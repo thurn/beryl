@@ -585,10 +585,12 @@ impl Table {
                 Band::TableMarks
             },
             opacity: look.pose.opacity,
+            phone: self.camera.window.phone(),
         };
-        dress
-            .badges
-            .write((shown, listed, object.copies), &on, builder);
+        let note = (dress.badges).write((shown, listed, object.copies), &on, builder);
+        if let Some(note) = note {
+            builder.note(at, note);
+        }
         let cost = (shown, listed, at, object.place);
         dress.badges.write_cost(cost, (&on, &self.camera), builder);
     }
@@ -623,6 +625,7 @@ impl Table {
                 face: look.face,
                 copies,
                 really: crate::frame::NameRef::default(),
+                note: crate::frame::NameRef::default(),
             },
         );
         let opacity = (look.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;

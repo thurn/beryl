@@ -114,6 +114,7 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         if opened == "table-assists" {
             marks(&mut view);
         }
+        add_note(&mut view);
         let mut table = testing::table(&view);
         // A few log lines, so that the checks see the log at the table's left with its undo
         // and rewind buttons.
@@ -218,6 +219,18 @@ fn saved_tables() -> [FixtureMessage; 2] {
         FixtureMessage::response(TABLE_SAVED, &saved),
         FixtureMessage::response(TABLE_JOIN, &mismatch),
     ]
+}
+
+/// Gives the viewer's first creature on the battlefield of `view` a table note longer than the
+/// card is wide, so that the line on its face is cut with an ellipsis.
+fn add_note(view: &mut PlayerView) {
+    if let Some(creature) = (view.objects.iter_mut()).find(|object| {
+        object.zone == ZoneName::Battlefield
+            && object.controller == Side::You
+            && object.pt.is_some()
+    }) {
+        creature.note = Some("Blocks the first attacker each turn".to_owned());
+    }
 }
 
 /// Marks the viewer's first creature on the battlefield of `view` as the manual table marks a

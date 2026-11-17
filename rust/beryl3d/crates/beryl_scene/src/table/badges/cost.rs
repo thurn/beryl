@@ -178,6 +178,7 @@ impl Badges {
                 face: None,
                 copies: 1,
                 really: NameRef::default(),
+                note: NameRef::default(),
             },
         );
         let mut x = right - width;

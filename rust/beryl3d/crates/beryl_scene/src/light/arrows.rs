@@ -158,6 +158,7 @@ impl Drawn {
                 face: None,
                 copies: 1,
                 really: crate::frame::NameRef::default(),
+                note: crate::frame::NameRef::default(),
             },
         );
         let points_per_millimetre = camera.points_per_millimetre(to.pose.position);

@@ -11,7 +11,7 @@ use glam::{Affine3A, Vec2, Vec3};
 use super::edit::Marks;
 use super::{Layer, Node, has_panel, text_top};
 use crate::art::orb;
-use crate::element::{Display, Overflow, Shown, TextAlign};
+use crate::element::{Display, Element, Overflow, Shown, TextAlign};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{
     Band, Draw, ElementLook, FrameBuilder, NameRef, Place, Resolved, Role, StateBits,
@@ -35,6 +35,15 @@ struct Look<'a> {
     /// It or an element over it lets the pointer through (`Style::passes`).
     passes: bool,
     faces: Option<&'a Faces>,
+}
+
+/// Whether `element`, drawn as `look` in `rect`, takes a press. An element scrolled out of its
+/// clip cannot be pressed, and one wholly transparent, as at the first frame it fades in, cannot
+/// be seen to be. A text field takes a press, which gives it the focus, though it has no `Press`.
+fn takes_press(element: &Element, look: &Look<'_>, rect: Rect) -> bool {
+    (element.press.is_some() || element.focus)
+        && look.opacity > 0.0
+        && look.clip.is_none_or(|(clip, _)| overlaps(clip, rect))
 }
 
 impl Layer {
@@ -137,16 +146,12 @@ impl Layer {
                 depth: 0.0,
                 opacity: look.opacity,
                 clip: look.clip.map(|(rect, _)| rect),
-                // An element scrolled out of its clip cannot be pressed, and one wholly
-                // transparent, as at the first frame it fades in, cannot be seen to be. A text
-                // field takes a press, which gives it the focus, though it has no `Press`.
-                interactive: (element.press.is_some() || element.focus)
-                    && look.opacity > 0.0
-                    && look.clip.is_none_or(|(clip, _)| overlaps(clip, rect)),
+                interactive: takes_press(element, &look, rect),
                 state,
                 face: None,
                 copies: 1,
                 really: crate::frame::NameRef::default(),
+                note: crate::frame::NameRef::default(),
             },
         );
         if builder.looking() {

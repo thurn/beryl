@@ -251,6 +251,7 @@ impl Table {
                     face: None,
                     copies: 1,
                     really: crate::frame::NameRef::default(),
+                    note: crate::frame::NameRef::default(),
                 },
             );
         }

@@ -294,8 +294,9 @@ impl Show {
 
     /// Shapes the numbers and signs of the badges, once, at `scale`; the mana symbols of every
     /// cost the face list names that are not shaped yet, for the costs hand cards show; and the
-    /// name of every named counter in the latest view not shaped yet. Each view is the latest
-    /// when it arrives, so every name a view shows is shaped before a frame shows it.
+    /// name of every named counter and the lines of text (`Badges::prepare`) in the latest view
+    /// not shaped yet. Each view is the latest when it arrives, so every name a view shows is
+    /// shaped before a frame shows it.
     pub fn shape_badges(&mut self, text: &mut Text, wanted: &mut Glyphs, scale: f32) {
         if !self.badges.shaped() {
             self.badges.shape(text, wanted, scale);
@@ -307,6 +308,7 @@ impl Show {
             .or(self.shown.as_deref());
         if let Some(update) = latest {
             self.badges.shape_names(text, wanted, &update.view.objects);
+            self.badges.prepare(&update.view, text, wanted);
         }
     }
 

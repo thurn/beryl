@@ -2839,7 +2839,9 @@ game
   `hovered`, `held`, `eligible`, `selected`, `target`, `disabled`, `focused`,
   `phased-out`, `picked`, `primary` (the button a prompt expects, drawn amber),
   `pile(<count>)` (on the top card of a battlefield pile), `copy("<name>")` (the
-  card a copy really is), `covered(<percent>)` and `faded(<percent>)`.
+  card a copy really is), `note("<text>")` (the note or chosen value drawn on a
+  permanent's face, whole even when the face cuts it), `covered(<percent>)` and
+  `faded(<percent>)`.
 - **`covered(<percent>)`** is how much of the element other elements hide, and
   **`faded(<percent>)`** how far its opacity is below 1. Neither is printed
   under 1%.

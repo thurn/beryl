@@ -14,9 +14,14 @@
 //! (a tenth of its width), from `badges` in `data/beryl3d/space.json`. The digits and signs are
 //! shaped once, when the first view arrives (`Badges::shape`), so a frame only places glyphs it
 //! already has and allocates nothing. A named counter's name is shaped when the first view that
-//! names it arrives (`Badges::shape_names`), and the lock is the flat layer's `LOCK` icon.
+//! names it arrives (`Badges::shape_names`), and the lock is the flat layer's `LOCK` icon. The
+//! lines of text a permanent wears besides, its note or chosen value and a copy's label, are
+//! `tags`.
 
-use beryl_protocol::protocol::{Counter, ObjectView, ZoneName};
+mod cost;
+mod tags;
+
+use beryl_protocol::protocol::{Counter, ObjectView, PlayerView, ZoneName};
 use glam::{Affine3A, Quat, Vec2};
 
 use super::{CARD_HEIGHT, CARD_WIDTH};
@@ -26,11 +31,9 @@ use crate::frame::{Band, Draw, FrameBuilder, RECORDS_PER_OBJECT, Sprite};
 use crate::input::{GlyphCell, IconCell};
 use crate::pose::Pose;
 use crate::text::fonts::Font;
-use crate::text::{Block, Glyphs, Text, TypeStyle, glyph_key};
+use crate::text::{Block, Glyphs, PlacedGlyph, Text, TypeStyle, glyph_key};
 use crate::tokens::{badge, color};
 use crate::widgets::icons::{LOCK, LOCK_SIDE};
-
-mod cost;
 
 /// The style every badge's number is shaped in: the card font's bold, at the size in points a
 /// plaque's numerals have on a battlefield card of the web interface.
@@ -94,6 +97,8 @@ pub struct Badges {
     names: Vec<(Box<str>, Block)>,
     /// Where the atlas holds the lock, at the latest scale it arrived at.
     lock: Option<Sprite>,
+    /// The lines of text of the permanents of the views so far.
+    tags: tags::Tags,
 }
 
 impl Badges {
@@ -171,6 +176,13 @@ impl Badges {
         }
     }
 
+    /// Shapes the line of text of each permanent in `view` that wears one (`tags`), once for
+    /// each text, and asks `wanted` for their glyphs. Called for every view as it arrives,
+    /// after `shape`, so that a frame shapes none.
+    pub fn prepare(&mut self, view: &PlayerView, text: &mut Text, wanted: &mut Glyphs) {
+        self.tags.prepare(view, text, wanted, self.scale);
+    }
+
     /// The shaped label of the named counter called `name`, if it is shaped.
     fn name(&self, name: &str) -> Option<&Block> {
         let at = self
@@ -188,6 +200,7 @@ impl Badges {
             wanted.want(block, self.scale);
         }
         self.want_costs(wanted);
+        self.tags.want(wanted, self.scale);
     }
 }
 
@@ -270,7 +283,7 @@ struct Plate {
     border: f32,
     fill: [u8; 4],
     edge: [u8; 4],
-    /// The height of its numerals.
+    /// The height of its numerals or text.
     numerals: f32,
 }
 
@@ -290,27 +303,31 @@ impl Name<'_> {
     }
 }
 
-/// Where a card's badges go: the card's pose, the band they are drawn in and their opacity.
+/// Where a card's badges go: the card's pose, the band they are drawn in and their opacity,
+/// and whether the table takes the phone layout, whose cards wear no copy label.
 pub(super) struct On {
     pub pose: Pose,
     pub band: Band,
     pub opacity: f32,
+    pub phone: bool,
 }
 
 impl Badges {
     /// Writes the badges of `object`, a card shown with `face`, standing for `copies` identical
     /// permanents, onto the card `on` describes. Only a permanent on the battlefield wears
-    /// them. A card writes no more than `BUDGET` records: a badge that would pass it is left
-    /// out, the plaque first kept, then the pile's count, then the lock, then the counters in
-    /// order, then the named counters in order.
+    /// them. A card writes no more than `BUDGET` records for its badges: a badge that would
+    /// pass it is left out, the plaque first kept, then the pile's count, then the lock, then
+    /// the counters in order, then the named counters in order. Its lines of text, its copy
+    /// label and its note, take their records from the frame's `TEXT_RECORDS` instead. Returns
+    /// the text of the note line it wrote.
     pub(super) fn write(
         &self,
         (object, face, copies): (&ObjectView, Option<&ListedFace>, u16),
         on: &On,
         builder: &mut FrameBuilder,
-    ) {
+    ) -> Option<&str> {
         if object.zone != ZoneName::Battlefield || self.pieces.is_empty() {
-            return;
+            return None;
         }
         // The side that faces up, so that a face-down permanent wears its badges on its back
         // as the web interface draws them, and a card turning over turns them with it.
@@ -358,9 +375,16 @@ impl Badges {
         if object.doesnt_untap {
             self.write_lock(corner, (card, on), &mut left, builder);
         }
-        // Along the foot, left to right, as far as the plaque.
+        // Along the foot, left to right, as far as the plaque: a copy's label, then the
+        // counters.
         let mut x = -corner.x + data::counter::LEFT * em();
         let end = corner.x - data::counter::RIGHT * em();
+        if let Some(line) = self.tags.copy(object).filter(|_| !on.phone) {
+            let width = self.copy_label(line, x, (card, on), builder);
+            if width > 0.0 {
+                x += width + data::counter::GAP * em();
+            }
+        }
         for (count, mark) in counters(object) {
             let mut label = Label::default();
             label.number(count, mark);
@@ -384,6 +408,8 @@ impl Badges {
             x += width + data::counter::GAP * em();
         }
         self.write_named(object, corner, (card, on), &mut left, builder);
+        let (said, line) = self.tags.note(object)?;
+        self.note(line, (card, on), builder).then_some(said)
     }
 
     /// Writes a badge for each named counter on `object` onto `card`, left to right in rows
@@ -530,18 +556,7 @@ impl Badges {
             return false;
         }
         *left -= records;
-        let raise = data::RAISE * em();
-        builder.draw(
-            on.band,
-            Draw::panel(
-                quad(card, plate.at, plate.size, raise),
-                faded(plate.fill, on.opacity),
-                faded(plate.edge, on.opacity),
-                plate.size,
-                plate.radius,
-                plate.border,
-            ),
-        );
+        panel(plate, (card, on), builder);
         let width = name.map_or(0.0, Name::width) + self.width(label, plate.numerals);
         let mut x = plate.at.x - width / 2.0;
         if let Some(name) = name {
@@ -571,9 +586,22 @@ impl Badges {
         (card, on): (Affine3A, &On),
         builder: &mut FrameBuilder,
     ) {
+        self.glyphs(style, &block.glyphs, (pen, k, ink), (card, on), builder);
+    }
+
+    /// Writes `glyphs`, shaped in `style`, onto `card` in `ink`, with their text box's top
+    /// left corner at `pen` on the card's face and `k` millimetres to the point.
+    fn glyphs(
+        &self,
+        style: TypeStyle,
+        glyphs: &[PlacedGlyph],
+        (pen, k, ink): (Vec2, f32, [u8; 4]),
+        (card, on): (Affine3A, &On),
+        builder: &mut FrameBuilder,
+    ) {
         let scale = self.scale;
         let raise = data::RAISE * em();
-        for glyph in &block.glyphs {
+        for glyph in glyphs {
             let Some(placed) = self.glyphs.get(glyph_key(style, scale, glyph.glyph)) else {
                 continue;
             };
@@ -611,6 +639,21 @@ fn quad(card: Affine3A, at: Vec2, size: Vec2, height: f32) -> Affine3A {
         Quat::IDENTITY,
         at.extend(height),
     )
+}
+
+/// Writes `plate`'s rounded panel onto `card`.
+fn panel(plate: &Plate, (card, on): (Affine3A, &On), builder: &mut FrameBuilder) {
+    builder.draw(
+        on.band,
+        Draw::panel(
+            quad(card, plate.at, plate.size, data::RAISE * em()),
+            faded(plate.fill, on.opacity),
+            faded(plate.edge, on.opacity),
+            plate.size,
+            plate.radius,
+            plate.border,
+        ),
+    );
 }
 
 /// The plaque's label and fill: power and toughness for a creature, loyalty for a

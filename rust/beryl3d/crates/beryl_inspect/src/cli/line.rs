@@ -7,12 +7,13 @@
 //! - a cut: `... <count> more in <place> (--within <place>)`;
 //! - an element: `<role> ["<name>"] #<id> [<place>] <x>,<y> <width>x<height> [<state>...]`,
 //!   where a name escapes `"` and `\` with a backslash and a state is a word of the closed list,
-//!   `moving`, `pile`, `covered` and `faded` taking a parenthesised value.
+//!   `moving`, `pile`, `covered` and `faded` taking a parenthesised value, and `copy` and
+//!   `note` a parenthesised name in quotes, escaped as an element's name is.
 
 use beryl_scene::frame::Role;
 
 /// The words a state may be.
-const STATES: [&str; 17] = [
+const STATES: [&str; 19] = [
     "interactive",
     "tapped",
     "face-down",
@@ -28,6 +29,8 @@ const STATES: [&str; 17] = [
     "picked",
     "primary",
     "pile",
+    "copy",
+    "note",
     "covered",
     "faded",
 ];
@@ -185,6 +188,21 @@ fn states(text: &str) -> Result<Vec<String>, String> {
         }
         let mut state = word.to_owned();
         rest = &rest[end..];
+        if let Some(quoted) = rest.strip_prefix("(\"")
+            && matches!(word, "copy" | "note")
+        {
+            let (text, after) = quoted_name(quoted).ok_or("a state's name is not closed")?;
+            let after = after
+                .strip_prefix(')')
+                .ok_or("a state's name is not closed")?;
+            let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+            states.push(format!("{word}(\"{escaped}\")"));
+            rest = after.trim_start();
+            continue;
+        }
+        if matches!(word, "copy" | "note") {
+            return Err(format!("the state '{word}' takes a name in quotes"));
+        }
         if let Some(value) = rest.strip_prefix('(') {
             if !matches!(word, "moving" | "pile" | "covered" | "faded") {
                 return Err(format!("the state '{word}' takes no value"));

@@ -62,6 +62,9 @@ pub struct Resolved {
     ///
     /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
     pub really: NameRef,
+    /// For a permanent, the line of text drawn on its face: its manual table note, or the
+    /// value it chose as it entered, in `Frame::names`. Empty when its face shows none.
+    pub note: NameRef,
 }
 
 /// What kind of thing an element is. Closed: a new role is added here with the word the tree
@@ -311,8 +314,13 @@ pub const ABILITIES: usize = 64;
 /// The most particle records a frame holds (`Band::Particles`), which only the Enhanced tier
 /// writes.
 pub const PARTICLES: usize = 2000;
+/// The most records all the cards of a frame write for the lines of text on their faces (a
+/// note or a chosen value, and a copy's label), beyond `RECORDS_PER_OBJECT`: few permanents
+/// have one, and a line is too long to fit in every card's share.
+pub const TEXT_RECORDS: usize = 2048;
 /// The most records a frame holds, so that ordering the largest board allocates nothing.
-pub const DRAWS: usize = (OBJECTS + ABILITIES) * RECORDS_PER_OBJECT + LAYER_RECORDS + PARTICLES;
+pub const DRAWS: usize =
+    (OBJECTS + ABILITIES) * RECORDS_PER_OBJECT + LAYER_RECORDS + PARTICLES + TEXT_RECORDS;
 /// How many bands there are (`Band`).
 pub const BANDS: usize = 9;
 /// The most elements of the flat layer a frame holds.
@@ -378,6 +386,8 @@ pub struct Frame {
     pub rings: Vec<Ring>,
     pub load: Load,
     pub work: Work,
+    /// How many of `TEXT_RECORDS` the frame's cards have not yet written.
+    text_room: usize,
     /// The sort keys and reordered records of `FrameBuilder::finish`, kept so that ordering
     /// allocates nothing.
     scratch: order::Scratch,
@@ -475,6 +485,7 @@ impl Frame {
             rings: Vec::with_capacity(RINGS),
             load: Load::default(),
             work: Work::default(),
+            text_room: TEXT_RECORDS,
             scratch: order::Scratch::with_capacity(draws),
         }
     }
@@ -549,6 +560,7 @@ impl<'a> FrameBuilder<'a> {
         frame.rings.clear();
         frame.load = Load::default();
         frame.work = Work::default();
+        frame.text_room = TEXT_RECORDS;
         frame.scratch.clear();
         Self {
             frame,
@@ -597,6 +609,27 @@ impl<'a> FrameBuilder<'a> {
         };
         self.frame.names.push_str(name);
         self.frame.resolved[at as usize].really = really;
+    }
+
+    /// Names the line of text drawn on the face of the element at `at` in `Frame::resolved`
+    /// (`Resolved::note`).
+    pub fn note(&mut self, at: u32, text: &str) {
+        let note = NameRef {
+            start: index(self.frame.names.len()),
+            len: index(text.len()),
+        };
+        self.frame.names.push_str(text);
+        self.frame.resolved[at as usize].note = note;
+    }
+
+    /// Takes `records` of the frame's `TEXT_RECORDS` for the lines of text on a card's face,
+    /// and says whether there were that many left. A line that does not fit is left out.
+    pub fn take_text_room(&mut self, records: usize) -> bool {
+        let fits = records <= self.frame.text_room;
+        if fits {
+            self.frame.text_room -= records;
+        }
+        fits
     }
 
     /// Counts an element visited: an object slot of the table or a node of the flat layer.

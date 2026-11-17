@@ -490,6 +490,7 @@ fn strip_card(id: u32, x: f32, depth: f32) -> Resolved {
         face: Some(1),
         copies: 1,
         really: NameRef::default(),
+        note: NameRef::default(),
     }
 }
 

@@ -660,6 +660,25 @@
       "ring": 0.0627,
       "points": 26,
       "lift": 3
+    },
+    "note": {
+      "top": 3.1,
+      "side": 0.7,
+      "padding_x": 0.4,
+      "padding_y": 0.18,
+      "text": 0.9,
+      "line_height": 1.2,
+      "radius": 0.35,
+      "points": 9
+    },
+    "copy": {
+      "padding_x": 0.3,
+      "padding_y": 0.12,
+      "text": 0.75,
+      "line_height": 1.1,
+      "radius": 0.3,
+      "border": 0.08,
+      "points": 8
     }
   },
   "effects": {

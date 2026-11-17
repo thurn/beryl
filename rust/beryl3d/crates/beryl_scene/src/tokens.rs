@@ -161,4 +161,11 @@ pub mod badge {
     /// The dark ring around each symbol of a card's cost, `.mana-cost .mana-symbol`'s
     /// `box-shadow` in `mana-symbols.css`.
     pub const COST_RING: [u8; 4] = [0x10, 0x16, 0x1c, 0xff];
+    /// The panel under a permanent's note or chosen value, `.card-note`'s `background` in
+    /// `card-frame.css`, whose text is `color::TYPE`.
+    pub const NOTE: [u8; 4] = [0x1c, 0x1a, 0x17, 0xe6];
+    /// A copy's "Copy" label, `.token-label` in `icon-button.css`: its fill, border and ink.
+    pub const COPY: [u8; 4] = [0x42, 0x35, 0x24, 0xff];
+    pub const COPY_BORDER: [u8; 4] = [0xc9, 0xb9, 0x8c, 0xff];
+    pub const COPY_INK: [u8; 4] = [0xff, 0xf4, 0xd6, 0xff];
 }

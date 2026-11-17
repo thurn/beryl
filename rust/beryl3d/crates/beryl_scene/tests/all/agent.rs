@@ -51,6 +51,7 @@ fn element(role: Role, name: &'static str, id: u32, place: Place, rect: Rect) ->
             face: (role == Role::Card).then_some(1),
             copies: 1,
             really: NameRef::default(),
+            note: NameRef::default(),
         },
     }
 }
