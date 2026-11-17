@@ -434,6 +434,12 @@ ticket-backed reports with fixtures.
   about a minute is kept. Until both times exist, the factor is 1.
 - If a push fails because a step appears hung, look at the processes its log
   lists before pushing again: a rerun will hang again.
+- A step killed at its hang limit or at the run's hard limit still records the
+  CPU seconds of everything under it, read from `ps` just before the kill
+  (`system.descendants_cpu_seconds`), and its log lists its processes. Before
+  that, a killed step recorded only its own usage, so a Beryl 3D `record` step
+  cut off at 180 s while cargo compiled showed about 0.4 CPU seconds, as if it
+  had waited on a lock.
 
 ## What each check is worth
 

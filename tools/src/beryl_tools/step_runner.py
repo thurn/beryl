@@ -190,10 +190,14 @@ class Steps:
                     )
                     left = min(mine, self.wall_left())
                     if left <= 0:
-                        if mine <= 0:
-                            hung = system.process_tree(proc.pid)
+                        # Listed for a step cut off by the run's wall limit too, not only at
+                        # its hang limit, so its log shows whether it was compiling or waiting.
+                        hung = system.process_tree(proc.pid)
+                        # Read before the kill: once its children are killed, reaping the step
+                        # counts only its own usage (`system.descendants_cpu_seconds`).
+                        under = system.descendants_cpu_seconds(proc.pid)
                         system.kill_tree(proc.pid)
-                        self.charge(reap(proc, None)[1])
+                        self.charge(under + reap(proc, None)[1])
                         break
                     code, used = reap(proc, min(0.5, left))
                     if code is not None:

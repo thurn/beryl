@@ -172,6 +172,37 @@ def process_tree(pid: int) -> str:
     )
 
 
+def cpu_time(text: str) -> float:
+    """Seconds in a CPU time as `ps -o time` prints it: `[days-][hours:]minutes:seconds`, where
+    macOS lets the minutes pass 59 (`7298:32.56`)."""
+    days, _, clock = text.strip().rpartition("-")
+    seconds = 0.0
+    for part in clock.split(":"):
+        seconds = seconds * 60 + float(part)
+    return seconds + (int(days) * 86_400 if days else 0)
+
+
+def descendants_cpu_seconds(pid: int) -> float:
+    """The CPU seconds (user plus system) the live processes under `pid` have used so far, not
+    counting `pid` itself; 0 on Windows or if ps fails.
+
+    A check step killed at its limit is reaped only after its children were killed with it, so
+    `wait4` gives the step's own usage and nothing of the cargo and rustc processes under it,
+    and the run log recorded about 0.4 CPU seconds for Beryl 3D `record` steps cut off after
+    180 s whether they had compiled for all of it or waited on a lock. So the step runner reads
+    this just before the kill."""
+    if WINDOWS:
+        return 0.0
+    try:
+        rows = {
+            int(r[0]): (int(r[1]), r[2]) for r in ps("pid=,ppid=,time=") if len(r) == 3
+        }
+        tree = descendants(pid, {p: parent for p, (parent, _) in rows.items()})
+        return sum(cpu_time(rows[p][1]) for p in tree if p in rows)
+    except (OSError, ValueError):
+        return 0.0
+
+
 def alive(pid: int) -> bool:
     """Whether process `pid` is running. On Windows `os.kill(pid, 0)` would send it Ctrl-C, so
     there it asks for the process's exit code instead."""
