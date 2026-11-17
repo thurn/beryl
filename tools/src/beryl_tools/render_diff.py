@@ -67,16 +67,17 @@ def context_of(card_name: str, faces: Iterable[str], spell: bool = False) -> Con
 
 
 def strip_reminder_text(text: str, context: Context) -> str:
-    """Removes reminder text, which is in parentheses and has no game function (CR 207.2a):
-    "Flash (You may cast this spell any time you could cast an instant.)" becomes
-    "Flash". Keep a basic land's intrinsic mana ability when Oracle prints it in
-    parentheses (CR 305.6). For example, "({T}: Add {U}.)" becomes "{T}: Add {U}."
-    A parenthesized explanation of a land creature's rules is still reminder text."""
+    """Removes parenthesized reminder text (CR 207.2a).
+
+    Keep standalone tap-for-mana text when Oracle prints it for a land's intrinsic
+    mana abilities (CR 305.6). A land creature's explanation of its rules is
+    still reminder text.
+    """
     lines = text.split("\n")
     return "\n".join(
         (
             line[1:-1]
-            if re.fullmatch(r"\(\{T\}: Add \{[WUBRGC]\}\.\)", line)
+            if re.fullmatch(r"\(\{T\}: Add [^()]+\.\)", line)
             else re.sub(r" ?\([^()]*\)", "", line)
         )
         for line in lines

@@ -17,9 +17,14 @@ JACE: Context = render_diff.context_of(
 )
 
 
-def test_strip_reminder_text_keeps_basic_land_mana_text() -> None:
+def test_strip_reminder_text_keeps_land_mana_text() -> None:
     text = "Flash (You may cast this spell any time you could cast an instant.)\n({T}: Add {U}.)"
     assert render_diff.strip_reminder_text(text, PLAIN) == "Flash\n{T}: Add {U}."
+    text = "({T}: Add {W} or {U}.)\n({T}: Add {W}, {U}, or {G}.)"
+    assert (
+        render_diff.strip_reminder_text(text, PLAIN)
+        == "{T}: Add {W} or {U}.\n{T}: Add {W}, {U}, or {G}."
+    )
 
 
 def test_strip_reminder_text_removes_a_land_creatures_standalone_reminder() -> None:
