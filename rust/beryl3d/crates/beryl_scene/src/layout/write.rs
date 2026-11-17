@@ -3,6 +3,8 @@
 //! button, a glyph record for each glyph a page holds (`text::write_block`), and the boxes of
 //! the text's lines. It reads only what `Client::handle` laid out, and allocates nothing.
 
+use std::borrow::Cow;
+
 use beryl_protocol::protocol::Side;
 use glam::{Affine3A, Vec2, Vec3};
 
@@ -11,7 +13,9 @@ use super::{Layer, Node, has_panel, text_top};
 use crate::art::orb;
 use crate::element::{Display, Overflow, Shown, TextAlign};
 use crate::faces::{CARD_BACK, Faces};
-use crate::frame::{Band, Draw, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
+use crate::frame::{
+    Band, Draw, ElementLook, FrameBuilder, NameRef, Place, Resolved, Role, StateBits,
+};
 use crate::input::{FaceId, FaceSize, Rect};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera};
 use crate::text::{self, BlockLook, faded};
@@ -114,8 +118,6 @@ impl Layer {
             Vec2::ZERO
         };
         let rect = moved(node.rect, look.point + node.offset() + sink);
-        let fade = |color: [u8; 4]| faded(color, look.opacity);
-        let clip = look.clip.map_or(0, |(_, entry)| entry);
         // A menu row is drawn highlighted while it has the focus or its submenu is open.
         let active = element.role == Role::MenuItem
             && (state.has(StateBits::FOCUSED) || self.submenu == Some(node.id));
@@ -147,19 +149,16 @@ impl Layer {
                 really: crate::frame::NameRef::default(),
             },
         );
+        if builder.looking() {
+            builder.look(look_of(
+                node,
+                index,
+                panel.as_ref(),
+                ink(node, state, look.tint),
+            ));
+        }
         if let Some(panel) = panel {
-            let mut draw = Draw::panel(
-                camera.layer_transform(rect),
-                fade(panel.tint),
-                fade(panel.edge),
-                Vec2::new(rect.width, rect.height),
-                panel.radius,
-                panel.border,
-            );
-            if clip > 0 {
-                draw = draw.with_clip(clip);
-            }
-            builder.draw(Band::Layer, draw);
+            write_panel(&panel, rect, &look, builder, camera);
         }
         let shown = Look {
             point: look.point + node.offset() + sink,
@@ -340,15 +339,32 @@ impl Layer {
                     },
                 node.content.y + text_top(node, block.height),
             );
+        // The words of each line are kept only while the frame is `looking`, so that no frame
+        // of the app builds them.
+        let source = match self
+            .editing
+            .as_ref()
+            .filter(|editing| editing.id == node.id)
+        {
+            Some(editing) => editing.shown(node),
+            None => element.text.as_deref().unwrap_or(""),
+        };
+        let words = if builder.looking() {
+            text::shaped_words(source)
+        } else {
+            Cow::Borrowed("")
+        };
         for line in &block.lines {
             builder.line(
                 index,
                 Rect {
-                    x: origin.x + line.x,
-                    y: origin.y + line.y,
-                    ..*line
+                    x: origin.x + line.rect.x,
+                    y: origin.y + line.rect.y,
+                    ..line.rect
                 },
                 block.base.style.size,
+                origin.y + line.baseline,
+                line.words(&words),
             );
         }
         let tint = fade(ink(node, state, look.tint));
@@ -497,6 +513,49 @@ fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> Option<Panel
         },
         border,
     })
+}
+
+/// Writes the record of `panel` filling `rect`, faded and clipped by `look`.
+fn write_panel(
+    panel: &Panel,
+    rect: Rect,
+    look: &Look,
+    builder: &mut FrameBuilder,
+    camera: &Camera,
+) {
+    let fade = |color: [u8; 4]| faded(color, look.opacity);
+    let mut draw = Draw::panel(
+        camera.layer_transform(rect),
+        fade(panel.tint),
+        fade(panel.edge),
+        Vec2::new(rect.width, rect.height),
+        panel.radius,
+        panel.border,
+    );
+    let clip = look.clip.map_or(0, |(_, entry)| entry);
+    if clip > 0 {
+        draw = draw.with_clip(clip);
+    }
+    builder.draw(Band::Layer, draw);
+}
+
+/// How `node`, the resolved element at `index`, is drawn on `panel` in `ink`, for the tools that
+/// compare Beryl 3D with the web interface (`Frame::looks`).
+fn look_of(node: &Node, index: u32, panel: Option<&Panel>, ink: [u8; 4]) -> ElementLook {
+    let mut text = node.element.style.text;
+    if let Some(block) = &node.block {
+        text.size = block.base.style.size;
+    }
+    ElementLook {
+        element: index,
+        background: panel.map(|panel| panel.tint),
+        border: panel
+            .filter(|panel| panel.border > 0.0)
+            .map(|panel| (panel.edge, panel.border)),
+        radius: panel.map_or(0.0, |panel| panel.radius),
+        color: ink,
+        text,
+    }
 }
 
 /// Whether a press on `node` does something now.

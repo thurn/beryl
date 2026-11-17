@@ -114,6 +114,16 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   on the right, at the same window size and `--scale`. The web side shows the
   moment's view at rest. Write what you compared, and the picture's path, on
   the bead.
+- `just b3d match snapshot <recording> --at <moment>` writes both clients'
+  pictures and element records of the same moment, mid-animation too, at scale
+  2 by default, to `$BERYL_CACHE/b3d/match/<target>/` and prints the files:
+  `web.png`, `b3d.png`, and `web.json` and `b3d.json`, where each element has
+  its role, name, box, paint order, parent, CSS style and lines of text with
+  their baselines. `report.txt` warns of inputs the two sides do not share
+  (fonts, card scans). A snapshot is reused until either client's sources
+  change; `--fresh` takes it again and `--art` draws the app's scans on both
+  sides. `just b3d tree <recording> --at <moment> --records` prints Beryl 3D's
+  records alone.
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>` (1600x900 by default),

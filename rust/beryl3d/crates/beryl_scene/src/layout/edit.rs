@@ -33,6 +33,17 @@ pub(super) struct Editing {
     dragging: bool,
 }
 
+impl Editing {
+    /// The text the field shows while it is edited, its placeholder when it is empty: what its
+    /// block was shaped from (`edit_block`).
+    pub(super) fn shown<'a>(&'a self, node: &'a Node) -> &'a str {
+        match self.editor.raw_text() {
+            "" => node.element.text.as_deref().unwrap_or(""),
+            raw => raw,
+        }
+    }
+}
+
 /// The selection, caret and composing underline of the edited field, in logical points from
 /// the top left corner of its laid-out text.
 #[derive(Debug, Default)]

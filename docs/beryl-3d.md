@@ -4265,12 +4265,26 @@ two clients at the same moment of a recording, and `data/beryl3d/web-match.json`
 holds the counts for every interface test target, which may only go down. The
 reference is the web interface as WebKit draws it, at scale 2.
 
-- **Snapshot.** Each client's elements are written as records: role, name,
-  object, box in points, paint order, the computed CSS style of a fixed list of
-  properties, and each line of text. The web side is read by a script that
-  Playwright evaluates in the page, so nothing under `ui/` changes. A
-  mid-animation moment is reached with Playwright's clock on the web side and
-  the stepped clock in Beryl 3D.
+- **Snapshot.** `just b3d match snapshot <target> --at <moment>` writes both
+  clients' pictures and element records of the moment to
+  `$BERYL_CACHE/b3d/match/<target>/` (`web.png`, `web.json`, `b3d.png`,
+  `b3d.json`, `report.txt`). A record holds the element's role, name, object (a
+  card's slot in the view), box in points, paint order, parent, the style of a
+  fixed list of CSS properties and each line of text with its baseline. Beryl
+  3D's records come from `b3d tree --records`, which builds the frame with
+  `Frame::looking` set so that it records how each flat-layer element was drawn
+  (its panel, text color and type) and each line's words; what `Style` cannot
+  say yet (gradients, shadows, filters, masks, transforms) is written as `none`.
+  The web side is read by a script that Playwright evaluates in the page, so
+  nothing under `ui/` changes, and its roles come from the ARIA role or from
+  `data/beryl3d/match/roles.json`. The page runs on Playwright's paused clock: a
+  mid-animation moment runs it as long after the view's arrival as Beryl 3D's
+  moment lies, and a moment at rest runs it until the stage is idle. The page's
+  first frames while it loads make the web side's start of the animation
+  approximate, and CSS animations finish rather than stopping at the moment. The
+  report warns when a bundled font's `name` table differs from the web's WOFF2
+  file of the same face. Neither side draws card scans unless `--art` is given,
+  and then both read the app's scan cache.
 - **Boxes and styles.** Elements are paired by locator, then by role, name and
   parent, then by role and the nearest box. Box differences, extra text lines,
   overlaps only one side has, differing style values, and web style values

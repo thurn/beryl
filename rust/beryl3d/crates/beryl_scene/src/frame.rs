@@ -3,12 +3,14 @@
 //! which the interface checks and agent tools read, and the draw list, which the renderer reads.
 
 mod draw;
+mod look;
 mod order;
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use glam::{Mat4, Vec2};
 
 pub use draw::{Draw, Material, Mesh, Sprite, TextureArray, sprites};
+pub use look::ElementLook;
 
 use crate::input::{Rect, Tier};
 
@@ -356,6 +358,11 @@ pub struct Frame {
     pub sounds: Vec<Sound>,
     /// Each laid-out line of text, for the "text fits" check.
     pub lines: Vec<TextLine>,
+    /// Whether the frame records `looks` and each line's words (`TextLine::words`), for the
+    /// tools that compare Beryl 3D with the web interface. Building a frame keeps it as it is.
+    pub looking: bool,
+    /// How each flat-layer element was drawn, while `looking`.
+    pub looks: Vec<ElementLook>,
     /// The hand cards the pointer has up out of their place in the fan (rising, raised or
     /// falling), each with the box it has resting in the fan. The pointer's hit test and the
     /// "reachable" check put these boxes in place of the drawn ones, so that a pointer over the
@@ -430,6 +437,10 @@ pub struct TextLine {
     /// The type size of its text, in logical points: the text's own size, which a text that
     /// shrinks to fit has shrunk.
     pub size: f32,
+    /// The y of its baseline on screen, in logical points.
+    pub baseline: f32,
+    /// Its words in `Frame::names`, while `Frame::looking`, and empty otherwise.
+    pub words: NameRef,
 }
 
 impl Frame {
@@ -452,6 +463,8 @@ impl Frame {
             shake: Vec2::ZERO,
             sounds: Vec::with_capacity(SOUNDS),
             lines: Vec::with_capacity(elements),
+            looking: false,
+            looks: Vec::new(),
             lifted: Vec::with_capacity(LIFTED),
             rings: Vec::with_capacity(RINGS),
             load: Load::default(),
@@ -522,6 +535,7 @@ impl<'a> FrameBuilder<'a> {
         frame.shake = Vec2::ZERO;
         frame.sounds.clear();
         frame.lines.clear();
+        frame.looks.clear();
         frame.lifted.clear();
         frame.rings.clear();
         frame.load = Load::default();
@@ -631,13 +645,39 @@ impl<'a> FrameBuilder<'a> {
     }
 
     /// Adds a line of the text of the resolved element at `element`, whose type is `size`
-    /// points.
-    pub fn line(&mut self, element: u32, rect: Rect, size: f32) {
+    /// points, whose baseline is at `baseline` on screen and which shows `words`. The words
+    /// are kept only while the frame is `looking`.
+    pub fn line(&mut self, element: u32, rect: Rect, size: f32, baseline: f32, words: &str) {
+        let words = if self.frame.looking {
+            let start = index(self.frame.names.len());
+            self.frame.names.push_str(words);
+            NameRef {
+                start,
+                len: index(words.len()),
+            }
+        } else {
+            NameRef::default()
+        };
         self.frame.lines.push(TextLine {
             element,
             rect,
             size,
+            baseline,
+            words,
         });
+    }
+
+    /// Whether the frame records how its elements look (`Frame::looking`).
+    #[must_use]
+    pub fn looking(&self) -> bool {
+        self.frame.looking
+    }
+
+    /// Records how a flat-layer element was drawn, while the frame is `looking`.
+    pub fn look(&mut self, look: ElementLook) {
+        if self.frame.looking {
+            self.frame.looks.push(look);
+        }
     }
 
     /// Records the layout work `Client::handle` did since the last frame: layout nodes

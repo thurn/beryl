@@ -240,6 +240,19 @@ impl Page {
         self.client.faces()
     }
 
+    /// When the client was given the latest view, in nanoseconds since the recording's start.
+    #[must_use]
+    pub fn view_given_at(&self) -> Option<u64> {
+        (self.inputs.iter().zip(&self.given_at).rev())
+            .find(|(input, _)| matches!(input, Input::Update(_)))
+            .map(|(_, &at)| at)
+    }
+
+    /// Whether later frames record their elements' looks (`Client::set_looking`), until a restart.
+    pub fn set_looking(&mut self, looking: bool) {
+        self.client.set_looking(looking);
+    }
+
     /// Every input handed to the client so far, in order.
     #[must_use]
     pub fn inputs(&self) -> &[Input] {

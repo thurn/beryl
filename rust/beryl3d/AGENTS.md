@@ -107,6 +107,13 @@ through the client with no window or GPU (the `b3d` skill has the details):
   right. It exports the recording (`just b3d export <directory> --only <name>`),
   shoots the page as `just ui-shots` does, and keeps the screenshot, which
   `--web <png>` reuses.
+- `just b3d match snapshot <name> --at <moment>` writes both clients' pictures
+  and element records (box, paint order, CSS style, lines of text) of the same
+  moment, mid-animation too, to `$BERYL_CACHE/b3d/match/<target>/`, with a
+  `report.txt` that warns of fonts or card scans the two sides do not share. It
+  takes `compare`'s target or a test's name, at scale 2 by default. The other
+  `just b3d match` subcommands read its directory. Beryl 3D's records alone are
+  `just b3d tree <name> --at <moment> --records`.
 
 These tools lay the frame out at scale 1 unless `--scale` gives another, while
 the desktop app on a Retina Mac runs at scale 2, so a picture of a look you
@@ -196,6 +203,12 @@ project, and selects the main lanes.
   it, as `screens.json`'s `prompt_shapes` maps each prompt shape.
   `just b3d parity --check` keeps the maps complete, and a `beryl_inspect` test
   checks that each named recording exists.
+
+- `data/beryl3d/match/roles.json`: CSS selectors of the web interface's
+  elements, each with the Beryl 3D role it stands for, which
+  `just b3d match snapshot` gives the web's element records. The first selector
+  an element matches wins; an element matching none takes its ARIA role, then
+  its tag's.
 
 - `data/beryl3d/screens.json`: Beryl 3D's screens, each with the recording, the
   moment (`at`) and the tree line (`shows`) that show it once it is `built`, and

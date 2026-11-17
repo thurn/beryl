@@ -461,7 +461,7 @@ fn sized(width: f32, height: f32, text: f32) -> Frame {
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     let spec = layer(Role::Button, "Done", 1, rect(100.0, 300.0, width, height));
     builder.resolved(spec.name, spec.element);
-    builder.line(0, rect(104.0, 310.0, 30.0, text), text);
+    builder.line(0, rect(104.0, 310.0, 30.0, text), text, 0.0, "");
     builder.finish();
     frame
 }
@@ -767,9 +767,9 @@ fn life_beside_text(life: Rect) -> Frame {
     for spec in [total, play, toggle, label] {
         builder.resolved(spec.name, spec.element);
     }
-    builder.line(0, life, 40.0);
-    builder.line(1, rect(600.0, 700.0, 120.0, 24.0), 18.0);
-    builder.line(3, rect(801.0, 701.0, 20.0, 20.0), 12.0);
+    builder.line(0, life, 40.0, 0.0, "");
+    builder.line(1, rect(600.0, 700.0, 120.0, 24.0), 18.0, 0.0, "");
+    builder.line(3, rect(801.0, 701.0, 20.0, 20.0), 12.0, 0.0, "");
     builder.finish();
     frame
 }

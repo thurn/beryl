@@ -6,7 +6,7 @@ use beryl_scene::element::Span;
 use beryl_scene::frame::{Frame, Material, Role};
 use beryl_scene::input::{AssetReady, GlyphCell, Input, Insets, Size};
 use beryl_scene::text::fonts::Font;
-use beryl_scene::text::{Block, Glyphs, Text, TypeStyle};
+use beryl_scene::text::{Block, Glyphs, Text, TypeStyle, shaped_words};
 use glam::Vec2;
 
 use crate::flat_layer::{client, deciding, prompt};
@@ -123,16 +123,31 @@ fn mana_symbols_are_inline_boxes_an_em_wide_that_wrap_whole() {
     assert!(wrapped.lines.len() >= 2, "{:?}", wrapped.lines);
     let first = wrapped.symbols[0].rect;
     assert!(first.x.abs() < 0.01, "{first:?} starts a line");
-    assert!(first.y >= wrapped.lines[0].y + wrapped.lines[0].height - 0.01);
+    let top = wrapped.lines[0].rect;
+    assert!(first.y >= top.y + top.height - 0.01);
     for symbol in &wrapped.symbols {
         let rect = symbol.rect;
         assert!(rect.x + rect.width <= narrow + 0.01, "{rect:?}");
         let middle = rect.y + rect.height / 2.0;
         assert!(
-            (wrapped.lines.iter()).any(|line| middle >= line.y && middle <= line.y + line.height),
+            (wrapped.lines.iter())
+                .any(|line| middle >= line.rect.y && middle <= line.rect.y + line.rect.height),
             "{rect:?} in {:?}",
             wrapped.lines
         );
+    }
+    // The lines' words, end to end, are the text as it was shaped, each symbol one object
+    // character, and each baseline lies inside its line.
+    let words = shaped_words("Pay {1}{U}");
+    let joined: String = wrapped
+        .lines
+        .iter()
+        .map(|line| line.words(&words))
+        .collect();
+    assert_eq!(joined, words);
+    assert_eq!(wrapped.lines[0].words(&words).trim_end(), "Pay");
+    for line in &wrapped.lines {
+        assert!(line.baseline > line.rect.y && line.baseline < line.rect.y + line.rect.height);
     }
 }
 

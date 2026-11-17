@@ -28,6 +28,18 @@ pub enum Font {
 }
 
 impl Font {
+    /// The font's family name as the web interface's CSS names it, without the `Variable`
+    /// that its variable fonts' names end in.
+    #[must_use]
+    pub fn family(self) -> &'static str {
+        match self {
+            Self::Cinzel => "Cinzel",
+            Self::CrimsonPro => "Crimson Pro",
+            Self::OpenSans => "Open Sans",
+            Self::Mana => "Mana",
+        }
+    }
+
     /// The font's file.
     #[must_use]
     pub fn file(self) -> &'static FontFile {

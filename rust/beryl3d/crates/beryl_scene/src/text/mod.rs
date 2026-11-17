@@ -11,6 +11,7 @@ pub mod glyphs;
 mod symbols;
 mod write;
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
@@ -80,8 +81,8 @@ pub struct Block {
     /// The width of its widest line and the height of all its lines.
     pub width: f32,
     pub height: f32,
-    /// Each line's box: as wide as its glyphs and as tall as the line.
-    pub lines: Vec<Rect>,
+    /// Each line: its box, its part of the text and its baseline.
+    pub lines: Vec<Line>,
     /// How the glyphs of run 0 look: the text's own style.
     pub base: Run,
     /// How the glyphs of each later run look, from run 1: each styled span's, then one for the
@@ -101,6 +102,55 @@ impl Block {
             later => &self.runs[usize::from(later) - 1],
         }
     }
+}
+
+/// One laid-out line of a block.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Line {
+    /// Its box: as wide as its glyphs and as tall as the line.
+    pub rect: Rect,
+    /// The byte range of the line in the text the block was shaped from, with each mana symbol
+    /// as one object character (`shaped_words`).
+    pub start: u32,
+    pub end: u32,
+    /// The baseline's distance below the block's top, in logical points.
+    pub baseline: f32,
+}
+
+impl Line {
+    /// The line's words in `words`, the text its block was shaped from as `shaped_words`
+    /// writes it; empty when `words` is not that text.
+    #[must_use]
+    pub fn words<'a>(&self, words: &'a str) -> &'a str {
+        words
+            .get(self.start as usize..self.end as usize)
+            .unwrap_or("")
+    }
+}
+
+/// `text` as it is shaped: each `{...}` mana symbol in it replaced by one object character
+/// (U+FFFC), which the symbol's disc stands in for.
+#[must_use]
+pub fn shaped_words(text: &str) -> Cow<'_, str> {
+    words_of(text, &symbols::tokens(text), &mut Vec::new())
+}
+
+/// `text` with each of its symbol `tokens` replaced by one object character, as
+/// `shaped_words` writes it, putting where each object character lands in `objects`.
+fn words_of<'a>(text: &'a str, tokens: &[Range<usize>], objects: &mut Vec<usize>) -> Cow<'a, str> {
+    if tokens.is_empty() {
+        return Cow::Borrowed(text);
+    }
+    let mut words = String::with_capacity(text.len());
+    let mut from = 0;
+    for token in tokens {
+        words.push_str(&text[from..token.start]);
+        objects.push(words.len());
+        words.push(symbols::OBJECT);
+        from = token.end;
+    }
+    words.push_str(&text[from..]);
+    Cow::Owned(words)
 }
 
 /// The look of some of a block's glyphs.
@@ -295,20 +345,7 @@ impl Text {
         let tokens = symbols::tokens(text);
         // Where each symbol's object character lands in `words`.
         let mut objects = Vec::with_capacity(tokens.len());
-        let words = if tokens.is_empty() {
-            std::borrow::Cow::Borrowed(text)
-        } else {
-            let mut words = String::with_capacity(text.len());
-            let mut from = 0;
-            for token in &tokens {
-                words.push_str(&text[from..token.start]);
-                objects.push(words.len());
-                words.push(symbols::OBJECT);
-                from = token.end;
-            }
-            words.push_str(&text[from..]);
-            std::borrow::Cow::Owned(words)
-        };
+        let words = words_of(text, &tokens, &mut objects);
         // A byte offset of `text` as one of `words`: one inside a symbol goes to the symbol's
         // start, or its end for the end of a range.
         let moved = |offset: usize, end: bool| {
@@ -514,11 +551,18 @@ fn add_line(block: &mut Block, line: &parley::Line<'_, u16>) {
     let metrics = line.metrics();
     let width = metrics.advance - metrics.hanging_advance;
     block.width = block.width.max(width);
-    block.lines.push(Rect {
-        x: metrics.offset,
-        y: metrics.block_min_coord,
-        width,
-        height: metrics.block_max_coord - metrics.block_min_coord,
+    let range = line.text_range();
+    let offset = |at: usize| u32::try_from(at).expect("a text is under 4 GB");
+    block.lines.push(Line {
+        rect: Rect {
+            x: metrics.offset,
+            y: metrics.block_min_coord,
+            width,
+            height: metrics.block_max_coord - metrics.block_min_coord,
+        },
+        start: offset(range.start),
+        end: offset(range.end),
+        baseline: metrics.baseline,
     });
 }
 

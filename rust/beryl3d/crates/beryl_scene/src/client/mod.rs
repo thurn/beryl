@@ -407,6 +407,12 @@ impl Client {
         matches!(self.screen, Screen::Game | Screen::Table) && self.table_shown()
     }
 
+    /// Whether each frame records how its flat-layer elements look and the words of each line
+    /// of text (`Frame::looking`), for the tools that compare Beryl 3D with the web interface.
+    pub fn set_looking(&mut self, looking: bool) {
+        self.frame.looking = looking;
+    }
+
     /// The frame at `now`, in nanoseconds since the client started.
     pub fn frame(&mut self, now: u64) -> &Frame {
         self.now = now;

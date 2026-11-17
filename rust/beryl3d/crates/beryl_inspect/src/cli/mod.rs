@@ -10,6 +10,7 @@ mod check;
 pub mod line;
 mod listing;
 pub mod options;
+mod records;
 mod test;
 mod timeline;
 mod view;
@@ -120,7 +121,7 @@ const COMMANDS: [Command; 8] = [
         spec: Spec {
             recording: true,
             values: &["--within", "--role"],
-            switches: &["--full"],
+            switches: &["--full", "--records"],
         },
         own: &[
             (
@@ -129,6 +130,10 @@ const COMMANDS: [Command; 8] = [
             ),
             ("--role <role>", "only elements of that role"),
             ("--full", "every element, with no place cut short"),
+            (
+                "--records",
+                "every element as JSON records with its style, for `just b3d match`",
+            ),
         ],
         run: view::tree,
     },

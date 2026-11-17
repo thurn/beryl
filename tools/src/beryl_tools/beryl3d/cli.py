@@ -30,6 +30,7 @@ from . import (
     gate,
     lane,
     live,
+    match,
     motion_film,
     parity,
     paths,
@@ -395,6 +396,7 @@ MODULES: tuple[ModuleType, ...] = (
     motion_film,
     bug,
     clear_save,
+    match,
 )
 
 OWN_COMMANDS: tuple[Command, ...] = (

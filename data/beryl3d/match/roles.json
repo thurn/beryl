@@ -1,0 +1,13 @@
+{
+  "about": "CSS selectors of the web interface's elements with the Beryl 3D role each stands for, for `just b3d match snapshot` (tools/src/beryl_tools/beryl3d/match/dump.mjs). The first selector an element matches gives its role; an element matching none takes its ARIA role, then its tag's.",
+  "roles": [
+    { "selector": ".card-el, [data-stage][data-card]", "role": "card" },
+    { "selector": "[data-life]", "role": "player" },
+    { "selector": ".icon-button", "role": "button" },
+    { "selector": ".button, button", "role": "button" },
+    { "selector": "input[type=checkbox], [role=switch]", "role": "toggle" },
+    { "selector": "input[type=range]", "role": "slider" },
+    { "selector": "input, textarea", "role": "field" },
+    { "selector": "svg, img", "role": "icon" }
+  ]
+}

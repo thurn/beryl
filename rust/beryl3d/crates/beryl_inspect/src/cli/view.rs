@@ -49,6 +49,9 @@ pub(super) fn tree(options: &Options) -> Result<Printed, Usage> {
     };
     let mut page = open(options)?;
     seek_and_act(&mut page, options, &options.at)?;
+    if options.switch("--records") {
+        return Ok(records(&mut page, options));
+    }
     let (view, views, animating) = page.position();
     let now = page.now();
     let frame = page.frame();
@@ -73,6 +76,28 @@ pub(super) fn tree(options: &Options) -> Result<Printed, Usage> {
         "{}\n{header}\n{body}",
         options.command_line()
     )))
+}
+
+/// `tree --records`: the moment's position and every element as a record, as one JSON object.
+/// `view_given_ms` is when the client was given the latest view, from which the web side counts
+/// how far into that view's animation the moment lies.
+fn records(page: &mut Page, options: &Options) -> Printed {
+    page.set_looking(true);
+    let (view, views, animating) = page.position();
+    let now = page.now();
+    let given = page.view_given_at();
+    let frame = page.frame();
+    let value = json!({
+        "command": options.command_line(),
+        "view": view,
+        "views": views,
+        "t_ms": milliseconds(now),
+        "view_given_ms": given.map(milliseconds),
+        "animating": animating,
+        "scale": options.scale,
+        "elements": super::records::records(frame),
+    });
+    Printed::text(format!("{value}\n"))
 }
 
 /// A tree line as JSON: its text, and its fields as the grammar reads them.
