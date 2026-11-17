@@ -203,10 +203,13 @@ fn apply(t: &GameTable, so_far: &mut SoFar, change: LayerChange) {
         // CR 613.1d: "Layer 4: Type-changing effects are applied. These include effects that
         // change an object's card type, subtype, and/or supertype."
         LayerChange::AddTypes(types) => so_far.types = so_far.types.union(types),
-        LayerChange::RemoveTypes(types) => so_far.types = so_far.types.minus(types),
         // CR 205.1a: "If an object's card type is removed, the subtypes correlated with that
         // card type will remain if they are also the subtypes of a card type the object
         // currently has; otherwise, they are also removed".
+        LayerChange::RemoveTypes(types) => {
+            so_far.types = so_far.types.minus(types);
+            so_far.subtypes = so_far.subtypes.of_types(t.subtypes(), so_far.types);
+        }
         LayerChange::SetTypes(types) => {
             so_far.types = types;
             so_far.subtypes = so_far.subtypes.of_types(t.subtypes(), types);

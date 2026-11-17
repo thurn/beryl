@@ -310,12 +310,13 @@ static MAP: CardDef = CardDef {
     tokens: &[],
 };
 
-/// Overlord of the Mistmoors: not a creature while it has a time counter (impending); when
-/// it enters, two Insects.
+/// An enchantment creature that loses its creature type while it has a time counter
+/// (impending). It creates two Insects when it enters.
 static OVERLORD: CardDef = CardDef {
     name: "Test Overlord",
     faces: &[Face {
         types: Types::ENCHANTMENT.union(Types::CREATURE),
+        subtypes: beryl_card::SubtypeWords::new(Subtypes::of(&[Subtype::Horror, Subtype::Shrine])),
         power: Some(5),
         toughness: Some(5),
         abilities: &[
@@ -1314,6 +1315,8 @@ fn impending_counters_and_type_changes_apply_in_layer_four() {
     zones::put_onto_battlefield(&mut game, r, p, FaceIx::FRONT, counters).unwrap();
     assert_eq!(s.counters_of(overlord, CounterKind::Time), 4);
     assert_eq!(types(&s, overlord), Types::ENCHANTMENT, "not a creature");
+    assert!(!s.has_subtype(&t, overlord, Subtype::Horror));
+    assert!(s.has_subtype(&t, overlord, Subtype::Shrine));
     let r = s.object_ref(overlord);
     with_game(&t, &mut s, &mut x, land, |game, _| {
         counters::remove(
@@ -1328,6 +1331,8 @@ fn impending_counters_and_type_changes_apply_in_layer_four() {
         types(&s, overlord),
         Types::ENCHANTMENT.union(Types::CREATURE)
     );
+    assert!(s.has_subtype(&t, overlord, Subtype::Horror));
+    assert!(s.has_subtype(&t, overlord, Subtype::Shrine));
 }
 
 #[test]

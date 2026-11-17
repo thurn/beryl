@@ -318,12 +318,15 @@ fn modify<L: Layout>(
         // CR 613.1d: "Layer 4: Type-changing effects are applied. These include effects that
         // change an object's card type, subtype, and/or supertype."
         LayerChange::AddTypes(types) => d.types = d.types.union(types),
-        LayerChange::RemoveTypes(types) => d.types = d.types.minus(types),
         // CR 205.1a: "Some effects set an object's card type. In most such cases, the new
         // card type(s) replaces any existing card types. ... If an object's card type is
         // removed, the subtypes correlated with that card type will remain if they are also
         // the subtypes of a card type the object currently has; otherwise, they are also
         // removed".
+        LayerChange::RemoveTypes(types) => {
+            d.types = d.types.minus(types);
+            d.subtypes = d.subtypes.of_types(t.subtypes(), d.types);
+        }
         LayerChange::SetTypes(types) => {
             d.types = types;
             d.subtypes = d.subtypes.of_types(t.subtypes(), types);

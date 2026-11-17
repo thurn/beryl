@@ -6,6 +6,14 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A permanent cast for impending kept its creature types while it was an
+  enchantment.** The layer code removed the Creature card type without checking
+  which subtypes the remaining card types could have. Both layer paths now
+  filter subtypes after removing a card type, as they do when setting the card
+  types. `impending_counters_and_type_changes_apply_in_layer_four` checks that
+  the creature subtype goes away and comes back, and that the enchantment
+  subtype stays.
+
 - **Worldgorger Dragon exiled its controller's permanents in slot order.**
   `linked::exile_instruction` emitted a zone change for each permanent. It
   visited the set by slot number, which changed which land the player saw leave
