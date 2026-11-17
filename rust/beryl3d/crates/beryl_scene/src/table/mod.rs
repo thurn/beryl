@@ -40,7 +40,9 @@ pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub(crate) use scene::{Objects, PileCount, ability_track};
 pub use shown::Moves;
 pub(crate) use stack::{OnStack, on_stack, row_area};
-pub use tray_layout::{Held, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes};
+pub use tray_layout::{
+    Across, Held, Second, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes,
+};
 
 use crate::data::space;
 use crate::input::{Insets, Size};
@@ -224,6 +226,18 @@ impl Layout {
             phone::layout(window)
         } else {
             *self
+        }
+    }
+
+    /// The space the cards a prompt holds up lie in on `window`: this layout's on a desktop
+    /// window, and the phone's (`phone::tray`) on a phone, without making the rest of the
+    /// phone layout.
+    #[must_use]
+    pub fn tray_for(&self, window: Window) -> TraySpace {
+        if window.phone() {
+            phone::tray(window)
+        } else {
+            self.tray
         }
     }
 

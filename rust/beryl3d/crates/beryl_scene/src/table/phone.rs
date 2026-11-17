@@ -33,9 +33,10 @@
 use beryl_protocol::protocol::Side;
 use glam::{Quat, Vec2, Vec3};
 
+use super::tray_layout::{Across, Second};
 use super::{
     CARD_HEIGHT, CARD_WIDTH, Camera, CameraData, DESKTOP, HandData, Layout, PlayerAnchor, RowArea,
-    Window,
+    TraySpace, Window,
 };
 use crate::agent::hit::CELL;
 use crate::data::audit;
@@ -384,6 +385,52 @@ fn opponent_hand(window: Window, bands: &PhoneBands) -> HandData {
     }
 }
 
+/// The space the cards a prompt holds up lie in on a phone `window`, in logical points (a stage
+/// as tall as the window), as the web's `phoneTray` gives it: across the column, over the
+/// opponent's rows, and the second of two piles over the viewer's own, clear of the row of
+/// buttons the prompt stands over the viewer's strip (`prompts::bar`), so that the middle band
+/// and the phase in it stay clear. Its
+/// cards are at most as wide as a card of the hand, and keep `least_step` apart, as the stack's
+/// items do, so that each card beneath keeps a square of the touch target uncovered.
+#[must_use]
+pub fn tray(window: Window) -> TraySpace {
+    tray_in(window, &phone_bands(window).unwrap_or_default())
+}
+
+fn tray_in(window: Window, bands: &PhoneBands) -> TraySpace {
+    use crate::data::space::hud::phone as hud;
+    use data::tray as shape;
+    let top = bands.opponent_back.top + shape::INSET;
+    let foot = bands.middle.bottom() + shape::INSET;
+    // The prompt's buttons stand on the dock's line while it holds cards up (`prompts::bar`):
+    // the strip's middle, or over the top of the hand where it reaches higher. A hand with more
+    // cards than one fan holds stands its back row in the strip, its top `HAND_TOP` over the
+    // strip's top edge.
+    let (button, gap) = (hud::BUTTON_HEIGHT, hud::DOCK_GAP);
+    let hand_top = bands.your_strip.top - data::bands::HAND_TOP;
+    let dock = bands.your_strip.middle().min(hand_top - gap - button / 2.0);
+    let buttons = dock - button / 2.0 - gap;
+    TraySpace {
+        stage_height: window.size.height,
+        y: top,
+        height: bands.middle.top - shape::INSET - top,
+        across: Across::Column {
+            left: bands.left,
+            width: bands.right - bands.left,
+        },
+        second: Some(Second {
+            y: foot,
+            height: buttons - foot,
+        }),
+        most: shape::MOST,
+        least: shape::LEAST,
+        gap: shape::GAP,
+        least_step: shape::LEAST_STEP,
+        heading: shape::HEADING,
+        depth: DESKTOP.tray.depth,
+    }
+}
+
 /// The phone layout for `window`, whose hands, piles, stack and anchors are converted from the
 /// web interface's places in points to this window's normalized device coordinates.
 #[must_use]
@@ -436,7 +483,7 @@ pub fn layout(window: Window) -> Layout {
         beneath_step: DESKTOP.beneath_step,
         piles,
         pile_scale,
-        tray: DESKTOP.tray,
+        tray: tray_in(window, &bands),
         stack: DESKTOP.stack,
         hand: your_hand(window, &bands),
         opponent_hand: opponent_hand(window, &bands),

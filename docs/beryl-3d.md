@@ -1390,18 +1390,23 @@ flight start exactly where the card was.
 - **Cards a prompt holds up lie in the tray.** `table::tray_layout` ports the
   web interface's `laidOut` for one pile (rows about the middle of the space)
   and two (boxes side by side), in the space `desktopTray` gives, placed
-  relative to the camera. Two kinds of split are laid out as the web lays them
-  out (`Held::kind`): cards picked out of the library from among the rest lie in
-  one fan in the order they were dealt, with no boxes, and cards put back from
-  the hand onto the library lie as the library, whose card backs the table
-  draws, and the hand fanned beside it. `Table::lift` holds cards up, each
-  moving from where it was drawn into its tray place, and `Table::let_go` sends
-  them back. Only the table's own resting places put them in the tray: scripts
-  are played from their zones (`Table::rests` gives those), and the first script
-  to start after the tray lets go moves each card it carries elsewhere from
-  where the tray held it (`Show::hand_over_tray`), as the web interface's
-  `Hold.keeps` does. While the tray is up only its cards can be pressed, as the
-  web's shade over the table takes the pointer.
+  relative to the camera. On the phone the space is the web's `phoneTray`: the
+  column over the opponent's rows, with a second band over the viewer's rows for
+  the second of two piles, so that the middle band stays clear. Cards there keep
+  the touch target's square uncovered wherever they overlap
+  (`TraySpace::least_step`), closing up no further than that and lying in
+  overlapping rows where one row has no room. Two kinds of split are laid out as
+  the web lays them out (`Held::kind`): cards picked out of the library from
+  among the rest lie in one fan in the order they were dealt, with no boxes, and
+  cards put back from the hand onto the library lie as the library, whose card
+  backs the table draws, and the hand fanned beside it. `Table::lift` holds
+  cards up, each moving from where it was drawn into its tray place, and
+  `Table::let_go` sends them back. Only the table's own resting places put them
+  in the tray: scripts are played from their zones (`Table::rests` gives those),
+  and the first script to start after the tray lets go moves each card it
+  carries elsewhere from where the tray held it (`Show::hand_over_tray`), as the
+  web interface's `Hold.keeps` does. While the tray is up only its cards can be
+  pressed, as the web's shade over the table takes the pointer.
 - **The opponent's scried cards lie beside their library.** They lie face down
   on the table at library size, as in Arena. Choices such as taking cards from
   the top of the library leave its cards in the pile until a script step moves

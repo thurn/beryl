@@ -26,7 +26,7 @@ use crate::faces::FaceList;
 use crate::frame::Role;
 use crate::input::{FaceId, FaceSize};
 use crate::screens::ScreenIn;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, TraySpace};
+use crate::table::{CARD_HEIGHT, CARD_WIDTH, DESKTOP};
 use crate::tokens::{color, space, type_style};
 use crate::widgets::{icon_button, icons};
 
@@ -124,7 +124,7 @@ fn ways_row(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
         return None;
     }
     let faces: Vec<Option<FaceId>> = way_faces(prompt, input).collect();
-    let space = TraySpace::DESKTOP;
+    let space = DESKTOP.tray_for(input.window);
     let (tray, per_stage) = space.on_window(input.window.size);
     #[expect(clippy::cast_precision_loss, reason = "a card has a few ways")]
     let count = ways.len() as f32;

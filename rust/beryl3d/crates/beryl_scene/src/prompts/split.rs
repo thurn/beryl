@@ -42,7 +42,7 @@ pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
     let (ShapeBody::Split { piles }, Some(held)) = (&prompt.body, Piles::of(prompt)) else {
         return Some(bar);
     };
-    let space = DESKTOP.tray;
+    let space = DESKTOP.tray_for(input.window);
     let size = input.window.size;
     let per_point = space.stage_height / size.height;
     let heading = space.heading / per_point;

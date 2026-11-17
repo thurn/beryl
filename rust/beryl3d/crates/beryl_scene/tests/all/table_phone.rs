@@ -2,14 +2,14 @@
 //! camera fitted to the battlefield between the strips and the hand, the bands each part of the
 //! table stands in, and every card at rest keeping a 44-point square to press.
 
-use beryl_protocol::protocol::{CardType, RowName, Side, ZoneName};
+use beryl_protocol::protocol::{CardType, ObjectId, RowName, Side, ZoneName};
 use beryl_scene::agent::checks::{on_screen, reachable};
 use beryl_scene::agent::{Context, Layout};
 use beryl_scene::frame::{Frame, Place, Resolved, Role};
 use beryl_scene::input::{Insets, Size};
 use beryl_scene::play::Show;
 use beryl_scene::table::phone::{Band, battlefield, layout};
-use beryl_scene::table::{DESKTOP, Table, Window, phone_bands};
+use beryl_scene::table::{DESKTOP, Held, Table, TrayKind, Window, phone_bands};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 
@@ -552,4 +552,99 @@ fn a_desktop_window_keeps_the_desktop_layout() {
     assert_eq!(*table.layout(), DESKTOP);
     assert_eq!(DESKTOP.for_window(Window::default()), DESKTOP);
     assert!(DESKTOP.for_window(phone(393.0, 759.0)).phone.is_some());
+}
+
+/// The box on the window of each card of `held` held up in a tray on `window`, in logical
+/// points, and how far it stands from the eye.
+fn tray_boxes_on(window: Window, held: &Held) -> Vec<(Vec2, Vec2, f32)> {
+    let table = Table::new(DESKTOP, window);
+    let camera = table.camera();
+    (table.tray_poses(held).cards.iter())
+        .map(|(_, pose)| {
+            let (corners, depth) = camera.card_box(pose);
+            let low = corners.iter().copied().fold(Vec2::MAX, Vec2::min);
+            let high = corners.iter().copied().fold(Vec2::MIN, Vec2::max);
+            (low, high, depth)
+        })
+        .collect()
+}
+
+fn ids(count: u16, from: u16) -> Vec<ObjectId> {
+    (from..from + count).map(ObjectId).collect()
+}
+
+/// On the phone, every card a prompt holds up in its tray keeps a 44-point square at its top
+/// left that no card in front of it covers, and stays out of the middle band, where the phase
+/// stands, and off the viewer's strip, where the prompt's buttons stand: one pile in rows, a
+/// pick's fan of more cards than one row holds, two piles in boxes one over the other, and a
+/// hand put back onto the library.
+#[test]
+fn every_card_held_up_on_the_phone_keeps_a_square_to_press() {
+    let pick = |count: u16| Held {
+        piles: vec![ids(count, 1)],
+        rooms: vec![None],
+        kind: TrayKind::Boxes,
+    };
+    let fan = |count: u16| Held {
+        piles: vec![ids(2, 1), ids(count - 2, 3)],
+        rooms: vec![Some(2), None],
+        kind: TrayKind::Fan {
+            order: ids(count, 1),
+        },
+    };
+    let split = |first: u16, second: u16| Held {
+        piles: vec![ids(first, 1), ids(second, 100)],
+        rooms: vec![None, None],
+        kind: TrayKind::Boxes,
+    };
+    let put_back = |hand: u16| Held {
+        piles: vec![Vec::new(), ids(hand, 1)],
+        rooms: vec![Some(2), None],
+        kind: TrayKind::PutBack,
+    };
+    let trays = [
+        pick(1),
+        pick(4),
+        pick(8),
+        pick(12),
+        fan(9),
+        fan(12),
+        split(3, 4),
+        split(0, 7),
+        put_back(3),
+        put_back(7),
+    ];
+    for (width, height) in PHONES {
+        let window = phone(width, height);
+        let bands = phone_bands(window).unwrap();
+        for held in &trays {
+            let boxes = tray_boxes_on(window, held);
+            for (index, &(low, high, depth)) in boxes.iter().enumerate() {
+                let label = format!("card {index} of {:?} at {width}x{height}", held.piles);
+                let square = (low, low + Vec2::splat(44.0));
+                assert!(
+                    square.1.x <= high.x && square.1.y <= high.y,
+                    "{label} is at least 44 points square: {low} to {high}"
+                );
+                let covered = boxes.iter().any(|&(l, h, d)| {
+                    d < depth
+                        && square.0.x < h.x
+                        && l.x < square.1.x
+                        && square.0.y < h.y
+                        && l.y < square.1.y
+                });
+                assert!(!covered, "{label} keeps its top left square uncovered");
+                let middle = (bands.middle.top, bands.middle.bottom());
+                assert!(
+                    high.y <= middle.0 || low.y >= middle.1,
+                    "{label} stays out of the middle band {middle:?}: {low} to {high}"
+                );
+                assert!(
+                    high.y <= bands.your_strip.top,
+                    "{label} stays off the viewer's strip at {}: {low} to {high}",
+                    bands.your_strip.top
+                );
+            }
+        }
+    }
 }

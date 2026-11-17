@@ -567,6 +567,14 @@
         "depth": 320,
         "step_depth": 1.5,
         "fan_radius": 36.217
+      },
+      "tray": {
+        "inset": 4,
+        "most": 104,
+        "least": 54,
+        "gap": 6,
+        "heading": 18,
+        "least_step": 52
       }
     }
   },

@@ -94,7 +94,9 @@ pub(super) fn bar(
 ///   turn button is, with the one that passes on beside it. When the viewer's hand holds more
 ///   cards than one fan has room for, its back row stands in the strip, so the dock rises
 ///   above the hand's top and leaves each card a strip to press.
-/// - Its other buttons, and a number's steps, are stacked over the dock.
+/// - Its other buttons, and a number's steps, are stacked over the dock. While the prompt holds
+///   cards up and puts no button forward, they stand on the dock's line instead, so that they
+///   stay clear of the cards the tray lays out over the viewer's rows (`table::phone::tray`).
 /// - What it asks, `asks`, is a pill on the middle band's line, as Arena writes it across the
 ///   middle of its table, or at the nearest height clear of every card where one lies on that
 ///   line (`hud::phone::asked_top`). While the prompt holds cards up, or lists what it asks
@@ -145,7 +147,12 @@ fn phone_bar(
         ));
         dock
     });
-    let over = (middle - height / 2.0).min(strip.top) - gap;
+    let held_up = Piles::of(prompt).is_some();
+    let over = if held_up && forward.is_none() && pass_on.is_none() {
+        middle + height / 2.0
+    } else {
+        (middle - height / 2.0).min(strip.top) - gap
+    };
     let mut more = column()
         .name("more")
         .gap(gap)
@@ -157,7 +164,7 @@ fn phone_bar(
         Vec2::new(1.0, 1.0),
     ));
     let more = (!more.children.is_empty()).then_some(more);
-    let held = Piles::of(prompt).is_some() || super::covers_table(prompt);
+    let held = held_up || super::covers_table(prompt);
     let pill = (!asks.is_empty()).then(|| {
         let style = TypeStyle {
             size: data::PILL_TEXT,
