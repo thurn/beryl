@@ -40,9 +40,8 @@ turn the user invoked you, so do all of the planning below in that turn.
 
 Nothing in this workflow waits for the user.
 
-Run `just ticket-backend` to select the tracker for this session. When it
-reports `server`, use the executable from its `tk` field for the native commands
-below. When it reports `beads`, use the `bd` commands.
+Run `just ticket-backend` and use the executable from its `tk` field for the
+ticket commands below.
 
 ## One group in one session
 

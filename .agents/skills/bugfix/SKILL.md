@@ -38,9 +38,8 @@ requires evidence that the player's requested behavior works, including the
 scope of the complaint beyond the pictured card. AI reports retain the
 blunder-catalog completion criteria below.
 
-Run `just ticket-backend` to select the tracker for this session. When it
-reports `server`, use the executable from its `tk` field for the native commands
-below. When it reports `beads`, use the `bd` commands.
+Run `just ticket-backend` and use the executable from its `tk` field for the
+ticket commands below.
 
 ## Where reports are
 

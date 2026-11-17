@@ -58,7 +58,7 @@ queue = false
 # change, so check trees stay close behind staging. With all three busy, the pushing tree checks.
 check_trees = 3
 
-# Beads labeled tier:light (mechanical work) run on a cheaper model.
+# Tickets labeled tier:light (mechanical work) run on a cheaper model.
 [tiers.light.claude]
 model = "sonnet"
 # tier:opus and tier:sonnet are built into Enact and need no entry here.

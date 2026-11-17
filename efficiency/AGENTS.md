@@ -33,12 +33,11 @@ store" and "Isolation" before changing anything here.
   output, written only when its digest changed. Malformed lines are skipped and
   counted. Every ingest records its own wall and CPU seconds in the `ingests`
   table.
-- `beads.py`: the legacy source, from `bd list --all -n 0 --json` in the main
-  checkout. When `.enact.toml` configures tickets, `tickets.py` asks
-  `enact backend` which store is active. Ticket mode reads one `tk export` for
-  tickets and verdicts and resumes `tk events --since` from the local store's
-  cursor. `ticket_ids.py` resolves both forms of a ticket ID and keeps old Beads
-  IDs for imported tickets.
+- `beads.py`: the snapshot reader used by `tickets.py`. In the main checkout,
+  `enact backend` supplies the `tk` executable. One `tk export` supplies tickets
+  and verdicts. Ingest resumes `tk events --since` from the local store's
+  cursor. `ticket_ids.py` resolves native IDs and the aliases kept for imported
+  tickets.
 - `claude.py`: Claude Code transcripts (requests, tool calls, their results and
   the Enact commands a session ran) and the desktop app's session records.
   `windows.py` derives bead windows from those commands and sets the `bead` of
@@ -77,8 +76,8 @@ store" and "Isolation" before changing anything here.
 - `cilog.py`: CI's sources. The run log is added up as it is read into one
   `checks` row per check per local day per host and script and one `lane_runs`
   row per run of a check lane (a `LineSource` whose `merges` add each row to the
-  stored one); no line is kept. The verdicts on the `ci-check` beads come from
-  `bd export` into `verdicts`. `family` names a check's family. `ci.py` is the
+  stored one); no line is kept. The verdicts on the `ci-check` tickets come from
+  `tk export` into `verdicts`. `family` names a check's family. `ci.py` is the
   `ci` query (the tree script, check lane, family, check, with CPU by kind of
   process from the sampler) and the CI metrics. `pushes.py` is the `pushes`
   query: each `enact push` tool call split by the fast check's `lane_runs` in
