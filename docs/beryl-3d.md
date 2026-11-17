@@ -1537,10 +1537,11 @@ streaks and notices (`StepOut`).
 - **A notice outlives its beat.** `announce` moves nothing: it writes a
   `NoticeRun`, which the show keeps in real time from when its script starts
   until it ends, and the client shows it as a float (the turn banner, a scry's
-  pill, a coin's flip). A notice whose step `passes` goes on standing while the
-  table plays on under it, across scripts, and `Show::passed` says when the last
-  such notice is over. `dwell` moves nothing either: it begins a `Span::Focus`
-  on its subject for the step, so the card is drawn `focused`.
+  pill, a coin's flip). A notice takes no press: a press on it reaches the card
+  beneath. A notice whose step `passes` goes on standing while the table plays
+  on under it, across scripts, and `Show::passed` says when the last such notice
+  is over. `dwell` moves nothing either: it begins a `Span::Focus` on its
+  subject for the step, so the card is drawn `focused`.
 - **Objects come to rest where placement puts them.** When a script has
   finished, every object's pose equals what its placement function gives for the
   new view. A check holds this on every fixture, so animation code cannot leave
@@ -1899,10 +1900,14 @@ window.
   - The open prompt's primary button and its pass-on button stand in a dock at
     the right of the viewer's strip. The dock rises above the hand when a hand
     in two rows reaches into the strip. The prompt's other buttons are stacked
-    over the dock. What the prompt asks is a pill on the middle band's line, or
-    at the nearest height clear of every permanent and stack item
-    (`hud::phone::asked_top`). While the table is shaded, the pill stands over
-    the strip instead. The client measures where cards rest
+    over the dock. Where the raised dock or the stacked buttons would stand over
+    a permanent of the viewer's back row, they stand at the right end of the
+    middle band instead, when they fit there and no stack item lies there, and
+    the pill beside them is narrowed to the band's left
+    (`hud::phone::clear_at_right`). What the prompt asks is a pill on the middle
+    band's line, or at the nearest height clear of every permanent and stack
+    item (`hud::phone::asked_top`). While the table is shaded, the pill stands
+    over the strip instead. The client measures where cards rest
     (`hud::phone::Occupied`) when it builds the screen.
   - Life totals that no prompt can pick, and the count labels, let the pointer
     through to the cards behind them. On the manual table a life total still

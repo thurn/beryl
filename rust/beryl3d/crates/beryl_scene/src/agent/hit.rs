@@ -152,6 +152,20 @@ impl Overlaps {
     }
 }
 
+/// The elements drawn over element `index` that share part of its box and can catch a press,
+/// other than its own descendants, in index order: what can keep a press from reaching it.
+/// `overlaps` must have been built from `frame`.
+#[must_use]
+pub fn covering(frame: &Frame, overlaps: &Overlaps, index: u32) -> Vec<u32> {
+    let mut over = overlaps.near(bounds(&frame.resolved[index as usize]));
+    over.retain(|&other| {
+        !is_within(frame, other, index)
+            && catches_anywhere(&frame.resolved[other as usize])
+            && covers(frame, other, index)
+    });
+    over
+}
+
 /// How much of element `index`'s area is covered by other elements, from 0 to 1, measured on
 /// the same cells as `free_rect`, each counted by its centre.
 #[must_use]

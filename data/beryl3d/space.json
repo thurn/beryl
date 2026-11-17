@@ -897,6 +897,8 @@
       "button_min_width": 84,
       "button_text": 18,
       "button_padding": 12,
+      "character_width": 0.55,
+      "overlap": 4,
       "dock_gap": 6,
       "asked_gap": 4,
       "pill_text": 16,

@@ -8,12 +8,16 @@ use glam::{Vec2, Vec4};
 
 use super::fault::{Context, Fault, Layout, Rule, Subject};
 use super::hit::{
-    Overlaps, bounds, contains, has_free_rect, hit, intersection, is_within, visible_bounds,
+    Overlaps, bounds, contains, covering, has_free_rect, hit, intersection, is_within,
+    visible_bounds,
 };
 use super::tree::locator_of;
 use crate::data::audit;
 use crate::frame::{Draw, Frame, Place, REVEALED_FACE, Role, StateBits};
 use crate::input::{Rect, Size};
+
+/// The most covering elements a "reachable" fault names.
+const MOST_COVERING: usize = 6;
 
 /// Every check that needs one frame, in the doc's order.
 #[must_use]
@@ -165,12 +169,23 @@ pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
             let overlaps = overlaps.get_or_insert_with(|| Overlaps::new(frame));
             if !has_free_rect(frame, overlaps, index, min) {
                 let subject = subject(frame, index);
+                let over: Vec<String> = covering(frame, overlaps, index)
+                    .into_iter()
+                    .take(MOST_COVERING)
+                    .map(|other| self::subject(frame, other).describe())
+                    .collect();
                 faults.push(fault(
                     Rule::Reachable,
                     context,
                     format!(
-                        "{} has no uncovered area {side} by {side} points where a press reaches it",
-                        subject.describe()
+                        "{} has no uncovered area {side} by {side} points where a press reaches \
+                         it; under {}",
+                        subject.describe(),
+                        if over.is_empty() {
+                            "nothing".to_owned()
+                        } else {
+                            over.join(", ")
+                        }
                     ),
                     vec![subject],
                 ));

@@ -420,7 +420,7 @@ fn the_stack_stands_in_the_middle_band_with_the_top_item_right_and_in_front() {
             assert_eq!(
                 card_faults(&frame, window, reachable)
                     .into_iter()
-                    .filter(|message| message.contains("Spell"))
+                    .filter(|message| message.starts_with("card \"Spell"))
                     .collect::<Vec<_>>(),
                 Vec::<String>::new(),
                 "{label}"

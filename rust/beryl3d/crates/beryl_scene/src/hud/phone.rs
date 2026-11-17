@@ -70,6 +70,28 @@ pub fn asked_top(bands: &PhoneBands, occupied: &Occupied, height: f32) -> f32 {
         .unwrap_or(line)
 }
 
+/// Whether a box `width` by `height` at the column's right end, its top at `top`, keeps clear
+/// of every permanent and stack item, allowing `data::OVERLAP` points of overlap on each side,
+/// so that a box that fills the middle band still fits between the creatures' rows, which a
+/// token's pile reaches over by a few points.
+#[must_use]
+pub fn clear_at_right(
+    bands: &PhoneBands,
+    occupied: &Occupied,
+    (width, height): (f32, f32),
+    top: f32,
+) -> bool {
+    let spare = data::OVERLAP;
+    let (left, bottom) = (bands.right - width + spare, top + height - spare);
+    let (right, top) = (bands.right - spare, top + spare);
+    occupied.cards.iter().all(|card| {
+        card.x >= right
+            || card.x + card.width <= left
+            || card.y >= bottom
+            || card.y + card.height <= top
+    })
+}
+
 /// The menu's button, at the right end of the opponent's strip: it opens the settings, which
 /// hold the log and the bug report (`MenuButton` in `ui/src/mobile/chrome.tsx`).
 #[must_use]

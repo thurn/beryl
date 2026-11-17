@@ -55,8 +55,10 @@ impl NoticeFloats {
                 let key = crate::notice::key(script, run.step);
                 keys.push(key);
                 let place = Place::of(&run.notice);
+                // A notice only tells what happened and takes no press, so a press on it
+                // reaches the card beneath, which it may stand over while it shows.
                 layer.prepare(float_of(place), key, || {
-                    element(&run.notice, view).name(name_of(place))
+                    element(&run.notice, view).name(name_of(place)).passes(true)
                 });
             }
         }

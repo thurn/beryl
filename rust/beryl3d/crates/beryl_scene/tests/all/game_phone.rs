@@ -171,13 +171,58 @@ fn the_pill_stands_on_the_middle_line_or_clear_of_the_stack() {
     );
 }
 
+#[test]
+fn stacked_buttons_stand_in_the_middle_band_when_a_permanent_lies_under_them() {
+    let size = (375.0, 647.0);
+    let bands = phone_bands(window(size.0, size.1)).unwrap();
+    let mut client = phone(size.0, size.1);
+    client.handle(asked_with(&[], &["Relic", "Talisman"]));
+    let frame = client.frame(0);
+    let cancel = edges(frame, find(frame, Role::Button, "Cancel"));
+    let middle = f32::midpoint(cancel.1, cancel.3);
+    assert!(
+        (middle - bands.middle.middle()).abs() < 1.0,
+        "Cancel {cancel:?} is off the middle band {:?}",
+        bands.middle
+    );
+    assert!((cancel.2 - bands.right).abs() < 0.5);
+    // The pill is narrowed to the band's left, clear of the button.
+    let pill = edges(frame, find(frame, Role::Text, "Pay {1}{U}"));
+    assert!(
+        pill.2 <= cancel.0,
+        "the pill {pill:?} reaches under Cancel {cancel:?}"
+    );
+    let window = window(size.0, size.1);
+    let context = Context {
+        recording: "game-phone".to_owned(),
+        seat: Side::You,
+        layout: Layout::Phone,
+        size: window.size,
+        safe_area: window.safe_area,
+        at: 0,
+    };
+    let covered: Vec<String> = (reachable(frame, &context).into_iter())
+        .map(|fault| fault.message)
+        .collect();
+    assert_eq!(covered, Vec::<String>::new());
+}
+
 /// The viewer paying a cost, with a hand of one card and the spells `stack` on the stack, and
 /// nothing on the battlefield.
 fn asked_over(stack: &[&str]) -> Input {
+    asked_with(stack, &[])
+}
+
+/// The viewer paying a cost, with a hand of one card, the spells `stack` on the stack and the
+/// noncreature, nonland permanents `permanents` on their battlefield.
+fn asked_with(stack: &[&str], permanents: &[&str]) -> Input {
     let mut view = ViewBuilder::new();
     view.card(ZoneName::Hand, Side::You, "Island");
     for name in stack {
         view.card(ZoneName::Stack, Side::You, name);
+    }
+    for name in permanents {
+        view.card(ZoneName::Battlefield, Side::You, name);
     }
     let Input::Update(mut update) = deciding(prompt("Pay {1}{U}")) else {
         unreachable!("`deciding` gives an update")
@@ -185,7 +230,7 @@ fn asked_over(stack: &[&str]) -> Input {
     let built = view.build();
     update.view.objects = built.objects;
     update.view.stack = built.stack;
-    update.view.battlefield.clear();
+    update.view.battlefield = built.battlefield;
     update.view.players = built.players;
     Input::Update(update)
 }
