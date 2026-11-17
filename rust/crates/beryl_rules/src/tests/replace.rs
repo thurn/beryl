@@ -18,7 +18,7 @@ use crate::filter::Filter;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::replacement::Unreplaced;
-use crate::state::{Continuous, Duration, MoveReplacement, TurnStep, Zone};
+use crate::state::{Continuous, Duration, LayerChange, MoveReplacement, TurnStep, Zone};
 use crate::table::TableError;
 use crate::{
     CardTable, GameTable, Outcome, Profile, Scratch, State, layers, library, tokens, zones,
@@ -200,6 +200,23 @@ fn a_replacement_of_an_opponents_draws() {
     assert_eq!(s.outcome(), None);
     drawing::draw(&mut Game::new(&mut s, &t, &mut x.events), Seat::P1, 1).unwrap();
     assert_eq!(s.outcome(), Some(Outcome::Win(Seat::P0)));
+}
+
+/// The player who now controls a draw replacement is the one whose opponents it affects
+/// ([CR 109.5]): "The words “you” and “your” on an object refer to the object’s controller".
+///
+/// [CR 109.5]: https://yawgatog.com/resources/magic-rules/#R1095
+#[test]
+fn a_draw_replacement_reads_the_current_controller() {
+    let (t, mut s) = game();
+    let mut x = Scratch::new();
+    let watch = put(&t, &mut s, &mut x, Seat::P0, "Test Watch");
+    let (card, _) = s.definition(watch).record(&t);
+    let control = Continuous::Layer(s.object_ref(watch), LayerChange::Control(Seat::P1));
+    s.start_effect(card, control, Duration::EndOfTurn).unwrap();
+
+    drawing::draw(&mut Game::new(&mut s, &t, &mut x.events), Seat::P0, 1).unwrap();
+    assert_eq!(s.outcome(), Some(Outcome::Win(Seat::P1)));
 }
 
 /// The card table refuses a replacement of a move that the engine has no code for: a rewrite

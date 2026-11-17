@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A draw replacement could read stale abilities during resolution.** The
+  draw code consulted the battlefield after a layer input changed without
+  refreshing the layer results. The replacement lookup now refreshes them
+  before reading abilities or controllers.
+  `a_draw_replacement_reads_the_current_controller` tests a draw immediately
+  after a control change.
+
 - **Seventeen damage prevention effects could stall a game.** The damage
   replacement code used the same fixed lists in both layouts, so retrying the
   event in `Large` still ran out of room. The candidate list and the list of

@@ -49,11 +49,7 @@ use crate::{ending, replace};
 /// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041
 /// [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
 pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Result<(), Full> {
-    let replaceable = game
-        .state
-        .replacing()
-        .unwrap_or(game.table.replaces_any())
-        .replaces(ReplacementKind::Draw);
+    let table_replacements = game.table.replaces_any();
     let dredge = game.table.can(Capability::Dredge);
     let turn = game.state.turn();
     let in_draw_step = turn.step() == TurnStep::Draw && turn.active() == player;
@@ -76,7 +72,12 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
                     break;
                 }
             }
-            if replaceable {
+            if game
+                .state
+                .replacing()
+                .unwrap_or(table_replacements)
+                .replaces(ReplacementKind::Draw)
+            {
                 replaced = replace::draw(game, player)?;
                 if replaced.is_some() {
                     break;

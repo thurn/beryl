@@ -20,6 +20,7 @@ use crate::filter;
 use crate::fixed::{Fixed, Full};
 use crate::game::Game;
 use crate::ids::Seat;
+use crate::layers;
 use crate::layout::{Layout, Queue};
 use crate::replacement;
 use crate::state::{Count, ObjectRef, State, TurnStep, Zone, ZoneKey};
@@ -93,7 +94,8 @@ impl<L: Layout> DrawReplacement<L> {
 /// others may then apply to whatever replaced the draw (CR 616.1f). With every candidate the
 /// same, the first in the order of the battlefield applies.
 ///
-/// [`Full`] past [`MOST`] replacements, or where the choice stops the run ([`answer`]).
+/// [`Full`] if a layer refresh or a scratch list runs out of room, or where the choice stops
+/// the run ([`answer`]).
 ///
 /// [CR 614.11]: https://yawgatog.com/resources/magic-rules/#R61411
 /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
@@ -101,6 +103,8 @@ pub(crate) fn draw<L: Layout>(
     game: &mut Game<'_, L>,
     player: Seat,
 ) -> Result<Option<DrawReplacement<L>>, Full> {
+    // The draw may follow an instruction that changed a layer input during resolution.
+    layers::refresh(game.state, game.table, game.sink)?;
     let (s, t) = (&*game.state, game.table);
     let mut found: Fixed<Option<DrawReplacement<L>>, MOST> = Fixed::new();
     for &permanent in s.battlefield() {
