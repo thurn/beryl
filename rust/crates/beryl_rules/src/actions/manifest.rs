@@ -51,7 +51,7 @@ pub fn manifest<L: Layout>(
     }
     // Each forgets alone: the result is the same in any order.
     let others = s.players().filter(|p| !knew.contains(p) && p != player);
-    for p in s.players_in_seat_order(others) {
+    for p in others.in_seat_order() {
         s.forget(p, card);
     }
     Ok(())

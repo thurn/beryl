@@ -211,15 +211,19 @@ impl<L: Layout> State<L> {
     }
 
     /// Checks that the reference still names a phased-in permanent (see [CR 110.1]): "A permanent
-    /// is a card or token on the battlefield." See [CR 702.26b] for phasing.
+    /// is a card or token on the battlefield." The permanent must be phased in (see [CR 702.26b]):
+    /// "a phased-out permanent is treated as though it does not exist. It can’t affect or be
+    /// affected by anything else in the game." A zone move ends the original object (see [CR 400.7]):
+    /// "An object that moves from one zone to another becomes a new object with no memory of,
+    /// or relation to, its previous existence."
     ///
+    /// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
     /// [CR 110.1]: https://yawgatog.com/resources/magic-rules/#R1101
     /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
     #[inline]
     pub fn permanent(&self, reference: ObjectRef<L>) -> Option<Permanent<L>> {
-        let object = self.object(reference.slot);
-        (object.on_battlefield() && object.incarnation() == reference.incarnation)
-            .then_some(Permanent(reference))
+        self.permanent_at(reference.slot)
+            .filter(|permanent| permanent.0.incarnation == reference.incarnation)
     }
 
     /// The phased-in permanent currently in this slot, if any.
@@ -255,13 +259,13 @@ impl<L: Layout> State<L> {
     /// All phased-in permanents, without computing their characteristics.
     #[inline]
     pub fn permanents(&self) -> Permanents<L> {
-        Permanents(self.battlefield().iter().copied().collect())
+        Permanents(self.in_zone(Zone::Battlefield))
     }
 
     /// Filters the vocabulary's selected objects to phased-in permanents.
     #[inline]
     pub fn permanents_in(&self, selected: Bitboard<L::Slot>) -> Permanents<L> {
-        Permanents(selected.filter(|slot| self.object(slot).on_battlefield()))
+        Permanents(selected & self.in_zone(Zone::Battlefield))
     }
 
     /// Takes the first remaining permanent in battlefield order (see [CR 613.7d]).

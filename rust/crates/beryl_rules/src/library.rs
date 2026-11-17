@@ -99,7 +99,7 @@ pub fn put_on_bottom_in_random_order<L: Layout>(
     // Rebound within each owner's library, among the slots that went there. Each takes
     // from the one random stream, by seat.
     let s = &mut *game.state;
-    for owner in s.players_in_seat_order(s.players()) {
+    for owner in s.players().in_seat_order() {
         let mut moved: L::Queue<L::Slot, 64> = Default::default();
         for &slot in s.library(owner) {
             if cards.contains(slot) {

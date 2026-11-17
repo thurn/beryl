@@ -143,7 +143,7 @@ impl<L: Layout> State<L> {
     /// [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
     pub fn card_types_in_graveyards(&self, t: &GameTable) -> usize {
         let mut types = Types::NONE;
-        for player in self.players_in_seat_order(self.players()) {
+        for player in self.players().in_seat_order() {
             for &slot in self.graveyard(player) {
                 if !self.object(slot).is_token() {
                     types = types.union(self.definition(slot).face(t).types);

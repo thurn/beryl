@@ -111,14 +111,7 @@ impl<L: Layout> State<L> {
         o.combat = CombatRole::None;
         let owner = o.owner.index();
         match to {
-            Zone::Library => match place {
-                Place::Top => self.zones.library[owner].push(slot)?,
-                Place::Bottom => self.zones.library[owner].insert(0, slot)?,
-                Place::UnderTop(n) => {
-                    let library = &mut self.zones.library[owner];
-                    library.insert(library.len().saturating_sub(usize::from(n)), slot)?;
-                }
-            },
+            Zone::Library => place_in_library(&mut self.zones.library[owner], slot, place)?,
             Zone::Graveyard => {
                 self.zones.graveyard[owner].push(slot)?;
                 self.flags.derived_dirty |= self.layers_read_graveyards();
@@ -254,13 +247,7 @@ impl<L: Layout> State<L> {
             .position(slot)
             .expect("a card in its owner's library");
         library.remove(i);
-        match place {
-            Place::Top => library.push(slot),
-            Place::Bottom => library.insert(0, slot),
-            Place::UnderTop(n) => {
-                library.insert(library.len().saturating_sub(usize::from(n)), slot)
-            }
-        }
+        place_in_library(library, slot, place)
     }
 
     /// Shuffles a library.
@@ -482,6 +469,19 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
     }
     if (o.zone.index()) < Zone::OWNED {
         s.zones.members[owner][o.zone.index()].remove(slot);
+    }
+}
+
+#[inline]
+fn place_in_library<S: SlotId>(
+    library: &mut impl Queue<S>,
+    slot: S,
+    place: Place,
+) -> Result<(), Full> {
+    match place {
+        Place::Top => library.push(slot),
+        Place::Bottom => library.insert(0, slot),
+        Place::UnderTop(n) => library.insert(library.len().saturating_sub(usize::from(n)), slot),
     }
 }
 

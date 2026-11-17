@@ -253,7 +253,7 @@ fn attached_illegally<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slo
 fn check_losses<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) -> bool {
     let mut causes: Causes<L> = Table::filled(None);
     // Each player's cause is their own: the result is the same in any order.
-    for player in s.players_in_seat_order(s.players()) {
+    for player in s.players().in_seat_order() {
         let p = s.player(player);
         // Both may hold at one check: life is named.
         causes[player.index()] = if p.life() <= 0 {
@@ -303,7 +303,7 @@ pub(crate) fn lose_game<L: Layout>(
     }
     let mut causes: Causes<L> = Table::filled(None);
     // Every one of them gets the one cause: the result is the same in any order.
-    for loser in s.players_in_seat_order(losers) {
+    for loser in losers.in_seat_order() {
         causes[loser.index()] = Some(cause);
     }
     end(s, sink, &causes);
@@ -324,7 +324,7 @@ fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, causes: &Causes<L>) {
     s.end_game(left.sole().map_or(Outcome::Draw, Outcome::Win));
     // They lose at once: the events of one happening, by seat, kept as one group.
     sink.together();
-    for player in s.players_in_seat_order(s.players()) {
+    for player in s.players().in_seat_order() {
         sink.push(match causes[player.index()] {
             Some(cause) => Event::Lose { player, cause },
             None => Event::Win { player },

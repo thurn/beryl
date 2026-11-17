@@ -355,10 +355,15 @@ impl<L: Layout> State<L> {
             CombatRole::attacking(AttackTarget::Player(player));
     }
 
-    /// Has an attacking creature attack `target` (see [CR 506.2]): "that player, planeswalkers they
-    /// control, and battles they protect may be attacked."
+    /// Sets the target that a creature attacks (see [CR 506.2]): "that player, planeswalkers
+    /// they control, and battles they protect may be attacked." When a planeswalker stops
+    /// being attacked, set the target to [`AttackTarget::Removed`] (see [CR 506.4]): "A
+    /// planeswalker or battle that's removed from combat stops being attacked." The creature
+    /// stays an attacking creature (see [CR 506.4c]).
     ///
     /// [CR 506.2]: https://yawgatog.com/resources/magic-rules/#R5062
+    /// [CR 506.4]: https://yawgatog.com/resources/magic-rules/#R5064
+    /// [CR 506.4c]: https://yawgatog.com/resources/magic-rules/#R5064c
     #[inline]
     pub fn choose_attacked(&mut self, attacker: Permanent<L>, target: AttackTarget<L>) {
         let CombatRole::Attacking {
@@ -368,17 +373,6 @@ impl<L: Layout> State<L> {
             unreachable!("an attack target for a creature that is not attacking");
         };
         *current = target;
-    }
-
-    /// Has an attacker whose planeswalker is no longer one its opponent controls attack nothing
-    /// (see [CR 506.4]): "A planeswalker or battle that's removed from combat stops being attacked."
-    /// The creature stays an attacking creature (see [CR 506.4c]).
-    ///
-    /// [CR 506.4]: https://yawgatog.com/resources/magic-rules/#R5064
-    /// [CR 506.4c]: https://yawgatog.com/resources/magic-rules/#R5064c
-    #[inline]
-    pub fn forget_attacked(&mut self, attacker: Permanent<L>) {
-        self.choose_attacked(attacker, AttackTarget::Removed);
     }
 
     /// Makes a creature a blocking creature, whose attacker [`State::block`] names next

@@ -409,7 +409,7 @@ fn shown<L: Layout>(
     shield: ShieldAt<L>,
 ) -> Result<Option<L::Slot>, Full> {
     let mut public = s.zone(ZoneKey::Stack);
-    for player in s.players_in_seat_order(s.players()) {
+    for player in s.players().in_seat_order() {
         for zone in [Zone::Battlefield, Zone::Graveyard, Zone::Exile] {
             public |= s.zone(ZoneKey::Of(player, zone));
         }

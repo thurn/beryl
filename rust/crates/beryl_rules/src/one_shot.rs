@@ -31,7 +31,7 @@ pub fn exile_until_leaves<L: Layout>(
     // occurred; a phased-out `object` can't be exiled (CR 702.26b).
     let until_stays =
         game.state.is_current(until) && game.state.object(until.slot).zone() == Zone::Battlefield;
-    if !until_stays || !game.on_battlefield(object) {
+    if !until_stays || game.state.permanent(object).is_none() {
         return Ok(());
     }
     zones::move_to(game, object, Zone::Exile, Reason::Exile)?;

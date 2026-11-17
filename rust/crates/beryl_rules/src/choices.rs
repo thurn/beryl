@@ -312,7 +312,7 @@ pub(crate) fn retarget<L: Layout>(
     let s = &*game.state;
     let mut opts: L::Queue<Opt<L>, OPTIONS> = Default::default();
     opts.push(kept)?;
-    for p in s.players_in_seat_order(others.players) {
+    for p in others.players.in_seat_order() {
         opts.push(Opt::Player(p))?;
     }
     let mut unlisted = others.abilities;

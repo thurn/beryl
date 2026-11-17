@@ -568,7 +568,7 @@ pub(crate) fn prune<L: Layout>(s: &mut State<L>) {
                 || !s.derived(walker).types.contains(Types::PLANESWALKER))
         {
             let attacker = s.permanent_at(slot).expect("an attacking permanent");
-            s.forget_attacked(attacker);
+            s.choose_attacked(attacker, AttackTarget::Removed);
         }
     }
 }

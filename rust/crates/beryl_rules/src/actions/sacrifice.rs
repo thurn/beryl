@@ -16,7 +16,7 @@ use crate::zones;
 /// owner's graveyard." One that has left the battlefield since is not sacrificed (CR 400.7).
 #[inline]
 pub fn sacrifice<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Result<(), Full> {
-    if !game.on_battlefield(object) {
+    if game.state.permanent(object).is_none() {
         return Ok(());
     }
     zones::move_to(game, object, Zone::Graveyard, Reason::Sacrifice)

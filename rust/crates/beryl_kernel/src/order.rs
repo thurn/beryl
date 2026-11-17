@@ -1,4 +1,4 @@
-//! The orders a set of objects or of players is read in, each asked of the state by name
+//! The orders in which a set of objects is read, each asked of the state by name
 //! (the crate's contract, "Sets and orders"). A [`Bitboard`] has none of its own: the
 //! battlefield, a library and a graveyard keep theirs ([`State::battlefield`],
 //! [`State::library_from_top`], [`State::graveyard`]), and the ones here put a set in order.
@@ -74,7 +74,7 @@ impl<L: Layout> State<L> {
                 }
             }
         }
-        for player in Seat::BOTH {
+        for player in self.players().in_seat_order() {
             if (rest & self.zone(ZoneKey::Of(player, Zone::Library))).is_empty() {
                 continue;
             }

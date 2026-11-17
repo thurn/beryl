@@ -102,7 +102,7 @@ fn player_rules_of<L: Layout>(
         // says, as one that changes a permanent does as its layer applies.
         crate::coverage::hit(ability);
         // Each player's set is a union: the order they are met in is nothing.
-        for player in s.players_in_seat_order(s.players()) {
+        for player in s.players().in_seat_order() {
             if filter::is_for(&rule.players, player, controller) {
                 rules[player.index()] = rules[player.index()].with(id);
             }

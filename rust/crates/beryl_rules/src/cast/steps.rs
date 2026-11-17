@@ -470,7 +470,7 @@ pub(crate) fn decision<L: Layout>(
                 abilities,
             } => {
                 let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
-                for player in s.players_in_seat_order(players) {
+                for player in players.in_seat_order() {
                     list.push(Opt::Player(player))?;
                 }
                 // Abilities on the stack, the top first, as the stack is read.

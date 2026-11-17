@@ -56,7 +56,7 @@ pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Vi
     }
     check_layers(s, t)?;
     // A check of each player alone: the order decides only which violation is reported.
-    for p in s.players_in_seat_order(s.players()) {
+    for p in s.players().in_seat_order() {
         check_payments(s, t, p)?;
     }
     Ok(())
@@ -98,7 +98,7 @@ fn check_layers<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Violation>
         None,
     )?;
     // The players in any order: each is checked alone.
-    for player in s.players_in_seat_order(s.players()) {
+    for player in s.players().in_seat_order() {
         check(
             fresh.rules_for(player) == s.rules_for(player),
             "the rules static abilities change differ from a fresh recompute",

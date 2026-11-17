@@ -58,7 +58,8 @@ pub(crate) fn away<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> 
             | Zone::Exile
             | Zone::Nowhere
             | Zone::Merged) => s
-                .players_in_seat_order(s.players())
+                .players()
+                .in_seat_order()
                 .fold(Bitboard::EMPTY, |all, p| all | s.zone(ZoneKey::Of(p, zone))),
         };
     }
@@ -134,7 +135,7 @@ pub(crate) fn match_event<L: Layout>(
             }
         }
         // Triggers wait in the order found, which the queue of them keeps: by seat.
-        for player in s.players_in_seat_order(s.players()) {
+        for player in s.players().in_seat_order() {
             for index in 0..s.player(player).emblems().len() {
                 let card = s.player(player).emblems()[index];
                 if !Copiable::<L>::of_card(card).may_listen(t).intersects(mask) {
@@ -324,7 +325,7 @@ fn fires<L: Layout>(
 ///
 /// [CR 702.40a]: https://yawgatog.com/resources/magic-rules/#R70240a
 fn cast_before<L: Layout>(s: &State<L>) -> u8 {
-    let players = s.players_in_seat_order(s.players());
+    let players = s.players().in_seat_order();
     let counted = players.map(|p| s.counted(Count::SpellsCast, p));
     counted.fold(0u8, u8::saturating_add).saturating_sub(1)
 }

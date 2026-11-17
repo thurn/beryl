@@ -636,7 +636,7 @@ pub fn holds<L: Layout>(
                 | Players::ThatPlayer
                 | Players::EachOther(_) => s.opponents_of(controller),
             };
-            s.players_in_seat_order(who)
+            who.in_seat_order()
                 .map(|p| i32::from(s.player(p).life()))
                 .sum()
         }

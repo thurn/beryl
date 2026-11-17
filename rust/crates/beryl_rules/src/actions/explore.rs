@@ -32,7 +32,7 @@ pub fn explore<L: Layout>(
     resolution: &mut Resolution<'_, L>,
     object: ObjectRef<L>,
 ) -> Flow {
-    let player = if game.on_battlefield(object) {
+    let player = if game.state.permanent(object).is_some() {
         game.state.controller(object.slot)
     } else {
         resolution.controller()

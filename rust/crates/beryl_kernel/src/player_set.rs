@@ -99,9 +99,16 @@ impl PlayerSet {
             .filter(move |&player| self.contains(player))
     }
 
-    /// The players by seat.
+    /// The set by seat, the order a decision lists players in and a record keeps them in.
+    ///
+    /// As with object candidates ([`crate::decision::Candidates`]), a
+    /// `Choice` is an index into candidates listed this way, and the events of one
+    /// simultaneous happening are written in it, so saves and recorded rollouts depend on
+    /// it. Use it to list players, and otherwise only where the result is the same whatever
+    /// order they come in, with a comment that says why. Players who act in turn take
+    /// [`crate::State::players_in_turn_order`].
     #[inline]
-    pub(crate) fn in_seat_order(self) -> impl Iterator<Item = Seat> + Clone {
+    pub fn in_seat_order(self) -> impl Iterator<Item = Seat> + Clone {
         Seat::BOTH
             .into_iter()
             .filter(move |&player| self.contains(player))

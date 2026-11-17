@@ -45,8 +45,8 @@ pub(crate) fn win_for<L: Layout>(game: &mut Game<'_, L>, winners: PlayerSet, cau
     let s = &*game.state;
     let mut losers = PlayerSet::NOBODY;
     // A union: the order the winners are met in is nothing.
-    for winner in s.players_in_seat_order(winners) {
-        for loser in s.players_in_seat_order(s.opponents_of(winner)) {
+    for winner in winners.in_seat_order() {
+        for loser in s.opponents_of(winner).in_seat_order() {
             losers.insert(loser);
         }
     }

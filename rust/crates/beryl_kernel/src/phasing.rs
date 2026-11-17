@@ -21,11 +21,11 @@
 use crate::bitboard::Bitboard;
 use crate::fixed::Full;
 use crate::ids::Seat;
-use crate::layout::{Layout, Queue};
+use crate::layout::Layout;
 use crate::memos::Memo;
 use crate::observation::Observation;
 use crate::reference::Permanents;
-use crate::state::{CombatRole, Flag, State, Zone};
+use crate::state::{Flag, State, Zone};
 
 /// Phased-out slots selected to phase in. Use within the current instruction.
 #[repr(transparent)]
@@ -90,13 +90,8 @@ impl<L: Layout> State<L> {
         // blocking, blocked, and/or unblocked creature." The creatures in combat with it stay
         // in combat, related to nothing, as when a permanent leaves the battlefield.
         for slot in all.iter() {
-            self.object_mut(slot).combat = CombatRole::None;
-            for i in 0..self.battlefield.len() {
-                let other = self.object_mut(self.battlefield.as_slice()[i]);
-                if !matches!(other.combat, CombatRole::None) {
-                    other.combat.forget(slot);
-                }
-            }
+            let permanent = self.permanent_at(slot).expect("a permanent phasing out");
+            self.remove_from_combat(permanent);
         }
         for slot in all.iter() {
             self.leave_battlefield(slot);

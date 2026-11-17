@@ -277,7 +277,7 @@ impl<L: Layout> Scene<'_, L> {
             } => {
                 let mut within = Bitboard::EMPTY;
                 // A set is built, whose order is nothing.
-                for player in s.players_in_seat_order(self.players(*players)) {
+                for player in self.players(*players).in_seat_order() {
                     within |= s.zone(ZoneKey::Of(player, zone));
                 }
                 filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
@@ -285,7 +285,7 @@ impl<L: Layout> Scene<'_, L> {
             // CR 400.1: "Each player has their own library, hand, and graveyard."
             Objects::CardsIn { players, zones } => {
                 let mut cards = Bitboard::EMPTY;
-                for player in s.players_in_seat_order(self.players(*players)) {
+                for player in self.players(*players).in_seat_order() {
                     for &zone in zones {
                         cards |= s.zone(ZoneKey::Of(player, zone));
                     }
@@ -382,7 +382,7 @@ impl<L: Layout> Scene<'_, L> {
             // CR 102.1: everyone in the game, but them.
             Players::EachOther(players) => {
                 let mut who = self.s.players();
-                for player in self.s.players_in_seat_order(self.players(*players)) {
+                for player in self.players(*players).in_seat_order() {
                     who = who.without(player);
                 }
                 who
@@ -411,7 +411,8 @@ impl<L: Layout> Scene<'_, L> {
         if matches!(s.object(slot).zone(), Zone::Battlefield | Zone::Stack) {
             return now;
         }
-        s.players_in_seat_order(s.players())
+        s.players()
+            .in_seat_order()
             .find(|player| self.registers.controlled[player.index()].contains(slot))
             .unwrap_or(now)
     }
@@ -479,7 +480,7 @@ impl<L: Layout> Scene<'_, L> {
             Amount::ThoseOf(players) => {
                 let (who, those) = (self.players(players), self.registers.outcome.objects);
                 let theirs = |player: Seat| self.registers.controlled[player.index()] & those;
-                let each = self.s.players_in_seat_order(who);
+                let each = who.in_seat_order();
                 each.map(|player| theirs(player).count().cast_signed())
                     .sum()
             }
@@ -500,7 +501,7 @@ impl<L: Layout> Scene<'_, L> {
             // CR 119.1: a player's life total, which may be below zero.
             Amount::Life(players) => {
                 let who = self.players(players);
-                let players = self.s.players_in_seat_order(who);
+                let players = who.in_seat_order();
                 players.map(|p| i32::from(self.s.player(p).life())).sum()
             }
             // Counted for each player this turn, in a game with a card that reads the count
@@ -509,7 +510,7 @@ impl<L: Layout> Scene<'_, L> {
             Amount::CardsDrawn(players) => self.counted(players, Count::CardsDrawn),
             Amount::Most(players, amount) => {
                 let who = self.players(players);
-                let each = self.s.players_in_seat_order(who);
+                let each = who.in_seat_order();
                 each.map(|player| self.value_for(player, *amount))
                     .max()
                     .unwrap_or(0)
@@ -540,7 +541,7 @@ impl<L: Layout> Scene<'_, L> {
     /// The total of `count` this turn over the players `players` names.
     fn counted(&self, players: Players, count: Count) -> i32 {
         let who = self.players(players);
-        let each = self.s.players_in_seat_order(who);
+        let each = who.in_seat_order();
         each.map(|player| i32::from(self.s.counted(count, player)))
             .sum()
     }
@@ -594,7 +595,7 @@ impl<L: Layout> Scene<'_, L> {
             // (`beryl_kernel`'s `Capability::DrewInDrawStep`).
             Condition::DrewInDrawStep(players) => {
                 let who = self.players(players);
-                let mut each = self.s.players_in_seat_order(who).peekable();
+                let mut each = who.in_seat_order().peekable();
                 each.peek().is_some()
                     && each.all(|player| self.s.counted(Count::DrewInDrawStep, player) > 0)
             }

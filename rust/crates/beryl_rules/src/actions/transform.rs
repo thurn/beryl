@@ -23,7 +23,7 @@ pub fn exile_and_return_transformed<L: Layout>(
     game: &mut Game<'_, L>,
     object: ObjectRef<L>,
 ) -> Result<(), Full> {
-    if !game.on_battlefield(object) {
+    if game.state.permanent(object).is_none() {
         return Ok(());
     }
     zones::move_to(game, object, Zone::Exile, Reason::Exile)?;

@@ -87,22 +87,6 @@ impl<L: Layout> State<L> {
         players.in_turn_order(first)
     }
 
-    /// `players` by seat, the order a decision lists players in and a record keeps them in.
-    ///
-    /// As with object candidates ([`crate::decision::Candidates`]), a
-    /// `Choice` is an index into candidates listed this way, and the events of one
-    /// simultaneous happening are written in it, so saves and recorded rollouts depend on
-    /// it. Use it to list players, and otherwise only where the result is the same whatever
-    /// order they come in, with a comment that says why. Players who act in turn take
-    /// [`State::players_in_turn_order`].
-    #[inline]
-    pub fn players_in_seat_order(
-        &self,
-        players: PlayerSet,
-    ) -> impl Iterator<Item = Seat> + Clone + use<L> {
-        players.in_seat_order()
-    }
-
     /// The defending players of this turn's combat (see [CR 506.2]): "During the combat phase of a
     /// two-player game, the nonactive player is the defending player; that player, planeswalkers
     /// they control, and battles they protect may be attacked."
@@ -197,10 +181,7 @@ mod tests {
             order(&mut s.players_in_turn_order_from(Seat::P0, everyone)),
             [Seat::P0, Seat::P1]
         );
-        assert_eq!(
-            order(&mut s.players_in_seat_order(everyone)),
-            [Seat::P0, Seat::P1]
-        );
+        assert_eq!(order(&mut everyone.in_seat_order()), [Seat::P0, Seat::P1]);
         assert_eq!(
             order(&mut s.players_in_turn_order(s.opponents_of(Seat::P1))),
             [Seat::P0]
