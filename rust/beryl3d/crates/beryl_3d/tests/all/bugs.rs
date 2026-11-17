@@ -50,6 +50,9 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
         .arg("--drive")
         .arg(&script)
         .env("BERYL_BUGS", &bugs)
+        // Under cargo the report asks git for the commit; a bundled app has no checkout to ask,
+        // so the test runs the app as one and the report must hold the build's commit.
+        .env_remove("CARGO_MANIFEST_DIR")
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
@@ -87,6 +90,13 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
     let report = read("report.md");
     assert!(report.contains("status: open\n"), "{report}");
     assert!(report.contains("the pay bar never filled"), "{report}");
+    // The commit is the one the binary was built from, not the `unknown` of a program that never
+    // recorded it.
+    let commit = report
+        .lines()
+        .find_map(|line| line.strip_prefix("commit: "))
+        .expect("the report records a commit");
+    assert!(!commit.starts_with("unknown"), "{report}");
     let tree = read("tree.txt");
     assert!(tree.starts_with("game"), "{tree}");
     assert!(

@@ -7,6 +7,7 @@ use beryl_3d::app;
 use beryl_3d::options::{Options, TOOLS, usage};
 
 fn main() -> ExitCode {
+    beryl_session::bugs::set_build_commit(env!("BERYL_COMMIT"));
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     if arguments.iter().any(|argument| argument == "--help") {
         println!("{}", usage(TOOLS));
