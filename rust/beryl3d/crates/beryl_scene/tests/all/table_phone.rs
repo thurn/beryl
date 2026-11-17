@@ -710,3 +710,35 @@ fn every_card_held_up_on_the_phone_keeps_a_square_to_press() {
         }
     }
 }
+
+/// A crowded row whose first permanent has an Aura peeking out to its right still leaves every
+/// card after it a square to press. The row used to count that peek only where its permanent
+/// was the last in view, so on the phone layout a crewed Vehicle with its Aura beside three
+/// tapped creatures left the creatures 47 points apart, and each tapped card covered its
+/// neighbour.
+#[test]
+fn an_aura_peeking_out_early_in_a_crowded_row_leaves_every_card_reachable() {
+    let mut view = ViewBuilder::new();
+    let vehicle = {
+        let card = view.card(ZoneName::Battlefield, Side::You, "Vehicle");
+        card.types = vec![CardType::Artifact, CardType::Creature];
+        card.slot
+    };
+    let aura = view.card(ZoneName::Battlefield, Side::You, "Aura");
+    aura.types = vec![CardType::Enchantment];
+    aura.attached_to = Some(vehicle);
+    for index in 0..3 {
+        let card = view.card(ZoneName::Battlefield, Side::You, &format!("Bear {index}"));
+        card.types = vec![CardType::Creature];
+        card.tapped = true;
+    }
+    for (width, height) in PHONES {
+        let window = phone(width, height);
+        let frame = frame_in(window, &view);
+        assert_eq!(
+            card_faults(&frame, window, reachable),
+            Vec::<String>::new(),
+            "{width}x{height}"
+        );
+    }
+}

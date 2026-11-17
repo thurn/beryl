@@ -384,3 +384,81 @@ fn a_card_flying_to_the_hidden_end_of_a_phone_row_is_seen() {
         .collect();
     assert!(unseen.is_empty(), "{unseen:?}");
 }
+
+/// A card that a step moves to the hidden end of a crowded row is not drawn there while it
+/// waits for a later step of the same script to take it out again. It used to stand drawn at
+/// the row's end, over the card in view beside it: on the phone layout, an evoked creature that
+/// entered a full row covered the permanent beside it until it was sacrificed.
+#[test]
+fn a_card_waiting_at_a_crowded_rows_hidden_end_is_not_drawn() {
+    let size = Size {
+        width: 393.0,
+        height: 759.0,
+    };
+    let mut builder = lands(12);
+    let newcomer = {
+        let card = builder.card(ZoneName::Hand, Side::You, "Land 12");
+        card.types = vec![CardType::Land];
+        card.slot
+    };
+    let before = builder.update();
+    let record = |view: &PlayerView| {
+        (view.objects.iter())
+            .find(|object| object.slot == newcomer)
+            .cloned()
+            .expect("the newcomer has a record")
+    };
+    // In the script's view, the newcomer has entered the battlefield and gone to the graveyard.
+    let mut after = before.view.clone();
+    after.players.you.graveyard.push(newcomer);
+    for object in &mut after.objects {
+        if object.slot == newcomer {
+            object.zone = ZoneName::Graveyard;
+        }
+    }
+    let mut entered = record(&before.view);
+    entered.zone = ZoneName::Battlefield;
+    let left = record(&after);
+    let fly = |from, why, object| Step {
+        act: Act::Fly {
+            from,
+            why,
+            object,
+            at: None,
+            item: None,
+            origin: None,
+        },
+        cause: None,
+    };
+    let beats = vec![
+        vec![fly(ZoneName::Hand, Why::Play, entered)],
+        vec![fly(ZoneName::Battlefield, Why::Sacrifice, left)],
+    ];
+    let waits = StepTiming {
+        delay: 600.0,
+        ..timing(300.0)
+    };
+    after.script = Some(testing::script(None, beats, vec![timing(300.0), waits]));
+    let after = GameUpdate {
+        session: before.session,
+        view: after,
+    };
+    let mut messages = vec![
+        FixtureMessage::game_update(&before),
+        FixtureMessage::game_update(&after),
+    ];
+    messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
+    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Phone, size)
+        .expect("the views can be read");
+    // In the wait between the two flights: the first lands 150 ms after its middle, and the
+    // second sets out 600 ms after that.
+    page.seek(&"step:2.0.0+450ms".parse().expect("a moment"))
+        .expect("the first flight is a moment of the recording");
+    let frame = page.frame();
+    let drawn: Vec<String> = (frame.resolved.iter())
+        .filter(|element| element.role == Role::Card && element.opacity > 0.0)
+        .map(|element| frame.name(element.name).to_owned())
+        .filter(|name| name == "Land 12")
+        .collect();
+    assert!(drawn.is_empty(), "the newcomer is drawn while it waits");
+}

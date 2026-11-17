@@ -285,20 +285,31 @@ pub(super) fn lay_row<'a>(
     // Every window of `shown` consecutive groups fits at the least strip, however wide its
     // last group is.
     let widest = widths.iter().copied().fold(0.0, f32::max);
-    let shown = window_size(groups.len(), room, widest, rules.strip);
-    let first = rules.scroll.min(groups.len() - shown);
-    let last_width = widths[first + shown - 1];
     // A group with cards attached to it is followed that much further on, so that what peeks
     // out to its right is left uncovered as its own card is.
     let right =
         |group: &[&ObjectView]| beneath.peek(group[0], peek_step(group[0], beneath, rules), false);
-    let extra: f32 = groups
-        .iter()
-        .skip(first)
-        .take(shown.saturating_sub(1))
-        .map(right)
-        .sum();
-    let step = spacing(shown, room, last_width, extra);
+    // `window_size` counts a group's peek only where that group is the window's last, so a
+    // window whose earlier groups have cards peeking out to their right can leave less than the
+    // least strip between the groups after them. On the phone layout, a crewed Vehicle with its
+    // Aura beside three tapped creatures did, and the tapped creatures covered each other. Such
+    // a window shows one group fewer until the strip fits.
+    let mut shown = window_size(groups.len(), room, widest, rules.strip);
+    let (first, step) = loop {
+        let first = rules.scroll.min(groups.len() - shown);
+        let last_width = widths[first + shown - 1];
+        let extra: f32 = groups
+            .iter()
+            .skip(first)
+            .take(shown.saturating_sub(1))
+            .map(right)
+            .sum();
+        let step = spacing(shown, room, last_width, extra);
+        if step >= rules.strip || shown == 1 {
+            break (first, step);
+        }
+        shown -= 1;
+    };
     let mut height = 0;
     let (mut before, mut after) = (0, 0);
     let mut left = area.left;

@@ -18,6 +18,7 @@ use crate::verbs::{self, Interval};
 
 mod abilities;
 mod counts;
+mod hidden;
 mod out;
 mod placement;
 mod places;
@@ -25,6 +26,7 @@ mod room;
 mod still;
 mod tracks;
 
+use hidden::hides;
 use room::{only_height, room_of};
 use tracks::same;
 pub(crate) use tracks::{add, numbers_of};
@@ -122,6 +124,9 @@ pub(crate) struct Motion<'a> {
     /// again takes its place. The stack's close-ups are tracked separately.
     closing: Vec<Option<Closing>>,
     stack_closing: Vec<Closing>,
+    /// The cards a step moved to a place a row has scrolled out of view, each with when it
+    /// arrived and the step's number, until a later step moves it again (`hide_on_arrival`).
+    hidden: Vec<(usize, u64, usize)>,
     /// The cards the opponent is handling as the steps so far leave the table, which the table
     /// played over does not keep.
     look: Look,
@@ -190,6 +195,7 @@ impl<'a> Motion<'a> {
             written: Written::default(),
             closing: Vec::new(),
             stack_closing: Vec::new(),
+            hidden: Vec::new(),
             look: Look::opening(
                 (before, after),
                 timings.iter().any(|timing| timing.duration > 0.0),
@@ -436,6 +442,7 @@ impl<'a> Motion<'a> {
                         ..from
                     })
                 });
+                let hidden = hides(before, after);
                 self.play(
                     number,
                     (beat, index),
@@ -445,6 +452,9 @@ impl<'a> Motion<'a> {
                     (Some(from), to),
                     (table, &dirty),
                 );
+                if hidden {
+                    self.hide_on_arrival(slot, number);
+                }
                 played = true;
                 continue;
             }
@@ -522,6 +532,7 @@ impl<'a> Motion<'a> {
             .and_then(Option::as_ref)
             .map(|rest| &rest.pose);
         let after = self.fresh.rests.get(slot).and_then(Option::as_ref);
+        let hidden = hides(self.rests.rests.get(slot).and_then(Option::as_ref), after);
         let regroup = regroup.filter(|_| {
             after.is_some_and(|rest| {
                 matches!(
@@ -588,6 +599,9 @@ impl<'a> Motion<'a> {
             _ => return,
         };
         self.push(slot, segment, cause);
+        if hidden {
+            self.hide_on_arrival(slot, number);
+        }
         if matches!(cause, Cause::Slide(_)) && segment.end() > own.to {
             self.note_closing(Some(slot), segment.end(), number);
         }
@@ -690,6 +704,7 @@ impl<'a> Motion<'a> {
             step: cause.step_time(),
             ..segment
         };
+        self.reveal(slot, segment.start);
         // A segment an earlier step gave the object that has not begun when this one does is
         // out of date: this step has moved the object's resting place since. When three
         // permanents tap at once, the first tap's row waits until its card has turned, but
