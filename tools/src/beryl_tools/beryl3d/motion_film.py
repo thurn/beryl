@@ -10,8 +10,8 @@ the first step of each case of the verb, or of the one case asked for, from its 
 at Arena's rate and width (`--rate 15 --frame-width 760`), in films of at most `MOST_FRAMES`
 frames each. Arena's instances of the same verb and case (data/arena-motion.json) are cut from
 their recordings by the main package's `retake` and `arena_frames`, into
-`$BERYL_CACHE/b3d/motion-film/<verb>/arena/`. When no instance's recording is on this machine
-(`$BERYL_ARENA`), it films Beryl 3D's side alone and says so on one line.
+`$BERYL_CACHE/b3d/motion-film/<verb>-<run>/arena/`. When no instance's recording is on this
+machine (`$BERYL_ARENA`), it films Beryl 3D's side alone and says so on one line.
 
 It prints, for each case, the folder of each Arena instance's frames beside the paths of
 Beryl 3D's films, and then each film's text: its layout, seat and case, the step and the steps
@@ -23,9 +23,9 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -277,8 +277,8 @@ def run_motion_film(args: argparse.Namespace) -> int:
         return 2
     for film in films:
         shoot(recording, film)
-    out = paths.cache() / "motion-film" / verb
-    shutil.rmtree(out, ignore_errors=True)
+    # Named for the run, so that two runs at once do not cut Arena's frames into one folder.
+    out = paths.cache() / "motion-film" / f"{verb}-{time.time_ns()}"
     arena, missing = arena_side(verb, case, int(args.instances), out / "arena")
 
     cases = list(dict.fromkeys(film.step.get("case") for film in films))

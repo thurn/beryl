@@ -136,22 +136,11 @@ def play(name: str, seconds: int, window: str) -> Path | None:
     """Plays `name` and gives the frame log the run wrote, or None when the run wrote none."""
     folder, checkout = app.frames_dir(), repo_paths.REPO.resolve()
     before = app.newest_log(folder, checkout)
-    arguments = argparse.Namespace(
-        fixture=name,
-        window=window,
-        run_for=f"{seconds}s",
-        no_build=True,
-        pause_at=None,
-        drive=None,
-        load=None,
-        slow_gpu=None,
-        agent=None,
-        opponent=None,
-        seed=None,
-        search_class=None,
-        offer=[],
-    )
-    app.run_app(arguments)
+    # Parsed by `just b3d app`'s own parser, so every option it adds has its default here.
+    parser = argparse.ArgumentParser()
+    app.app_arguments(parser)
+    given = ["--fixture", name, "--window", window, "--for", f"{seconds}s"]
+    app.run_app(parser.parse_args([*given, "--no-build"]))
     after = app.newest_log(folder, checkout)
     return after if after != before else None
 
@@ -168,7 +157,6 @@ def run_perf(args: argparse.Namespace) -> int:
     if unknown:
         print(f"perf: no recording named {', '.join(unknown)}", file=sys.stderr)
         return 2
-    print("just b3d perf " + " ".join(names) + (" --verbs" if args.verbs else ""))
     for name in names:
         log = play(name, run_seconds(lengths[name]), args.window)
         if log is None:

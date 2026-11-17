@@ -1,10 +1,13 @@
 """`just b3d perf`: the line printed for a fixture and the late frames grouped by verb, on
 frame logs written by hand."""
 
+import argparse
 import json
 from pathlib import Path
 
-from beryl_tools.beryl3d import perf
+import pytest
+
+from beryl_tools.beryl3d import app, perf
 
 
 def late(at: float, gap: float, client: float, verbs: list[str]) -> dict[str, object]:
@@ -69,3 +72,20 @@ def test_lengths_come_from_the_longest_seat_and_round_up_with_a_second() -> None
     )
     assert perf.recording_lengths(listing) == {"verbs-zones": 22152}
     assert perf.run_seconds(22152) == 24
+
+
+def test_a_fixture_is_played_with_every_option_of_just_b3d_app(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    played: list[argparse.Namespace] = []
+
+    def run_app(args: argparse.Namespace) -> int:
+        played.append(args)
+        return 0
+
+    monkeypatch.setattr(app, "run_app", run_app)
+    monkeypatch.setattr(app, "frames_dir", lambda: tmp_path)
+    assert perf.play("verbs-zones", 3, "none") is None
+    assert played[0].fixture == "verbs-zones" and played[0].run_for == "3s"
+    # `run_app` reads every option of `just b3d app`, `--replay` among them.
+    assert played[0].no_build and played[0].replay is None

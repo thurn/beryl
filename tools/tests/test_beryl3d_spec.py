@@ -45,7 +45,6 @@ def test_each_moment_and_seat_runs_info_tree_and_check(
     assert verbs.count("info") == verbs.count("tree") == verbs.count("check") == 3
     assert ["tree", "counterspell/a", "--seat", "opponent", "--at", "prompt:1"] in ran
     out = capsys.readouterr().out
-    assert out.startswith("just b3d spec Counterspell")
     assert "... 20 more lines" in out and "counterspell-targets" not in out
 
 

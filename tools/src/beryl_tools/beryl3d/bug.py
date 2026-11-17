@@ -5,8 +5,8 @@ A report is a folder that beryl_session's `bugs` module wrote (`tools/src/beryl_
 reads them). Beryl 3D's report names the client in its `ui.json` log and holds `tree.txt`, the
 element tree of the frozen frame, and `frames.jsonl`, the frame log so far. A report saved
 while a recording replayed also records the recording, its seat and the moment (`at`, in
-milliseconds, and whether the replay had already ended) in `ui.json`, so `just b3d tree` reaches the same frame with no game. A report
-from a live game holds the game's `replay.json`, which `just b3d app --replay` resumes.
+milliseconds, and whether the replay had already ended) in `ui.json`, so `just b3d tree`
+reaches the same frame with no game. A report from a live game holds the game's `replay.json`, which `just b3d app --replay` resumes.
 
 The command writes no file.
 """

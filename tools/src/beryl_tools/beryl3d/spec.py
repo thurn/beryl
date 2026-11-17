@@ -124,11 +124,6 @@ def run_spec(args: argparse.Namespace) -> int:
     if not found:
         print(f"spec: no moments of {slugs[0]} to show", file=sys.stderr)
         return 2
-    command = ["just", "b3d", "spec", args.card]
-    if args.moment:
-        command.append(args.moment)
-    command += ["--seat", args.seat, *(["--film"] if args.film else [])]
-    print(shlex.join(command))
     worst = 0
     for m in found:
         lines, code = describe(m, args.film)

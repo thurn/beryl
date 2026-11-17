@@ -68,13 +68,13 @@ It finds a recording that plays the verb (the verb's entry in
 `data/beryl3d/parity.json`, or `--recording <name>`) and films the first step of
 each case from both seats in both layouts, at Arena's 15 frames a second and 760
 px wide, with `just b3d film`. Beside each case it cuts Arena's instances of it
-into `~/Library/Caches/beryl/b3d/motion-film/<verb>/arena/`, as `just motion
---film` does. It prints each pair of paths and each film's text: the step, the
-steps playing meanwhile, the picture and what moves in each frame. That text is
-the packet; give its saved output to the reviewer in place of `brief.txt`. When
-no Arena recording is on the machine, it films Beryl 3D's side alone and says
-so. For one frame of a moment, use `just b3d png <recording> --at <moment>
---tree`.
+into `~/Library/Caches/beryl/b3d/motion-film/<verb>-<run>/arena/`, as
+`just motion --film` does. It prints each pair of paths and each film's text:
+the step, the steps playing meanwhile, the picture and what moves in each frame.
+That text is the packet; give its saved output to the reviewer in place of
+`brief.txt`. When no Arena recording is on the machine, it films Beryl 3D's side
+alone and says so. For one frame of a moment, use
+`just b3d png <recording> --at <moment> --tree`.
 
 ## 2. Hand it to a fresh reviewer
 
