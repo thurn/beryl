@@ -192,10 +192,12 @@ def test_a_build_gives_tokens_back_while_a_push_waits(
     monkeypatch.setattr(cargo_pool, "SHRINK_SECONDS", 0.05)
     pool: Pool = Pool(tmp_path / "pool", 9)
     got: list[tokens.Lease | None] = []
+    started: Path = tmp_path / "started"
+    monkeypatch.setenv("FAKE_CARGO_STARTED", str(started))
 
     def push() -> None:
         # Wait until the build holds its six tokens, then ask for six as a push.
-        while len(pool.holders()) < 6:
+        while not started.exists():
             time.sleep(0.01)
         lease = pool.acquire("push", 6)
         got.append(lease)
@@ -304,9 +306,11 @@ def test_a_test_run_keeps_its_tokens(
     monkeypatch.setattr(tokens, "RECLAIM_SECONDS", 0.3)
     pool: Pool = Pool(tmp_path / "pool", 9)
     got: list[tokens.Lease | None] = []
+    started: Path = tmp_path / "started"
+    monkeypatch.setenv("FAKE_CARGO_STARTED", str(started))
 
     def push() -> None:
-        while len(pool.holders()) < 6:
+        while not started.exists():
             time.sleep(0.01)
         got.append(pool.acquire("push", 6))
         release.touch()
