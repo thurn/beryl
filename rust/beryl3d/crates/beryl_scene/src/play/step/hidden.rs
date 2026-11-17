@@ -12,6 +12,17 @@ pub(super) fn hides(before: Option<&Rest>, after: Option<&Rest>) -> bool {
     before.is_some_and(|rest| rest.visible) && after.is_some_and(|rest| !rest.visible)
 }
 
+/// Whether a card that a step changes in place, as one that phases out does, rests out of view
+/// afterwards (`Motion::hide_on_arrival`), wherever it rested before. The change gives the card
+/// a segment, and a card on a track is drawn unless it rests out of view both before and after
+/// the whole script. So a card out of view that a later step of the script moved into view was
+/// drawn out of view from the change until that move: on the phone layout, a tapped land at the
+/// lands row's hidden end stood drawn over an artifact in the others row from when a spell
+/// phased it out until the lands untapped and flew back into view.
+pub(super) fn hides_in_place(before: Option<&Rest>, after: Option<&Rest>) -> bool {
+    before.is_some() && after.is_some_and(|rest| !rest.visible)
+}
+
 impl Motion<'_> {
     /// Notes that the `number`th step moved the object in `slot` to a place a row has scrolled
     /// out of view (`rows::beyond_right`). The scene leaves such a card undrawn only where it

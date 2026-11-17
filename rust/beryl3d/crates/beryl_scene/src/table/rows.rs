@@ -168,16 +168,26 @@ impl<'a> Beneath<'a> {
 /// How far, in millimetres, each card under `host` peeks out past the one before it: the web
 /// interface's step, `beneath_step` of a card's width, or the least strip that leaves an
 /// overlapped card of the row reachable where that is wider, as it is in a small window, so
-/// that a press can still reach a card tucked under another. Where the permanent and its cards
-/// at that step would be wider than the row, as six cards held in exile are on the phone, where
-/// the strip is nearly a card's width, the step closes up until they fit: a row scrolls whole
-/// groups, so it could never bring a group wider than itself into view.
+/// that a press can still reach a card tucked under another. A card narrower than the
+/// permanent, as an untapped Aura under a tapped creature is, peeks out that much further, so
+/// that it too shows the least strip past the permanent's edge: at the plain step, an Aura on
+/// a tapped creature on the phone showed 37 points, short of the 44 a press needs. Where the
+/// permanent and its cards at that step would be wider than the row, as six cards held in
+/// exile are on the phone, where the strip is nearly a card's width, the step closes up until
+/// they fit: a row scrolls whole groups, so it could never bring a group wider than itself into
+/// view.
 fn peek_step(host: &ObjectView, beneath: &Beneath, rules: &RowRules) -> f32 {
     let step = (rules.layout.beneath_step.x * CARD_WIDTH).max(rules.strip);
     let count = beneath.of(host.slot, true).count() + beneath.of(host.slot, false).count();
     if count == 0 {
         return step;
     }
+    let narrower = (beneath
+        .of(host.slot, true)
+        .chain(beneath.of(host.slot, false)))
+    .map(|card| (card_width(host) - card_width(card)) / 2.0)
+    .fold(0.0, f32::max);
+    let step = step.max(rules.strip + narrower);
     // Each side's cards reach at most `step` further per card than they do at a step of 0, so
     // at `fits` the group is no wider than the row.
     let fixed = card_width(host) + beneath.peek(host, 0.0, true) + beneath.peek(host, 0.0, false);
@@ -285,11 +295,13 @@ pub(super) fn lay_row<'a>(
     // Every window of `shown` consecutive groups fits at the least strip, however wide its
     // last group is.
     let widest = widths.iter().copied().fold(0.0, f32::max);
-    // A group with cards attached to it is followed that much further on, so that what peeks
-    // out to its right is left uncovered as its own card is.
-    let right =
-        |group: &[&ObjectView]| beneath.peek(group[0], peek_step(group[0], beneath, rules), false);
-    // `window_size` counts a group's peek only where that group is the window's last, so a
+    // A group with cards attached to it, which peek out to its right from under its permanent,
+    // is not overlapped: the next group stands past its whole width. Those cards show only past
+    // the permanent's right edge, so the next group covering any of the permanent would cover
+    // them first. On the phone layout, an Aura on a creature that the next creature overlapped
+    // showed 36 points, short of the 44 a press needs.
+    let attached = |group: &[&ObjectView]| beneath.of(group[0].slot, false).next().is_some();
+    // `window_size` counts a group's width only where that group is the window's last, so a
     // window whose earlier groups have cards peeking out to their right can leave less than the
     // least strip between the groups after them. On the phone layout, a crewed Vehicle with its
     // Aura beside three tapped creatures did, and the tapped creatures covered each other. Such
@@ -298,14 +310,21 @@ pub(super) fn lay_row<'a>(
     let (first, step) = loop {
         let first = rules.scroll.min(groups.len() - shown);
         let last_width = widths[first + shown - 1];
-        let extra: f32 = groups
-            .iter()
-            .skip(first)
-            .take(shown.saturating_sub(1))
-            .map(right)
-            .sum();
-        let step = spacing(shown, room, last_width, extra);
-        if step >= rules.strip || shown == 1 {
+        let (mut whole, mut overlapped) = (0.0, 0);
+        for (group, width) in groups.iter().zip(&widths).skip(first).take(shown - 1) {
+            if attached(group) {
+                whole += width;
+            } else {
+                overlapped += 1;
+            }
+        }
+        let step = spacing(overlapped + 1, room, last_width, whole);
+        let fits = if overlapped > 0 {
+            step >= rules.strip
+        } else {
+            whole + last_width <= room
+        };
+        if fits || shown == 1 {
             break (first, step);
         }
         shown -= 1;
@@ -330,7 +349,7 @@ pub(super) fn lay_row<'a>(
         };
         place_group((group, beneath), at, y, &mut height, visible, rules, laid);
         if visible {
-            left += step + right(group);
+            left += if attached(group) { *width } else { step };
         }
     }
     RowWindow::new(groups.len(), first, shown, (before, after))

@@ -742,3 +742,63 @@ fn an_aura_peeking_out_early_in_a_crowded_row_leaves_every_card_reachable() {
         );
     }
 }
+
+/// An Aura attached to a tapped creature peeks out past the creature's right edge far enough to
+/// press, in a row with room to spare. The untapped Aura is narrower than the tapped creature,
+/// so at the plain peek step it showed only 37 points past the creature's edge on the phone.
+#[test]
+fn an_aura_on_a_tapped_creature_peeks_out_far_enough_to_press() {
+    let mut view = ViewBuilder::new();
+    let creature = {
+        let card = view.card(ZoneName::Battlefield, Side::You, "Spirit");
+        card.types = vec![CardType::Creature];
+        card.tapped = true;
+        card.slot
+    };
+    let aura = view.card(ZoneName::Battlefield, Side::You, "Aura");
+    aura.types = vec![CardType::Enchantment];
+    aura.attached_to = Some(creature);
+    view.card(ZoneName::Battlefield, Side::You, "Bear").types = vec![CardType::Creature];
+    for (width, height) in PHONES {
+        let window = phone(width, height);
+        let frame = frame_in(window, &view);
+        assert_eq!(
+            card_faults(&frame, window, reachable),
+            Vec::<String>::new(),
+            "{width}x{height}"
+        );
+    }
+}
+
+/// In a crowded row, the group after a permanent with an Aura attached stands past the Aura's
+/// edge instead of overlapping the permanent. The Aura shows only past the permanent's right
+/// edge, so a neighbour that overlapped the permanent left it 36 points on the phone.
+#[test]
+fn a_crowded_row_leaves_an_attached_aura_a_square_to_press() {
+    let mut view = ViewBuilder::new();
+    let host = {
+        let card = view.card(ZoneName::Battlefield, Side::You, "Host");
+        card.types = vec![CardType::Creature];
+        card.slot
+    };
+    for index in 0..5 {
+        view.card(ZoneName::Battlefield, Side::You, &format!("Bear {index}"))
+            .types = vec![CardType::Creature];
+    }
+    let aura = view.card(ZoneName::Battlefield, Side::You, "Aura");
+    aura.types = vec![CardType::Enchantment];
+    aura.attached_to = Some(host);
+    for (width, height) in PHONES {
+        let window = phone(width, height);
+        let frame = frame_in(window, &view);
+        assert!(
+            cards_at(&frame, battlefield_place(Side::You, RowName::Creatures)).len() > 2,
+            "{width}x{height} shows the Aura's permanent and more than one creature"
+        );
+        assert_eq!(
+            card_faults(&frame, window, reachable),
+            Vec::<String>::new(),
+            "{width}x{height}"
+        );
+    }
+}

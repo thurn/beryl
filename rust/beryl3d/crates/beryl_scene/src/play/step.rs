@@ -26,7 +26,7 @@ mod room;
 mod still;
 mod tracks;
 
-use hidden::hides;
+use hidden::{hides, hides_in_place};
 use room::{only_height, room_of};
 use tracks::same;
 pub(crate) use tracks::{add, numbers_of};
@@ -532,7 +532,8 @@ impl<'a> Motion<'a> {
             .and_then(Option::as_ref)
             .map(|rest| &rest.pose);
         let after = self.fresh.rests.get(slot).and_then(Option::as_ref);
-        let hidden = hides(self.rests.rests.get(slot).and_then(Option::as_ref), after);
+        let rested = self.rests.rests.get(slot).and_then(Option::as_ref);
+        let (hidden, hidden_in_place) = (hides(rested, after), hides_in_place(rested, after));
         let regroup = regroup.filter(|_| {
             after.is_some_and(|rest| {
                 matches!(
@@ -550,6 +551,9 @@ impl<'a> Motion<'a> {
                 self.change(slot, (before.copied(), after.copied()), number, own)
             {
                 self.push(slot, segment, cause);
+                if hidden_in_place {
+                    self.hide_on_arrival(slot, number);
+                }
             }
             return;
         }
