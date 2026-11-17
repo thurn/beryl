@@ -3,9 +3,10 @@
 // writes the page's screenshot and its elements as the records `web.json` holds.
 //
 // Usage, from ui/ (where Playwright is installed): node <this file> <job.json>
-// The job is {base, route, width, height, scale, offset_ms, png, json, roles, target, art_dir}:
-// `offset_ms` is how long after the fixture's last view arrived to stop the clock, or null for
-// the view at rest; `roles` is data/beryl3d/match/roles.json's `roles`.
+// The job is {base, route, fixture, width, height, scale, offset_ms, png, json, roles, target,
+// art_dir}: `fixture` is {name, file}, the file that answers the page's request for
+// /fixtures/<name>.json; `offset_ms` is how long after the fixture's last view arrived to stop
+// the clock, or null for the view at rest; `roles` is data/beryl3d/match/roles.json's `roles`.
 //
 // Node resolves a module from the file that imports it, and this file is outside ui/, so the
 // capture helpers (and through them Playwright) are imported from ui/scripts by path.
@@ -368,6 +369,18 @@ try {
         viewport: { width: job.width, height: job.height },
         deviceScaleFactor: job.scale,
     });
+    // The page fetches its fixture from the server (`fixtureTransport` in ui/src/ipc.ts); it
+    // comes from the job's file instead, so the server needs no file of its own.
+    const fixturePath = `/fixtures/${encodeURIComponent(job.fixture.name)}.json`;
+    await context.route(
+        (url) => url.pathname === fixturePath,
+        async (route) => {
+            await route.fulfill({
+                body: await readFile(job.fixture.file),
+                contentType: "application/json",
+            });
+        },
+    );
     // With `art_dir`, card images load from the app's scan cache, which Beryl 3D reads too: it
     // holds each image under its Scryfall path (rust/crates/beryl_art), and the card backs
     // under `backs/`. An image it lacks is not fetched, and is listed.

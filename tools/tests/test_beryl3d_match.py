@@ -1,12 +1,13 @@
 """`just b3d match`: the target a command line names, the element records both clients write
-(`web.json` and `b3d.json`), and the fonts check's warnings."""
+(`web.json` and `b3d.json`), the fonts check's warnings, and the matcher and box diff that
+`match boxes` prints."""
 
 from __future__ import annotations
 
 import argparse
 import copy
 
-from beryl_tools.beryl3d.match import fonts, records, target
+from beryl_tools.beryl3d.match import boxes, fonts, joined, records, target
 
 
 def args(recording: str, *rest: str) -> argparse.Namespace:
@@ -174,3 +175,127 @@ def test_fonts_warn_of_a_different_version_and_of_a_file_that_was_not_read() -> 
         "warning: fonts: Beryl 3D's OpenSans.ttf: no name table",
         "warning: fonts: web's open-sans/files/open-sans-latin-wght-normal.woff2: not read",
     ]
+
+
+def line(string: str, at: list[float]) -> dict[str, object]:
+    return {
+        "string": string,
+        "family": "Open Sans",
+        "size": 16,
+        "weight": 400,
+        "color": [245, 243, 240, 1],
+        "baseline": at[1] + at[3] - 4,
+        "box": at,
+    }
+
+
+def plain(role: str, name: str, at: list[float], **given: object) -> dict[str, object]:
+    """An element with no key and no text unless `given` says otherwise."""
+    return element(
+        **{"role": role, "name": name, "key": None, "box": at, "text": [], **given}
+    )
+
+
+def test_the_matcher_pairs_by_key_then_role_name_and_parent_then_nearest_box() -> None:
+    web = [
+        # 0: the same locator on both sides.
+        element(key='button "Play" #7'),
+        # 1, 2: no key on the web; the prompt pairs by name, and the two labels named alike
+        # pair under it, not under the other region.
+        plain("region", "prompt", [980, 733, 580, 80]),
+        plain("text", "Pay", [996, 749, 144, 48], parent=1),
+        plain("region", "log", [0, 0, 300, 900]),
+        plain("text", "Pay", [10, 10, 40, 20], parent=3),
+        # 5: unnamed, so only its box can pair it: 3 points away pairs, 30 does not.
+        plain("icon", "", [29, 29, 22, 22]),
+        plain("icon", "", [100, 100, 22, 22]),
+    ]
+    b3d = [
+        element(key='button "Play" #7', box=[1150, 749, 192, 48]),
+        plain("region", "log", [0, 0, 300, 900], key='region "log" #3'),
+        plain("text", "Pay", [12, 12, 40, 20], parent=1, key='text "Pay" #4'),
+        plain("region", "prompt", [980, 733, 580, 80], key='region "prompt" #5'),
+        plain("text", "Pay", [12, 12, 40, 20], parent=3, key='text "Pay" #6'),
+        plain("icon", "", [32, 29, 22, 22]),
+        plain("icon", "", [130, 100, 22, 22]),
+    ]
+    found = joined.join(web, b3d)
+    listed = found["pairs"]
+    assert isinstance(listed, list)
+    pairs = {(p["web"], p["b3d"]): p["pass"] for p in listed}
+    assert pairs == {
+        (0, 0): "key",
+        (1, 3): "identity",
+        (2, 4): "identity",
+        (3, 1): "identity",
+        (4, 2): "identity",
+        (5, 5): "box",
+    }
+    unmatched = found["unmatched"]
+    assert isinstance(unmatched, dict)
+    assert [e["index"] for e in unmatched["web"]] == [6]
+    assert [e["box"] for e in unmatched["b3d"]] == [[130, 100, 22, 22]]
+
+
+def test_boxes_lists_moved_and_rewrapped_elements_worst_first_and_text_drawn_over_text() -> (
+    None
+):
+    web = [
+        plain(
+            "text",
+            "flip",
+            [600, 158, 390, 59],
+            text=[line("You won", [600, 158, 390, 29])],
+        ),
+        plain("button", "Settings", [1542, 14, 44, 44]),
+        plain("button", "Report", [1542, 70, 44, 44]),
+        plain("text", "life", [780, 82, 38, 46], text=[line("20", [780, 82, 38, 46])]),
+        plain(
+            "text",
+            "play",
+            [600, 230, 200, 20],
+            text=[line("on the play", [600, 230, 200, 20])],
+        ),
+    ]
+    b3d = copy.deepcopy(web)
+    # The heading wraps onto two lines, a button moves 6 points, another a quarter point, and
+    # the life total slides down over "on the play".
+    b3d[0]["text"] = [
+        line("You", [600, 158, 390, 29]),
+        line("won", [600, 187, 390, 29]),
+    ]
+    b3d[1]["box"] = [1548, 14, 44, 44]
+    b3d[2]["box"] = [1542.25, 70, 44, 44]
+    b3d[3]["box"] = [780, 220, 38, 46]
+    b3d[3]["text"] = [line("20", [780, 220, 38, 46])]
+    pairs = joined.join(web, b3d)["pairs"]
+    assert isinstance(pairs, list)
+    found = boxes.differences(web, b3d, pairs)
+    assert [d.line() for d in found] == [
+        'text "flip"  web [600 158 390 59]  b3d [600 158 390 59]  dx 0 dy 0 dw 0 dh 0  '
+        "WRAP 1/2",
+        'text "life"  web [780 82 38 46]  b3d [780 220 38 46]  dx 0 dy +138 dw 0 dh 0',
+        'button "Settings"  web [1542 14 44 44]  b3d [1548 14 44 44]  dx +6 dy 0 dw 0 dh 0',
+    ]
+    only_b3d, only_web = boxes.one_sided_overlaps(web, b3d, pairs)
+    assert only_b3d == ['text "life"  and  text "play"']
+    assert only_web == []
+
+
+def test_a_label_on_a_child_counts_as_its_buttons_text() -> None:
+    # The web puts a button's label on a span inside it; Beryl 3D on the button itself.
+    web = [
+        plain("button", "Play", [820, 287, 250, 48]),
+        plain(
+            "text",
+            "",
+            [922, 299, 45, 24],
+            parent=0,
+            text=[line("Play", [922, 299, 45, 24])],
+        ),
+    ]
+    b3d = [element(box=[820, 287, 250, 48], key='button "Play" #1')]
+    b3d[0]["text"] = [line("Play", [922, 299, 45, 24])]
+    pairs = joined.join(web, b3d)["pairs"]
+    assert isinstance(pairs, list)
+    assert boxes.differences(web, b3d, pairs) == []

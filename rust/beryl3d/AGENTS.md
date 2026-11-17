@@ -114,6 +114,13 @@ through the client with no window or GPU (the `b3d` skill has the details):
   takes `compare`'s target or a test's name, at scale 2 by default. The other
   `just b3d match` subcommands read its directory. Beryl 3D's records alone are
   `just b3d tree <name> --at <moment> --records`.
+- `just b3d match boxes <name> --at <moment>` pairs the snapshot's elements
+  (writing `joined.json`) and prints, worst first, each pair whose box differs
+  by more than half a point or whose text breaks into a different number of
+  lines (`WRAP n/m`, or `LINES n/m` when the words differ), the elements left
+  unpaired on each side, and text that overlaps in Beryl 3D but not on the web
+  (or the reverse). `--all [prefix]` does it for every desktop and phone test
+  target at its end (`just b3d test --list`) and prints each one's totals.
 
 These tools lay the frame out at scale 1 unless `--scale` gives another, while
 the desktop app on a Retina Mac runs at scale 2, so a picture of a look you

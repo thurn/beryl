@@ -34,6 +34,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 from ... import paths as repo_paths
@@ -59,6 +63,40 @@ SOURCES = (
 APP_SCANS: Path = Path.home() / "Library" / "Caches" / "ca.thurn.beryl"
 # `b3d-render png`'s line naming the file it wrote.
 WROTE: re.Pattern[str] = re.compile(r"^wrote (?P<path>\S+\.png)", re.MULTILINE)
+
+
+# The `cargo build` arguments of the two programs a snapshot runs.
+B3D_BUILD = ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"]
+RENDER_BUILD = ["build", "-q", "-p", "beryl_pictures", "--bin", "b3d-render"]
+
+
+@dataclass(frozen=True)
+class Shared:
+    """What snapshots taken together share (`shared`): both programs already built, and one
+    Vite server of ui/ at `base` with the browser environment `env`. Each snapshot would
+    otherwise build both programs and start its own server, which takes seconds."""
+
+    base: str
+    env: dict[str, str]
+
+
+@contextmanager
+def shared() -> Iterator[Shared | None]:
+    """Builds both programs and serves ui/ for the duration, for many `ensure` calls; yields
+    None after printing why it could not."""
+    from .. import cli
+
+    if cli.quick_build(B3D_BUILD) != 0 or cli.quick_build(RENDER_BUILD) != 0:
+        print("match: b3d or b3d-render did not build", file=sys.stderr)
+        yield None
+        return
+    env = shots.browser_env()
+    try:
+        with shots.served_ui(env) as url:
+            yield Shared(url, env)
+    except shots.UiError as error:
+        print(f"match: {error}", file=sys.stderr)
+        yield None
 
 
 def snapshot_arguments(parser: argparse.ArgumentParser) -> None:
@@ -91,16 +129,14 @@ def inputs(t: Target, art: bool) -> str:
     return digest.hexdigest()
 
 
-def render_png(t: Target, art: bool, out: Path) -> str | None:
+def render_png(t: Target, art: bool, out: Path, build: bool = True) -> str | None:
     """Draws the moment with `b3d-render png` and copies it to `out`; None when it worked, else
-    why not. Without `art` it reads scans from an empty directory, so every face is drawn.
+    why not. Without `art` it reads scans from an empty directory, so every face is drawn. It
+    builds `b3d-render` first unless `build` is False.
     """
     from .. import cli
 
-    built = cli.quick_build(
-        ["build", "-q", "-p", "beryl_pictures", "--bin", "b3d-render"]
-    )
-    if built != 0:
+    if build and cli.quick_build(RENDER_BUILD) != 0:
         return "b3d-render did not build"
     with tempfile.TemporaryDirectory(prefix="b3d-match-scans-") as empty:
         env = {**os.environ}
@@ -128,14 +164,19 @@ def dump_web(
     moment: dict[str, object],
     art: bool,
     out: Path,
+    serving: Shared | None = None,
 ) -> tuple[list[str], str | None]:
     """Shoots the web interface's page of `messages` at `moment` (`b3d.json`'s) into `out`'s
-    `web.png` and `web.json`. Returns the lines dump.mjs printed (page errors, scans missing)
-    and, if it failed, why."""
+    `web.png` and `web.json`, from the server `serving` names or from one started for it.
+    Returns the lines dump.mjs printed (page errors, scans missing) and, if it failed, why.
+    """
     width, height = t.width_height()
-    name = f"b3d-match-{os.getpid()}"
-    fixture = shots.RECORDED / f"{name}.json"
-    fixture.parent.mkdir(parents=True, exist_ok=True)
+    # Unique among the snapshots one process takes at once on threads (`boxes --all`).
+    name = f"b3d-match-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    # dump.mjs answers the page's request for the fixture with this file. A file written into
+    # ui/public would not do: a server started earlier (`Shared`) watches no files, so it
+    # serves only the public files that existed when it started.
+    fixture = out / "web-fixture.json"
     fixture.write_text(json.dumps({"messages": messages}))
     phone = "phone&" if t.layout == "phone" else ""
     at = compare.web_at(messages, int(str(moment["view"])))
@@ -143,8 +184,9 @@ def dump_web(
     offset = None
     if moment.get("animating") and isinstance(given, int):
         offset = int(str(moment["t_ms"])) - given
-    job = {
+    job: dict[str, object] = {
         "route": f"/?{phone}fixture={name}&at={at}#/game",
+        "fixture": {"name": name, "file": str(fixture)},
         "width": width,
         "height": height,
         "scale": float(t.scale),
@@ -155,20 +197,27 @@ def dump_web(
         "target": t.test_name(),
         "art_dir": str(APP_SCANS / "art") if art else None,
     }
-    job_file = out / "web-job.json"
+    job_file: Path = out / "web-job.json"
+
+    def dump(base: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        job_file.write_text(json.dumps({**job, "base": base}))
+        return subprocess.run(
+            ["node", str(HERE / "dump.mjs"), str(job_file)],
+            cwd=repo_paths.UI,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
     try:
-        env = shots.browser_env()
-        with shots.served_ui(env) as url:
-            job_file.write_text(json.dumps({**job, "base": url}))
-            done = subprocess.run(
-                ["node", str(HERE / "dump.mjs"), str(job_file)],
-                cwd=repo_paths.UI,
-                env=env,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+        if serving is not None:
+            done = dump(serving.base, serving.env)
+        else:
+            env = shots.browser_env()
+            with shots.served_ui(env) as url:
+                done = dump(url, env)
     except shots.UiError as error:
         return [], str(error)
     finally:
@@ -205,10 +254,14 @@ def report(t: Target, moment: dict[str, object], warnings: list[str], out: Path)
     return "\n".join(lines) + "\n"
 
 
-def ensure(t: Target, fresh: bool = False, art: bool = False) -> Path | None:
+def ensure(
+    t: Target, fresh: bool = False, art: bool = False, serving: Shared | None = None
+) -> Path | None:
     """The snapshot directory of `t`, taken now unless an up-to-date one exists; None after
-    printing why it could not be taken. The other `match` subcommands start from this.
+    printing why it could not be taken. The other `match` subcommands start from this. Given
+    `serving` (`shared`), it neither builds nor starts a server of its own.
     """
+    build = serving is None
     out = t.directory()
     digest = inputs(t, art)
     stamp = out / "inputs.txt"
@@ -217,7 +270,9 @@ def ensure(t: Target, fresh: bool = False, art: bool = False) -> Path | None:
         return out
     stamp.unlink(missing_ok=True)
 
-    printed = compare.b3d(["tree", t.recording, *t.common(), "--at", t.at, "--records"])
+    printed = compare.b3d(
+        ["tree", t.recording, *t.common(), "--at", t.at, "--records"], build
+    )
     if printed is None:
         return None
     printout = json.loads(printed.strip().splitlines()[-1])
@@ -237,20 +292,20 @@ def ensure(t: Target, fresh: bool = False, art: bool = False) -> Path | None:
         )
         + "\n"
     )
-    failed = render_png(t, art, out / "b3d.png")
+    failed = render_png(t, art, out / "b3d.png", build)
     if failed:
         print(f"match snapshot: {failed}", file=sys.stderr)
         return None
 
     work = Path(tempfile.mkdtemp(prefix="b3d-match-"))
     try:
-        if compare.b3d(["export", str(work), "--only", t.recording]) is None:
+        if compare.b3d(["export", str(work), "--only", t.recording], build) is None:
             return None
         exported = work / f"{t.recording.replace('/', '__')}.{t.seat}.json"
         messages = json.loads(exported.read_text())
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    printed_lines, failed = dump_web(t, messages, moment, art, out)
+    printed_lines, failed = dump_web(t, messages, moment, art, out, serving)
     if failed:
         print(f"match snapshot: {failed}", file=sys.stderr)
         return None

@@ -77,13 +77,15 @@ def target(args: argparse.Namespace) -> tuple[str, str, str]:
     return args.recording, args.seat or "you", args.size or DEFAULT_SIZE[args.layout]
 
 
-def b3d(arguments: list[str]) -> str | None:
+def b3d(arguments: list[str], build: bool = True) -> str | None:
     """The output of the `b3d` program's text command `arguments`, or None after printing why
-    it failed. It builds `b3d` as `just b3d tree` does, and the recordings pack if missing.
+    it failed. It builds `b3d` as `just b3d tree` does, unless `build` is False because the
+    caller already has, and the recordings pack if missing.
     """
     from . import cli
 
-    if cli.quick_build(["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"]) != 0:
+    built = ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"]
+    if build and cli.quick_build(built) != 0:
         return None
     line = [str(cli.linked("b3d")), *arguments]
     done = subprocess.run(line, capture_output=True, text=True, check=False)

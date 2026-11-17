@@ -42,6 +42,10 @@ pub(super) const STOP_AFTER: &str = "--stop-after";
 /// The switch that plays the phone windows of the matrix instead of the desktop ones.
 pub(super) const PHONE_ONLY: &str = "--phone-only";
 
+/// The switch that prints the names of the tests the rest of the command line would play, one
+/// a line, and plays none (`just b3d match boxes --all` reads it).
+pub(super) const LIST: &str = "--list";
+
 /// How many rules the closing summary names as having the most listed faults.
 const MOST_RULES: usize = 3;
 
@@ -74,6 +78,10 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
     let tests = runner::tests(prefix, windows).map_err(Usage)?;
     if tests.is_empty() {
         return Err(nothing_matches(prefix)?);
+    }
+    if options.switch(LIST) {
+        let names: String = tests.iter().map(|test| test.name() + "\n").collect();
+        return Ok(Printed::text(names));
     }
     let limits = match mode {
         Mode::AtCheckTimes => Some(Limits::read().map_err(Usage)?),

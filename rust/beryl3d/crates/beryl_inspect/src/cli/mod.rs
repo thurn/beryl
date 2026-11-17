@@ -207,6 +207,7 @@ const COMMANDS: [Command; 8] = [
                 test::UPDATE,
                 test::RAISE,
                 test::PHONE_ONLY,
+                test::LIST,
             ],
         },
         own: &[
@@ -229,6 +230,10 @@ const COMMANDS: [Command; 8] = [
             (
                 "--phone-only",
                 "the phone windows (393x759, 375x647, 430x932) instead of the desktop ones",
+            ),
+            (
+                "--list",
+                "print the names of the tests it would play, one a line, and play none",
             ),
         ],
         run: test::test,

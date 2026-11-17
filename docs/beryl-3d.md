@@ -4285,10 +4285,17 @@ reference is the web interface as WebKit draws it, at scale 2.
   report warns when a bundled font's `name` table differs from the web's WOFF2
   file of the same face. Neither side draws card scans unless `--art` is given,
   and then both read the app's scan cache.
-- **Boxes and styles.** Elements are paired by locator, then by role, name and
-  parent, then by role and the nearest box. Box differences, extra text lines,
-  overlaps only one side has, differing style values, and web style values
-  `Style` cannot express are each listed worst first.
+- **Boxes and styles.** Elements are paired by locator, then by role, name (or
+  card) and parent, then by role and the nearest box within 24 points; the pairs
+  and what is left over go to the snapshot's `joined.json`. "The same parent"
+  means that the nearest ancestors already paired are each other's pair, since
+  the web nests many more unnamed elements. `just b3d match boxes` lists, worst
+  first, box differences over half a point, text broken into a different number
+  of lines (an element's lines include those of its unpaired descendants, as the
+  web puts a button's label on a span inside it), the unpaired elements on each
+  side, and text overlaps only one side has; `--all` runs every test target.
+  Differing style values and web style values `Style` cannot express are each
+  listed worst first.
 - **Effects.** A conformance suite draws single elements with the box shadows,
   gradients, drop shadows, filters and masks the web interface uses, in WebKit
   and in Beryl 3D's renderer, and holds each within a small tolerance.

@@ -124,6 +124,13 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   change; `--fresh` takes it again and `--art` draws the app's scans on both
   sides. `just b3d tree <recording> --at <moment> --records` prints Beryl 3D's
   records alone.
+- `just b3d match boxes <recording> --at <moment>` pairs the two clients'
+  elements and prints the layout differences as numbers, worst first: each
+  paired element whose box moved or resized by more than half a point (web box,
+  Beryl 3D box, dx dy dw dh) or whose text wraps onto a different number of
+  lines (`WRAP n/m`), the elements only one side has, and text drawn over other
+  text on one side only. `--all` runs every desktop and phone test target at
+  its end; give a prefix (`--all opening-play`) to run one recording's.
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>` (1600x900 by default),

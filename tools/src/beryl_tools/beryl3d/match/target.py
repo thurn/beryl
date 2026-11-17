@@ -69,12 +69,21 @@ class Target:
         return path
 
 
-def arguments(parser: argparse.ArgumentParser) -> None:
-    """The target's arguments, which every `just b3d match` subcommand takes."""
+def arguments(parser: argparse.ArgumentParser, every: bool = False) -> None:
+    """The target's arguments, which every `just b3d match` subcommand takes. With `every`, the
+    subcommand also runs over every test target (`--all`), so the recording and the moment
+    may be left out: the subcommand checks that one of the two ways was given."""
     parser.add_argument(
-        "recording", help="a recording `just b3d list` names, or a test's name"
+        "recording",
+        nargs="?" if every else None,
+        help="a recording `just b3d list` names, or a test's name"
+        + (" (with --all, a prefix of the tests' names)" if every else ""),
     )
-    parser.add_argument("--at", required=True, help="the moment, as `tree` takes it")
+    parser.add_argument(
+        "--at",
+        required=not every,
+        help="the moment, as `tree` takes it" + (" (--all: end)" if every else ""),
+    )
     parser.add_argument("--seat", choices=("you", "opponent"), default=None)
     parser.add_argument("--layout", choices=("desktop", "phone"), default=None)
     parser.add_argument("--size", default=None, help="<width>x<height> in points")
