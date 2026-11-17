@@ -112,7 +112,12 @@ impl Table {
     /// card that was drawn before the row scrolled is drawn part of the way from where it was
     /// to where it rests, and one that was not fades in where it rests. Returns whether it
     /// slides or fades.
-    pub(super) fn slide_look(&self, slot: usize, object: &mut SceneObject, now: u64) -> bool {
+    pub(in crate::table) fn slide_look(
+        &self,
+        slot: usize,
+        object: &mut SceneObject,
+        now: u64,
+    ) -> bool {
         let slide = &self.slide;
         let (Some(share), Some((pose, seen))) =
             (slide.share(now), slide.from.get(slot).copied().flatten())

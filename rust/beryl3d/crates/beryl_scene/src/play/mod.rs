@@ -202,8 +202,9 @@ impl Show {
         &mut self.pointer
     }
 
-    /// Where `subject` is at `now` and how large: a card where `pose` has it, an ability on
-    /// the stack where `ability_pose` has it, a player at their anchor (`Table::player_pose`).
+    /// Where `subject` is at `now` and how large: a card where it is drawn (`drawn_pose`), an
+    /// ability on the stack where `ability_pose` has it, a player at their anchor
+    /// (`Table::player_pose`).
     #[must_use]
     pub fn reach(&self, subject: Subject, now: u64) -> Option<Reach> {
         let card = |pose: Pose| Reach {
@@ -211,7 +212,7 @@ impl Show {
             half: Vec2::new(CARD_WIDTH, CARD_HEIGHT) * 0.5 * pose.scale,
         };
         match subject {
-            Subject::Object { slot } => self.pose(usize::from(slot.0), now).map(card),
+            Subject::Object { slot } => self.drawn_pose(usize::from(slot.0), now).map(card),
             Subject::Player { player } => Some(Reach {
                 pose: self.table.player_pose(player),
                 half: Vec2::ZERO,
@@ -346,6 +347,15 @@ impl Show {
             return Some(track.pose_at(playing.clock(now)));
         }
         self.table.rest(slot)
+    }
+
+    /// Where the object in `slot` is drawn at `now`: where `pose` puts it, moved as the table
+    /// draws it by a row's slide, the tray's move and the box that shows it
+    /// (`Table::drawn_pose`). A mark, arrow or effect on a card goes with the card, instead of
+    /// staying where its track or its rest is while the card stands in a box or flies to the
+    /// tray.
+    fn drawn_pose(&self, slot: usize, now: u64) -> Option<Pose> {
+        Some(self.table.drawn_pose(slot, self.pose(slot, now)?, now))
     }
 
     /// Where the object in `slot` will rest once every script given so far has played: at the

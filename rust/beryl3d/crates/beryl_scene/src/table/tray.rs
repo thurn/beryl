@@ -299,6 +299,22 @@ impl Table {
         object.pose
     }
 
+    /// Where the card in `slot` is drawn at `now`, given `pose`, where the playing script's track
+    /// or its rest puts it: moved as `write` moves it, by the slide of a row that scrolled, the
+    /// tray's move into or out of the tray, and the box that shows it. `pose` itself for a slot
+    /// the table holds no card in.
+    #[must_use]
+    pub fn drawn_pose(&self, slot: usize, pose: Pose, now: u64) -> Pose {
+        let Some(mut object) = self.objects.cards.get(slot).copied().flatten() else {
+            return pose;
+        };
+        object.pose = pose;
+        self.slide_look(slot, &mut object, now);
+        self.tray_look(slot, &mut object, now);
+        self.shown_look(slot, &mut object, now);
+        object.pose
+    }
+
     /// Changes `object`, the card in `slot` as it rests, for the move of the tray's cards under
     /// way at `now`: it is drawn part of the way from where it was as the move began. Returns
     /// whether it moves.
