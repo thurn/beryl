@@ -67,6 +67,13 @@ just b3d film verbs-zones --from 0ms --to 3s --frames 12   # twelve frames in on
   `--every <duration>` chooses the frames; `--crop` follows one element. Use it
   to see an animation's path, and `diff` or `tree` to find out why.
 
+- **`parity`** prints the parity list, one line per kind of item the web
+  interface shows, `<kind> <done> / <total>` and up to five items still missing
+  (`--full` for all, `--json` for the report). It runs every interface test on
+  the desktop and phone windows, a minute or two; `--results <dir>` reads saved
+  `test --json` outputs instead. `--check` only checks that
+  `data/beryl3d/parity.json` maps every skill and web screen file.
+
 Pictures are drawn in the Baseline tier with placeholder card faces, and text in
 the table is not drawn yet.
 

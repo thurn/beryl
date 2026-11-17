@@ -85,18 +85,9 @@ fn the_screens_file_names_a_fixture_for_every_prompt_shape() {
 /// recording does not show would count in the parity list without being there.
 #[test]
 fn every_built_screen_shows_in_its_recording() {
-    use std::str::FromStr;
-
-    use beryl_scene::driver::Moment;
-    use beryl_scene::input::Size;
-
     let path = recordings::root().join("data/beryl3d/screens.json");
     let text = std::fs::read_to_string(&path).expect("the screens file is readable");
     let file: serde_json::Value = serde_json::from_str(&text).expect("the screens file is JSON");
-    let size = Size {
-        width: 1600.0,
-        height: 900.0,
-    };
     for screen in file["screens"]
         .as_array()
         .expect("the screens file lists screens")
@@ -105,23 +96,67 @@ fn every_built_screen_shows_in_its_recording() {
         if screen["built"] != serde_json::Value::Bool(true) {
             continue;
         }
-        let field = |key: &str| {
-            screen[key]
-                .as_str()
-                .unwrap_or_else(|| panic!("{name}, marked built, names no `{key}`"))
-        };
-        let (recording, at, shows) = (field("recording"), field("at"), field("shows"));
-        let mut page = beryl_inspect::pages::page(recording, Side::You, Layout::Desktop, size)
-            .unwrap_or_else(|why| panic!("{name}: {why}"));
-        let moment = Moment::from_str(at).unwrap_or_else(|why| panic!("{name}: {at}: {why:?}"));
-        page.seek(&moment)
-            .unwrap_or_else(|why| panic!("{name}: {why}"));
-        page.still();
-        let tree = page.tree();
-        assert!(
-            tree.contains(shows),
-            "{name}: {recording} at {at} shows no {shows}:\n{tree}"
-        );
+        assert_shows(name, screen);
+    }
+}
+
+/// Asserts that the recording `entry` names shows the tree line its `shows` names at the
+/// moment its `at` names, from the player's seat in the usual desktop window. `name` says
+/// which entry failed. The screens file's built screens and the conventions files' entries
+/// are both held to this.
+pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
+    use std::str::FromStr;
+
+    use beryl_scene::driver::Moment;
+    use beryl_scene::input::Size;
+
+    let field = |key: &str| {
+        entry[key]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name} names no `{key}`"))
+    };
+    let (recording, at, shows) = (field("recording"), field("at"), field("shows"));
+    let size = Size {
+        width: 1600.0,
+        height: 900.0,
+    };
+    let mut page = beryl_inspect::pages::page(recording, Side::You, Layout::Desktop, size)
+        .unwrap_or_else(|why| panic!("{name}: {why}"));
+    let moment = Moment::from_str(at).unwrap_or_else(|why| panic!("{name}: {at}: {why:?}"));
+    page.seek(&moment)
+        .unwrap_or_else(|why| panic!("{name}: {why}"));
+    page.still();
+    let tree = page.tree();
+    assert!(
+        tree.contains(shows),
+        "{name}: {recording} at {at} shows no {shows}:\n{tree}"
+    );
+}
+
+/// Every recording `data/beryl3d/parity.json` names for a verb, an effect or a mark is a
+/// recording of the pack, so the parity list counts each by a recording the tests play.
+#[test]
+fn the_parity_file_names_recordings_of_the_pack() {
+    let path = recordings::root().join("data/beryl3d/parity.json");
+    let text = std::fs::read_to_string(&path).expect("the parity file is readable");
+    let file: serde_json::Value = serde_json::from_str(&text).expect("the parity file is JSON");
+    let names: Vec<String> = recordings::names()
+        .expect("the recordings pack is readable")
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+    for key in ["verbs", "effects", "marks"] {
+        let mapped = file[key]
+            .as_object()
+            .unwrap_or_else(|| panic!("the parity file maps {key}"));
+        assert!(!mapped.is_empty(), "the parity file maps no {key}");
+        for (item, recording) in mapped {
+            let recording = recording.as_str().expect("each item names a recording");
+            assert!(
+                names.iter().any(|name| name == recording),
+                "{key}: {item} names {recording:?}, which `just b3d list` does not list"
+            );
+        }
     }
 }
 

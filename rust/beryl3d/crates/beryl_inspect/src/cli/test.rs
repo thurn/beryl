@@ -130,7 +130,8 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
             tests.dedup();
             tests.len()
         });
-    log(&outcomes, &failing(&shown, comparison.as_ref()));
+    let failing = failing(&shown, comparison.as_ref());
+    log(&outcomes, &failing);
     let report = Report {
         command: options.command_line(),
         found: grouped(&shown),
@@ -142,6 +143,7 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
         frames: Frames::of(&outcomes),
         failed,
         outcomes: &outcomes,
+        failing,
         deferred,
         seconds,
     };
@@ -226,6 +228,8 @@ struct Report<'a> {
     slowest: Vec<&'a Outcome>,
     frames: Option<Frames>,
     failed: usize,
+    /// The names of the tests that fail ([`failing`]), for the JSON output's `results`.
+    failing: BTreeSet<String>,
     /// How many tests had not started when `--stop-after` passed.
     deferred: usize,
     /// The run's time on the clock.
@@ -289,6 +293,13 @@ impl Report<'_> {
                 "seconds": o.seconds,
                 "frames": o.frames,
             })).collect::<Vec<_>>(),
+            // Every test played and whether it passed, as the run log has them, so that
+            // `just b3d parity` can tell which recordings pass from both seats in every window.
+            "results": self.outcomes.iter().map(|o| {
+                let name = o.test.name();
+                let outcome = if self.failing.contains(&name) { "fail" } else { "pass" };
+                json!({ "test": name, "outcome": outcome })
+            }).collect::<Vec<_>>(),
             "seconds": self.seconds,
             "test_ms": self.test_ms(),
             "judged": Rule::ALL.iter().map(|&rule| {

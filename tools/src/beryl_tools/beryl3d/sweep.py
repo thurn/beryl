@@ -153,6 +153,9 @@ OWN: tuple[SweepStep, ...] = (
     # Instructions per frame under Callgrind in `beryl3d-bench`, an arm64 Linux machine that
     # only Apple silicon runs (counts.py).
     SweepStep("frame-counts", (*BY, "b3d", "gate", "--counts"), (MAC,), SLOW),
+    # The parity list's data maps every skill directory and web screen file, and names nothing
+    # that no longer exists (parity.py). It never fails for an incomplete list.
+    SweepStep("parity-list", (*BY, "b3d", "parity", "--check")),
 )
 
 

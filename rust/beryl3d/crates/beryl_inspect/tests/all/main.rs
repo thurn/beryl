@@ -5,6 +5,7 @@
 //! allocator, and a binary has only one.
 
 mod cli;
+mod conventions;
 mod differential;
 mod faults;
 mod frame_allocation;

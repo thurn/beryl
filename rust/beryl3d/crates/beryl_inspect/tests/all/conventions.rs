@@ -1,0 +1,66 @@
+//! The conventions files, `data/beryl3d/conventions/<kind>.json`: how Beryl 3D follows each
+//! entry of `data/ui-conventions.json`, one file per section kind, for the parity list to count.
+
+use beryl_inspect::recordings;
+
+use crate::screens::assert_shows;
+
+/// The section kinds of `data/ui-conventions.json` that have a conventions file.
+const KINDS: [&str; 4] = ["exception", "settled", "no-equivalent", "not-seen"];
+
+fn read(path: &str) -> serde_json::Value {
+    let text = std::fs::read_to_string(recordings::root().join(path))
+        .unwrap_or_else(|why| panic!("{path} is not readable: {why}"));
+    serde_json::from_str(&text).unwrap_or_else(|why| panic!("{path} is not JSON: {why}"))
+}
+
+/// Each conventions file's entries, by name, with the file's kind.
+fn entries() -> Vec<(&'static str, String, serde_json::Value)> {
+    KINDS
+        .iter()
+        .flat_map(|&kind| {
+            let file = read(&format!("data/beryl3d/conventions/{kind}.json"));
+            file["entries"]
+                .as_object()
+                .unwrap_or_else(|| panic!("conventions/{kind}.json has `entries`"))
+                .iter()
+                .map(|(name, entry)| (kind, name.clone(), entry.clone()))
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// A conventions file's key that names no entry of its section kind would count a convention
+/// that does not exist, or one of another kind.
+#[test]
+fn every_key_names_an_entry_of_its_section() {
+    let conventions = read("data/ui-conventions.json");
+    let listed = conventions["entries"]
+        .as_array()
+        .expect("ui-conventions.json lists entries");
+    for (kind, name, _) in entries() {
+        assert!(
+            listed
+                .iter()
+                .any(|e| e["kind"] == kind && e["name"].as_str() == Some(&name)),
+            "conventions/{kind}.json: {name:?} is no `{kind}` entry of data/ui-conventions.json"
+        );
+    }
+}
+
+/// Each entry is either a recording, a moment and a tree line that show Beryl 3D following the
+/// convention, and the recording shows that line then, or an open entry with its reason.
+#[test]
+fn every_entry_shows_in_its_recording_or_is_open() {
+    for (kind, name, entry) in entries() {
+        let label = format!("conventions/{kind}.json: {name}");
+        if entry.get("recording").is_some() {
+            assert_shows(&label, &entry);
+        } else {
+            assert!(
+                entry["open"].as_str().is_some_and(|why| !why.is_empty()),
+                "{label} is neither {{\"recording\", \"at\", \"shows\"}} nor {{\"open\"}}"
+            );
+        }
+    }
+}
