@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import json
 import re
 import shlex
@@ -443,17 +444,28 @@ def web_lines(pack: str, directory: Path) -> list[str]:
     if done.returncode != 0:
         sys.stderr.write(done.stderr)
         raise SystemExit(done.returncode)
-    cached.write_text(done.stdout)
+    # Written beside the cache file and renamed onto it, so a run that starts meanwhile (the
+    # sweep runs `timeline-parity` and `timeline-parity-all` at once, and the fast check's trees
+    # share this cache) finds no file or the whole one, never the part written so far.
+    partial = cached.with_name(f"{cached.name}.{os.getpid()}.tmp")
+    partial.write_text(done.stdout)
+    os.replace(partial, cached)
     prune_web_cache(cached.parent)
     return done.stdout.splitlines()
 
 
 def prune_web_cache(directory: Path, now: float | None = None) -> None:
-    """Deletes the cached web timelines not written within [`WEB_CACHE_DAYS`]. Each change to
-    the web timeline's sources writes a new file, so without this they pile up."""
+    """Deletes the cached web timelines not written within [`WEB_CACHE_DAYS`], with any partial
+    file a killed run left. Each change to the web timeline's sources writes a new file, so
+    without this they pile up."""
     oldest = (time.time() if now is None else now) - WEB_CACHE_DAYS * 86400
-    for file in directory.glob("web-timelines-*.jsonl"):
-        if file.stat().st_mtime < oldest:
+    for file in directory.glob("web-timelines-*"):
+        try:
+            written = file.stat().st_mtime
+        except FileNotFoundError:
+            # Another run renamed or pruned it after the listing.
+            continue
+        if written < oldest:
             file.unlink(missing_ok=True)
 
 

@@ -150,16 +150,25 @@ fn all(options: &Options) -> Result<Printed, Usage> {
     }
     let directory = pack::cache_dir().join("out");
     fs::create_dir_all(&directory).map_err(|e| Usage(format!("{}: {e}", directory.display())))?;
-    let run = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs());
-    let path = directory.join(format!("timeline-{run}.jsonl"));
+    let path = directory.join(run_file_name());
     fs::write(&path, text).map_err(|e| Usage(format!("{}: {e}", path.display())))?;
     Ok(Printed::text(format!(
         "{}\n{}\n{recordings} recordings, {count} lines\n",
         options.command_line(),
         path.display()
     )))
+}
+
+/// The name of the file that one `timeline --all` run writes: the time in nanoseconds and the
+/// process id. The fast check's trees and the Beryl 3D sweep share the cache's `out` folder,
+/// and the sweep runs `timeline-parity` and `timeline-parity-all` at once in one tree. When
+/// the name held only the second, two runs that finished in the same second wrote one file,
+/// and the first to finish deleted it before the second read it.
+fn run_file_name() -> String {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| since.as_nanos());
+    format!("timeline-{nanos}-{}.jsonl", std::process::id())
 }
 
 /// `messages` with the session's `stage_timings` response first, unless they hold one. The
@@ -219,4 +228,20 @@ pub(super) fn export(options: &Options) -> Result<Printed, Usage> {
         options.command_line(),
         directory.display()
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::run_file_name;
+
+    #[test]
+    fn two_runs_never_share_a_file() {
+        let first = run_file_name();
+        std::thread::sleep(std::time::Duration::from_micros(10));
+        assert_ne!(first, run_file_name());
+        assert!(
+            first.ends_with(&format!("-{}.jsonl", std::process::id())),
+            "{first}"
+        );
+    }
 }

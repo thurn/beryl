@@ -230,12 +230,14 @@ def test_pruning_the_web_cache_keeps_only_recent_files(tmp_path: Path) -> None:
     old = tmp_path / "web-timelines-old.jsonl"
     recent = tmp_path / "web-timelines-recent.jsonl"
     other = tmp_path / "other.jsonl"
-    for file in (old, recent, other):
+    partial = tmp_path / "web-timelines-killed.jsonl.123.tmp"
+    for file in (old, recent, other, partial):
         file.write_text("")
         os.utime(file, (now - 3 * 86400, now - 3 * 86400))
     os.utime(recent, (now - 3600, now - 3600))
     timeline.prune_web_cache(tmp_path, now)
     assert not old.exists() and recent.exists() and other.exists()
+    assert not partial.exists()
 
 
 def test_web_hash_moves_with_every_file_the_web_timeline_imports(

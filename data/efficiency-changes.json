@@ -233,5 +233,10 @@
     "label": "A flaky-check bead and its repeat comments quote the failed attempt's output, kept for 14 days in $BERYL_CACHE/ci/flakes, instead of naming only the step and sending an Opus session to look for logs that the rerun and the Beryl 3D sweep had already overwritten (6 such beads for whole steps open on 2026-11-17)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The `just b3d timeline-parity` command names Beryl 3D's timeline file by nanosecond and process id, and writes the web timeline cache by rename, so the Beryl 3D sweep's timeline-parity and timeline-parity-all steps, which run at once and share $BERYL_CACHE/b3d, no longer delete or half-read each other's files (the cause behind flaky-check beads by-o3wua and by-s9etj)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
