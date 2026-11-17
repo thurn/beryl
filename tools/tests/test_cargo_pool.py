@@ -260,22 +260,37 @@ def test_an_agent_build_starts_on_free_tokens_while_ci_gives_back(
     assert not pool.holders()
 
 
-def test_a_push_build_still_waits_for_lower_classes(
+def test_a_push_build_starts_on_free_tokens_and_holds_lower_classes_back(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    cargo, out = fake_cargo(tmp_path / "bin")
+    # A push's build that found nothing to compile waited the whole reclaim time first, in a
+    # quarter of the fast checks' builds on 2026-11-16. Now it starts on the three free tokens
+    # at once, and while it runs short its waiter's file tells slow CI to give tokens back.
+    release: Path = tmp_path / "release"
+    cargo, out = fake_cargo(tmp_path / "bin", release)
     monkeypatch.setenv(cargo_pool.REAL_ENV, str(cargo))
     monkeypatch.setenv(tokens.CLASS_ENV, "push")
-    monkeypatch.setattr(tokens, "RECLAIM_SECONDS", 0.3)
-    pool = Pool(tmp_path / "pool", 9)
+    monkeypatch.setattr(tokens, "RECLAIM_SECONDS", 3600.0)
+    pool: Pool = Pool(tmp_path / "pool", 9)
     ci = pool.acquire("ci", 5, elastic_from=1)
     assert ci is not None
-    # Nothing gives the elastic tokens back here, so the push waits out the reclaim time
-    # before it takes the three that are free.
+    seen: list[bool] = []
+
+    def slow_ci() -> None:
+        deadline = time.monotonic() + 5
+        while not pool.higher_waiting("ci") and time.monotonic() < deadline:
+            time.sleep(0.01)
+        seen.append(pool.higher_waiting("ci"))
+        release.touch()
+
+    thread = threading.Thread(target=slow_ci)
+    thread.start()
     assert cargo_pool.run(["build"], pool) == 0
+    thread.join(5)
+    assert seen == [True]
     assert json.loads(out.read_text())["tokens"] == "3"
     line = json.loads((pool.root / tokens.LEASE_LOG).read_text().splitlines()[-1])
-    assert line["class"] == "push" and line["waited_s"] >= 0.3
+    assert line["class"] == "push" and line["waited_s"] < 1.0
     ci.release()
 
 

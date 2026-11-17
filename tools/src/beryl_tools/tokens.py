@@ -98,7 +98,6 @@ seconds at a time from Node, which would need the same protocol written again th
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import random
@@ -618,9 +617,10 @@ def acquire(
     want: int,
     give_up: Callable[[], bool] = lambda: False,
     command: str = "",
+    hold_out: bool = True,
 ) -> Lease | None:
     """A lease from the machine's pool (`Pool.acquire`)."""
-    return Pool().acquire(klass, want, give_up, command)
+    return Pool().acquire(klass, want, give_up, command, hold_out=hold_out)
 
 
 def lease(
@@ -648,9 +648,15 @@ def run_program(
     while the program runs (`run_growing`); only a program that reads [`GRANT_FILE_ENV`] and
     adds threads may ask for that, or the extra tokens would sit idle. `want` is the most tokens
     the program can use, `largest` by default; a single-threaded program passes 1, so that it
-    never waits out `RECLAIM_SECONDS` for tokens it would leave idle."""
+    never waits out `RECLAIM_SECONDS` for tokens it would leave idle.
+
+    A growing lease starts at once on the free tokens, and lower classes give theirs back while
+    it runs (`run_growing`), rather than waiting out `RECLAIM_SECONDS` first: the commit that
+    made this change counts the waits it removed from Beryl 3D's `record`."""
     wanted = want or largest(pool_size())
-    lease = acquire(named_class(), wanted, command=Path(command[0]).name)
+    lease = acquire(
+        named_class(), wanted, command=Path(command[0]).name, hold_out=not grow
+    )
     assert lease is not None
     with lease:
         env = {**(kwargs.pop("env", None) or os.environ), **lease.env()}
@@ -672,8 +678,11 @@ def run_growing(
     and the tests after `record` were cut off at the 180 s limit in every run that reached
     them. For a push or the merge queue ([`GROW_AS_WAITER`]) the lease also counts as a waiter
     while it is short, so the tokens agents give back or release come to it rather than to the
-    next agent; such a lease lasts at most the length of the check step."""
+    next agent; such a lease lasts at most the length of the check step. Any other class counts
+    as a waiter for its first `RECLAIM_SECONDS`, as long as `Pool.acquire` would have waited.
+    """
     pool = Pool()
+    reclaiming = time.monotonic() + RECLAIM_SECONDS
     klass = lease.klass
     # The name `top_up` uses for this thread's waiter, so its own file is not a rival.
     me = pool.root / f"wait-{os.getpid()}-{threading.get_ident()}-{klass}"
@@ -699,8 +708,10 @@ def run_growing(
     try:
         while runner.is_alive():
             if lease.size < lease.wanted:
-                if klass in GROW_AS_WAITER:
+                if klass in GROW_AS_WAITER or time.monotonic() < reclaiming:
                     me.write_text(f"{os.getpid()} {klass}")
+                else:
+                    me.unlink(missing_ok=True)
                 before = lease.size
                 lease.grow(pool.top_up(klass, lease.size, lease.wanted))
                 if lease.size != before:
@@ -746,52 +757,3 @@ def unheld(env: dict[str, str]) -> dict[str, str]:
     takes its own tokens, such as a sweep that slow CI starts from inside a step's lease.
     """
     return {k: v for k, v in env.items() if k not in HELD_ENV}
-
-
-def status(_args: argparse.Namespace) -> int:
-    pool = Pool()
-    with system.file_lock(pool.root / "lock"):
-        held = pool.holders()
-        waiting = pool.waiters()
-    print(f"{len(held)} of {pool.size} tokens held")
-    for klass in CLASSES:
-        pids: dict[int, int] = {}
-        for h in held.values():
-            if h.klass == klass:
-                pids[h.pid] = pids.get(h.pid, 0) + 1
-        queued = sum(1 for _, w in waiting if w.klass == klass)
-        if pids or queued:
-            leases = ", ".join(f"pid {p}: {n}" for p, n in sorted(pids.items()))
-            print(f"  {klass}: {leases or 'none held'}; {queued} waiting")
-    return 0
-
-
-def run(args: argparse.Namespace) -> int:
-    """Runs a command inside a lease of `--class` tokens, at most `--cores`."""
-    command = args.extra[1:] if args.extra[:1] == ["--"] else args.extra
-    if not command:
-        print("tokens run: no command", file=sys.stderr)
-        return 2
-    lease = acquire(
-        args.klass,
-        args.cores or largest(pool_size()),
-        command=Path(command[0]).name,
-    )
-    assert lease is not None
-    with lease:
-        env = {**os.environ, **lease.env()}
-        return subprocess.run(
-            [system.which(command[0]), *command[1:]], env=env, check=False
-        ).returncode
-
-
-def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    p = sub.add_parser("tokens", help="the machine's CPU tokens: who holds and waits")
-    p.set_defaults(func=status)
-    r = sub.add_parser(
-        "tokens-run",
-        help="run a command inside a lease of CPU tokens (--class C, --cores N, -- COMMAND...)",
-    )
-    r.add_argument("--class", dest="klass", choices=CLASSES, default="agent")
-    r.add_argument("--cores", type=int, default=0, help="the most tokens to take")
-    r.set_defaults(func=run, passthrough=True)

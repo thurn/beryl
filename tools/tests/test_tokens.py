@@ -517,3 +517,48 @@ def test_a_single_threaded_program_takes_one_token_without_waiting(
     other.release()
     assert done.stdout.strip() == "1"
     assert time.monotonic() - started < tokens.RECLAIM_SECONDS / 2
+
+
+def test_a_growing_program_lease_starts_on_free_tokens_and_holds_lower_classes_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A sweep holds elastic tokens. A lease that does not grow waits out `RECLAIM_SECONDS` for
+    # them; a growing one, such as `record`'s, starts on the free token at once and is a waiter
+    # while it runs, so the sweep gives its tokens back to it.
+    root: Path = tmp_path / "pool"
+    monkeypatch.setattr(tokens, "Pool", lambda: Pool(root, 8))
+    monkeypatch.setattr(tokens, "pool_size", lambda: 8)
+    monkeypatch.setattr(tokens, "GROW_SECONDS", 0.05)
+    monkeypatch.setattr(tokens, "RECLAIM_SECONDS", 3600.0)
+    monkeypatch.setenv(tokens.CLASS_ENV, "agent")
+    sweep = Pool(root, 8).acquire("sweep", 2, never, elastic_from=0)
+    other = Pool(root, 8).acquire("agent", 3, never)
+    assert sweep is not None and other is not None
+    swept: tokens.Lease = sweep
+    seen: list[bool] = []
+
+    def give_back() -> None:
+        deadline = time.monotonic() + 5
+        while not Pool(root, 8).higher_waiting("sweep") and time.monotonic() < deadline:
+            time.sleep(0.01)
+        seen.append(Pool(root, 8).higher_waiting("sweep"))
+        swept.release()
+
+    giver = threading.Thread(target=give_back)
+    giver.start()
+    done = tokens.run_program(
+        [sys.executable, "-c", GROWN_PROGRAM, "3"],
+        grow=True,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    giver.join(5)
+    other.release()
+    assert seen == [True]
+    assert done.stdout.strip() == "3"
+    lines = [json.loads(t) for t in (root / tokens.LEASE_LOG).read_text().splitlines()]
+    [line] = [t for t in lines if t["command"] == Path(sys.executable).name]
+    assert (line["cores"], line["grown_to"]) == (1, 3)
+    assert line["waited_s"] < 1.0
+    assert not Pool(root, 8).holders() and not list(root.glob("wait-*"))

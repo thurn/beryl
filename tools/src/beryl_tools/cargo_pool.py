@@ -36,12 +36,15 @@ when it started, which the jobserver does not control.
 A lease that would start short of what it wants while lower classes hold elastic tokens waits up
 to `tokens.RECLAIM_SECONDS` for them. For an agent's incremental build that held its lease for
 under 2 s, that wait was 8 to 12 s: after a one-line edit, `just b3d tree` took 11 to 13 s against
-its 3 s target on 2026-11-16. So a command that compiles only, of a class below `push`
-(`STARTS_SHORT`), starts at once on the tokens that are free, and for the first
-`RECLAIM_SECONDS` keeps a waiter's file beside its lease (`wait_beside`), so that the
-lower classes give their elastic tokens back, which the lease then takes through its jobserver.
-A push's and the queue's builds still wait: their check steps run against a time limit and want
-every core they can get from the start.
+its 3 s target on 2026-11-16. Pushes paid the same wait: between 10:00 UTC 2026-11-16 and 00:10
+the next day, 989 of 1,158 push-class `cargo build` leases held their tokens under 3 s, because
+the build found nothing to compile, and a quarter of them had first waited the full 10 s. In the
+Beryl 3D lanes that build opens the `record` step every other step waits behind. So a command
+that compiles only (`SHRINKS`), of any class, starts at once on the tokens that are free, and for
+the first `RECLAIM_SECONDS` keeps a waiter's file beside its lease (`wait_beside`), so that the
+lower classes give their elastic tokens back, which the lease then takes through its jobserver
+within `GROW_SECONDS`. A build that has work to do loses at most those seconds of full width; one
+that has none finishes before the wait would have ended.
 
 An agent's lease still waits while a push or the queue waits, or while agents and slow CI hold
 their share of the pool. On 2026-11-16 at load 14 to 22, `just b3d tree` after a one-line edit
@@ -111,12 +114,6 @@ SHRINKS: frozenset[str] = frozenset({"build", "check", "clippy", "rustc", "doc"}
 # waits on it, such as `just b3d tree` (see the module comment). A build of a class that starts
 # short then never waits for tokens: it starts on the free ones, or on this many slots and none.
 FLOOR_ENV = "BERYL_CARGO_FLOOR"
-
-# The classes whose compile-only commands start on the tokens that are free instead of waiting
-# for lower classes to give theirs back, and grow as they do.
-STARTS_SHORT: frozenset[str] = frozenset(
-    k for k in tokens.CLASSES if tokens.CLASSES.index(k) > tokens.CLASSES.index("push")
-)
 
 
 def install() -> None:
@@ -211,7 +208,8 @@ def run(argv: list[str], pool: tokens.Pool | None = None) -> int:
     want = tokens.largest(pool.size)
     shrinks = subcommand(argv) in SHRINKS
     klass = tokens.named_class()
-    short = shrinks and klass in STARTS_SHORT
+    # Compile-only commands start on the free tokens and grow (see the module comment).
+    short = shrinks
     floor = floor_slots() if short else 0
     if floor:
         # The tokens free now, every one elastic, and no line in the pool's log, as for a

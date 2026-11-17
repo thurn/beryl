@@ -198,5 +198,10 @@
     "label": "The fast check's Beryl 3D cargo-test step runs its tests in waves when its CPU lease got fewer tokens than it wanted, taking the tokens that free up before each wave, instead of running every test on the 1-2 threads it started with (60-115 s on one thread against 18-25 s on twelve)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Push and queue cargo builds, and growing programs such as Beryl 3D's record, start at once on the CPU tokens that are free and hold lower classes back while they grow, instead of waiting up to 10 s for elastic tokens before a build or record that usually has nothing to do",
+    "metric": "machine.queued-core-hours-per-day",
+    "expect": "down"
   }
 ]
