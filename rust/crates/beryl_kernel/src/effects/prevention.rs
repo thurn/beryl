@@ -124,7 +124,17 @@ impl<L: Layout> State<L> {
                     timestamp: e.timestamp,
                     shield,
                 }),
-                _ => None,
+                Payload::Layer(_)
+                | Payload::Move(_)
+                | Payload::Rule(_)
+                | Payload::Cast(_)
+                | Payload::Cost(_)
+                | Payload::Regeneration
+                | Payload::Prevent(_)
+                | Payload::Copy(_)
+                | Payload::Text(_)
+                | Payload::Control(_)
+                | Payload::ExtraTurn => None,
             })
     }
 

@@ -261,7 +261,24 @@ pub fn read_layer(modification: Modification) -> Layer {
     match modification {
         Modification::SetPower(_) | Modification::SetPt(..) => Layer::PtDefining,
         Modification::AddChosenColor => Layer::Color,
-        _ => Layer::PtSetting,
+        Modification::Control
+        | Modification::AddTypes(_)
+        | Modification::RemoveTypes(_)
+        | Modification::SetTypes(_)
+        | Modification::AddSubtypeWord(_)
+        | Modification::SetSubtypeWord(_)
+        | Modification::SetLandTypeWords(_)
+        | Modification::AddKeywords(_)
+        | Modification::Grant(_)
+        | Modification::ModifyPt(..)
+        | Modification::LoseAllAbilities
+        | Modification::LoseAbility(_)
+        | Modification::SetColorWords(_)
+        | Modification::AddColorWords(_)
+        | Modification::SetBasePt(..)
+        | Modification::SwitchPt
+        | Modification::AddProtection(_)
+        | Modification::GrantEscape => Layer::PtSetting,
     }
 }
 

@@ -15,7 +15,7 @@ use crate::store::{Duration, Ended, Store};
 use crate::table::GameTable;
 
 use super::sets::Sets;
-use super::{Affects, ContinuousEffect, EFFECTS, Effects, Kinds, Payload};
+use super::{Affects, ContinuousEffect, CostChange, EFFECTS, Effects, Kinds, Payload};
 
 impl<L: Layout> Store<L> for Effects<L> {
     fn empty() -> Self {
@@ -207,7 +207,9 @@ impl<L: Layout> Store<L> for Effects<L> {
                     Duration::UntilYourNextTurn(theirs) if theirs == player => {
                         "until their next turn".to_owned()
                     }
-                    other => other.words(),
+                    other @ (Duration::EndOfTurn
+                    | Duration::UntilYourNextTurn(_)
+                    | Duration::Indefinite) => other.words(),
                 };
                 Some(format!(
                     "player {} {} {lasting}",
@@ -254,5 +256,27 @@ impl<L: Layout> Relayout for Effects<L> {
             kinds: self.kinds,
             rules: Table::from_fn(|player| self.rules[player]),
         }
+    }
+}
+
+impl<L: Layout> State<L> {
+    /// The generic mana the cost changes on the spell `object` add to its cost
+    /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "plus all additional
+    /// costs and cost increases"). With no cost change live on any object, one AND.
+    #[inline]
+    pub fn cost_increase(&self, object: ObjectRef<L>) -> u8 {
+        let affected = Affects::object(object);
+        self.effects
+            .of(Kinds::COST)
+            .iter()
+            .filter(|e| e.affected == affected)
+            .fold(0, |total, e| {
+                if let Payload::Cost(change) = e.payload {
+                    let CostChange::Increase(n) = change;
+                    total.saturating_add(n)
+                } else {
+                    total
+                }
+            })
     }
 }

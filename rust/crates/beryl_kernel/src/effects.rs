@@ -520,9 +520,13 @@ impl<L: Layout> Effects<L> {
     fn rules_on(&self, affected: Affects<L>) -> Rules {
         self.of(Kinds::RULE)
             .iter()
-            .fold(Rules::NONE, |rules, e| match e.payload {
-                Payload::Rule(rule) if e.affected == affected => rules.with(rule),
-                _ => rules,
+            .filter(|e| e.affected == affected)
+            .fold(Rules::NONE, |rules, e| {
+                if let Payload::Rule(rule) = e.payload {
+                    rules.with(rule)
+                } else {
+                    rules
+                }
             })
     }
 }
@@ -685,13 +689,15 @@ impl<L: Layout> State<L> {
         object: ObjectRef<L>,
     ) -> impl Iterator<Item = MoveReplacement> + '_ {
         let affected = Affects::object(object);
-        self.effects
-            .of(Kinds::MOVE)
-            .iter()
-            .filter_map(move |e| match e.payload {
-                Payload::Move(replacement) if e.affected == affected => Some(replacement),
-                _ => None,
-            })
+        self.effects.of(Kinds::MOVE).iter().filter_map(move |e| {
+            if let Payload::Move(replacement) = e.payload
+                && e.affected == affected
+            {
+                Some(replacement)
+            } else {
+                None
+            }
+        })
     }
 
     /// The permissions to cast, in the order they began: who may cast which card from a
@@ -703,22 +709,6 @@ impl<L: Layout> State<L> {
             .of(Kinds::CAST)
             .iter()
             .filter_map(ContinuousEffect::permission)
-    }
-
-    /// The generic mana the cost changes on the spell `object` add to its cost
-    /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "plus all additional
-    /// costs and cost increases"). With no cost change live on any object, one AND.
-    #[inline]
-    pub fn cost_increase(&self, object: ObjectRef<L>) -> u8 {
-        let affected = Affects::object(object);
-        self.effects
-            .of(Kinds::COST)
-            .iter()
-            .filter(|e| e.affected == affected)
-            .fold(0, |total, e| match e.payload {
-                Payload::Cost(CostChange::Increase(n)) => total.saturating_add(n),
-                _ => total,
-            })
     }
 
     /// The rule changes in force for `player` now, whoever makes them: a static ability of

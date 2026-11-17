@@ -55,7 +55,33 @@ fn library<L: Layout, M: Layout>(e: &Event<L>) -> Event<M> {
         },
         Event::TopOrBottom { player, top } => Event::TopOrBottom { player, top },
         Event::LibraryShuffled { player } => Event::LibraryShuffled { player },
-        _ => unreachable!("a library event"),
+        Event::ZoneChange { .. }
+        | Event::Damage { .. }
+        | Event::DrawCard { .. }
+        | Event::Reveal { .. }
+        | Event::LifeGain { .. }
+        | Event::LifeLoss { .. }
+        | Event::CountersAdded { .. }
+        | Event::CountersRemoved { .. }
+        | Event::Tap { .. }
+        | Event::Untap { .. }
+        | Event::Mana { .. }
+        | Event::ResolutionPayment { .. }
+        | Event::AbilityFinished
+        | Event::StackArrival { .. }
+        | Event::StackDeparture { .. }
+        | Event::TokensCreated { .. }
+        | Event::Cast { .. }
+        | Event::Ability { .. }
+        | Event::Attack { .. }
+        | Event::Block { .. }
+        | Event::StepBegins { .. }
+        | Event::GainControl { .. }
+        | Event::CoinFlip { .. }
+        | Event::Lose { .. }
+        | Event::Targeted { .. }
+        | Event::Win { .. }
+        | Event::Mutated { .. } => unreachable!("a library event"),
     }
 }
 

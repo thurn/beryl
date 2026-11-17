@@ -1,6 +1,8 @@
 //! The Effects store's tests: what it keeps across layouts, when it is full, and what ends
 //! its entries.
 
+#![allow(clippy::wildcard_enum_match_arm)]
+
 use beryl_card::Zone;
 
 use super::*;
