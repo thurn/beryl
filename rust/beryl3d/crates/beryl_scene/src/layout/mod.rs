@@ -79,7 +79,9 @@ struct Node {
     /// Its text, broken at the content box's width.
     block: Option<Block>,
     /// For an element anchored to a scene object, the object's centre on the window as the
-    /// last frame drew it (the middle of its box's top edge, for `Anchor::Above`), or `None` if the table did not show it (`Layer::follow`).
+    /// last frame drew it (the middle of its box's top edge for `Anchor::Above`, and of its
+    /// bottom edge for `Anchor::Below`), or `None` if the table did not show it
+    /// (`Layer::follow`).
     followed: Option<glam::Vec2>,
     /// Where its layout put its top left corner, relative to its tree's, once it has been
     /// placed.

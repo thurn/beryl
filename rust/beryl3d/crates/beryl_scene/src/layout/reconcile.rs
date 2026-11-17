@@ -102,7 +102,10 @@ impl Layer {
                 .expect("the node is in the tree");
             node.block = None;
         }
-        if !matches!(element.anchor, Some(Anchor::Object(..) | Anchor::Above(..))) {
+        if !matches!(
+            element.anchor,
+            Some(Anchor::Object(..) | Anchor::Above(..) | Anchor::Below(..))
+        ) {
             node.followed = None;
         }
         // A kept node of the screen whose opacity changes fades to it from how opaque it is.

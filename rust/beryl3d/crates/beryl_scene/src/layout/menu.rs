@@ -283,7 +283,9 @@ pub(super) fn place_menus(node: &mut Node, tree: Vec2, panel: Option<Rect>, wind
                     fit(row_top, size.y, window.height),
                 )
             }),
-            Some(Anchor::Point(..) | Anchor::Object(..) | Anchor::Above(..)) => {
+            Some(
+                Anchor::Point(..) | Anchor::Object(..) | Anchor::Above(..) | Anchor::Below(..),
+            ) => {
                 if let Some(corner) = child.corner() {
                     place_menus(child, corner, panel, window);
                 }

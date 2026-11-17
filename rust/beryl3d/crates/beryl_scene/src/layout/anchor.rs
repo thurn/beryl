@@ -28,6 +28,9 @@ impl Layer {
                 Some(Anchor::Above(subject, _)) => {
                     node.followed = spot(subject).map(|spot| spot.top);
                 }
+                Some(Anchor::Below(subject, _)) => {
+                    node.followed = spot(subject).map(|spot| spot.bottom);
+                }
                 _ => {}
             }
             for child in &mut node.children {
@@ -54,27 +57,34 @@ impl Node {
             Anchor::Above(_, gap) => {
                 (self.followed).map(|top| top - Vec2::new(size.x / 2.0, size.y + gap))
             }
+            Anchor::Below(_, gap) => {
+                (self.followed).map(|bottom| bottom + Vec2::new(-size.x / 2.0, gap))
+            }
             Anchor::Menu(_) => self.placed,
             Anchor::Submenu | Anchor::Tip => self.placed.filter(|_| self.shown),
         }
     }
 }
 
-/// Where a scene object stands on the window, in logical points: the centre of its box, and the
-/// middle of the box's highest edge (the highest point of the box, at its centre's x).
+/// Where a scene object stands on the window, in logical points: the centre of its box, the
+/// middle of the box's highest edge (the highest point of the box, at its centre's x) and the
+/// middle of its lowest edge.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spot {
     pub centre: Vec2,
     pub top: Vec2,
+    pub bottom: Vec2,
 }
 
 impl Spot {
-    /// A spot with no box, such as a player's life total's place, whose top is its centre.
+    /// A spot with no box, such as a player's life total's place, whose top and bottom are its
+    /// centre.
     #[must_use]
     pub fn point(at: Vec2) -> Self {
         Self {
             centre: at,
             top: at,
+            bottom: at,
         }
     }
 }
@@ -88,9 +98,11 @@ pub fn spot_of(builder: &FrameBuilder, table: &Table, subject: Subject) -> Optio
         let corners = builder.corners(ElementId(id))?;
         let centre = corners.iter().copied().sum::<Vec2>() / 4.0;
         let highest = (corners.iter()).fold(f32::INFINITY, |high, corner| high.min(corner.y));
+        let lowest = (corners.iter()).fold(f32::NEG_INFINITY, |low, corner| low.max(corner.y));
         Some(Spot {
             centre,
             top: Vec2::new(centre.x, highest),
+            bottom: Vec2::new(centre.x, lowest),
         })
     };
     match subject {

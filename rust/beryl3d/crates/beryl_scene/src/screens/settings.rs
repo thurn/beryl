@@ -108,7 +108,7 @@ pub fn settings(input: &ScreenIn) -> Element {
                 .child(mute)
                 .child(levels),
         )
-        .child(graphics(settings.graphics))
+        .child(graphics(settings.graphics, super::phone(input)))
         .child(
             row()
                 .gap(space::L)
@@ -167,8 +167,11 @@ fn in_game(input: &ScreenIn) -> bool {
 
 /// The graphics row: a label and one button for each way the visual tier is chosen, the saved
 /// one shown as the primary button and marked selected. Neither the web interface nor Arena has
-/// this setting, so it is built from the sheet's own buttons.
-fn graphics(chosen: Graphics) -> Element {
+/// this setting, so it is built from the sheet's own buttons. A phone's panel is too narrow for
+/// the label and three buttons in one row without shrinking their words under the phone's
+/// least text size, so on the `phone` the label stands over the buttons, one to a line across
+/// the panel.
+fn graphics(chosen: Graphics, phone: bool) -> Element {
     let choice = |label: &str, graphics: Graphics| {
         let element = if graphics == chosen {
             primary(label)
@@ -180,14 +183,25 @@ fn graphics(chosen: Graphics) -> Element {
             .selected(graphics == chosen)
             .on_press(Press::Setting(Setting::Graphics(graphics)))
     };
+    let choices = [
+        choice("Automatic", Graphics::Automatic),
+        choice("Baseline", Graphics::Baseline),
+        choice("Enhanced", Graphics::Enhanced),
+    ];
+    if phone {
+        return column()
+            .name("graphics")
+            .gap(space::S)
+            .align_items(Align::Stretch)
+            .child(text("Graphics"))
+            .children(choices);
+    }
     row()
         .name("graphics")
         .gap(space::M)
         .align_items(Align::Center)
         .child(text("Graphics"))
-        .child(choice("Automatic", Graphics::Automatic))
-        .child(choice("Baseline", Graphics::Baseline))
-        .child(choice("Enhanced", Graphics::Enhanced))
+        .children(choices)
 }
 
 /// A slider for `setting` named `label`, with the label beside it.
