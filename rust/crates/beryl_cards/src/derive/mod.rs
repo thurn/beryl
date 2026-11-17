@@ -40,7 +40,7 @@ mod recipe;
 mod witness;
 
 use play::{Answers, Walk, openings, walk};
-use position::{Place, early, preamble, start};
+use position::{Place, early, preamble, start, with_filter_partners};
 use witness::{Witness, witnesses};
 
 /// What every generated scenario's name starts with, which the oracles' report marks them by.
@@ -193,6 +193,17 @@ pub fn for_card(def: &'static CardDef) -> Generated {
             &opening.stimuli,
             &mut BTreeSet::new(),
         );
+    }
+    for place in Place::of(def) {
+        let base = start(def, place, None);
+        let Some(start) = with_filter_partners(def, place, &base) else {
+            continue;
+        };
+        let mut seen = BTreeSet::new();
+        for (label, stimuli) in openings(def, place, &start, &[], &preamble(def, place)) {
+            let label = format!("{label} {} with filter partners", place.words());
+            generator.opening(place, &start, &[], &label, &stimuli, &mut seen);
+        }
     }
     generated
 }

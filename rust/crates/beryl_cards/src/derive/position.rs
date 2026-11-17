@@ -2,8 +2,8 @@
 //! card, which the position holds only where the card starts.
 
 use beryl_engine::card::{
-    Ability, AbilityKind, CardDef, Cost, Face, FaceIx, ManaColor, Players, Rewrite, TriggerEvent,
-    Types,
+    Ability, AbilityKind, CardDef, Cost, Face, FaceIx, ManaColor, Players, Rewrite, Supertypes,
+    TriggerEvent, Types,
 };
 use beryl_engine::state::CounterKind;
 use beryl_engine::{TurnStep, Zone};
@@ -13,6 +13,10 @@ use super::PREFIX;
 use super::play::Stimulus;
 use super::witness::Witness;
 use crate::{names, props};
+
+mod partners;
+
+pub(super) use partners::printed;
 
 /// The turn a scenario's main phase is in, player 0 active.
 pub(super) const TURN: u16 = 3;
@@ -282,6 +286,44 @@ pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witnes
         },
     ];
     scenario
+}
+
+/// Play the original openings as well as this board. Adding legal targets can
+/// hide the case where a spell or ability has no legal target.
+pub(super) fn with_filter_partners(
+    def: &'static CardDef,
+    place: Place,
+    start: &Scenario,
+) -> Option<Scenario> {
+    if matches!(place, Place::Mana(..)) {
+        return None;
+    }
+    let mut battlefield = start.setup.players.map(|p| p.permanents.to_vec());
+    let before = battlefield.each_ref().map(Vec::len);
+    if !partners::add(def, &mut battlefield, early(def, place)) {
+        return None;
+    }
+
+    let [mine, theirs] = battlefield;
+    // The scenario explicitly lists named cards the generator chose outside the props.
+    let mut other: Vec<_> = mine[before[0]..]
+        .iter()
+        .chain(&theirs[before[1]..])
+        .map(|permanent| permanent.card)
+        .filter(|card| !props::ALL.iter().any(|prop| prop.card == *card))
+        .filter(|card| {
+            crate::CARDS
+                .cards()
+                .iter()
+                .any(|def| def.name == *card && !def.front().supertypes.contains(Supertypes::BASIC))
+        })
+        .collect();
+    other.sort_unstable();
+    other.dedup();
+    let mut scenario = (*start).interaction(leak(other));
+    scenario.setup.players[0].permanents = leak(mine);
+    scenario.setup.players[1].permanents = leak(theirs);
+    Some(scenario)
 }
 
 /// A Mountain for each {R} and a Forest for each {G} of the costliest of `def`'s faces in

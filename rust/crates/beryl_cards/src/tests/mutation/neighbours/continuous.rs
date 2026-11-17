@@ -5,25 +5,25 @@ use beryl_card::{
     Replaced, Replacement, Rewrite, RuleChange, SpellCost, Types, When, Zone,
 };
 
-use super::{Neighbours, costs, leak, leak_slice, operands};
+use super::{Kind, Neighbours, costs, leak, leak_slice, operands};
 
-pub(super) fn abilities(ability: &Ability) -> Vec<(&'static str, String, Ability)> {
+pub(super) fn abilities(ability: &Ability) -> Vec<(&'static str, Kind, String, Ability)> {
     let mut out = Vec::new();
     if let Some(layer) = ability.layer() {
-        for (field, name, layer) in layers(layer) {
+        for (field, kind, name, layer) in layers(layer) {
             if !layer.needs_a_resolution() {
-                out.push((field, name, Ability::static_ability(leak(layer))));
+                out.push((field, kind, name, Ability::static_ability(leak(layer))));
             }
         }
     }
     if let Some(replacement) = ability.replacement() {
-        for (field, name, replacement) in replacements(replacement) {
-            out.push((field, name, Ability::replacing(leak(replacement))));
+        for (field, kind, name, replacement) in replacements(replacement) {
+            out.push((field, kind, name, Ability::replacing(leak(replacement))));
         }
     }
     if let Some(rule) = ability.rule() {
-        for (name, rule) in rules(rule) {
-            out.push(("rule", name, Ability::rule_change(leak(rule))));
+        for (kind, name, rule) in rules(rule) {
+            out.push(("rule", kind, name, Ability::rule_change(leak(rule))));
         }
     }
     out
@@ -102,14 +102,20 @@ fn affected(objects: Objects) -> Neighbours<Objects> {
     }
 }
 
-fn layers(layer: &LayerSpec) -> Vec<(&'static str, String, LayerSpec)> {
+fn layers(layer: &LayerSpec) -> Vec<(&'static str, Kind, String, LayerSpec)> {
     let mut out = Vec::new();
     for (name, affected) in affected(layer.affected) {
-        out.push(("affected", name, LayerSpec { affected, ..*layer }));
+        out.push((
+            "affected",
+            Kind::StaticAffected,
+            name,
+            LayerSpec { affected, ..*layer },
+        ));
     }
     if let Some(condition) = layer.condition {
         out.push((
             "condition",
+            Kind::StaticCondition,
             "negated".to_owned(),
             LayerSpec {
                 condition: Some(Condition::Not(leak(condition))),
@@ -122,6 +128,7 @@ fn layers(layer: &LayerSpec) -> Vec<(&'static str, String, LayerSpec)> {
         modifications.remove(index);
         out.push((
             "modification",
+            Kind::StaticModification,
             format!("{index} drop"),
             LayerSpec {
                 modifications: leak_slice(modifications),
@@ -133,6 +140,7 @@ fn layers(layer: &LayerSpec) -> Vec<(&'static str, String, LayerSpec)> {
             modifications[index] = changed;
             out.push((
                 "modification",
+                Kind::StaticModification,
                 format!("{index} {name}"),
                 LayerSpec {
                     modifications: leak_slice(modifications),
@@ -186,11 +194,12 @@ fn modifications_of(modification: Modification) -> Neighbours<Modification> {
     out
 }
 
-fn replacements(replacement: &Replacement) -> Vec<(&'static str, String, Replacement)> {
+fn replacements(replacement: &Replacement) -> Vec<(&'static str, Kind, String, Replacement)> {
     let mut out = Vec::new();
     if replacement.replaces != Replaced::None {
         out.push((
             "replacement event",
+            Kind::ReplacementEvent,
             "disabled".to_owned(),
             Replacement {
                 replaces: Replaced::None,
@@ -215,6 +224,7 @@ fn replacements(replacement: &Replacement) -> Vec<(&'static str, String, Replace
     if let Some(replaces) = event {
         out.push((
             "replacement event",
+            Kind::ReplacementEvent,
             format!("{replaces:?}"),
             Replacement {
                 replaces,
@@ -229,14 +239,20 @@ fn replacements(replacement: &Replacement) -> Vec<(&'static str, String, Replace
     if replacement.rewrite != Rewrite::None {
         out.push((
             "replacement rewrite",
+            Kind::ReplacementRewrite,
             "disabled".to_owned(),
             rewrite(Rewrite::None),
         ));
     }
     let mut numbers = |n, build: fn(u8) -> Rewrite| {
-        out.extend(
-            costs::unsigned(n).map(|n| ("replacement rewrite", n.to_string(), rewrite(build(n)))),
-        );
+        out.extend(costs::unsigned(n).map(|n| {
+            (
+                "replacement rewrite",
+                Kind::ReplacementRewrite,
+                n.to_string(),
+                rewrite(build(n)),
+            )
+        }));
     };
     match replacement.rewrite {
         Rewrite::EntersTappedUnlessFewLands(n) => numbers(n, Rewrite::EntersTappedUnlessFewLands),
@@ -249,25 +265,30 @@ fn replacements(replacement: &Replacement) -> Vec<(&'static str, String, Replace
         out.extend(costs::unsigned(n).map(|n| {
             (
                 "replacement rewrite",
+                Kind::ReplacementRewrite,
                 n.to_string(),
                 rewrite(Rewrite::EntersWithCounters(kind, n)),
             )
         }));
     }
     if let Rewrite::ToZone(zone) = replacement.rewrite {
-        out.extend(
-            operands::zones(zone)
-                .into_iter()
-                .map(|(name, zone)| ("replacement rewrite", name, rewrite(Rewrite::ToZone(zone)))),
-        );
+        out.extend(operands::zones(zone).into_iter().map(|(name, zone)| {
+            (
+                "replacement rewrite",
+                Kind::ReplacementRewrite,
+                name,
+                rewrite(Rewrite::ToZone(zone)),
+            )
+        }));
     }
     out
 }
 
-pub(super) fn rules(rule: &RuleChange) -> Neighbours<RuleChange> {
+pub(super) fn rules(rule: &RuleChange) -> Vec<(Kind, String, RuleChange)> {
     let mut out = Vec::new();
     for (name, players) in operands::players(rule.players) {
         out.push((
+            Kind::RulePlayers,
             format!("rule players {name}"),
             RuleChange { players, ..*rule },
         ));
@@ -280,10 +301,15 @@ pub(super) fn rules(rule: &RuleChange) -> Neighbours<RuleChange> {
         When::AsUsual => None,
     };
     if let Some(when) = when {
-        out.push((format!("rule when {when:?}"), RuleChange { when, ..*rule }));
+        out.push((
+            Kind::RuleWhen,
+            format!("rule when {when:?}"),
+            RuleChange { when, ..*rule },
+        ));
     }
     for (name, what) in governed(rule.what) {
         out.push((
+            Kind::RuleGoverned,
             format!("rule governed {name}"),
             RuleChange { what, ..*rule },
         ));

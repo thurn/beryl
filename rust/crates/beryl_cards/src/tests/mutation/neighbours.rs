@@ -29,6 +29,7 @@ pub(super) struct Mutant {
     pub node: String,
     /// What replaced it: "drop step 1", "`Regeneration::Allowed`".
     pub neighbour: String,
+    pub kind: Kind,
     pub def: &'static CardDef,
 }
 
@@ -51,6 +52,7 @@ pub(super) fn mutants(def: &'static CardDef) -> Vec<Mutant> {
             out.push(Mutant {
                 node: format!("{}: {}", token.name, mutant.node),
                 neighbour: mutant.neighbour,
+                kind: mutant.kind,
                 def: making(def, k, mutant.def),
             });
         }
@@ -208,10 +210,11 @@ fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
         } else {
             format!("{}: ", face.name)
         };
-        for (node, neighbour, changed) in faces::neighbours(face) {
+        for (node, kind, neighbour, changed) in faces::neighbours(face) {
             out.push(Mutant {
                 node: format!("{face_name}{node}"),
                 neighbour,
+                kind,
                 def: with_face(def, f, changed),
             });
         }
@@ -220,6 +223,7 @@ fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
                 out.push(Mutant {
                     node: format!("{face_name}ability {index}, trigger frequency"),
                     neighbour: "every time".to_owned(),
+                    kind: Kind::TriggerFrequency,
                     def: with_face(def, f, changed),
                 });
             }
@@ -239,7 +243,7 @@ fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
                     "ability"
                 };
                 let at = format!("{face_name}{what} {i}");
-                for (node, neighbour, changed) in
+                for (node, kind, neighbour, changed) in
                     ability_neighbours(ability, list, (!granted).then_some(face), &at)
                 {
                     if !reads_link && neighbour.starts_with(LINKED) {
@@ -256,6 +260,7 @@ fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
                     out.push(Mutant {
                         node,
                         neighbour,
+                        kind,
                         def: with_face(def, f, face),
                     });
                 }
@@ -374,4 +379,67 @@ fn with(face: &Face, abilities: &'static [Ability], grants: &'static [Ability]) 
         grants,
         excepts: face.excepts,
     }
+}
+
+// Use the same variants for construction and for the witness test's whole set.
+macro_rules! mutation_kinds {
+    ($($kind:ident),+ $(,)?) => {
+        /// The field or instruction operation that changed.
+        #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+        pub(super) enum Kind {
+            $($kind),+
+        }
+
+        impl Kind {
+            pub(super) const ALL: &'static [Self] = &[$(Self::$kind),+];
+        }
+    };
+}
+
+mutation_kinds! {
+    AbilityCondition,
+    ActivatedGeneric,
+    AdditionalCost,
+    Amount,
+    CastingOption,
+    CastingOptionPart,
+    ChoiceOptional,
+    ChoiceVisibility,
+    CopyException,
+    CopyTargets,
+    CostPart,
+    DamageRecipients,
+    Destination,
+    EffectCondition,
+    EffectObjects,
+    EffectPlayers,
+    FreeCast,
+    Keyword,
+    ManaProduct,
+    May,
+    Prevention,
+    PreventionSource,
+    PutController,
+    PutLink,
+    PutTapped,
+    Regeneration,
+    ReplacementBody,
+    ReplacementCondition,
+    ReplacementEvent,
+    ReplacementRewrite,
+    RuleGoverned,
+    RulePlayers,
+    RuleWhen,
+    SearchFilter,
+    SequenceStep,
+    StaticAffected,
+    StaticCondition,
+    StaticModification,
+    TargetOptional,
+    TextChangeDuration,
+    TriggerCondition,
+    TriggerEvent,
+    TriggerFrequency,
+    TriggerSubject,
+    Unless,
 }

@@ -2,7 +2,7 @@
 
 use beryl_card::{Cost, CostAction, CostPart, ManaCost, Measure, Zone};
 
-use super::{Neighbours, leak_slice};
+use super::{Kind, Neighbours, leak_slice};
 
 pub(super) fn unsigned(n: u8) -> impl Iterator<Item = u8> {
     [n.checked_sub(1), n.checked_add(1)].into_iter().flatten()
@@ -12,7 +12,7 @@ pub(super) fn signed(n: i8) -> impl Iterator<Item = i8> {
     [n.checked_sub(1), n.checked_add(1)].into_iter().flatten()
 }
 
-pub(super) fn costs(cost: Cost, generic: bool) -> Neighbours<Cost> {
+pub(super) fn costs(cost: Cost, generic: bool) -> Vec<(Kind, String, Cost)> {
     let mut out = Vec::new();
     if generic {
         for value in unsigned(cost.mana.generic) {
@@ -20,13 +20,17 @@ pub(super) fn costs(cost: Cost, generic: bool) -> Neighbours<Cost> {
                 generic: value,
                 ..cost.mana
             };
-            out.push((format!("generic {value}"), Cost::of(mana, cost.parts())));
+            out.push((
+                Kind::ActivatedGeneric,
+                format!("generic {value}"),
+                Cost::of(mana, cost.parts()),
+            ));
         }
     }
     out.extend(
         parts(cost.parts())
             .into_iter()
-            .map(|(name, parts)| (name, Cost::of(cost.mana, parts))),
+            .map(|(name, parts)| (Kind::CostPart, name, Cost::of(cost.mana, parts))),
     );
     out
 }
@@ -97,7 +101,7 @@ fn changes(part: CostPart) -> Neighbours<CostPart> {
         CostPart::OneOf(options) => {
             let mut out = Vec::new();
             for (index, &option) in options.iter().enumerate() {
-                for (name, changed) in costs(option, true) {
+                for (_, name, changed) in costs(option, true) {
                     let mut options = options.to_vec();
                     options[index] = changed;
                     out.push((

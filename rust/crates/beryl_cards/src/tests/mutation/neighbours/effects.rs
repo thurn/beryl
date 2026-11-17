@@ -1,5 +1,5 @@
 //! Neighbours of the instructions in an ability's effect.
-use super::{leak, leak_slice};
+use super::{Kind, leak, leak_slice};
 use beryl_card::Effect;
 
 mod instructions;
@@ -10,18 +10,18 @@ use instructions::local;
 pub(super) fn effect_neighbours(
     effect: &'static Effect,
     at: &str,
-    out: &mut Vec<(String, String, Effect)>,
+    out: &mut Vec<(String, Kind, String, Effect)>,
 ) {
-    for (neighbour, changed) in local(effect) {
-        out.push((at.to_owned(), neighbour, changed));
+    for (kind, neighbour, changed) in local(effect) {
+        out.push((at.to_owned(), kind, neighbour, changed));
     }
     // A neighbour of a child, with the child replaced in this node.
     let mut child =
         |child: &'static Effect, at: String, rebuild: &dyn Fn(&'static Effect) -> Effect| {
             let mut inner = Vec::new();
             effect_neighbours(child, &at, &mut inner);
-            for (node, neighbour, changed) in inner {
-                out.push((node, neighbour, rebuild(leak(changed))));
+            for (node, kind, neighbour, changed) in inner {
+                out.push((node, kind, neighbour, rebuild(leak(changed))));
             }
         };
     match *effect {

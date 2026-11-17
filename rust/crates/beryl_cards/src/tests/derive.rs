@@ -22,11 +22,6 @@ const UNREACHED: &[(&str, &str)] = &[
          hand-written scenarios play it, choose Human and cast a Human with that mana",
     ),
     (
-        "Lord of Atlantis: ability 0 (Static)",
-        "it affects only other Merfolk, and a generated scenario casts the card with none on the \
-         battlefield; the card's hand-written scenarios have Merfolk on both sides",
-    ),
-    (
         "Spara's Headquarters: ability 0 (Mana)",
         "no card of the pool asks for {G}, and automatic payment spends a unit that may be \
          several kinds as the lowest of them, {W}",
@@ -41,20 +36,6 @@ const UNREACHED: &[(&str, &str)] = &[
         "Thundertrap Trainer: casting option 0 (Offspring(ManaCost { generic: 4, symbols: [0, \
          0, 0, 0, 0, 0], x: 0 }))",
         "as offspring's trigger",
-    ),
-    (
-        "Leonin Scimitar: ability 1 (Activated)",
-        "equip targets a creature its controller controls, and a generated position gives the \
-         Equipment's controller none; the card's hand-written scenario equips one",
-    ),
-    (
-        "Opalescence: ability 0 (Static)",
-        "it changes only other non-Aura enchantments, and a generated position has none; the \
-         card's hand-written scenarios put some beside it",
-    ),
-    (
-        "Leonin Scimitar: ability 0 (Static)",
-        "it changes only the creature the Equipment is attached to, as equip",
     ),
 ];
 

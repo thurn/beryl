@@ -467,9 +467,9 @@ hand-picked witnesses. Twenty-seven abilities are listed as unreachable
   from either zone, the recipe plays the granting effect and uses the permission
   at priority. The 16-run cap applies to each recipe opening.
 - **Witnesses from neighbours.** A witness is a position fragment under which a
-  field's value changes the outcome. A test requires one for every neighbour
-  `neighbours.rs` can make, so adding a mutant kind without a way to observe it
-  fails.
+  field's value changes the outcome. The mutation test requires a generated or
+  scripted scenario to distinguish a real mutant of each kind. The match that
+  selects the scenario must cover each kind the mutation generator declares.
 - **A wider snapshot.** The final snapshot, which the oracles compare, gains
   each permanent's colors, card types, subtypes, keywords, damage marked and
   attachment. It records power and toughness for every creature, identifying
@@ -478,9 +478,12 @@ hand-picked witnesses. Twenty-seven abilities are listed as unreachable
   stack. Beryl can take this snapshot at any open decision. XMage and Forge
   compare the new fields where their harnesses can stop for the final
   assertions.
-- **Partners by filter.** Where a card's filter names a quality (a Merfolk, an
-  Aura, a creature with flying), the position includes a prop or an implemented
-  card with it and one without.
+- **Partners by filter.** An extra starting position keeps the full filter
+  together, including ownership and bounds. It adds a permanent that passes and
+  a contrasting one on the relevant side, reusing the board and preferring props
+  before other implemented cards. The original positions still test play with
+  fewer legal targets. The filter vocabulary describes printed types, subtypes
+  and colors, among other qualities. Flying is a keyword.
 
 `UNREACHED` and `EQUIVALENT` may only shrink.
 

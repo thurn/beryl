@@ -8,24 +8,27 @@ use beryl_card::{
 use beryl_kernel::listener::listens_to;
 use beryl_kernel::table::{is_sacrificed, is_simple};
 
-use super::{Neighbours, continuous, costs, effects, leak, leak_slice};
+use super::{Kind, Neighbours, continuous, costs, effects, leak, leak_slice};
 
 pub(super) fn ability_neighbours(
     ability: &Ability,
     siblings: &[Ability],
     face: Option<&Face>,
     at: &str,
-) -> Vec<(String, String, Ability)> {
+) -> Vec<(String, Kind, String, Ability)> {
     let mut out = Vec::new();
-    let mut add = |field: &str, name, changed| out.push((format!("{at}, {field}"), name, changed));
+    let mut add = |field: &str, kind, name, changed| {
+        out.push((format!("{at}, {field}"), kind, name, changed));
+    };
     match ability.kind() {
         AbilityKind::Spell => {}
         AbilityKind::Activated | AbilityKind::Mana => {
-            for (name, cost) in
+            for (kind, name, cost) in
                 costs::costs(*ability.cost(), ability.kind() == AbilityKind::Activated)
             {
                 add(
                     "cost",
+                    kind,
                     name,
                     with_cost_or_product(ability, cost, ability.produces()),
                 );
@@ -34,6 +37,7 @@ pub(super) fn ability_neighbours(
                 for (name, product) in products(ability, siblings, face) {
                     add(
                         "mana product",
+                        Kind::ManaProduct,
                         name,
                         with_cost_or_product(ability, *ability.cost(), product),
                     );
@@ -42,10 +46,11 @@ pub(super) fn ability_neighbours(
         }
         AbilityKind::Triggered => {
             let trigger = ability.trigger().expect("triggered ability");
-            for (field, name, trigger) in triggers(trigger) {
+            for (field, kind, name, trigger) in triggers(trigger) {
                 if listens_to(&trigger, ability.zones()).is_ok() {
                     add(
                         field,
+                        kind,
                         name,
                         preserve(ability, Ability::triggered(leak(trigger))),
                     );
@@ -53,14 +58,22 @@ pub(super) fn ability_neighbours(
             }
         }
         AbilityKind::Static | AbilityKind::Replacement => {
-            for (field, name, changed) in continuous::abilities(ability) {
-                add(field, name, preserve(ability, changed));
+            for (field, kind, name, changed) in continuous::abilities(ability) {
+                add(field, kind, name, preserve(ability, changed));
             }
         }
     }
     if let Some(condition) = ability.condition() {
         add(
             "condition",
+            match ability.kind() {
+                AbilityKind::Triggered => Kind::TriggerCondition,
+                AbilityKind::Replacement => Kind::ReplacementCondition,
+                AbilityKind::Spell
+                | AbilityKind::Activated
+                | AbilityKind::Mana
+                | AbilityKind::Static => Kind::AbilityCondition,
+            },
             "negated".to_owned(),
             ability.only_if(leak(Condition::Not(condition))),
         );
@@ -70,6 +83,7 @@ pub(super) fn ability_neighbours(
         specs[j].optional = !spec.optional;
         add(
             &format!("target {j}"),
+            Kind::TargetOptional,
             if spec.optional {
                 "required"
             } else {
@@ -84,13 +98,18 @@ pub(super) fn ability_neighbours(
     {
         let mut effects = Vec::new();
         effects::effect_neighbours(effect, at, &mut effects);
-        for (node, neighbour, changed) in effects {
+        for (node, kind, neighbour, changed) in effects {
             let node = if neighbour.starts_with("rule ") && node == at {
                 format!("{at}, rule")
             } else {
                 node
             };
-            out.push((node, neighbour, ability.effect(leak(changed))));
+            let kind = if ability.kind() == AbilityKind::Replacement {
+                Kind::ReplacementBody
+            } else {
+                kind
+            };
+            out.push((node, kind, neighbour, ability.effect(leak(changed))));
         }
     }
     out
@@ -186,7 +205,7 @@ fn products(ability: &Ability, siblings: &[Ability], face: Option<&Face>) -> Nei
     out
 }
 
-fn triggers(trigger: &Trigger) -> Vec<(&'static str, String, Trigger)> {
+fn triggers(trigger: &Trigger) -> Vec<(&'static str, Kind, String, Trigger)> {
     use TriggerEvent as Event;
     // Choose an event with the same kind of subject, and prefer adjacent timing for
     // step triggers. The engine matcher rejects combinations it would never read.
@@ -209,11 +228,13 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, String, Trigger)> {
     let mut out = vec![
         (
             "trigger event",
+            Kind::TriggerEvent,
             format!("{event:?}"),
             Trigger { event, ..*trigger },
         ),
         (
             "trigger subject",
+            Kind::TriggerSubject,
             format!("{subject:?}"),
             Trigger {
                 subject,
@@ -224,6 +245,7 @@ fn triggers(trigger: &Trigger) -> Vec<(&'static str, String, Trigger)> {
     if !trigger.delayed {
         out.push((
             "trigger frequency",
+            Kind::TriggerFrequency,
             "next time".to_owned(),
             Trigger {
                 delayed: true,

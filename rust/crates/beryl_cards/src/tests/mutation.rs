@@ -24,6 +24,7 @@ use beryl_scenario::{Failure, Scenario, outcome_with};
 
 use crate::CARDS;
 
+mod coverage;
 mod neighbours;
 mod witnesses;
 

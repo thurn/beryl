@@ -1,14 +1,12 @@
 //! Setup and legal game actions for each event recipe.
 
-use beryl_card::{
-    Behavior, CardDef, CastingOption, Castings, Effect, FaceIx, Filter, Seat, Types, Words,
-};
+use beryl_card::{Behavior, CardDef, CastingOption, Castings, Effect, FaceIx, Filter, Seat, Types};
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, P0, P1, Permanent, Scenario};
 
 use super::{Recipe, players};
 use crate::derive::play::Stimulus;
-use crate::derive::position::{LAST_TURN, Place, TURN, preamble, start};
+use crate::derive::position::{LAST_TURN, Place, TURN, preamble, printed, start};
 use crate::{CARDS, names, props};
 
 pub(in crate::derive) struct Opening {
@@ -71,22 +69,12 @@ impl Opening {
 /// Match printed characteristics in the zone where the planned event will happen. The engine
 /// still makes the real trigger and replacement checks after continuous effects.
 fn matches(filter: Filter, def: &CardDef, owner: Seat, zone: Zone) -> bool {
-    let face = def.front();
-    let words = Words::default();
     match filter {
-        Filter::Any => true,
-        Filter::Types(types) => face.types.intersects(types),
-        Filter::Supertypes(types) => face.supertypes.intersects(types),
-        Filter::SubtypeWord(subtype) => face.subtypes.read(&words).contains(subtype.read(&words)),
-        Filter::ColorWords(colors) => face.colors.intersects(colors.read(&words)),
         Filter::Whose(whose) | Filter::Owned(whose) => players(*whose).contains(&owner),
-        Filter::Tapped | Filter::Token | Filter::ManaValueAtMostX => false,
-        Filter::ManaValueAtMost(most) => face.cost.mana_value() <= most,
-        Filter::PowerAtMost(most) => face.power.is_some_and(|power| power <= most),
         Filter::Not(inner) => !matches(*inner, def, owner, zone),
         Filter::All(filters) => filters.iter().all(|&f| matches(f, def, owner, zone)),
         Filter::AnyOf(filters) => filters.iter().any(|&f| matches(f, def, owner, zone)),
-        Filter::InZone(expected) => zone == expected,
+        part => printed(part, Permanent::new(def.name), def.front(), zone).unwrap_or(false),
     }
 }
 

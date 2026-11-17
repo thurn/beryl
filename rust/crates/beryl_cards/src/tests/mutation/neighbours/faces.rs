@@ -2,9 +2,9 @@
 
 use beryl_card::{CastingOption, Face, Keywords};
 
-use super::{costs, leak_slice, with};
+use super::{Kind, costs, leak_slice, with};
 
-pub(super) fn neighbours(face: &Face) -> Vec<(String, String, Face)> {
+pub(super) fn neighbours(face: &Face) -> Vec<(String, Kind, String, Face)> {
     let copy = || with(face, face.abilities, face.grants);
     let mut out = Vec::new();
     for (index, option) in face.casting.iter().enumerate() {
@@ -13,6 +13,7 @@ pub(super) fn neighbours(face: &Face) -> Vec<(String, String, Face)> {
         remaining.remove(index);
         out.push((
             node.clone(),
+            Kind::CastingOption,
             "drop".to_owned(),
             Face {
                 casting: leak_slice(remaining),
@@ -36,6 +37,7 @@ pub(super) fn neighbours(face: &Face) -> Vec<(String, String, Face)> {
             casting[index] = rebuild(cost, changed);
             out.push((
                 node.clone(),
+                Kind::CastingOptionPart,
                 name,
                 Face {
                     casting: leak_slice(casting),
@@ -47,6 +49,7 @@ pub(super) fn neighbours(face: &Face) -> Vec<(String, String, Face)> {
     if !face.additional_cost.is_empty() {
         out.push((
             "additional cost".to_owned(),
+            Kind::AdditionalCost,
             "drop".to_owned(),
             Face {
                 additional_cost: &[],
@@ -58,6 +61,7 @@ pub(super) fn neighbours(face: &Face) -> Vec<(String, String, Face)> {
             if !parts.is_empty() {
                 out.push((
                     "additional cost".to_owned(),
+                    Kind::AdditionalCost,
                     name,
                     Face {
                         additional_cost: parts,
@@ -71,6 +75,7 @@ pub(super) fn neighbours(face: &Face) -> Vec<(String, String, Face)> {
         if face.keywords.contains(bit) {
             out.push((
                 "keyword".to_owned(),
+                Kind::Keyword,
                 format!("drop {name}"),
                 Face {
                     keywords: face.keywords.minus(bit),
