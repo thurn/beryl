@@ -207,6 +207,11 @@ impl Drive {
                 self.pointer(at, PointerPhase::Down, point, Button::Primary);
                 self.pointer(at, PointerPhase::Up, point, Button::Primary);
             }
+            Action::Menu(locator) => {
+                let point = point(locator)?;
+                self.pointer(at, PointerPhase::Down, point, Button::Secondary);
+                self.pointer(at, PointerPhase::Up, point, Button::Secondary);
+            }
             Action::Hover(locator) => {
                 let point = point(locator)?;
                 self.pointer(at, PointerPhase::Move, point, Button::None);

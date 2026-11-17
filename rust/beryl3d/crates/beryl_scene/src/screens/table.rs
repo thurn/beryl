@@ -81,7 +81,7 @@ pub fn table(input: &ScreenIn) -> Element {
         if input.window.phone() {
             bottom_sheet(open, input)
         } else {
-            context_menu(open.at, menu(MENU, &open.title, &open.groups))
+            context_menu(open.at, menu(MENU, &open.title, &open.whose, &open.groups))
         }
     });
     let sweep = (state.sweep)
@@ -125,7 +125,7 @@ fn bottom_sheet(open: &OpenMenu, input: &ScreenIn) -> Element {
     let safe = window.safe_area;
     let width =
         (window.size.width - safe.left - safe.right - 2.0 * MENU_EDGE).min(sheet::MAX_WIDTH);
-    let mut panel = sheet_menu(MENU, &open.title, &open.groups, open.page)
+    let mut panel = sheet_menu(MENU, &open.title, &open.whose, &open.groups, open.page)
         .min_width(width)
         .max_width(width)
         .max_height(window.size.height - safe.top - safe.bottom - 2.0 * MENU_EDGE)

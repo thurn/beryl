@@ -98,7 +98,7 @@ name and sets the seat and the window.
 - **A locator** is the start of a tree line: `card "Island" #8`, `card #8`,
   `button "Resolve"`. A whole tree line works too, since what follows the id is
   ignored. `region "prompt" > button "Cancel"` looks inside another element.
-- **An action** is `press <locator>`, `hover <locator>`,
+- **An action** is `press <locator>`, `hover <locator>`, `menu <locator>` (a right click),
   `drag <locator> to <locator>`, `type <locator> "<text>"`, `key <name>`,
   `move <x>,<y>`, `step <duration>` or `still`.
 

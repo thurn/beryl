@@ -52,13 +52,14 @@ impl MenuRow {
     }
 }
 
-/// The menu `id` titled `title`, with its rows in `groups`: a list named by its title whose
-/// rows are menu items named by their labels. A press on a row sends `Press::Menu(id, n)`,
-/// where `n` counts the menu's rows from 0 over all its groups, and then the rows of its
-/// submenus, in order, after the last of them.
+/// The menu `id` titled `title`, with `whose` under the title (whose the card or pile is, or
+/// nothing), and its rows in `groups`: a list named by its title whose rows are menu items
+/// named by their labels. A press on a row sends `Press::Menu(id, n)`, where `n` counts the
+/// menu's rows from 0 over all its groups, and then the rows of its submenus, in order, after
+/// the last of them.
 #[must_use]
-pub fn menu(id: MenuId, title: &str, groups: &[MenuGroup]) -> Element {
-    build(id, title, groups, false, None)
+pub fn menu(id: MenuId, title: &str, whose: &str, groups: &[MenuGroup]) -> Element {
+    build(id, (title, whose), groups, false, None)
 }
 
 /// The press of the Back row of a sheet menu showing a submenu's rows (`sheet_menu`), which
@@ -71,12 +72,25 @@ pub const BACK: u16 = u16::MAX;
 /// `Press::Menu(id, BACK)`, and the rows of that row's submenu, numbered as `menu` numbers
 /// them.
 #[must_use]
-pub fn sheet_menu(id: MenuId, title: &str, groups: &[MenuGroup], page: Option<u16>) -> Element {
-    build(id, title, groups, true, page)
+pub fn sheet_menu(
+    id: MenuId,
+    title: &str,
+    whose: &str,
+    groups: &[MenuGroup],
+    page: Option<u16>,
+) -> Element {
+    build(id, (title, whose), groups, true, page)
 }
 
-/// The panel of `menu` and `sheet_menu`, the latter if `sheet` is set.
-fn build(id: MenuId, title: &str, groups: &[MenuGroup], sheet: bool, page: Option<u16>) -> Element {
+/// The panel of `menu` and `sheet_menu`, the latter if `sheet` is set, under the title and
+/// the dim line that says whose the target is (`Menu.tsx`'s `table-menu-title`).
+fn build(
+    id: MenuId,
+    (title, whose): (&str, &str),
+    groups: &[MenuGroup],
+    sheet: bool,
+    page: Option<u16>,
+) -> Element {
     let rows = groups.iter().map(|group| group.rows.len()).sum::<usize>();
     let mut next = 0;
     let mut next_nested = u16::try_from(rows).unwrap_or(u16::MAX);
@@ -88,6 +102,18 @@ fn build(id: MenuId, title: &str, groups: &[MenuGroup], sheet: bool, page: Optio
         size::MENU_TITLE_PADDING_SIDE,
     ];
     let mut panel = panel(title).child(heading);
+    if !whose.is_empty() {
+        let mut line = text(whose)
+            .style(type_style::MENU_HINT)
+            .color(color::TEXT_DIM);
+        line.style.padding = [
+            0.0,
+            size::MENU_TITLE_PADDING_SIDE,
+            size::MENU_TITLE_PADDING_BOTTOM,
+            size::MENU_TITLE_PADDING_SIDE,
+        ];
+        panel = panel.child(line);
+    }
     if let Some(page) = page.filter(|_| sheet) {
         // The rows of the submenu of row `page` take their numbers after those of the
         // submenus before it.

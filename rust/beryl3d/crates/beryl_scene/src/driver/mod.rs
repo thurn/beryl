@@ -332,9 +332,15 @@ impl Page {
 
     /// Presses and releases the primary button where `locator`'s element is uncovered.
     pub fn press(&mut self, locator: &str) {
+        self.click(locator, Button::Primary);
+    }
+
+    /// Presses and releases `button` where `locator`'s element is uncovered: the secondary
+    /// button is a right click, which the `menu` action gives.
+    pub fn click(&mut self, locator: &str, button: Button) {
         let point = self.point(locator);
-        self.pointer(PointerPhase::Down, point, Button::Primary);
-        self.pointer(PointerPhase::Up, point, Button::Primary);
+        self.pointer(PointerPhase::Down, point, button);
+        self.pointer(PointerPhase::Up, point, button);
         self.render();
     }
 
@@ -387,11 +393,12 @@ impl Page {
     /// When a locator of the action names no single uncovered element in the present frame.
     pub fn try_act(&mut self, action: &Action) -> Result<(), DriverError> {
         let locators: Vec<&str> = match action {
-            Action::Press(locator) | Action::Hover(locator) | Action::Type(locator, _) => {
-                vec![locator]
-            }
+            Action::Press(locator)
+            | Action::Hover(locator)
+            | Action::Menu(locator)
+            | Action::Type(locator, _)
+            | Action::Wheel(locator, _) => vec![locator],
             Action::Drag(from, to) => vec![from, to],
-            Action::Wheel(locator, _) => vec![locator],
             Action::Key(_) | Action::Move(_) | Action::Step(_) | Action::Still => Vec::new(),
         };
         for locator in locators {
@@ -421,6 +428,7 @@ impl Page {
         match action {
             Action::Press(locator) => self.press(locator),
             Action::Hover(locator) => self.hover(locator),
+            Action::Menu(locator) => self.click(locator, Button::Secondary),
             Action::Drag(from, to) => self.drag(from, to),
             Action::Type(locator, text) => self.type_text(locator, text),
             Action::Key(chord) => self.key_chord(*chord),

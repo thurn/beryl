@@ -1,1 +1,127 @@
-{ "entries": {} }
+{
+  "entries": {
+    "Manual table: a click acts": {
+      "open": "Clicking a life total opens no number prompt, the table shows no mana symbols or player counters to click, and a refused action does not shake (needs bead by-q44s.9.23)"
+    },
+    "Manual table log": {
+      "recording": "screen/table",
+      "at": "end",
+      "do": [
+        "press button \"Show log\""
+      ],
+      "shows": "text \"1 You Shuffled your library.\""
+    },
+    "Manual table: drawing and removing arrows": {
+      "recording": "screen/table",
+      "at": "end",
+      "do": [
+        "menu card \"Serra Angel\" #11",
+        "press menuitem \"Draw arrow…\"",
+        "hover card \"Serra Angel\" #26"
+      ],
+      "shows": "arrow \"hostile-target\""
+    },
+    "Proposal panel": {
+      "open": "The manual table shows no proposal panel for turn upkeep or combat (needs bead by-q44s.9.25)"
+    },
+    "Assist label": {
+      "open": "State nudges put no tags on cards or life totals (needs bead by-q44s.9.25)"
+    },
+    "Selection rectangle": {
+      "open": "No summary of the selected permanents' count, power and toughness, and no action draws a rectangle (needs bead by-q44s.9.26)"
+    },
+    "Undo": {
+      "open": "The engine game has no undo button (needs bead by-q44s.9.27)"
+    },
+    "Chrome": {
+      "open": "The desktop game shows no bug button or undo button (needs bead by-q44s.9.27)"
+    },
+    "Why a click is refused": {
+      "open": "A refused click shows no reason at the permanent that forbids it (needs bead by-q44s.9.27)"
+    },
+    "The opponent's choice of top or bottom": {
+      "recording": "subtlety/hard-cast-the-creature-spells-owner-puts-it-on-top",
+      "at": "2500ms",
+      "still": false,
+      "shows": "text \"Top\""
+    },
+    "Suggestions are sensible": {
+      "recording": "choice-untap",
+      "at": "prompt:2",
+      "shows": "button \"Submit 4\""
+    },
+    "Nothing overlaps": {
+      "recording": "piles-crowded",
+      "at": "end",
+      "shows": "pile \"Opponent's library\""
+    },
+    "Library drop halves": {
+      "open": "The halves are drawn mid-drag, but no action holds a drag over a library to show them (needs bead by-q44s.9.26)"
+    },
+    "Lobby": {
+      "recording": "screen/lobby",
+      "at": "end",
+      "shows": "region \"Assists\""
+    },
+    "Guided manual table start": {
+      "open": "The table opens with no die roll, Play or Draw choice, or Keep and Mulligan (needs bead by-q44s.9.24)"
+    },
+    "Manual table connection": {
+      "open": "No recording shows a dropped connection, a redial, Resume table or a join failure (needs bead by-q44s.9.24)"
+    },
+    "Manual table prompts": {
+      "recording": "screen/table",
+      "at": "end",
+      "do": [
+        "key Cmd+P"
+      ],
+      "shows": "field \"Set power and toughness\""
+    },
+    "Manual table library flows": {
+      "open": "The library menu offers no Scry or Surveil under Assists (needs bead by-q44s.9.25)"
+    },
+    "Manual table pile viewers": {
+      "open": "The pile viewer cannot be searched, grouped or sorted, and a library search offers no Shuffle on closing (needs bead by-q44s.9.26)"
+    },
+    "Context menu": {
+      "recording": "screen/table",
+      "at": "end",
+      "do": [
+        "menu card \"Serra Angel\" #26"
+      ],
+      "shows": "text \"Opponent’s\""
+    },
+    "Command list": {
+      "recording": "screen/table",
+      "at": "end",
+      "do": [
+        "key Cmd+K"
+      ],
+      "shows": "field \"Search commands\""
+    },
+    "Quitting from a manual table": {
+      "open": "Cmd+Q leaves the table at once instead of asking first (needs bead by-q44s.9.23)"
+    },
+    "Manual table turn controls": {
+      "open": "The manual table shows no step track and no Next button (needs bead by-q44s.9.23)"
+    },
+    "Manual table announcements": {
+      "open": "The manual table shows no banner for its announce steps (needs bead by-q44s.9.23)"
+    },
+    "Ability menus on a manual table": {
+      "open": "A permanent's menu lists no abilities under Assists (needs bead by-q44s.9.25)"
+    },
+    "Creating tokens on a manual table": {
+      "recording": "screen/table",
+      "at": "end",
+      "do": [
+        "key Cmd+K",
+        "press menuitem \"Create token…\""
+      ],
+      "shows": "menuitem \"Custom token\""
+    },
+    "Manual counters and untap flags": {
+      "open": "Not checked against named counters, player counters or the untap lock yet (needs bead by-q44s.9.23)"
+    }
+  }
+}

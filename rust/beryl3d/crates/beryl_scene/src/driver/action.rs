@@ -13,6 +13,9 @@ pub enum Action {
     Press(String),
     /// `hover <locator>`
     Hover(String),
+    /// `menu <locator>`: a right click on the element, which opens a context menu where it
+    /// has one, as on the manual table.
+    Menu(String),
     /// `drag <locator> to <locator>`
     Drag(String, String),
     /// `type <locator> "<text>"`
@@ -96,7 +99,7 @@ impl std::str::FromStr for Action {
 
     fn from_str(line: &str) -> Result<Self, ParseError> {
         let line = line.trim();
-        let actions = "The actions are press <locator>, hover <locator>, drag <locator> to \
+        let actions = "The actions are press <locator>, hover <locator>, menu <locator>, drag <locator> to \
                        <locator>, type <locator> \"<text>\", key <name>, move <x>,<y>, wheel \
                        <locator> <x>,<y>, step <duration> and still";
         let expected =
@@ -113,6 +116,7 @@ impl std::str::FromStr for Action {
         match verb {
             "press" => needs("a locator").map(Self::Press),
             "hover" => needs("a locator").map(Self::Hover),
+            "menu" => needs("a locator").map(Self::Menu),
             "drag" => {
                 let at = outside_quotes(rest, " to ")
                     .ok_or_else(|| expected("drag needs <locator> to <locator>"))?;

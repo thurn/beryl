@@ -275,6 +275,7 @@ fn every_action_name_is_a_line_run_accepts() {
             Action::Press("button \"Auto Pay\"".to_owned()),
         ),
         ("hover card #8", Action::Hover("card #8".to_owned())),
+        ("menu card #8", Action::Menu("card #8".to_owned())),
         (
             "drag card \"Go to Sleep\" to region \"stack\"",
             Action::Drag(

@@ -299,7 +299,7 @@ fn groups(labels: &[&str], submenu: bool) -> Vec<MenuGroup> {
 #[test]
 fn a_context_menu_by_the_right_edge_stays_8_points_inside_and_its_submenu_opens_left() {
     let mut layer = Layer::new();
-    let menu = widgets::menu(MENU, "Island", &groups(&["Tap", "Play", "Exile"], true));
+    let menu = widgets::menu(MENU, "Island", "", &groups(&["Tap", "Play", "Exile"], true));
     // 4 points from the right edge of the 1440-point window.
     let at = Vec2::new(1436.0, 300.0);
     layer.show(Some(
@@ -338,7 +338,12 @@ fn a_context_menu_by_the_right_edge_stays_8_points_inside_and_its_submenu_opens_
 #[test]
 fn down_twice_and_return_presses_the_third_row_of_a_menu() {
     let mut layer = Layer::new();
-    let menu = widgets::menu(MENU, "Island", &groups(&["Tap", "Untap", "Exile"], false));
+    let menu = widgets::menu(
+        MENU,
+        "Island",
+        "",
+        &groups(&["Tap", "Untap", "Exile"], false),
+    );
     layer.show(Some(
         row()
             .name("table")

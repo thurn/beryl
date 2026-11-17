@@ -469,6 +469,7 @@ fn example_menu(kind: GalleryMenu) -> Element {
         return menu(
             MENU_ID,
             "Beast",
+            "Token creature · yours",
             &[
                 group(&[("Tap", "")]),
                 group(&[
@@ -501,6 +502,7 @@ fn example_menu(kind: GalleryMenu) -> Element {
     menu(
         MENU_ID,
         "Library",
+        "53 cards · yours",
         &[
             group(&[
                 ("Draw", ""),

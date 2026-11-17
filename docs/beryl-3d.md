@@ -2724,12 +2724,13 @@ These four are written one way everywhere.
   the failure lists the elements with the nearest names and says how to narrow
   it.
 - **An action** is one line: `press <locator>`, `hover <locator>`,
-  `drag <locator> to <locator>`, `type <locator> "<text>"`, `key <name>`,
-  `move <x>,<y>`, `wheel <locator> <x>,<y>` (turn the mouse wheel over an
-  element by that many points; a negative `y` scrolls toward the end),
-  `step <duration>` or `still` (run the clock until nothing moves). `--do` takes
-  one action. A drive script is a file of them. The running app's socket reads
-  them. The test driver's methods have the same names.
+  `menu <locator>` (a right click), `drag <locator> to <locator>`,
+  `type <locator> "<text>"`, `key <name>`, `move <x>,<y>`,
+  `wheel <locator> <x>,<y>` (turn the mouse wheel over an element by that many
+  points; a negative `y` scrolls toward the end), `step <duration>` or `still`
+  (run the clock until nothing moves). `--do` takes one action. A drive script
+  is a file of them. The running app's socket reads them. The test driver's
+  methods have the same names.
 
 ### What is printed
 

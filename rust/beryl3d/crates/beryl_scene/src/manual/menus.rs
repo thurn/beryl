@@ -103,6 +103,8 @@ pub struct OpenMenu {
     pub at: Vec2,
     pub target: Target,
     pub title: String,
+    /// Whose the target is, under the title (`whose`).
+    pub whose: String,
     pub groups: Vec<MenuGroup>,
     pub acts: Vec<Act>,
     /// On the phone's sheet, the number of the row whose submenu the sheet shows in place of
@@ -192,6 +194,7 @@ pub fn open(target: Target, view: &PlayerView, at: Vec2, context: &Context) -> O
         at,
         target,
         title: title(target, view),
+        whose: whose(target, view),
         groups,
         acts,
         page: None,
@@ -227,5 +230,42 @@ pub fn title(target: Target, view: &PlayerView) -> String {
         Target::Hand(_) => "Hand".to_owned(),
         Target::Life(Side::You | Side::Opponent) => "Life".to_owned(),
         Target::Table => "Table".to_owned(),
+    }
+}
+
+/// The line under the menu's title, as the web's `menuRows` header writes it: a library's or
+/// hand's count of cards (a library's with whose it is), else whose the card (by its owner),
+/// pile or life total is, or nothing for the table.
+#[must_use]
+pub fn whose(target: Target, view: &PlayerView) -> String {
+    let word = |side: Side| match side {
+        Side::You => "Yours",
+        Side::Opponent => "Opponent’s",
+    };
+    let count = |count: usize| format!("{count} {}", if count == 1 { "card" } else { "cards" });
+    match target {
+        Target::Card(slot) => (view.objects.iter())
+            .find(|object| object.slot == slot)
+            .map(|object| word(object.owner).to_owned())
+            .unwrap_or_default(),
+        Target::Pile(side, ZoneName::Library) => {
+            let library = match side {
+                Side::You => &view.players.you.library,
+                Side::Opponent => &view.players.opponent.library,
+            };
+            let whose = match side {
+                Side::You => "yours",
+                Side::Opponent => "opponent’s",
+            };
+            format!("{} · {whose}", count(library.len()))
+        }
+        Target::Hand(side) => (view.table.as_ref())
+            .map(|table| match side {
+                Side::You => table.orders.you.hand.len(),
+                Side::Opponent => table.orders.opponent.hand.len(),
+            })
+            .map_or_else(|| word(side).to_owned(), count),
+        Target::Pile(side, _) | Target::Life(side) => word(side).to_owned(),
+        Target::Table => String::new(),
     }
 }
