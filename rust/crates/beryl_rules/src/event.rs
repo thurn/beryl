@@ -258,10 +258,13 @@ fn move_ordered<L: Layout, const N: usize>(
             match replace::enchants(s, t, sink, slot, m.entry)? {
                 replace::Enchants::NotAnAura => {}
                 replace::Enchants::Object(host) => m.entry.attach = Some(host),
-                replace::Enchants::Nothing if from == Zone::Stack => m.to = Zone::Graveyard,
                 replace::Enchants::Nothing => {
-                    s.end_exiled_until(slot);
-                    continue;
+                    sink.copies.retain(|&(copier, _)| copier != slot);
+                    if from != Zone::Stack {
+                        s.end_exiled_until(slot);
+                        continue;
+                    }
+                    m.to = Zone::Graveyard;
                 }
             }
         }

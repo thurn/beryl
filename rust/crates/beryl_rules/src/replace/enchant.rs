@@ -10,7 +10,7 @@
 use beryl_card::Prompt;
 use beryl_card::prompt::Purpose;
 
-use super::answer;
+use super::{answer, selected_copy};
 use crate::actions::attach;
 use crate::bitboard::Bitboard;
 use crate::card::{Subtype, Words};
@@ -61,11 +61,13 @@ pub(crate) fn enchants<L: Layout>(
     slot: L::Slot,
     entry: Entry<L>,
 ) -> Result<Enchants<L::Slot>, Full> {
-    let face = s.copiable(slot).turned(entry.face).face(t);
+    let copied = selected_copy(sink, slot);
+    let values = copied.unwrap_or_else(|| s.copiable(slot).turned(entry.face));
+    let face = values.face(t);
     if !face.subtypes.read(&Words::NONE).contains(Subtype::Aura) {
         return Ok(Enchants::NotAnAura);
     }
-    let found = layers::entered(s, t, slot, entry, |copy| {
+    let found = layers::entered(s, t, slot, entry, copied, |copy| {
         if !t
             .subtypes()
             .has(Subtype::Aura)

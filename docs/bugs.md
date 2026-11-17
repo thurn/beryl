@@ -6,6 +6,12 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Entering as a copy of a back face could panic.** The Aura attachment
+  check looked up the copied face on the original card. It now reads the
+  selected copy and applies its values in the preview used to choose a legal
+  attachment. `a_copy_of_a_back_face_aura_enters_attached` covers a single-faced
+  card entering as an Aura's back face and attaching to a land.
+
 - **A draw replacement could read stale abilities during resolution.** The
   draw code consulted the battlefield after a layer input changed without
   refreshing the layer results. The replacement lookup now refreshes them

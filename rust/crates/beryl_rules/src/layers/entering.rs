@@ -8,6 +8,8 @@
 //!
 //! [CR 614.12]: https://yawgatog.com/resources/magic-rules/#R61412
 
+use beryl_kernel::query::Copiable;
+
 use crate::card::Face;
 use crate::event::{self, Entry, Sink};
 use crate::fixed::Full;
@@ -34,11 +36,12 @@ pub(crate) fn as_it_would_exist<L: Layout>(
     slot: L::Slot,
     entry: Entry<L>,
 ) -> Result<Derived<L>, Full> {
-    entered(s, t, slot, entry, |copy| *copy.derived(slot))
+    entered(s, t, slot, entry, None, |copy| *copy.derived(slot))
 }
 
 /// What `read` finds in a copy of the state in which the object in `slot` has entered the
-/// battlefield as `entry` says, with the layers applied: the copy [`as_it_would_exist`]
+/// battlefield as `entry` says, with any chosen copy effect and the layers applied:
+/// the copy [`as_it_would_exist`]
 /// reads, for a caller that asks a filter of the object as it would exist on the
 /// battlefield. The copy stays here, so it is never moved.
 ///
@@ -48,12 +51,17 @@ pub(crate) fn entered<L: Layout, R>(
     t: &GameTable,
     slot: L::Slot,
     entry: Entry<L>,
+    copied: Option<Copiable<L>>,
     read: impl FnOnce(&State<L>) -> R,
 ) -> Result<R, Full> {
     let mut copy = s.clone();
     let mut sink = Sink::off();
     copy.move_object(&mut sink, slot, Zone::Battlefield, Place::Top)?;
     event::arrive(&mut copy, t, slot, entry)?;
+    if let Some(values) = copied {
+        let permanent = copy.permanent_at(slot).expect("a copy just entered");
+        copy.enter_as_copy(permanent, values)?;
+    }
     super::refresh(&mut copy, t, &mut sink)?;
     Ok(read(&copy))
 }

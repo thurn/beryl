@@ -10,7 +10,8 @@
 use beryl_card::{BasicLandTypes, ManaColor, ManaSet, Objects};
 
 use crate::card::{
-    Ability, CardDef, Face, LayerSpec, Modification, Replacement, Supertypes, Types,
+    Ability, CardDef, Face, FaceIx, LayerSpec, Modification, Replacement, Subtype, SubtypeWords,
+    Subtypes, Supertypes, TargetKind, TargetSpec, Types,
 };
 use crate::event::{self, Entry, Reason, Sink};
 use crate::filter::Filter;
@@ -89,6 +90,72 @@ static TAPLAND: CardDef = CardDef {
     }],
     tokens: &[],
 };
+
+/// May copy an enchantment as it enters.
+static MIRROR: CardDef = CardDef {
+    name: "Test Mirror",
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        abilities: &[Ability::replacing(&Replacement::enter_as_copy(
+            &Filter::Types(Types::ENCHANTMENT),
+            None,
+        ))],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
+
+/// Its back face is an Aura with enchant land.
+static SHIFTING_AURA: CardDef = CardDef {
+    name: "Test Shifting Aura",
+    faces: &[
+        Face {
+            types: Types::ARTIFACT,
+            ..Face::EMPTY
+        },
+        Face {
+            name: "Test Land Aura",
+            types: Types::ENCHANTMENT,
+            subtypes: SubtypeWords::new(Subtypes::of(&[Subtype::Aura])),
+            abilities: &[Ability::spell().target(&TargetSpec::one(
+                TargetKind::Permanent,
+                Filter::Types(Types::LAND),
+            ))],
+            transformed: true,
+            ..Face::EMPTY
+        },
+    ],
+    tokens: &[],
+};
+
+/// The copy enters as the back face of an Aura, so its controller must choose a legal land
+/// to enchant ([CR 303.4f]) even though the card entering is a single-faced artifact.
+///
+/// [CR 303.4f]: https://yawgatog.com/resources/magic-rules/#R3034f
+#[test]
+fn a_copy_of_a_back_face_aura_enters_attached() {
+    static TABLE: CardTable = CardTable::new(&[&MIRROR, &SHIFTING_AURA, &TAPLAND]);
+    let player = Seat::P0;
+    let deck = &[
+        (1, "Test Mirror"),
+        (1, "Test Shifting Aura"),
+        (1, "Test Tapland"),
+    ];
+    let t = GameTable::new(&TABLE, [deck, deck]).unwrap();
+    let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
+    let mut x = Scratch::new();
+    let aura = put(&t, &mut s, &mut x, player, "Test Shifting Aura");
+    let land = put(&t, &mut s, &mut x, player, "Test Tapland");
+    s.board().set_face(aura, FaceIx::BACK);
+    layers::refresh(&mut s, &t, &mut x.events).unwrap();
+
+    // The sole enchantment is the second option, after declining the copy.
+    x.events.asking.begin(&[1], false).unwrap();
+    let mirror = put(&t, &mut s, &mut x, player, "Test Mirror");
+    x.events.asking.end();
+    assert_eq!(s.copiable(mirror).face(&t).name, "Test Land Aura");
+    assert_eq!(s.object(mirror).attached_to(), Some(land));
+}
 
 static CARDS: CardTable = CardTable::new(&[&MOON, &OPAL, &SPRINGS, &TAPLAND]);
 

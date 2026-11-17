@@ -344,7 +344,7 @@ fn entering_destinations<L: Layout>(
             _ => None,
         };
         for (ability, a, (objects, instead)) in statics(s, t, p, enters) {
-            let passes = layers::entered(s, t, slot, entry, |as_it_would_exist| {
+            let passes = layers::entered(s, t, slot, entry, None, |as_it_would_exist| {
                 objects.matches(as_it_would_exist, t, slot, controller, &words)
             })?;
             if !passes {
@@ -541,6 +541,14 @@ fn copy_to_enter<L: Layout>(
     Ok(Some(copy))
 }
 
+/// The values an entering permanent chose to copy, before it reaches the battlefield
+/// ([`copy_to_enter`]).
+fn selected_copy<L: Layout>(sink: &Sink<L>, slot: L::Slot) -> Option<Copiable<L>> {
+    sink.copies
+        .iter()
+        .find_map(|&(copier, values)| (copier == slot).then_some(values))
+}
+
 /// The life an "unless you pay N life" replacement of the entering object asks for, if it has
 /// one ([`Rewrite::EntersTappedUnlessPayLife`]), with the index of its ability.
 fn life_asked(face: &crate::card::Face) -> Option<(AbilityIx, u8)> {
@@ -574,10 +582,11 @@ pub(crate) fn pay_life_to_enter<L: Layout>(
     entry: Entry<L>,
 ) -> Result<(), Full> {
     let o = s.object(slot);
-    let face = s.copiable(slot).turned(entry.face).face(t);
+    let copied = selected_copy(sink, slot);
+    let values = copied.unwrap_or_else(|| s.copiable(slot).turned(entry.face));
     let player = entry.controller.unwrap_or(o.owner());
-    if let Some((ability, n)) = life_asked(face)
-        && s.has_ability(slot, ability)
+    if let Some((ability, n)) = life_asked(values.face(t))
+        && (copied.is_some() || s.has_ability(slot, ability))
     {
         // The life is lost to the permanent's own replacement effect ([CR 614.1c]: "Effects
         // that read ... "As [this permanent] enters . . . ," ... are replacement effects."),
