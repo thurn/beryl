@@ -138,6 +138,19 @@ impl Client {
             }
             TablePress::CustomCreate => self.create_custom(shift),
             TablePress::CancelCapture => self.stop_capture(None),
+            TablePress::Step { at, active } => {
+                let Some(view) = self.show.latest().map(|update| &update.view) else {
+                    return;
+                };
+                let id = crate::manual::turn::step_command(view, at, active);
+                self.run_table_command(id, crate::manual::Target::Table);
+            }
+            TablePress::Quit => {
+                self.manual.quitting = false;
+                self.requests.push_back(crate::command::Request::Quit);
+                self.show_screen();
+            }
+            TablePress::Next => self.run_table_command("phase.next", crate::manual::Target::Table),
             TablePress::Close => {
                 self.manual.close_overlay();
                 self.layer.focus(None);
@@ -211,6 +224,8 @@ impl Client {
                     self.choose_token(open.highlight, shift);
                 } else if self.manual.custom.is_some() {
                     self.create_custom(shift);
+                } else if self.manual.quitting {
+                    self.table_press(TablePress::Quit);
                 } else {
                     self.order_done();
                 }

@@ -126,6 +126,9 @@ pub enum Request {
         effects: u8,
         muted: bool,
     },
+    /// Quit the app, as the player confirmed when Quit asked first on the manual table. The
+    /// session shuts the table down as the app ends, so that it can be resumed.
+    Quit,
     /// Replay the recording `name` from its start as `seat` sees it, in place of whatever
     /// feeds the client now, as the app's `--fixture` does. Sent from the testing screen, which
     /// only a tools build reaches.

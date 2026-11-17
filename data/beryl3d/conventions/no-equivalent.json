@@ -133,13 +133,23 @@
       "shows": "field \"Search commands\""
     },
     "Quitting from a manual table": {
-      "open": "Cmd+Q leaves the table at once instead of asking first (needs bead by-q44s.9.23)"
+      "recording": "screen/table",
+      "at": "end",
+      "do": [
+        "key Cmd+Q"
+      ],
+      "shows": "text \"Quit Beryl?\""
     },
     "Manual table turn controls": {
-      "open": "The manual table shows no step track and no Next button (needs bead by-q44s.9.23)"
+      "recording": "screen/table",
+      "at": "end",
+      "shows": "button \"Next\""
     },
     "Manual table announcements": {
-      "open": "The manual table shows no banner for its announce steps (needs bead by-q44s.9.23)"
+      "recording": "screen/table",
+      "at": "step:2.0.0",
+      "still": false,
+      "shows": "text \"Shuffled\""
     },
     "Ability menus on a manual table": {
       "recording": "screen/table-assists",

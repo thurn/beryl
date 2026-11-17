@@ -23,8 +23,10 @@ pub mod menus;
 pub mod opening;
 pub mod order;
 pub mod palette;
+pub mod quit;
 pub mod selection;
 pub mod tokens;
+pub mod turn;
 pub mod viewers;
 
 use beryl_protocol::PlayerView;
@@ -97,6 +99,13 @@ pub enum TablePress {
     CustomCreate,
     /// Stop waiting for a key to bind to the command list's highlighted row.
     CancelCapture,
+    /// The icon at `at` of a step track, in the active player's rows if `active`
+    /// (`turn::step_command`).
+    Step { at: u8, active: bool },
+    /// The Next button, which advances to the next phase.
+    Next,
+    /// Quit's question was answered Quit.
+    Quit,
     /// Close the command list, ask prompt, token search, custom token form or order tray.
     Close,
     /// Turn the line `line` of the proposal `id` on or off (`assists::proposals`).
@@ -151,6 +160,8 @@ pub struct TableState {
     /// The highest selected permanent on the window, which the selection's summary stands
     /// over (`selection::highest`).
     pub summary_over: Option<ObjectId>,
+    /// Whether the Quit key asked whether to leave the table and quit (`quit`).
+    pub quitting: bool,
 }
 
 /// What a table action the client sent asks of the table's answer to it: to remember the
@@ -184,11 +195,12 @@ impl TableState {
             picking: None,
             landing: None,
             summary_over: None,
+            quitting: false,
         }
     }
 
-    /// Whether the command list, ask prompt, token search, custom token form or order tray is
-    /// open, which takes the keys from the table.
+    /// Whether the command list, ask prompt, token search, custom token form, order tray or
+    /// Quit's question is open, which takes the keys from the table.
     #[must_use]
     pub fn overlay_open(&self) -> bool {
         self.palette.is_some()
@@ -196,10 +208,11 @@ impl TableState {
             || self.tokens.is_some()
             || self.custom.is_some()
             || self.order.is_some()
+            || self.quitting
     }
 
-    /// Closes the command list, ask prompt, token search, custom token form and order tray.
-    /// Returns whether one was open.
+    /// Closes the command list, ask prompt, token search, custom token form, order tray and
+    /// Quit's question. Returns whether one was open.
     pub fn close_overlay(&mut self) -> bool {
         let open = self.overlay_open();
         self.palette = None;
@@ -207,6 +220,7 @@ impl TableState {
         self.tokens = None;
         self.custom = None;
         self.order = None;
+        self.quitting = false;
         open
     }
 }

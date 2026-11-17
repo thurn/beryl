@@ -596,8 +596,8 @@ fn carry_out(window: &Window, clipboard: &mut Clipboard, request: Request) -> Op
         Request::Share { path } => reveal(&path),
         Request::OpenUrl(url) => open_url(url),
         // A desktop has no haptics. The app's feed saves the settings, plays the sound,
-        // replays a recording, takes the bug report's picture, saves the report and exports the
-        // reports, as it sees each request first (`Feed::request`).
+        // replays a recording, takes the bug report's picture, saves the report, exports the
+        // reports and ends the run on a quit, as it sees each request first (`Feed::request`).
         Request::Haptic(_)
         | Request::ExportBugs
         | Request::FreezeFrame
@@ -605,7 +605,8 @@ fn carry_out(window: &Window, clipboard: &mut Clipboard, request: Request) -> Op
         | Request::SaveSettings(_)
         | Request::Music(_)
         | Request::Audio { .. }
-        | Request::Replay { .. } => {}
+        | Request::Replay { .. }
+        | Request::Quit => {}
     }
     None
 }

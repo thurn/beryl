@@ -22,7 +22,7 @@ use beryl_scene::{Client, Config};
 use glam::Vec2;
 
 /// A sample view at a solo manual table, at rest.
-fn table_view() -> beryl_protocol::PlayerView {
+pub(super) fn table_view() -> beryl_protocol::PlayerView {
     let mut builder = ViewBuilder::sample();
     builder.script(ScriptBuilder::reset().build());
     let mut view = builder.build();
@@ -31,7 +31,7 @@ fn table_view() -> beryl_protocol::PlayerView {
 }
 
 /// A client on the Mac in a 1600 by 900 window that has been given `view` and drawn it.
-fn client_at_table(view: &beryl_protocol::PlayerView) -> (Client, Frame) {
+pub(super) fn client_at_table(view: &beryl_protocol::PlayerView) -> (Client, Frame) {
     client_in(view, 1600.0, 900.0)
 }
 
@@ -58,14 +58,14 @@ fn client_in(view: &beryl_protocol::PlayerView, width: f32, height: f32) -> (Cli
 }
 
 /// The middle of the first element of `frame` with `role` whose name starts with `name`.
-fn middle(frame: &Frame, role: Role, name: &str) -> Vec2 {
+pub(super) fn middle(frame: &Frame, role: Role, name: &str) -> Vec2 {
     let element = (frame.resolved.iter())
         .find(|element| element.role == role && frame.name(element.name).starts_with(name))
         .unwrap_or_else(|| panic!("no {role:?} named {name:?}"));
     element.corners.iter().copied().sum::<Vec2>() / 4.0
 }
 
-fn pointer(phase: PointerPhase, position: Vec2, button: Button) -> Input {
+pub(super) fn pointer(phase: PointerPhase, position: Vec2, button: Button) -> Input {
     Input::Pointer(Pointer {
         id: 0,
         kind: PointerKind::Mouse,
@@ -103,7 +103,7 @@ fn menu_rows(frame: &Frame) -> Vec<&str> {
         .collect()
 }
 
-fn key(code: KeyCode, modifiers: Modifiers) -> Input {
+pub(super) fn key(code: KeyCode, modifiers: Modifiers) -> Input {
     Input::Key(Key {
         code,
         phase: KeyPhase::Down,
@@ -112,7 +112,7 @@ fn key(code: KeyCode, modifiers: Modifiers) -> Input {
 }
 
 /// The table actions the client has queued, in order.
-fn acts(client: &mut Client) -> Vec<TableAction> {
+pub(super) fn acts(client: &mut Client) -> Vec<TableAction> {
     std::iter::from_fn(|| client.next_command())
         .filter_map(|command| match command {
             SessionCommand::TableAct(action) => Some(action),
@@ -433,7 +433,7 @@ fn a_submenu_row_on_the_phone_sheet_shows_its_rows_with_back() {
 }
 
 /// Cmd held, as the table's keys are written for the Mac.
-fn cmd() -> Modifiers {
+pub(super) fn cmd() -> Modifiers {
     Modifiers {
         command: true,
         ..Modifiers::default()
@@ -441,7 +441,7 @@ fn cmd() -> Modifiers {
 }
 
 /// Types `words` into the focused field.
-fn type_in(client: &mut Client, words: &str) {
+pub(super) fn type_in(client: &mut Client, words: &str) {
     client.handle(Input::Text(TextChange::Insert(words.to_owned())));
 }
 
@@ -455,12 +455,12 @@ fn rows(client: &mut Client, now: u64) -> Vec<String> {
 }
 
 /// Every command the client has queued, in order.
-fn commands(client: &mut Client) -> Vec<SessionCommand> {
+pub(super) fn commands(client: &mut Client) -> Vec<SessionCommand> {
     std::iter::from_fn(|| client.next_command()).collect()
 }
 
 /// The action `json` names, as a table action.
-fn action(json: serde_json::Value) -> TableAction {
+pub(super) fn action(json: serde_json::Value) -> TableAction {
     serde_json::from_value(json).unwrap()
 }
 
@@ -702,7 +702,7 @@ fn the_library_order_puts_the_first_card_on_top() {
 }
 
 /// Presses the first element drawn at `now` with `role` whose name starts with `name`.
-fn press(client: &mut Client, now: u64, role: Role, name: &str) {
+pub(super) fn press(client: &mut Client, now: u64, role: Role, name: &str) {
     let at = middle(&client.frame(now).clone(), role, name);
     client.handle(pointer(PointerPhase::Down, at, Button::Primary));
     client.handle(pointer(PointerPhase::Up, at, Button::Primary));

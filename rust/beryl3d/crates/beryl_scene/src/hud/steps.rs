@@ -18,6 +18,9 @@
 //! - The current step burns gold in the active player's rows.
 //! - On the phone layout the icons are too small to touch, so they are not shown, and they are
 //!   hidden while a pile's viewer is open over the table.
+//! - On the manual table (`table_steps`) the icons are the step track: none is a stop, the
+//!   table's phase lights in the active player's rows, and a press on an icon sends
+//!   `TablePress::Step`, which sets the phase (`manual::turn`).
 //!
 //! [CR 502.4]: https://yawgatog.com/resources/magic-rules/#R5024
 //! [CR 514.3]: https://yawgatog.com/resources/magic-rules/#R5143
@@ -29,6 +32,7 @@ use super::players::face_centre;
 use crate::data::space::hud::{STEP_FIXED, STEP_OFF};
 use crate::element::{Anchor, Display, Element, Press, Shown, Track, holder};
 use crate::frame::Role;
+use crate::manual::TablePress;
 use crate::screens::ScreenIn;
 use crate::table::Window;
 use crate::tokens::{color, size};
@@ -107,18 +111,49 @@ pub fn steps(input: &ScreenIn) -> Option<Element> {
     }
     let stops = &input.settings.stops;
     Some(holder().name("steps").children([
-        rows(view, Side::You, stops.yours, input.window),
-        rows(view, Side::Opponent, stops.theirs, input.window),
+        rows(view, Side::You, Mode::Stops(stops.yours), input.window),
+        rows(
+            view,
+            Side::Opponent,
+            Mode::Stops(stops.theirs),
+            input.window,
+        ),
     ]))
 }
 
-/// `side`'s twelve icons about their orb, with `set` the steps of their turns that stop.
-fn rows(view: &PlayerView, side: Side, set: StepSet, window: Window) -> Element {
+/// What the manual table shows for the steps: both players' step tracks, on the desktop
+/// layout, while no pile's viewer is open, with the icon of the table's phase lit in the
+/// active player's rows, as the web's `StepStops` stands on the manual table with no stops and
+/// an `onStep`.
+#[must_use]
+pub fn table_steps(input: &ScreenIn) -> Option<Element> {
+    let view = input.view?;
+    let table = view.table.as_ref()?;
+    if input.window.phone() || input.viewing.is_some() {
+        return None;
+    }
+    let lit = crate::manual::turn::icon_of(table.phase);
+    Some(holder().name("steps").children([
+        rows(view, Side::You, Mode::Table(lit), input.window),
+        rows(view, Side::Opponent, Mode::Table(lit), input.window),
+    ]))
+}
+
+/// What a player's rows are for: a game's stops, with the steps of their turns that stop, or
+/// the manual table's step track, with the index in `STEP_STOPS` of the icon its phase lights.
+#[derive(Clone, Copy)]
+enum Mode {
+    Stops(StepSet),
+    Table(usize),
+}
+
+/// `side`'s twelve icons about their orb, for `mode`.
+fn rows(view: &PlayerView, side: Side, mode: Mode, window: Window) -> Element {
     let whose = match side {
         Side::You => "Your",
         Side::Opponent => "Opponent's",
     };
-    let current = (view.turn.active == side).then_some(view.turn.step);
+    let active = view.turn.active == side;
     // The columns are `STEP_GAP` apart and the rows `STEP_ROW_GAP`, but a grid here has one gap
     // for both, so each column is wider by the difference and its icon stands in its middle.
     let margin = (size::STEP_GAP - size::STEP_ROW_GAP) / 2.0;
@@ -142,8 +177,11 @@ fn rows(view: &PlayerView, side: Side, set: StepSet, window: Window) -> Element 
         Vec2::new(0.5, 0.5),
     ));
     element.children((0..STEP_STOPS.len()).map(|at| {
-        icon(at, whose, side, set, current)
-            .grid_column(column_of(at))
+        let icon = match mode {
+            Mode::Stops(set) => icon(at, whose, side, set, active.then_some(view.turn.step)),
+            Mode::Table(lit) => track_icon(at, whose, active, active && at == lit),
+        };
+        icon.grid_column(column_of(at))
             .grid_row(row_of(at))
             .margin([0.0, margin, 0.0, margin])
     }))
@@ -201,5 +239,35 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
             theirs: side == Side::Opponent,
         });
     }
+    element
+}
+
+/// The icon at `at` of a manual table's step track, lit if `here`, which a press sets the phase
+/// to; `active` says whether its rows are the active player's.
+fn track_icon(at: usize, whose: &str, active: bool, here: bool) -> Element {
+    let name = format!("{whose} {}", STEP_STOPS[at].label);
+    let mut element = Element::new(Role::Button)
+        .name(&name)
+        .width(size::STEP)
+        .height(size::STEP)
+        .color(if here {
+            color::STEP_CURRENT
+        } else {
+            color::STEP
+        })
+        .opacity(if here { 1.0 } else { STEP_OFF })
+        .selected(here)
+        .on_press(Press::Table(TablePress::Step {
+            #[expect(clippy::cast_possible_truncation, reason = "twelve icons")]
+            at: at as u8,
+            active,
+        }));
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "an icon is a whole number of points"
+    )]
+    let side_points = size::STEP as u16;
+    element.shows = Some(Shown::Icon(icons::STEPS_OUTLINED[at], side_points));
     element
 }

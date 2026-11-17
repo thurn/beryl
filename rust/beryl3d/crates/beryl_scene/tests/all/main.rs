@@ -29,6 +29,7 @@ mod light;
 mod lobby;
 mod manual;
 mod manual_assists;
+mod manual_controls;
 mod manual_start;
 mod motion;
 mod notices;

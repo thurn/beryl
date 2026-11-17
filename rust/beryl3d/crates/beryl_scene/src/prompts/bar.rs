@@ -94,7 +94,7 @@ pub(super) fn bar(
 /// the web's `.turn-action` stands a `.turn-caption` under the turn button: where a pass leads
 /// ("Next" over "To Combat"), or the value an X is set to ("Pay" over "X = 1"). A button with
 /// no caption stands alone.
-fn captioned(pressed: Element, caption: &str) -> Element {
+pub(crate) fn captioned(pressed: Element, caption: &str) -> Element {
     if caption.is_empty() {
         return pressed;
     }

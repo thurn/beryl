@@ -2,7 +2,8 @@
 //! an empty view, as the stress boards are made (`crate::stress`). Each is named
 //! `screen/<name>`, and `data/beryl3d/screens.json` lists them for the parity list. The manual
 //! table's is a view of a solo table built by hand, with a few cards in each zone, which opens
-//! the table screen itself. The lobby's is a solo table's lobby built by hand, with the sample
+//! the table screen itself, and then the same view again with the banner a shuffle announces.
+//! The lobby's is a solo table's lobby built by hand, with the sample
 //! deck loaded. The manual table's assists have one of their own, `screen/table-assists`: the
 //! same table with every assist on, a turn upkeep proposal, a state nudge's label on the
 //! opponent's creature and an activated ability on the viewer's first land.
@@ -16,7 +17,7 @@ use beryl_protocol::protocol::{
     AssistsView, CardType, LabelView, LinkState, LogLine, PlayerState, ProposalLine, ProposalView,
     Side, TableAbilityOption, TableCardCommands, TablePrompt, TableView, TargetRef, ZoneName,
 };
-use beryl_protocol::script::Reset;
+use beryl_protocol::script::{Act, Notice, Reset, Step, StepTiming};
 use beryl_protocol::{AgentView, GameUpdate, PlayerView, SessionId};
 use beryl_scene::driver::{OPEN, RECORDINGS};
 use beryl_scene::testing;
@@ -142,9 +143,16 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
             payload: serde_json::to_value(testing::lobby(true)).ok()?,
         });
     }
+    let shuffled = (opened == "table").then(|| shuffled(&view));
     messages.push(FixtureMessage::game_update(&GameUpdate {
         session: SessionId(1),
         view,
+    }));
+    messages.extend(shuffled.map(|view| {
+        FixtureMessage::game_update(&GameUpdate {
+            session: SessionId(1),
+            view,
+        })
     }));
     Some(messages)
 }
@@ -241,5 +249,26 @@ fn guided_or_linked(opened: &str, table: &mut TableView) {
             table.peer_name = Some("Alex".to_owned());
         }
         _ => {}
+    }
+}
+
+/// `view` again, with a script that announces a shuffle, as a manual table's Shuffle library
+/// sends it: the banner shows over the table for its step, as the table's first view's script
+/// never plays (`play::compile`).
+fn shuffled(view: &PlayerView) -> PlayerView {
+    let step = Step {
+        act: Act::Announce {
+            notice: Notice::Shuffle,
+        },
+        cause: None,
+    };
+    let timing = StepTiming {
+        delay: 116.0,
+        passes: true,
+        ..testing::timing(1200.0)
+    };
+    PlayerView {
+        script: Some(testing::script(None, vec![vec![step]], vec![timing])),
+        ..view.clone()
     }
 }

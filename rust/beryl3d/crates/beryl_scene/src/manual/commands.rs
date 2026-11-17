@@ -410,6 +410,13 @@ pub fn actions_for(
     if matches!(command.id, "table.untap_all" | "phase.untap_active") {
         return vec![untap(view)];
     }
+    if let Some(with_action) = match command.id {
+        "phase.next" => Some(false),
+        "phase.next_with_action" => Some(true),
+        _ => None,
+    } {
+        return super::turn::advance(view, with_action);
+    }
     let Some(template) = command.action else {
         return Vec::new();
     };
@@ -606,7 +613,7 @@ fn grouped_actions(
 
 /// The action that untaps every permanent the viewer controls that is tapped and untaps as
 /// usual (`untapPermanents` in `ui/src/table/turn.ts`).
-fn untap(view: &PlayerView) -> TableAction {
+pub(crate) fn untap(view: &PlayerView) -> TableAction {
     let tapped: Vec<ObjectId> = (view.objects.iter())
         .filter(|object| {
             object.zone == ZoneName::Battlefield

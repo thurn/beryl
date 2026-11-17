@@ -308,7 +308,9 @@ pub fn request_to_c(request: &Request, text: &mut CString) -> Option<BerylReques
         | Request::Paste
         // A phone's app has no testing screen, whose recordings only a desktop tools build
         // lists.
-        | Request::Replay { .. } => return None,
+        | Request::Replay { .. }
+        // A phone's app is never quit from inside it.
+        | Request::Quit => return None,
     }
     Some(out)
 }

@@ -74,6 +74,8 @@ struct AppFeed {
     /// Whether the source has ended: a replayed recording has played to its end, or a view of
     /// the live game has said the game is over.
     ended: bool,
+    /// Whether the player asked to quit (`Request::Quit`), which ends the run.
+    quit: bool,
     /// The run as known before the host opened; the host fills in the display and adapter.
     run: Run,
     /// Whether the latest view says the AI is searching.
@@ -296,6 +298,7 @@ impl Feed for AppFeed {
                     audio.levels(*music, *effects, *muted);
                 }
             }
+            Request::Quit => self.quit = true,
             Request::SaveSettings(settings) => {
                 if let Some(saver) = &self.saver {
                     saver.save(settings.clone());
@@ -374,7 +377,7 @@ impl Feed for AppFeed {
         if self.live.as_ref().is_some_and(crate::live::Live::quit) {
             return true;
         }
-        self.finish == Finish::GameOver && self.ended
+        self.quit || (self.finish == Finish::GameOver && self.ended)
     }
 }
 
@@ -453,6 +456,7 @@ fn phone_app(
         log_dir,
         finish,
         ended: false,
+        quit: false,
         run: Run {
             checkout: checkout(),
             pid: std::process::id(),
@@ -514,6 +518,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
             Finish::AtExit
         },
         ended: false,
+        quit: false,
         run: run.clone(),
         searching: false,
         shown_first: false,

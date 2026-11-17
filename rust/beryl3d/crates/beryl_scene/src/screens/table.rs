@@ -17,13 +17,15 @@ use crate::data::space::flat::{MENU_EDGE, sheet};
 use crate::data::space::pointer::DRAG_THRESHOLD_POINTS;
 use crate::element::{Align, Element, Overflow, Press, Shown, column};
 use crate::frame::Role;
+use crate::hud::{players, steps};
 use crate::input::{FaceId, FaceSize};
 use crate::inspect::viewer::viewer;
 use crate::manual::Target;
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::menus::{MENU, OpenMenu};
 use crate::manual::{
-    TableState, ask, assists, drop, link, log, opening, order, palette, selection, tokens,
+    TableState, ask, assists, drop, link, log, opening, order, palette, quit, selection, tokens,
+    turn,
 };
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::widgets::{context_menu, menu, sheet_menu};
@@ -118,7 +120,18 @@ pub fn table(input: &ScreenIn) -> Element {
         let top = link::top(window.size, window.phone(), window.safe_area.top);
         link::banner(view, window.size, top)
     });
+    // The Next button stands in the lower right, where the ask prompt docks, so it gives way
+    // to whatever the table shows over itself.
+    let next = (input.view.and_then(|view| view.table.as_ref()))
+        .filter(|_| state.menu.is_none() && !state.overlay_open())
+        .map(|table| {
+            let inset = crate::data::space::flat::table::EDGE;
+            turn::next(table.phase, input.window.size, inset)
+        });
     screen
+        .children(players::players(input))
+        .children(steps::table_steps(input))
+        .children(next)
         .children(log)
         .children(summary)
         .children(proposals)
@@ -142,6 +155,9 @@ fn over(state: &TableState, input: &ScreenIn) -> Option<Element> {
     }
     if let Some(open) = &state.ask {
         return Some(ask::dock(open, input.fields, window));
+    }
+    if state.quitting {
+        return Some(quit::question(window));
     }
     if let Some(open) = &state.custom {
         return Some(tokens::custom_panel(open, input.fields, window));

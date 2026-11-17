@@ -194,8 +194,32 @@ impl Client {
             .chain(fallbacks)
             .find(|target| command.applies(target.applies_to(view)))
             .unwrap_or(Target::Table);
+        // The Quit key asks first, as the web's `TableCommands` sends it to `quit`; Leave
+        // table in a menu leaves at once.
+        if command.id == "table.leave" {
+            self.manual.menu = None;
+            self.manual.close_overlay();
+            self.manual.quitting = true;
+            self.show_screen();
+            return;
+        }
         let act = menus::act(command, target, view, &self.table_context(), shift);
         self.give(act, target, shift);
+    }
+
+    /// Gives the table command whose id is `id` to `target`, as a key or a menu row would.
+    pub(super) fn run_table_command(&mut self, id: &str, target: Target) {
+        let Some((_, command)) = commands::command(id) else {
+            return;
+        };
+        let Some(view) = self.show.latest().map(|update| &update.view) else {
+            return;
+        };
+        if view.table.is_none() {
+            return;
+        }
+        let act = menus::act(command, target, view, &self.table_context(), false);
+        self.give(act, target, false);
     }
 
     /// What the client knows beyond the table's view that decides which commands it offers:
