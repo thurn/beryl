@@ -222,12 +222,26 @@ fn an_outline_encloses_its_card_through_a_flight() {
     {
         let outlines = sprites_of(frame, sprites::OUTLINE.rect);
         assert_eq!(outlines.len(), 1, "one outline at {} ms", t / MS);
-        let outline = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)]
+        // The rectangle the sprite's line runs along, not the whole quad: the quad of a line
+        // drawn at seven tenths of the card's width still held the card.
+        let [x, y] = sprites::OUTLINE_LINE;
+        let outline = [(-x, -y), (x, -y), (x, y), (-x, y)]
             .map(|(x, y)| camera.to_screen(quad_point(outlines[0], x, y)));
-        for corner in element(frame, cards.discard).corners {
+        let corners = element(frame, cards.discard).corners;
+        for corner in corners {
             assert!(
                 inside(outline, corner),
                 "at {} ms the card's corner {corner} is outside its outline {outline:?}",
+                t / MS
+            );
+        }
+        // And close around it: inside the card grown by a fifth about its middle.
+        let middle = corners.iter().copied().sum::<Vec2>() / 4.0;
+        let grown = corners.map(|corner| middle + (corner - middle) * 1.2);
+        for corner in outline {
+            assert!(
+                inside(grown, corner),
+                "at {} ms the outline's corner {corner} is far outside its card {corners:?}",
                 t / MS
             );
         }

@@ -449,7 +449,7 @@ impl Client {
         let table = self.show.table();
         self.layer
             .follow(|subject| layout::spot_of(&builder, table, subject));
-        // A total that changes shows the element `prepare` laid out for it.
+        // Each total shows what `prepare` laid out; the opening hides them, as the web's does.
         self.counts.write(
             &mut self.layer,
             self.show.counts(),
@@ -457,7 +457,7 @@ impl Client {
             table_now,
             self.show.table().layout(),
             self.window.size,
-            (counted, targets),
+            (counted && !self.viewing.opening, targets),
         );
         (self.piles).write(&mut self.layer, self.show.table(), counted);
         (self.notices).write(

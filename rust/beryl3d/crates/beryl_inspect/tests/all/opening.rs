@@ -64,6 +64,10 @@ fn the_opening_hand_stands_in_the_row_and_keep_answers_the_mulligan() {
     assert!(!tree.contains("toggle \"Your draw\""), "{tree}");
     assert!(tree.contains("text \"Opening hand\""), "{tree}");
     assert!(tree.contains("text \"On the draw\""), "{tree}");
+    // The life totals are hidden, as the web's overlay covers them: the opponent's stood over
+    // "On the draw".
+    assert!(!tree.contains("player \"Opponent 20\""), "{tree}");
+    assert!(!tree.contains("player \"You 20\""), "{tree}");
     for name in HAND {
         let (card_name, slot) = name.rsplit_once(" #").expect("a slot");
         let boxed = page.find(&format!("region \"{name}\"")).rect();

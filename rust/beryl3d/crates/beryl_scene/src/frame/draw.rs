@@ -88,7 +88,10 @@ pub struct Sprite {
 /// cut into 256 by 256 cells, row by row from the top left. The last two cells of the bottom
 /// row are spare.
 pub mod sprites {
+    use glam::Vec2;
+
     use super::Sprite;
+    use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 
     /// The atlas page that holds them.
     pub const PAGE: u16 = 0;
@@ -126,6 +129,21 @@ pub mod sprites {
     /// `beryl_assets`' tests hold both rectangles to the shape it draws, with a margin for
     /// filtering.
     pub const OUTLINE_HOLE: [f32; 2] = [0.29, 0.42];
+    /// Half the width and height of the rounded rectangle that `OUTLINE`'s line runs along, in
+    /// the same units. It has a card's proportions, since the cell holds a card's outline.
+    pub const OUTLINE_LINE: [f32; 2] = [LINE_HEIGHT * CARD_WIDTH / CARD_HEIGHT, LINE_HEIGHT];
+    /// `OUTLINE_LINE`'s height: 0.94 of the cell's drawn area, which leaves `beryl_assets`'
+    /// border of 2 texels on each side of the 256 texel cell.
+    const LINE_HEIGHT: f32 = 0.94 * 126.0 / 256.0;
+
+    /// The size to scale a quad drawn with `OUTLINE` to, so that its line runs `half` from its
+    /// middle across and up: around a card when `half` is the card's half size. The cell already
+    /// holds a card's proportions, so a quad scaled to the card's own size drew the line at
+    /// about seven tenths of the card's width.
+    #[must_use]
+    pub fn outline_size(half: Vec2) -> Vec2 {
+        half / Vec2::from(OUTLINE_LINE)
+    }
 }
 
 const MESH_SHIFT: u8 = 2;

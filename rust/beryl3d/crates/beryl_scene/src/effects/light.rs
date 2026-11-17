@@ -80,7 +80,7 @@ pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut Fram
         let pose = reach.pose;
         let draw = match run.effect {
             Effect::Glow => {
-                let size = (half + Vec2::splat(glow::HALO * 2.0 * half.x)) * 2.0;
+                let size = sprites::outline_size(half + Vec2::splat(glow::HALO * 2.0 * half.x));
                 let size = size * (1.0 + glow::SPREAD * progress);
                 lying(&pose, size, color::GLOW, sprites::OUTLINE, progress)
             }

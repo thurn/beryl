@@ -176,7 +176,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             .count();
         #[expect(clippy::cast_precision_loss, reason = "a handful of marks")]
         let grow = light::OUTLINE_GROW * pose.scale * (1 + inside) as f32;
-        let size = (half + Vec2::splat(grow)) * 2.0;
+        let size = sprites::outline_size(half + Vec2::splat(grow));
         let transform =
             Affine3A::from_scale_rotation_translation(size.extend(1.0), pose.rotation, position);
         builder.draw(band, Draw::glow(transform, tint, sprites::OUTLINE, 0.0));

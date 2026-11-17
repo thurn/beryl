@@ -22,8 +22,6 @@ const HALF: f32 = (sprites::CELL - 2 * BORDER) as f32 / 2.0;
 /// One texel, in the coordinates a shape is drawn in, which run from -1 to 1 across the
 /// drawn area.
 const TEXEL: f32 = 1.0 / HALF;
-/// A card's width over its height (63 by 88 millimetres), for the outline.
-const CARD_ASPECT: f32 = 63.0 / 88.0;
 
 /// The atlas's page 0, `PAGE_SIZE` rows of as many 8-bit opacity texels, top row first.
 #[must_use]
@@ -188,8 +186,10 @@ fn ribbon(_x: f32, y: f32) -> f32 {
 /// A card-shaped outline: the ring of a rounded rectangle of a card's proportions, solid on
 /// the line and soft at its sides, empty inside.
 fn outline(x: f32, y: f32) -> f32 {
-    let height = 0.94;
-    let half = (height * CARD_ASPECT, height);
+    // `sprites::OUTLINE_LINE` is in units of the whole cell, -0.5 to 0.5 across, and a shape is
+    // drawn in units of the drawn area, -1 to 1 across.
+    let [width, height] = sprites::OUTLINE_LINE.map(|half| half * f32::from(sprites::CELL) / HALF);
+    let half = (width, height);
     // A card's 3 millimetre corner, at the card's 88 millimetre height.
     let radius = height * 2.0 * 3.0 / 88.0;
     let distance = rounded_box(x, y, half, radius).abs();

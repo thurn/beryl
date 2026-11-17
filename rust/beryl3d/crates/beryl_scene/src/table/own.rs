@@ -114,7 +114,8 @@ pub(super) fn write(
         marks.icon(sprites::COIN, own::coin::AT * card, size, color::COIN);
     }
     if record.controller != record.owner {
-        marks.icon(sprites::OUTLINE, Vec2::ZERO, card, color::OUTLINE);
+        let size = sprites::outline_size(card / 2.0);
+        marks.icon(sprites::OUTLINE, Vec2::ZERO, size, color::OUTLINE);
     }
     if fighting != Fighting::No {
         #[expect(
