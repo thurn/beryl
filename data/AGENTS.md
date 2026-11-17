@@ -3,6 +3,10 @@
 This adds to the root `AGENTS.md`, whose rules all apply here.
 
 - `beryl3d/` holds Beryl 3D's data files, described in `rust/beryl3d/AGENTS.md`.
+- `ci-incidents.json` sets the CI incident destination and workload aliases.
+  `ci-incident-migration.json` records reviewed ownership transfers and
+  diagnostic selectors for importing old reports with `by incident-migrate`
+  (docs/checks.md).
 - `card-store.tsv` is the card store, built by `just cards` from Scryfall's bulk
   data. It has a record for every card in the pool and every token those cards
   make, sorted so it can be searched by seeking

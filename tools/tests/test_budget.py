@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from tests.incident_support import ReporterTickets
+
 import pytest
 
 from beryl_tools import budget, check_value, verdicts
@@ -21,7 +23,7 @@ def labels(issue: dict[str, object]) -> list[str]:
     return [str(label) for label in found] if isinstance(found, list) else []
 
 
-class FakeTickets(verdicts.Tickets):
+class FakeTickets(ReporterTickets):
     """The ticket service as budget.py uses it, in memory."""
 
     def __init__(self) -> None:
@@ -71,7 +73,7 @@ def test_an_overrun_files_a_bead_naming_its_lanes() -> None:
     line = budget.report("check", 60, "191 s", LANES, "load average 6", store)
     assert line == "check: over budget: filed by-1 to audit it"
     [issue] = store.issues
-    assert issue["metadata"] == {budget.SCRIPT_KEY: "check"}
+    assert issue["metadata"][budget.SCRIPT_KEY] == "check"  # pyre-ignore[16]
     assert budget.LABEL in labels(issue)
     assert "tests 118 s" in str(issue["description"])
 
@@ -89,7 +91,7 @@ def test_a_closed_bead_lets_the_next_overrun_file_again() -> None:
     store = FakeTickets()
     budget.report("check", 60, "191 s", LANES, "", store)
     store.issues[0]["status"] = "closed"
-    budget.report("check", 60, "191 s", LANES, "", store)
+    budget.report("check", 60, "192 s", LANES, "", store)
     assert len(store.issues) == 2
 
 
@@ -144,7 +146,7 @@ def test_slow_ci_over_its_cpu_budget_files_a_bead_per_lane_naming_the_cuts() -> 
     assert lines[0] == "ci budget: a full run uses 201 CPU seconds, over 125"
     rust, ui = store.issues
     assert rust["title"] == "Cut 1 checks from slow CI's rust lane"
-    assert rust["metadata"] == {budget.LANE_KEY: "rust"}
+    assert rust["metadata"][budget.LANE_KEY] == "rust"  # pyre-ignore[16]
     assert budget.CUT_LABEL in labels(rust)
     assert "- delete: `rust:costly`: 10 runs, 0 catches, 50.00 CPU s" in str(
         rust["description"]

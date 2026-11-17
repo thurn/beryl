@@ -46,6 +46,7 @@ from pathlib import Path
 from . import (
     bisect,
     checks,
+    incidents,
     coverage,
     mobile,
     nightly,
@@ -304,46 +305,36 @@ def file(
     found: list[str],
     output: str,
     store: verdicts.Tickets | None = None,
+    run_id: str = "",
 ) -> list[str]:
-    """Files the sweep's failed checks: a comment on each open sweep ticket that names one of
-    them already, and a new ticket per lane for the rest. Returns a line per ticket touched.
-    """
+    """File each failed check's diagnostic on its canonical incident; return a line per check."""
     store = store or verdicts.STORE
-    known = nightly_failures.open_beads(store, LABEL) if failed else {}
-    tail = nightly_failures.tail(output)
     lines: list[str] = []
     for lane, names in sorted(failed.items()):
         mine = [line for line in found if any(n in line for n in names)] or found
-        for bead, theirs in sorted(known.items()):
-            again = [c for c in names if c in theirs]
-            if again:
-                text = body(commit, lane, again, since, mine, tail)
-                code, _ = store.add_comment(bead, text)
-                lines.append(
-                    f"sweep: {bead}: still failing: {', '.join(again)}"
-                    if code == 0
-                    else f"sweep: {bead}: comment not added"
-                )
-        new = [c for c in names if not any(c in t for t in known.values())]
-        if not new:
-            continue
-        more = f" and {len(new) - 1} more" if len(new) > 1 else ""
-        code, out = store.create_issue(
-            title=f"Fix sweep {lane} failure: {new[0]}{more}",
-            body=body(commit, lane, new, since, mine, tail),
-            acceptance=f"`{reproduce(lane, new)}` passes at the staging tip.",
-            priority=PRIORITY,
-            labels=f"role:steward,{LABEL}",
-            metadata={
-                nightly_failures.CHECKS_KEY: "\n".join(new),
-                "enact_ci_host": nightly_failures.host(),
-            },
-        )
-        lines.append(
-            f"sweep: {out.strip()}: filed {', '.join(new)}"
-            if code == 0
-            else f"sweep: {lane}: ticket not filed for {', '.join(new)}"
-        )
+        for check in names:
+            own = incidents.check_output(check, output)
+            result = store.incident(
+                incidents.failure(check, own, nightly_failures.host()),
+                run_id or f"sweep:{commit}",
+                nightly_failures.host(),
+                title=f"Fix sweep {lane} failure: {check}",
+                body=body(
+                    commit, lane, [check], since, mine, nightly_failures.tail(own)
+                ),
+                acceptance=f"`{reproduce(lane, [check])}` passes at the staging tip.",
+                priority=PRIORITY,
+                labels=f"role:steward,{LABEL}",
+                metadata={
+                    nightly_failures.CHECKS_KEY: check,
+                    "enact_ci_host": nightly_failures.host(),
+                },
+            )
+            lines.append(
+                f"sweep: {result.issue}: {'filed' if result.created else 'still failing'} {check}"
+                if result
+                else f"sweep: {lane}: ticket not filed for {check}"
+            )
     return lines
 
 
@@ -374,7 +365,14 @@ def sweep_run(args: argparse.Namespace) -> int:
     for o in failed:
         checks_failed.setdefault(o.lane, [f"{o.lane}:lane"])
     output = "\n".join(o.log for o in failed)
-    for line in file(commit, checks_failed, args.since, found, output):
+    for line in file(
+        commit,
+        checks_failed,
+        args.since,
+        found,
+        output,
+        run_id=f"sweep:{commit}:{began.isoformat()}",
+    ):
         print(line, file=sys.stderr)
     return report.code
 

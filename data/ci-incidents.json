@@ -1,0 +1,7 @@
+{
+  "parent": "",
+  "aliases": {
+    "b3d-timeline-parity:timeline-parity": "b3d:timeline-parity",
+    "b3d-timeline-parity-all:timeline-parity-all": "b3d:timeline-parity"
+  }
+}

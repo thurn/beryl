@@ -26,23 +26,11 @@ import socket
 import subprocess
 from datetime import datetime, timedelta, timezone
 
-from . import check_value, paths, runlog, system, verdicts
+from . import check_value, incidents, paths, runlog, system, verdicts
 
 LABEL = "check-budget"
 SCRIPT_KEY = "beryl_budget_script"
 PRIORITY = "2"
-
-
-def open_bead(script: str, store: verdicts.Tickets) -> str | None:
-    """The open budget ticket filed for `script`, if any."""
-    beads = store.list_issues("--label", LABEL)
-    for b in beads if isinstance(beads, list) else []:
-        if not isinstance(b, dict) or b.get("status") == "closed":
-            continue
-        meta = b.get("metadata")
-        if isinstance(meta, dict) and meta.get(SCRIPT_KEY) == script:
-            return str(b.get("id"))
-    return None
 
 
 def commit() -> str:
@@ -78,14 +66,17 @@ def report(
     lanes: list[str],
     load: str,
     store: verdicts.Tickets | None = None,
+    run_id: str = "",
 ) -> str:
     """Files a ticket for a run of `script` over `budget`, unless one is open; returns a line
     saying which."""
     store = store or verdicts.STORE
-    known = open_bead(script, store)
-    if known:
-        return f"{script}: over budget: {known} is open to audit it"
-    code, out = store.create_issue(
+    result = store.incident(
+        incidents.Identity(
+            f"budget:{script}", "budget", "load-adjusted budget exceeded"
+        ),
+        run_id or f"{script}:{commit()}",
+        socket.gethostname(),
         title=f"Audit slow steps: by {script} over its {budget} s budget",
         body=body(script, budget, took, lanes, load),
         acceptance=f"`by {script}` on every lane fits {budget} s on an idle machine.",
@@ -93,9 +84,11 @@ def report(
         labels=f"{LABEL},tier:opus",
         metadata={SCRIPT_KEY: script},
     )
-    if code != 0:
+    if result is None:
         return f"{script}: over budget: ticket not filed"
-    return f"{script}: over budget: filed {out.strip()} to audit it"
+    if not result.created:
+        return f"{script}: over budget: {result.issue} is open to audit it"
+    return f"{script}: over budget: filed {result.issue} to audit it"
 
 
 # Slow CI's budget: CPU seconds of a full run (check_value.full_run). Set on 2026-11-13, when a
@@ -208,7 +201,10 @@ def file_cut(
 ) -> str:
     host = socket.gethostname().split(".")[0]
     count = sum(len(g.checks) for g in groups)
-    code, out = store.create_issue(
+    result = store.incident(
+        incidents.Identity(f"budget:ci:{lane}", "budget", "CPU budget exceeded"),
+        f"ci:{commit()}",
+        socket.gethostname(),
         title=f"Cut {count} checks from slow CI's {lane} lane",
         body=cut_body(lane, groups, whole, budget, host),
         acceptance="Every check listed no longer runs in slow CI: deleted, replaced by a fast"
@@ -218,9 +214,9 @@ def file_cut(
         labels=f"{CUT_LABEL},tier:opus",
         metadata={LANE_KEY: lane},
     )
-    if code != 0:
+    if result is None:
         return f"ci budget: {lane}: cut ticket not filed"
-    return f"ci budget: {lane}: filed {out.strip()} to cut {count} checks"
+    return f"ci budget: {lane}: {'filed' if result.created else 'updated'} {result.issue} to cut {count} checks"
 
 
 def slow_report(

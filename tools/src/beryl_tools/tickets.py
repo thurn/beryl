@@ -17,6 +17,10 @@ class TicketError(RuntimeError):
     pass
 
 
+class TicketConflict(TicketError):
+    """A conditional write lost a race and can be retried after a fresh read."""
+
+
 def detect(repo: Path) -> str:
     config = (paths.main_checkout(repo) or repo) / ".enact.toml"
     if not config.is_file():
@@ -66,7 +70,8 @@ def invoke(
         check=False,
     )
     if result.returncode:
-        raise TicketError(f"tk {args[0]}: {(result.stderr or result.stdout).strip()}")
+        error = TicketConflict if result.returncode == 3 else TicketError
+        raise error(f"tk {args[0]}: {(result.stderr or result.stdout).strip()}")
     return result.stdout
 
 
@@ -133,6 +138,14 @@ def top_level(_: argparse.Namespace) -> int:
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    from . import incident_migration
+
+    migration = sub.add_parser(
+        "incident-migrate", help="preview or import reviewed CI incident ownership"
+    )
+    migration.add_argument("file", type=Path)
+    migration.add_argument("--apply", action="store_true")
+    migration.set_defaults(func=incident_migration.command)
     sub.add_parser(
         "ticket-backend", help="show the active tracker and native client path"
     ).set_defaults(func=backend_cmd)

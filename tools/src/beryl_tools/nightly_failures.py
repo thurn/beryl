@@ -3,15 +3,16 @@ checks (the fuzz, the motion capture, the oracle sweep) fails on origin/staging,
 run-log checks go to a ticket, so a card a rules change broke reaches someone the next morning
 instead of only `$BERYL_CACHE/nightly`.
 
-Each lane's new failures get one P1 `role:steward` ticket, labeled `nightly-failure`, naming the
+Each new failure signature gets a P1 ticket, labeled `nightly-failure`, naming the
 commit, the failed checks, how to replay them and the tail of the night's output. It is a
-Steward's, with no parent, because that is the one kind of ticket every Enact vizier takes up
+Steward's by default, with no parent, because that is the one kind of ticket every Enact vizier takes up
 whatever its run (Enact's `schedule`); P1 puts it after slow CI's P0 failures. It carries no
 `enact_ci_os` or `enact_ci_range`, so Enact never mistakes it for a slow-CI failure, and the
 host that failed in `enact_ci_host`, so this machine's viziers take it first.
 
-A check that an open nightly ticket already names is not filed again: the next night's repeat
-failure comments on that ticket instead (the checks are in its metadata, [`CHECKS_KEY`]). A
+A repeat diagnostic comments on its canonical open incident (`incidents.report`) instead
+of filing again. Different faults of one check remain separate. The reported checks are
+in each ticket's metadata ([`CHECKS_KEY`]). A
 night with no failed check files nothing. Nothing here fails the nightly: a ticket request that fails
 is reported and the run goes on (verdicts.Tickets).
 """
@@ -24,7 +25,7 @@ import socket
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 
-from . import runlog, verdicts
+from . import incidents, runlog, verdicts
 
 LABEL = "nightly-failure"
 # The metadata key of the checks a nightly ticket was filed for, a line each: a card's name in a
@@ -85,20 +86,6 @@ def host() -> str:
     return os.environ.get("ENACT_HOST") or socket.gethostname().split(".")[0].lower()
 
 
-def open_beads(store: verdicts.Tickets, label: str = LABEL) -> dict[str, set[str]]:
-    """Each open ticket with `label` (the nightly's by default), with the checks it was filed
-    for."""
-    beads = store.list_issues("--label", label)
-    found: dict[str, set[str]] = {}
-    for b in beads if isinstance(beads, list) else []:
-        if not isinstance(b, dict) or b.get("status") == "closed":
-            continue
-        meta = b.get("metadata")
-        checks = str(meta.get(CHECKS_KEY, "")) if isinstance(meta, dict) else ""
-        found[str(b.get("id"))] = set(checks.splitlines())
-    return found
-
-
 def body(
     commit: str, lane: str, checks: list[str], passed: str, output: str, kept: str = ""
 ) -> str:
@@ -127,44 +114,34 @@ def file(
     store: verdicts.Tickets | None = None,
     by_lane: Mapping[str, str] | None = None,
     kept: Mapping[str, str] | None = None,
+    run_id: str = "",
 ) -> list[str]:
-    """Files the night's failed checks (`failed_checks`): a comment on each open ticket that
-    already names one of them, and a new ticket per lane for the rest. Returns a line per ticket
-    touched. A lane's text quotes its own step's output from `by_lane` (a lane is named after
+    """File each failed check's diagnostic on its canonical incident and return a line for each.
+
+    A lane's text quotes its own step's output from `by_lane` (a lane is named after
     its step) and names the file `kept` holds it in; without them, the night's `output`.
     """
     store = store or verdicts.STORE
-    known = open_beads(store) if failed else {}
     lines: list[str] = []
     for lane, checks in sorted(failed.items()):
         own = (by_lane or {}).get(lane, output)
         where = (kept or {}).get(lane, "")
-        for bead, theirs in sorted(known.items()):
-            again = [c for c in checks if c in theirs]
-            if again:
-                code, _ = store.add_comment(
-                    bead, body(commit, lane, again, passed, own, where)
-                )
-                lines.append(
-                    f"nightly: {bead}: still failing: {', '.join(again)}"
-                    if code == 0
-                    else f"nightly: {bead}: comment not added"
-                )
-        new = [c for c in checks if not any(c in t for t in known.values())]
-        if not new:
-            continue
-        code, out = store.create_issue(
-            title=f"Fix nightly {lane} failure: {new[0]}"
-            + (f" and {len(new) - 1} more" if len(new) > 1 else ""),
-            body=body(commit, lane, new, passed, own, where),
-            acceptance=f"`{reproduce(lane, new)}` passes at the staging tip.",
-            priority=PRIORITY,
-            labels=f"role:steward,{LABEL}",
-            metadata={CHECKS_KEY: "\n".join(new), "enact_ci_host": host()},
-        )
-        lines.append(
-            f"nightly: {out.strip()}: filed {', '.join(new)}"
-            if code == 0
-            else f"nightly: {lane}: ticket not filed for {', '.join(new)}"
-        )
+        for check in checks:
+            own_check = incidents.check_output(check, own)
+            result = store.incident(
+                incidents.failure(check, own_check, host()),
+                run_id or f"nightly:{commit}",
+                host(),
+                title=f"Fix nightly {lane} failure: {check}",
+                body=body(commit, lane, [check], passed, own_check, where),
+                acceptance=f"`{reproduce(lane, [check])}` passes at the staging tip.",
+                priority=PRIORITY,
+                labels=f"role:steward,{LABEL}",
+                metadata={CHECKS_KEY: check, "enact_ci_host": host()},
+            )
+            lines.append(
+                f"nightly: {result.issue}: {'filed' if result.created else 'still failing'}: {check}"
+                if result
+                else f"nightly: {lane}: ticket not filed for {check}"
+            )
     return lines

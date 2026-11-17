@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from tests.incident_support import ReporterTickets
+
 import pytest
 
 from beryl_tools import nightly_failures, slow_ci, sweep, verdicts
@@ -95,7 +97,7 @@ def test_failed_checks_replay_by_name_or_whole() -> None:
     assert sweep.reproduce("pytest", ["pytest:pytest"]) == "just test-py"
 
 
-class FakeTickets(verdicts.Tickets):
+class FakeTickets(ReporterTickets):
     """The ticket store used by sweep filing, in memory."""
 
     def __init__(self) -> None:

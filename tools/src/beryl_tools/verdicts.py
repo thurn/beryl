@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import paths, system, tickets
+from . import incidents, paths, system, tickets
 
 # Re-exported: the fast check, the pruning rule and their tests read them as verdicts.SLOW_ONLY,
 # and slow CI's tests step as verdicts.FAST_ONLY.
@@ -345,6 +345,50 @@ class Tickets:
 
     _check_tickets: dict[str, str] | None = None
 
+    def incident_enabled(self) -> bool:
+        return os.environ.get(TICKETS_ENV) != "off"
+
+    def incident_backend(self) -> incidents.Backend:
+        return incidents.Native(tickets.client())
+
+    def incident(
+        self,
+        identity: incidents.Identity,
+        run: str,
+        host: str,
+        *,
+        title: str,
+        body: str,
+        priority: str,
+        labels: str,
+        acceptance: str = "",
+        parent: str = "",
+        metadata: dict[str, str] | None = None,
+    ) -> incidents.Result | None:
+        if not self.incident_enabled():
+            return None
+        try:
+            return incidents.report(
+                self.incident_backend(),
+                incidents.Sighting(
+                    identity,
+                    run,
+                    host,
+                    {
+                        "title": title,
+                        "body": body,
+                        "priority": int(priority),
+                        "labels": labels.split(","),
+                        "acceptance": acceptance,
+                        "metadata": metadata or {},
+                    },
+                    parent,
+                ),
+            )
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
+            warn(f"tracker incident: {error}")
+            return None
+
     def tracker(self, operation: str, native: Callable[[str], str]) -> tuple[int, str]:
         if os.environ.get(TICKETS_ENV) == "off":
             return -1, ""
@@ -489,6 +533,12 @@ class DryRun(Tickets):
 
     def list_issues(self, *filters: str, include_closed: bool = False) -> object:
         return self.real.list_issues(*filters, include_closed=include_closed)
+
+    def incident_backend(self) -> incidents.Backend:
+        return incidents.Preview(self.real.incident_backend(), self.command)
+
+    def incident_enabled(self) -> bool:
+        return self.real.incident_enabled()
 
     def create_issue(
         self,

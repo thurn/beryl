@@ -193,6 +193,7 @@ class Run:
     # output is all the run prints of that step.
     failures: dict[str, str] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
+    started: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     @staticmethod
     def start(script: str) -> Run:
@@ -338,7 +339,12 @@ class Run:
             }
             failures = {c: self.failures.get(c, "") for c in flakes}
             return lines + flaky.report(
-                flakes, self.script, self.commit, host=self.host, failures=failures
+                flakes,
+                self.script,
+                self.commit,
+                host=self.host,
+                failures=failures,
+                run_id=f"{self.script}:{self.commit}:{self.started}",
             )
         except Exception as e:  # Neither do verdicts.
             warn(e)

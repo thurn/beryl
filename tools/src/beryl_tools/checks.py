@@ -459,7 +459,16 @@ def run_all(
         print(f"{script}: {load_note()}")
         if not failed and script != "ci":
             spent = took(steps.clock.wall(), elapsed)
-            print(budget_beads.report(script, budget, spent, lines, load_note()))
+            print(
+                budget_beads.report(
+                    script,
+                    budget,
+                    spent,
+                    lines,
+                    load_note(),
+                    run_id=f"{script}:{run.commit}:{run.started}",
+                )
+            )
     code = 1 if failed else 0
     clock = steps.clock
     return Report(code, outcomes, over, clock.loaded(), cold, clock.wall())

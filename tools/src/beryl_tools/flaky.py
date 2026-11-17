@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import paths, verdicts
+from . import incidents, paths, verdicts
 
 LABEL = "flaky-check"
 CHECK_KEY = "beryl_flaky_check"
@@ -209,6 +209,7 @@ def report(
     store: verdicts.Tickets | None = None,
     host: str | None = None,
     failures: dict[str, str] | None = None,
+    run_id: str = "",
 ) -> list[str]:
     """Comments on the open ticket of each check in `flakes` that has one, and files a ticket for
     each other check that flaked in another run in the last `REPEAT_DAYS` (`earlier`); returns
@@ -230,29 +231,35 @@ def report(
         if kept:
             lines.append(f"flaky: {check}: its failed attempt's output is in {kept}")
         failure = quoted(output, kept, short)
-        bead = known.get(check)
-        if bead:
-            store.add_comment(bead, f"Flaked again in {where}.\n\n{failure}")
-            lines.append(f"flaky: {check}: {bead} is open to delete it")
-            continue
         before = earlier(history.get(check, []), script, commit, host)
-        if not before:
+        if not before and check not in known:
             lines.append(
                 f"flaky: {check}: its first flake in {REPEAT_DAYS} days;"
                 " a second in another run files a bead to delete it"
             )
             continue
-        code, out = store.create_issue(
+        result = store.incident(
+            incidents.failure(check, output, host, category="flaky"),
+            run_id or f"{script}:{commit}",
+            host,
             title=title(check, flake),
-            body=body(check, flake, where, before, failure),
+            body=(
+                f"Flaked again in {where}.\n\n{failure}"
+                if check in known
+                else body(check, flake, where, before, failure)
+            ),
             acceptance=acceptance(check, flake),
             priority=PRIORITY,
             labels=f"{LABEL},tier:opus",
             metadata={CHECK_KEY: check},
         )
-        if code != 0:
+        if result is None:
             lines.append(f"flaky: {check}: delete bead not filed")
             continue
-        known[check] = out.strip()
-        lines.append(f"flaky: {check}: filed {out.strip()} to delete it")
+        known[check] = result.issue
+        lines.append(
+            f"flaky: {check}: filed {result.issue} to delete it"
+            if result.created
+            else f"flaky: {check}: {result.issue} is open to delete it"
+        )
     return lines

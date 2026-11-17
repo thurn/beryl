@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import IO
 
+from tests.incident_support import ReporterTickets
+
 import pytest
 
 from beryl_tools import nightly, nightly_failures, runlog, verdicts
@@ -244,7 +246,7 @@ def test_the_oracles_play_every_scenario_at_low_priority_and_log_each(
     assert (record["script"], record["commit"]) == ("nightly", "abc123")
 
 
-class FakeTickets(verdicts.Tickets):
+class FakeTickets(ReporterTickets):
     """The ticket service as the nightly's filing uses it, in memory."""
 
     def __init__(self) -> None:

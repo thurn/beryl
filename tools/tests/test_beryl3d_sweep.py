@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from collections.abc import Callable
 from pathlib import Path
 
+from tests.incident_support import ReporterTickets
+
 import pytest
 
 from beryl_tools import budget, check_value, slow_ci, verdicts
@@ -284,7 +286,7 @@ def test_a_steps_own_command_is_what_a_worker_types() -> None:
     assert sweep.own_command("scene-purity").startswith("just b3d sweep --step")
 
 
-class FakeTickets(verdicts.Tickets):
+class FakeTickets(ReporterTickets):
     """Ticket filing, in memory."""
 
     def __init__(self) -> None:

@@ -374,6 +374,45 @@ whole night's, and names the file in `$BERYL_CACHE/nightly/failures` that keeps
 that step's whole output for two weeks. `last-output.txt` holds only the latest
 firing.
 
+Nightly, browser and native sweeps, flaky checks and budget reports share the
+incident writer in `tools/src/beryl_tools/incidents.py`. Its versioned signature
+contains the workload, platform, failure category and diagnostic. Hostnames,
+Rust thread IDs and source line numbers are not failure identities. Assertion
+operands, replay/viewport identities and unfamiliar output are retained, so
+different faults of one check remain separate incidents. Explicit `CANNOT_RUN:`
+diagnostics and `cannot-run` identities describe environmental inability;
+ordinary failures and flaky checks have separate categories. Workload renames
+are listed in `data/ci-incidents.json` under `aliases`. Unknown formats are kept
+conservatively; sharing a step name alone never proves a shared cause.
+
+The writer reads the tracker sequence before searching for an owner and
+conditions its entire batch on that sequence. A racing report rereads ownership.
+Creation includes the first sighting's evidence marker; later sightings append
+their own output, host and run identity as comments. A lost response is resolved
+by reading that durable marker before retrying. This does not depend on the
+tracker's one-day create-request retry cache. A retry still belongs to its
+original incident after closure; a later sighting creates a new incident with
+`beryl_incident_previous` naming its predecessor. Reporting failures print a
+warning and never change the check's outcome.
+
+`beryl_incident_keys` stores each owner's signatures. `ci_canonical_tickets`
+records explicit ownership transfers, including closed duplicate tickets; the
+writer follows these references using the tracker's alias resolution. A
+multiple-cause report needs signatures assigned to their individual owners.
+Ambiguous owners produce a visible reporting error instead of silently choosing
+one. Preview reviewed transfers with
+`by incident-migrate data/ci-incident-migration.json`, then add `--apply` to
+persist them atomically. That file records this reliability run's mapping. Only
+retained diagnostics with exactly one matching owner seed signatures; missing
+output does not justify treating every later failure as the old cause.
+
+New infrastructure incidents use the `parent` in `data/ci-incidents.json`;
+`BERYL_CI_INCIDENT_PARENT` overrides it for a deployment. An empty value keeps
+the existing unparented routing. A configured programme receives executor
+tickets instead of global Stewards. An explicit product parent, including Beryl
+3D's epic, takes precedence. Enact's global P0 Steward handling remains
+unparented and takes precedence over either setting.
+
 The reporters use Enact's active tracker through
 `tools/src/beryl_tools/tickets.py`. The main checkout selects ticket enrollment
 for all linked worktrees. Use the tests in `tools/tests/test_tickets.py`,
@@ -389,8 +428,8 @@ ticket-backed reports with fixtures.
   7 days, it files a P1 `flaky-check` ticket (`flaky.py`) to delete the check. A
   first flake files nothing: most single flakes came from the run, not the check
   (a loaded sweep, a shared fixture directory, code changing between the
-  attempts). Each check has at most one open ticket; a later flake comments on
-  it.
+  attempts). Each failure signature has at most one open incident; a repeat
+  diagnostic comments on it.
 - The ticket, and each later comment, quotes the last 40 lines of the failed
   attempt's output, and the whole output is kept for 14 days in
   `$BERYL_CACHE/ci/flakes` on the machine that ran it. Without this, a step that

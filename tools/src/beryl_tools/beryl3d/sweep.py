@@ -70,6 +70,7 @@ from pathlib import Path
 
 from .. import (
     bisect,
+    incidents,
     checks,
     coverage,
     nightly,
@@ -588,48 +589,39 @@ def file(
     found: list[str],
     output_by_lane: dict[str, str],
     store: verdicts.Tickets | None = None,
+    run_id: str = "",
 ) -> list[str]:
-    """Files the sweep's failed checks, by step: a comment on each open sweep ticket that names
-    one of them already, and a new ticket per step for the rest. Returns a line per ticket
-    touched."""
+    """File each failed check's diagnostic on its canonical incident; return a line per check."""
     store = store or verdicts.STORE
-    known = nightly_failures.open_beads(store, LABEL) if failed else {}
     lines: list[str] = []
     for lane_name, names in sorted(failed.items()):
         step = step_of(lane_name)
-        tail = nightly_failures.tail(output_by_lane[lane_name])
+        output = output_by_lane[lane_name]
         mine = [line for line in found if any(n in line for n in names)] or found
-        for bead, theirs in sorted(known.items()):
-            again = [c for c in names if c in theirs]
-            if again:
-                text = body(commit, step, again, since, mine, tail)
-                code, _ = store.add_comment(bead, text)
-                lines.append(
-                    f"b3d sweep: {bead}: still failing: {', '.join(again)}"
-                    if code == 0
-                    else f"b3d sweep: {bead}: comment not added"
-                )
-        new = [c for c in names if not any(c in t for t in known.values())]
-        if not new:
-            continue
-        more = f" and {len(new) - 1} more" if len(new) > 1 else ""
-        code, out = store.create_issue(
-            title=f"Fix the Beryl 3D sweep's {step} step: {new[0]}{more}",
-            body=body(commit, step, new, since, mine, tail),
-            acceptance=acceptance(step),
-            priority=PRIORITY,
-            parent=paths.EPIC,
-            labels=f"role:executor,{LABEL}",
-            metadata={
-                nightly_failures.CHECKS_KEY: "\n".join(new),
-                "enact_ci_host": nightly_failures.host(),
-            },
-        )
-        lines.append(
-            f"b3d sweep: {out.strip()}: filed {', '.join(new)}"
-            if code == 0
-            else f"b3d sweep: {step}: ticket not filed for {', '.join(new)}"
-        )
+        for check in names:
+            own = incidents.check_output(check, output)
+            result = store.incident(
+                incidents.failure(check, own, nightly_failures.host()),
+                run_id or f"b3d-sweep:{commit}",
+                nightly_failures.host(),
+                title=f"Fix the Beryl 3D sweep's {step} step: {check}",
+                body=body(
+                    commit, step, [check], since, mine, nightly_failures.tail(own)
+                ),
+                acceptance=acceptance(step),
+                priority=PRIORITY,
+                parent=paths.EPIC,
+                labels=f"role:executor,{LABEL}",
+                metadata={
+                    nightly_failures.CHECKS_KEY: check,
+                    "enact_ci_host": nightly_failures.host(),
+                },
+            )
+            lines.append(
+                f"b3d sweep: {result.issue}: {'filed' if result.created else 'still failing'} {check}"
+                if result
+                else f"b3d sweep: {step}: ticket not filed for {check}"
+            )
     return lines
 
 
@@ -729,7 +721,15 @@ def sweep_run(args: argparse.Namespace) -> int:
     by_step = failed_by_step(commit, began, failed)
     if not args.dry_run:
         by_step = still_failing(commit, by_step)
-    for line in file(commit, by_step, args.since, found, output_by_lane, store):
+    for line in file(
+        commit,
+        by_step,
+        args.since,
+        found,
+        output_by_lane,
+        store,
+        run_id=f"b3d-sweep:{commit}:{began.isoformat()}",
+    ):
         print(line, file=sys.stderr)
     return report.code
 

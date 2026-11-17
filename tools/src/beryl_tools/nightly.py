@@ -398,7 +398,13 @@ def file_failures(
     failed = nightly_failures.failed_checks(commit, since)
     passed = last_passed_commit(read_log())
     for line in nightly_failures.file(
-        commit, failed, output, passed, by_lane=by_step, kept=kept
+        commit,
+        failed,
+        output,
+        passed,
+        by_lane=by_step,
+        kept=kept,
+        run_id=f"nightly:{commit}:{since.isoformat()}",
     ):
         print(line, file=sys.stderr)
 

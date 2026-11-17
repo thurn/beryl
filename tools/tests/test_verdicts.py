@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from tests.incident_support import ReporterTickets
+
 import pytest
 
 from beryl_tools.flaky import folder as flakes_folder
@@ -21,7 +23,7 @@ from beryl_tools import (
 )
 
 
-class FakeTickets(verdicts.Tickets):
+class FakeTickets(ReporterTickets):
     """The ticket operations the CI reporters use, in memory."""
 
     def __init__(self) -> None:
@@ -366,7 +368,7 @@ def test_a_check_files_its_delete_bead_when_it_flakes_in_a_second_run(
     kept = sorted(flakes_folder().glob("*-ui-test_scry*.txt"))
     assert len(kept) == 4 and "first attempt broke" in kept[-1].read_text()
     assert filed["priority"] == "1"
-    assert filed["metadata"] == {"beryl_flaky_check": "ui-test:scry"}
+    assert filed["metadata"]["beryl_flaky_check"] == "ui-test:scry"  # pyre-ignore[16]
     assert f"flaky: ui-test:scry: filed {bead} to delete it" in capsys.readouterr().out
     # A second flake while the ticket is open comments on it instead of filing another.
     (tmp_path / "ran").unlink()
