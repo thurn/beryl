@@ -347,6 +347,22 @@ mod milestone_three {
     }
 
     #[test]
+    fn the_graphics_setting_is_saved_and_starts_automatic() {
+        use beryl_scene::settings::Graphics;
+        let mut settings = Settings::default();
+        assert_eq!(settings.graphics, Graphics::Automatic);
+        settings.apply(Setting::Graphics(Graphics::Baseline));
+        assert_eq!(settings.graphics, Graphics::Baseline);
+        let mut client = client();
+        while client.next_request().is_some() {}
+        client.press(&Press::Setting(Setting::Graphics(Graphics::Enhanced)));
+        let Some(Request::SaveSettings(saved)) = client.next_request() else {
+            panic!("the first request saves the settings");
+        };
+        assert_eq!(saved.graphics, Graphics::Enhanced);
+    }
+
+    #[test]
     fn a_finished_game_the_viewer_won_plays_the_win() {
         let mut view = ViewBuilder::sample().build();
         view.status = Status::Over {

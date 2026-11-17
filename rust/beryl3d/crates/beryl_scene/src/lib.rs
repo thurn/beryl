@@ -23,6 +23,8 @@ pub mod notice;
 pub mod play;
 pub mod pointer;
 pub mod pose;
+#[cfg(feature = "driver")]
+pub mod probe;
 pub mod prompts;
 pub mod screens;
 pub mod settings;

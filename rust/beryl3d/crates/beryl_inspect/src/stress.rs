@@ -7,22 +7,16 @@
 use beryl_protocol::PlayerView;
 use beryl_protocol::card_records::{CardEntry, CardFace, CardImages, CardRecords};
 use beryl_protocol::protocol::{
-    CardHandling, CardType, Facing, ObjectId, ObjectView, PlayerState, PowerToughness, Side,
-    StackItem, TargetRef, Why, ZoneName,
+    CardHandling, Facing, ObjectId, ObjectView, PlayerState, PowerToughness, Side, StackItem,
+    TargetRef, Why, ZoneName,
 };
 use beryl_protocol::script::{
-    Act, Arrow, Curve, Fact, Mark, Notice, Reset, Room, Span, Step, StepTiming, Stream, Subject,
-    Table, Tally, replay, time_script,
+    Act, Arrow, Fact, Mark, Notice, Reset, Span, Step, StepTiming, Stream, Subject, Table, Tally,
+    replay, time_script,
 };
 use beryl_scene::agent::Rule;
+use beryl_scene::probe::{self, card, permanent};
 use beryl_scene::testing;
-
-/// How many permanents move in a stress board's second view.
-const FLIGHTS: usize = 40;
-/// How long each flight takes, in milliseconds.
-const FLIGHT_DURATION: f64 = 420.0;
-/// How long after one flight the next one starts, in milliseconds.
-const FLIGHT_STAGGER: f64 = 30.0;
 
 /// A synthetic board and any scripted changes to it.
 #[derive(Clone, Debug, PartialEq)]
@@ -151,93 +145,15 @@ pub fn stress(name: &str) -> Option<Stress> {
     Board::parse(name).map(Board::build)
 }
 
-/// A battlefield of `count` permanents, then the same one after `FLIGHTS` of them have moved
-/// to its end.
+/// A battlefield of `count` permanents, then the same one after 40 of them have moved to its
+/// end: the board the app also draws to choose its tier (`beryl_scene::probe`).
 fn board(count: u16) -> Stress {
-    let mut first = PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20));
-    first.objects = (0..count).map(permanent).collect();
-    first.battlefield = first.objects.iter().map(|object| object.slot).collect();
-    first.script = Some(testing::script(
-        Some(Reset::default()),
-        Vec::new(),
-        Vec::new(),
-    ));
-
-    // Each moved permanent joins the end of the battlefield, after the ones that stay.
-    let mut second = first.clone();
-    let moved: Vec<ObjectView> = second.objects[..FLIGHTS].to_vec();
-    second.battlefield.rotate_left(FLIGHTS);
-    second.objects.rotate_left(FLIGHTS);
-    let end = count - 1;
-    let beat: Vec<Step> = moved
-        .into_iter()
-        .map(|object| Step {
-            act: Act::Fly {
-                from: ZoneName::Battlefield,
-                why: Why::Effect,
-                object,
-                at: Some(end),
-                item: None,
-                origin: None,
-            },
-            cause: None,
-        })
-        .collect();
-    let timings: Vec<StepTiming> = beat.iter().map(|_| flight_timing()).collect();
-    second.script = Some(testing::script(None, vec![beat], timings.clone()));
-
+    let probe::Board { views, timings } = probe::board(count);
     Stress {
-        views: vec![first, second],
-        timings: vec![timings],
+        views,
+        timings,
         drive: Drive::default(),
         unjudged: &[],
-    }
-}
-
-/// The permanent in slot `index + 1`: its own name; a creature or a land by turns, a third of
-/// them tapped, and the controllers alternating every two so that each kind is split evenly.
-fn permanent(index: u16) -> ObjectView {
-    let side = if (index / 2).is_multiple_of(2) {
-        Side::You
-    } else {
-        Side::Opponent
-    };
-    let mut object = card(index, ZoneName::Battlefield, side);
-    object.tapped = index.is_multiple_of(3);
-    if index.is_multiple_of(2) {
-        object.types = vec![CardType::Creature];
-        object.pt = Some(PowerToughness {
-            power: 2,
-            toughness: 2,
-        });
-    } else {
-        object.types = vec![CardType::Land];
-    }
-    object
-}
-
-/// The hand-built timing of one flight: every step the same, and the next begins after
-/// `FLIGHT_STAGGER`.
-fn flight_timing() -> StepTiming {
-    StepTiming {
-        case: None,
-        duration: FLIGHT_DURATION,
-        delay: 0.0,
-        stagger: FLIGHT_STAGGER,
-        curve: Curve::EaseInOut,
-        each: None,
-        with: false,
-        after: Vec::new(),
-        hold: None,
-        leads: false,
-        passes: false,
-        alone: false,
-        opens: false,
-        ahead: false,
-        closes: None,
-        room: Room::Step,
-        phases: Vec::new(),
-        effects: Vec::new(),
     }
 }
 
@@ -303,16 +219,6 @@ fn recording(views: Vec<PlayerView>) -> Stress {
         drive: Drive::default(),
         unjudged: &[],
     }
-}
-
-fn card(index: u16, zone: ZoneName, side: Side) -> ObjectView {
-    ObjectView::card(
-        ObjectId(index + 1),
-        format!("Stress {:03}", index + 1),
-        zone,
-        side,
-        side,
-    )
 }
 
 fn ability(source: &ObjectView, targets: Vec<TargetRef>) -> StackItem {

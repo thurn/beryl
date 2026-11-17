@@ -138,6 +138,8 @@ class SweepStep:
 OWN: tuple[SweepStep, ...] = (
     # The app starts with no window and shows its first frame.
     SweepStep("smoke", (*BY, "b3d", "smoke")),
+    # The tier chosen at startup and its drop to Baseline, in the app with no window.
+    SweepStep("tiers", (*BY, "b3d", "tiers")),
     # A release build has no live socket: it builds release, so the sweep runs it and the lane
     # does not.
     SweepStep("release-socket", (*BY, "b3d", "release-socket")),

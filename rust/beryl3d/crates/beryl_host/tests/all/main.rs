@@ -7,3 +7,4 @@ mod faces;
 mod frames;
 mod phone;
 mod threads;
+mod tier;

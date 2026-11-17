@@ -10,6 +10,7 @@ use beryl_scene::Client;
 use beryl_scene::command::Request;
 use beryl_scene::frame::{Frame, Wake};
 use beryl_scene::input::{Input, Tier};
+use beryl_scene::settings::Graphics;
 
 use crate::rate::{Paced, RateRule, Step, Thresholds};
 
@@ -91,6 +92,48 @@ pub struct Opened {
     pub display_hz: f32,
     /// The GPU adapter's name.
     pub adapter: String,
+}
+
+/// What a host has opened, for the app to prepare the renderer before the first frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Opening {
+    /// The size of the window or target, in physical pixels.
+    pub width: u32,
+    pub height: u32,
+    /// Physical pixels per logical point.
+    pub scale: f32,
+    /// The display's highest refresh rate, in frames a second.
+    pub display_hz: f32,
+}
+
+/// The tier a host starts the client in, as the app chose it before the first frame
+/// (docs/beryl-3d.md, "Choosing a tier"), and what the frame loop needs to change it when the
+/// player changes the setting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Chosen {
+    /// How the player asked for the tier to be chosen.
+    pub graphics: Graphics,
+    /// The tier the client starts in.
+    pub tier: Tier,
+    /// Whether the renderer can draw the Enhanced tier (`Renderer::enhanced_available`).
+    pub enhanced_available: bool,
+}
+
+impl Chosen {
+    /// The Baseline tier, chosen automatically on a renderer without Enhanced: what a host
+    /// whose app chose nothing starts in.
+    pub const BASELINE: Self = Self {
+        graphics: Graphics::Automatic,
+        tier: Tier::Baseline,
+        enhanced_available: false,
+    };
+
+    /// Whether the rate rule may drop the tier to Baseline: it is Enhanced and chosen
+    /// automatically.
+    #[must_use]
+    pub fn tier_can_drop(self) -> bool {
+        self.graphics == Graphics::Automatic && self.tier == Tier::Enhanced
+    }
 }
 
 /// What a host's app adds to the loop: inputs it gives the client before a frame (a recording's
@@ -178,6 +221,10 @@ pub struct FrameLoop<T> {
     rate: Option<RateRule>,
     /// The rate frames are counted against: the rule's choice, or the fixed rate.
     hz: f32,
+    /// How the tier is chosen, as the settings last said, and whether the renderer has the
+    /// Enhanced tier, so that a change of the setting during play can be carried out.
+    graphics: Graphics,
+    enhanced_available: bool,
     /// The drive script being played, if any (`--drive`).
     #[cfg(feature = "drive")]
     drive: Option<crate::drive::Drive>,
@@ -200,6 +247,8 @@ impl<T: Ticks> FrameLoop<T> {
             last: None,
             rate: None,
             hz: 60.0,
+            graphics: Graphics::Automatic,
+            enhanced_available: false,
             #[cfg(feature = "drive")]
             drive: None,
             #[cfg(feature = "drive")]
@@ -224,12 +273,26 @@ impl<T: Ticks> FrameLoop<T> {
         self
     }
 
-    /// The same loop counting frames against `hz` and never stepping, for a host whose ticks
-    /// come at a fixed rate.
+    /// The same loop counting frames against `hz`, for a host whose ticks come at a fixed rate
+    /// (winit's redraw requests, which cannot ask for a lower one). Its rule still drops the
+    /// tier when `tier_can_drop`, but never steps the rate: its lowest rate is `hz` itself.
     #[must_use]
-    pub fn fixed_at(mut self, hz: f32) -> Self {
-        self.hz = hz;
-        self.rate = None;
+    pub fn fixed_at(self, hz: f32, tier_can_drop: bool) -> Self {
+        let thresholds = Thresholds {
+            lowest_hz: hz.round() as usize,
+            ..Thresholds::DATA
+        };
+        self.paced_by(RateRule::new(hz, tier_can_drop, thresholds))
+    }
+
+    /// The same loop starting the client in `chosen`'s tier, and remembering how it was chosen
+    /// so that a change of the setting during play is carried out (`next_request`). The rule's
+    /// drop is the host's to set, through `paced` or `fixed_at` with `chosen.tier_can_drop()`.
+    #[must_use]
+    pub fn with_tier(mut self, chosen: Chosen) -> Self {
+        self.graphics = chosen.graphics;
+        self.enhanced_available = chosen.enhanced_available;
+        self.client.handle(Input::Tier(chosen.tier));
         self
     }
 
@@ -359,8 +422,32 @@ impl<T: Ticks> FrameLoop<T> {
     /// these after each frame and carries out the ones it can.
     pub fn next_request(&mut self) -> Option<Request> {
         let request = self.client.next_request()?;
+        if let Request::SaveSettings(settings) = &request
+            && settings.graphics != self.graphics
+        {
+            self.set_graphics(settings.graphics);
+        }
         self.feed.request(&request);
         Some(request)
+    }
+
+    /// Carries out a change of how the tier is chosen during play, with no new measurement
+    /// (docs/beryl-3d.md, "Choosing a tier"): Baseline draws Baseline; Enhanced draws Enhanced
+    /// where the renderer has it, and never drops; Automatic keeps the tier, and lets it drop
+    /// if it is Enhanced.
+    fn set_graphics(&mut self, graphics: Graphics) {
+        self.graphics = graphics;
+        match graphics {
+            Graphics::Baseline => self.client.handle(Input::Tier(Tier::Baseline)),
+            Graphics::Enhanced if self.enhanced_available => {
+                self.client.handle(Input::Tier(Tier::Enhanced));
+            }
+            Graphics::Enhanced | Graphics::Automatic => {}
+        }
+        let tier_can_drop = graphics == Graphics::Automatic && self.client.tier() == Tier::Enhanced;
+        if let Some(rule) = &mut self.rate {
+            rule.set_tier_can_drop(tier_can_drop);
+        }
     }
 
     /// The client, for draining what it asks of the platform after a frame.

@@ -114,6 +114,12 @@ impl RateRule {
         }
     }
 
+    /// Allows or forbids the tier's drop from now on, after the player changed how the tier is
+    /// chosen.
+    pub fn set_tier_can_drop(&mut self, tier_can_drop: bool) {
+        self.tier_can_drop = tier_can_drop;
+    }
+
     /// The rate chosen, in frames a second.
     #[must_use]
     pub fn hz(&self) -> f32 {

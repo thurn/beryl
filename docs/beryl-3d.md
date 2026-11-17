@@ -1020,17 +1020,17 @@ thresholds are `frame_rate` in `data/beryl3d/space.json`.
 - **Who steps.** The macOS display link asks for exactly the chosen rate. The
   windowless host's timer steps the same way, so `--slow-gpu` shows the rule at
   work in a run with no window. winit's redraw requests on Windows cannot ask
-  for a rate, so Windows counts frames against a fixed rate and never steps. The
-  phones step: the host passes the display's highest rate in `BerylConfig`, the
-  rule starts there, and every `BerylWake` carries the rate it has chosen, which
-  the iOS host applies to `CADisplayLink`'s preferred frame rate range and the
-  Android host to `Surface.setFrameRate` when it changes. Some cannot change it:
-  Android below API 30 has no `Surface.setFrameRate`, and a display may ignore
-  the request. So the library draws on a tick only once the chosen rate's
-  interval has passed since the last tick it drew, less half the display's
-  interval (`beryl_host::phone::due`). With the display at 120 Hz and the rule
-  at 60 Hz every other tick draws, and a skipped tick is not a frame to the
-  rule.
+  for a rate, so Windows counts frames against a fixed rate and never steps the
+  rate, though it still drops the tier. The phones step: the host passes the
+  display's highest rate in `BerylConfig`, the rule starts there, and every
+  `BerylWake` carries the rate it has chosen, which the iOS host applies to
+  `CADisplayLink`'s preferred frame rate range and the Android host to
+  `Surface.setFrameRate` when it changes. Some cannot change it: Android below
+  API 30 has no `Surface.setFrameRate`, and a display may ignore the request. So
+  the library draws on a tick only once the chosen rate's interval has passed
+  since the last tick it drew, less half the display's interval
+  (`beryl_host::phone::due`). With the display at 120 Hz and the rule at 60 Hz
+  every other tick draws, and a skipped tick is not a frame to the rule.
 
 The C functions the phone hosts call, as `include/beryl3d.h` in `beryl_3d`
 declares them. Every enumerated value is a `uint32_t` with named constants, and
@@ -2206,12 +2206,16 @@ draw every gated fixture in it on a device with full limits:
 The tier is chosen once at startup, can only go down during play, and can be
 fixed by a setting.
 
-- **At startup the tier is Baseline**, and the game's first frames are drawn in
-  it. During the loading screen the renderer draws the `stress-255` board in the
-  Enhanced tier into a texture 30 times and measures how long the GPU takes. If
-  the slowest of those is under a third of the display's refresh interval, the
-  tier becomes Enhanced before the first turn. A floor device fails this test
-  and never shows an Enhanced frame.
+- **At startup the tier is Baseline.** Before the first frame, the renderer
+  draws the `stress-255` board in the Enhanced tier into an offscreen texture of
+  the window's size, once unmeasured and then 30 times, waiting for the GPU
+  after each. If the slowest of those is under a third of the display's refresh
+  interval, the first frame is already Enhanced. The first draw is not counted
+  because it makes the multisampled buffers and first uses each pipeline, which
+  took ten times an ordinary frame. On this Mac the measurement adds about 50
+  milliseconds before the first frame. A floor device fails this test and never
+  shows an Enhanced frame. The frame log's `tier` line gives the setting, the
+  slowest frame, the interval and the tier chosen.
 - **During play** the host's rate rule (see [Hosts](#hosts)) watches the time
   between presented frames against the chosen rate's interval (16.7 milliseconds
   at 60 Hz). If 3 of any 60 consecutive animating frames arrive more than half
@@ -2881,7 +2885,11 @@ just b3d smoke
   a game. `--pause-at <moment>` stops its clock there. `--drive <script>` plays
   a file of actions on the display's clock. `--load <threads>[:<class>]` starts
   busy threads, to imitate a loaded machine. `--slow-gpu <duration>` holds each
-  finished frame back, to imitate a slow GPU. `--for <duration>` ends the run.
+  finished frame back, to imitate a slow GPU.
+  `--tier automatic|baseline|enhanced` sets the graphics setting for the run,
+  and `--probe pass|fail` replaces the startup measurement's verdict, so that
+  `just b3d tiers` does not depend on the machine's load. `--for <duration>`
+  ends the run.
 - **`--agent <name>`** starts a fresh game in which that agent of the session's
   answers for the viewer, so the AI searches with nobody at the table, and ends
   the run when the game is over. The opponent is `mcts-hidden` unless
@@ -2918,10 +2926,10 @@ just b3d smoke
   asked for more, and how long frames waited for a drawable (the median, the
   95th percentile, the worst and the total). Its first line records the window,
   the display's rate, the load average and any drive script, busy threads and
-  slowed frames. Each pointer, key, text, surface and lifecycle input has a line
-  of its own. `just b3d frames [path]` prints a log's summary and its worst
-  frames. With no path it reads the newest log of a run started from the same
-  checkout.
+  slowed frames. The `tier` line says how the tier was chosen at startup. Each
+  pointer, key, text, surface and lifecycle input has a line of its own.
+  `just b3d frames [path]` prints a log's summary and its worst frames. With no
+  path it reads the newest log of a run started from the same checkout.
 - **`live`** speaks to a running debug build over a local socket,
   `$TMPDIR/beryl3d-<process id>.sock`, which the app announces on its first
   lines: `live tree`, `live png`, `live do '<action>'` and `live quit`. When

@@ -3,9 +3,8 @@
 //! session thread or by a replayed recording, writing its frame log.
 
 use std::cell::RefCell;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use beryl_host::{Desktop, WindowMode};
@@ -24,6 +23,9 @@ use crate::bugs::Bugs;
 use crate::fixture::Fixture;
 use crate::frame_log::{FrameLog, Run, Summary};
 use crate::options::{Options, Window};
+#[cfg(all(feature = "tools", unix))]
+use crate::places::out_dir;
+use crate::places::{checkout, frames_dir, now_ms};
 use crate::session::{self, Commands, Live};
 use crate::settings::{self, Saver};
 
@@ -85,6 +87,9 @@ struct AppFeed {
     bugs: Bugs,
     /// The host's clock at the latest frame, in nanoseconds.
     clock: u64,
+    /// How the tier was chosen, which the host's setup writes before it opens and `opened`
+    /// moves into the frame log.
+    tier: crate::tier::Pending,
     /// The socket `just b3d live` speaks to, in a build that has one.
     #[cfg(all(feature = "tools", unix))]
     live: Option<crate::live::Live>,
@@ -164,6 +169,9 @@ impl Feed for AppFeed {
         self.run.adapter.clone_from(&opened.adapter);
         let log = FrameLog::create(&self.log_dir, &self.run)
             .map_err(|error| format!("the frame log could not be written: {error}"));
+        if let (Ok(log), Some(tiered)) = (&log, self.tier.borrow_mut().take()) {
+            log.tier(tiered);
+        }
         *self.log.borrow_mut() = Some(log);
     }
 
@@ -466,6 +474,7 @@ fn phone_app(
         saver: None,
         bugs,
         clock: 0,
+        tier: Rc::default(),
         #[cfg(all(feature = "tools", unix))]
         live: None,
     })
@@ -492,6 +501,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         .transpose()?;
     let slow_gpu = options.slow_gpu.unwrap_or_default();
     let (settings, saver) = player_settings(options);
+    let (setup, tier) = crate::tier::setup(settings.as_ref(), options.probe);
     let audio = start_audio(options.window, &settings.clone().unwrap_or_default());
     let log = Rc::new(RefCell::new(None));
     let mut feed = AppFeed {
@@ -511,6 +521,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         saver,
         bugs: Bugs::desktop(),
         clock: 0,
+        tier,
         #[cfg(all(feature = "tools", unix))]
         live: None,
     };
@@ -537,7 +548,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
             #[cfg(feature = "tools")]
             let host = host.driven(drive);
             feed.attach(options, host.inbox())?;
-            host.run(client, Box::new(feed), |_| {})
+            host.run(client, Box::new(feed), setup)
         }
         // A phone's app is its Swift or Kotlin host, which calls `crate::ffi`.
         #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -560,7 +571,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
             #[cfg(feature = "tools")]
             let host = host.driven(drive);
             feed.attach(options, host.inbox())?;
-            host.run(client, Box::new(feed), |_| {})
+            host.run(client, Box::new(feed), setup)
         }
     };
     let log = log.borrow_mut().take();
@@ -664,10 +675,22 @@ fn start_audio(window: Window, settings: &beryl_scene::settings::Settings) -> Au
 }
 
 /// The player's saved settings and the writer of their changes, in a live game the viewer
+/// plays, with `--tier` in place of the saved graphics setting. It goes in the settings the
+/// client holds, so that the settings the client asks to save never carry the other value back
+/// to the frame loop.
+fn player_settings(options: &Options) -> (Option<beryl_scene::settings::Settings>, Option<Saver>) {
+    let (mut settings, saver) = saved_settings(options);
+    if let Some(graphics) = options.graphics {
+        settings.get_or_insert_default().graphics = graphics;
+    }
+    (settings, saver)
+}
+
+/// The player's saved settings and the writer of their changes, in a live game the viewer
 /// plays. A replayed recording, a resumed replay file and a game `--agent` plays start from
 /// the defaults and save nothing, so that a test's or an agent's run never changes the
 /// player's settings.
-fn player_settings(options: &Options) -> (Option<beryl_scene::settings::Settings>, Option<Saver>) {
+fn saved_settings(options: &Options) -> (Option<beryl_scene::settings::Settings>, Option<Saver>) {
     #[cfg(feature = "tools")]
     if options.fixture.is_some() {
         return (None, None);
@@ -710,23 +733,6 @@ fn pause_at(options: &Options) -> Result<Option<u64>, String> {
     Err(format!("--pause-at {text}: this build cannot pause"))
 }
 
-/// The time, in milliseconds since the Unix epoch.
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| since.as_millis() as u64)
-}
-
-/// The checkout the app was built from: four directories above this crate's.
-fn checkout() -> String {
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let root = manifest.ancestors().nth(4).unwrap_or(manifest);
-    root.canonicalize()
-        .unwrap_or_else(|_| root.to_owned())
-        .display()
-        .to_string()
-}
-
 /// Opens the live socket for this process, and says where it is. A socket that cannot be made
 /// leaves the app running without one.
 #[cfg(all(feature = "tools", unix))]
@@ -746,37 +752,4 @@ fn start_live(inbox: Inbox) -> Option<crate::live::Live> {
             None
         }
     }
-}
-
-/// `$BERYL_CACHE/b3d/frames`, where frame logs go.
-fn frames_dir() -> PathBuf {
-    cache_dir().join("b3d").join("frames")
-}
-
-/// `$BERYL_CACHE/b3d/out`, where the pictures of `just b3d live png` go, as those of
-/// `just b3d png` do.
-#[cfg(all(feature = "tools", unix))]
-fn out_dir() -> PathBuf {
-    cache_dir().join("b3d").join("out")
-}
-
-/// The cache folder: `~/Library/Caches/beryl`, or on Windows `%LOCALAPPDATA%\beryl`, unless
-/// `$BERYL_CACHE` names another.
-fn cache_dir() -> PathBuf {
-    std::env::var_os("BERYL_CACHE").map_or_else(
-        || {
-            if cfg!(windows) {
-                PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap_or_default()).join("beryl")
-            } else {
-                home().join("Library").join("Caches").join("beryl")
-            }
-        },
-        PathBuf::from,
-    )
-}
-
-fn home() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_default()
 }

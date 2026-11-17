@@ -22,6 +22,8 @@ impl Client {
                 });
             }
             Setting::FullControl(_) => self.send_stops(),
+            // The host sees the saved settings and changes the tier (`beryl_host`'s frame loop).
+            Setting::Graphics(_) => {}
         }
         self.show_screen();
     }

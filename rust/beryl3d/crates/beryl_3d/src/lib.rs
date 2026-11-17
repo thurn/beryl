@@ -12,5 +12,7 @@ pub mod frame_log;
 pub mod live;
 pub mod load;
 pub mod options;
+mod places;
 pub mod session;
 pub mod settings;
+pub mod tier;

@@ -25,7 +25,7 @@ use winit::window::{Window, WindowId};
 use crate::assets::{Faces, Glyphs, Scans};
 use crate::clipboard::Clipboard;
 use crate::events::Translator;
-use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Sleep, Ticks, When};
+use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Opening, Shown, Sleep, Ticks, When};
 use crate::inbox::Inbox;
 
 /// What the window is (decision C15: the faster choice is the default).
@@ -123,12 +123,12 @@ impl Desktop {
 
     /// Runs `client` in the window until it is closed, `Options::end_after` has passed or the
     /// drive script or the feed has ended (`FrameLoop::at_end`), with `feed` added to its frame loop. `setup` prepares the renderer (its card faces, say)
-    /// before the first frame.
+    /// before the first frame, and chooses the tier the client starts in.
     pub fn run(
         self,
         client: Client,
         feed: Box<dyn Feed>,
-        setup: impl FnOnce(&mut Renderer),
+        setup: impl FnOnce(&mut Renderer, Opening) -> Chosen,
     ) -> Result<(), String> {
         let wake = self.inbox();
         let mut app = App {
@@ -270,7 +270,7 @@ impl Ticks for Pacer {
     }
 }
 
-impl<S: FnOnce(&mut Renderer)> App<S> {
+impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
     fn now(&self) -> u64 {
         self.started.elapsed().as_nanos() as u64
     }
@@ -295,13 +295,21 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
         let (mut renderer, surface) =
             Renderer::for_window(Arc::clone(&window), size.width, size.height)?;
         renderer.upload_page(&light::prepared());
-        if let Some(setup) = self.setup.take() {
-            setup(&mut renderer);
-        }
+        let display_hz = self.display_hz(&window);
+        let chosen = self.setup.take().map_or(Chosen::BASELINE, |setup| {
+            setup(
+                &mut renderer,
+                Opening {
+                    width: size.width,
+                    height: size.height,
+                    scale: window.scale_factor() as f32,
+                    display_hz,
+                },
+            )
+        });
         let (client, mut feed) = self.client.take().ok_or("the window opened twice")?;
         let translator = Translator::new(size, window.scale_factor());
         crate::threads::interactive_thread();
-        let display_hz = self.display_hz(&window);
         feed.opened(&Opened {
             display_hz,
             adapter: renderer.adapter().to_owned(),
@@ -312,12 +320,12 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
         let frames = FrameLoop::new(client, pacer)
             .with_feed(feed)
             .paused_at(self.options.pause_at);
-        // The tier starts at Baseline, and Enhanced is not built yet, so it cannot drop.
         let frames = if fixed {
-            frames.fixed_at(display_hz)
+            frames.fixed_at(display_hz, chosen.tier_can_drop())
         } else {
-            frames.paced(display_hz, false)
-        };
+            frames.paced(display_hz, chosen.tier_can_drop())
+        }
+        .with_tier(chosen);
         #[cfg(feature = "drive")]
         let frames = frames.driven(self.drive.take());
         let mut frames = frames;
@@ -398,7 +406,7 @@ impl<S: FnOnce(&mut Renderer)> App<S> {
     }
 }
 
-impl<S: FnOnce(&mut Renderer)> ApplicationHandler<UserEvent> for App<S> {
+impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> for App<S> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(running) = &mut self.running {
             running.frames.handle(Input::Lifecycle(Lifecycle::Resumed));

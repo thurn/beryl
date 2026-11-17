@@ -19,7 +19,7 @@ use beryl_scene::frame::{Frame, Wake};
 use beryl_scene::input::{Input, Insets, Key, Lifecycle, Pointer, Size, TextChange};
 
 use crate::assets::{Faces, Glyphs, Scans};
-use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Ticks, When};
+use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Shown, Ticks, When};
 use crate::inbox::Inbox;
 
 /// What the platform does when an input arrives from another thread: it asks for a frame
@@ -218,10 +218,12 @@ impl Phone {
         });
         crate::threads::interactive_thread();
         // The rule starts at the display's highest rate and steps as frames miss or keep it.
-        // The tier is not chosen automatically yet, so it never drops.
+        // A phone's app measures nothing at startup, so the tier is Baseline and cannot drop.
+        let chosen = Chosen::BASELINE;
         let mut frames = FrameLoop::new(client, Platform::default())
             .with_feed(feed)
-            .paced(self.display_hz, false);
+            .paced(self.display_hz, chosen.tier_can_drop())
+            .with_tier(chosen);
         frames.handle(size);
         self.state = State::Running(Box::new(Running {
             frames,

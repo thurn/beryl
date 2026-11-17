@@ -39,6 +39,7 @@ from . import (
     stand_in,
     sweep,
     test_fit,
+    tiers,
     timeline,
     vm,
 )
@@ -631,6 +632,16 @@ OWN_COMMANDS: tuple[Command, ...] = (
         ),
         app.run_smoke,
         app.smoke_arguments,
+    ),
+    Command(
+        "tiers",
+        "the tier chosen at startup and its drop, in three runs of the app with no window",
+        (
+            ("just b3d tiers", "build the app and check the three runs' frame logs"),
+            ("just b3d tiers --no-build", "the app as last built"),
+        ),
+        tiers.run_tiers,
+        tiers.tiers_arguments,
     ),
     Command(
         "frames",

@@ -2,7 +2,8 @@
 //! file of its own, `$BERYL_CACHE/b3d/frames/<start time>-<process id>.jsonl`, that an agent
 //! reads with `just b3d frames`. Its first line describes the run, then one line follows for
 //! each late frame and for each pointer, key, text, surface and lifecycle input. The log
-//! records when the first frame was shown and summarizes the run at exit or at replay end.
+//! records when the first frame was shown, the tier chosen at startup (`tier`), and summarizes
+//! the run at exit or at replay end.
 //!
 //! A frame is late when more than one and a half intervals of the rate the host asked for
 //! passed since the frame before it while the ticks ran (decision C18). When the host asked
@@ -28,6 +29,8 @@ use beryl_scene::frame::SoundId;
 use beryl_scene::input::{Input, Lifecycle, Modifiers, TextChange};
 use beryl_scene::sound::NAMES;
 use serde::{Deserialize, Serialize};
+
+pub use crate::tier::Tiered;
 
 /// A sixtieth of a second, in nanoseconds.
 const SIXTIETH: f64 = 1e9 / 60.0;
@@ -108,6 +111,9 @@ pub struct Stepped {
     pub at_ms: f64,
     /// The rate it asked for from then on, or `None` when it dropped the tier to Baseline.
     pub hz: Option<f32>,
+    /// How many frames the run had drawn when it stepped, counting the one that made it.
+    #[serde(default)]
+    pub frame: u64,
 }
 
 /// The last line: what the run did.
@@ -192,6 +198,7 @@ pub enum Line {
     LifecycleShownMs(f64),
     Summary(Summary),
     Input(Inputted),
+    Tier(Tiered),
 }
 
 /// An input line as written: the input, and how long before it the last frame was drawn.
@@ -324,6 +331,8 @@ pub struct Log {
     pub inputs: Vec<InputLine>,
     /// None when the run ended without writing one (it was killed, say).
     pub summary: Option<Summary>,
+    /// The tier chosen at startup, where the host chose one.
+    pub tier: Option<Tiered>,
 }
 
 /// The log of a run under way.
@@ -416,6 +425,7 @@ impl FrameLog {
                     Step::Baseline => None,
                     Step::Rate(hz) => Some(hz),
                 },
+                frame: summary.frames,
             });
         }
         if let Some(pause) = self.pause_at
@@ -504,6 +514,12 @@ impl FrameLog {
                 since_frame_ms,
             }));
         }
+    }
+
+    /// Writes the tier chosen at startup.
+    pub fn tier(&self, tiered: Tiered) {
+        // The writer ends only with the log, so a failed send has nowhere to go.
+        let _ = self.lines.send(Line::Tier(tiered));
     }
 
     /// Notes a sound the client asked for in a frame.
@@ -612,6 +628,7 @@ pub fn read(path: &Path) -> Result<Log, String> {
         late: Vec::new(),
         inputs: Vec::new(),
         summary: None,
+        tier: None,
     };
     for line in lines {
         match line? {
@@ -620,6 +637,7 @@ pub fn read(path: &Path) -> Result<Log, String> {
             Line::Late(late) => log.late.push(late),
             Line::Summary(summary) => log.summary = Some(summary),
             Line::Input(input) => log.inputs.push(input.input),
+            Line::Tier(tiered) => log.tier = Some(tiered),
         }
     }
     Ok(log)

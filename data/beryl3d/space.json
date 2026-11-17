@@ -316,6 +316,7 @@
     "verbs.lift.hand.columns",
     "layout.desktop.tray.put_back.deck_backs",
     "flat.phone.opening.per_row",
+    "enhanced.probe.frames",
     "enhanced.particles.ash.count",
     "enhanced.particles.vortex.count",
     "enhanced.bloom.taps"
@@ -707,6 +708,10 @@
       "fill_elevation": 30,
       "sheen": 0.1,
       "sheen_power": 24.0
+    },
+    "probe": {
+      "frames": 30,
+      "share": 0.3333
     },
     "particles": {
       "ash": {

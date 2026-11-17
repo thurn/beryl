@@ -1,4 +1,4 @@
-//! The player's settings on disk (docs/beryl-3d.md, "Sound"): `settings.json` in the app's
+//! The player's settings on disk (docs/beryl-3d.md, "Sound" and "Choosing a tier"): `settings.json` in the app's
 //! data folder. The app reads it at startup and hands it to the client as `Input::Settings`,
 //! and writes it again for each `Request::SaveSettings`, on a thread of its own so that the
 //! frame thread does no file I/O.
@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Sender};
 
 use beryl_scene::manual::bindings::Bindings;
-use beryl_scene::settings::Settings;
+use beryl_scene::settings::{Graphics, Settings};
 use beryl_session::protocol::StopsSetting;
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +27,37 @@ struct Saved {
     stops: StopsSetting,
     /// The table commands whose keys the player changed, by command id (`Bindings`).
     bindings: BTreeMap<String, Option<String>>,
+    graphics: SavedGraphics,
+}
+
+/// `Graphics` as the file writes it: `automatic`, `baseline` or `enhanced`.
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SavedGraphics {
+    #[default]
+    Automatic,
+    Baseline,
+    Enhanced,
+}
+
+impl From<Graphics> for SavedGraphics {
+    fn from(graphics: Graphics) -> Self {
+        match graphics {
+            Graphics::Automatic => Self::Automatic,
+            Graphics::Baseline => Self::Baseline,
+            Graphics::Enhanced => Self::Enhanced,
+        }
+    }
+}
+
+impl From<SavedGraphics> for Graphics {
+    fn from(saved: SavedGraphics) -> Self {
+        match saved {
+            SavedGraphics::Automatic => Self::Automatic,
+            SavedGraphics::Baseline => Self::Baseline,
+            SavedGraphics::Enhanced => Self::Enhanced,
+        }
+    }
 }
 
 impl Default for Saved {
@@ -44,6 +75,7 @@ impl From<Settings> for Saved {
             full_control: settings.full_control,
             stops: settings.stops,
             bindings: settings.bindings.overrides().clone(),
+            graphics: settings.graphics.into(),
         }
     }
 }
@@ -57,6 +89,7 @@ impl From<Saved> for Settings {
             full_control: saved.full_control,
             stops: saved.stops,
             bindings: Bindings::from_overrides(saved.bindings),
+            graphics: saved.graphics.into(),
         }
     }
 }

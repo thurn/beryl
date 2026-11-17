@@ -13,7 +13,7 @@ use beryl_scene::frame::Frame;
 use beryl_scene::input::{Input, Insets, Size};
 
 use crate::assets::{Faces, Glyphs, Scans};
-use crate::frames::{Draw, Feed, FrameLoop, Opened, Shown, Sleep, Ticks, When};
+use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Opening, Shown, Sleep, Ticks, When};
 use crate::inbox::Inbox;
 
 /// How the windowless host draws.
@@ -73,7 +73,8 @@ impl Windowless {
 
     /// Runs `client` with `feed` added to its frame loop until `end_after` has passed, the
     /// drive script has given its last action or the feed has ended, or for ever when none of
-    /// these happens. `setup` prepares the renderer before the first frame.
+    /// these happens. `setup` prepares the renderer before the first frame, and chooses the tier
+    /// the client starts in.
     ///
     /// # Errors
     ///
@@ -82,15 +83,14 @@ impl Windowless {
         self,
         client: Client,
         mut feed: Box<dyn Feed>,
-        setup: impl FnOnce(&mut Renderer),
+        setup: impl FnOnce(&mut Renderer, Opening) -> Chosen,
     ) -> Result<(), String> {
         let options = self.options;
         let mut renderer = Renderer::headless(Limits::Default)?;
         renderer.upload_page(&light::prepared());
-        setup(&mut renderer);
-        let width = (options.size.width * options.scale).round().max(1.0) as u32;
-        let height = (options.size.height * options.scale).round().max(1.0) as u32;
-        let target = Target::offscreen(&renderer, width, height);
+        let opening = opening(&options);
+        let chosen = setup(&mut renderer, opening);
+        let target = Target::offscreen(&renderer, opening.width, opening.height);
         feed.opened(&Opened {
             display_hz: options.hz,
             adapter: renderer.adapter().to_owned(),
@@ -106,7 +106,8 @@ impl Windowless {
         let frames = FrameLoop::new(client, timer)
             .with_feed(feed)
             .paused_at(options.pause_at)
-            .paced(options.hz, false);
+            .paced(options.hz, chosen.tier_can_drop())
+            .with_tier(chosen);
         #[cfg(feature = "drive")]
         let frames = frames.driven(self.drive);
         let mut frames = frames;
@@ -252,5 +253,15 @@ impl Draw for Offscreen {
     fn assets(&mut self, client: &mut Client, when: When) {
         self.glyphs.deliver(client, &mut self.renderer);
         self.faces.deliver(client, &mut self.renderer, when);
+    }
+}
+
+/// The offscreen target's size in physical pixels, its scale and the timer's rate.
+fn opening(options: &WindowlessOptions) -> Opening {
+    Opening {
+        width: (options.size.width * options.scale).round().max(1.0) as u32,
+        height: (options.size.height * options.scale).round().max(1.0) as u32,
+        scale: options.scale,
+        display_hz: options.hz,
     }
 }

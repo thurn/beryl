@@ -4,8 +4,9 @@
 
 The app is built with cargo's `test` profile, as the workspace's tests are: optimized enough to
 measure frames, it shares the dependencies `just b3d cargo-test` built, and the `tools` feature
-gives it `--fixture`, `--pause-at`, `--drive`, `--load`, `--slow-gpu`, `--offer` and `--agent`
-with its `--opponent`, `--seed` and `--search-class`, which a release build leaves off.
+gives it `--fixture`, `--pause-at`, `--drive`, `--load`, `--slow-gpu`, `--offer`, `--tier`,
+`--probe` and `--agent` with its `--opponent`, `--seed` and `--search-class`, which a release
+build leaves off.
 """
 
 from __future__ import annotations
@@ -111,6 +112,16 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
         help="add this agent to the start screen's opponents (expert); repeatable",
     )
     parser.add_argument(
+        "--tier",
+        choices=("automatic", "baseline", "enhanced"),
+        help="how the visual tier is chosen, in place of the saved setting",
+    )
+    parser.add_argument(
+        "--probe",
+        choices=("pass", "fail"),
+        help="the startup measurement's verdict, in place of the one it measures",
+    )
+    parser.add_argument(
         "--window",
         choices=WINDOWS,
         help="none for an agent and fullscreen for a person, unless given",
@@ -139,6 +150,8 @@ def run_app(args: argparse.Namespace) -> int:
         ("--opponent", args.opponent),
         ("--seed", args.seed),
         ("--search-class", args.search_class),
+        ("--tier", args.tier),
+        ("--probe", args.probe),
     ):
         if value is not None:
             command += [option, value]
@@ -283,6 +296,9 @@ def report(path: Path) -> str:
     ]
     if conditions:
         out.append("made to imitate: " + ", ".join(conditions))
+    tier = next((line["tier"] for line in lines if "tier" in line), None)
+    if tier is not None:
+        out.append(tier_line(tier))
     if summary is None:
         out.append("no summary: the run ended before it wrote one")
     else:
@@ -323,6 +339,19 @@ def report(path: Path) -> str:
     return "\n".join(out)
 
 
+def tier_line(tier: dict[str, Any]) -> str:
+    """The tier chosen at startup (docs/beryl-3d.md, 'Choosing a tier'), one line."""
+    measured = (
+        f"slowest measured frame {tier['slowest_ms']:.1f} ms"
+        if tier.get("slowest_ms") is not None
+        else "nothing measured"
+    )
+    return (
+        f"tier: {tier['tier']} at startup (setting {tier['setting']}, {measured},"
+        f" interval {tier['interval_ms']:.1f} ms; {tier.get('took_ms', 0.0):.0f} ms before the first frame)"
+    )
+
+
 def rate_line(run: dict[str, Any], summary: dict[str, Any]) -> str:
     """The rate the host asked the display for and its steps down and up (decision C18), one
     line. A log written before the host stepped has no steps and asked for the display's rate.
@@ -334,7 +363,7 @@ def rate_line(run: dict[str, Any], summary: dict[str, Any]) -> str:
         (
             f"{step['hz']} Hz at {step['at_ms']:.0f} ms"
             if step["hz"] is not None
-            else f"Baseline tier at {step['at_ms']:.0f} ms"
+            else f"Baseline tier at {step['at_ms']:.0f} ms (frame {step.get('frame', '?')})"
         )
         for step in steps
     ]

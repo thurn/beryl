@@ -33,7 +33,9 @@ pub use desktop::{Desktop, Options, WindowMode, is_fullscreen_key};
 pub use drive::Drive;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use events::{LINE_POINTS, Translator, modifiers_from};
-pub use frames::{Draw, Feed, FrameLoop, NoFeed, Opened, Shown, Sleep, Ticked, Ticks, When};
+pub use frames::{
+    Chosen, Draw, Feed, FrameLoop, NoFeed, Opened, Opening, Shown, Sleep, Ticked, Ticks, When,
+};
 #[cfg(feature = "headless")]
 pub use headless::Headless;
 pub use inbox::Inbox;
