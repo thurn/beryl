@@ -145,5 +145,68 @@
     "scenario": "the controller chooses the controlled player's cleanup discard",
     "cr": "CR 724.5 (https://yawgatog.com/resources/magic-rules/#R7245): \"While controlling another player, a player makes all choices and decisions the controlled player is allowed to make or is told to make by the rules or by any objects. This includes choices and decisions about what to play, and choices and decisions called for by spells and abilities.\"",
     "reason": "The scenario ends at the pending discard decision, which XMage's script cannot answer for the controlled player: XMage asks the controlled player's own test player at cleanup and fails for lack of a scripted choice. The rules give that decision to the controller."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Glorious Anthem",
+    "scenario": "a permanent that becomes a creature gets +1/+1",
+    "cr": "CR 205.1a (https://yawgatog.com/resources/magic-rules/#R2051a): \"Some effects set an object's card type. In most such cases, the new card type(s) replaces any existing card types. However, an object with either the instant or sorcery card type retains that type. Counters, stickers, effects, and damage marked on the object remain with it, even if they are meaningless to the new card type. Similarly, when an effect sets one or more of an object's subtypes, the new subtype(s) replaces any existing subtypes from the appropriate set (creature types, land types, artifact types, enchantment types, planeswalker types, or spell types). If an object's card type is removed, the subtypes correlated with that card type will remain if they are also the subtypes of a card type the object currently has; otherwise, they are also removed for the entire time the object's card type is removed. Removing an object's subtype doesn't affect its card types at all.\"",
+    "reason": "XMage keeps the old creature subtype when Swift Reconfiguration makes the permanent a Vehicle artifact and removes Creature. A later effect making the Vehicle a creature does not restore that subtype."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Opalescence",
+    "scenario": "an Aura is not made a creature",
+    "cr": "CR 205.1a (https://yawgatog.com/resources/magic-rules/#R2051a): \"Some effects set an object's card type. In most such cases, the new card type(s) replaces any existing card types. However, an object with either the instant or sorcery card type retains that type. Counters, stickers, effects, and damage marked on the object remain with it, even if they are meaningless to the new card type. Similarly, when an effect sets one or more of an object's subtypes, the new subtype(s) replaces any existing subtypes from the appropriate set (creature types, land types, artifact types, enchantment types, planeswalker types, or spell types). If an object's card type is removed, the subtypes correlated with that card type will remain if they are also the subtypes of a card type the object currently has; otherwise, they are also removed for the entire time the object's card type is removed. Removing an object's subtype doesn't affect its card types at all.\"",
+    "reason": "XMage keeps the old creature subtype when Swift Reconfiguration makes the permanent a Vehicle artifact and removes Creature. A later effect making the Vehicle a creature does not restore that subtype."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Swift Reconfiguration",
+    "scenario": "a creature becomes a noncreature Vehicle that can't crew alone",
+    "cr": "CR 205.1a (https://yawgatog.com/resources/magic-rules/#R2051a): \"Some effects set an object's card type. In most such cases, the new card type(s) replaces any existing card types. However, an object with either the instant or sorcery card type retains that type. Counters, stickers, effects, and damage marked on the object remain with it, even if they are meaningless to the new card type. Similarly, when an effect sets one or more of an object's subtypes, the new subtype(s) replaces any existing subtypes from the appropriate set (creature types, land types, artifact types, enchantment types, planeswalker types, or spell types). If an object's card type is removed, the subtypes correlated with that card type will remain if they are also the subtypes of a card type the object currently has; otherwise, they are also removed for the entire time the object's card type is removed. Removing an object's subtype doesn't affect its card types at all.\"",
+    "reason": "XMage keeps the old creature subtype when Swift Reconfiguration makes the permanent a Vehicle artifact and removes Creature. A later effect making the Vehicle a creature does not restore that subtype."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Swift Reconfiguration",
+    "scenario": "crewing the Vehicle makes it a creature until end of turn",
+    "cr": "CR 205.1a (https://yawgatog.com/resources/magic-rules/#R2051a): \"Some effects set an object's card type. In most such cases, the new card type(s) replaces any existing card types. However, an object with either the instant or sorcery card type retains that type. Counters, stickers, effects, and damage marked on the object remain with it, even if they are meaningless to the new card type. Similarly, when an effect sets one or more of an object's subtypes, the new subtype(s) replaces any existing subtypes from the appropriate set (creature types, land types, artifact types, enchantment types, planeswalker types, or spell types). If an object's card type is removed, the subtypes correlated with that card type will remain if they are also the subtypes of a card type the object currently has; otherwise, they are also removed for the entire time the object's card type is removed. Removing an object's subtype doesn't affect its card types at all.\"",
+    "reason": "XMage keeps the old creature subtype when Swift Reconfiguration makes the permanent a Vehicle artifact and removes Creature. A later effect making the Vehicle a creature does not restore that subtype."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Swift Reconfiguration",
+    "scenario": "Thieving Skydiver kicked for 1 can't take a reconfigured 2-drop",
+    "cr": "CR 205.1a (https://yawgatog.com/resources/magic-rules/#R2051a): \"Some effects set an object's card type. In most such cases, the new card type(s) replaces any existing card types. However, an object with either the instant or sorcery card type retains that type. Counters, stickers, effects, and damage marked on the object remain with it, even if they are meaningless to the new card type. Similarly, when an effect sets one or more of an object's subtypes, the new subtype(s) replaces any existing subtypes from the appropriate set (creature types, land types, artifact types, enchantment types, planeswalker types, or spell types). If an object's card type is removed, the subtypes correlated with that card type will remain if they are also the subtypes of a card type the object currently has; otherwise, they are also removed for the entire time the object's card type is removed. Removing an object's subtype doesn't affect its card types at all.\"",
+    "reason": "XMage keeps the old creature subtype when Swift Reconfiguration makes the permanent a Vehicle artifact and removes Creature. A later effect making the Vehicle a creature does not restore that subtype."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Swift Reconfiguration",
+    "scenario": "Thieving Skydiver kicked for 2 takes the reconfigured creature",
+    "cr": "CR 205.1a (https://yawgatog.com/resources/magic-rules/#R2051a): \"Some effects set an object's card type. In most such cases, the new card type(s) replaces any existing card types. However, an object with either the instant or sorcery card type retains that type. Counters, stickers, effects, and damage marked on the object remain with it, even if they are meaningless to the new card type. Similarly, when an effect sets one or more of an object's subtypes, the new subtype(s) replaces any existing subtypes from the appropriate set (creature types, land types, artifact types, enchantment types, planeswalker types, or spell types). If an object's card type is removed, the subtypes correlated with that card type will remain if they are also the subtypes of a card type the object currently has; otherwise, they are also removed for the entire time the object's card type is removed. Removing an object's subtype doesn't affect its card types at all.\"",
+    "reason": "XMage keeps the old creature subtype when Swift Reconfiguration makes the permanent a Vehicle artifact and removes Creature. A later effect making the Vehicle a creature does not restore that subtype."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Swift Reconfiguration",
+    "scenario": "generated 1: cast from hand",
+    "cr": "CR 205.1a (https://yawgatog.com/resources/magic-rules/#R2051a): \"Some effects set an object's card type. In most such cases, the new card type(s) replaces any existing card types. However, an object with either the instant or sorcery card type retains that type. Counters, stickers, effects, and damage marked on the object remain with it, even if they are meaningless to the new card type. Similarly, when an effect sets one or more of an object's subtypes, the new subtype(s) replaces any existing subtypes from the appropriate set (creature types, land types, artifact types, enchantment types, planeswalker types, or spell types). If an object's card type is removed, the subtypes correlated with that card type will remain if they are also the subtypes of a card type the object currently has; otherwise, they are also removed for the entire time the object's card type is removed. Removing an object's subtype doesn't affect its card types at all.\"",
+    "reason": "XMage keeps the old creature subtype when Swift Reconfiguration makes the permanent a Vehicle artifact and removes Creature. A later effect making the Vehicle a creature does not restore that subtype."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Swift Reconfiguration",
+    "scenario": "generated 2: cast from hand",
+    "cr": "CR 205.1a (https://yawgatog.com/resources/magic-rules/#R2051a): \"Some effects set an object's card type. In most such cases, the new card type(s) replaces any existing card types. However, an object with either the instant or sorcery card type retains that type. Counters, stickers, effects, and damage marked on the object remain with it, even if they are meaningless to the new card type. Similarly, when an effect sets one or more of an object's subtypes, the new subtype(s) replaces any existing subtypes from the appropriate set (creature types, land types, artifact types, enchantment types, planeswalker types, or spell types). If an object's card type is removed, the subtypes correlated with that card type will remain if they are also the subtypes of a card type the object currently has; otherwise, they are also removed for the entire time the object's card type is removed. Removing an object's subtype doesn't affect its card types at all.\"",
+    "reason": "XMage keeps the old creature subtype when Swift Reconfiguration makes the permanent a Vehicle artifact and removes Creature. A later effect making the Vehicle a creature does not restore that subtype."
+  },
+  {
+    "oracle": "forge",
+    "card": "Abhorrent Oculus",
+    "scenario": "Fractured Identity copies a face-down permanent as a 2/2",
+    "cr": "CR 707.2 (https://yawgatog.com/resources/magic-rules/#R7072): \"When copying an object, the copy acquires the copiable values of the original object's characteristics and, when copying a spell, choices made when casting or activating it (modes, targets, the value of X, whether it was kicked, how it will affect multiple targets, and so on). The copiable values are the values derived from the text printed on the object (that text being name, mana cost, color indicator, card type, subtype, supertype, rules text, power, toughness, loyalty, and/or defense), as modified by other copy effects, by its face-down status, and by 'as . . . enters' and 'as . . . is turned face up' abilities that set power and toughness (and may also set additional characteristics). Other effects (including type-changing and text-changing effects), status, counters, and stickers are not copied.\"",
+    "reason": "Forge names the face-up token Wetland Sambar. The source was face down when exiled, so the copy gets the nameless copiable characteristics from its last known information on the battlefield."
   }
 ]
