@@ -31,6 +31,7 @@ from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from . import scope
 from .beads import main_checkout, run_bd
 from .ingest import LineSource, Merge, Row, SnapshotSource, SourceError
 
@@ -77,7 +78,7 @@ def utc(value: object) -> datetime:
 
 def local_day(moment: datetime) -> str:
     """The local day of a UTC time, as rollups.day_of gives it."""
-    return moment.astimezone().strftime("%Y-%m-%d")
+    return scope.local_time(moment).strftime("%Y-%m-%d")
 
 
 def number(value: object) -> float | None:

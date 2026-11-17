@@ -5,8 +5,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import time
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -19,15 +18,7 @@ from tests.synthetic import listing
 HOST = "jarvis"
 CORES = 8
 
-
-@pytest.fixture(autouse=True)
-def utc_days(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Local days are UTC days, so that a test's days do not depend on the machine's zone."""
-    monkeypatch.setenv("TZ", "UTC")
-    time.tzset()
-    yield
-    monkeypatch.undo()
-    time.tzset()
+pytestmark = pytest.mark.usefixtures("utc_days")
 
 
 def line(

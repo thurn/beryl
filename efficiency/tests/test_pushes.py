@@ -5,8 +5,6 @@ slow CI's runs and bisection."""
 from __future__ import annotations
 
 import json
-import time
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -26,6 +24,8 @@ from tests.test_ci import check_bead, line, verdict
 
 HOST = "jarvis"
 ENACT = "python3 ~/enact/scripts/enact.py"
+
+pytestmark = pytest.mark.usefixtures("utc_days")
 
 
 def at(hour: int, minute: int, second: int = 0) -> str:
@@ -56,15 +56,6 @@ OUTPUT = (
     " check's target\n"
     "deferred: shots capture\n"
 )
-
-
-@pytest.fixture(autouse=True)
-def utc_days(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setenv("TZ", "UTC")
-    time.tzset()
-    yield
-    monkeypatch.undo()
-    time.tzset()
 
 
 @pytest.fixture

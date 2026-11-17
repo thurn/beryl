@@ -58,6 +58,11 @@ def parse_time(value: str) -> datetime:
     )
 
 
+def local_time(moment: datetime) -> datetime:
+    """Convert to the reporting host's local time."""
+    return moment.astimezone()
+
+
 def parse_since(value: str, at: datetime | None = None) -> Range:
     """`24h`, `7d`, `all`, or a date (`2026-11-01`, the start of that day in local time)."""
     if value == "all":
@@ -75,7 +80,7 @@ def parse_since(value: str, at: datetime | None = None) -> Range:
         raise argparse.ArgumentTypeError(
             f"--since takes 24h, 7d, all or a date such as 2026-11-01, not {value!r}"
         ) from None
-    return Range(stamp(day.astimezone()), None, value)
+    return Range(stamp(local_time(day)), None, value)
 
 
 @dataclass(frozen=True)

@@ -14,6 +14,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING
 
+from . import scope
 from .facts import (
     NO_BEAD,
     NO_EPIC,
@@ -196,7 +197,7 @@ def core_figures(facts: Facts, closed: list[Bead]) -> Valued:
 
 def bucket_of(moment: str, hourly: bool) -> str:
     """The local hour or day of a UTC time."""
-    local = parse_time(moment).astimezone()
+    local = scope.local_time(parse_time(moment))
     return local.strftime("%Y-%m-%d %H:00" if hourly else "%Y-%m-%d")
 
 
@@ -585,7 +586,7 @@ def epic_lines(e: Epic) -> list[str]:
 
 def day_of(moment: str) -> str:
     """The local day of a UTC time."""
-    return parse_time(moment).astimezone().strftime("%Y-%m-%d")
+    return bucket_of(moment, hourly=False)
 
 
 def window_key(facts: Facts, by: str) -> Callable[[Window], str]:

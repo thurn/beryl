@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -21,18 +20,11 @@ HOST = "jarvis"
 PROVIDER = "claude"
 WEEK = Scope(Range("2026-11-08T00:00:00", "2026-11-15T00:00:00", "7d"))
 
+pytestmark = pytest.mark.usefixtures("utc_days")
+
 
 def at(day: int, hour: int, minute: int = 0, second: int = 0) -> str:
     return f"2026-11-{day:02d}T{hour:02d}:{minute:02d}:{second:02d}.000Z"
-
-
-@pytest.fixture(autouse=True)
-def utc_days(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setenv("TZ", "UTC")
-    time.tzset()
-    yield
-    monkeypatch.undo()
-    time.tzset()
 
 
 @pytest.fixture

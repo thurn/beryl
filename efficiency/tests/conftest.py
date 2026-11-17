@@ -3,9 +3,24 @@ is public, so no test reads a real transcript, bead or command line from a machi
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+
+from beryl_efficiency import scope
+
+
+@pytest.fixture
+def utc_days(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Use UTC for the reports' calendar buckets on every host."""
+
+    def as_utc(moment: datetime) -> datetime:
+        if moment.tzinfo is None:
+            return moment.replace(tzinfo=timezone.utc)
+        return moment.astimezone(timezone.utc)
+
+    monkeypatch.setattr(scope, "local_time", as_utc)
 
 
 @pytest.fixture(autouse=True)
