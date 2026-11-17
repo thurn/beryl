@@ -20,6 +20,7 @@ use glam::camera::rh::{proj::directx, view::look_to_mat4};
 use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
 
 use super::{LIT, LIT_OFFSET, SHADER};
+use crate::count::{self, FragmentCounter};
 use crate::draw::Draws;
 use crate::mesh::Vertex;
 use crate::pipeline::{DEPTH, RECORD};
@@ -136,7 +137,13 @@ impl Shadow {
     /// Records the shadow map's pass for the frame `draws` describes into `encoder`, and returns
     /// how many draw calls it took: one for each run of card-mesh records before the flat
     /// layer. The vertex stage leaves out the records of any other material, such as the table.
-    pub(crate) fn draw(&mut self, encoder: &mut wgpu::CommandEncoder, draws: &Draws) -> u32 {
+    /// `counter`, when present, counts the pass's fragments, of which a depth-only pass has none.
+    pub(crate) fn draw(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        draws: &Draws,
+        counter: Option<&FragmentCounter>,
+    ) -> u32 {
         let group = self.group(draws);
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("shadow map"),
@@ -159,6 +166,7 @@ impl Shadow {
         pass.set_index_buffer(draws.indices.slice(..), wgpu::IndexFormat::Uint16);
         let indices = draws.ranges[Mesh::Card as usize].clone();
         let mut draw_calls = 0;
+        count::begin(counter, &mut pass);
         for run in runs(draws.frame) {
             if run.pass == Pass::Layer || run.mesh != Mesh::Card as u8 {
                 continue;
@@ -173,6 +181,7 @@ impl Shadow {
             pass.draw_indexed(indices.clone(), 0, 0..records.len() as u32);
             draw_calls += 1;
         }
+        count::end(counter, &mut pass);
         draw_calls
     }
 

@@ -1,29 +1,33 @@
-//! Counts the fragments the Baseline tier shades, for `just b3d gate --gpu`
+//! Counts the fragments a tier shades, for `just b3d gate --gpu`
 //! (`tools/src/beryl_tools/beryl3d/gpu.py`), which holds the counts to the limits under
-//! `tiers.baseline.fragments` in `data/beryl3d/gates.json` (docs/beryl-3d.md, "What is
-//! counted"). It needs a GPU adapter with pipeline statistics queries, so it runs in the
+//! `tiers.<tier>.fragments` in `data/beryl3d/gates.json` (docs/beryl-3d.md, "What is
+//! counted"). The count is the sum over every render pass of a frame: one in Baseline, up to
+//! seven in Enhanced. It needs a GPU adapter with pipeline statistics queries, so it runs in the
 //! `beryl3d-bench` virtual machine on Mesa's software Vulkan driver, whose count is exact.
 //!
-//! `--board <name>` (every gated board when neither option is given) draws the 8 frames of a gated board that `beryl_inspect::gate::rank` ranks
-//! highest, each into a target of `gate::TARGET`, and prints each frame's count.
+//! `--tier baseline|enhanced` (baseline by default) chooses the tier every frame is drawn in.
+//!
+//! `--board <name>` (every gated board when neither option is given) draws the 8 frames of a
+//! gated board that `beryl_inspect::gate::rank` ranks highest, each into a target of
+//! `gate::TARGET`, and prints each frame's count and draw calls.
 //!
 //! `--recorded <name> --at <ms>` draws one frame of a recording, from the first seat in a 1920
 //! by 1080 window, both as the client built it (opaque records with a depth buffer, then the
 //! blended ones) and with every record of the table drawn blended from back to front with no
 //! depth writes. The doc's Baseline table compares the two.
 //!
-//! The output is one JSON object: `{"adapter", "boards": [...], "recorded": [...]}`.
+//! The output is one JSON object: `{"adapter", "tier", "boards": [...], "recorded": [...]}`.
 
 use std::process::ExitCode;
 
-use beryl_inspect::gate::{self, BOARDS, Moment};
+use beryl_inspect::gate::{self, BOARDS, Playback};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use beryl_render::{Limits, Renderer, Target};
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::Duration;
 use beryl_scene::frame::Frame;
-use beryl_scene::input::Size;
+use beryl_scene::input::{Size, Tier};
 use serde_json::{Value, json};
 
 /// The window a recording is drawn in for the doc's comparison, at one pixel per point.
@@ -32,30 +36,37 @@ const RECORDED_WINDOW: Size = Size {
     height: 1080.0,
 };
 
-/// Draws `frame` into `target` and returns how many fragments it shaded.
-fn count(renderer: &mut Renderer, frame: &Frame, target: &mut Target) -> u64 {
-    renderer.render(frame, target);
-    renderer
+/// Draws `frame` into `target` and returns how many fragments it shaded and how many draw
+/// calls it took.
+fn count(renderer: &mut Renderer, frame: &Frame, target: &mut Target) -> (u64, u32) {
+    let drawn = renderer.render(frame, target);
+    let fragments = renderer
         .fragments()
-        .expect("a counting renderer counts fragments")
+        .expect("a counting renderer counts fragments");
+    (fragments, drawn.draw_calls)
 }
 
-/// The ranked frames of the gated board `name` and their counts.
-fn board(renderer: &mut Renderer, name: &str) -> Option<Value> {
+/// The ranked frames of the gated board `name`, drawn in `tier`, and their counts.
+fn board(renderer: &mut Renderer, name: &str, tier: Tier) -> Option<Value> {
     let ranked = gate::rank(name)?;
     let [width, height] = gate::TARGET;
     let mut target = Target::offscreen(renderer, width, height);
     let mut frames = Vec::new();
-    gate::play(name, |moment: Moment, frame| {
+    let mut playback = Playback::new(name)?.with_tier(tier);
+    while let Some(moment) = playback.moment() {
+        playback.handle();
+        let frame = playback.frame();
         if ranked.contains(&moment.frame) {
+            let (fragments, draw_calls) = count(renderer, frame, &mut target);
             frames.push(json!({
                 "frame": moment.frame,
                 "ms": moment.now / 1_000_000,
                 "phase": moment.phase.name(),
-                "fragments": count(renderer, frame, &mut target),
+                "fragments": fragments,
+                "draw_calls": draw_calls,
             }));
         }
-    });
+    }
     Some(json!({
         "name": name,
         "pixels": u64::from(width) * u64::from(height),
@@ -78,7 +89,7 @@ fn all_blended(frame: &Frame) -> Frame {
     blended
 }
 
-/// One frame of the recording `name`, `at_ms` after its start, counted both ways.
+/// One frame of the recording `name`, `at_ms` after its start, counted both ways, in Baseline.
 fn recorded(renderer: &mut Renderer, name: &str, at_ms: u64) -> Result<Value, String> {
     let mut page = pages::page(name, Side::You, Layout::Desktop, RECORDED_WINDOW)?;
     page.step(Duration::from_millis(at_ms));
@@ -91,14 +102,23 @@ fn recorded(renderer: &mut Renderer, name: &str, at_ms: u64) -> Result<Value, St
         "pixels": u64::from(width) * u64::from(height),
         "records": frame.draws.len(),
         "opaque_records": frame.opaque,
-        "opaque_with_depth": count(renderer, &frame, &mut target),
-        "all_blended": count(renderer, &all_blended(&frame), &mut target),
+        "opaque_with_depth": count(renderer, &frame, &mut target).0,
+        "all_blended": count(renderer, &all_blended(&frame), &mut target).0,
     }))
+}
+
+/// `tier` as `--tier` names it.
+fn tier_name(tier: Tier) -> &'static str {
+    match tier {
+        Tier::Baseline => "baseline",
+        Tier::Enhanced => "enhanced",
+    }
 }
 
 fn usage() -> ExitCode {
     eprintln!(
-        "usage: fragments [--board <name>]... [--recorded <name> --at <ms>]...; \
+        "usage: fragments [--tier baseline|enhanced] [--board <name>]... \
+         [--recorded <name> --at <ms>]...; \
          the gated boards are {BOARDS:?}"
     );
     ExitCode::from(2)
@@ -107,10 +127,18 @@ fn usage() -> ExitCode {
 fn main() -> ExitCode {
     let mut boards = Vec::new();
     let mut recordings = Vec::new();
+    let mut tier = Tier::Baseline;
     let mut arguments = std::env::args().skip(1);
     while let Some(argument) = arguments.next() {
         match (argument.as_str(), arguments.next()) {
             ("--board", Some(name)) => boards.push(name),
+            ("--tier", Some(name)) => {
+                tier = match name.as_str() {
+                    "baseline" => Tier::Baseline,
+                    "enhanced" => Tier::Enhanced,
+                    _ => return usage(),
+                };
+            }
             ("--recorded", Some(name)) => {
                 let at = match (arguments.next().as_deref(), arguments.next()) {
                     (Some("--at"), Some(ms)) => ms.parse::<u64>().ok(),
@@ -134,9 +162,16 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if tier == Tier::Enhanced && !renderer.enhanced_available() {
+        eprintln!(
+            "fragments: the adapter {:?} cannot draw the Enhanced tier",
+            renderer.adapter()
+        );
+        return ExitCode::from(2);
+    }
     let mut counted = Vec::new();
     for name in &boards {
-        let Some(board) = board(&mut renderer, name) else {
+        let Some(board) = board(&mut renderer, name, tier) else {
             eprintln!("fragments: no gated board {name:?}; the boards are {BOARDS:?}");
             return ExitCode::from(2);
         };
@@ -156,6 +191,7 @@ fn main() -> ExitCode {
         "{}",
         json!({
             "adapter": renderer.counting_adapter(),
+            "tier": tier_name(tier),
             "boards": counted,
             "recorded": frames,
         })

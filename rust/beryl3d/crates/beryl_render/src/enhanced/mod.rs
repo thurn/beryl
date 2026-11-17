@@ -19,6 +19,7 @@ use std::num::NonZeroU64;
 
 use beryl_scene::frame::Frame;
 
+use crate::count::{self, FragmentCounter};
 use crate::draw::Draws;
 use crate::pipeline::{DEPTH, Shape, pipeline_set};
 use crate::runs::Pass;
@@ -180,6 +181,11 @@ impl Enhanced {
     /// Records the frame `draws` describes into `encoder`, ending in `view`, and returns how
     /// many draw calls every pass took. `layer` is the Baseline tier's pipelines, of which the
     /// flat layer's is used, and `layer_depth` a one-sample depth buffer the size of `view`.
+    /// `counter`, when present, counts the fragments every pass shades.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each is a separate input of the frame"
+    )]
     pub(crate) fn render(
         &mut self,
         device: &wgpu::Device,
@@ -188,8 +194,9 @@ impl Enhanced {
         view: &wgpu::TextureView,
         layer: &[wgpu::RenderPipeline; 3],
         layer_depth: &wgpu::TextureView,
+        counter: Option<&FragmentCounter>,
     ) -> u32 {
-        let mut draw_calls = self.shadow.draw(encoder, draws);
+        let mut draw_calls = self.shadow.draw(encoder, draws, counter);
         let targets = self.targets(device, draws.width, draws.height);
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -214,9 +221,11 @@ impl Enhanced {
                 return draw_calls;
             };
             pass.set_bind_group(1, group, &[]);
+            count::begin(counter, &mut pass);
             draw_calls += draws.record(&mut pass, &self.pipelines, |pass| pass != Pass::Layer);
+            count::end(counter, &mut pass);
         }
-        draw_calls += self.bloom.apply(device, encoder, draws, view);
+        draw_calls += self.bloom.apply(device, encoder, draws, view, counter);
         if draws.frame.layer < draws.kept {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("flat layer"),
@@ -234,7 +243,9 @@ impl Enhanced {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            count::begin(counter, &mut pass);
             draw_calls += draws.record(&mut pass, layer, |pass| pass == Pass::Layer);
+            count::end(counter, &mut pass);
         }
         draw_calls
     }

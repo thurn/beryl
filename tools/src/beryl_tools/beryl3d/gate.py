@@ -18,8 +18,13 @@ with `--update`, or the room it left would let a later change add the work back 
 hand, when the work itself changed or a compiler or dependency upgrade moved the count, with the
 old and new numbers in the commit body (rust/beryl3d/AGENTS.md).
 
+The gate also plays each board in the Enhanced tier. It holds the worst frame's particles to
+`tiers.enhanced.particles`, and fails on any Enhanced frame whose resolved elements number
+differently from the Baseline playback's at the same frame. The Enhanced boards have no work
+limits of their own: the client's work is the same in both tiers except for particles.
+
 `--gpu` counts the GPU's work instead, the shader cost and fragments under `materials` and
-`tiers.baseline` (gpu.py).
+`tiers.<tier>` (gpu.py).
 """
 
 from __future__ import annotations
@@ -86,6 +91,15 @@ class Board:
 
 
 @dataclass(frozen=True)
+class Tiered:
+    """A board played in the Enhanced tier: each frame's particles and resolved elements, by
+    frame."""
+
+    name: str
+    frames: list[Frame]
+
+
+@dataclass(frozen=True)
 class Measured:
     """A board's measurement of one limit: the number, and the frame it came from when it is
     one frame's."""
@@ -125,6 +139,67 @@ def parse(text: str) -> list[Board]:
             )
         )
     return boards
+
+
+def parse_enhanced(text: str) -> list[Tiered]:
+    """The Enhanced playbacks in the `gate` binary's output, named without their suffix."""
+    return [
+        Tiered(
+            name=str(board["name"]).removesuffix(" enhanced"),
+            frames=[
+                Frame(
+                    index=int(f["frame"]),
+                    ms=int(f["ms"]),
+                    phase=str(f["phase"]),
+                    counts={
+                        "particles": float(f["particles"]),
+                        "resolved": float(f["resolved"]),
+                    },
+                )
+                for f in board["frames"]
+            ],
+        )
+        for board in json.loads(text).get("enhanced", [])
+    ]
+
+
+def enhanced_failures(
+    boards: list[Board], enhanced: list[Tiered], particles: int | None
+) -> list[str]:
+    """One line for each board whose worst Enhanced frame has more than `particles`, and for
+    each Enhanced frame whose resolved elements differ in number from Baseline's at the same
+    frame."""
+    lines: list[str] = []
+    baseline = {board.name: board for board in boards}
+    for tiered in enhanced:
+        name = f"{tiered.name} enhanced"
+        if particles is None:
+            lines.append(f"{name}: no limit under tiers.enhanced.particles")
+        elif tiered.frames:
+            m = worst(tiered.frames, "particles")
+            assert m.frame
+            if m.value > particles:
+                lines.append(
+                    f"{name} {m.frame.moment()}: particles is {int(m.value)}, over its"
+                    f" limit {particles}"
+                )
+        board = baseline.get(tiered.name)
+        if board is None:
+            continue
+        if len(board.frames) != len(tiered.frames):
+            lines.append(
+                f"{name}: {len(tiered.frames)} frames, but Baseline played"
+                f" {len(board.frames)}"
+            )
+        for ours, theirs in zip(tiered.frames, board.frames):
+            mine, base = ours.counts["resolved"], theirs.counts.get("resolved")
+            if mine != base:
+                lines.append(
+                    f"{name} {ours.moment()}: {int(mine)} resolved elements, but Baseline"
+                    f" has {base if base is None else int(base)}"
+                )
+                break
+    return lines
 
 
 def worst(frames: list[Frame], count: str) -> Measured:
@@ -219,8 +294,9 @@ def summary(board: Board) -> str:
     return f"{board.name}: {len(board.frames)} frames; worst " + ", ".join(parts)
 
 
-def play(names: list[str]) -> list[Board]:
-    """Plays the boards called `names` (every gated board for none) with the `gate` binary."""
+def play(names: list[str]) -> tuple[list[Board], list[Tiered]]:
+    """Plays the boards called `names` (every gated board for none) with the `gate` binary, in
+    Baseline and in Enhanced."""
     from .cli import program, record  # cli imports this module.
 
     # The gated recorded boards are read from the pack, which only `record` builds. It builds
@@ -240,14 +316,14 @@ def play(names: list[str]) -> list[Board]:
     )
     if done.returncode != 0:
         raise SystemExit(done.returncode)
-    return parse(done.stdout)
+    return parse(done.stdout), parse_enhanced(done.stdout)
 
 
 def run_gate(args: argparse.Namespace) -> int:
     data = json.loads(GATES.read_text())
     if args.gpu:
         return gpu.run_gpu(list(args.board), args.update, data)
-    boards = play(list(args.board))
+    boards, enhanced = play(list(args.board))
     if args.counts:
         from . import counts  # It imports this module.
 
@@ -259,6 +335,15 @@ def run_gate(args: argparse.Namespace) -> int:
     for board in boards:
         print(summary(board))
     lines = failures(boards, data.get("frames", {}))
+    particles = data.get("tiers", {}).get("enhanced", {}).get("particles")
+    lines += enhanced_failures(boards, enhanced, particles)
+    for tiered in enhanced:
+        m = worst(tiered.frames, "particles")
+        assert m.frame
+        print(
+            f"{tiered.name} enhanced: worst particles {int(m.value)} at {m.frame.index}"
+            f" (limit {particles})"
+        )
     for line in lines:
         print(f"FAIL {line}", file=sys.stderr)
     return 1 if lines else 0

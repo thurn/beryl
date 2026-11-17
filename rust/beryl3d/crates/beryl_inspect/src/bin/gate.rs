@@ -8,6 +8,10 @@
 //! allocation inside a frame, if any, and the frames `rank` picks, among which the
 //! instruction-count gate expects the frame with the most instructions.
 //!
+//! It then plays each board again in the Enhanced tier and prints, under the board's name with
+//! an `enhanced` suffix (`stress-verbs enhanced`), each frame's particles and resolved elements,
+//! which the gate holds to the tier's particle limit and to the Baseline playback's count.
+//!
 //! Usage: `gate [--board <name>]...`, every board of `beryl_inspect::gate::BOARDS` when none is
 //! named.
 
@@ -18,6 +22,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 
 use beryl_inspect::gate::{BOARDS, Playback, rank};
+use beryl_scene::input::Tier;
 use serde_json::{Value, json};
 
 /// What the program is doing, so that the allocator knows which count an allocation joins.
@@ -119,6 +124,7 @@ fn measure(name: &str) -> Option<Value> {
             "upload_bytes": load.upload_bytes,
             "blended_area": frame.areas().blended,
             "frame_allocations": allocations,
+            "resolved": frame.resolved.len(),
         }));
     }
     let backtrace = FIRST
@@ -138,6 +144,25 @@ fn measure(name: &str) -> Option<Value> {
     }))
 }
 
+/// Plays the board called `name` in the Enhanced tier and returns each frame's particles and
+/// resolved elements. Its other work is the Baseline playback's, which the tier check holds.
+fn enhanced(name: &str) -> Option<Value> {
+    let mut playback = Playback::new(name)?.with_tier(Tier::Enhanced);
+    let mut frames = Vec::new();
+    while let Some(moment) = playback.moment() {
+        playback.handle();
+        let frame = playback.frame();
+        frames.push(json!({
+            "frame": moment.frame,
+            "ms": moment.now / 1_000_000,
+            "phase": moment.phase.name(),
+            "particles": frame.load.particles,
+            "resolved": frame.resolved.len(),
+        }));
+    }
+    Some(json!({ "name": format!("{name} enhanced"), "frames": frames }))
+}
+
 fn main() -> ExitCode {
     let mut names = Vec::new();
     let mut arguments = std::env::args().skip(1);
@@ -152,13 +177,15 @@ fn main() -> ExitCode {
         names = BOARDS.iter().map(|name| (*name).to_owned()).collect();
     }
     let mut boards = Vec::new();
+    let mut tiered = Vec::new();
     for name in &names {
-        let Some(board) = measure(name) else {
+        let (Some(board), Some(enhanced)) = (measure(name), enhanced(name)) else {
             eprintln!("gate: no gated board {name:?}; the boards are {BOARDS:?}");
             return ExitCode::from(2);
         };
         boards.push(board);
+        tiered.push(enhanced);
     }
-    println!("{}", json!({ "boards": boards }));
+    println!("{}", json!({ "boards": boards, "enhanced": tiered }));
     ExitCode::SUCCESS
 }

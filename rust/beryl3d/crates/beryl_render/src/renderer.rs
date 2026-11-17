@@ -11,7 +11,7 @@ use beryl_scene::input::{AssetReady, FaceSize, Tier};
 use wgpu::util::DeviceExt;
 
 use crate::atlas::Atlas;
-use crate::count::FragmentCounter;
+use crate::count::{self, FragmentCounter};
 use crate::draw::Draws;
 use crate::enhanced::{Enhanced, LIT_OFFSET, Lit};
 use crate::faces::{
@@ -411,6 +411,7 @@ impl Renderer {
                 view,
                 &self.pipelines,
                 &depth,
+                self.counter.as_ref(),
             ),
             _ => baseline_pass(
                 &mut encoder,
@@ -421,6 +422,9 @@ impl Renderer {
                 self.counter.as_ref(),
             ),
         };
+        if let Some(counter) = &self.counter {
+            counter.resolve(&mut encoder);
+        }
         let submission = self.queue.submit([encoder.finish()]);
         self.slots.submitted(submission);
         Drawn { draw_calls }
@@ -454,8 +458,7 @@ impl Renderer {
 
 /// Records the Baseline tier's one pass over every record of `draws` into `encoder`, drawing
 /// into `view` with the one-sample `depth` buffer, and returns how many draw calls it took.
-/// `counter`, when present, counts the fragments the pass shades. The Enhanced tier's passes
-/// are not counted.
+/// `counter`, when present, counts the fragments the pass shades.
 fn baseline_pass(
     encoder: &mut wgpu::CommandEncoder,
     draws: &Draws,
@@ -487,15 +490,9 @@ fn baseline_pass(
         occlusion_query_set: None,
         multiview_mask: None,
     });
-    if let Some(counter) = counter {
-        pass.begin_pipeline_statistics_query(&counter.set, 0);
-    }
+    count::begin(counter, &mut pass);
     let draw_calls = draws.record(&mut pass, pipelines, |_| true);
-    if let Some(counter) = counter {
-        pass.end_pipeline_statistics_query();
-        drop(pass);
-        counter.resolve(encoder);
-    }
+    count::end(counter, &mut pass);
     draw_calls
 }
 

@@ -185,6 +185,19 @@
         "stress-hand": 1.00132,
         "stress-stack": 1.099233
       }
+    },
+    "enhanced": {
+      "draw_calls": 32,
+      "particles": 2000,
+      "fragments": {
+        "stress-255": 1.066617,
+        "stress-1024": 1.067242,
+        "stress-verbs": 2.825461,
+        "stress-hand": 1.035435,
+        "stress-stack": 2.68818,
+        "verbs-zones": 2.537795,
+        "pay-default": 2.529013
+      }
     }
   },
   "materials": {

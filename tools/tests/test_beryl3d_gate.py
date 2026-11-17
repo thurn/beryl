@@ -5,8 +5,15 @@ import json
 from beryl_tools.beryl3d import gate
 
 
-def output(records: list[int], allocation: int | None = None) -> str:
-    """The `gate` binary's output for one board whose frames write `records`."""
+def output(
+    records: list[int],
+    allocation: int | None = None,
+    particles: list[int] | None = None,
+    resolved: list[int] | None = None,
+) -> str:
+    """The `gate` binary's output for one board whose frames write `records`, and whose
+    Enhanced playback's frames have `particles` and `resolved` elements (none and 10 each by
+    default)."""
     frames = [
         {
             "frame": i,
@@ -24,9 +31,23 @@ def output(records: list[int], allocation: int | None = None) -> str:
             "upload_bytes": 80 * n,
             "blended_area": 0.123401,
             "frame_allocations": 0,
+            "resolved": 10,
         }
         for i, n in enumerate(records)
     ]
+    enhanced = {
+        "name": "stress-255 enhanced",
+        "frames": [
+            {
+                "frame": i,
+                "ms": i * 16,
+                "phase": "rest" if i == 0 else "flight",
+                "particles": (particles or [0] * len(records))[i],
+                "resolved": (resolved or [10] * len(records))[i],
+            }
+            for i in range(len(records))
+        ],
+    }
     first = None
     if allocation is not None:
         frames[allocation]["frame_allocations"] = 2
@@ -37,7 +58,7 @@ def output(records: list[int], allocation: int | None = None) -> str:
         "frames": frames,
         "first_frame_allocation": first,
     }
-    return json.dumps({"boards": [board]})
+    return json.dumps({"boards": [board], "enhanced": [enhanced]})
 
 
 def test_update_sets_missing_limits_from_the_measurement() -> None:
@@ -93,3 +114,33 @@ def test_a_count_under_its_limit_fails_until_the_limit_is_lowered() -> None:
         " `just b3d gate --update` lowers it"
     ]
     assert gate.failures(boards, gate.lowered(boards, limits)) == []
+
+
+def enhanced_failures(text: str, particles: int | None = 2000) -> list[str]:
+    return gate.enhanced_failures(
+        gate.parse(text), gate.parse_enhanced(text), particles
+    )
+
+
+def test_the_enhanced_tier_within_its_limits_passes() -> None:
+    assert enhanced_failures(output([3, 5], particles=[0, 2000])) == []
+
+
+def test_an_enhanced_frame_over_the_particle_limit_fails() -> None:
+    assert enhanced_failures(output([3, 5, 4], particles=[0, 2001, 1500])) == [
+        "stress-255 enhanced frame 1 (16 ms, flight): particles is 2001, over its"
+        " limit 2000"
+    ]
+
+
+def test_an_enhanced_frame_with_other_resolved_elements_fails() -> None:
+    [line] = enhanced_failures(output([3, 5], resolved=[10, 11]))
+    assert line == (
+        "stress-255 enhanced frame 1 (16 ms, flight): 11 resolved elements, but"
+        " Baseline has 10"
+    )
+
+
+def test_no_particle_limit_fails() -> None:
+    [line] = enhanced_failures(output([3]), particles=None)
+    assert "no limit under tiers.enhanced.particles" in line

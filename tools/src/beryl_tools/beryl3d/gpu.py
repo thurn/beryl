@@ -6,13 +6,17 @@ limits in `data/beryl3d/gates.json`:
   expressions (`expressions`) of each material's `shade_` function in beryl_render's shader,
   with the fragment entry point's added. The `shader_cost` test of beryl_render counts them and
   holds them to the limits, and runs on any machine, also in the lane's `cargo-test` step.
-- **Fragments shaded**, under `tiers.baseline.fragments.<board>`: the most fragments any of a
-  gated board's 8 ranked frames shades, in screens (fragments divided by the target's pixels).
-  beryl_render's `fragments` example draws the frames in the `beryl3d-bench` virtual machine on
-  Mesa's software Vulkan driver and reads the driver's count with a pipeline statistics query.
-  It is exact, so the gate draws every frame twice and fails if the two counts differ. During
-  the build-out (build_out.py) a board over its limit is a warning, and only a board over
-  [`TARGET_SCREENS`] fails.
+- **Fragments shaded**, under `tiers.<tier>.fragments.<board>` for the Baseline and Enhanced
+  tiers: the most fragments any of a gated board's 8 ranked frames shades in that tier, in
+  screens (fragments divided by the target's pixels), summed over every render pass of the
+  frame. beryl_render's `fragments` example draws the frames in the `beryl3d-bench` virtual
+  machine on Mesa's software Vulkan driver and reads the driver's count with pipeline
+  statistics queries. It is exact, so the gate draws every frame twice and fails if the two
+  counts differ. During the build-out (build_out.py) a board over its own limit but within
+  its tier's target ([`TARGETS`]) is a warning. In Enhanced a board over the target always
+  fails ([`HARD_TARGETS`]).
+- **Draw calls in Enhanced**, under `tiers.enhanced.draw_calls`: the most draw calls any ranked
+  frame of any board may take in the Enhanced tier, over all of its passes.
 
 `--update` lowers each limit to what was measured and sets a missing one; it never raises one.
 """
@@ -32,8 +36,13 @@ from .. import bench
 from .. import paths as repo_paths
 from . import build_out, paths, source, vm
 
-# The Baseline tier's target: no gated frame shades more than this many screens.
-TARGET_SCREENS = 1.75
+# Each tier's target: no gated frame shades more than this many screens in that tier.
+TARGETS: dict[str, float] = {"baseline": 1.75, "enhanced": 4.0}
+TIERS: tuple[str, ...] = tuple(TARGETS)
+# The tiers whose per-board limits must stay under the target, so that a board over it fails
+# whatever its limit. Baseline's limits were set before the target was held this way, and its
+# target only decides which boards fail during the build-out.
+HARD_TARGETS: frozenset[str] = frozenset({"enhanced"})
 # Fragments in screens, kept to this many places and rounded up. On a 2880 by 1800 target one
 # millionth of a screen is 5 fragments.
 SCREEN_PLACES = 6
@@ -51,6 +60,7 @@ class Counted:
     ms: int
     phase: str
     fragments: int
+    draw_calls: int = 0
 
 
 @dataclass(frozen=True)
@@ -84,6 +94,7 @@ def parse_boards(text: str) -> list[BoardCount]:
                     ms=int(f["ms"]),
                     phase=str(f["phase"]),
                     fragments=int(f["fragments"]),
+                    draw_calls=int(f.get("draw_calls", 0)),
                 )
                 for f in b["frames"]
             ],
@@ -104,33 +115,56 @@ def parse_materials(text: str) -> dict[str, dict[str, int]]:
 
 
 def fragment_failures(
-    boards: list[BoardCount], limits: dict[str, float], *, warn_within_target: bool
+    boards: list[BoardCount],
+    limits: dict[str, float],
+    *,
+    warn_within_target: bool,
+    tier: str = "baseline",
 ) -> tuple[list[str], list[str]]:
-    """The failures and the warnings for each board's fragments. A board over its limit fails,
-    or with `warn_within_target` (the build-out) is only a warning unless it is over
-    [`TARGET_SCREENS`] too."""
+    """The failures and the warnings for each board's fragments in `tier`. A board over its
+    limit fails, or with `warn_within_target` (the build-out) is only a warning unless it is
+    over the tier's target too. A board over the target fails whatever its limit."""
+    target = TARGETS[tier]
     failed: list[str] = []
     warned: list[str] = []
     for board in boards:
         worst = board.worst()
         shown = board.screens()
         where = f"{board.name} frame {worst.frame} ({worst.ms} ms, {worst.phase})"
+        if tier != "baseline":
+            where = f"{where} in {tier}"
         limit = limits.get(board.name)
+        line = f"{where}: fragments is {shown} screens ({worst.fragments})"
         if limit is None:
             failed.append(
                 f"{where}: fragments is {shown} screens with no limit under"
-                f" tiers.baseline.fragments; `just b3d gate --gpu --update` sets it"
+                f" tiers.{tier}.fragments; `just b3d gate --gpu --update` sets it"
             )
-        elif shown > limit:
-            line = (
-                f"{where}: fragments is {shown} screens ({worst.fragments}), over its limit"
-                f" {limit}"
-            )
-            if warn_within_target and shown <= TARGET_SCREENS:
-                warned.append(f"{line}, within the target {TARGET_SCREENS}")
+        elif shown > limit or (shown > target and tier in HARD_TARGETS):
+            over = [f"over its limit {limit}"] if shown > limit else []
+            over += [f"over the target {target}"] if shown > target else []
+            line = f"{line}, {' and '.join(over)}"
+            if warn_within_target and shown <= target:
+                warned.append(f"{line}, within the target {target}")
             else:
                 failed.append(line)
     return failed, warned
+
+
+def draw_call_failures(boards: list[BoardCount], limit: int | None) -> list[str]:
+    """One line for each board with a ranked frame that takes more than `limit` draw calls
+    in the Enhanced tier."""
+    if limit is None:
+        return ["no limit under tiers.enhanced.draw_calls"]
+    lines: list[str] = []
+    for board in boards:
+        worst = max(board.frames, key=lambda f: (f.draw_calls, -f.frame))
+        if worst.draw_calls > limit:
+            lines.append(
+                f"{board.name} frame {worst.frame} ({worst.ms} ms, {worst.phase}) in"
+                f" enhanced: {worst.draw_calls} draw calls, over the limit {limit}"
+            )
+    return lines
 
 
 def lowered_fragments(
@@ -189,23 +223,25 @@ def shader_cost() -> tuple[int, str]:
 
 def fragments_script(names: list[str]) -> str:
     """The script that takes in the sources (`source.py`), builds the `fragments` example from
-    the machine's copy and runs it twice, reading the recordings pack that `source.send_pack` put in
+    the machine's copy and runs it twice in each tier, reading the recordings pack that `source.send_pack` put in
     the machine (building it there would compile the engine, which exceeds 4 GiB). It holds the machine's lock so that it takes turns with the frame counts
     (counts.py), since two builds at once could exceed the machine's memory."""
     boards = " ".join(f"--board {shlex.quote(n)}" for n in names)
+    runs = "".join(
+        f'"$CARGO_TARGET_DIR/debug/examples/fragments" --tier {tier} {boards}\n' * 2
+        for tier in TIERS
+    )
     return bench.locked(f""". "$HOME/.cargo/env"
 set -e
 {source.take_in_script()}cd {source.SOURCE}/rust/beryl3d
 export CARGO_TARGET_DIR="{VM_TARGET}" BERYL_CACHE="$HOME/{source.VM_CACHE}"
 {vm.JOBS_SCRIPT}cargo build --locked -q -p beryl_render --example fragments
-"$CARGO_TARGET_DIR/debug/examples/fragments" {boards}
-"$CARGO_TARGET_DIR/debug/examples/fragments" {boards}
-""")
+{runs}""")
 
 
-def count_fragments(names: list[str]) -> list[BoardCount]:
-    """Each named board's (every gated board's for none) ranked frames counted in the machine. Fails unless both runs printed
-    the same counts."""
+def count_fragments(names: list[str]) -> dict[str, list[BoardCount]]:
+    """Each named board's (every gated board's for none) ranked frames counted in the machine,
+    by tier. Fails unless both runs of a tier printed the same counts."""
     code = vm.ensure()
     if code != 0:
         raise SystemExit(code)
@@ -217,20 +253,35 @@ def count_fragments(names: list[str]) -> list[BoardCount]:
     if done.returncode != 0:
         raise SystemExit(done.returncode)
     runs = [line for line in done.stdout.splitlines() if line.startswith("{")]
-    if len(runs) != 2:
-        print(f"FAIL the fragments example printed {len(runs)} results, not 2")
-        raise SystemExit(1)
-    first, second = (parse_boards(run) for run in runs)
-    if first != second:
-        print(
-            "FAIL the fragment counts differ between two runs:\n"
-            f"{runs[0]}\n{runs[1]}",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
+    return compare_runs(runs)
+
+
+def compare_runs(runs: list[str]) -> dict[str, list[BoardCount]]:
+    """The counts by tier in the `fragments` example's outputs `runs`, two for each tier.
+    Fails unless each tier's two runs printed the same counts."""
+    by_tier: dict[str, list[str]] = {}
+    for run in runs:
+        by_tier.setdefault(str(json.loads(run)["tier"]), []).append(run)
+    counted: dict[str, list[BoardCount]] = {}
+    for tier in TIERS:
+        found = by_tier.get(tier, [])
+        if len(found) != 2:
+            print(
+                f"FAIL the fragments example printed {len(found)} {tier} results, not 2"
+            )
+            raise SystemExit(1)
+        first, second = (parse_boards(run) for run in found)
+        if first != second:
+            print(
+                f"FAIL the {tier} fragment counts differ between two runs:\n"
+                f"{found[0]}\n{found[1]}",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        counted[tier] = first
     adapter = json.loads(runs[0])["adapter"]
-    print(f"fragments counted on {adapter}, the same on two runs")
-    return first
+    print(f"fragments counted on {adapter}, the same on two runs in each tier")
+    return counted
 
 
 def run_gpu(names: list[str], update: bool, gates: dict[str, Any]) -> int:
@@ -250,24 +301,31 @@ def run_gpu(names: list[str], update: bool, gates: dict[str, Any]) -> int:
     if code != 0:
         lines.append(f"beryl_render's shader_cost test failed:\n{output}")
 
-    boards = count_fragments(names)
-    baseline = gates.setdefault("tiers", {}).setdefault("baseline", {})
-    if update:
-        baseline["fragments"] = lowered_fragments(boards, baseline.get("fragments", {}))
-        write(gates)
-    for board in boards:
-        worst = board.worst()
-        print(
-            f"{board.name}: worst of {len(board.frames)} ranked frames is frame"
-            f" {worst.frame}, {worst.fragments} fragments, {board.screens()} screens"
-            f" (target {TARGET_SCREENS})"
+    tiers = gates.setdefault("tiers", {})
+    for tier, boards in count_fragments(names).items():
+        held = tiers.setdefault(tier, {})
+        if update:
+            held["fragments"] = lowered_fragments(boards, held.get("fragments", {}))
+            write(gates)
+        for board in boards:
+            worst = board.worst()
+            calls = max(f.draw_calls for f in board.frames)
+            print(
+                f"{board.name} {tier}: worst of {len(board.frames)} ranked frames is"
+                f" frame {worst.frame}, {worst.fragments} fragments, {board.screens()}"
+                f" screens (target {TARGETS[tier]}); at most {calls} draw calls"
+            )
+        failed, warned = fragment_failures(
+            boards,
+            held.get("fragments", {}),
+            warn_within_target=build_out.BUILD_OUT,
+            tier=tier,
         )
-    failed, warned = fragment_failures(
-        boards, baseline.get("fragments", {}), warn_within_target=build_out.BUILD_OUT
-    )
-    lines += failed
-    for line in warned:
-        print(f"WARN {line}")
+        lines += failed
+        if tier == "enhanced":
+            lines += draw_call_failures(boards, held.get("draw_calls"))
+        for line in warned:
+            print(f"WARN {line}")
     for line in lines:
         print(f"FAIL {line}", file=sys.stderr)
     return 1 if lines else 0

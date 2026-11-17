@@ -14,6 +14,7 @@ use beryl_scene::data::space::enhanced::bloom::{SCALE, SIGMA, STRENGTH, TAPS};
 use beryl_scene::frame::Band;
 use wgpu::util::DeviceExt;
 
+use crate::count::{self, FragmentCounter};
 use crate::draw::Draws;
 use crate::pipeline::VERTEX_BUFFERS;
 use crate::runs::Pass;
@@ -187,13 +188,14 @@ impl Bloom {
     /// Records bloom for the frame `draws` describes into `encoder`, over the resolved picture
     /// in `view`, and returns how many draw calls it took: none, recording nothing, when the
     /// frame has no glows; otherwise the glows' runs and one call for each of the blur across,
-    /// the blur down and the composite.
+    /// the blur down and the composite. `counter`, when present, counts each pass's fragments.
     pub(crate) fn apply(
         &mut self,
         device: &wgpu::Device,
         encoder: &mut wgpu::CommandEncoder,
         draws: &Draws,
         view: &wgpu::TextureView,
+        counter: Option<&FragmentCounter>,
     ) -> u32 {
         let bands = &draws.frame.bands;
         let glows = bands[Band::Glows as usize]..bands[Band::Glows as usize + 1].min(draws.kept);
@@ -206,12 +208,15 @@ impl Bloom {
         };
         let mut draw_calls = {
             let mut pass = begin(encoder, "bloom glows", &targets.first, true);
-            draws.record_part(
+            count::begin(counter, &mut pass);
+            let calls = draws.record_part(
                 &mut pass,
                 glows,
                 |pass| (pass == Pass::Table).then_some(&self.glows),
                 targets.size,
-            )
+            );
+            count::end(counter, &mut pass);
+            calls
         };
         let steps = [
             ("bloom across", &targets.second, &targets.across, &self.blur),
@@ -224,7 +229,9 @@ impl Bloom {
             let mut pass = begin(encoder, label, into, clear);
             pass.set_pipeline(pipeline);
             pass.set_bind_group(0, reads, &[]);
+            count::begin(counter, &mut pass);
             pass.draw(0..3, 0..1);
+            count::end(counter, &mut pass);
             draw_calls += 1;
         }
         draw_calls

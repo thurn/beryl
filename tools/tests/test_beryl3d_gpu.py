@@ -75,3 +75,64 @@ def test_material_counts_are_read_from_the_test_output() -> None:
         measured, {"card": {"expressions": 60, "samples": 2}}
     )
     assert lowered == {"card": {"expressions": 60, "samples": 1}}
+
+
+def tiered(counts: list[int], tier: str, draw_calls: int = 20) -> str:
+    """The `fragments` example's output in `tier` for one board whose ranked frames shade
+    `counts` of 1000 pixels, each taking `draw_calls` draw calls."""
+    text = json.loads(output(counts))
+    text["tier"] = tier
+    for frame in text["boards"][0]["frames"]:
+        frame["draw_calls"] = draw_calls
+    return json.dumps(text)
+
+
+def test_an_enhanced_board_over_its_limit_fails() -> None:
+    boards = gpu.parse_boards(tiered([1000, 2500], "enhanced"))
+    [line], _ = gpu.fragment_failures(
+        boards, {"stress-255": 2.4}, warn_within_target=False, tier="enhanced"
+    )
+    assert line.startswith("stress-255 frame 31 (516 ms, flight) in enhanced:")
+    assert "2.5 screens (2500), over its limit 2.4" in line
+    assert gpu.fragment_failures(
+        boards, {"stress-255": 2.5}, warn_within_target=False, tier="enhanced"
+    ) == ([], [])
+
+
+def test_an_enhanced_board_over_the_target_fails_even_in_the_build_out() -> None:
+    boards = gpu.parse_boards(tiered([4100], "enhanced"))
+    [line], warned = gpu.fragment_failures(
+        boards, {"stress-255": 4.5}, warn_within_target=True, tier="enhanced"
+    )
+    assert "over the target 4.0" in line
+    assert warned == []
+    [line], _ = gpu.fragment_failures(
+        boards, {}, warn_within_target=True, tier="enhanced"
+    )
+    assert "no limit under tiers.enhanced.fragments" in line
+
+
+def test_an_enhanced_frame_over_32_draw_calls_fails() -> None:
+    assert (
+        gpu.draw_call_failures(gpu.parse_boards(tiered([1000], "enhanced", 32)), 32)
+        == []
+    )
+    [line] = gpu.draw_call_failures(
+        gpu.parse_boards(tiered([1000], "enhanced", 33)), 32
+    )
+    assert line == (
+        "stress-255 frame 30 (500 ms, flight) in enhanced: 33 draw calls, over the limit 32"
+    )
+
+
+def test_each_tier_is_read_from_its_two_runs() -> None:
+    runs = [tiered([1000], "baseline"), tiered([2000], "enhanced")] * 2
+    counted = gpu.compare_runs(runs)
+    assert [b.worst().fragments for b in counted["baseline"]] == [1000]
+    assert [b.worst().fragments for b in counted["enhanced"]] == [2000]
+    assert gpu.lowered_fragments(counted["enhanced"], {"stress-255": 2.5}) == {
+        "stress-255": 2.0
+    }
+    assert gpu.lowered_fragments(counted["enhanced"], {"stress-255": 1.5}) == {
+        "stress-255": 1.5
+    }

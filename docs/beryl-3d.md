@@ -2201,6 +2201,47 @@ draw every gated fixture in it on a device with full limits:
 }
 ```
 
+How the gates hold them:
+
+- **Fragments.** `just b3d gate --gpu` draws each gated board's 8 ranked frames
+  in both tiers and counts the fragments of every render pass of a frame, one
+  pipeline statistics query per pass, summed. An Enhanced frame has up to seven
+  passes: the shadow map's (depth only, so it shades none), the multisampled
+  main pass, bloom's four and the flat layer's. The four-sample main pass shades
+  a pixel once unless a triangle's edge crosses it, and the count is what the
+  driver reports, not divided by the samples. Each board's worst frame is held
+  to its own measured limit under `tiers.enhanced.fragments.<board>`, which only
+  goes down, and a board over the 4.0-screen target fails whatever its limit.
+- **Draw calls.** The same run fails on any ranked frame that takes more than
+  `tiers.enhanced.draw_calls` calls over all its passes.
+- **Particles.** `just b3d gate` plays every board in Enhanced too, and fails on
+  a frame with more than `tiers.enhanced.particles` particles, or with a
+  different number of resolved elements from the Baseline playback's frame. The
+  Enhanced boards have no work limits of their own under `frames`: the client's
+  work is the same in both tiers except for particles.
+
+Measured on 2026-11-16 by `just b3d gate --gpu` (llvmpipe, LLVM 21.1.8, in
+`beryl3d-bench`, the same on two runs) and `just b3d gate`, the most in any of a
+board's 8 ranked frames, in screens of 2880 by 1800. Particles are the most in
+any frame of the board's playback.
+
+| Board          | Baseline fragments | Enhanced fragments | Enhanced draw calls | Particles |
+| -------------- | -----------------: | -----------------: | ------------------: | --------: |
+| `stress-255`   |              1.038 |              1.067 |                   4 |         0 |
+| `stress-1024`  |              1.038 |              1.067 |                   4 |         0 |
+| `stress-verbs` |              1.316 |              2.825 |                  23 |       513 |
+| `stress-hand`  |              1.017 |              1.035 |                   3 |         0 |
+| `stress-stack` |              1.111 |              2.688 |                   8 |         0 |
+| `verbs-zones`  |              1.012 |              2.538 |                  10 |       127 |
+| `pay-default`  |              1.044 |              2.529 |                  10 |         0 |
+| Target         |               1.75 |                4.0 |                  32 |     2,000 |
+
+A board with glows or streaks costs about 1.5 screens more in Enhanced than in
+Baseline, nearly all of it bloom's: its blur and composite passes each shade
+every pixel of a half-size or full-size target. The stress boards with no glows
+record no bloom passes, so their Enhanced cost is the Baseline cost and the
+multisampled edges.
+
 ### Choosing a tier
 
 The tier is chosen once at startup, can only go down during play, and can be
@@ -3367,11 +3408,13 @@ the fragments the depth buffer rejects, and the gate reads it from the driver.
 beryl_render's `shader_cost` test counts each material and holds it to
 `materials.<name>` in `data/beryl3d/gates.json`; it needs no GPU, so the lane's
 tests run it too. beryl_render's `fragments` example draws the 8 frames of each
-gated board that `rank` picks in the virtual machine, twice, and the gate fails
-if the two counts differ or the worst frame's count, in screens, is over
-`tiers.baseline.fragments.<board>` (during the build-out, only over the target
-of 1.75 screens; see "During the build-out"). Only Vulkan and DirectX 12 offer
-the pipeline statistics query in `wgpu`, so the count cannot be taken on Metal.
+gated board that `rank` picks in the virtual machine, twice in each tier, and
+the gate fails if the two counts differ or the worst frame's count, in screens,
+is over `tiers.<tier>.fragments.<board>` (during the build-out, only over the
+tier's target, 1.75 screens for Baseline and 4.0 for Enhanced; see "During the
+build-out" and "The Enhanced tier"). A frame's count is the sum over its render
+passes, one query each. Only Vulkan and DirectX 12 offer the pipeline statistics
+query in `wgpu`, so the count cannot be taken on Metal.
 
 ### What it is held to
 
