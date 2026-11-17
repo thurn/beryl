@@ -29,7 +29,8 @@ On an Apple silicon Mac:
 
 Beryl uses Enact's `tk` ticket client. The repository configures the production
 project in `.enact.toml`. Use `enact backend` for the managed executable path
-and the [ticket dashboard](https://tickets.thurn.workers.dev/by/) for browsing.
+and the [ticket dashboard](https://tickets.thurn.workers.dev/beryl) for
+browsing.
 
 Run the setup recipes one at a time: each installs with Homebrew, which takes a
 lock.
