@@ -269,16 +269,28 @@ fn the_frame_limits_name_what_is_over_them() {
     assert!(limits.over(&outcomes[..1], true).is_empty());
 }
 
-/// The verdict the run log gets for `name` when `b3d test` runs it against an allowance of
-/// `allowed` `rule` faults (none when `allowed` is `None`), and the exit status.
+/// The verdict the run log gets for `name` when `b3d test` runs it against its entry in the
+/// list of allowed faults with `allowed` `rule` faults besides (none when `allowed` is `None`),
+/// and the exit status.
 fn logged_verdict(name: &str, rule: &str, allowed: Option<usize>, label: &str) -> (String, i32) {
     let dir = std::env::temp_dir().join(format!("beryl-results-{}-{label}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("a directory");
     let list = dir.join("test-faults.json");
-    let tests = allowed.map_or_else(
-        || serde_json::json!({}),
-        |n| serde_json::json!({ name: { rule: n } }),
+    let listed = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../data/beryl3d/test-faults.json"
     );
+    let listed: Value =
+        serde_json::from_str(&std::fs::read_to_string(listed).expect("the list of allowed faults"))
+            .expect("JSON");
+    let mut entry = listed["tests"][name].clone();
+    if !entry.is_object() {
+        entry = serde_json::json!({});
+    }
+    if let Some(n) = allowed {
+        entry[rule] = n.into();
+    }
+    let tests = serde_json::json!({ name: entry });
     std::fs::write(&list, serde_json::json!({ "tests": tests }).to_string()).expect("a list");
     let results = dir.join("results.jsonl");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_b3d"))
@@ -305,8 +317,9 @@ fn logged_verdict(name: &str, rule: &str, allowed: Option<usize>, label: &str) -
 }
 
 /// The run log's verdict is the one the exit status gives: a test whose faults match their
-/// allowance passes, and a stale count fails it. Every interface test is free of faults today,
-/// so this runs one with none; `faults.rs` covers the new and excess counts on made-up outcomes.
+/// allowance passes, and a stale count fails it. The allowance starts from the test's entry in
+/// the list of allowed faults, so a fault listed there today does not decide the verdict;
+/// `faults.rs` covers the new and excess counts on made-up outcomes.
 #[test]
 fn the_run_log_agrees_with_the_allowance_comparison() {
     let name = "b3d:verbs-piles/you/1440x900";
