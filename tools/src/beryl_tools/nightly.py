@@ -9,7 +9,8 @@ on the gated fixtures held to its counts (`by ui-counts --gate`) and
 every card scenario in the oracles (`by oracle`, which slow CI plays only some of). It costs no
 agent tokens and needs no session open. Its record is this machine's,
 in `$BERYL_CACHE/nightly`: `log.jsonl` (one line per attempt, skipped or not) and
-`last-output.txt` (the last run's output). A check a step fails on origin/staging also goes to
+`last-output.txt` (the last run's output), and in `failures/` each failed step's whole output
+for two weeks. A check a step fails on origin/staging also goes to
 a Steward bead (nightly_failures.py), so it reaches someone. More nightly work joins as another
 [`Step`] in [`STEPS`].
 
@@ -338,13 +339,26 @@ def measure(
     # The run log's records carry the wall clock, whatever `stamp` says.
     since = datetime.now(timezone.utc).replace(microsecond=0)
     output = folder() / "last-output.txt"
+    # Where each step's output starts and ends in `output`, in bytes.
+    spans: dict[str, tuple[int, int]] = {}
     with open(output, "w") as out:
         for step in steps:
             out.write(f"== {step.name} on {commit}\n")
             out.flush()
+            start = output.stat().st_size
             codes[step.name] = step.run(commit, out)
+            out.flush()
+            # A step's subprocesses wrote through the shared descriptor; carry on after them.
+            out.seek(0, os.SEEK_END)
+            spans[step.name] = (start, output.stat().st_size)
     if any(codes.values()):
-        file_failures(commit, since, output.read_text(errors="replace"))
+        whole = output.read_bytes()
+        by_step = {
+            name: whole[a:b].decode(errors="replace")
+            for name, (a, b) in spans.items()
+            if codes[name]
+        }
+        file_failures(commit, since, whole.decode(errors="replace"), by_step)
     return {
         "time": stamp,
         "commit": commit,
@@ -362,14 +376,30 @@ def last_passed_commit(records: list[dict[str, object]]) -> str:
     return ""
 
 
-def file_failures(commit: str, since: datetime, output: str) -> None:
+def file_failures(
+    commit: str, since: datetime, output: str, by_step: dict[str, str]
+) -> None:
     """Files the checks the night's steps failed in beads (nightly_failures.py), printing a
-    line for each bead touched."""
-    from . import nightly_failures  # It imports runlog, which imports this module.
+    line for each bead touched. `by_step` holds each failed step's own output: each is kept
+    whole in a file of its own (`flaky.keep`), since the next firing overwrites
+    `last-output.txt`, and a lane's bead quotes the tail of its step's output, not of the
+    night's, which ends with whatever step ran last."""
+    from . import (
+        flaky,
+        nightly_failures,
+    )  # They import runlog, which imports this module.
 
+    kept: dict[str, str] = {}
+    for name, text in by_step.items():
+        path = flaky.keep(f"{name}-{commit[:12]}", text, folder() / "failures")
+        if path is not None:
+            kept[name] = str(path)
+            print(f"nightly: kept {name}'s output in {path}", file=sys.stderr)
     failed = nightly_failures.failed_checks(commit, since)
     passed = last_passed_commit(read_log())
-    for line in nightly_failures.file(commit, failed, output, passed):
+    for line in nightly_failures.file(
+        commit, failed, output, passed, by_lane=by_step, kept=kept
+    ):
         print(line, file=sys.stderr)
 
 

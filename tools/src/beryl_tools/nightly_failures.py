@@ -21,7 +21,7 @@ from __future__ import annotations
 import os
 import shlex
 import socket
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 
 from . import runlog, verdicts
@@ -99,17 +99,23 @@ def open_beads(store: verdicts.Beads, label: str = LABEL) -> dict[str, set[str]]
     return found
 
 
-def body(commit: str, lane: str, checks: list[str], passed: str, output: str) -> str:
+def body(
+    commit: str, lane: str, checks: list[str], passed: str, output: str, kept: str = ""
+) -> str:
+    """The bead's text. `output` is the lane's own step output when the caller has it; `kept`
+    names the file that holds the whole of it."""
     since = (
         f" The last nightly that passed every step was at {passed}." if passed else ""
     )
     listed = "\n".join(f"- `{c}`" for c in checks)
+    whole = f" The whole output of the {lane} step is in `{kept}`." if kept else ""
     return (
         f"The nightly (`by nightly`, tools/src/beryl_tools/nightly.py) failed {len(checks)} "
         f"{lane} check(s) on origin/staging at {commit}.{since}\n\n{listed}\n\n"
         f"Replay them on that commit with `{reproduce(lane, checks)}`; the run log "
-        f"(`by ci-report`) has every record. Slow CI does not run these: `just ci` passing "
-        f"proves nothing here.{verdicts.SKILL_NOTE}\n\nOutput tail:\n```\n{tail(output)}\n```"
+        f"(`by ci-report`) has every record.{whole} Slow CI does not run these: `just ci` "
+        f"passing proves nothing here.{verdicts.SKILL_NOTE}\n\n"
+        f"Output tail:\n```\n{tail(output)}\n```"
     )
 
 
@@ -119,19 +125,25 @@ def file(
     output: str,
     passed: str = "",
     store: verdicts.Beads | None = None,
+    by_lane: Mapping[str, str] | None = None,
+    kept: Mapping[str, str] | None = None,
 ) -> list[str]:
     """Files the night's failed checks (`failed_checks`): a comment on each open bead that
     already names one of them, and a new bead per lane for the rest. Returns a line per bead
-    touched."""
+    touched. A lane's text quotes its own step's output from `by_lane` (a lane is named after
+    its step) and names the file `kept` holds it in; without them, the night's `output`.
+    """
     store = store or verdicts.STORE
     known = open_beads(store) if failed else {}
     lines: list[str] = []
     for lane, checks in sorted(failed.items()):
+        own = (by_lane or {}).get(lane, output)
+        where = (kept or {}).get(lane, "")
         for bead, theirs in sorted(known.items()):
             again = [c for c in checks if c in theirs]
             if again:
                 code, _ = store.add_comment(
-                    bead, body(commit, lane, again, passed, output)
+                    bead, body(commit, lane, again, passed, own, where)
                 )
                 lines.append(
                     f"nightly: {bead}: still failing: {', '.join(again)}"
@@ -144,7 +156,7 @@ def file(
         code, out = store.create_issue(
             title=f"Fix nightly {lane} failure: {new[0]}"
             + (f" and {len(new) - 1} more" if len(new) > 1 else ""),
-            body=body(commit, lane, new, passed, output),
+            body=body(commit, lane, new, passed, own, where),
             acceptance=f"`{reproduce(lane, new)}` passes at the staging tip.",
             priority=PRIORITY,
             labels=f"role:steward,{LABEL}",

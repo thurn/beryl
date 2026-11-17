@@ -411,3 +411,21 @@ def test_no_verdicts_found_keeps_the_last_history(
     monkeypatch.setattr(verdicts, "STORE", Empty())
     assert verdicts.refresh_history() == 1
     assert verdicts.cached_history() == {"ui-test:scry": [{"verdict": "catch"}]}
+
+
+def test_a_lane_quotes_its_own_steps_output_and_keeps_it_whole(bd: FakeBd) -> None:
+    # The night's output ends with whatever step ran last. A fuzz bead once quoted the oracle
+    # and iroh steps' output, and the next firing overwrote `last-output.txt`, so the fuzz
+    # failure could only be seen by running the fuzz again.
+    steps = [
+        checking("fuzz", {"fuzz:games": "fail"}),
+        checking("oracle", {"oracle:Card A/a/forge": "pass"}),
+    ]
+    night(steps, "bad", NOW)
+    [issue] = bd.issues
+    text = str(issue["description"])
+    quoted = text.split("Output tail")[1]
+    assert "fuzz output" in quoted and "oracle output" not in quoted
+    [kept] = list((nightly.folder() / "failures").glob("*.txt"))
+    assert kept.read_text() == "fuzz output\n"
+    assert str(kept) in text

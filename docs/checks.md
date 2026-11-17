@@ -365,6 +365,11 @@ skill works them as one Enact run, grouped by shared cause. The Beryl 3D sweep's
 `b3d-sweep` beads are not among them: they are Beryl 3D's own work, filed under
 its epic.
 
+A `nightly-failure` bead quotes the end of its own step's output, not of the
+whole night's, and names the file in `$BERYL_CACHE/nightly/failures` that keeps
+that step's whole output for two weeks. `last-output.txt` holds only the latest
+firing.
+
 The reporters use Enact's active tracker through
 `tools/src/beryl_tools/tickets.py`. The main checkout selects ticket enrollment
 for all linked worktrees. Use the tests in `tools/tests/test_tickets.py`,

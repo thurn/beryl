@@ -238,5 +238,10 @@
     "label": "The `just b3d timeline-parity` command names Beryl 3D's timeline file by nanosecond and process id, and writes the web timeline cache by rename, so the Beryl 3D sweep's timeline-parity and timeline-parity-all steps, which run at once and share $BERYL_CACHE/b3d, no longer delete or half-read each other's files (the cause behind flaky-check beads by-o3wua and by-s9etj)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A nightly-failure bead quotes its own step's output and names a file that keeps it for two weeks, instead of the tail of the whole night (which ended with the oracle and iroh steps) in a file the next firing overwrote, so a Steward no longer re-runs a 2-10 minute `just fuzz` just to see what failed",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
