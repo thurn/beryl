@@ -33,6 +33,9 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
 - `card-printings.csv`: the specific printing chosen for each card.
 - `rules-version.json`: the Comprehensive Rules release that every citation in
   the code is checked against.
+- `rule-ownership-allowlist.json`: kernel and rules source files still waiting
+  for an `Implements:` header of their own or in their parent module. Each
+  module pass removes its files from the list.
 - `oracle-divergences.json`: test scenarios where an oracle (XMage or Forge)
   gets the rules wrong, each with its rules citation. Never edit it by hand:
   `just card diverge` writes an entry, only when the other oracle agrees with

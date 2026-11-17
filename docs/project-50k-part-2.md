@@ -283,41 +283,70 @@ check, in the `names` lane, fails when:
 - two modules declare the same rule;
 - a module declares a rule it never cites.
 
-A module that implements no rule (the engine's state machine, the scratch
-buffers) declares `//! Implements: none` with a sentence saying what it is. Test
-files and card files are not checked.
+A section or numeric subrule in the declaration claims its descendants. A child
+module can cite rules declared in its own header or an enclosing module's
+header. A module that implements no rule gives its reason in the same line, for
+example `//! Implements: none. Holds scratch buffers.` Test files and card files
+are outside the check.
 
 `just citations coverage` lists every rule of the pinned release that no module
-owns, by section, and writes the same to `$BERYL_CACHE/rule-coverage.json`. That
-list is the measure of how far the engine is from the whole Comprehensive Rules,
-and it is where a planner finds the next mechanism.
+owns, by section, and writes the same to `$BERYL_CACHE/rule-coverage.json`. A
+claim identifies the module to extend for rules under that claim. The list shows
+where the engine still needs an owner.
 
-**The layout it leads to.** The ownership bead fixes the map; this is the
-starting proposal for `beryl_rules`, by the section of the rules each directory
-owns:
+**The module map.** The pass numbers match the children of M4. Paths are
+relative to each crate's `src/`. Files keep their names and nesting under the
+destination unless a named move or a directory move below says otherwise. A
+surviving test stays in its test module. The table inventories the source trees
+at the start of the passes.
 
-| Directory or file       | Owns                                                              | Holds today's                                                                     |
-| ----------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `game/`                 | CR 103, 104: starting and ending the game                         | `start.rs`, `ending.rs`, the `Format` reads                                       |
-| `turn/`                 | CR 500 to 514, 703, 725: the turn's steps and turn-based actions  | `turn.rs`, `stops.rs`, `engine/paused_step.rs`                                    |
-| `casting/`              | CR 601, 602, 116, 118: casting, activating, special actions, cost | `cast/`, `casting.rs`, `costs.rs`, `engine/land.rs`                               |
-| `mana/`                 | CR 106, 605                                                       | `mana/`                                                                           |
-| `stack/`                | CR 405, 603, 608: the stack, triggers, resolving                  | `stack.rs`, `trigger.rs`, `trigger/`, `delayed_triggers.rs`, `resolve.rs`         |
-| `continuous/`           | CR 611 to 613: continuous effects, text changes, the layers       | `layers/`, `continuous.rs`, `text.rs`, `rule_change.rs`                           |
-| `replacement/`          | CR 614 to 616                                                     | `replace.rs`, `replace/`, `protection.rs`                                         |
-| `combat/`               | CR 506 to 511, 120                                                | `combat.rs`, `combat/`, `damage.rs`                                               |
-| `zones/`                | CR 400 to 408, 110, 111, 114, 122                                 | `zones.rs`, `library.rs`, `tokens.rs`, `emblems.rs`, `counters.rs`, `entered.rs`  |
-| `objects/`              | CR 707, 708, 712, 731: copies, face-down, faces, merging          | `actions/copy.rs`, `face_down.rs`, `keywords/mutate.rs`, `linked.rs`              |
-| `actions/`              | CR 701, one file per keyword action                               | `actions/`                                                                        |
-| `keywords/`             | CR 702, one file per keyword ability                              | `keywords/`, `phasing.rs`                                                         |
-| `sba.rs`                | CR 704                                                            | `sba.rs`                                                                          |
-| `engine/`, `interpret/` | No rule: the state machine, decisions, the effect interpreter     | `engine.rs`, `engine/`, `interpret/`, `choices.rs`, `resolution.rs`, `scratch.rs` |
+The kernel groups its code by what it stores. Its modules declare rules where
+they implement them directly. The kernel's zone mutator owns CR 400.7, so
+`zones/` uses specific rules from section 400 and a cross-reference to CR 400.7.
+The timestamp clock in `timestamps.rs` owns CR 613.7. The simultaneous-entry
+ordering in `continuous/arrival_timestamps.rs` cites that rule as a
+cross-reference. The layers declare the other parts of section 613 that they
+implement. The rules' turn module handles the noncombat steps. Combat owns its
+own steps, and the stack owns section 405. `keywords/` declares the keyword
+rules it implements individually. Protection is in `replacement/`, and phasing
+and mutate are in `objects/`. The pass labels group related rules for
+navigation. A declaration claims only the sections or subrules that the module
+implements.
 
-The kernel is organised by what it stores, not by rule, so it declares ownership
-only where it implements a rule itself (CR 400.7 in the zone move, CR 613.7 in
-timestamps). Its files that exist only because another reached 800 lines
-(`additions.rs`, `defined.rs`, `elsewhere.rs`) rejoin what they were cut from or
-get a name that says what they hold.
+#### `beryl_kernel/src/`
+
+| Pass                                     | Destination | Existing source files                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Object references and characteristics | `.`         | `abilities.rs`, `additions.rs`, `copiable.rs`, `defined.rs`, `definition.rs`, `derive.rs`, `elsewhere.rs`, `ids.rs`, `last_known.rs`, `lib.rs`, `object.rs`, `query.rs`, `reference.rs`, `stack.rs`, `subtypes.rs`, `timestamps.rs`, `stack/tests.rs`. Move `additions.rs` → `copiable/additions.rs`, `defined.rs` → `query/defined_power.rs`, `elsewhere.rs` → `query/zone_characteristics.rs`               |
+| 2. State and mutators                    | `.`         | `bitboard.rs`, `board.rs`, `invariants.rs`, `mutate.rs`, `new.rs`, `order.rs`, `phasing.rs`, `player.rs`, `player_set.rs`, `players.rs`, `state.rs`, `turn.rs`, `two_player.rs`, `zone.rs`, `mutate/merge.rs`                                                                                                                                                                                                 |
+| 3. Stores                                | `.`         | `chosen.rs`, `counters.rs`, `effects.rs`, `listener.rs`, `mana_memory.rs`, `memos.rs`, `repeats.rs`, `replacement.rs`, `rule_changes.rs`, `static_ability.rs`, `store.rs`, `trackers.rs`, `effects/{change.rs,control.rs,copy.rs,extra_turn.rs,on.rs,prevention.rs,regeneration.rs,sets.rs,store.rs,text.rs,tests.rs}`, `counters/tests.rs`, `memos/tests.rs`, `static_ability/tests.rs`, `trackers/tests.rs` |
+| 4. Decisions and information             | `.`         | `asking.rs`, `cause.rs`, `chance.rs`, `decision.rs`, `event.rs`, `knowledge.rs`, `observation.rs`, `payable.rs`, `pending.rs`, `profile.rs`, `rng.rs`, `decision/collapse.rs`, `event/kinds.rs`                                                                                                                                                                                                               |
+| 5. Layouts and table                     | `.`         | `filter.rs`, `fit.rs`, `fixed.rs`, `layout.rs`, `relayout.rs`, `table.rs`, `relayout/events.rs`, `table/{capability.rs,cards.rs,listeners.rs,tests.rs}`                                                                                                                                                                                                                                                       |
+
+#### `beryl_rules/src/`
+
+`cast/` becomes `casting/`, `layers/` moves to `continuous/layers/`, and
+`replace/` becomes `replacement/`. `stack/trigger/` holds the trigger matcher.
+`engine.rs` stays beside `engine/`, and owns priority where it advances or
+passes it. The interpreter and decision helpers cite the steps they call through
+to. The root `lib.rs` keeps the crate contract.
+
+| Pass                                                                                                  | Destination                         | Existing source files                                                                                                                                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6. Game and turn (CR 103, CR 104, CR 119, CR 500 to 505, CR 512 to 514, CR 703)                       | `game/`, `turn/`                    | `ending.rs`, `game.rs`, `life.rs`, `start.rs`, `stops.rs`, `turn.rs`, `engine/paused_step.rs`. Move `ending.rs` → `game/ending.rs`, `game.rs` → `game/mod.rs`, `life.rs` → `game/life.rs`, `start.rs` → `game/start.rs`, `stops.rs` → `turn/stops.rs`, `engine/paused_step.rs` → `turn/paused_step.rs`, `turn.rs` → `turn/mod.rs`                   |
+| 7. Casting and activating (CR 601, CR 602, CR 116, CR 118)                                            | `casting/`                          | `announced.rs`, `casting.rs`, `costs.rs`, `cast/{mod.rs,costs.rs,delve.rs,legal.rs,parts.rs,stack.rs,steps.rs,targets.rs,timing.rs}`, `engine/land.rs`. Move `casting.rs` → `casting/start.rs`, `costs.rs` → `casting/payment.rs`                                                                                                                   |
+| 8. Mana (CR 106, CR 605)                                                                              | `mana/`                             | `mana/{add.rs,lookahead.rs,mod.rs,pay.rs,pool.rs,remembered.rs,solver.rs,sources.rs,units.rs}`                                                                                                                                                                                                                                                      |
+| 9. Stack and triggers (CR 405, CR 603, CR 608)                                                        | `stack/`                            | `delayed_triggers.rs`, `resolve.rs`, `stack.rs`, `trigger.rs`, `trigger/elsewhere.rs`. Move `stack.rs` → `stack/mod.rs`, `trigger.rs` → `stack/trigger/mod.rs`, `trigger/elsewhere.rs` → `stack/trigger/other_zones.rs`                                                                                                                             |
+| 10. Continuous effects (CR 611 to 613)                                                                | `continuous/`                       | `continuous.rs`, `entered.rs`, `rule_change.rs`, `text.rs`, `layers/{apply.rs,dependency.rs,elsewhere.rs,entering.rs,granted.rs,merged.rs,mod.rs,player_rules.rs,text.rs,together.rs}`. Move `continuous.rs` → `continuous/mod.rs`, `entered.rs` → `continuous/arrival_timestamps.rs`, `layers/elsewhere.rs` → `continuous/layers/other_zones.rs`   |
+| 11. Replacement and prevention (CR 614 to 616, CR 702.16)                                             | `replacement/`                      | `event.rs`, `protection.rs`, `replace.rs`, `replace/{damage.rs,destruction.rs,draws.rs,enchant.rs}`. Move `replace.rs` → `replacement/mod.rs`                                                                                                                                                                                                       |
+| 12. Combat and damage (CR 506 to 511, CR 120)                                                         | `combat/`                           | `combat.rs`, `damage.rs`, `combat/assignment.rs`. Move `combat.rs` → `combat/mod.rs`                                                                                                                                                                                                                                                                |
+| 13. Zone changes and counters (CR 110, CR 111, CR 114, CR 121, CR 122, CR 400 to 408)                 | `zones/`                            | `counters.rs`, `drawing.rs`, `emblems.rs`, `library.rs`, `tokens.rs`, `zones.rs`. Move `zones.rs` → `zones/mod.rs`                                                                                                                                                                                                                                  |
+| 14. Copies and object changes (CR 607, CR 610, CR 702.26, CR 702.140, CR 707, CR 708, CR 712, CR 731) | `objects/`                          | `actions/copy.rs`, `face_down.rs`, `linked.rs`, `one_shot.rs`, `phasing.rs`, `keywords/mutate.rs`                                                                                                                                                                                                                                                   |
+| 15. Keyword actions, keyword abilities, and coin flips (CR 701, CR 702, CR 705)                       | `actions/`, `keywords/`             | `actions/{attach.rs,counter.rs,destroy.rs,discard.rs,exile.rs,explore.rs,fateseal.rs,manifest.rs,manifest_dread.rs,mill.rs,mod.rs,regenerate.rs,reveal.rs,sacrifice.rs,scry.rs,search.rs,shuffle.rs,tap.rs,transform.rs}`, `coins.rs`, `keywords/{flashback.rs,mod.rs}`. Move `coins.rs` → `actions/coins.rs`                                       |
+| 16. State machine, interpreter, and state-based actions (CR 117, CR 704)                              | `engine/`, `interpret/`, crate root | `bodies.rs`, `card.rs`, `choices.rs`, `chosen.rs`, `coverage.rs`, `engine.rs`, `lib.rs`, `reference.rs`, `resolution.rs`, `sba.rs`, `scratch.rs`, `engine/questions.rs`, `interpret/{mod.rs,run.rs,scene.rs}`, `tests/{invariants.rs,mod.rs,replay.rs,widths.rs}`. Move `choices.rs` → `interpret/choices.rs`, `chosen.rs` → `interpret/catalog.rs` |
+| 19. Event and layer tests                                                                             | `tests/`                            | `tests/{abilities_away.rs,ability_removal.rs,delayed.rs,entering.rs,entering_together.rs,events.rs,land_types.rs,layer_inputs.rs,layer_sets.rs,many_layers.rs,replace.rs,static_abilities.rs,triggers.rs}`, `tests/events/{causes.rs,groups.rs}`                                                                                                    |
+| 20. Casting and payment tests                                                                         | `tests/`                            | `tests/{any_target.rs,banned.rs,cast.rs,casting.rs,chosen.rs,life_costs.rs,payment.rs,remembered_mana.rs,spell_copies.rs,spell_costs.rs}`                                                                                                                                                                                                           |
+| 21. Combat, library, and other tests                                                                  | `tests/`                            | `tests/{combat.rs,effects.rs,game.rs,graveyard_return.rs,library.rs,mulligan.rs,phasing.rs,regeneration.rs,rules.rs,trackers.rs}`, `tests/combat/keywords.rs`                                                                                                                                                                                       |
 
 **One pass per module (P11).** Each bead of the module pass takes one row of the
 table and makes three commits:

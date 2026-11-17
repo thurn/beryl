@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import citations, paths
-from .citations import Citation, Version, anchor_of
+from .citations import Citation, Version, anchor_of, number_of
 
 # How alike a reworded rule must be to its old text to be taken for it, and by how much it
 # must beat the next nearest. A rule that kept its number needs only to be the nearest and
@@ -44,14 +44,6 @@ class Placement:
     number: str | None
     note: str | None = None
     reworded: bool = False
-
-
-def number_of(anchor: str) -> str:
-    """The rule number of a rules key: `R7126a` is `712.6a`, `R7` is `7`, `R712` is `712`."""
-    digits = anchor[1:]
-    if len(digits) <= 3 or not digits[:3].isdigit():
-        return digits
-    return f"{digits[:3]}.{digits[3:]}"
 
 
 def section(anchor: str) -> str:

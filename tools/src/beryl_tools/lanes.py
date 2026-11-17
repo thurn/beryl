@@ -194,6 +194,7 @@ def names_lane(
         headers = [p for p in cited or [] if card_files.FILE.match(p)]
         if cited is None or headers:
             lane.step("card-headers", [*checks, "card-headers", *headers])
+    lane.step("rule-ownership", [*checks, "rule-ownership"])
     if crates or (crates is None and cited is None):
         lane.step("card-crates", [*checks, "card-crates"])
     return lane

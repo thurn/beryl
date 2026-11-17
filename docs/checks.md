@@ -69,6 +69,16 @@ The lanes:
   - `citations`: `just citations` on the changed files, using the cached rules
     text, and skipped if none is cached. Slow CI runs it on the whole tree and
     downloads the text.
+  - `rule-ownership`: an `Implements:` header in a kernel or rules module claims
+    rules and their descendants. The check rejects conflicting claims, claims
+    without an implementation citation, and citations outside the file's or
+    enclosing module's claims. Use `see` before each cross-reference. The check
+    reads both crates together and skips when the pinned rules text is
+    unavailable. Remove migrated files from
+    `data/rule-ownership-allowlist.json`. An allowlisted child inherits its
+    parent declaration once its pass removes the child's entry.
+    `just citations coverage` reports the unclaimed rules by section in the
+    terminal and in `$BERYL_CACHE/rule-coverage.json`.
 - `oracle`: in XMage and Forge, the scenarios in each changed card file that
   have not passed before, and, when the change reaches `beryl_cards` (a card
   file, the card store or a crate it depends on), each random scenario under the

@@ -167,6 +167,8 @@ means `python3 ~/enact/scripts/enact.py`.
   `const fn` can't remove the repetition.
 - No source file may be over 800 lines (the `file-length` check, with exceptions
   in `data/file-length-allowlist.json`).
+- Kernel and rules modules declare the rules they implement in an `Implements:`
+  header and mark cross-references with `see` (the `rule-ownership` check).
 - No card names in generic code (the `card-names` check, with exceptions in its
   allowlist). If a mechanic only exists for one card, that usually means a
   general abstraction is missing.

@@ -131,6 +131,14 @@ def anchor_of(number: str) -> str:
     return "R" + number.replace(".", "")
 
 
+def number_of(anchor: str) -> str:
+    """The rule number of a rules key: `R7126a` is `712.6a`, `R7` is `7`, `R712` is `712`."""
+    digits = anchor[1:]
+    if len(digits) <= 3 or not digits[:3].isdigit():
+        return digits
+    return f"{digits[:3]}.{digits[3:]}"
+
+
 def normalize(text: str) -> str:
     """`text` in ASCII punctuation, without accents, with whitespace collapsed."""
     decomposed = unicodedata.normalize("NFKD", text.translate(TRANSLATED))
@@ -396,7 +404,7 @@ def step(*args: str) -> int:
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    from . import citation_migrate, citation_shorten
+    from . import citation_migrate, citation_shorten, rule_ownership
 
     p = sub.add_parser(
         "citations",
@@ -406,3 +414,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     actions = p.add_subparsers(dest="action")
     citation_migrate.register(actions)
     citation_shorten.register(actions)
+    coverage = actions.add_parser(
+        "coverage", help="list the rules no engine module owns"
+    )
+    coverage.set_defaults(func=rule_ownership.run_coverage)
