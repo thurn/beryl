@@ -124,13 +124,13 @@ pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
         width: 1600.0,
         height: 900.0,
     };
-    let side = match entry["seat"].as_str() {
+    let seat = match entry["seat"].as_str() {
         None | Some("you") => Side::You,
         Some("opponent") => Side::Opponent,
         Some(other) => panic!("{name}: `seat` is \"you\" or \"opponent\", not {other:?}"),
     };
     let still = entry["still"].as_bool().unwrap_or(true);
-    let mut page = beryl_inspect::pages::page(recording, side, Layout::Desktop, size)
+    let mut page = beryl_inspect::pages::page(recording, seat, Layout::Desktop, size)
         .unwrap_or_else(|why| panic!("{name}: {why}"));
     let moment = Moment::from_str(at).unwrap_or_else(|why| panic!("{name}: {at}: {why:?}"));
     page.seek(&moment)
