@@ -82,7 +82,20 @@ fn player_matches(spec: &TargetSpec, player: Seat, you: Seat) -> bool {
         TargetKind::Player => match spec.filter {
             Filter::Any => true,
             Filter::Whose(players) => filter::is_for(players, player, you),
-            _ => unreachable!("a player filter is Any or Whose"),
+            Filter::Types(_)
+            | Filter::Supertypes(_)
+            | Filter::SubtypeWord(_)
+            | Filter::ColorWords(_)
+            | Filter::Owned(_)
+            | Filter::Tapped
+            | Filter::Token
+            | Filter::ManaValueAtMost(_)
+            | Filter::PowerAtMost(_)
+            | Filter::ManaValueAtMostX
+            | Filter::Not(_)
+            | Filter::All(_)
+            | Filter::AnyOf(_)
+            | Filter::InZone(_) => unreachable!("a player filter is Any or Whose"),
         },
         TargetKind::PermanentOrPlayer => true,
         TargetKind::Permanent
@@ -207,7 +220,13 @@ fn domain<L: Layout>(
                 player_matches(spec, p, you) && !rule_change::protected_from_everything(s, t, p)
             })
         }
-        _ => PlayerSet::NOBODY,
+        TargetKind::Permanent
+        | TargetKind::Spell
+        | TargetKind::SpellOrPermanent
+        | TargetKind::GraveyardCard
+        | TargetKind::Ability
+        | TargetKind::ActivatedAbility
+        | TargetKind::TriggeredAbility => PlayerSet::NOBODY,
     };
     let mut within = match spec.kind {
         TargetKind::Player => Bitboard::EMPTY,
@@ -249,7 +268,9 @@ fn enough_candidates<L: Layout>(
         abilities,
     } = domain(s, t, spec, you, itself, source);
     let found = players.count() + abilities.count_ones();
-    let Some(need) = usize::from(spec.count).checked_sub(found as usize) else {
+    let Some(need) = usize::from(spec.count)
+        .checked_sub(usize::try_from(found).expect("at most the players and stack abilities"))
+    else {
         return true;
     };
     let words = printed_on(s, itself, source);

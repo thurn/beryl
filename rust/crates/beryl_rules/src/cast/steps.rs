@@ -232,7 +232,7 @@ pub(super) fn pay_mana<L: Layout>(
             s.ask(Pending::Casting(c));
             Ok(())
         }
-        payment => {
+        payment @ (Payment::KeepMostPayable | Payment::Greedy) => {
             let plans = mana::plans(
                 s,
                 t,
@@ -307,8 +307,8 @@ pub(super) fn finish<L: Layout>(
     } = entry.item
     {
         let face = t.def(card).face(face);
-        for (i, option) in face.casting.iter().enumerate() {
-            if costs.contains(CastingIx::new(i as u8)) {
+        for (option, i) in face.casting.iter().zip(0..) {
+            if costs.contains(CastingIx::new(i)) {
                 crate::coverage::hit(option);
             }
         }
@@ -383,7 +383,7 @@ fn x_options<L: Layout>(
         StackItem::Spell {
             card, face, costs, ..
         } => x_range_start(t.def(card).face(face), costs, c.free()).unwrap_or(0),
-        _ => 0,
+        StackItem::Activated { .. } | StackItem::Triggered { .. } => 0,
     };
     let exclude = spent_by_entry(t, entry);
     let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
@@ -427,12 +427,13 @@ pub(crate) fn decision<L: Layout>(
             Prompt::new(Purpose::X),
         ),
         CastStep::TargetCount => {
-            let entry = top(s);
-            let spec = &specs(t, entry)[c.spec.index()];
-            let most = target_options(s, t, c).count().min(u32::from(spec.count));
+            let spec = &specs(t, top(s))[c.spec.index()];
+            let most = u8::try_from(target_options(s, t, c).count())
+                .unwrap_or(u8::MAX)
+                .min(spec.count);
             let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
             for n in 0..=most {
-                list.push(Opt::Number(n as u8))?;
+                list.push(Opt::Number(n))?;
             }
             let count = Prompt::new(Purpose::Target)
                 .most(spec.count)
@@ -468,7 +469,7 @@ pub(crate) fn decision<L: Layout>(
                 // Abilities on the stack, the top first, as the stack is read.
                 let mut unlisted = abilities;
                 while unlisted != 0 {
-                    let place = 63 - unlisted.leading_zeros() as usize;
+                    let place = usize::try_from(unlisted.ilog2()).expect("a bit in a u64");
                     unlisted &= !(1 << place);
                     list.push(Opt::Ability(index::<L>(place)))?;
                 }

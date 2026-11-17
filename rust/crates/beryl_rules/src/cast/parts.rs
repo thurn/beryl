@@ -84,7 +84,11 @@ fn part_being_paid<L: Layout>(
 fn step<L: Layout>(c: &Casting<L>) -> PayingObjects<L> {
     match c.step {
         CastStep::Objects(paying) => paying,
-        _ => unreachable!("a casting paying with objects"),
+        CastStep::X
+        | CastStep::TargetCount
+        | CastStep::Target { .. }
+        | CastStep::Plan
+        | CastStep::Manual { .. } => unreachable!("a casting paying with objects"),
     }
 }
 
@@ -99,7 +103,11 @@ pub(super) fn substitute(
             Measure::ForGeneric(n) => Some((index, *action, chosen, n)),
             Measure::Count(_) | Measure::TotalPower(_) => None,
         },
-        _ => None,
+        CostPart::This(_)
+        | CostPart::Loyalty(_)
+        | CostPart::Life(_)
+        | CostPart::OneOf(_)
+        | CostPart::DiscardHand => None,
     })
 }
 
@@ -136,7 +144,13 @@ pub(super) fn candidates<L: Layout>(
                     && !(action == CostAction::Tap && s.object(slot).is_tapped())
             })
             .collect(),
-        zone => {
+        zone @ (Zone::Library
+        | Zone::Hand
+        | Zone::Graveyard
+        | Zone::Exile
+        | Zone::Stack
+        | Zone::Nowhere
+        | Zone::Merged) => {
             let mut cards = s.zone(ZoneKey::Of(player, zone));
             cards.remove(itself);
             cards.filter(|slot| {
@@ -184,37 +198,6 @@ pub(super) fn payable<L: Layout>(
     }
 }
 
-/// Whether `player` has the objects to pay every part of the cost of an ability of the object
-/// in `slot` that is paid with objects.
-pub(super) fn ability_payable<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    slot: L::Slot,
-    parts: &'static [CostPart],
-) -> bool {
-    parts.iter().all(|part| match part {
-        CostPart::Chosen(action, chosen) => payable(s, t, player, slot, *action, chosen),
-        _ => true,
-    })
-}
-
-/// Whether `player` can pay every payment of life among `parts`, as [`life::can_pay`]
-/// answers for each ([CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)): "If a
-/// cost or effect allows a player to pay an amount of life greater than 0, the player may do
-/// so only if their life total is greater than or equal to the amount of the payment."
-pub(super) fn life_payable<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    player: Seat,
-    parts: &[CostPart],
-) -> bool {
-    parts.iter().all(|part| match part {
-        CostPart::Life(n) => life::can_pay(s, t, player, *n),
-        _ => true,
-    })
-}
-
 /// Whether `player` has the objects to pay every part of the cost of casting `face` of the
 /// card in `slot` with the options `costs`.
 pub(super) fn spell_payable<L: Layout>(
@@ -232,7 +215,9 @@ pub(super) fn spell_payable<L: Layout>(
     face.cost_parts(costs).all(|part| match part {
         CostPart::Chosen(action, chosen) => payable(s, t, player, slot, *action, chosen),
         CostPart::Life(n) => life::can_pay(s, t, player, *n),
-        _ => unreachable!("the card table refuses a spell's cost the engine cannot pay"),
+        CostPart::This(_) | CostPart::Loyalty(_) | CostPart::OneOf(_) | CostPart::DiscardHand => {
+            unreachable!("the card table refuses a spell's cost the engine cannot pay")
+        }
     }) && parts_share_enough(s, t, player, slot, face, costs)
 }
 
@@ -409,7 +394,7 @@ pub(super) fn pay<L: Layout>(
     }
     match c.kind {
         CastKind::Activation => pay_substitutes(s, t, sink, c),
-        _ => finish(s, t, sink, c),
+        CastKind::Spell { .. } | CastKind::Trigger => finish(s, t, sink, c),
     }
 }
 
@@ -436,8 +421,10 @@ pub(super) fn pay_substitutes<L: Layout>(
                 (DELVE_PART, delve_most(face, costs, cards))
             })
         }
-        _ => substitute(entry_ability_of(t, entry).cost().parts())
-            .map(|(part, _, _, most)| (part, most)),
+        StackItem::Activated { .. } | StackItem::Triggered { .. } => {
+            substitute(entry_ability_of(t, entry).cost().parts())
+                .map(|(part, _, _, most)| (part, most))
+        }
     };
     if let Some((part, most)) = found {
         let left = most.min(total_cost(s, t, entry, &c).generic);
@@ -656,7 +643,13 @@ fn pay_with<L: Layout>(
 ) -> Result<(), Full> {
     match action {
         CostAction::Tap => event::set_tapped(s, t, sink, s.object_ref(slot), true),
-        _ => unreachable!("the card table refuses a cost the engine cannot pay"),
+        CostAction::Sacrifice
+        | CostAction::Discard
+        | CostAction::Exile
+        | CostAction::Reveal
+        | CostAction::RemoveCounter(_) => {
+            unreachable!("the card table refuses a cost the engine cannot pay")
+        }
     }
 }
 

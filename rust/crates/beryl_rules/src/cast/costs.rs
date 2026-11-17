@@ -55,7 +55,13 @@ pub(super) fn x_range_start(face: &Face, costs: Castings, free: bool) -> Option<
         if o.cost().x > 0 {
             let least = match o {
                 CastingOption::Kicker { min_x, .. } => min_x,
-                _ => 0,
+                CastingOption::Offspring(_)
+                | CastingOption::Impending { .. }
+                | CastingOption::Overload { .. }
+                | CastingOption::Evoke { .. }
+                | CastingOption::Alternative { .. }
+                | CastingOption::Escape { .. }
+                | CastingOption::Mutate { .. } => 0,
             };
             min = Some(min.map_or(least, |m: u8| m.max(least)));
         }
@@ -168,7 +174,22 @@ pub fn cost_being_cast<L: Layout>(s: &State<L>, t: &GameTable, x: u8) -> Option<
             },
             &c,
         )),
-        _ => None,
+        Pending::None
+        | Pending::PlayOrDraw { .. }
+        | Pending::Mulligans
+        | Pending::Discard
+        | Pending::LegendRule { .. }
+        | Pending::EnterPayingLife { .. }
+        | Pending::DeclareAttackers { .. }
+        | Pending::DeclareBlockers { .. }
+        | Pending::CombatDamage { .. }
+        | Pending::Resolving(_)
+        | Pending::StepActions(_)
+        | Pending::CastOffer { .. }
+        | Pending::TurningFaceUp { .. }
+        | Pending::OrderEntered { .. }
+        | Pending::EnterChoosing { .. }
+        | Pending::ManaColor { .. } => None,
     }
 }
 

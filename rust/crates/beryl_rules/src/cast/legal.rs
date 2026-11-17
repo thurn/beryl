@@ -5,8 +5,8 @@ use std::cell::{Cell, OnceCell};
 
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityIx, AbilityKind, Castings, CostAction, Face, FaceIx, Keywords, ManaCost,
-    ObjectAbility, Timing, Types,
+    Ability, AbilityIx, AbilityKind, Castings, CostAction, CostPart, Face, FaceIx, Keywords,
+    ManaCost, ObjectAbility, Timing, Types,
 };
 use crate::casting;
 use crate::decision::{Candidates, OPTIONS, Opt, Refusal};
@@ -14,6 +14,7 @@ use crate::engine::collapse;
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
+use crate::life;
 use crate::mana::{self, Funds};
 use crate::rule_change;
 use crate::state::{RuleKind, State, Tracker, Zone, ZoneKey};
@@ -489,10 +490,10 @@ fn activatable<L: Layout, const TARGETS: bool>(
     }
     // CR 118.3: "A player can't pay a cost without having the necessary resources to pay it
     // fully."
-    if a.cost().chooses() && !parts::ability_payable(s, t, player, slot, a.cost().parts()) {
+    if a.cost().chooses() && !ability_payable(s, t, player, slot, a.cost().parts()) {
         return false;
     }
-    if a.cost().pays_life_or_chooses() && !parts::life_payable(s, t, player, a.cost().parts()) {
+    if a.cost().pays_life_or_chooses() && !life_payable(s, t, player, a.cost().parts()) {
         return false;
     }
     if matches!(a.cost().removes(), Some(kind) if s.counters_of(slot, kind) == 0) {
@@ -686,4 +687,38 @@ pub fn payable_responses<L: Layout>(
     activation_options(s, t, &now, &mut out)?;
     now.complete()?;
     Ok(out)
+}
+
+/// Whether `player` has the objects to pay every part of the cost of an ability of the object
+/// in `slot` that is paid with objects.
+fn ability_payable<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    slot: L::Slot,
+    parts: &'static [CostPart],
+) -> bool {
+    parts.iter().all(|part| match part {
+        CostPart::Chosen(action, chosen) => parts::payable(s, t, player, slot, *action, chosen),
+        CostPart::This(_)
+        | CostPart::Loyalty(_)
+        | CostPart::Life(_)
+        | CostPart::OneOf(_)
+        | CostPart::DiscardHand => true,
+    })
+}
+
+/// Whether `player` can pay every payment of life among `parts`, as [`life::can_pay`]
+/// answers for each ([CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)): "If a
+/// cost or effect allows a player to pay an amount of life greater than 0, the player may do
+/// so only if their life total is greater than or equal to the amount of the payment."
+fn life_payable<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, parts: &[CostPart]) -> bool {
+    parts.iter().all(|part| match part {
+        CostPart::Life(n) => life::can_pay(s, t, player, *n),
+        CostPart::This(_)
+        | CostPart::Chosen(..)
+        | CostPart::Loyalty(_)
+        | CostPart::OneOf(_)
+        | CostPart::DiscardHand => true,
+    })
 }

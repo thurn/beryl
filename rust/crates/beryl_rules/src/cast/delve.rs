@@ -104,7 +104,12 @@ pub(super) fn delve_most<S: SlotId>(face: &Face, costs: Castings, cards: Bitboar
                     ..
                 },
             ) => u32::from(*n),
-            _ => 0,
+            CostPart::This(_)
+            | CostPart::Chosen(..)
+            | CostPart::Loyalty(_)
+            | CostPart::Life(_)
+            | CostPart::OneOf(_)
+            | CostPart::DiscardHand => 0,
         })
         .sum();
     u8::try_from(cards.count().saturating_sub(held)).unwrap_or(u8::MAX)
