@@ -355,9 +355,25 @@ fn piles(camera: &Camera, bands: &PhoneBands) -> ([[Vec2; 3]; 2], [f32; 2]) {
     (piles, scale)
 }
 
+/// The highest the top edge of the viewer's hand may reach on a phone, in logical points from the
+/// window's top: low enough that each card of the viewer's back row, tapped, keeps a strip the
+/// phone's touch target tall above it, and a cell of the hit test's grid more at each edge. A
+/// hand of several rows that rose higher would cover the lands and other permanents, and then
+/// the creatures, past what a press can reach; the cards that do not fit under this ceiling
+/// scroll instead (`hands::Fan::shown`).
+fn hand_ceiling(camera: &Camera) -> f32 {
+    // A tapped card lies across its row, so its far edge is half a card's width from the row's
+    // middle, toward the opponent.
+    let far = camera
+        .to_screen(Vec3::new(0.0, data::lands::Y + CARD_WIDTH / 2.0, 0.0))
+        .y;
+    far + audit::PHONE_TARGET_POINTS + 2.0 * CELL
+}
+
 /// The viewer's hand: cards a quarter of the column wide, at most 100 points, 4 points apart
-/// while they have room, their top edges 8 points under the hand band's top (`placeHand`).
-fn your_hand(window: Window, bands: &PhoneBands) -> HandData {
+/// while they have room, their top edges 8 points under the hand band's top (`placeHand`), and
+/// in rows no higher than `ceiling` points from the window's top (`hand_ceiling`).
+fn your_hand(window: Window, bands: &PhoneBands, ceiling: f32) -> HandData {
     let width = bands.right - bands.left;
     let wide = hand_width(width);
     HandData {
@@ -370,7 +386,7 @@ fn your_hand(window: Window, bands: &PhoneBands) -> HandData {
         room: (width - wide) / wide,
         bias_degrees: data::hand::BIAS_DEGREES,
         across: ndc(window, f32::midpoint(bands.left, bands.right), 0.0).x,
-        ceiling: ndc(window, 0.0, window.safe_area.top).y,
+        ceiling: ndc(window, 0.0, ceiling).y,
     }
 }
 
@@ -521,7 +537,7 @@ pub fn layout(window: Window) -> Layout {
         pile_scale,
         tray: tray_in(window, &bands),
         stack: DESKTOP.stack,
-        hand: your_hand(window, &bands),
+        hand: your_hand(window, &bands, hand_ceiling(&camera)),
         opponent_hand: opponent_hand(window, &bands),
         players: [anchor(bands.your_strip), anchor(bands.opponent_strip)],
         phone: Some(stack),

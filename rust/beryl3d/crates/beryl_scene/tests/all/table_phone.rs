@@ -335,8 +335,14 @@ fn the_hand_runs_off_the_bottom_with_every_top_edge_in_reach() {
                 row: None,
             };
             let cards = cards_at(&frame, hand);
-            assert_eq!(cards.len(), count);
             let label = format!("{count} cards at {width}x{height}");
+            // A hand of up to nine cards fits under the hand's ceiling in every phone window; a
+            // larger one shows as many as fit, at least nine, and scrolls.
+            assert!(
+                cards.len() == count || (count > 9 && (9..count).contains(&cards.len())),
+                "{label}: {} shown",
+                cards.len()
+            );
             // The front row runs off the window's bottom, and every card's top stays clear of
             // the top safe inset.
             assert!(
@@ -363,6 +369,39 @@ fn the_hand_runs_off_the_bottom_with_every_top_edge_in_reach() {
                 card_faults(&frame, window, reachable),
                 Vec::<String>::new(),
                 "{label}"
+            );
+        }
+    }
+}
+
+/// A hand of several rows rises toward the table, and stops where the viewer's lands and other
+/// permanents, tapped, still keep a square to press above it: the cards past what fits under
+/// that height scroll instead of covering the back row, and then the creatures.
+#[test]
+fn a_hand_of_several_rows_leaves_every_back_row_card_reachable() {
+    for count in [9, 14, 30] {
+        let mut view = ViewBuilder::new();
+        for index in 0..count {
+            view.card(ZoneName::Hand, Side::You, &format!("Card {index}"));
+        }
+        for index in 0..4 {
+            for (name, types) in [
+                (format!("Land {index}"), vec![CardType::Land]),
+                (format!("Relic {index}"), vec![CardType::Artifact]),
+                (format!("Bear {index}"), vec![CardType::Creature]),
+            ] {
+                let card = view.card(ZoneName::Battlefield, Side::You, &name);
+                card.types = types;
+                card.tapped = index % 2 == 0;
+            }
+        }
+        for (width, height) in PHONES {
+            let window = phone(width, height);
+            let frame = frame_in(window, &view);
+            assert_eq!(
+                card_faults(&frame, window, reachable),
+                Vec::<String>::new(),
+                "{count} cards at {width}x{height}"
             );
         }
     }

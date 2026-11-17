@@ -17,8 +17,9 @@ use beryl_protocol::protocol::{Candidate, CandidateView, ObjectView, Status};
 use beryl_protocol::script::Mark;
 use glam::Vec2;
 
-use super::bar::bar;
+use super::bar::{Controls, bar};
 use super::{Shown, Steps, marks, ways};
+use crate::data::space::hud::phone::CHARACTER_WIDTH;
 use crate::element::{
     Align, Anchor, Direction, Element, Justify, Press, Shown as Showing, column, row, text,
 };
@@ -27,7 +28,8 @@ use crate::frame::Role;
 use crate::input::{FaceId, FaceSize};
 use crate::screens::ScreenIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, DESKTOP};
-use crate::tokens::{color, space, type_style};
+use crate::text::TypeStyle;
+use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{icon_button, icons};
 
 /// The tint of the face of a way that cannot be chosen, as the web's `.stage-way:disabled`
@@ -74,9 +76,9 @@ fn look(shown: Shown, marked: Marked) -> Option<Mark> {
 }
 
 /// A number's value, with what it means, between the step to the value below it and the step
-/// to the value above it, as the web's `Stepper` draws it. A step with no value to go to
-/// cannot be pressed. Nothing for any other prompt.
-fn stepper(prompt: &PromptView) -> Option<Element> {
+/// to the value above it, as the web's `Stepper` draws it, and about how large it is drawn. A
+/// step with no value to go to cannot be pressed. Nothing for any other prompt.
+fn stepper(prompt: &PromptView) -> Option<Controls> {
     let ShapeBody::Number {
         values,
         value,
@@ -103,14 +105,47 @@ fn stepper(prompt: &PromptView) -> Option<Element> {
             (detail.as_deref())
                 .map(|detail| text(detail).style(type_style::BODY).color(color::TEXT_DIM)),
         );
-    Some(
-        row()
-            .name("stepper")
-            .gap(space::S)
-            .align_items(Align::Center)
-            .child(step(below, icons::MINUS, "Less"))
-            .child(shown)
-            .child(step(above, icons::PLUS, "More")),
+    let element = row()
+        .name("stepper")
+        .gap(space::S)
+        .align_items(Align::Center)
+        .child(step(below, icons::MINUS, "Less"))
+        .child(shown)
+        .child(step(above, icons::PLUS, "More"));
+    Some(Controls {
+        element,
+        size: stepper_size(&value.to_string(), detail.as_deref()),
+    })
+}
+
+/// About how large a number's stepper is drawn with `value` over `detail`, from the count of
+/// their characters: an estimate on the generous side, as `bar::button_width` makes, which only
+/// decides where the stepper stands on the phone. `detail` is a cost, each `{...}` of which is
+/// one mana symbol drawn about as wide as its type is tall, and each other character of which
+/// counts as wide as its type is tall too.
+fn stepper_size(value: &str, detail: Option<&str>) -> (f32, f32) {
+    let line = |style: TypeStyle| style.size * style.line_height;
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a value and its cost are a few characters"
+    )]
+    let (value_width, detail_width) = (
+        value.chars().count() as f32 * type_style::TITLE.size * CHARACTER_WIDTH,
+        detail.map_or(0.0, |detail| {
+            let symbols = detail.split('{').skip(1).count();
+            let inside: usize = (detail.split('{').skip(1))
+                .map(|part| part.split('}').next().map_or(0, str::len) + 2)
+                .sum();
+            (detail.chars().count() - inside + symbols) as f32 * type_style::BODY.size
+        }),
+    );
+    let shown = (
+        value_width.max(detail_width),
+        line(type_style::TITLE) + detail.map_or(0.0, |_| line(type_style::BODY)),
+    );
+    (
+        2.0 * size::ICON_BUTTON + 2.0 * space::S + shown.0,
+        size::ICON_BUTTON.max(shown.1),
     )
 }
 

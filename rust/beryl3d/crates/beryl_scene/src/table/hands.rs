@@ -92,7 +92,7 @@ pub(super) fn hand(
     } else {
         fan_poses(shown, side, data, strip, camera, &mut lay);
     }
-    super::lifted::lay_picked(&picked, side, camera, placement);
+    super::lifted::lay_picked(&picked, side, camera, data.ceiling, placement);
 }
 
 /// Fans of each size for a single script, whose window and hand layout stay fixed. A script

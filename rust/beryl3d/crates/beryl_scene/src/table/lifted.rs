@@ -207,6 +207,7 @@ pub(crate) fn lay(
                 (offset, under, order),
                 (handled.opening, pile),
                 camera,
+                layout.hand.ceiling,
             )
         };
         if let Some(rest) = placement.get(object.slot).copied() {
@@ -229,13 +230,18 @@ pub(crate) fn lay(
 /// `offset` is its column's distance from the middle column, `under` how many cards of its
 /// column lie over it, and `order` how far it lies over the first card. The opponent's cards,
 /// and every card a counted look at a `pile` takes, show their backs, as the web's do; so does a
-/// card whose face the viewer's record does not show.
+/// card whose face the viewer's record does not show. On the phone, where that place lies over
+/// the viewer's back row, the viewer's cards stand with the middle card's top edge at
+/// `ceiling`, the height in normalized device coordinates the viewer's hand keeps under so
+/// that each card of that row keeps a strip to press (`phone::hand_ceiling`); it is infinite
+/// on the desktop.
 fn held_up(
     object: &ObjectView,
     side: Side,
     (offset, under, order): (f32, usize, f32),
     (opening, pile): (bool, bool),
     camera: &Camera,
+    ceiling: f32,
 ) -> Pose {
     let aspect = camera.window.size.width / camera.window.size.height;
     let (at, height) = match (opening, side) {
@@ -247,7 +253,12 @@ fn held_up(
     let width = height * 2.0 * (CARD_WIDTH / CARD_HEIGHT) / aspect;
     // Where the middle card stands is given across in window heights, so that it keeps its
     // distance from the middle of the screen at any window shape, as the web's `fromMiddle` does.
-    let at = Vec2::new(at.x / aspect, at.y);
+    let y = if side == Side::You && !opening && ceiling.is_finite() {
+        ceiling - height
+    } else {
+        at.y
+    };
+    let at = Vec2::new(at.x / aspect, y);
     #[expect(clippy::cast_precision_loss, reason = "a handful of cards")]
     let ndc =
         at + Vec2::new(
@@ -269,13 +280,15 @@ fn held_up(
 /// resolution that is paused, apart from the hand where the cards a player handles from their
 /// hand are held up: face up for their player, face down for the other ([CR 101.4a]): "each
 /// player must clearly indicate which face-down card they are choosing." The web interface's
-/// `pickedPlacements` (`ui/src/game/layout.ts`) lays them out the same way.
+/// `pickedPlacements` (`ui/src/game/layout.ts`) lays them out the same way. `ceiling` is the
+/// height the viewer's hand keeps under, which `held_up` keeps them under on the phone.
 ///
 /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
 pub(crate) fn lay_picked(
     picked: &[&ObjectView],
     side: Side,
     camera: &Camera,
+    ceiling: f32,
     placement: &mut Placement,
 ) {
     let columns = lift::hand::COLUMNS.min(picked.len());
@@ -290,7 +303,14 @@ pub(crate) fn lay_picked(
         let order = (column * packet + packet - under) as f32;
         // A hidden pick is made while a spell or ability resolves, which is never before the
         // first turn, so its cards are never laid out as an opening hand's.
-        let pose = held_up(object, side, (offset, under, order), (false, false), camera);
+        let pose = held_up(
+            object,
+            side,
+            (offset, under, order),
+            (false, false),
+            camera,
+            ceiling,
+        );
         placement.set(
             object.slot,
             super::Rest {

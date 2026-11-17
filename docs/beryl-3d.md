@@ -1297,12 +1297,15 @@ row. A stack with more items than fit across shows its top items, as many as fit
 beside room at each end for a count (`stack.count_room`), and scrolls as a
 battlefield row does: rows of items stacked over the battlefield would cover the
 creatures' rows past what a press can reach. The viewer's hand, too, shows only
-as many cards as keep their strips in rows under the top safe inset, and scrolls
-(below, "How a row scrolls"). The rows never move for the stack, so an item
-keeps the web's size, 68 points wide, only where the band is tall enough: at 375
-by 647 it is 51 points wide, so that a tapped creature under it, 56 points tall
-there, keeps an uncovered strip of 44 points and a cell of the hit test's grid
-at each edge (`stack_height`).
+as many cards as keep their strips in rows whose top edge stays low enough that
+each card of the viewer's back row, tapped, keeps a strip of 44 points and a
+cell of the hit test's grid at each edge above it (`hand_ceiling`), and scrolls
+(below, "How a row scrolls"). A card the viewer handles from their hand, or
+picked in a hidden pick, stands with its top edge at that height too. The rows
+never move for the stack, so an item keeps the web's size, 68 points wide, only
+where the band is tall enough: at 375 by 647 it is 51 points wide, so that a
+tapped creature under it, 56 points tall there, keeps an uncovered strip of 44
+points and a cell of the hit test's grid at each edge (`stack_height`).
 
 ### Objects and placement
 
@@ -1395,27 +1398,27 @@ flight start exactly where the card was.
   in hand order from the back row to the front, and each row stands high enough
   above the one in front of it to leave every card a square of `strip` above it.
   Sixty cards take two rows in every desktop window. On the phone, where the
-  rows may rise no higher than the top safe inset, a hand too large for the rows
-  that fit there shows as many cards as keep their strips and scrolls; 60 cards
-  at 375 by 647 would need about 12 rows where 10 fit. The stack's items stand
-  at the right of the screen, the top item in front and each item beneath
-  peeking out above and to its left, and a tall stack shrinks to fit. Each item
-  beneath is pressed through the strip it shows at its left. A stack so tall
-  that this strip would be narrower than the reachable check's square (8 items
-  in a 1440 by 900 window) stands in rows instead, which the web interface does
-  not do: each row stands a little above the one in front of it, and each item a
-  little to the left of the one in front of it in its row, so every item keeps
-  an uncovered corner `stack.spare` times the square's side. Each row holds as
-  many items as lets the items be largest while the rows fit under the stack's
-  top and reach left no further than the leaning stack ever does, to no less
-  than 0.4 of their full size: past that the rows grow longer. As the web
-  interface ends the permanents' rows left of its stack (`ROOM.end`), a
-  battlefield row whose cards the stack's band of the screen would cover past
-  the reachable check's square (both creatures' rows) ends a gap left of the
-  furthest the leaning stack ever reaches, however tall the stack is, so no card
-  under the stack loses its square and no row moves as the stack grows. A spell
-  that is resolving, which the game has taken off its stack while its card stays
-  in the stack's zone, stays the top item until it leaves.
+  rows may rise only so high that the viewer's back row keeps a strip to press,
+  a hand too large for the rows that fit there shows as many cards as keep their
+  strips and scrolls. The stack's items stand at the right of the screen, the
+  top item in front and each item beneath peeking out above and to its left, and
+  a tall stack shrinks to fit. Each item beneath is pressed through the strip it
+  shows at its left. A stack so tall that this strip would be narrower than the
+  reachable check's square (8 items in a 1440 by 900 window) stands in rows
+  instead, which the web interface does not do: each row stands a little above
+  the one in front of it, and each item a little to the left of the one in front
+  of it in its row, so every item keeps an uncovered corner `stack.spare` times
+  the square's side. Each row holds as many items as lets the items be largest
+  while the rows fit under the stack's top and reach left no further than the
+  leaning stack ever does, to no less than 0.4 of their full size: past that the
+  rows grow longer. As the web interface ends the permanents' rows left of its
+  stack (`ROOM.end`), a battlefield row whose cards the stack's band of the
+  screen would cover past the reachable check's square (both creatures' rows)
+  ends a gap left of the furthest the leaning stack ever reaches, however tall
+  the stack is, so no card under the stack loses its square and no row moves as
+  the stack grows. A spell that is resolving, which the game has taken off its
+  stack while its card stays in the stack's zone, stays the top item until it
+  leaves.
 - **Cards a prompt holds up lie in the tray.** `table::tray_layout` ports the
   web interface's `laidOut` for one pile (rows about the middle of the space)
   and two (boxes side by side), in the space `desktopTray` gives, placed
@@ -1913,12 +1916,15 @@ window.
   - The phase icon stands on the middle band's line, and full control's mark
     stands at the band's right end.
   - The open prompt's primary button and its pass-on button stand in a dock at
-    the right of the viewer's strip. The dock rises above the hand when a hand
-    in two rows reaches into the strip. The prompt's other buttons are stacked
-    over the dock. Where the raised dock or the stacked buttons would stand over
-    a permanent of the viewer's back row, they stand at the right end of the
-    middle band instead, when they fit there and no stack item lies there, and
-    the pill beside them is narrowed to the band's left
+    the right of the viewer's strip. The dock, and the "Opponent's Turn" button
+    that stands in its place while the opponent acts, rise above the hand when a
+    hand in two rows reaches into the strip. The prompt's other buttons, and a
+    number's stepper, are stacked over the dock. Where the raised dock or the
+    stacked buttons would stand over a permanent of the viewer's back row, they
+    stand in the middle band instead, when they fit there clear of every
+    permanent, stack item and the phase icon: the dock at the band's right end,
+    and the stacked buttons there, beside the dock, or at the band's left end.
+    The pill is narrowed to the room between them
     (`hud::phone::clear_at_right`). What the prompt asks is a pill on the middle
     band's line, or at the nearest height clear of every permanent and stack
     item (`hud::phone::asked_top`). While the table is shaded, the pill stands

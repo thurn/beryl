@@ -70,20 +70,23 @@ pub fn asked_top(bands: &PhoneBands, occupied: &Occupied, height: f32) -> f32 {
         .unwrap_or(line)
 }
 
-/// Whether a box `width` by `height` at the column's right end, its top at `top`, keeps clear
-/// of every permanent and stack item, allowing `data::OVERLAP` points of overlap on each side,
-/// so that a box that fills the middle band still fits between the creatures' rows, which a
-/// token's pile reaches over by a few points.
+/// Whether a box `width` by `height` whose right edge stands `beside` points left of the
+/// column's right end, its top at `top`, keeps clear of every permanent and stack item,
+/// allowing `data::OVERLAP` points of overlap on each side, so that a box that fills the middle
+/// band still fits between the creatures' rows, which a token's pile reaches over by a few
+/// points.
 #[must_use]
 pub fn clear_at_right(
     bands: &PhoneBands,
     occupied: &Occupied,
     (width, height): (f32, f32),
     top: f32,
+    beside: f32,
 ) -> bool {
     let spare = data::OVERLAP;
-    let (left, bottom) = (bands.right - width + spare, top + height - spare);
-    let (right, top) = (bands.right - spare, top + spare);
+    let end = bands.right - beside;
+    let (left, bottom) = (end - width + spare, top + height - spare);
+    let (right, top) = (end - spare, top + spare);
     occupied.cards.iter().all(|card| {
         card.x >= right
             || card.x + card.width <= left
@@ -122,14 +125,8 @@ pub fn middle(view: &PlayerView, full_control: bool, bands: &PhoneBands) -> Elem
         .color(if yours { color::GOLD } else { color::TEXT_DIM })
         .passes(true);
     phase.shows = Some(Shown::Icon(phase_icon(view.turn.step), icons::PHASE_SIDE));
-    phase.anchor = Some(if view.stack.is_empty() {
-        Anchor::Point(
-            Vec2::new(f32::midpoint(bands.left, bands.right), line),
-            Vec2::splat(0.5),
-        )
-    } else {
-        Anchor::Point(Vec2::new(bands.left, line), Vec2::new(0.0, 0.5))
-    });
+    let (left, _) = phase_edges(view.stack.is_empty(), bands);
+    phase.anchor = Some(Anchor::Point(Vec2::new(left, line), Vec2::new(0.0, 0.5)));
     let mark = full_control.then(|| {
         let mut mark = Element::new(Role::Region)
             .name("full control")
@@ -148,6 +145,27 @@ pub fn middle(view: &PlayerView, full_control: bool, bands: &PhoneBands) -> Elem
         .name("middle")
         .child(phase)
         .children(mark)
+}
+
+/// The left and right edges of the phase icon in the middle band: centred while the stack is
+/// empty, and at the band's left while it holds anything.
+fn phase_edges(stack_empty: bool, bands: &PhoneBands) -> (f32, f32) {
+    let side = f32::from(icons::PHASE_SIDE);
+    let left = if stack_empty {
+        f32::midpoint(bands.left, bands.right) - side / 2.0
+    } else {
+        bands.left
+    };
+    (left, left + side)
+}
+
+/// The left and right edges of the phase icon `middle` draws for the screen `input` builds, or
+/// an empty span at the column's left where it draws none.
+#[must_use]
+pub fn phase_span(input: &ScreenIn, bands: &PhoneBands) -> (f32, f32) {
+    input.view.map_or((bands.left, bands.left), |view| {
+        phase_edges(view.stack.is_empty(), bands)
+    })
 }
 
 /// The icon of the phase `step` is in, of the web's five (`phaseOf` in `ui/src/mobile/layout.ts`):
