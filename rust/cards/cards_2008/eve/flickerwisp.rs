@@ -134,13 +134,13 @@ pub mod scenarios {
         // The exiled creature loses its counter and its attachments. The Aura goes to the
         // graveyard, and the Equipment stays on the battlefield without giving its bonus.
         Scenario::new("Flickerwisp returns a creature without its counter or attachments")
-            .interaction(&[Card::HolyStrength, Card::LeoninScimitar])
+            .interaction(&[Card::HolyStrength])
             .hand(P0, &[WISP, Card::HolyStrength])
             .permanents(
                 P0,
                 &[
                     Permanent::new(Prop::Vanilla).counters(CounterKind::PlusOne, 1),
-                    Permanent::new(Card::LeoninScimitar),
+                    Permanent::new(Prop::Equipment),
                     Permanent::new(Card::Plains),
                     Permanent::new(Card::Plains),
                     Permanent::new(Card::Plains),
@@ -151,7 +151,7 @@ pub mod scenarios {
             .actions(&[
                 ME.casts(Card::HolyStrength),
                 Resolve,
-                ME.activates(Card::LeoninScimitar, 1),
+                ME.activates(Prop::Equipment, 1),
                 Resolve,
                 ME.pt(Prop::Vanilla, 5, 5),
                 ME.casts(WISP),
@@ -159,7 +159,7 @@ pub mod scenarios {
                 ME.targets(Prop::Vanilla),
                 Resolve,
                 ME.has(Zone::Graveyard, Card::HolyStrength, 1),
-                ME.controls(Card::LeoninScimitar, 1),
+                ME.controls(Prop::Equipment, 1),
                 advance_to(1, TurnStep::End),
                 Resolve,
                 ME.pt(Prop::Vanilla, 2, 1),
