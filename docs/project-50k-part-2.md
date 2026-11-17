@@ -425,7 +425,7 @@ a rule for each. The target is that a simple card costs a cheap model one short
 session with no engine source read.
 
 **E1. Mutants for every part of a definition.** The mutation check
-(`beryl_cards/src/tests/mutation/`) changes one node of a card's definition and
+(`beryl_cards/src/mutation/`) changes one node of a card's definition and
 requires some scenario to tell the mutant from the card. It tests effects,
 target optionality, static modifications and affected sets, replacement events
 and rewrites, mana products, triggers, rule changes, activation and casting
@@ -437,8 +437,9 @@ mana product neighbour must fit the payment engine's supported sources.
 
 **E2. The bar, and the gates that change.** `just card check` reports, per card,
 the mutants that generated scenarios alone kill. A card whose generated
-scenarios kill them all, and agree with both oracles, is `generated`: its file
-has no `scenarios` module. Four things change so that this is legal:
+scenarios kill them all, pass in at least one oracle, and have no unexpected
+oracle failures is `generated`: its file has no `scenarios` module. Four gates
+make this possible:
 
 - the set crates' build scripts stop requiring a `SCENARIOS` constant in every
   card file (`beryl_card_build/src/generate.rs`);
@@ -451,6 +452,10 @@ has no `scenarios` module. Four things change so that this is legal:
 
 A card with a surviving mutant gets a hand-written scenario for that mutant
 only, or a witness when the mutant is of a vocabulary entry many cards share.
+The single-card check runs the same generator used by the full sweep so it can
+report the answer limit without generating scenarios for unrelated cards. Specs
+and Playground use generated and rules-library scenarios when a card file
+supplies none.
 
 **E3. A generator that reaches more.** `derive/` plays player 0 acting at the
 first main-phase priority, an attack, and steps through turn 4, from seven

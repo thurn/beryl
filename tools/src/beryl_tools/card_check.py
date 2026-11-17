@@ -8,10 +8,13 @@ stops the rest:
 2. `tests`: that crate's tests in the card's own module, if its file has any.
 3. `beryl`: the card's scenarios in Beryl's strict runner, `beryl_scenario run --card`: the
    hand-written ones of its file and the rules library's, and the ones generated for it (K3).
-4. `oracles`: the same scenarios in XMage and Forge, `by oracle <name> --no-sim`, which holds
+4. `generated`: mutation coverage from generated scenarios alone. A file with no
+   scenarios of its own must have generated scenarios that kill every mutant.
+5. `oracles`: the same scenarios in XMage and Forge, `by oracle <name> --no-sim`, which holds
    the oracle lock and applies data/oracle-divergences.json and data/oracle-exporter-gaps.json.
-   `--no-oracles` skips it, for a fast loop.
-5. `render`: the rules text the card's definition renders to against its Oracle text in the
+   A card without scenarios of its own must have a generated scenario that passes in at
+   least one oracle. `--no-oracles` skips the oracle step for a fast loop.
+6. `render`: the rules text the card's definition renders to against its Oracle text in the
    card store, normalized (render_diff.py). A difference fails the step and prints the
    paragraphs that differ, since a definition that reads differently from the card most often
    does something different, unless data/card-text-allowlist.json pins exactly that difference
@@ -27,7 +30,7 @@ import argparse
 import json
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -57,9 +60,6 @@ class Outcome:
     said: str
     # The command's output, printed when the step fails.
     output: str = ""
-
-
-Step = Callable[[Card], Outcome]
 
 
 def command(
@@ -122,8 +122,8 @@ def tests(target: Card) -> Outcome:
     return Outcome("pass", f"{passed} passed" if passed else f"none in {target.module}")
 
 
-def beryl(target: Card) -> Outcome:
-    result = command(
+def scenario_command(action: str, target: Card) -> subprocess.CompletedProcess[str]:
+    return command(
         [
             "cargo",
             "run",
@@ -135,23 +135,54 @@ def beryl(target: Card) -> Outcome:
             "--bin",
             "beryl_scenario",
             "--",
-            "run",
+            action,
             "--card",
             target.name,
         ]
     )
+
+
+def beryl(target: Card) -> Outcome:
+    result = scenario_command("run", target)
     output = result.stdout + result.stderr
     lines = output.strip().splitlines()
     summary = lines[-1] if lines else "no output"
     if result.returncode != 0:
         failures = [line for line in lines if line.startswith("fail ")]
         return Outcome("fail", failures[0] if failures else summary, output)
-    # Every card file has a scenario of its own (`every_card_has_scenarios_and_they_pass`).
-    if target.module is not None and summary.startswith("0 hand-written"):
-        return Outcome("fail", f"its file has no scenario: {summary}", output)
     if summary.startswith("0 hand-written, 0 generated"):
         return Outcome("fail", "no scenarios", output)
     return Outcome("pass", summary)
+
+
+def generated(target: Card) -> tuple[Outcome, bool]:
+    """Reports kills from generated scenarios and whether the card relies on them."""
+    result = scenario_command("generated", target)
+    if result.returncode != 0:
+        output = result.stdout + result.stderr
+        return Outcome("fail", first_error(output), output), False
+    report = cast(Json, json.loads(result.stdout))
+    mutants = cast(int, report["mutants"])
+    survivors = cast(list[str], report["survivors"])
+    count = cast(int, report["generated"])
+    requires_generated = report["written"] == 0
+    eligible = count > 0 and not survivors
+    if not count:
+        decision = "no generated scenarios"
+    elif survivors:
+        decision = "needs hand-written scenarios"
+    else:
+        decision = "eligible for generated-only coverage pending oracle checks"
+    said = (
+        f"{mutants - len(survivors)}/{mutants} mutants killed, {report['cut']} answers cut, "
+        f"{decision}"
+    )
+    if survivors:
+        said += f"; survivors: {'; '.join(survivors)}"
+    return (
+        Outcome("fail" if requires_generated and not eligible else "pass", said),
+        requires_generated,
+    )
 
 
 def oracle_counts(engine: str, result: Json) -> str:
@@ -173,7 +204,7 @@ def oracle_counts(engine: str, result: Json) -> str:
     return f"{engine}: {', '.join(counts) or 'no scenarios'}{why}"
 
 
-def oracles(target: Card) -> Outcome:
+def oracles(target: Card, requires_generated: bool) -> Outcome:
     result = command(
         [sys.executable, "-m", "beryl_tools.cli", "oracle", target.name, "--no-sim"],
         paths.REPO,
@@ -195,6 +226,18 @@ def oracles(target: Card) -> Outcome:
     )
     if result.returncode != 0:
         return Outcome("fail", said, output)
+    generated_passes = sum(
+        cast(int, cast(Json, summary[engine]).get("generated_pass", 0))
+        for engine in ("xmage", "forge")
+        if engine in summary
+    )
+    if not generated_passes:
+        said = f"no generated scenario passed either oracle; {said}"
+        if requires_generated:
+            return Outcome("fail", said, output)
+    else:
+        checks = "check" if generated_passes == 1 else "checks"
+        said += f"; generated scenarios passed {generated_passes} oracle {checks}"
     return Outcome("pass", said)
 
 
@@ -221,25 +264,24 @@ def render(target: Card) -> Outcome:
     )
 
 
-def no_oracles_given(target: Card) -> Outcome:
-    return Outcome("skip", "--no-oracles")
-
-
-def steps(no_oracles: bool) -> list[tuple[str, Step]]:
-    """The steps, in order."""
-    return [
-        ("build", build),
-        ("tests", tests),
-        ("beryl", beryl),
-        ("oracles", no_oracles_given if no_oracles else oracles),
-        ("render", render),
-    ]
+def steps(target: Card, no_oracles: bool) -> Iterator[tuple[str, Outcome]]:
+    """Run one step at a time so a failure can stop the check."""
+    yield "build", build(target)
+    yield "tests", tests(target)
+    yield "beryl", beryl(target)
+    report, requires_generated = generated(target)
+    yield "generated", report
+    yield "oracles", (
+        Outcome("skip", "--no-oracles")
+        if no_oracles
+        else oracles(target, requires_generated)
+    )
+    yield "render", render(target)
 
 
 def check(target: Card, no_oracles: bool) -> int:
     """Runs the steps on `target`, printing a line for each, until one fails."""
-    for name, step in steps(no_oracles):
-        outcome = step(target)
+    for name, outcome in steps(target, no_oracles):
         print(f"{name}: {outcome.status}: {outcome.said}", flush=True)
         if outcome.status == "fail":
             if outcome.output.strip():

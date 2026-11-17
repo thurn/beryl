@@ -144,6 +144,7 @@ ORACLE_SUMMARY: dict[str, object] = {
         "fail": 0,
         "allowlisted": 0,
         "unsupported": 1,
+        "generated_pass": 0,
         "scenarios": [{"status": "unsupported", "reason": "no exporter for X"}],
     },
     "forge": {
@@ -151,6 +152,7 @@ ORACLE_SUMMARY: dict[str, object] = {
         "fail": 0,
         "allowlisted": 0,
         "unsupported": 0,
+        "generated_pass": 1,
         "scenarios": [],
     },
     "report": "oracle.json",
@@ -169,6 +171,14 @@ class Commands:
         self.fail_on = fail_on
         self.rendered = {"Counterspell": "Counter target spell.", "Grizzly Bears": ""}
         self.rendered.update(rendered or {})
+        self.mutations: dict[str, object] = {
+            "written": 1,
+            "generated": 2,
+            "mutants": 2,
+            "survivors": ["ability 0: drop step 1"],
+            "cut": 3,
+        }
+        self.oracle_summary: dict[str, object] = ORACLE_SUMMARY
 
     def __call__(
         self, args: list[str], cwd: Path = Path(".")
@@ -179,12 +189,14 @@ class Commands:
             name = args[-1]
             face = {"name": name, "text": self.rendered[name]}
             out = json.dumps({"name": name, "faces": [face]}) + "\n"
+        elif "generated" in args:
+            out = json.dumps(self.mutations)
         elif "beryl_scenario" in args:
-            out = "pass hand-written: one\n1 hand-written, 2 generated, 0 failed\n"
+            out = f"{self.mutations['written']} hand-written, 2 generated, 0 failed\n"
             if failing:
                 out = "fail hand-written: one: action 2: wrong\n1 hand-written, 0 failed\n"
         elif "oracle" in args:
-            out = json.dumps(ORACLE_SUMMARY, indent=2) + "\n"
+            out = json.dumps(self.oracle_summary, indent=2) + "\n"
         elif "test" in args:
             out = "test result: ok. 2 passed; 0 failed\n"
         else:
@@ -195,7 +207,8 @@ class Commands:
     def steps(self) -> list[str]:
         """Which step each command was: its cargo subcommand, `oracle` or `render`."""
         return [
-            next((w for w in ("oracle", "render") if w in a), a[1]) for a in self.ran
+            next((w for w in ("generated", "oracle", "render") if w in a), a[1])
+            for a in self.ran
         ]
 
 
@@ -217,18 +230,22 @@ def test_check_runs_each_step_in_order_on_the_cards_crate(
 ) -> None:
     commands = Commands()
     assert check("Counterspell", sources, monkeypatch, commands) == 0
-    assert commands.steps() == ["check", "test", "run", "oracle", "render"]
-    build, tests, beryl, oracle, render = commands.ran
+    assert commands.steps() == ["check", "test", "run", "generated", "oracle", "render"]
+    build, tests, beryl, generated, oracle, render = commands.ran
     assert build[build.index("-p") + 1] == "cards_1993"
     assert tests[-2:] == ["--", "lea::counterspell::"]
     assert beryl[-3:] == ["run", "--card", "Counterspell"]
+    assert generated[-3:] == ["generated", "--card", "Counterspell"]
     assert oracle[-3:] == ["oracle", "Counterspell", "--no-sim"]
     assert render[-3:] == ["render", "--json", "Counterspell"]
     assert capsys.readouterr().out.splitlines() == [
         "build: pass: cargo check -p cards_1993",
         "tests: pass: 2 passed",
         "beryl: pass: 1 hand-written, 2 generated, 0 failed",
-        "oracles: pass: xmage: 2 pass, 1 unsupported (no exporter for X); forge: 3 pass",
+        "generated: pass: 1/2 mutants killed, 3 answers cut, needs hand-written scenarios; "
+        "survivors: ability 0: drop step 1",
+        "oracles: pass: xmage: 2 pass, 1 unsupported (no exporter for X); forge: 3 pass; "
+        "generated scenarios passed 1 oracle check",
         "render: pass: matches its Oracle text",
         "card check: Counterspell passed",
     ]
@@ -243,7 +260,11 @@ def test_check_runs_each_step_in_order_on_the_cards_crate(
             ["check", "test", "run"],
             "beryl: fail: fail hand-written: one: action 2",
         ),
-        ("oracle", ["check", "test", "run", "oracle"], "oracles: fail: xmage: 2 pass"),
+        (
+            "oracle",
+            ["check", "test", "run", "generated", "oracle"],
+            "oracles: fail: xmage: 2 pass",
+        ),
     ],
 )
 def test_check_stops_at_the_first_failure_and_exits_nonzero(
@@ -270,7 +291,7 @@ def test_no_oracles_skips_xmage_and_forge(
 ) -> None:
     commands = Commands()
     assert check("Counterspell", sources, monkeypatch, commands, no_oracles=True) == 0
-    assert commands.steps() == ["check", "test", "run", "render"]
+    assert commands.steps() == ["check", "test", "run", "generated", "render"]
     assert "oracles: skip: --no-oracles" in capsys.readouterr().out
 
 
@@ -280,28 +301,51 @@ def test_a_card_complete_from_the_store_has_no_tests_of_its_own(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     commands = Commands()
+    commands.mutations.update(written=0, survivors=[])
     assert check("Grizzly Bears", sources, monkeypatch, commands, no_oracles=True) == 0
-    assert commands.steps() == ["check", "run", "render"]
+    assert commands.steps() == ["check", "run", "generated", "render"]
     assert "tests: skip: no file" in capsys.readouterr().out
 
 
-def test_a_card_file_with_no_scenario_of_its_own_fails(
+def test_a_card_without_its_own_scenarios_needs_generated_mutation_coverage(
     sources: card.Sources,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    class Generated(Commands):
-        def __call__(
-            self, args: list[str], cwd: Path = Path(".")
-        ) -> subprocess.CompletedProcess[str]:
-            if "beryl_scenario" not in args:
-                return super().__call__(args, cwd)
-            self.ran.append(args)
-            out = "pass generated: one\n0 hand-written, 1 generated, 0 failed\n"
-            return subprocess.CompletedProcess(args, 0, out, "")
+    commands = Commands()
+    commands.mutations["written"] = 0
+    assert check("Counterspell", sources, monkeypatch, commands) == 1
+    assert "generated: fail: 1/2 mutants killed" in capsys.readouterr().out
+    assert "oracle" not in commands.steps()
 
-    assert check("Counterspell", sources, monkeypatch, Generated(), True) == 1
-    assert "beryl: fail: its file has no scenario" in capsys.readouterr().out
+
+@pytest.mark.parametrize("generated_pass", [0, 1])
+def test_a_card_without_its_own_scenarios_needs_a_generated_oracle_pass(
+    sources: card.Sources,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    generated_pass: int,
+) -> None:
+    commands = Commands()
+    commands.mutations.update(written=0, survivors=[])
+    # An oracle pass on a library scenario alone does not meet this bar.
+    commands.oracle_summary = {
+        "xmage": {"pass": 2, "unsupported": 2, "generated_pass": 0},
+        "forge": {
+            "pass": 2,
+            "unsupported": 2 - generated_pass,
+            "generated_pass": generated_pass,
+        },
+    }
+    assert check("Counterspell", sources, monkeypatch, commands) == int(
+        not generated_pass
+    )
+    output = capsys.readouterr().out
+    assert "generated: pass: 2/2 mutants killed, 3 answers cut" in output
+    if generated_pass:
+        assert "card check: Counterspell passed" in output
+    else:
+        assert "oracles: fail: no generated scenario passed either oracle" in output
 
 
 def test_a_rendering_that_differs_from_the_oracle_text_fails_with_the_diff(

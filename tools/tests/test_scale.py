@@ -1,5 +1,6 @@
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 
 from beryl_tools import card_store, scale, scale_workspace
@@ -19,12 +20,18 @@ def test_every_card_file_is_in_the_pool() -> None:
 def test_a_clone_renames_only_its_own_card_and_faces() -> None:
     pool, _ = scale_workspace.sources()
     counterspell = next(s for s in pool if s.name == "Counterspell")
-    text = scale_workspace.clone(counterspell, 7)
+    # A card can have no scenarios, so supply the name references the clone must rewrite.
+    source = replace(
+        counterspell,
+        text=counterspell.text
+        + "\nconst CARDS: &[&str] = &[Card::Counterspell, Card::Plains];\n",
+    )
+    text = scale_workspace.clone(source, 7)
     assert "Card::Counterspell7" in text
     assert "Printed::Counterspell7" in text
     assert not re.search(r"(Card|Printed)::Counterspell\b", text)
-    assert "Prop::Artifact" in text  # the other cards stay what they are
-    assert ".effect(&counter(target()))" in text  # its body and scenarios come along
+    assert "Card::Plains]" in text  # the other card keeps its name
+    assert ".effect(&counter(target()))" in text
     record = scale_workspace.clone_record(counterspell, 7, "z00001")
     assert record["name"] == "Counterspell 7" and record["first_set"] == "z00001"
 

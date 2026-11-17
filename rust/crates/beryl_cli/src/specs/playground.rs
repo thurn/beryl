@@ -63,10 +63,7 @@ pub fn generate(card: &'static str) -> Playground {
         .copied()
         .find(|d| d.name == card)
         .expect("card definition");
-    let scenarios = beryl_cards::scenarios()
-        .iter()
-        .find(|(name, _)| *name == card)
-        .map_or(&[][..], |(_, cases)| *cases);
+    let scenarios = super::scenarios(def);
     let mut groups: BTreeMap<String, Vec<Variant>> = BTreeMap::new();
     add_scenarios(def, scenarios, &mut groups);
     // Definitions supply ability setups even when the scenario suite has no activation.

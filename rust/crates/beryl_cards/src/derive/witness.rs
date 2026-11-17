@@ -10,7 +10,7 @@
 //! Damn written as a plain destroy still meets a shielded creature, and `XMage` and Forge, which
 //! read the Oracle text for themselves, then disagree with Beryl.
 //!
-//! The mutation check (`tests/mutation.rs`) finds a field no witness covers: a mutant of the
+//! The mutation check (`crate::mutation`) finds a field no witness covers: a mutant of the
 //! card with that field changed survives every scenario.
 
 use beryl_card::{CostAction, CostPart, Filter, Node};

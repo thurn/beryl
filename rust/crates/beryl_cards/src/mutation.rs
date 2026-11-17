@@ -13,8 +13,9 @@
 //! values give different outcomes: add it to the generator (`derive::witness`), with a real
 //! card implemented for it if the pool has none, or write a scenario for a card-specific
 //! interaction. If both definitions always play the same way, list the mutant in
-//! [`EQUIVALENT`] with the reason.
+//! `EQUIVALENT` with the reason.
 
+#[cfg(test)]
 use std::collections::BTreeSet;
 
 use beryl_engine::card::CardDef;
@@ -24,8 +25,10 @@ use beryl_scenario::{Failure, Scenario, outcome_with};
 
 use crate::CARDS;
 
+#[cfg(test)]
 mod coverage;
 mod neighbours;
+#[cfg(test)]
 mod witnesses;
 
 use neighbours::mutants;
@@ -33,6 +36,7 @@ use neighbours::mutants;
 /// The mutants no scenario can tell from their card, because the two definitions do the same
 /// thing in every game: the card, the node and the neighbour as the failure names them, and
 /// why. An entry a scenario kills fails too, so the list stays current.
+#[cfg(test)]
 const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
     (
         "Aang's Iceberg",
@@ -122,6 +126,7 @@ fn result(cards: &'static CardTable, scenario: &Scenario) -> Result<ScenarioResu
 }
 
 /// Every scenario of the card: its file's, the rules library's for it and its generated ones.
+#[cfg(test)]
 fn scenarios_of(card: &str) -> Vec<&'static Scenario> {
     let own = crate::scenarios().iter().copied();
     let generated = crate::derive::all().iter().copied();
@@ -133,11 +138,16 @@ fn scenarios_of(card: &str) -> Vec<&'static Scenario> {
 }
 
 /// What the check found for one card.
-struct Report {
-    card: &'static str,
-    mutants: usize,
+pub struct Report {
+    pub card: &'static str,
+    pub mutants: usize,
     /// Each survivor as "node: neighbour".
-    survivors: Vec<String>,
+    pub survivors: Vec<String>,
+}
+
+/// Checks a card against its generated scenarios.
+pub fn generated(def: &'static CardDef, scenarios: &[Scenario]) -> Report {
+    report(def, &expected(scenarios.iter().collect()))
 }
 
 /// Each scenario that passes with the real card, with its result.
@@ -163,6 +173,7 @@ fn killed(mutant: &'static CardDef, expected: &[(&Scenario, ScenarioResult)]) ->
 }
 
 /// Plays every mutant of `def` against its scenarios.
+#[cfg(test)]
 fn check(def: &'static CardDef) -> Report {
     let witnesses = witnesses::for_card(def.name);
     let mut expected = expected(scenarios_of(def.name));
@@ -171,10 +182,14 @@ fn check(def: &'static CardDef) -> Report {
             .unwrap_or_else(|error| panic!("{}: invalid witness: {error}", def.name));
         (scenario, result)
     }));
+    report(def, &expected)
+}
+
+fn report(def: &'static CardDef, expected: &[(&Scenario, ScenarioResult)]) -> Report {
     let all = mutants(def);
     let survivors = all
         .iter()
-        .filter(|m| !killed(m.def, &expected))
+        .filter(|m| !killed(m.def, expected))
         .map(|m| format!("{}: {}", m.node, m.neighbour))
         .collect();
     Report {
@@ -185,6 +200,7 @@ fn check(def: &'static CardDef) -> Report {
 }
 
 /// Every card file's report, the cards shared among threads.
+#[cfg(test)]
 fn reports() -> Vec<Report> {
     let defs: &'static [&'static CardDef] = CARDS.cards();
     let threads = std::thread::available_parallelism().map_or(4, usize::from);

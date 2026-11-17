@@ -728,9 +728,16 @@ def oracle(args: argparse.Namespace) -> int:
         return 1 if built else checks.CANNOT_RUN
     report = log_dir() / "oracle.json"
     report.write_text(json.dumps(results, indent=2))
-    # Only what needs attention on stdout; the full report is in the log.
+    # Keep the count card check needs before filtering out clean passes.
     summary: dict[str, object] = {
-        name: {**result, "scenarios": forge.attention(result)}
+        name: {
+            **result,
+            "generated_pass": sum(
+                s.get("generated", False) is True and s["status"] == "pass"
+                for s in cast(list[dict[str, object]], result["scenarios"])
+            ),
+            "scenarios": forge.attention(result),
+        }
         for name, result in results.items()
     }
     summary["report"] = str(report)

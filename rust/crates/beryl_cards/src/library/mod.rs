@@ -35,6 +35,11 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         actions::counter::SCENARIOS,
     ),
     (
+        "actions::counter",
+        names::COUNTERSPELL,
+        actions::counter::GRAVEYARD,
+    ),
+    (
         "actions::explore",
         names::GET_LOST,
         actions::explore::SCENARIOS,

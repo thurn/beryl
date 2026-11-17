@@ -274,6 +274,17 @@ fn constants_source(constants: &BTreeMap<String, String>, indent: &str) -> Strin
     out
 }
 
+/// Whether a card file declares a scenario module on its own line.
+fn has_scenarios(text: &str) -> bool {
+    text.lines().any(|line| {
+        line.split_once('{').is_some_and(|(declaration, _)| {
+            declaration
+                .split_whitespace()
+                .eq(["pub", "mod", "scenarios"])
+        })
+    })
+}
+
 /// A set crate's source: the shared modules its files reach by `crate::`, the constants they
 /// use, a module for each set directory with one for each file in it, and the crate's tables
 /// in the files' order. `from_out` is the crate's directory as the written file reaches it, a
@@ -349,11 +360,12 @@ pub fn set_crate_source(
         let (set, module) = (&file.set, &file.module);
         writeln!(tree, "    pub mod {module};").unwrap();
         writeln!(cards, "    &{set}::{module}::CARD,").unwrap();
-        writeln!(
-            scenarios,
-            "    (names::{own}, {set}::{module}::scenarios::SCENARIOS),"
-        )
-        .unwrap();
+        let cases = if has_scenarios(&text) {
+            format!("{set}::{module}::scenarios::SCENARIOS")
+        } else {
+            "&[]".to_owned()
+        };
+        writeln!(scenarios, "    (names::{own}, {cases}),").unwrap();
         card_names.push((camel(name)?, format!("names::{own}")));
         constants.insert(own, name.to_string());
     }

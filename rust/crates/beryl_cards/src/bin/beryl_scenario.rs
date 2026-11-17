@@ -17,6 +17,9 @@
 //! the rules library's entries it is listed under, and the ones generated for it. It
 //! prints a line per scenario and a count of each kind, and exits 1 when any fails or a
 //! generated run could not be played, and 2 when no card has that name.
+//!
+//! `beryl_scenario generated --card NAME` reports which
+//! definition mutations survive the card's generated scenarios, as JSON for card check.
 
 use std::fmt::Write as _;
 use std::process::ExitCode;
@@ -28,7 +31,7 @@ use beryl_scenario::Scenario;
 const SEED: u64 = 1;
 
 const USAGE: &str = "usage: beryl_scenario dump [PATH] [--generated N] [--card NAME]... | run \
-                     --card NAME | render [--json] [NAME]...";
+                     --card NAME | generated --card NAME | render [--json] [NAME]...";
 
 fn usage() -> ExitCode {
     eprintln!("{USAGE}");
@@ -58,6 +61,7 @@ fn main() -> ExitCode {
     }
     match (args.as_slice(), named.as_slice()) {
         ([run], [card]) if run == "run" => run_card(card),
+        ([generated], [card]) if generated == "generated" => generated_card(card),
         ([dump], _) if dump == "dump" => {
             println!("{}", dump_json(generated, &named));
             ExitCode::SUCCESS
@@ -119,12 +123,7 @@ fn run_card(name: &str) -> ExitCode {
         .filter(|&(card, _)| card == def.name)
         .flat_map(|(_, scenarios)| scenarios)
         .collect();
-    // A card with a Rust body gets no generated scenarios: nothing can read what it does.
-    let derived = if derive::custom().contains(&def.name) {
-        None
-    } else {
-        Some(derive::for_card(def))
-    };
+    let derived = derive_card(def);
     let mut failed = 0;
     for (kind, scenario) in written.iter().map(|&s| ("hand-written", s)).chain(
         derived
@@ -164,6 +163,44 @@ fn run_card(name: &str) -> ExitCode {
     } else {
         ExitCode::FAILURE
     }
+}
+
+/// A Rust body cannot be read by the scenario generator.
+fn derive_card(def: &'static beryl_card::CardDef) -> Option<derive::Generated> {
+    (!derive::custom().contains(&def.name)).then(|| derive::for_card(def))
+}
+
+fn generated_card(name: &str) -> ExitCode {
+    let Some(def) = find(name) else {
+        eprintln!("beryl_scenario: no card named {name} is built");
+        return ExitCode::from(2);
+    };
+    let written = beryl_cards::scenarios()
+        .iter()
+        .find(|(card, _)| *card == def.name)
+        .map_or(0, |(_, scenarios)| scenarios.len());
+    let derived = derive_card(def);
+    let (scenarios, cut) = if let Some(derived) = &derived {
+        if !derived.failures.is_empty() {
+            eprintln!("{}", derived.failures.join("\n"));
+            return ExitCode::FAILURE;
+        }
+        (derived.scenarios.as_slice(), derived.cut)
+    } else {
+        (&[][..], 0)
+    };
+    let report = beryl_cards::mutation::generated(def, scenarios);
+    println!(
+        "{}",
+        serde_json::json!({
+            "written": written,
+            "generated": scenarios.len(),
+            "mutants": report.mutants,
+            "survivors": report.survivors,
+            "cut": cut,
+        })
+    );
+    ExitCode::SUCCESS
 }
 
 /// Prints the rendered rules text of the cards named, or of every card written in a file.

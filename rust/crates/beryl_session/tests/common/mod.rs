@@ -33,12 +33,12 @@ pub fn views_heard(
     name: &str,
     mut tweak: impl FnMut(usize, u8, &mut PlayerView),
 ) -> Vec<[(PlayerView, Heard); 2]> {
-    let (_, scenarios) = beryl_cards::scenarios()
+    let scenario = beryl_cards::scenarios()
         .iter()
-        .find(|&&(c, _)| c == card)
-        .expect("the card's scenarios");
-    let scenario = scenarios
-        .iter()
+        .copied()
+        .chain(beryl_cards::library::by_card())
+        .filter(|&(c, _)| c == card)
+        .flat_map(|(_, cases)| cases)
         .find(|s| s.name == name)
         .expect("the scenario");
     let (table, _) = beryl_scenario::position(&CARDS, scenario).unwrap_or_else(|e| panic!("{e}"));

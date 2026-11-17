@@ -139,21 +139,18 @@ pub fn generate(specs: &[&Spec]) {
     });
 }
 
-/// The scenarios in `card`'s file. A card complete from the card store has no file: its
-/// scenarios are the rules library's that play it and those generated from its definition
-/// (`beryl_cards::derive`), made once on its first request.
-fn scenarios(card: &str) -> &'static [Scenario] {
+/// A card's own scenarios, or the rules library's and the generated scenarios
+/// if it has none. Build and cache the fallback one card at a time.
+fn scenarios(def: &'static CardDef) -> &'static [Scenario] {
+    let card = def.name;
     static MADE: std::sync::Mutex<Vec<(&'static str, &'static [Scenario])>> =
         std::sync::Mutex::new(Vec::new());
     if let Some((_, written)) = beryl_cards::scenarios()
         .iter()
-        .find(|(name, _)| *name == card)
+        .find(|(name, written)| *name == card && !written.is_empty())
     {
         return written;
     }
-    let Some(def) = CARDS.from_store().iter().find(|d| d.name == card) else {
-        return &[];
-    };
     let mut made = MADE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -211,7 +208,7 @@ impl Spec {
 
     fn generated(&self) -> &auto::Generated {
         self.generated
-            .get_or_init(|| auto::generate(self.def, scenarios(self.card)))
+            .get_or_init(|| auto::generate(self.def, scenarios(self.def)))
     }
 
     fn playground(&self) -> &playground::Playground {
@@ -221,7 +218,7 @@ impl Spec {
 
     pub fn checkpoints(&self) -> &auto::ReviewSet {
         self.checkpoints
-            .get_or_init(|| auto::checkpoints(self.def, scenarios(self.card)))
+            .get_or_init(|| auto::checkpoints(self.def, scenarios(self.def)))
     }
 
     /// The original replay, if it shows this card being cast from hand.
@@ -392,6 +389,19 @@ mod tests {
     fn slugs_name_cards() {
         assert_eq!(slug("Currency Converter"), "currency-converter");
         assert_eq!(slug("Jace, Vryn's Prodigy"), "jace-vryns-prodigy");
+    }
+
+    #[test]
+    fn a_card_without_hand_written_scenarios_gets_playable_moments() {
+        let spec = spec(beryl_cards::names::HOLY_STRENGTH).unwrap();
+        let moment = spec
+            .moments()
+            .iter()
+            .find(|m| m.name.starts_with("generated-"))
+            .expect("a moment from a generated scenario");
+        for view in View::ALL {
+            assert!(reach(moment, view).is_ok(), "{view:?}");
+        }
     }
 
     #[test]

@@ -17,6 +17,8 @@ pub mod derive;
 pub mod generate;
 #[cfg(feature = "scenarios")]
 pub mod library;
+#[cfg(feature = "scenarios")]
+pub mod mutation;
 
 pub use beryl_card_shared::{props, tokens};
 
@@ -39,7 +41,8 @@ include!(concat!(env!("OUT_DIR"), "/tables.rs"));
 /// [`CardTable::get`] finds by name (`beryl_card_build`'s `complete`).
 pub static CARDS: CardTable = CardTable::of_parts(SET_CARDS, SET_STORE_CARDS);
 
-/// Every card's scenarios (architecture §17.1), by card name, in the order of [`CARDS`].
+/// Every card file's hand-written scenarios (architecture §17.1), by name, in the order of
+/// [`CARDS`]. Files without scenarios have an empty slice.
 ///
 /// They are gathered from the set crates' tables when first asked for, as [`CARDS`]' cards
 /// are. Gathering them in a static made the compiler read every scenario of every set crate

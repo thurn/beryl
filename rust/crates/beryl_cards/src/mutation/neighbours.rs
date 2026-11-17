@@ -391,6 +391,7 @@ macro_rules! mutation_kinds {
         }
 
         impl Kind {
+            #[cfg(test)]
             pub(super) const ALL: &'static [Self] = &[$(Self::$kind),+];
         }
     };

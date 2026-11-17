@@ -20,7 +20,6 @@ mod derive;
 mod equipment;
 mod facts;
 mod knowledge;
-mod mutation;
 mod props;
 mod render;
 mod slot_order;
@@ -202,11 +201,26 @@ fn every_card_has_scenarios_and_they_pass() {
         .copied()
         .chain(crate::library::by_card())
     {
-        if scenarios.is_empty() {
-            failures.push(format!("{card} has no scenario"));
-        }
         for scenario in scenarios {
             failures.extend(plays_alike_in_every_slot_order(card, scenario));
+        }
+    }
+    // The derive tests replay generated scenarios under every slot order. Here they
+    // must also demonstrate every mutation for a card with no scenario of its own.
+    let generated: std::collections::BTreeMap<_, _> =
+        crate::derive::all().iter().copied().collect();
+    for (&def, &(_, written)) in CARDS.cards().iter().zip(crate::scenarios()) {
+        if !written.is_empty() {
+            continue;
+        }
+        let cases = generated.get(def.name).copied().unwrap_or_default();
+        if cases.is_empty() {
+            failures.push(format!("{} has no scenario", def.name));
+            continue;
+        }
+        let report = crate::mutation::generated(def, cases);
+        for survivor in report.survivors {
+            failures.push(format!("{}: generated scenarios miss {survivor}", def.name));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
@@ -314,7 +328,12 @@ fn every_ability_and_casting_option_is_exercised_by_a_scenario() {
     use beryl_engine::coverage;
 
     coverage::start();
-    for &(_, scenarios) in crate::scenarios() {
+    for (_, scenarios) in crate::scenarios()
+        .iter()
+        .copied()
+        .chain(crate::library::by_card())
+        .chain(crate::derive::all().iter().copied())
+    {
         for scenario in scenarios {
             // `every_card_has_scenarios_and_they_pass` reports failures.
             let _ = beryl_scenario::run(&CARDS, scenario);
@@ -356,7 +375,12 @@ fn the_dump_is_valid_json_with_every_scenario() {
         serde_json::from_str(&beryl_scenario::to_json(&CARDS, crate::scenarios())).unwrap();
     let total: usize = crate::scenarios().iter().map(|(_, s)| s.len()).sum();
     assert_eq!(json.as_array().unwrap().len(), total);
-    assert_eq!(json[0]["card"], CARDS.cards()[0].name);
+    if let Some((first, _)) = crate::scenarios()
+        .iter()
+        .find(|(_, cases)| !cases.is_empty())
+    {
+        assert_eq!(json[0]["card"], *first);
+    }
 }
 
 /// A paused body's looks stay known (architecture §13): while Elite Spellbinder asks whether

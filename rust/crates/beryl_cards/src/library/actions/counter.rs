@@ -1,7 +1,8 @@
 //! Counter ([CR 701.6](https://yawgatog.com/resources/magic-rules/#R7016)).
 
-use beryl_engine::Zone;
+use beryl_engine::{TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
+use beryl_scenario_types::{ME, THEM};
 
 use crate::{names, props};
 
@@ -44,5 +45,23 @@ pub const SCENARIOS: &[Scenario] =
                     card: props::VANILLA.card,
                     count: 0,
                 }),
+            ]),
+    ];
+
+/// The default destination, exercised by the scenario and the session's animation checks.
+pub const GRAVEYARD: &[Scenario] =
+    &[
+        Scenario::new("Counterspell counters a spell into its owner's graveyard")
+            .battlefield(P0, &[names::ISLAND, names::ISLAND])
+            .hand(P0, &[names::COUNTERSPELL])
+            .battlefield(P1, &[names::PLAINS])
+            .hand(P1, &[props::ARTIFACT.card, names::PLAINS])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .actions(&[
+                THEM.casts(props::ARTIFACT.card),
+                ME.casts(names::COUNTERSPELL),
+                THEM.has(Zone::Graveyard, props::ARTIFACT.card, 1),
+                THEM.has(Zone::Battlefield, props::ARTIFACT.card, 0),
+                ME.has(Zone::Graveyard, names::COUNTERSPELL, 1),
             ]),
     ];
