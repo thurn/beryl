@@ -30,14 +30,22 @@ pub(super) struct Inspector {
     pub(super) pinned: Option<ObjectId>,
     /// The view or prompt changed since it was last laid out.
     pub(super) due: bool,
+    /// The click the open decision last refused, whose reason the inspector shows
+    /// (`refusal`).
+    pub(super) refusal: Option<super::refusal::Refusal>,
+    /// When the refusal's word under the permanent that forbade the click goes, while it shows.
+    pub(super) notice_until: Option<u64>,
 }
 
 impl Client {
     /// Shows the inspector for the card the last frame found under the pointer, or none, and
     /// lays it out again if the card, its place, or the view or prompt (`Inspector::due`) changed
-    /// since it was last laid out. It asks for the card's face at full size.
-    pub(super) fn inspect(&mut self) {
+    /// since it was last laid out. It asks for the card's face at full size. It also shows the
+    /// word a refused click puts under a permanent, at the table's time `now`.
+    pub(super) fn inspect(&mut self, now: u64) {
+        self.inspector.notice_until = self.refusal_frame(now);
         self.inspector.judged = self.hovered_slot();
+        self.refusal_hovered(self.inspector.judged);
         let inspected = self.inspected_now();
         if inspected == self.inspector.shown && !self.inspector.due {
             return;
@@ -81,8 +89,8 @@ impl Client {
     /// The card the inspector shows now, from the last frame: the card a finger asked to see
     /// (`Inspector::pinned`), or else the hovered card, at rest and not held, on the game screen
     /// with no sheet open, when it is one the web interface's `Controls` inspects. A card in the
-    /// viewer's hand rises in the fan to be read instead, unless it is face down; a finger, which
-    /// raises no card, sees it whole.
+    /// viewer's hand rises in the fan to be read instead, unless it is face down or its click was
+    /// just refused; a finger, which raises no card, sees it whole.
     fn inspected_now(&self) -> Option<Inspected> {
         if self.screen != Screen::Game || self.sheet.is_some() {
             return None;
@@ -97,9 +105,12 @@ impl Client {
             return None;
         };
         let face_down = element.state.has(StateBits::FACE_DOWN);
+        let refusal = self.refusal_of(slot).cloned();
         let read = match zone {
             ZoneName::Battlefield | ZoneName::Stack => true,
-            ZoneName::Hand => side == Side::You && (face_down || pinned.is_some()),
+            ZoneName::Hand => {
+                side == Side::You && (face_down || pinned.is_some() || refusal.is_some())
+            }
             _ => false,
         };
         if !read || element.state.has(StateBits::MOVING) || element.state.has(StateBits::HELD) {
@@ -113,6 +124,7 @@ impl Client {
             face,
             x,
             targets: self.marked(),
+            refusal,
         })
     }
 

@@ -31,8 +31,9 @@ pub(super) struct Manual {
     /// makes a click on a card add it to the selection or take it out.
     pub(super) meta: bool,
     pub(super) lobby: Lobby,
-    /// Whether the table refused an action since the last frame, which then plays the refusal
-    /// sound, as the web's `shakeRefusal` plays it for every refused table action.
+    /// Whether the table refused an action, or the open decision a click on a card, since the
+    /// last frame, which then plays the refusal sound, as the web's `shakeRefusal` plays it for
+    /// every refused table action and `useRefusal` for every refused click.
     pub(super) refused: bool,
 }
 

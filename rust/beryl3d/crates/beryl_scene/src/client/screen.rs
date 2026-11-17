@@ -1,12 +1,13 @@
-//! Showing the flat layer's screen or sheet, and the gear that opens the settings sheet, a float
-//! at the game screen's top right.
+//! Showing the flat layer's screen or sheet, and the corner's buttons, a float at the game
+//! screen's top right: the gear that opens the settings sheet, the bug button and undo.
 
+use beryl_protocol::DecisionId;
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
 
 use super::Client;
 
-use crate::command::Request;
+use crate::command::{Request, SessionCommand};
 use crate::element::floats;
 use crate::faces::{FaceList, Faces};
 use crate::hud::phone::Occupied;
@@ -223,13 +224,15 @@ impl Client {
         }
     }
 
-    /// Shows the gear that opens the settings at the window's top right while the game screen
-    /// is shown with no sheet over it, or while the bug report takes its picture, and takes it
-    /// away otherwise.
+    /// Shows the corner's buttons at the window's top right (`screens::corner`): the gear that
+    /// opens the settings, the bug button and undo while the open decision has an answer to
+    /// take back. They show while the game screen is shown with no sheet over it, or while the
+    /// bug report takes its picture, and go otherwise.
     pub(super) fn show_gear(&mut self) {
         // The phone's menu button, part of its game screen, opens the settings instead.
+        let (bug, undo) = (!self.bug_open(), self.undoable().is_some());
         let gear = (self.screen == Screen::Game && self.table_shown() && !self.window.phone())
-            .then(screens::gear);
+            .then(|| screens::corner(bug, undo));
         let shown = gear.is_some();
         self.layer.float(floats::GEAR, gear);
         if shown {
@@ -244,6 +247,21 @@ impl Client {
                     ..FloatLook::default()
                 },
             );
+        }
+    }
+
+    /// The open decision while one of the viewer's answers can be taken back from it and no
+    /// click is waiting for its answer, as the web's `StageBoard` shows its undo button.
+    pub(super) fn undoable(&self) -> Option<DecisionId> {
+        let decision = self.open_decision()?;
+        (decision.undo > 0 && self.clicks.is_empty()).then_some(decision.id)
+    }
+
+    /// Takes back the viewer's latest answer, one for each press of undo or Cmd+Z, across the
+    /// opponent's turns: the session undoes it and sends the views from there.
+    pub(super) fn undo(&mut self) {
+        if let Some(decision) = self.undoable() {
+            self.commands.push_back(SessionCommand::Undo(decision));
         }
     }
 }

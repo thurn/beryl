@@ -19,7 +19,7 @@ pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
 pub use start::{SEED, StartForm, in_progress, seed};
 pub(crate) use start::{checkbox, small};
 
-pub use settings::{Concede, GEAR_INSET, gear};
+pub use settings::{Concede, GEAR_INSET, corner};
 pub use table::sheet_face;
 
 use beryl_protocol::prompt::PromptView;

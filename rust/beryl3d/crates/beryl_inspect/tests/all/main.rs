@@ -4,6 +4,7 @@
 //! `recorded_allocation.rs` stays a binary of its own, because it installs a counting global
 //! allocator, and a binary has only one.
 
+mod chrome;
 mod cli;
 mod conventions;
 mod differential;

@@ -34,10 +34,20 @@ const MARGIN: f32 = size::SCREEN_MARGIN;
 /// How far the gear stands from the window's top and right edges, in logical points.
 pub const GEAR_INSET: f32 = size::SETTINGS_GEAR_INSET;
 
-/// The gear that opens the sheet, which the client shows at the game screen's top right.
+/// The column the client shows at the game screen's top right (UI Conventions, "Chrome"): the
+/// gear that opens the sheet, the bug button under it when `bug`, and undo under that when
+/// `undo`, with no gap kept for a button left out. This is the web's `Corner` and `UndoButton`
+/// (`ui/src/game/Corner.tsx`). The web hides its bug button while the report is open.
 #[must_use]
-pub fn gear() -> Element {
-    icon_button(icons::GEAR, "Settings").on_press(Press::Sheet(Some(Sheet::Settings)))
+pub fn corner(bug: bool, undo: bool) -> Element {
+    column()
+        .name("corner")
+        .gap(size::CORNER_GAP)
+        .child(icon_button(icons::GEAR, "Settings").on_press(Press::Sheet(Some(Sheet::Settings))))
+        .children(bug.then(|| {
+            icon_button(icons::BUG, "Report bug").on_press(Press::Sheet(Some(Sheet::BugReport)))
+        }))
+        .children(undo.then(|| icon_button(icons::UNDO, "Undo").on_press(Press::Undo)))
 }
 
 /// What the flat layer shows for the sheet: the panel in the middle of the window.

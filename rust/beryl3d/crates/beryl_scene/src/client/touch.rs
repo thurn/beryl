@@ -116,11 +116,13 @@ impl Client {
     }
 
     /// A press that picked nothing up on the card in `slot`: with Cmd held on the
-    /// manual table it adds the card to the selection or takes it out, and otherwise clicks the
-    /// open prompt on the card.
+    /// manual table it adds the card to the selection or takes it out, on a card the open
+    /// decision refuses it says why (`refuse_click`), and otherwise it clicks the open prompt on
+    /// the card.
     pub(super) fn card_clicked(&mut self, slot: usize) {
         if let Ok(slot) = u16::try_from(slot)
             && !self.table_click(ObjectId(slot))
+            && !self.refuse_click(ObjectId(slot))
         {
             let on = Subject::Object {
                 slot: ObjectId(slot),

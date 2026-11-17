@@ -504,6 +504,20 @@
         "size": 17.8,
         "line_height": 1.236,
         "note": "What the prompt's primary button says under it, such as where a pass leads: `.turn-caption` in `ui/src/screens/styles/controls.css`, 17.8 points on a 22-point line."
+      },
+      "REFUSAL": {
+        "font": "OpenSans",
+        "weight": 600,
+        "size": 17,
+        "line_height": 1.4,
+        "note": "The inspector's line that says why a card can't be played: `.inspect-refusal` in `ui/src/screens/styles/inspector.css`, 17 points at weight 600."
+      },
+      "TIMING_REFUSAL": {
+        "font": "OpenSans",
+        "weight": 600,
+        "size": 16,
+        "line_height": 1.4,
+        "note": "The word under the permanent that holds a player to sorcery speed: `.timing-refusal`, 16 points at weight 600."
       }
     },
     "size": {
@@ -983,6 +997,38 @@
       },
       "INSPECTOR_RADIUS": {
         "value": 22
+      },
+      "CORNER_GAP": {
+        "value": 12,
+        "note": "The gap between the buttons of the game screen's top right corner: the web's gear, bug button and undo, each 44 points tall, stand 14, 70 and 126 points from the top."
+      },
+      "REFUSAL_RADIUS": {
+        "value": 10,
+        "note": "The radius of the corners of the inspector's line that says why a card can't be played: `.inspect-refusal`'s `border-radius`."
+      },
+      "REFUSAL_PADDING_X": {
+        "value": 12,
+        "note": "The padding either side of that line's words: `.inspect-refusal`'s `padding: 8px 12px`."
+      },
+      "REFUSAL_PADDING_Y": {
+        "value": 8,
+        "note": "The padding above and below that line's words."
+      },
+      "TIMING_REFUSAL_RADIUS": {
+        "value": 8,
+        "note": "The radius of the corners of the word under the permanent that holds a player to sorcery speed: `.timing-refusal`'s `border-radius`."
+      },
+      "TIMING_REFUSAL_PADDING_X": {
+        "value": 10,
+        "note": "The padding either side of that word: `.timing-refusal`'s `padding: 5px 10px`."
+      },
+      "TIMING_REFUSAL_PADDING_Y": {
+        "value": 5,
+        "note": "The padding above and below that word."
+      },
+      "TIMING_REFUSAL_GAP": {
+        "value": 6,
+        "note": "The gap between the bottom of the permanent and that word, as the web's `noticePlace` leaves it."
       }
     },
     "color": {
@@ -1166,6 +1212,14 @@
       "TURN_CAPTION": {
         "value": "#b4b2ae",
         "note": "The caption under the prompt's primary button: `.turn-caption`'s `color`."
+      },
+      "REFUSAL": {
+        "value": "rgb(27 26 24 / 88%)",
+        "note": "The face of the inspector's line that says why a card can't be played: `.inspect-refusal`'s `background`; its words are `stat-down`."
+      },
+      "TIMING_REFUSAL": {
+        "value": "rgb(27 26 24 / 95%)",
+        "note": "The face of the word under the permanent that holds a player to sorcery speed: `.timing-refusal`'s `background`; its rim is `stat-down`."
       }
     },
     "mana": {

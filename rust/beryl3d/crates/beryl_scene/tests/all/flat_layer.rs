@@ -219,15 +219,16 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
     assert!(!frame.resolved[title].interactive);
     assert!(text_fits(frame, &context()).is_empty());
     // A panel for the bar, one for each button, one for each player's orb, one under each
-    // player's life total and one under the count of each of the six piles, the settings gear,
-    // the button of the game log, folded because the opponent's lands reach into its column, and
+    // player's life total and one under the count of each of the six piles, the corner's settings
+    // gear, bug button and undo (the sample has an answer to take back), the button of the game
+    // log, folded because the opponent's lands reach into its column, and
     // the disc of each of the title's two mana symbols, all in the flat layer's band.
     let layer = &frame.draws[frame.layer as usize..];
     let panels = layer
         .iter()
         .filter(|draw| draw.material == Material::Panel as u8)
         .count();
-    assert_eq!(panels, 17);
+    assert_eq!(panels, 19);
 }
 
 #[test]
@@ -493,15 +494,16 @@ fn a_prompt_opens_only_once_its_view_has_played_out() {
     client.handle(Input::Update(update));
 
     // While the card flies, the bar is neither drawn nor pressed. The life totals, which are
-    // floats, are drawn, and so is the settings gear, another float.
+    // floats, are drawn, and so is the corner of the gear, the bug button and undo, another float.
     let frame = client.frame(MS);
+    let corner = ["corner", "Settings", "Report bug", "Undo"];
     assert!(
         !frame
             .resolved
             .iter()
             .any(|element| element.place == Place::Layer
                 && !matches!(element.role, Role::Player | Role::Text)
-                && frame.name(element.name) != "Settings"),
+                && !corner.contains(&frame.name(element.name))),
         "no prompt bar while the draw plays"
     );
     let open = {

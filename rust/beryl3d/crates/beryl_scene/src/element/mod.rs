@@ -88,6 +88,8 @@ pub enum Press {
     Lobby(LobbyPress),
     /// Open the folded game log, or close it (`hud::log`).
     Log,
+    /// Take back the viewer's latest answer that can be taken back (`Client::undo`).
+    Undo,
 }
 
 /// What a `Press::Lobby` does (`screens::lobby`).
@@ -444,4 +446,7 @@ pub mod floats {
     /// The count of items scrolled off the stack's bottom, at its left, and its top, at its
     /// right.
     pub const STACK_COUNT: [FloatId; 2] = [FloatId(36), FloatId(37)];
+    /// The word under the opponent's permanent that refused a click by holding the viewer to
+    /// sorcery speed (`Client::refusal_frame`).
+    pub const REFUSAL: FloatId = FloatId(38);
 }

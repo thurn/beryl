@@ -44,6 +44,7 @@ mod lobby;
 mod manual;
 mod manual_overlays;
 mod own;
+mod refusal;
 mod screen;
 mod stops;
 mod table_pointer;
@@ -433,7 +434,7 @@ impl Client {
         let transitioning = self.tick_layer(now);
         self.show.pointer_mut().advance(table_now);
         self.show.advance_slide(table_now);
-        self.inspect();
+        self.inspect(table_now);
         self.write_pill(self.screen == Screen::Game && self.sheet.is_none());
         let visible = self.hud_shown();
         let mut builder = FrameBuilder::new(&mut self.frame, self.tier);
@@ -500,9 +501,7 @@ impl Client {
         self.wake = if transitioning || own_due || inspecting {
             Wake::Now
         } else {
-            // A tooltip waiting for the pointer to rest shows at its time, and a finger held
-            // still or waiting to pick a card up acts at its time.
-            (self.bug_wake(table_now).or_at(self.layer.tip_due())).or_at(self.touch.due())
+            self.timed_wake(table_now)
         };
         &self.frame
     }
@@ -612,6 +611,7 @@ impl Client {
             }
             Press::Menu(crate::manual::menus::MENU, row) => self.press_table_menu(row),
             Press::Log => self.toggle_log(),
+            Press::Undo => self.undo(),
             Press::Menu(..) => {}
             Press::Dismiss(Dismiss::Menu) => {
                 if self.gallery.menu.take().is_some() {

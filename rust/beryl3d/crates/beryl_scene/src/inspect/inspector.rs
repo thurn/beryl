@@ -16,11 +16,11 @@
 
 use std::fmt::Write as _;
 
-use beryl_protocol::protocol::{ObjectId, ObjectView, PaidCost, StackItem, ZoneName};
+use beryl_protocol::protocol::{ObjectId, ObjectView, PaidCost, RefusalView, StackItem, ZoneName};
 use glam::Vec2;
 
 use crate::data::space::layout::desktop::inspector as data;
-use crate::element::{Element, Shown, column, text};
+use crate::element::{Element, Shown, column, row, text};
 use crate::faces::FaceList;
 use crate::frame::Role;
 use crate::input::{FaceId, FaceSize, Rect};
@@ -39,6 +39,9 @@ pub struct Inspected {
     /// The boxes of the cards the open prompt marks, which the player may be about to pick and
     /// which the inspector keeps clear of where it can (the web's `keptClear`).
     pub targets: Vec<Rect>,
+    /// Why the open decision refused the click on it, while the pointer has stayed on it
+    /// since (`Client::refuse_click`).
+    pub refusal: Option<RefusalView>,
 }
 
 /// The inspector's corner radius, `.inspect`'s `border-radius`.
@@ -83,8 +86,59 @@ pub fn inspector(input: &ScreenIn) -> Option<Element> {
             .radius(RADIUS)
             .passes(true)
             .child(face)
-            .children(lines),
+            .children(lines)
+            .children(
+                inspected
+                    .refusal
+                    .as_ref()
+                    .map(|reason| refusal(reason, input, inner)),
+            ),
     )
+}
+
+/// The line under the state that says why a click on the card was refused, as the web's
+/// `InspectRefusal` draws it (`ui/src/game/Piles.tsx`), in the words `refusal_words` gives.
+/// The web's glyph before the words, from the Mana font, is not drawn: the flat layer has no
+/// such icons.
+fn refusal(reason: &RefusalView, input: &ScreenIn, inner: f32) -> Element {
+    let by = match reason {
+        RefusalView::Timing { by: Some(by) } => (input.view)
+            .and_then(|view| view.objects.iter().find(|object| object.slot == *by))
+            .and_then(|object| object.name.as_deref()),
+        _ => None,
+    };
+    let words = refusal_words(reason, by);
+    let mut line = row()
+        .name(&format!("Can't play: {words}"))
+        .justify_content(crate::element::Justify::Center)
+        .max_width(inner)
+        .background(color::REFUSAL)
+        .radius(size::REFUSAL_RADIUS)
+        .child(
+            text(&words)
+                .style(type_style::REFUSAL)
+                .color(color::STAT_DOWN),
+        );
+    let (across, down) = (size::REFUSAL_PADDING_X, size::REFUSAL_PADDING_Y);
+    line.style.padding = [down, across, down, across];
+    line
+}
+
+/// Why a card can't be played, in the web's words (`REFUSAL_WORDS` in `ui/src/game/Piles.tsx`):
+/// a timing refusal names the permanent `by` that holds its controller to sorcery speed, by the
+/// part of its name before a comma.
+#[must_use]
+pub fn refusal_words(reason: &RefusalView, by: Option<&str>) -> String {
+    match (reason, by) {
+        (RefusalView::Timing { .. }, Some(by)) => {
+            format!("Sorcery speed: {}", by.split(',').next().unwrap_or(by))
+        }
+        (RefusalView::Timing { .. }, None) => "Sorcery speed".to_owned(),
+        (RefusalView::LandPlayed, _) => "Land played".to_owned(),
+        (RefusalView::Mana, _) => "No mana".to_owned(),
+        (RefusalView::Cost, _) => "Can't pay".to_owned(),
+        (RefusalView::Target, _) => "No target".to_owned(),
+    }
 }
 
 /// The lines under the face that say what the face cannot, in the web's order: its note, the

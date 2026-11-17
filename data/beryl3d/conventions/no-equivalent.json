@@ -40,13 +40,22 @@
       "shows": "text \"4/4\""
     },
     "Undo": {
-      "open": "The engine game has no undo button (needs bead by-q44s.9.27)"
+      "recording": "teferi-timing",
+      "at": "prompt:4",
+      "shows": "button \"Undo\""
     },
     "Chrome": {
-      "open": "The desktop game shows no bug button or undo button (needs bead by-q44s.9.27)"
+      "recording": "pay-default",
+      "at": "prompt:1",
+      "shows": "button \"Report bug\""
     },
     "Why a click is refused": {
-      "open": "A refused click shows no reason at the permanent that forbids it (needs bead by-q44s.9.27)"
+      "recording": "teferi-timing",
+      "at": "prompt:4",
+      "do": [
+        "press card \"Thirst for Discovery\" #1"
+      ],
+      "shows": "region \"Can't play: Sorcery speed: Teferi\""
     },
     "The opponent's choice of top or bottom": {
       "recording": "subtlety/hard-cast-the-creature-spells-owner-puts-it-on-top",

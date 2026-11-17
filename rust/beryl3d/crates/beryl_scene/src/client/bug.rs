@@ -212,6 +212,15 @@ impl Client {
         }
     }
 
+    /// When the next thing that waits for a time acts, with nothing animating: the bug report's
+    /// own (`bug_wake`), a tooltip waiting for the pointer to rest, a finger held still or
+    /// waiting to pick a card up, and the word a refused click put under a permanent going.
+    pub(super) fn timed_wake(&self, table: u64) -> Wake {
+        let wake = self.bug_wake(table).or_at(self.layer.tip_due());
+        wake.or_at(self.touch.due())
+            .or_at(self.inspector.notice_until)
+    }
+
     /// A pointer event while the report is open: nothing reaches the table. While a region is
     /// being chosen, a drag outside the tools draws it, and a release chooses it (a click, the
     /// whole window); otherwise the pointer presses the report's controls.

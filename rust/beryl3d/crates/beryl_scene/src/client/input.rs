@@ -368,6 +368,13 @@ impl Client {
         if first && Chord::parse(bug_report, mac) == Some(Chord::of(&key)) {
             return Some(Press::Sheet(Some(Sheet::BugReport)));
         }
+        // The platform's undo takes back an answer, as the web's `StageBoard` lets it.
+        if first
+            && self.screen == Screen::Game
+            && Chord::parse("Cmd+Z", mac) == Some(Chord::of(&key))
+        {
+            return Some(Press::Undo);
+        }
         self.inputs.push(Input::Key(key));
         None
     }
