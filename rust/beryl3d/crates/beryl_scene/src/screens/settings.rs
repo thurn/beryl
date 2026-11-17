@@ -8,7 +8,7 @@ use super::{Screen, ScreenIn, Sheet};
 use crate::data::space::flat::phone::GUTTER;
 use crate::data::space::hud::phone::BUTTON_MIN_WIDTH as PHONE_BUTTON;
 use crate::element::{Align, Element, Justify, Overflow, Position, Press, column, row, text};
-use crate::settings::Setting;
+use crate::settings::{Graphics, Setting};
 use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{button, icon_button, icons, primary, slider, toggle};
 
@@ -95,6 +95,7 @@ pub fn settings(input: &ScreenIn) -> Element {
                 .child(mute)
                 .child(levels),
         )
+        .child(graphics(settings.graphics))
         .child(
             row()
                 .gap(space::L)
@@ -149,6 +150,31 @@ fn in_game(input: &ScreenIn) -> bool {
         && !input
             .view
             .is_some_and(|view| matches!(view.status, Status::Over { .. }))
+}
+
+/// The graphics row: a label and one button for each way the visual tier is chosen, the saved
+/// one shown as the primary button and marked selected. Neither the web interface nor Arena has
+/// this setting, so it is built from the sheet's own buttons.
+fn graphics(chosen: Graphics) -> Element {
+    let choice = |label: &str, graphics: Graphics| {
+        let element = if graphics == chosen {
+            primary(label)
+        } else {
+            button(label)
+        };
+        element
+            .min_width(0.0)
+            .selected(graphics == chosen)
+            .on_press(Press::Setting(Setting::Graphics(graphics)))
+    };
+    row()
+        .name("graphics")
+        .gap(space::M)
+        .align_items(Align::Center)
+        .child(text("Graphics"))
+        .child(choice("Automatic", Graphics::Automatic))
+        .child(choice("Baseline", Graphics::Baseline))
+        .child(choice("Enhanced", Graphics::Enhanced))
 }
 
 /// A slider for `setting` named `label`, with the label beside it.

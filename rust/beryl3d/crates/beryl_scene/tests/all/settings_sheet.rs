@@ -4,7 +4,7 @@
 use beryl_scene::Client;
 use beryl_scene::command::Request;
 use beryl_scene::element::Press;
-use beryl_scene::frame::Role;
+use beryl_scene::frame::{Role, StateBits};
 use beryl_scene::input::{Input, Key, KeyCode, KeyPhase, Modifiers, PointerPhase};
 use beryl_scene::screens::Screen;
 use beryl_scene::tokens::size;
@@ -131,4 +131,41 @@ fn escape_closes_the_sheet() {
         modifiers: Modifiers::default(),
     }));
     assert!(!controls(&mut client).contains(&"Music".to_owned()));
+}
+
+/// The settings the client last asked to save, if it asked.
+fn saved(client: &mut Client) -> Option<beryl_scene::settings::Settings> {
+    std::iter::from_fn(|| client.next_request())
+        .filter_map(|request| match request {
+            Request::SaveSettings(settings) => Some(settings),
+            _ => None,
+        })
+        .last()
+}
+
+#[test]
+fn the_graphics_row_shows_the_saved_value() {
+    use beryl_scene::settings::{Graphics, Setting};
+    let mut client = in_game();
+    client.press(&Press::Setting(Setting::Graphics(Graphics::Enhanced)));
+    client.press(&Press::Sheet(Some(beryl_scene::screens::Sheet::Settings)));
+    let frame = client.frame(1);
+    let selected = |name: &str| {
+        frame.resolved[find(frame, Role::Button, name)]
+            .state
+            .has(StateBits::SELECTED)
+    };
+    assert!(selected("Enhanced"));
+    assert!(!selected("Automatic"));
+    assert!(!selected("Baseline"));
+}
+
+#[test]
+fn choosing_baseline_saves_it() {
+    use beryl_scene::settings::Graphics;
+    let mut client = in_game();
+    click(&mut client, Role::Button, "Settings");
+    click(&mut client, Role::Button, "Baseline");
+    let settings = saved(&mut client).expect("a save");
+    assert_eq!(settings.graphics, Graphics::Baseline);
 }
