@@ -23,7 +23,7 @@ def test_a_rules_change_plays_only_the_sample() -> None:
     assert other is not None and set(other) != set(chosen)
 
 
-def test_an_exporter_or_harness_change_plays_every_card() -> None:
+def test_an_exporter_or_harness_change_keeps_the_sample_and_changed_cards() -> None:
     for path in (
         "tools/src/beryl_tools/forge.py",
         "tools/src/beryl_tools/xmage_java.py",
@@ -32,6 +32,10 @@ def test_an_exporter_or_harness_change_plays_every_card() -> None:
         "tools/src/beryl_tools/oracles.py",
         "tools/oracles/BerylForgeHarness.java",
         "data/oracle-divergences.json",
+        "data/card-store.tsv",
     ):
-        assert oracle_selection.choose([COUNTERSPELL, path], "abc123", EVERY) is None
+        chosen = oracle_selection.choose([COUNTERSPELL, path], "abc123", EVERY)
+        assert chosen is not None
+        assert chosen["Counterspell"] == oracle_selection.CHANGED
+        assert len(chosen) == oracle_selection.SAMPLE + 1
     assert oracle_selection.choose(None, "abc123", EVERY) is None

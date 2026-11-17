@@ -259,5 +259,10 @@
     "label": "Beryl 3D's record command runs the linker's executable so warm builds reuse its macOS first-run validation instead of launching Cargo's refreshed copy",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Oracle outcomes use each scenario’s exported inputs so unrelated exporter edits retain prior passes",
+    "metric": "slow-ci.cpu-seconds-per-run",
+    "expect": "down"
   }
 ]

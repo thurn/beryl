@@ -1,11 +1,10 @@
 """What the oracles made of each scenario, remembered by content, so that a run plays only the
 scenarios that are new to XMage and Forge.
 
-A scenario's outcome in the oracles depends on two things: its dump entry (the position, the
-script and the final snapshot Beryl played to) and the oracles' side (their pinned commits, the
-exporters and harnesses, and the card store the exporters read). `Memory.key` hashes both, so
-an entry whose key passed before passes again. Every `by oracle` run records the outcome of each
-scenario it played in `$BERYL_CACHE/oracles/outcomes.txt`.
+A scenario's outcome is keyed on the Java method and Forge JSON the exporters prepared,
+including their unsupported reasons, plus the oracle pins and generic Java harnesses. Editing
+an exporter or the card store invalidates only scenarios whose exported inputs change. Every
+`by oracle` run records each scenario it played in `$BERYL_CACHE/oracles/outcomes.txt`.
 
 This matters most for the random scenarios filed under the card "Generated" (generate.rs).
 Their scripts play through the rules engine, so a rules change rewrites some of them without
@@ -34,6 +33,7 @@ from pathlib import Path
 from typing import cast
 
 from . import paths, system
+from .oracle_exports import label
 
 # The card the dump files the random scenarios under (`beryl_cards::generate::CARD`).
 GENERATED = "Generated"
@@ -41,16 +41,11 @@ GENERATED = "Generated"
 # Why a scenario outside the chosen cards played, as the run log's `chosen` says (runlog.py).
 NEW = "new to the oracles"
 
-# The files on the oracles' side whose contents decide an outcome besides the dump entry: the
-# exporters, the Java harnesses and the card store. The dump's own code is left out, because
-# whatever it changes shows in the entries. The allowlists only classify a failure, and the
-# scenarios they list are never skipped.
+# Exporter source and card data are represented by each scenario's exported input instead.
+# Both Java harness locations are needed: XMage's base class lives beside the Python tools.
 SIDE_GLOBS: tuple[str, ...] = (
-    "tools/src/beryl_tools/xmage*.py",
-    "tools/src/beryl_tools/forge.py",
-    "tools/src/beryl_tools/card_facts.py",
-    "tools/oracles/**/*",
-    "data/card-store.tsv",
+    "tools/oracles/**/*.java",
+    "tools/src/beryl_tools/BerylScenarioTest.java",
 )
 
 PASS = "pass"
@@ -63,10 +58,17 @@ SCENARIO_PACKAGE = "beryl_cards"
 def reached(
     changed: Sequence[str], packages: list[dict[str, object]] | None = None
 ) -> bool:
-    """Whether `changed` can change a dumped scenario: a card file, the card store, or a crate
-    that `SCENARIO_PACKAGE` depends on (rust_tests.affected_packages, given the workspace's
-    `packages` or reading them)."""
-    from . import card_files, rust_tests  # They import much of the tools.
+    """Whether `changed` can change a dumped scenario or its exported oracle inputs.
+
+    A card file, the card store, or a crate that `SCENARIO_PACKAGE` depends on can change
+    the dump (rust_tests.affected_packages, using `packages` or reading the workspace).
+    Exporter and harness edits also need selection to inspect the prepared inputs.
+    """
+    # These modules import much of the tools.
+    from . import card_files, oracle_selection, rust_tests
+
+    if any(oracle_selection.HARNESS.match(p) for p in changed):
+        return True
 
     if card_files.cards_in(changed):
         return True
@@ -84,11 +86,6 @@ def side(pins: Sequence[str], repo: Path = paths.REPO) -> str:
         digest.update(path.relative_to(repo).as_posix().encode() + b"\0")
         digest.update(path.read_bytes())
     return digest.hexdigest()
-
-
-def label(entry: Mapping[str, object]) -> str:
-    """How the allowlists and the oracles' results name a scenario: "card / scenario"."""
-    return f"{entry['card']} / {entry['name']}"
 
 
 def listed(repo: Path = paths.REPO) -> set[str]:
@@ -115,14 +112,21 @@ class Memory:
     """The outcomes recorded under one oracles' side, with the scenarios always played whole."""
 
     def __init__(
-        self, side_hash: str, outcomes: dict[str, str], always: set[str]
+        self,
+        side_hash: str,
+        outcomes: dict[str, str],
+        always: set[str],
+        exports: Mapping[str, str],
     ) -> None:
         self.side = side_hash
         self.outcomes = outcomes
         self.always = always
+        self.exports = exports
 
     @staticmethod
-    def load(pins: Sequence[str], path: Path | None = None) -> Memory:
+    def load(
+        pins: Sequence[str], exports: Mapping[str, str], path: Path | None = None
+    ) -> Memory:
         """The outcomes in `path` (the cache's by default); the last line for a key wins."""
         path = store() if path is None else path
         outcomes: dict[str, str] = {}
@@ -131,11 +135,11 @@ class Memory:
                 key, _, outcome = line.partition(" ")
                 if outcome:
                     outcomes[key] = outcome
-        return Memory(side(pins), outcomes, listed())
+        return Memory(side(pins), outcomes, listed(), exports)
 
     def key(self, entry: Mapping[str, object]) -> str:
-        text = json.dumps(entry, sort_keys=True)
-        return hashlib.sha256(f"{self.side}\0{text}".encode()).hexdigest()
+        export = self.exports[label(entry)]
+        return hashlib.sha256(f"exports-v1\0{self.side}\0{export}".encode()).hexdigest()
 
     def seen(self, entry: Mapping[str, object]) -> str | None:
         return self.outcomes.get(self.key(entry))

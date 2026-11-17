@@ -3,11 +3,12 @@ import json
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
-from beryl_tools import oracle_memory, oracles
+from beryl_tools import oracle_exports, oracle_memory, oracles, xmage_java
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -130,14 +131,25 @@ def fake_oracles(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     # The outcomes the runs record (oracle_memory.py) go to a cache of the test's own.
     monkeypatch.setenv("BERYL_CACHE", tempfile.mkdtemp(prefix="beryl-oracle-test-"))
 
-    def check(entries: list[dict[str, object]], _work: Path) -> dict[str, object]:
-        played.append([str(e["card"]) for e in entries])
-        scenarios = [{**e, "status": "pass"} for e in entries]
+    def check(exports: oracle_exports.Exports, _work: Path) -> dict[str, object]:
+        played.append([str(e["card"]) for e in exports.forge])
+        scenarios = [{**e, "status": "pass"} for e in exports.forge]
         return {"pass": len(scenarios), "fail": 0, "scenarios": scenarios}
 
     monkeypatch.setattr(
         oracles, "dump_scenarios", lambda path, log, cards=(): SCENARIOS
     )
+
+    def prepare(
+        entries: list[dict[str, object]], checkout: Path
+    ) -> oracle_exports.Exports:
+        java = [
+            xmage_java.Export(str(e["card"]), str(e["name"]), f"s{i}")
+            for i, e in enumerate(entries)
+        ]
+        return oracle_exports.Exports(java, entries, [])
+
+    monkeypatch.setattr(oracle_exports.Exports, "prepare", prepare)
     monkeypatch.setattr(oracles, "require_built", lambda: None)
     monkeypatch.setattr(oracles, "check_xmage", check)
     monkeypatch.setattr(oracles, "check_forge", check)
@@ -215,3 +227,56 @@ def test_a_run_waiting_past_the_lock_wait_skips_and_passes(
         ("oracle:Ponder/looks at three/xmage", "skip"),
         ("oracle:Ponder/looks at three/forge", "skip"),
     ]
+
+
+def test_changed_exports_are_prepared_once_and_reused_after_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    played = fake_oracles(monkeypatch)
+    entries = [
+        {"card": "Generated", "name": "Generated 1"},
+        {"card": "Generated", "name": "Generated 2"},
+        {"card": "Ponder", "name": "looks at three"},
+    ]
+    monkeypatch.setattr(oracles, "dump_scenarios", lambda *args: entries)
+    monkeypatch.setattr(oracles.oracle_selection, "slow_ci", lambda every: {})
+    prepare: Callable[[list[dict[str, object]], Path], oracle_exports.Exports] = (
+        oracle_exports.Exports.prepare
+    )
+    prepared: list[oracle_exports.Exports] = []
+    changed: bool = False
+
+    def export(
+        entries: list[dict[str, object]], checkout: Path
+    ) -> oracle_exports.Exports:
+        result = prepare(entries, checkout)
+        if changed:
+            result.xmage[1].body.append("execute();")
+        prepared.append(result)
+        return result
+
+    check: Callable[[oracle_exports.Exports, Path], dict[str, object]] = (
+        oracles.check_xmage
+    )
+
+    def xmage(exports: oracle_exports.Exports, log: Path) -> dict[str, object]:
+        # Execution must use the objects whose keys selection inspected, with their original
+        # method identities even when the earlier method in the same class was filtered out.
+        for item in exports.xmage:
+            assert any(item is original for original in prepared[-1].xmage)
+        if changed and exports.xmage:
+            assert [e.method for e in exports.xmage] == ["s1"]
+        return check(exports, log)
+
+    monkeypatch.setattr(oracle_exports.Exports, "prepare", export)
+    monkeypatch.setattr(oracles, "check_xmage", xmage)
+    assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
+    assert played == [["Generated", "Generated", "Ponder"]] * 2
+    changed = True
+    played.clear()
+    assert oracles.oracle(oracle_args(new=True, no_sim=True)) == 0
+    assert played == [["Generated"]] * 2
+    played.clear()
+    assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
+    assert played == [[], []]
+    assert len(prepared) == 3

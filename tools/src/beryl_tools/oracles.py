@@ -46,11 +46,10 @@ from typing import cast
 from . import card_store, cards, checks, forge, oracle_selection, paths, runlog, system
 from . import (
     card_diverge,
-    card_facts,
     deadline,
     oracle_memory,
+    oracle_exports,
     xmage,
-    xmage_export,
     xmage_java,
 )
 from .oracle_selection import skip_all
@@ -548,11 +547,10 @@ def dump_scenarios(path: Path, log: Path, cards: list[str]) -> list[card_store.J
     return json.loads(path.read_text())
 
 
-def check_forge(entries: list[dict[str, object]], work: Path) -> dict[str, object]:
+def check_forge(exports: oracle_exports.Exports, work: Path) -> dict[str, object]:
     """Plays the scenarios in Forge; the summary of `forge.summarize`."""
-    exported, skipped = forge.export(entries, card_store.STORE)
     scenarios = work / "forge-scenarios.json"
-    scenarios.write_text(json.dumps(exported, indent=1))
+    scenarios.write_text(json.dumps(exports.forge, indent=1))
     classes = root() / "forge-harness"
     forge.compile_harness(java_home(), forge_jar(), classes)
     results = forge.play(
@@ -564,7 +562,9 @@ def check_forge(entries: list[dict[str, object]], work: Path) -> dict[str, objec
         work / "forge-results.json",
         log_dir() / "forge-oracle.log",
     )
-    return forge.summarize(results, skipped, forge.divergences(DIVERGENCES, "forge"))
+    return forge.summarize(
+        results, exports.skipped, forge.divergences(DIVERGENCES, "forge")
+    )
 
 
 def xmage_tests() -> Path:
@@ -596,14 +596,11 @@ def surefire_results(classes: Sequence[str]) -> dict[tuple[str, str], str | None
     return outcomes
 
 
-def check_xmage(entries: list[dict[str, object]], log: Path) -> dict[str, object]:
+def check_xmage(prepared: oracle_exports.Exports, log: Path) -> dict[str, object]:
     """Exports the scenarios as XMage tests and runs them with Maven: one status per scenario
     (pass, fail, allowlisted, unsupported) and their counts, as `forge.summarize` reports.
     """
-    faces = xmage_java.Faces.load(card_store.STORE, card_facts.named_cards(entries))
-    exports = xmage_export.export_all(
-        entries, faces, xmage_java.xmage_cards(checkout(XMAGE))
-    )
+    exports = prepared.xmage
     classes = xmage_java.write(exports, xmage_tests())
     for old in reports().glob(f"TEST-{xmage_java.PACKAGE}.*.xml"):
         old.unlink()
@@ -684,7 +681,8 @@ def oracle(args: argparse.Namespace) -> int:
             oracle_selection.slow_ci(every) if args.select and not args.cards else None
         )
         # The scenarios new to the oracles, or all of them (oracle_memory.py).
-        memory = oracle_memory.Memory.load([o.commit for o in ORACLES])
+        exports = oracle_exports.Exports.prepare(entries, checkout(XMAGE))
+        memory = oracle_memory.Memory.load([o.commit for o in ORACLES], exports.keys())
         sampled = oracle_selection.SAMPLED
         entries = memory.select(entries, chosen, args.cards, args.new, sampled)
         if chosen is not None:
@@ -693,6 +691,7 @@ def oracle(args: argparse.Namespace) -> int:
             entries = oracle_selection.fitted(entries, records.get())
             if not entries:
                 return 0
+        exports = exports.select(entries)
         try:
             with locked(args.lock_wait):
                 require_built()  # Again: a setup may have held the lock to rebuild one.
@@ -701,11 +700,11 @@ def oracle(args: argparse.Namespace) -> int:
                 xmage_log.write_text("")
                 started = time.perf_counter()
                 results: dict[str, dict[str, object]] = {
-                    "xmage": check_xmage(entries, xmage_log)
+                    "xmage": check_xmage(exports, xmage_log)
                 }
                 seconds = {"xmage": time.perf_counter() - started}
                 started = time.perf_counter()
-                results["forge"] = check_forge(entries, work)
+                results["forge"] = check_forge(exports, work)
                 seconds["forge"] = time.perf_counter() - started
                 memory.record(entries, results)  # Before the gaps rewrite failures.
                 if not args.no_sim:
@@ -767,7 +766,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--select",
         action="store_true",
         help="only the cards slow CI chooses: those changed since origin/master and a "
-        "sample, or every card when the exporters or harness changed",
+        "sample, plus scenarios whose exported inputs have not passed",
     )
     p.add_argument(
         "--new",

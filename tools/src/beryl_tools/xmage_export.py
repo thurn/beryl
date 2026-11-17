@@ -12,6 +12,11 @@ from .xmage_java import Export, Faces, method_name, setup_cards, xmage_spelling
 
 
 def export_one(entry: Json, index: int, faces: Faces, cards: set[str]) -> Export:
+    return _export_one(entry, index, faces, {xmage_spelling(c) for c in cards})
+
+
+def _export_one(entry: Json, index: int, faces: Faces, known: set[str]) -> Export:
+    """Translate with the oracle's normalized card names shared across the dump."""
     export = Export(
         card=cast(str, entry["card"]),
         scenario=cast(str, entry["name"]),
@@ -20,7 +25,6 @@ def export_one(entry: Json, index: int, faces: Faces, cards: set[str]) -> Export
     if "failure" in entry:
         export.unsupported = f"Beryl fails it: {entry['failure']}"
         return export
-    known = {xmage_spelling(c) for c in cards}
     missing = sorted(
         c for c in set(setup_cards(entry)) if xmage_spelling(c) not in known
     )
@@ -36,10 +40,11 @@ def export_one(entry: Json, index: int, faces: Faces, cards: set[str]) -> Export
 
 
 def export_all(dump: Sequence[Json], faces: Faces, cards: set[str]) -> list[Export]:
+    known = {xmage_spelling(c) for c in cards}
     counters: dict[str, int] = {}
     exports = []
     for entry in dump:
         card = cast(str, entry["card"])
         counters[card] = counters.get(card, 0) + 1
-        exports.append(export_one(entry, counters[card], faces, cards))
+        exports.append(_export_one(entry, counters[card], faces, known))
     return exports

@@ -11,6 +11,7 @@ from beryl_tools import (
     card_store,
     checks,
     oracles,
+    oracle_exports,
     xmage,
     card_facts,
     xmage_export,
@@ -292,7 +293,6 @@ def test_the_summary_counts_passes_failures_and_allowlisted_divergences(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
-    dump = [e for e in json.loads(FIXTURE.read_text()) if e["card"] != "Mana Tithe"]
     found = list(exports().values())
     drain: xmage_java.Export = next(e for e in found if e.card == "Mana Drain")
     crypt: xmage_java.Export = next(e for e in found if e.card == "Mana Crypt")
@@ -313,7 +313,10 @@ def test_the_summary_counts_passes_failures_and_allowlisted_divergences(
     log = tmp_path / "oracle.log"
 
     allowlist(allowed, crypt.card, crypt.scenario)
-    summary = oracles.check_xmage(dump, log)
+    summary = oracles.check_xmage(
+        oracle_exports.Exports([e for e in found if e.card != "Mana Tithe"], [], []),
+        log,
+    )
     counts = {k: summary[k] for k in ("pass", "fail", "allowlisted", "unsupported")}
     assert counts == {"pass": 1, "fail": 1, "allowlisted": 1, "unsupported": 1}
     rows = {r["name"]: r for r in scenarios(summary)}
@@ -324,7 +327,10 @@ def test_the_summary_counts_passes_failures_and_allowlisted_divergences(
 
     # A passing scenario on the allowlist is a stale entry.
     allowlist(allowed, drain.card, drain.scenario)
-    stale = oracles.check_xmage(dump, log)
+    stale = oracles.check_xmage(
+        oracle_exports.Exports([e for e in found if e.card != "Mana Tithe"], [], []),
+        log,
+    )
     assert stale["stale_allowlist"] == 1
     row = next(r for r in scenarios(stale) if r["name"] == drain.scenario)
     assert row["stale_allowlist"] is True

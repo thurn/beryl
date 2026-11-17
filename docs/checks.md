@@ -99,11 +99,11 @@ The lanes:
     terminal and in `$BERYL_CACHE/rule-coverage.json`.
 - `oracle`: in XMage and Forge, the scenarios in each changed card file that
   have not passed before, and, when the change reaches `beryl_cards` (a card
-  file, the card store or a crate it depends on), each random scenario under the
-  card `Generated` that no run has played. A rules change rewrites some of those
-  without touching any card file. Every oracle run records each scenario's
-  outcome under a hash of its dump entry and the oracles' side (their pins, the
-  exporters, the harnesses and the card store) in
+  file, the card store or a crate it depends on), or changes an exporter or
+  harness, each random scenario under the card `Generated` that no run has
+  played. A rules change rewrites some of those without touching any card file.
+  Every oracle run records each scenario's outcome under a hash of its exported
+  Java method and Forge JSON, the oracle pins and the generic Java harnesses in
   `$BERYL_CACHE/oracles/outcomes.txt` (`oracle_memory.py`). A generated scenario
   that already failed elsewhere is left to slow CI, so a failure on staging
   fails no one else's push. It plays what fits the time left, cheapest first,
@@ -179,8 +179,9 @@ The lanes slow CI adds to the fast check's:
   machine. It plays a sample of cards chosen from the commit hash whole, the
   scenarios of the cards changed since `origin/master` that have not passed
   before, and every other scenario that has not passed under its hash
-  (`oracle_memory.py`), or every card if the exporters or harnesses changed. A
-  scenario listed in `data/oracle-exporter-gaps.json` or
+  (`oracle_memory.py`). Exporter and card-store edits invalidate only scenarios
+  whose exported inputs change; a harness or pin change invalidates all of them.
+  A scenario listed in `data/oracle-exporter-gaps.json` or
   `data/oracle-divergences.json` plays only with its card. The nightly run plays
   every card on staging.
 - `counts`: `just count-gate`, which checks the rollout benchmark's instruction

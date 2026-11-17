@@ -3,9 +3,9 @@ lane has time for (`fitted`).
 
 Slow CI tests staging's commits since master, so the lane plays the cards whose files changed
 since `origin/master`, plus a sample fixed by the commit, so that every run checks something
-and a failure in the sample reproduces from the SHA. A change to what the exporters or the
-oracle harnesses are built from ([`HARNESS`]) can break any card's translation: then every card
-plays. A rules change does not select every card; the nightly's full sweep on staging
+and a failure in the sample reproduces from the SHA. Changes to exporters or harnesses
+([`HARNESS`]) select scenarios through their exported input keys, rather than forcing every
+card to play. A rules change does not select every card; the nightly's full sweep on staging
 (nightly.py, `oracle_step`) does that. `by oracle` with no names stays the manual full sweep.
 Of the chosen cards, the sample plays whole and the others only their scenarios that have not
 passed; every other scenario that has not passed joins them (oracle_memory.py).
@@ -29,12 +29,14 @@ if TYPE_CHECKING:
 # scenario types), the oracle runner with its pins, the Java harnesses, and the oracles'
 # allowlists.
 HARNESS: re.Pattern[str] = re.compile(
-    r"^tools/src/beryl_tools/(xmage\w*|forge|card_facts|oracles)\.py$"
+    r"^tools/src/beryl_tools/(xmage\w*|forge|card_facts|oracles|oracle_exports|oracle_memory|oracle_selection)\.py$"
     r"|^rust/crates/beryl_scenario/src/(json|facts)\.rs$"
     r"|^rust/crates/beryl_scenario_types/"
     r"|^rust/crates/beryl_cards/src/bin/beryl_scenario\.rs$"
     r"|^tools/oracles/"
+    r"|^tools/src/beryl_tools/BerylScenarioTest\.java$"
     r"|^data/oracle-[\w-]+\.json$"
+    r"|^data/card-store\.tsv$"
 )
 
 # How many cards the sample adds.
@@ -43,7 +45,6 @@ SAMPLE = 3
 # Why a card played, as the run log's `chosen` says (runlog.py).
 CHANGED = "card file changed"
 SAMPLED = "sample of the commit"
-EVERY = "exporters or harness changed"
 
 
 def sample(cards: list[str], commit: str, count: int = SAMPLE) -> list[str]:
@@ -60,11 +61,10 @@ def choose(
     changed: list[str] | None, commit: str, every: list[str]
 ) -> dict[str, str] | None:
     """The cards to play, each with why: those whose files are among `changed` and the sample
-    of `commit` among `every` card; None, for every card, when the harness changed or nothing
-    says what changed."""
+    of `commit` among `every` card; None, for every card, when nothing says what changed.
+    Exported input keys add every scenario that has not passed after an exporter change.
+    """
     if changed is None:
-        return None
-    if any(HARNESS.match(p) for p in changed):
         return None
     chosen = {card: CHANGED for card in card_files.cards_in(changed)}
     for card in sample(sorted(every), commit):

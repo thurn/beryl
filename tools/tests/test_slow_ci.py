@@ -76,6 +76,19 @@ def test_a_data_file_the_ui_imports_runs_the_ui_and_browser_lanes() -> None:
     assert "rust" not in chosen.why
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "data/card-store.tsv",
+        "tools/src/beryl_tools/oracle_exports.py",
+        "tools/src/beryl_tools/BerylScenarioTest.java",
+        "tools/oracles/BerylForgeHarness.java",
+    ],
+)
+def test_export_inputs_reach_the_oracle_lane(path: str) -> None:
+    assert "oracle" in plan([path]).why
+
+
 def test_a_tools_change_reaches_other_lanes_only_through_their_fingerprints() -> None:
     changed = ["tools/src/beryl_tools/card_names.py"]
     assert set(plan(changed).why) == {"repo", "names", "python"}
