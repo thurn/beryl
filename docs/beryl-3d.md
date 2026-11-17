@@ -2162,8 +2162,10 @@ It changes only how pixels are shaded.
 
 - **A shadow map.** One key light above the table. A depth-only pass draws the
   cards from the light's view, and the main pass samples it, so every card casts
-  a shadow of its true shape on the table and on the cards below it. The
-  Baseline tier's shadow quads are not drawn.
+  a shadow of its true shape on the table and on the cards below it. A card
+  casts what is shown of it: one less than half opaque casts nothing, and a
+  dissolving card casts only the rows below its breaking edge. The Baseline
+  tier's shadow quads are not drawn.
 - **Per-pixel lighting.** Cards and the table are lit by the key light and a
   soft fill, with a faint sheen that moves across a card's face as it tilts.
 - **Bloom** on glows and streaks, from a half-resolution blur.
