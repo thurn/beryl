@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Considering a payment could overflow a full mana pool.** The solver narrowed
+  mana left over from tapped sources and added it to a byte without checking the
+  sum. It now caps both the remainder and the sum at the pool's byte limit. The
+  cast lint and
+  `offering_payments_with_a_full_pool_does_not_wrap_remaining_mana` cover the
+  conversion and the full-pool case.
+
 - **Layer dependencies past the 256th effect could apply the wrong effect.** The
   pending list stored each effect's position in a byte. It now uses full slice
   indices, and the loop check sizes its visited set to the segment.

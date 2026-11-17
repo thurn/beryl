@@ -74,6 +74,30 @@ fn plans_that_leave_different_mana_floating_are_a_decision() {
     assert_eq!(g.s.object(bear).zone(), Zone::Stack);
 }
 
+#[test]
+fn offering_payments_with_a_full_pool_does_not_wrap_remaining_mana() {
+    let mut g = Game::new(Profile::EXACT);
+    g.give(g.me, "Test Crypt", Zone::Battlefield);
+    let color = ManaColor::Colorless;
+    let mut pool = ManaPool::default();
+    pool[color] = u8::MAX;
+    g.s.board().set_mana(g.me, pool);
+    crate::layers::refresh(&mut g.s, &g.t, &mut Sink::default()).unwrap();
+
+    let plans = mana::plans(
+        &g.s,
+        &g.t,
+        &mut Sink::default(),
+        g.me,
+        ManaCost::generic(1),
+        Bitboard::EMPTY,
+        false,
+        mana::Paying::NOTHING,
+    )
+    .unwrap();
+    assert!(plans.iter().any(|plan| plan.left[color.index()] == 254));
+}
+
 /// A {1}{W} spell with a Plains, a Strip Mine and a W/U dual: the Plains pays {W}, and the
 /// {1} comes from the Strip or the dual.
 fn strip_or_dual(payment: Payment) -> (bool, bool) {

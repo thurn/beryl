@@ -219,7 +219,10 @@ fn complete<L: Layout, const MEMORY: bool>(
         }
     }
     for (c, &n) in classes.iter().zip(spent.iter()) {
-        units.add(c.kinds, n as u16);
+        units.add(
+            c.kinds,
+            u16::try_from(n).expect("at most a byte of taps times a byte of mana"),
+        );
     }
     if !units.pays(cost) {
         return None;
@@ -231,7 +234,10 @@ fn complete<L: Layout, const MEMORY: bool>(
     for (i, c) in classes.iter().enumerate() {
         let made = u32::from(plan.taps[i]) * u32::from(c.amount);
         if made > spent[i] {
-            left[lowest_kind(c.kinds)] += (made - spent[i]) as u8;
+            // Each kind of floating mana is capped at 255, as in State::add_mana.
+            let remainder = u8::try_from(made - spent[i]).unwrap_or(u8::MAX);
+            let floating = &mut left[lowest_kind(c.kinds)];
+            *floating = floating.saturating_add(remainder);
         }
     }
     Some(left)
@@ -299,7 +305,7 @@ fn floats_for_nothing<L: Layout>(sources: &Sources<L>, p: &Plan<L>, q: &Plan<L>)
 }
 
 pub(super) fn lowest_kind(kinds: u8) -> usize {
-    kinds.trailing_zeros() as usize
+    usize::try_from(kinds.trailing_zeros()).expect("a bit in a u8")
 }
 
 /// Offers the plan `p` to [`plans`]' list `out`, with `scores` beside it: a plan of the same
