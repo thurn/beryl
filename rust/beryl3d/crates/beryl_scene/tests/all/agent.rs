@@ -6,6 +6,7 @@ use beryl_scene::agent::checks::{
     phone_sizes, reachable,
 };
 use beryl_scene::agent::locate::LocateError;
+use beryl_scene::agent::text_overlap::text_overlap;
 use beryl_scene::agent::tree::line;
 use beryl_scene::agent::{Context, Fault, Layout, Rule, TreeOptions, hit, locate, tree, uncovered};
 use beryl_scene::frame::{
@@ -742,4 +743,67 @@ fn the_layout_follows_the_shorter_side_of_the_window() {
     assert_eq!(Layout::for_size(size(500.0, 500.0)), Layout::Desktop);
     assert_eq!(Layout::for_size(size(500.0, 1200.0)), Layout::Desktop);
     assert_eq!(Layout::for_size(size(1280.0, 800.0)), Layout::Desktop);
+}
+
+/// A frame of a life total, a float of the flat layer, whose text line lies at `life`, beside the
+/// text "On the play" and a toggle, and the toggle's own label inside it.
+fn life_beside_text(life: Rect) -> Frame {
+    let mut frame = Frame::with_capacity(4, 0, 4096);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let total = layer(Role::Player, "You 20", 1, life);
+    let play = layer(
+        Role::Text,
+        "On the play",
+        2,
+        rect(600.0, 700.0, 120.0, 24.0),
+    );
+    let toggle = layer(
+        Role::Toggle,
+        "Your upkeep",
+        3,
+        rect(800.0, 700.0, 22.0, 22.0),
+    );
+    let label = layer(Role::Text, "Upkeep", 4, rect(800.0, 700.0, 22.0, 22.0)).parent(2);
+    for spec in [total, play, toggle, label] {
+        builder.resolved(spec.name, spec.element);
+    }
+    builder.line(0, life, 40.0);
+    builder.line(1, rect(600.0, 700.0, 120.0, 24.0), 18.0);
+    builder.line(3, rect(801.0, 701.0, 20.0, 20.0), 12.0);
+    builder.finish();
+    frame
+}
+
+#[test]
+fn a_life_total_over_a_line_of_text_overlaps_it_and_a_label_inside_its_toggle_does_not() {
+    let clear = life_beside_text(rect(600.0, 640.0, 60.0, 48.0));
+    assert_eq!(summary(&text_overlap(&clear, &desktop())), Vec::new());
+    let over = life_beside_text(rect(620.0, 680.0, 60.0, 48.0));
+    assert_eq!(
+        summary(&text_overlap(&over, &desktop())),
+        one(
+            Rule::TextOverlap,
+            &[r#"player "You 20" #1"#, r#"text "On the play" #2"#]
+        )
+    );
+    let on_toggle = life_beside_text(rect(780.0, 690.0, 40.0, 30.0));
+    assert_eq!(
+        summary(&text_overlap(&on_toggle, &desktop())),
+        vec![
+            (
+                Rule::TextOverlap,
+                vec![
+                    r#"player "You 20" #1"#.to_owned(),
+                    r#"toggle "Your upkeep" #3"#.to_owned()
+                ]
+            ),
+            (
+                Rule::TextOverlap,
+                vec![
+                    r#"player "You 20" #1"#.to_owned(),
+                    r#"text "Upkeep" #4"#.to_owned()
+                ]
+            ),
+        ]
+    );
 }

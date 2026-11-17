@@ -9,6 +9,7 @@ pub mod hit;
 pub mod judged;
 pub mod locate;
 pub mod steps;
+pub mod text_overlap;
 pub mod tree;
 
 pub use checks::check;

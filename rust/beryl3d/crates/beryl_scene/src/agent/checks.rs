@@ -27,6 +27,7 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults.extend(reachable(frame, context));
     faults.extend(duplicates(frame, context));
     faults.extend(text_fits(frame, context));
+    faults.extend(super::text_overlap::text_overlap(frame, context));
     faults.extend(named(frame, context));
     faults.extend(blank_cards(frame, context));
     faults.extend(clips(frame, context));
@@ -650,7 +651,7 @@ pub fn lines_hold(before: &[KeptArrow], after: &Frame, context: &Context) -> Vec
 }
 
 /// The indexes of the interactive elements.
-fn interactive(frame: &Frame) -> impl Iterator<Item = u32> + '_ {
+pub(super) fn interactive(frame: &Frame) -> impl Iterator<Item = u32> + '_ {
     frame
         .resolved
         .iter()
@@ -659,14 +660,19 @@ fn interactive(frame: &Frame) -> impl Iterator<Item = u32> + '_ {
         .map(|(index, _)| index as u32)
 }
 
-fn subject(frame: &Frame, index: u32) -> Subject {
+pub(super) fn subject(frame: &Frame, index: u32) -> Subject {
     Subject {
         locator: locator_of(frame, index),
         rect: bounds(&frame.resolved[index as usize]),
     }
 }
 
-fn fault(rule: Rule, context: &Context, message: String, elements: Vec<Subject>) -> Fault {
+pub(super) fn fault(
+    rule: Rule,
+    context: &Context,
+    message: String,
+    elements: Vec<Subject>,
+) -> Fault {
     Fault {
         rule,
         elements,

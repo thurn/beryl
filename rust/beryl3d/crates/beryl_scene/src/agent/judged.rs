@@ -82,6 +82,7 @@ impl Judged {
         self.add(Rule::Reachable, layer + if moving { 0 } else { cards });
         self.add(Rule::Duplicate, frame.resolved.len());
         self.add(Rule::TextFits, frame.lines.len());
+        self.add(Rule::TextOverlap, frame.lines.len());
         self.add(Rule::Named, interactive);
         self.add(Rule::BlankCard, face_up);
         self.add(

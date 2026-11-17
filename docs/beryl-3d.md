@@ -3027,6 +3027,15 @@ screen, so they cover every card spec that is ever generated.
 - **No overlap.** No two interactive elements of the flat layer intersect,
   unless one contains the other in the tree. Cards are exempt, because rows and
   hands overlap them on purpose.
+- **Text overlaps nothing.** No laid-out line of text crosses a line of another
+  element's text or an interactive element of the flat layer, unless one of the
+  two holds the other in the tree, as a button holds its label. Floats such as
+  life totals and pools are laid out as text, so they count. Each line is judged
+  where its clip shows it, a faded element (no more opaque than the audit's
+  `transparent`) is not seen, and boxes may touch by a point, since a line's box
+  includes its leading. The opponent's life total once sat on "On the draw" at
+  the opening and no check saw it, because "no overlap" compares only
+  interactive elements.
 - **Reachable.** A hit test at the centre of the visible part of an interactive
   flat-layer element (its box cut to its clip, so a list row scrolled partly out
   of view is pressed where it shows) returns that element or one inside it, and
