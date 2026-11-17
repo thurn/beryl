@@ -4,9 +4,11 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, Subtype, Types};
-use crate::event::{self, Event, Reason};
+use crate::damage;
+use crate::event::{self, Event, Reason, Recipient};
+use crate::game::Game;
 use crate::ids::{Seat, SlotId};
-use crate::state::{Continuous, CounterKind, Duration, LayerChange, Zone};
+use crate::state::{Continuous, CounterKind, Duration, LayerChange, Shield, Subject, Zone};
 use crate::{
     GameTable, Large, Layout, Outcome, Replay, Scratch, StallReason, State, Step, layers, next,
     trigger,
@@ -48,6 +50,57 @@ fn refresh<L: Layout>(s: &mut State<L>, t: &GameTable) {
 
 fn power_and_toughness<L: Layout>(s: &State<L>, slot: L::Slot) -> (i8, i8) {
     (s.derived(slot).power, s.derived(slot).toughness)
+}
+
+/// Each shield prevents one damage ([CR 615.7]): "Preventing 1 damage reduces the
+/// remaining shield by 1." Seventeen shields require `Large` to consider and apply them all.
+///
+/// [CR 615.7]: https://yawgatog.com/resources/magic-rules/#R6157
+#[test]
+fn damage_uses_more_than_sixteen_shields_in_large() {
+    let (t, mut small, player) = game();
+    let source = put(&mut small, &t, player, "Test Bear");
+    let card = card_of(&small, &t, source);
+    let shield = Shield {
+        left: Some(1),
+        from: None,
+    };
+    for _ in 0..17 {
+        small
+            .start_effect(
+                card,
+                Continuous::Prevent(Subject::Player(player), shield),
+                Duration::EndOfTurn,
+            )
+            .unwrap();
+    }
+    let mut large = small.widen();
+    let reference = small.object_ref(source);
+    let mut scratch = Scratch::new();
+    assert_eq!(
+        damage::deal(
+            &mut Game::new(&mut small, &t, &mut scratch.events),
+            reference,
+            Recipient::Player(player),
+            20,
+            false,
+        ),
+        Err(crate::fixed::Full)
+    );
+
+    let reference = large.object_ref(source.to().unwrap());
+    let mut scratch = Scratch::new();
+    assert_eq!(
+        damage::deal(
+            &mut Game::new(&mut large, &t, &mut scratch.events),
+            reference,
+            Recipient::Player(player),
+            20,
+            false,
+        ),
+        Ok(3)
+    );
+    assert!(!large.has_prevention_shields());
 }
 
 #[test]

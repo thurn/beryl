@@ -8,7 +8,7 @@ use crate::card::{Ability, AbilityKind, Effect, ObjectAbility, Replaced, Replace
 use crate::decision::{Decision, DecisionKind, OPTIONS, Opt};
 use crate::event::{Recipient, ReplacementKind};
 use crate::filter::Evaluate;
-use crate::fixed::{Fixed, Full};
+use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
@@ -52,7 +52,8 @@ pub(crate) struct Damage<L: Layout> {
 /// Gated on the kind: while no effect gives protection, no permanent replaces damage and no
 /// shield is on anything, the proposal is returned as built after two ANDs.
 ///
-/// [`Full`] if a choice of order stopped the run ([`super::answer`]).
+/// [`Full`] if the layout's scratch lists fill or a choice of order stops the run
+/// ([`super::answer`]).
 ///
 /// [CR 702.16e]: https://yawgatog.com/resources/magic-rules/#R70216e
 /// [CR 615.6]: https://yawgatog.com/resources/magic-rules/#R6156
@@ -87,7 +88,7 @@ fn player_protected<L: Layout>(s: &State<L>, t: &GameTable, p: &Damage<L>) -> bo
 /// event."
 ///
 /// [CR 614.5]: https://yawgatog.com/resources/magic-rules/#R6145
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Key<S> {
     /// The recipient's protection.
     Protection,
@@ -98,7 +99,7 @@ enum Key<S> {
 }
 
 /// What an effect that applies does to the damage.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Change {
     /// Prevents all of it: protection, or a shield for the next time ([CR 615.8]): "These
     /// effects prevent the next instance of damage from that source, regardless of how much
@@ -116,7 +117,7 @@ enum Change {
 
 /// An effect that applies to the damage now: where it comes from, what it does, the shield's
 /// place in the store for a shield, and the object a player choosing an order is shown for it.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct Candidate<S> {
     key: Key<S>,
     change: Change,
@@ -124,9 +125,10 @@ struct Candidate<S> {
     shown: Option<S>,
 }
 
-/// The most effects one damage event can meet: the scratch lists of [`replaced`] hold this
-/// many.
+/// The scratch lists in [`replaced`] hold this many effects in `Small` and grow in `Large`.
 const MOST: usize = 16;
+
+type Candidates<L> = <L as Layout>::Queue<Option<Candidate<<L as Layout>::Slot>>, MOST>;
 
 /// [`damage`] once some effect may apply: the loop of [CR 616.1]: "If two or more replacement
 /// and/or prevention effects are attempting to modify the way an event affects an object or
@@ -146,7 +148,7 @@ const MOST: usize = 16;
 #[cold]
 #[inline(never)]
 fn replaced<L: Layout>(game: &mut Game<'_, L>, mut p: Damage<L>) -> Result<Damage<L>, Full> {
-    let mut applied: Fixed<Option<Key<L::Slot>>, MOST> = Fixed::new();
+    let mut applied = L::Queue::<Option<Key<L::Slot>>, MOST>::default();
     while p.amount > 0 {
         let found = candidates(game.state(), game.table(), &p, applied.as_slice())?;
         let Some(c) = choose(game, &p, found.as_slice())? else {
@@ -172,8 +174,8 @@ fn candidates<L: Layout>(
     t: &GameTable,
     p: &Damage<L>,
     applied: &[Option<Key<L::Slot>>],
-) -> Result<Fixed<Option<Candidate<L::Slot>>, MOST>, Full> {
-    let mut found = Fixed::new();
+) -> Result<Candidates<L>, Full> {
+    let mut found = Candidates::<L>::default();
     let mut add = |c: Candidate<L::Slot>| {
         if applied.contains(&Some(c.key)) {
             Ok(())

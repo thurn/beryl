@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Seventeen damage prevention effects could stall a game.** The damage
+  replacement code used the same fixed lists in both layouts, so retrying the
+  event in `Large` still ran out of room. The candidate list and the list of
+  effects already applied now grow in `Large`.
+  `damage_uses_more_than_sixteen_shields_in_large` checks the retry and the
+  amount of damage that gets through.
+
 - **Scry could offer a token as a library card.** A token put into a library can
   still be there until state-based actions run. The top-card query now skips
   tokens and spell copies, and library reordering requires a `CardIn<Library>`.
