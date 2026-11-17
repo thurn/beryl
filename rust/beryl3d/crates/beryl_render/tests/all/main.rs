@@ -3,6 +3,7 @@
 //! after each edit.
 
 mod downlevel;
+mod enhanced;
 mod faces;
 mod render;
 mod shader_cost;

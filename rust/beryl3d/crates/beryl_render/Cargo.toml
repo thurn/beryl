@@ -15,6 +15,9 @@ beryl_assets = { path = "../beryl_assets" }
 beryl_scene = { path = "../beryl_scene" }
 # Casts draw records to bytes for upload, in place of hand-written unsafe casts.
 bytemuck = { version = "1.25.2", features = ["derive"] }
+# The key light's matrix and directions, in the client core's own math types, in place of
+# hand-written matrix code.
+glam = "0.34.3"
 # Writes a rendered frame as a PNG picture, in place of a hand-written encoder.
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 # Blocks on wgpu's adapter and device requests, in place of an async runtime.
@@ -32,7 +35,5 @@ beryl_protocol = { path = "../../../crates/beryl_protocol" }
 naga = { version = "30.0.2", features = ["wgsl-in"] }
 # Reads the material limits in data/beryl3d/gates.json and prints the counts.
 serde_json = "1.0.154"
-# Builds the test scenes' transforms and camera.
-glam = "0.34.3"
 # Finds the glyphs of the test text in its font: the release beryl_assets rasterizes with.
 swash = "=0.2.10"

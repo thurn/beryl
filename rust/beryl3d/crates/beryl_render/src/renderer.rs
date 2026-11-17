@@ -1,23 +1,25 @@
 //! The renderer: draws a frame's draw list in the Baseline tier (docs/beryl-3d.md, "The
-//! Baseline tier"). The records are uploaded as the instance buffer unchanged, then drawn one
+//! Baseline tier"), or in the Enhanced tier when the frame asks for it and the device allows it
+//! (`enhanced`). The records are uploaded as the instance buffer unchanged, then drawn one
 //! instanced call per run of records that share a pass, a mesh, a texture array and a clip:
 //! the opaque records with a depth buffer, then the blended ones, tested against it on the
 //! table and untested in the flat layer.
 
 use beryl_assets::{Format, Prepared, dimensions};
 use beryl_scene::frame::{Frame, TextureArray, Wake};
-use beryl_scene::input::{AssetReady, FaceSize};
+use beryl_scene::input::{AssetReady, FaceSize, Tier};
 use wgpu::util::DeviceExt;
 
 use crate::atlas::Atlas;
 use crate::count::FragmentCounter;
+use crate::draw::Draws;
+use crate::enhanced::{Enhanced, LIT_OFFSET, Lit};
 use crate::faces::{
     COMPRESSION, FaceArray, Waiting, empty_arrays, face_arrays, face_upload, full_array, supported,
     token_array,
 };
 use crate::mesh::meshes;
 use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
-use crate::runs::runs;
 use crate::slots::{Slots, mapped_features};
 use crate::target::Target;
 
@@ -25,8 +27,11 @@ use crate::target::Target;
 /// holds (`beryl_scene::frame::DRAWS`), so that the buffer is made once, at startup, and never
 /// again during play.
 const RECORDS: u64 = beryl_scene::frame::DRAWS as u64;
-/// The uniforms' size: the view and projection, the target's size and the shake.
+/// The Baseline uniforms' size: the view and projection, the target's size and the shake.
 const UNIFORMS: u64 = 80;
+/// The size of a frame's uniform buffer: the Baseline uniforms, then the Enhanced tier's `Lit`
+/// at `LIT_OFFSET`.
+const UNIFORM_BUFFER: u64 = LIT_OFFSET + size_of::<Lit>() as u64;
 
 /// The limits a headless device is created with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,6 +73,8 @@ pub struct Renderer {
     /// upload makes again, empty.
     freed_full: Option<Format>,
     depth: Option<(wgpu::TextureView, u32, u32)>,
+    /// The Enhanced tier, on a device that can draw it.
+    enhanced: Option<Enhanced>,
     /// Present when the renderer counts the fragments each frame shades.
     counter: Option<FragmentCounter>,
     /// The GPU adapter's name and backend, for logs.
@@ -107,9 +114,10 @@ impl Renderer {
         });
         let faces = empty_arrays(&device, &queue);
         let atlas = Atlas::new(&device);
-        let slots = Slots::new(&device, UNIFORMS, RECORDS * RECORD, |uniforms| {
+        let slots = Slots::new(&device, UNIFORM_BUFFER, RECORDS * RECORD, |uniforms| {
             bind_groups(&device, &layout, uniforms, &sampler, &faces, &atlas)
         });
+        let enhanced = Enhanced::new(&device, &queue, target_format, &layout, slots.uniforms());
         Self {
             device,
             queue,
@@ -126,6 +134,7 @@ impl Renderer {
             waiting: Waiting::default(),
             freed_full: None,
             depth: None,
+            enhanced,
             counter: None,
             adapter: "unknown".to_owned(),
             gpu: None,
@@ -181,6 +190,14 @@ impl Renderer {
         let mut renderer = Self::new(device, queue, wgpu::TextureFormat::Rgba8Unorm);
         renderer.adapter.clone_from(&name);
         Ok((renderer, name))
+    }
+
+    /// Whether it draws frames in `Tier::Enhanced` in that tier. A renderer that cannot, on a
+    /// device made with the floor's limits or without four-sample targets, draws them in
+    /// Baseline.
+    #[must_use]
+    pub fn enhanced_available(&self) -> bool {
+        self.enhanced.is_some()
     }
 
     /// The name of the GPU adapter it draws with, as the driver gives it.
@@ -269,10 +286,13 @@ impl Renderer {
     /// "Hosts": "Low memory"): the full-size face array, which the next full-size upload makes
     /// again, empty, and the full-size faces waiting to be uploaded. The client forgets its
     /// full-size layers on the same `Lifecycle::LowMemory`, so those cards draw from their
-    /// board-size faces. Board-size faces and glyph pages are kept. The Enhanced tier's buffers
-    /// are to be freed here too once that tier has any.
+    /// board-size faces. Board-size faces and glyph pages are kept. The Enhanced tier's
+    /// four-sample targets are freed too, and made again by its next frame.
     pub fn low_memory(&mut self) {
         self.waiting.drop_full();
+        if let Some(enhanced) = &mut self.enhanced {
+            enhanced.low_memory();
+        }
         let full = &self.faces[face_array(FaceSize::Full)];
         // A renderer with no match holds only the token array, which there is no need to free.
         if full.size != dimensions(FaceSize::Full) {
@@ -324,7 +344,9 @@ impl Renderer {
         self.render_view(frame, &target.view, target.width, target.height)
     }
 
-    /// Draws `frame` into `view`, `width` by `height` physical pixels, cleared to black first.
+    /// Draws `frame` into `view`, `width` by `height` physical pixels, cleared to black first:
+    /// in the Enhanced tier when the frame is in it and this renderer can draw it, and in
+    /// Baseline otherwise.
     pub(crate) fn render_view(
         &mut self,
         frame: &Frame,
@@ -332,14 +354,23 @@ impl Renderer {
         width: u32,
         height: u32,
     ) -> Drawn {
-        let mut uniforms = [0.0_f32; (UNIFORMS / 4) as usize];
-        uniforms[..16].copy_from_slice(&frame.view_projection.to_cols_array());
-        uniforms[16..].copy_from_slice(&[
+        let enhanced = frame.tier == Tier::Enhanced && self.enhanced.is_some();
+        let mut baseline = [0.0_f32; (UNIFORMS / 4) as usize];
+        baseline[..16].copy_from_slice(&frame.view_projection.to_cols_array());
+        baseline[16..].copy_from_slice(&[
             width as f32,
             height as f32,
             frame.shake.x,
             frame.shake.y,
         ]);
+        let mut uniforms = [0_u8; UNIFORM_BUFFER as usize];
+        uniforms[..UNIFORMS as usize].copy_from_slice(bytemuck::cast_slice(&baseline));
+        let written = if enhanced {
+            uniforms[LIT_OFFSET as usize..].copy_from_slice(bytemuck::bytes_of(&Lit::of(frame)));
+            UNIFORM_BUFFER
+        } else {
+            UNIFORMS
+        };
         // A client made with `Config::LARGEST` never writes more records than the buffer holds.
         // Records past it are not drawn, rather than making a buffer during play.
         let kept = frame.draws.len().min(RECORDS as usize);
@@ -353,84 +384,46 @@ impl Renderer {
         let Some(slot) = self.slots.write(
             &self.device,
             &self.queue,
-            bytemuck::cast_slice(&uniforms),
+            &uniforms[..written as usize],
             records,
         ) else {
             // The device was lost; the host makes a new renderer when it notices.
             return Drawn::default();
         };
+        let draws = Draws {
+            frame,
+            kept: kept as u32,
+            slot,
+            vertices: &self.vertices,
+            indices: &self.indices,
+            ranges: &self.ranges,
+            width,
+            height,
+        };
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        let mut drawn = Drawn::default();
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("frame"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &depth,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Discard,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            if let Some(counter) = &self.counter {
-                pass.begin_pipeline_statistics_query(&counter.set, 0);
-            }
-            pass.set_vertex_buffer(0, self.vertices.slice(..));
-            pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint16);
-            let mut state = None;
-            for run in runs(frame) {
-                let records = run.records.start..run.records.end.min(kept as u32);
-                if records.is_empty() {
-                    continue;
-                }
-                let Some(indices) = self.ranges.get(usize::from(run.mesh)) else {
-                    debug_assert!(false, "a record names mesh {}", run.mesh);
-                    continue;
-                };
-                let Some(bind_group) = slot.bind_groups.get(usize::from(run.array)) else {
-                    debug_assert!(false, "a record names texture array {}", run.array);
-                    continue;
-                };
-                if state != Some((run.pass, run.array, run.clip)) {
-                    pass.set_pipeline(&self.pipelines[run.pass as usize]);
-                    pass.set_bind_group(0, bind_group, &[]);
-                    let [x, y, w, h] = scissor(frame, run.clip, width, height);
-                    pass.set_scissor_rect(x, y, w, h);
-                    state = Some((run.pass, run.array, run.clip));
-                }
-                // The run's records are bound from their offset, so every draw starts at
-                // instance 0: OpenGL ES 3.0 has no first instance.
-                let count = records.len() as u32;
-                let bytes = u64::from(records.start) * RECORD..u64::from(records.end) * RECORD;
-                pass.set_vertex_buffer(1, slot.instances.slice(bytes));
-                pass.draw_indexed(indices.clone(), 0, 0..count);
-                drawn.draw_calls += 1;
-            }
-            if self.counter.is_some() {
-                pass.end_pipeline_statistics_query();
-            }
-        }
-        if let Some(counter) = &self.counter {
-            counter.resolve(&mut encoder);
-        }
+        let draw_calls = match &mut self.enhanced {
+            Some(tier) if enhanced => tier.render(
+                &self.device,
+                &mut encoder,
+                &draws,
+                view,
+                &self.pipelines,
+                &depth,
+            ),
+            _ => baseline_pass(
+                &mut encoder,
+                &draws,
+                view,
+                &depth,
+                &self.pipelines,
+                self.counter.as_ref(),
+            ),
+        };
         let submission = self.queue.submit([encoder.finish()]);
         self.slots.submitted(submission);
-        drawn
+        Drawn { draw_calls }
     }
 
     fn depth_view(&mut self, width: u32, height: u32) -> wgpu::TextureView {
@@ -459,18 +452,51 @@ impl Renderer {
     }
 }
 
-/// The scissor rectangle for clip entry `clip` of `frame`, inside a target of `width` by
-/// `height` pixels: the whole target for entry 0.
-fn scissor(frame: &Frame, clip: u8, width: u32, height: u32) -> [u32; 4] {
-    if clip == 0 {
-        return [0, 0, width, height];
+/// Records the Baseline tier's one pass over every record of `draws` into `encoder`, drawing
+/// into `view` with the one-sample `depth` buffer, and returns how many draw calls it took.
+/// `counter`, when present, counts the fragments the pass shades. The Enhanced tier's passes
+/// are not counted.
+fn baseline_pass(
+    encoder: &mut wgpu::CommandEncoder,
+    draws: &Draws,
+    view: &wgpu::TextureView,
+    depth: &wgpu::TextureView,
+    pipelines: &[wgpu::RenderPipeline; 3],
+    counter: Option<&FragmentCounter>,
+) -> u32 {
+    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("frame"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: depth,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: wgpu::StoreOp::Discard,
+            }),
+            stencil_ops: None,
+        }),
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    if let Some(counter) = counter {
+        pass.begin_pipeline_statistics_query(&counter.set, 0);
     }
-    let rect = frame.clips[usize::from(clip)];
-    let x = (rect.x.max(0.0) as u32).min(width);
-    let y = (rect.y.max(0.0) as u32).min(height);
-    let right = ((rect.x + rect.width).max(0.0).ceil() as u32).clamp(x, width);
-    let bottom = ((rect.y + rect.height).max(0.0).ceil() as u32).clamp(y, height);
-    [x, y, right - x, bottom - y]
+    let draw_calls = draws.record(&mut pass, pipelines, |_| true);
+    if let Some(counter) = counter {
+        pass.end_pipeline_statistics_query();
+        drop(pass);
+        counter.resolve(encoder);
+    }
+    draw_calls
 }
 
 /// The index in `Renderer::faces` of the array for `size`.

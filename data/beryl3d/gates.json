@@ -219,6 +219,18 @@
     "streak": {
       "samples": 1,
       "expressions": 96
+    },
+    "card_lit": {
+      "samples": 1,
+      "expressions": 130
+    },
+    "table_lit": {
+      "samples": 1,
+      "expressions": 98
+    },
+    "particle": {
+      "samples": 1,
+      "expressions": 97
     }
   },
   "tests": {

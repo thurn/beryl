@@ -16,7 +16,7 @@ const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
 /// How far a sampled channel may be from the expected value, out of 255.
 const TOLERANCE: u8 = 2;
 
-fn renderer(limits: Limits) -> Renderer {
+pub(super) fn renderer(limits: Limits) -> Renderer {
     let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
     let format = Format::choose(&renderer.formats());
     renderer.set_faces(&["", "Island", "Plains", "Counterspell"], format);
@@ -27,14 +27,14 @@ fn renderer(limits: Limits) -> Renderer {
 /// A camera looking straight down on the table, with the 200 by 200 pixel target showing
 /// x and y from -100 to 100 millimetres: the point (x, y) is drawn at pixel (x + 100, 100 - y).
 /// Heights from -1000 to 1000 are in view; higher is nearer.
-fn overhead() -> Mat4 {
+pub(super) fn overhead() -> Mat4 {
     directx::orthographic(-100.0, 100.0, -100.0, 100.0, 0.0, 2000.0)
         * look_at_mat4(Vec3::new(0.0, 0.0, 1000.0), Vec3::ZERO, Vec3::Y)
 }
 
 /// A table-material rectangle `size` millimetres large, centred at `centre`, at height `z`.
 /// The table material draws its tint, so the rectangle is that solid color.
-fn rectangle(centre: Vec2, size: Vec2, z: f32, rgb: [u8; 3]) -> Draw {
+pub(super) fn rectangle(centre: Vec2, size: Vec2, z: f32, rgb: [u8; 3]) -> Draw {
     let transform = Affine3A::from_scale_rotation_translation(
         Vec3::new(size.x / CARD_WIDTH, size.y / CARD_HEIGHT, 1.0),
         Quat::IDENTITY,
@@ -44,7 +44,7 @@ fn rectangle(centre: Vec2, size: Vec2, z: f32, rgb: [u8; 3]) -> Draw {
 }
 
 /// A card lying face up at `position`, showing placeholder face `face`.
-fn card(position: Vec3, face: u16, tint: [u8; 4]) -> Draw {
+pub(super) fn card(position: Vec3, face: u16, tint: [u8; 4]) -> Draw {
     Draw::card(
         Affine3A::from_translation(position),
         tint,
@@ -61,11 +61,22 @@ fn card(position: Vec3, face: u16, tint: [u8; 4]) -> Draw {
 fn draw(
     renderer: &mut Renderer,
     view_projection: Mat4,
+    size: (u32, u32),
+    records: &[(Band, Draw)],
+) -> (Picture, u32) {
+    draw_in(Tier::Baseline, renderer, view_projection, size, records)
+}
+
+/// `draw`, in a frame of `tier`.
+pub(super) fn draw_in(
+    tier: Tier,
+    renderer: &mut Renderer,
+    view_projection: Mat4,
     (width, height): (u32, u32),
     records: &[(Band, Draw)],
 ) -> (Picture, u32) {
     let mut frame = Frame::with_capacity(0, records.len(), 0);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(&mut frame, tier);
     builder.camera(view_projection);
     for &(band, record) in records {
         builder.draw(band, record);
@@ -80,19 +91,19 @@ fn draw(
     (picture, drawn.draw_calls)
 }
 
-struct Picture {
-    pixels: Vec<u8>,
-    width: u32,
+pub(super) struct Picture {
+    pub(super) pixels: Vec<u8>,
+    pub(super) width: u32,
 }
 
 impl Picture {
-    fn at(&self, x: u32, y: u32) -> [u8; 3] {
+    pub(super) fn at(&self, x: u32, y: u32) -> [u8; 3] {
         let i = ((y * self.width + x) * 4) as usize;
         [self.pixels[i], self.pixels[i + 1], self.pixels[i + 2]]
     }
 
     /// The pixel showing the overhead camera's point (x, y).
-    fn overhead(&self, x: f32, y: f32) -> [u8; 3] {
+    pub(super) fn overhead(&self, x: f32, y: f32) -> [u8; 3] {
         self.at((x + 100.0) as u32, (100.0 - y) as u32)
     }
 }
@@ -383,18 +394,31 @@ fn the_largest_frame_draws_its_last_record() {
     }
 }
 
-/// Twenty cards on the desktop layout's table through its perspective camera, three of them
-/// raised above the table with contact shadows beneath, written to a PNG picture.
-#[test]
-fn twenty_cards_with_three_raised_draw_in_perspective() {
+/// Twenty cards on the desktop layout's table, seen through its perspective camera in the
+/// default window, three of them raised above the table with contact shadows beneath.
+pub(super) struct TwentyCards {
+    pub(super) camera: Camera,
+    pub(super) width: u32,
+    pub(super) height: u32,
+    /// Each record with its band, in order.
+    pub(super) records: Vec<(Band, Draw)>,
+    /// Points inside each contact shadow that no card covers.
+    pub(super) shadow_points: Vec<Vec3>,
+    /// The centre of each card.
+    pub(super) cards: Vec<Vec3>,
+    /// A point on the cloth far from every card, and the cloth's color.
+    pub(super) cloth: (Vec3, [u8; 3]),
+}
+
+pub(super) fn twenty_cards() -> TwentyCards {
     let window = Window::default();
     let camera = Camera::fit(DESKTOP.camera, window);
-    let (width, height) = (window.size.width as u32, window.size.height as u32);
     let raised = [3, 9, 15];
     let mut opaque = Vec::new();
     let mut shadows = Vec::new();
     let mut edges = Vec::new();
     let mut shadow_points = Vec::new();
+    let mut cards = Vec::new();
     for i in 0..20 {
         let column = (i % 10) as f32;
         let row = (i / 10) as f32;
@@ -415,6 +439,7 @@ fn twenty_cards_with_three_raised_draw_in_perspective() {
             shadow_points.push(Vec3::new(position.x, position.y - 8.0 - 40.0, 0.6));
         }
         let record = card(position, face, [255; 4]);
+        cards.push(position);
         opaque.push((Band::Opaque, record));
         edges.push((Band::TableMarks, record.edge()));
     }
@@ -425,7 +450,29 @@ fn twenty_cards_with_three_raised_draw_in_perspective() {
     );
     let cloth_rgb = [38, 66, 58];
     opaque.push((Band::Opaque, Draw::table(cloth, [38, 66, 58, 255])));
-    let records: Vec<(Band, Draw)> = opaque.into_iter().chain(shadows).chain(edges).collect();
+    TwentyCards {
+        camera,
+        width: window.size.width as u32,
+        height: window.size.height as u32,
+        records: opaque.into_iter().chain(shadows).chain(edges).collect(),
+        shadow_points,
+        cards,
+        cloth: (Vec3::new(0.0, 180.0, -0.5), cloth_rgb),
+    }
+}
+
+/// The twenty cards, written to a PNG picture.
+#[test]
+fn twenty_cards_with_three_raised_draw_in_perspective() {
+    let TwentyCards {
+        camera,
+        width,
+        height,
+        records,
+        shadow_points,
+        cloth: (cloth_point, cloth_rgb),
+        ..
+    } = twenty_cards();
     for limits in BOTH {
         let mut renderer = renderer(limits);
         let mut frame = Frame::with_capacity(0, records.len(), 0);
@@ -453,10 +500,7 @@ fn twenty_cards_with_three_raised_draw_in_perspective() {
             picture.at(p.x as u32, p.y as u32)
         };
         // The cloth far from every card is its own color.
-        assert!(
-            close(pixel(Vec3::new(0.0, 180.0, -0.5)), cloth_rgb),
-            "{limits:?}"
-        );
+        assert!(close(pixel(cloth_point), cloth_rgb), "{limits:?}");
         for point in &shadow_points {
             let shaded = pixel(*point);
             assert!(

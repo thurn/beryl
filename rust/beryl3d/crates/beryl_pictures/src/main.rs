@@ -201,9 +201,10 @@ fn help(command: &Command) -> String {
     out
 }
 
-/// The recording `options` names, played in the window and seat they give, with a renderer.
+/// The recording `options` names, played in the window, seat and tier they give, with a
+/// renderer made with full limits, which draws the Enhanced tier where the GPU allows it.
 pub(crate) fn open(options: &Options) -> Result<Headless, Error> {
-    let page = cli::open(options)?;
+    let page = cli::open(options)?.with_tier(options.tier);
     Headless::new(
         page,
         options.size.width,

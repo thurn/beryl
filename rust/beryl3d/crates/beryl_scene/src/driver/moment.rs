@@ -196,3 +196,31 @@ impl FromStr for Moment {
 fn positive(number: u32) -> Option<u32> {
     (number > 0).then_some(number)
 }
+
+/// How far apart two moments' names are: whether they are of different kinds, then how far
+/// apart their numbers are, the view first.
+pub(super) fn moment_distance(a: Name, b: Name) -> (bool, u32, u32, u32) {
+    match (a, b) {
+        (Name::Step(v, e, s), Name::Step(w, f, t)) => {
+            (false, v.abs_diff(w), e.abs_diff(f), s.abs_diff(t))
+        }
+        (Name::View(v), Name::View(w)) | (Name::Prompt(v), Name::Prompt(w)) => {
+            (false, v.abs_diff(w), 0, 0)
+        }
+        _ => (
+            std::mem::discriminant(&a) != std::mem::discriminant(&b),
+            0,
+            0,
+            0,
+        ),
+    }
+}
+
+/// `time` moved by `offset`, in nanoseconds.
+pub(super) fn offset_from(time: u64, offset: Offset) -> u64 {
+    if offset.before {
+        time.saturating_sub(offset.length.0)
+    } else {
+        time + offset.length.0
+    }
+}

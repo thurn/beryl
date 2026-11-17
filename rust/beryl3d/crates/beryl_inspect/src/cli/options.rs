@@ -29,12 +29,9 @@ impl std::fmt::Display for Usage {
 }
 
 /// The two visual tiers (docs/beryl-3d.md, "Rendering"). Text commands accept the option and
-/// print the same tree in either, because the tiers differ only in shading.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Tier {
-    Baseline,
-    Enhanced,
-}
+/// print the same tree in either, because the tiers differ only in shading; `png` and `film`
+/// draw in the tier given.
+pub use beryl_scene::input::Tier;
 
 /// A command's own options, beside the common ones.
 #[derive(Clone, Copy, Debug, Default)]

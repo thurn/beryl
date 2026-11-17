@@ -33,11 +33,13 @@ pub use moment::{Duration, Moment, Name, Offset, ParseError};
 pub use recording::{Answer, OPEN, RECORDINGS, Recording, Responses, plays_on};
 
 use self::cues::Cues;
+use self::moment::{moment_distance, offset_from};
 use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
 use crate::faces::FaceList;
 use crate::frame::{Frame, Place, Role, Sound, StateBits, Wake};
 use crate::input::{
     AssetReady, Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Rect, Size,
+    Tier,
 };
 use crate::play::record::Plant;
 use crate::{Client, Config};
@@ -115,6 +117,8 @@ pub struct Page {
     size: Size,
     /// The window's safe area, for the client and the checks alike ([`Page::with_safe_area`]).
     safe_area: Insets,
+    /// The visual tier the client is told of whenever it is made anew ([`Page::with_tier`]).
+    tier: Tier,
     tick: Duration,
     cues: Cues,
     client: Client,
@@ -167,6 +171,7 @@ impl Page {
             layout,
             size,
             safe_area: Insets::default(),
+            tier: Tier::Baseline,
             tick: TICK,
             cues: Cues::default(),
             client: Client::new(Config::LARGEST),
@@ -200,6 +205,17 @@ impl Page {
     pub fn with_safe_area(mut self, safe_area: Insets) -> Self {
         self.safe_area = safe_area;
         self.restart();
+        self
+    }
+
+    /// The same page at its start, drawn in `tier`: the client leaves out the records that tier
+    /// does not draw. Where everything is stays the same.
+    #[must_use]
+    pub fn with_tier(mut self, tier: Tier) -> Self {
+        if tier != self.tier {
+            self.tier = tier;
+            self.restart();
+        }
         self
     }
 
@@ -553,6 +569,9 @@ impl Page {
         for plant in &self.plants {
             self.client.plant(*plant);
         }
+        if self.tier != Tier::Baseline {
+            self.give(Input::Tier(self.tier));
+        }
         self.give(Input::Surface {
             size: self.size,
             scale: 1.0,
@@ -707,6 +726,7 @@ impl Page {
             layout: self.layout,
             size: self.size,
             safe_area: self.safe_area,
+            tier: self.tier,
             tick: self.tick,
             cues: self.cues.fresh(),
             client: Client::new(Config::LARGEST),
@@ -768,33 +788,5 @@ impl Page {
             let name = Name::Step(number, step.beat as u32, step.index as u32);
             moments.push((name, from + (to - from) / 2));
         }
-    }
-}
-
-/// How far apart two moments' names are: whether they are of different kinds, then how far
-/// apart their numbers are, the view first.
-fn moment_distance(a: Name, b: Name) -> (bool, u32, u32, u32) {
-    match (a, b) {
-        (Name::Step(v, e, s), Name::Step(w, f, t)) => {
-            (false, v.abs_diff(w), e.abs_diff(f), s.abs_diff(t))
-        }
-        (Name::View(v), Name::View(w)) | (Name::Prompt(v), Name::Prompt(w)) => {
-            (false, v.abs_diff(w), 0, 0)
-        }
-        _ => (
-            std::mem::discriminant(&a) != std::mem::discriminant(&b),
-            0,
-            0,
-            0,
-        ),
-    }
-}
-
-/// `time` moved by `offset`, in nanoseconds.
-fn offset_from(time: u64, offset: Offset) -> u64 {
-    if offset.before {
-        time.saturating_sub(offset.length.0)
-    } else {
-        time + offset.length.0
     }
 }

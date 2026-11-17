@@ -34,6 +34,8 @@ pub(crate) struct Slot {
     pub(crate) instances: wgpu::Buffer,
     /// One bind group per texture array, by `TextureArray` value.
     pub(crate) bind_groups: [wgpu::BindGroup; 3],
+    /// Which of the sets it is, counted from 0 in the order `Slots::uniforms` lists them.
+    pub(crate) index: usize,
     /// The submission that last read the buffers, when they are being mapped again after it.
     submitted: Option<wgpu::SubmissionIndex>,
 }
@@ -71,13 +73,14 @@ impl Slots {
             })
         };
         let sets = (0..count)
-            .map(|_| {
+            .map(|index| {
                 let uniforms = buffer("uniforms", uniforms, wgpu::BufferUsages::UNIFORM);
                 let bind_groups = bind(&uniforms);
                 Slot {
                     uniforms,
                     instances: buffer("records", instances, wgpu::BufferUsages::VERTEX),
                     bind_groups,
+                    index,
                     submitted: None,
                 }
             })
@@ -87,6 +90,11 @@ impl Slots {
             mapped,
             current: 0,
         }
+    }
+
+    /// Every slot's uniform buffer, by `Slot::index`.
+    pub(crate) fn uniforms(&self) -> impl Iterator<Item = &wgpu::Buffer> {
+        self.sets.iter().map(|slot| &slot.uniforms)
     }
 
     /// Makes every slot's bind groups again, after the texture arrays changed.

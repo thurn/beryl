@@ -77,20 +77,46 @@ pub fn pipelines(
         label: Some("beryl_render"),
         source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
     });
+    let shape = Shape {
+        shader: &shader,
+        entry_points: ("vs", "fs"),
+        format,
+        samples: 1,
+    };
+    pipeline_set(device, &[layout], &shape)
+}
+
+/// What a set of pipelines draws with: a shader module and its two entry points, the target's
+/// format and how many samples each pixel of the target holds.
+pub struct Shape<'a> {
+    pub shader: &'a wgpu::ShaderModule,
+    /// The vertex and fragment entry points.
+    pub entry_points: (&'static str, &'static str),
+    pub format: wgpu::TextureFormat,
+    pub samples: u32,
+}
+
+/// The pipelines of `shape` for the three passes, indexed by `Pass as usize`, with bind groups
+/// laid out by `layouts` in order.
+pub fn pipeline_set(
+    device: &wgpu::Device,
+    layouts: &[&wgpu::BindGroupLayout],
+    shape: &Shape,
+) -> [wgpu::RenderPipeline; 3] {
+    let layouts: Vec<Option<&wgpu::BindGroupLayout>> = layouts.iter().copied().map(Some).collect();
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("beryl_render"),
-        bind_group_layouts: &[Some(layout)],
+        bind_group_layouts: &layouts,
         immediate_size: 0,
     });
     [Pass::Opaque, Pass::Table, Pass::Layer]
-        .map(|pass| pipeline(device, &pipeline_layout, &shader, format, pass))
+        .map(|pass| pipeline(device, &pipeline_layout, shape, pass))
 }
 
 fn pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
-    shader: &wgpu::ShaderModule,
-    format: wgpu::TextureFormat,
+    shape: &Shape,
     pass: Pass,
 ) -> wgpu::RenderPipeline {
     let (blend, depth_write, depth_compare) = match pass {
@@ -115,8 +141,8 @@ fn pipeline(
         }),
         layout: Some(layout),
         vertex: wgpu::VertexState {
-            module: shader,
-            entry_point: Some("vs"),
+            module: shape.shader,
+            entry_point: Some(shape.entry_points.0),
             compilation_options: wgpu::PipelineCompilationOptions {
                 constants: &shaken,
                 ..Default::default()
@@ -135,11 +161,11 @@ fn pipeline(
             ],
         },
         fragment: Some(wgpu::FragmentState {
-            module: shader,
-            entry_point: Some("fs"),
+            module: shape.shader,
+            entry_point: Some(shape.entry_points.1),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[Some(wgpu::ColorTargetState {
-                format,
+                format: shape.format,
                 blend,
                 write_mask: wgpu::ColorWrites::ALL,
             })],
@@ -157,7 +183,10 @@ fn pipeline(
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: shape.samples,
+            ..Default::default()
+        },
         multiview_mask: None,
         cache: None,
     })
