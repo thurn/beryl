@@ -53,10 +53,8 @@ impl<L: Layout> State<L> {
     /// object's text names takes these ([`beryl_card::words`]). One AND while no text change
     /// is in force.
     ///
-    /// The changes compose in the order they began. A change that would need a fifth subtype
-    /// entry ([`beryl_card::words::SUBTYPE_CHANGES`]) reads as nothing: the five basic land
-    /// types are all the cards replace, so it would take every one of them replaced on one
-    /// object.
+    /// The changes compose in the order they began. The map has an entry for each basic
+    /// land type word, so applying another substitution cannot run out of room.
     ///
     /// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
     #[inline]
@@ -77,7 +75,7 @@ impl<L: Layout> State<L> {
             .iter()
             .fold(Words::NONE, |words, e| match (e.affected, e.payload) {
                 (Affects::Object { slot: on, .. }, Payload::Text(change)) if on == slot => {
-                    words.changing(change).unwrap_or(words)
+                    words.changing(change)
                 }
                 _ => words,
             })

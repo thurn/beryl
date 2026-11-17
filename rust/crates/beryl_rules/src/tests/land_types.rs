@@ -7,7 +7,7 @@
 
 use beryl_card::{
     AbilityIx, Amount, BasicLandTypes, CopyChange, CopyException, ExceptIx, FaceIx, ManaColor,
-    ManaCost, Objects, TextChange,
+    ManaCost, Objects, SubtypeWord, TextWord,
 };
 
 use crate::additions::Addition;
@@ -17,7 +17,10 @@ use crate::event::Sink;
 use crate::event::TokenEntry;
 use crate::filter::Filter;
 use crate::ids::{Seat, Slot};
-use crate::state::{Continuous, Duration, LayerChange, TurnStep, Zone};
+use crate::state::{
+    AbilityRef, Continuous, Duration, LayerChange, StackEntry, StackItem, TriggerInfo, TurnStep,
+    Zone,
+};
 use crate::{CardTable, GameTable, Profile, State, layers, reference};
 use crate::{Scratch, tokens};
 
@@ -439,10 +442,9 @@ fn a_text_change_on_a_copy_keeps_the_subtype_its_exception_adds() {
     let copy = made.sole().unwrap();
     assert!(is(&t, &s, copy, Subtype::Illusion) && is(&t, &s, copy, Subtype::Forest));
     let card = s.copiable(arbor).record(&t).0;
-    let change = TextChange::Subtype {
-        from: Subtype::Forest,
-        to: Subtype::Island,
-    };
+    let change = TextWord::LandType(Subtype::Forest)
+        .to(TextWord::LandType(Subtype::Island))
+        .unwrap();
     let effect = Continuous::Text(s.object_ref(copy), change);
     s.start_effect(card, effect, Duration::Indefinite).unwrap();
     layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
@@ -452,4 +454,55 @@ fn a_text_change_on_a_copy_keeps_the_subtype_its_exception_adds() {
         is(&t, &s, copy, Subtype::Illusion),
         "the exception's subtype stays"
     );
+}
+
+/// Text changes compose in timestamp order (CR 613.7), and an ability on the stack keeps
+/// the words its source had when it went there (CR 113.7a).
+#[test]
+fn five_land_word_changes_compose_in_live_and_captured_text() {
+    let (t, mut s) = game();
+    let mut sink = Sink::off();
+    let land = on(&t, &mut s, "Test Dual");
+    let source = s.object_ref(land);
+    let card = s.copiable(land).record(&t).0;
+    let ability = || {
+        StackEntry::new(StackItem::Triggered {
+            of: AbilityRef {
+                source: Some(source),
+                card,
+                controller: Seat::P0,
+                ..AbilityRef::default()
+            },
+            info: TriggerInfo::default(),
+        })
+    };
+    let changes = [
+        (Subtype::Island, Subtype::Swamp),
+        (Subtype::Plains, Subtype::Island),
+        (Subtype::Swamp, Subtype::Mountain),
+        (Subtype::Mountain, Subtype::Forest),
+        (Subtype::Forest, Subtype::Swamp),
+    ];
+    for (index, (from, to)) in changes.into_iter().enumerate() {
+        let change = TextWord::LandType(from).to(TextWord::LandType(to)).unwrap();
+        s.start_effect(card, Continuous::Text(source, change), Duration::Indefinite)
+            .unwrap();
+        // Capture the source's words just before and just after the fifth change.
+        if index >= 3 {
+            s.put_on_stack(&mut sink, ability()).unwrap();
+        }
+    }
+    layers::refresh(&mut s, &t, &mut sink).unwrap();
+
+    assert!(is(&t, &s, land, Subtype::Swamp));
+    assert!(is(&t, &s, land, Subtype::Island));
+    assert!(!is(&t, &s, land, Subtype::Forest));
+    let island = SubtypeWord::new(Subtype::Island);
+    let plains = SubtypeWord::new(Subtype::Plains);
+    let before = s.entry_words(&s.stack()[0]);
+    let after = s.entry_words(&s.stack()[1]);
+    assert_eq!(island.read(&before), Subtype::Forest);
+    assert_eq!(island.read(&after), Subtype::Swamp);
+    assert_eq!(plains.read(&before), Subtype::Island);
+    assert_eq!(plains.read(&after), Subtype::Island);
 }

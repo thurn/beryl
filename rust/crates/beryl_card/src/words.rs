@@ -34,19 +34,15 @@
 
 use crate::characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes};
 
-/// The most subtype words one object's text changes can replace, each with another.
-pub const SUBTYPE_CHANGES: usize = 4;
-
-/// The text changes on one object: for each color word and each subtype it replaces, the
+/// The text changes on one object: for each color word and each basic land type word, the
 /// word it reads as instead. Several text-changing effects compose into one `Words`, each
 /// applied to what the earlier ones left.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Words {
     /// What each color word reads as, in [`Colors::EACH`]'s order.
     colors: [Colors; 5],
-    /// The first `changed` entries are subtype words with what each reads as.
-    subtypes: [(Subtype, Subtype); SUBTYPE_CHANGES],
-    changed: u8,
+    /// What each basic land type word reads as, in [`BasicLandTypes::SUBTYPES`]' order.
+    land_types: [BasicLandWord; 5],
 }
 
 /// No changes: the filler of a fixed-capacity list's unused places.
@@ -60,8 +56,7 @@ impl Words {
     /// No changes: each word reads as itself.
     pub const NONE: Words = Words {
         colors: Colors::EACH,
-        subtypes: [(Subtype::ALL[0], Subtype::ALL[0]); SUBTYPE_CHANGES],
-        changed: 0,
+        land_types: BasicLandWord::EACH,
     };
 
     /// These changes, then every instance of the color word `from` replaced with `to`: a
@@ -77,23 +72,15 @@ impl Words {
         self
     }
 
-    /// These changes, then every instance of the subtype word `from` replaced with `to`, or
-    /// `None` when that would need more than [`SUBTYPE_CHANGES`] entries.
-    #[must_use]
-    pub fn changing_subtype(mut self, from: Subtype, to: Subtype) -> Option<Words> {
-        let changed = usize::from(self.changed);
-        let mut replaced = false;
-        for (word, reads) in &mut self.subtypes[..changed] {
-            replaced |= *word == from;
+    /// These changes, then every instance of the basic land type word `from` replaced with
+    /// `to`.
+    fn changing_land_type(mut self, from: BasicLandWord, to: BasicLandWord) -> Words {
+        for reads in &mut self.land_types {
             if *reads == from {
                 *reads = to;
             }
         }
-        if !replaced {
-            *self.subtypes.get_mut(changed)? = (from, to);
-            self.changed += 1;
-        }
-        Some(self)
+        self
     }
 
     /// What one color reads as.
@@ -109,35 +96,33 @@ impl Words {
 
     /// What one subtype reads as.
     fn subtype(&self, subtype: Subtype) -> Subtype {
-        self.subtypes[..usize::from(self.changed)]
-            .iter()
-            .find(|&&(word, _)| word == subtype)
-            .map_or(subtype, |&(_, reads)| reads)
+        BasicLandWord::of_subtype(subtype).map_or(subtype, |word| {
+            self.land_types[usize::from(word.0)].subtype()
+        })
     }
 }
 
 impl Words {
-    /// These changes, then `change`, or `None` when that would need more than
-    /// [`SUBTYPE_CHANGES`] subtype entries.
+    /// These changes, then `change`.
     #[must_use]
-    pub fn changing(self, change: TextChange) -> Option<Words> {
+    pub fn changing(self, change: TextChange) -> Words {
         match change {
-            TextChange::Color { from, to } => Some(self.changing_color(from, to)),
-            TextChange::Subtype { from, to } => self.changing_subtype(from, to),
+            TextChange::Color { from, to } => self.changing_color(from, to),
+            TextChange::LandType { from, to } => self.changing_land_type(from, to),
         }
     }
 
     /// Whether every word reads as printed.
     #[inline]
     pub fn is_none(&self) -> bool {
-        self.changed == 0 && self.colors == Colors::EACH
+        !self.changes_subtypes() && self.colors == Colors::EACH
     }
 
     /// Whether some subtype word reads as another: the type line, a land type or a landwalk
     /// may read otherwise than printed.
     #[inline]
     pub fn changes_subtypes(&self) -> bool {
-        self.changed != 0
+        self.land_types != BasicLandWord::EACH
     }
 
     /// The landwalk keywords among `keywords` as these words read them: "forestwalk" whose
@@ -149,7 +134,7 @@ impl Words {
     #[inline]
     #[must_use]
     pub fn landwalk(&self, keywords: Keywords) -> Keywords {
-        if self.changed == 0 || !keywords.intersects(Keywords::ANY_LANDWALK) {
+        if !self.changes_subtypes() || !keywords.intersects(Keywords::ANY_LANDWALK) {
             return keywords;
         }
         self.landwalk_changed(keywords)
@@ -207,20 +192,38 @@ impl Words {
 }
 
 /// One change of an object's text ([CR 612.1]): every instance of one color word replaced
-/// with another, or of one subtype word with another.
+/// with another, or of one basic land type word with another.
 ///
 /// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TextChange {
     /// Each a single color.
-    Color {
-        from: Colors,
-        to: Colors,
+    Color { from: Colors, to: Colors },
+    LandType {
+        from: BasicLandWord,
+        to: BasicLandWord,
     },
-    Subtype {
-        from: Subtype,
-        to: Subtype,
-    },
+}
+
+/// One word from [`BasicLandTypes::SUBTYPES`], stored as its index.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct BasicLandWord(u8);
+
+impl BasicLandWord {
+    const EACH: [Self; 5] = [Self(0), Self(1), Self(2), Self(3), Self(4)];
+
+    /// The word for `subtype`, if it names a basic land type.
+    pub fn of_subtype(subtype: Subtype) -> Option<Self> {
+        BasicLandTypes::SUBTYPES
+            .iter()
+            .zip(Self::EACH)
+            .find_map(|(&(_, land), word)| (land == subtype).then_some(word))
+    }
+
+    /// The subtype this word names as printed.
+    fn subtype(self) -> Subtype {
+        BasicLandTypes::SUBTYPES[usize::from(self.0)].1
+    }
 }
 
 /// A word a player may choose to replace, or to replace it with, as a text-changing effect
@@ -250,7 +253,7 @@ impl TextWord {
         }
     }
 
-    /// Its number. A land type no basic land type is numbers past the ten.
+    /// Its number. A subtype outside the five basic land types returns [`TextWord::COUNT`].
     pub const fn number(self) -> u8 {
         match self {
             TextWord::Color(color) => color.0.trailing_zeros() as u8,
@@ -286,7 +289,10 @@ impl TextWord {
                 Some(TextChange::Color { from, to })
             }
             (TextWord::LandType(from), TextWord::LandType(to)) if from != to => {
-                Some(TextChange::Subtype { from, to })
+                Some(TextChange::LandType {
+                    from: BasicLandWord::of_subtype(from)?,
+                    to: BasicLandWord::of_subtype(to)?,
+                })
             }
             _ => None,
         }
@@ -315,8 +321,8 @@ impl ColorWords {
     }
 }
 
-/// A subtype word: "Aura", "Island", "Elk". A text change replaces a basic land type or a
-/// creature type; any other subtype reads as itself, since no change names it.
+/// A subtype word: "Aura", "Island", "Elk". The supported text changes replace basic land
+/// type words. Other subtype words read as printed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SubtypeWord(Subtype);
 
@@ -330,10 +336,10 @@ impl SubtypeWord {
     /// The subtype this word names on an object with `words`.
     #[inline]
     pub fn read(self, words: &Words) -> Subtype {
-        if words.changed == 0 {
-            self.0
-        } else {
+        if words.changes_subtypes() {
             words.subtype(self.0)
+        } else {
+            self.0
         }
     }
 }
@@ -359,7 +365,7 @@ impl SubtypeWords {
     /// The subtypes these words name on an object with `words`.
     #[inline]
     pub fn read(self, words: &Words) -> Subtypes {
-        if words.changed == 0 {
+        if !words.changes_subtypes() {
             self.0
         } else {
             self.0
@@ -383,7 +389,7 @@ impl LandTypeWords {
     /// The basic land types these words name on an object with `words`.
     #[inline]
     pub fn read(self, words: &Words) -> BasicLandTypes {
-        if words.changed == 0 {
+        if !words.changes_subtypes() {
             self.0
         } else {
             self.0
@@ -397,7 +403,8 @@ impl LandTypeWords {
 #[cfg(test)]
 mod tests {
     use super::{
-        ColorChanges, ColorWords, LandTypeWords, SubtypeWord, SubtypeWords, TextWord, Words,
+        BasicLandWord, ColorChanges, ColorWords, LandTypeWords, SubtypeWord, SubtypeWords,
+        TextWord, Words,
     };
     use crate::characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes};
 
@@ -416,10 +423,11 @@ mod tests {
     /// and leaves the others.
     #[test]
     fn a_change_replaces_every_instance() {
+        let forest = BasicLandWord::of_subtype(Subtype::Forest).unwrap();
+        let island = BasicLandWord::of_subtype(Subtype::Island).unwrap();
         let words = Words::NONE
             .changing_color(Colors::RED, Colors::BLUE)
-            .changing_subtype(Subtype::Forest, Subtype::Island)
-            .unwrap();
+            .changing_land_type(forest, island);
         let red_white = Colors::RED.union(Colors::WHITE);
         assert_eq!(
             ColorWords::new(red_white).read(&words),
@@ -448,10 +456,12 @@ mod tests {
             .changing_color(Colors::BLUE, Colors::GREEN);
         assert_eq!(ColorWords::new(Colors::RED).read(&words), Colors::GREEN);
         assert_eq!(ColorWords::new(Colors::BLUE).read(&words), Colors::GREEN);
+        let forest = BasicLandWord::of_subtype(Subtype::Forest).unwrap();
+        let island = BasicLandWord::of_subtype(Subtype::Island).unwrap();
+        let swamp = BasicLandWord::of_subtype(Subtype::Swamp).unwrap();
         let words = Words::NONE
-            .changing_subtype(Subtype::Forest, Subtype::Island)
-            .and_then(|w| w.changing_subtype(Subtype::Island, Subtype::Swamp))
-            .unwrap();
+            .changing_land_type(forest, island)
+            .changing_land_type(island, swamp);
         assert_eq!(
             SubtypeWord::new(Subtype::Forest).read(&words),
             Subtype::Swamp
@@ -466,9 +476,9 @@ mod tests {
     /// is islandwalk, and the other keywords stay.
     #[test]
     fn a_landwalk_reads_through_its_land_type() {
-        let words = Words::NONE
-            .changing_subtype(Subtype::Forest, Subtype::Island)
-            .unwrap();
+        let forest = BasicLandWord::of_subtype(Subtype::Forest).unwrap();
+        let island = BasicLandWord::of_subtype(Subtype::Island).unwrap();
+        let words = Words::NONE.changing_land_type(forest, island);
         let printed = Keywords::FORESTWALK.union(Keywords::FLYING);
         assert_eq!(
             words.landwalk(printed),
@@ -488,7 +498,10 @@ mod tests {
         }
         let red = TextWord::Color(Colors::RED);
         let forest = TextWord::LandType(Subtype::Forest);
+        let cave = TextWord::LandType(Subtype::Cave);
         assert!(red.to(forest).is_none());
+        assert!(cave.to(forest).is_none());
+        assert!(forest.to(cave).is_none());
         assert!(red.to(TextWord::Color(Colors::BLUE)).is_some());
         assert_eq!(forest.name(), "Forest");
     }
