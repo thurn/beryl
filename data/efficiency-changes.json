@@ -213,5 +213,10 @@
     "label": "Card writers can omit hand-written scenarios when generated scenarios cover every mutant and pass the oracle check",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A push's fast check runs in one of three reused check trees, check-1 to check-3, which stay a commit or two behind staging and keep their rustc incremental caches, instead of in the pushing tree, which rebuilt every crate staging changed since its agent started (Beryl 3D shared test build: median 134 CPU-seconds per push)",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
   }
 ]

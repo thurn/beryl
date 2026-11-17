@@ -529,6 +529,18 @@ own busy figure for comparison. `cpu.py` explains how processes are attributed.
   cache in seconds (copy-on-write, `tools/src/beryl_tools/warm.py`), and
   removing the worktree saves them back. Plain `npm` or `cargo` commands don't
   do this, so run `just warm` (or `just ui-typecheck`, `just ui-unit`) first.
+- `enact push` runs the fast check in one of three reused worktrees,
+  `.worktrees/check-1` to `check-3` (`[push] check_trees` in `.enact.toml`),
+  with the pushed commit checked out detached, not in the pushing tree. Every
+  push is staging's tip plus one change, so these trees stay a commit or two
+  behind staging, and rustc reuses their incremental caches. The pushing tree
+  last built whatever staging was when its agent started, often 20-30 commits
+  earlier: on 2026-11-16 the Beryl 3D shared test build of a push had a median
+  of 134 CPU-seconds there. When all three are busy, the check runs in the
+  pushing tree. Paths a failing check prints point into the check tree, which
+  the next push reuses, so rerun the failing check in your own worktree to look
+  at its output. `$ENACT_BRANCH` names the pushed branch, which the run log
+  records as the run's place (`runlog.place`).
 - A slot's `rust/target` and `rust/beryl3d/target` would otherwise grow with
   every change on staging, since cargo builds a crate under a new hash whenever
   a crate it depends on changes. Every six hours, the next check or `just b3d`

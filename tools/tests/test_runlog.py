@@ -465,3 +465,14 @@ def test_a_pytest_rerun_runs_only_the_tests_that_failed() -> None:
     # A module that does not import errors outside any test: the rerun runs them all.
     collection = "ERROR tests/test_warm.py - ImportError\n" + output
     assert reruns.failed_pytests(collection) == []
+
+
+def test_a_push_check_in_a_detached_check_tree_is_placed_on_its_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Enact runs a push's fast check in a reused tree with the commit detached, and names the
+    # branch in ENACT_BRANCH, so tests and verdicts keyed on the place follow the branch.
+    monkeypatch.setenv(runlog.BRANCH_ENV, "enact/by-abc")
+    assert runlog.place("check") == "enact/by-abc"
+    monkeypatch.setenv(runlog.BRANCH_ENV, "HEAD")
+    assert runlog.place("check") != "HEAD"

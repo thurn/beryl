@@ -148,12 +148,22 @@ def label(path: Path, chosen: Mapping[str, str], cut: Iterable[str]) -> None:
         warn(e)
 
 
+# The branch a push's fast check checks, set by `enact push` (`place`).
+BRANCH_ENV = "ENACT_BRANCH"
+
+
 def place(script: str) -> str:
     """Where a run's checks ran, so a pass settles only failures from the same place
     (verdicts.settle) and Beryl 3D's test step keeps the tests that failed there
     (beryl3d/test_fit.py); each record holds it as `place`. It is the branch, or `staging` for
     slow CI or the browser sweep on a detached staging tip, else the working tree's path.
+    A push's fast check runs in one of Enact's reused check trees with the pushed commit
+    detached ('[push] check_trees' in .enact.toml), so there the branch comes from
+    `$ENACT_BRANCH`, which `enact push` sets to the branch it checks.
     """
+    branch = os.environ.get(BRANCH_ENV, "").strip()
+    if branch and branch != "HEAD":
+        return branch
     branch = git("symbolic-ref", "--short", "-q", "HEAD")
     if branch:
         return branch

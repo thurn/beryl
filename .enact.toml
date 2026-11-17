@@ -51,6 +51,14 @@ remove = 'f="$ENACT_WORKTREE_PATH/tools/src/beryl_tools/warm.py"; [ -f "$f" ] ||
 # 2026-11-14 a push waited 20 minutes in it. The fast check now fits 60 s and stops at 180 s
 # (tools/src/beryl_tools/deadline.py), so a lost race costs little, and slow CI is the gate.
 queue = false
+# Each push's fast check runs in one of three reused worktrees, .worktrees/check-1 to check-3,
+# with the pushed commit detached, instead of in the pushing tree (docs/checks.md). The pushing
+# tree last built whatever staging was when its agent started, and rustc ignores incremental
+# caches built at another path, so the check rebuilt every crate staging changed since: on
+# 2026-11-16 a Beryl 3D push's shared test build had a median of 134 CPU-seconds (p90 303),
+# against about 20 in a tree that built the commit before. Every push is staging's tip plus one
+# change, so check trees stay close behind staging. With all three busy, the pushing tree checks.
+check_trees = 3
 
 # Beads labeled tier:light (mechanical work) run on a cheaper model.
 [tiers.light.claude]
