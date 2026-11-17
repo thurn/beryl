@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import caches
+from beryl_tools import caches, tokens
 
 # Where a check wants each test's result, and the lane it belongs to (python_tests.py), read once
 # at import: `own_cache` below removes the variable while each test runs.
@@ -28,6 +28,13 @@ def own_cache(
     monkeypatch.delenv("BERYL_CHECK_RESULTS", raising=False)
     # Nor does the fast check's time contract (deadline.py) reach a test run under it.
     monkeypatch.delenv("BERYL_CHECK_STARTED", raising=False)
+    # Nor does the environment of the run that runs pytest: the browser sweep sets every hang
+    # limit (hang.py) and runs its steps as the `sweep` token class or at low priority, which
+    # makes `bench.locked` write a sweep's lock script (vm_host.background). Under a sweep, the
+    # hang and bench tests saw that environment instead of the defaults they test.
+    monkeypatch.delenv("CHECK_HANG_LIMIT_S", raising=False)
+    monkeypatch.delenv(tokens.CLASS_ENV, raising=False)
+    monkeypatch.delenv("BERYL_LOW_PRIORITY", raising=False)
     monkeypatch.setattr(caches, "free_space", lambda _: 10 * caches.LOW_DISK)
     return cache
 
