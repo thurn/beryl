@@ -222,7 +222,10 @@ fn a_new_file_is_listed_with_no_other_edit() {
     );
     assert!(!before.contains("lea::island::CARD"), "{before}");
 
-    scratch.write("cards_1993/lea/island.rs", "names::ISLAND");
+    scratch.write(
+        "cards_1993/lea/island.rs",
+        "use names::ISLAND;\npub mod scenarios {}",
+    );
     scratch.write("cards_1993/apc/fire_ice.rs", "names::FIRE_ICE");
     assert_eq!(
         modules(&dir),
@@ -233,6 +236,7 @@ fn a_new_file_is_listed_with_no_other_edit() {
         "#[path = \"../crate/apc\"]\npub mod apc {",
         "    pub mod island;",
         "    &apc::fire_ice::CARD,\n    &lea::island::CARD,\n    &lea::plains::CARD,",
+        "    (names::FIRE_ICE, &[]),",
         "    (names::ISLAND, lea::island::scenarios::SCENARIOS),",
         "    pub const FIRE_ICE: &str = \"Fire // Ice\";",
     ] {

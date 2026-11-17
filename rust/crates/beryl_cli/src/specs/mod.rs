@@ -142,9 +142,9 @@ pub fn generate(specs: &[&Spec]) {
 /// A card's own scenarios, or the rules library's and the generated scenarios
 /// if it has none. Build and cache the fallback one card at a time.
 fn scenarios(def: &'static CardDef) -> &'static [Scenario] {
-    let card = def.name;
     static MADE: std::sync::Mutex<Vec<(&'static str, &'static [Scenario])>> =
         std::sync::Mutex::new(Vec::new());
+    let card = def.name;
     if let Some((_, written)) = beryl_cards::scenarios()
         .iter()
         .find(|(name, written)| *name == card && !written.is_empty())
