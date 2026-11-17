@@ -243,5 +243,11 @@
     "label": "A nightly-failure bead quotes its own step's output and names a file that keeps it for two weeks, instead of the tail of the whole night (which ended with the oracle and iroh steps) in a file the next firing overwrote, so a Steward no longer re-runs a 2-10 minute `just fuzz` just to see what failed",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Enact replaces local sync and its 4.7 s median ownership-lock wait with tk coordination",
+    "metric": "bead.agent-minutes",
+    "expect": "down",
+    "commit": "c166fc4ae2abbc8ecb99286ba16167e3f6b9eef7"
   }
 ]
