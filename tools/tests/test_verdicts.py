@@ -7,7 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import checks, cli, paths, runlog, runstore, verdicts
+from beryl_tools import (
+    checks,
+    cli,
+    paths,
+    runlog,
+    runstore,
+    step_runner,
+    tokens,
+    verdicts,
+)
 
 
 class FakeBd(verdicts.Beads):
@@ -70,12 +79,17 @@ class FakeBd(verdicts.Beads):
 def bd(monkeypatch: pytest.MonkeyPatch) -> FakeBd:
     fake = FakeBd()
     monkeypatch.setattr(verdicts, "STORE", fake)
+    # These lanes run fixture scripts, so they need neither a CLI build nor CPU tokens.
+    monkeypatch.setattr(step_runner, "BUILDS_CLI", frozenset())
+    monkeypatch.setattr(tokens, "HEAVY_STEPS", frozenset())
     return fake
 
 
 @pytest.fixture
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A repository of its own, so trees can be told apart."""
+    # The fixture uses its own Git branches even when the suite runs in an Enact push.
+    monkeypatch.delenv(runlog.BRANCH_ENV, raising=False)
     root = tmp_path / "repo"
     root.mkdir()
     git(root, "init", "-q", "-b", "work")
