@@ -28,7 +28,7 @@ TREE_LINES = 40
 # How many frames `--film` draws of each moment.
 FILM_FRAMES = 12
 SEATS = ("you", "opponent")
-PROMPT_LINE = re.compile(r"^(prompt:\d+)\s")
+PROMPT_LINE: re.Pattern[str] = re.compile(r"^(prompt:\d+)\s")
 
 
 @dataclass(frozen=True)
