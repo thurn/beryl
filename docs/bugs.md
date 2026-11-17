@@ -6,6 +6,14 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **The fifth basic land text change could be dropped.** The text map stored
+  only four subtype replacements, so a fifth could leave a printed Island
+  reading Forest when it should read Swamp. `Words` now maps all five basic land
+  types and applies each substitution without a capacity check.
+  `five_land_word_changes_compose_in_live_and_captured_text` checks the live
+  type line and the words abilities capture before and after the fifth change.
+  [Fix](https://github.com/thurn/beryl/commit/a309fcfa5ec7f56c9db7e6f774d9a4e3ead7fb68).
+
 - **Considering a payment could overflow a full mana pool.** The solver narrowed
   mana left over from tapped sources and added it to a byte without checking the
   sum. It now caps both the remainder and the sum at the pool's byte limit. The
