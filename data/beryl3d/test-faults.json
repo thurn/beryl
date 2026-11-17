@@ -501,6 +501,12 @@
     "b3d:timetwister/shuffles-graveyards-away/you/2560x1080": {
       "text-overlap": 1
     },
+    "b3d:underworld-breach/a-sacrificed-diamond-can-escape-before-the-opponent-gets-priority/opponent/1920x1080": {
+      "text-overlap": 3
+    },
+    "b3d:underworld-breach/a-sacrificed-diamond-can-escape-before-the-opponent-gets-priority/opponent/2560x1080": {
+      "text-overlap": 1
+    },
     "b3d:verbs-cast-stops/opponent/1440x900": {
       "text-overlap": 2
     },
