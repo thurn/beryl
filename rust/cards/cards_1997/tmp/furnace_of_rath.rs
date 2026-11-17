@@ -108,5 +108,34 @@ pub mod scenarios {
                 ME.life(18),
             ],
         ),
+        // The doubled damage still comes from the attacker, so its lifelink gains the
+        // full amount that the defending player loses.
+        Scenario::new("Furnace of Rath doubles damage and life gained from Griselbrand")
+            .interaction(&[Card::Griselbrand])
+            .life(P0, 6)
+            .battlefield(P0, &[FURNACE, Card::Griselbrand])
+            .actions(&[
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(Card::Griselbrand),
+                ME.deciding(DecisionKind::Priority, 2),
+                THEM.life(6),
+                ME.life(20),
+            ]),
+        // The attacker assigns one damage to its blocker. The remaining five are assigned
+        // to the defending player and doubled to ten.
+        Scenario::new("Furnace of Rath doubles trample damage after assignment")
+            .interaction(&[Card::ColossalDreadmaw])
+            .battlefield(P0, &[FURNACE, Card::ColossalDreadmaw])
+            .battlefield(P1, &[Prop::Vanilla])
+            .actions(&[
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(Card::ColossalDreadmaw),
+                THEM.chooses(DecisionKind::Blocker, Prop::Vanilla),
+                advance_to(1, TurnStep::EndOfCombat),
+                THEM.has(Zone::Graveyard, Prop::Vanilla, 1),
+                THEM.life(10),
+            ]),
     ];
 }

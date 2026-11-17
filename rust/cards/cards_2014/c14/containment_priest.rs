@@ -145,5 +145,21 @@ pub mod scenarios {
                 ME.has_cards(Zone::Exile, 0),
                 THEM.has_cards(Zone::Exile, 0),
             ]),
+        // A creature cast using escape enters even though the spell came from the graveyard.
+        Scenario::new("a creature cast from the graveyard enters through Containment Priest")
+            .interaction(&[Card::UnderworldBreach])
+            .battlefield(P0, &[Card::UnderworldBreach, Card::Island, Card::Island])
+            .battlefield(P1, &[Card::ContainmentPriest])
+            .graveyard(
+                P0,
+                &[Prop::Vanilla, Card::Plains, Card::Plains, Card::Plains],
+            )
+            .actions(&[
+                ME.escapes(Prop::Vanilla),
+                Resolve,
+                ME.controls(Prop::Vanilla, 1),
+                ME.has(Zone::Exile, Prop::Vanilla, 0),
+                ME.has(Zone::Exile, Card::Plains, 3),
+            ]),
     ];
 }

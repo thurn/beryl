@@ -131,5 +131,66 @@ pub mod scenarios {
                 ME.controls(SPIRIT_TOKEN, 0),
                 ME.has(Zone::Exile, SPIRIT_TOKEN, 0),
             ]),
+        // The exiled creature loses its counter and its attachments. The Aura goes to the
+        // graveyard, and the Equipment stays on the battlefield without giving its bonus.
+        Scenario::new("Flickerwisp returns a creature without its counter or attachments")
+            .interaction(&[Card::HolyStrength, Card::LeoninScimitar])
+            .hand(P0, &[WISP, Card::HolyStrength])
+            .permanents(
+                P0,
+                &[
+                    Permanent::new(Prop::Vanilla).counters(CounterKind::PlusOne, 1),
+                    Permanent::new(Card::LeoninScimitar),
+                    Permanent::new(Card::Plains),
+                    Permanent::new(Card::Plains),
+                    Permanent::new(Card::Plains),
+                    Permanent::new(Card::Plains),
+                    Permanent::new(Card::Plains),
+                ],
+            )
+            .actions(&[
+                ME.casts(Card::HolyStrength),
+                Resolve,
+                ME.activates(Card::LeoninScimitar, 1),
+                Resolve,
+                ME.pt(Prop::Vanilla, 5, 5),
+                ME.casts(WISP),
+                Resolve,
+                ME.targets(Prop::Vanilla),
+                Resolve,
+                ME.has(Zone::Graveyard, Card::HolyStrength, 1),
+                ME.controls(Card::LeoninScimitar, 1),
+                advance_to(1, TurnStep::End),
+                Resolve,
+                ME.pt(Prop::Vanilla, 2, 1),
+                ME.counters(Prop::Vanilla, CounterKind::PlusOne, 0),
+            ]),
+        // Underworld Breach enters after the end step starts, so its end step sacrifice never
+        // triggers that turn. The delayed return also survives the loss of Flickerwisp.
+        Scenario::new(
+            "Underworld Breach returns after Flickerwisp dies and misses the end step trigger",
+        )
+        .interaction(&[Card::UnderworldBreach, Card::LightningBolt])
+        .hand(P0, &[WISP, Card::LightningBolt])
+        .battlefield(
+            P0,
+            &[Card::Plains, Card::Plains, Card::Plains, Card::Mountain],
+        )
+        .battlefield(P1, &[Card::UnderworldBreach])
+        .library(P1, &[Card::Island; 2])
+        .actions(&[
+            ME.casts(WISP),
+            Resolve,
+            ME.targets(Card::UnderworldBreach),
+            Resolve,
+            ME.casts(Card::LightningBolt),
+            ME.targets(WISP),
+            Resolve,
+            ME.has(Zone::Graveyard, WISP, 1),
+            advance_to(1, TurnStep::End),
+            Resolve,
+            stack(0),
+            THEM.controls(Card::UnderworldBreach, 1),
+        ]),
     ];
 }

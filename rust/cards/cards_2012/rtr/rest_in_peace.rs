@@ -163,5 +163,28 @@ pub mod scenarios {
                 ME.life(20),
                 THEM.life(20),
             ]),
+        // Malcolm can find the card his ability discarded in exile and offer to cast it.
+        Scenario::new("Malcolm finds the discarded creature that Rest in Peace exiled")
+            .interaction(&[Card::MalcolmAlluringScoundrel])
+            .permanents(
+                P0,
+                &[
+                    Permanent::new(RIP),
+                    Permanent::new(Card::MalcolmAlluringScoundrel).counters(CounterKind::Chorus, 3),
+                ],
+            )
+            .library(P0, &[Prop::Flier])
+            .actions(&[
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(Card::MalcolmAlluringScoundrel),
+                advance_to(1, TurnStep::CombatDamage),
+                Resolve,
+                ME.has(Zone::Exile, Prop::Flier, 1),
+                ME.chooses(DecisionKind::CastOffer, Prop::Flier),
+                Resolve,
+                ME.controls(Prop::Flier, 1),
+                ME.has(Zone::Graveyard, Prop::Flier, 0),
+            ]),
     ];
 }

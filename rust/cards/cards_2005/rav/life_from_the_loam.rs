@@ -116,6 +116,8 @@ pub mod scenarios {
                 ME.passes(),
                 ME.deciding(DecisionKind::ChooseUpTo, 2),
                 ME.picks_up_to(LOAM),
+                // Milling and returning Loam are both done before priority resumes.
+                stack(0),
                 ME.has(Zone::Hand, LOAM, 1),
                 ME.has_cards(Zone::Hand, 2),
                 ME.has_cards(Zone::Graveyard, 3),
@@ -271,6 +273,27 @@ pub mod scenarios {
                 ME.has(Zone::Hand, LOAM, 1),
                 ME.has_cards(Zone::Graveyard, 0),
                 ME.has_cards(Zone::Exile, 3),
+            ]),
+        // A search can put a card into hand while dredge is available without replacing the
+        // move or offering a dredge choice.
+        Scenario::new("putting a searched card into hand does not offer dredge")
+            .interaction(&[Card::Spellseeker])
+            .battlefield(P0, &[Card::Island; 3])
+            .hand(P0, &[Card::Spellseeker])
+            .graveyard(P0, &[LOAM])
+            .library(
+                P0,
+                &[Card::Island, Prop::Instant, Prop::Sorcery, Card::Plains],
+            )
+            .actions(&[
+                ME.casts(Card::Spellseeker),
+                Resolve,
+                Resolve,
+                ME.yes(),
+                ME.picks_up_to(Prop::Instant),
+                ME.has(Zone::Hand, Prop::Instant, 1),
+                ME.has(Zone::Graveyard, LOAM, 1),
+                ME.has_cards(Zone::Library, 3),
             ]),
     ];
 }

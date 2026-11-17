@@ -79,5 +79,30 @@ pub mod scenarios {
                 advance_to(1, TurnStep::EndOfCombat),
                 THEM.life(17),
             ]),
+        // The shield can be set up before an attacker is declared and still prevent combat
+        // damage from the chosen source later in the turn.
+        Scenario::new("Circle of Protection: Red shields against a creature before it attacks")
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(P0, &[COP, Card::Plains])
+            .battlefield(P1, &[GIANT])
+            .actions(&[
+                advance_to(2, TurnStep::BeginningOfCombat),
+                THEM.passes(),
+                ME.activates(COP, 0),
+                THEM.attacks_with(GIANT),
+                advance_to(2, TurnStep::EndOfCombat),
+                ME.life(20),
+            ]),
+        // A red permanent that cannot deal damage is still a legal choice.
+        Scenario::new("Circle of Protection: Red can choose Blood Moon")
+            .interaction(&[Card::BloodMoon])
+            .battlefield(P0, &[COP, Card::Plains])
+            .battlefield(P1, &[Card::BloodMoon, GIANT])
+            .actions(&[
+                ME.activates(COP, 0),
+                ME.deciding(DecisionKind::ChooseObject, 2),
+                ME.picks(Card::BloodMoon),
+                ME.tapped(Card::Plains, 1),
+            ]),
     ];
 }

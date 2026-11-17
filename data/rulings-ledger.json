@@ -31,6 +31,86 @@
       ]
     }
   ],
+  "Chains of Mephistopheles": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "a094cf101b06",
+      "untestable": "The cost vocabulary cannot express drawing a card as payment, and no implemented card charges a draw as a cost."
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "a8304f7289a1",
+      "scenario": [
+        "two Chains: discard, then mill"
+      ]
+    },
+    {
+      "published_at": "2007-09-16",
+      "hash": "01aa23c1b947",
+      "scenario": [
+        "the draw step's first draw is not replaced, the next one is",
+        "an upkeep draw is replaced, the draw step's draw is not"
+      ]
+    },
+    {
+      "published_at": "2007-09-16",
+      "hash": "44aba4a0d505",
+      "scenario": [
+        "drawing seven with a card in hand discards and draws seven times",
+        "Timetwister's draws with empty hands mill seven each"
+      ]
+    },
+    {
+      "published_at": "2007-09-16",
+      "hash": "7c32779e42bf",
+      "scenario": [
+        "a draw with a card in hand discards it, then draws",
+        "a draw with an empty hand mills a card instead"
+      ]
+    }
+  ],
+  "Circle of Protection: Red": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "e3343153991b",
+      "scenario": [
+        "Circle of Protection: Red shields against a creature before it attacks"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "c066d7fe22be",
+      "untestable": "The Bolt and Blood Moon scenarios cover spells and permanents. by-ptc7.2.11 tracks sources referred to on the stack and shields on spells that become permanents."
+    }
+  ],
+  "Containment Priest": [
+    {
+      "published_at": "2021-03-19",
+      "hash": "a6259f275f20",
+      "scenario": [
+        "Containment Priest returning is not exiled by itself"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "1e7f382b404f",
+      "scenario": [
+        "a creature cast from the graveyard enters through Containment Priest"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "827e2e1cb01e",
+      "scenario": [
+        "Containment Priest entering with another creature exiles neither"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "8737e516e828",
+      "untestable": "The Opalescence scenario covers a noncreature entering as a creature. by-ptc7.2.12 tracks the converse: Beryl exiles an uncast Clever Impersonator before it can copy a noncreature permanent."
+    }
+  ],
   "Dress Down": [
     {
       "published_at": "2021-06-18",
@@ -98,7 +178,83 @@
       "untestable": "The vocabulary only grants flash timing to spells. Land plays have no permission for Scout's Warning or Teferi, Mage of Zhalfir to change their timing."
     }
   ],
+  "Flickerwisp": [
+    {
+      "published_at": "2021-03-19",
+      "hash": "21e17a9d4b9d",
+      "scenario": [
+        "Flickerwisp returns a creature without its counter or attachments"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "542a9dbf9b4e",
+      "scenario": [
+        "Underworld Breach returns after Flickerwisp dies and misses the end step trigger"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "c6fed29ffa80",
+      "scenario": [
+        "Flickerwisp exiles a token, which does not return"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "a62681d8e255",
+      "scenario": [
+        "Underworld Breach returns after Flickerwisp dies and misses the end step trigger"
+      ]
+    }
+  ],
+  "Furnace of Rath": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "5abf59a1c930",
+      "scenario": [
+        "two Furnaces of Rath multiply Lightning Bolt's damage by 4"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "8cebc9463c79",
+      "scenario": [
+        "Furnace of Rath doubles damage and life gained from Griselbrand"
+      ]
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "13abd5740918",
+      "untestable": "The spell and ability vocabulary cannot assign portions of one damage amount to separate targets. The trample ruling has its own combat scenario."
+    },
+    {
+      "published_at": "2004-10-04",
+      "hash": "700ef3f2fa7a",
+      "scenario": [
+        "Furnace of Rath doubles trample damage after assignment"
+      ]
+    },
+    {
+      "published_at": "2005-08-01",
+      "hash": "5a7aaf25fd3d",
+      "scenario": [
+        "preventing first, Mending Hands stops a Bolt under Furnace of Rath",
+        "doubling first, a Bolt under Furnace of Rath gets 2 past Mending Hands"
+      ]
+    }
+  ],
   "Glorious Anthem": [],
+  "Griselbrand": [
+    {
+      "published_at": "2012-05-01",
+      "hash": "49fc9bd7822a",
+      "scenario": [
+        "6 life cannot pay",
+        "exactly 7 life may pay, leaving 0"
+      ]
+    }
+  ],
   "Humility": [
     {
       "published_at": "2006-02-01",
@@ -123,6 +279,75 @@
       "scenario": [
         "with Humility earlier, each is as big as its mana value",
         "with Humility later, each is 1/1"
+      ]
+    }
+  ],
+  "Life from the Loam": [
+    {
+      "published_at": "2024-01-12",
+      "hash": "a1ebc7851163",
+      "scenario": [
+        "dredge with too few cards in the library",
+        "dredge with exactly three cards in the library"
+      ]
+    },
+    {
+      "published_at": "2024-01-12",
+      "hash": "84f67f146110",
+      "scenario": [
+        "dredge in the draw step"
+      ]
+    },
+    {
+      "published_at": "2024-01-12",
+      "hash": "25883bd2e090",
+      "scenario": [
+        "putting a searched card into hand does not offer dredge"
+      ]
+    },
+    {
+      "published_at": "2024-01-12",
+      "hash": "a3d0de070b8d",
+      "scenario": [
+        "dredge each draw of an ability on its own"
+      ]
+    },
+    {
+      "published_at": "2024-01-12",
+      "hash": "8bb959a5dda4",
+      "scenario": [
+        "two dredge cards in the graveyard"
+      ]
+    },
+    {
+      "published_at": "2024-01-12",
+      "hash": "4df5c0d16706",
+      "scenario": [
+        "dredge in the draw step",
+        "dredge a draw after the same ability milled it"
+      ]
+    }
+  ],
+  "Lightning Bolt": [],
+  "Mother of Runes": [],
+  "Notion Thief": [
+    {
+      "published_at": "2018-03-16",
+      "hash": "261b929a7a96",
+      "scenario": [
+        "an opponent's draw is P0's instead"
+      ]
+    },
+    {
+      "published_at": "2018-03-16",
+      "hash": "5f1d70a8aec6",
+      "untestable": "A draw with more than one opposing Notion Thief requires at least three players. The scenario builder only supports two seats. The two-seat loop is tested by “with a Notion Thief each, the player who would draw draws”."
+    },
+    {
+      "published_at": "2018-03-16",
+      "hash": "cd0a723f6fd9",
+      "scenario": [
+        "with a Notion Thief each, the player who would draw draws"
       ]
     }
   ],
@@ -254,6 +479,31 @@
       "scenario": [
         "with Humility earlier, each is as big as its mana value",
         "with Humility later, each is 1/1"
+      ]
+    }
+  ],
+  "Rest in Peace": [
+    {
+      "published_at": "2018-03-16",
+      "hash": "40056ef4ec55",
+      "scenario": [
+        "a creature destroyed under Rest in Peace is exiled and doesn't die",
+        "the legend rule's creature is exiled and doesn't die"
+      ]
+    },
+    {
+      "published_at": "2018-03-16",
+      "hash": "e98875ca5b2e",
+      "scenario": [
+        "a card discarded under Rest in Peace is exiled and still discarded",
+        "Malcolm finds the discarded creature that Rest in Peace exiled"
+      ]
+    },
+    {
+      "published_at": "2018-03-16",
+      "hash": "5d07c8cfb475",
+      "scenario": [
+        "Rest in Peace destroyed by a spell is exiled; the spell is not"
       ]
     }
   ],
