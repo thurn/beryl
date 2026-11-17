@@ -66,7 +66,7 @@ impl Headless {
         let (out, pages) = mpsc::channel();
         let glyphs = GlyphWorker::spawn(out, || {}, crate::threads::asset_thread);
         // The test driver lays the page out at one physical pixel to a point.
-        glyphs.request(prepare_latin(1.0));
+        glyphs.prepare(prepare_latin(1.0));
         glyphs.icons(1.0);
         let mut head = Self {
             page,

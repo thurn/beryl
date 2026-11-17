@@ -90,7 +90,7 @@ impl Glyphs {
     pub(crate) fn start(scale: f32, wake: impl Fn() + Send + 'static) -> Self {
         let (out, pages) = mpsc::channel();
         let worker = GlyphWorker::spawn(out, wake, crate::threads::asset_thread);
-        worker.request(prepare_latin(scale));
+        worker.prepare(prepare_latin(scale));
         worker.icons(scale);
         Self {
             worker,
@@ -104,7 +104,7 @@ impl Glyphs {
     pub(crate) fn rescale(&mut self, scale: f32) {
         if (scale - self.scale).abs() > f32::EPSILON {
             self.scale = scale;
-            self.worker.request(prepare_latin(scale));
+            self.worker.prepare(prepare_latin(scale));
             self.worker.icons(scale);
         }
     }

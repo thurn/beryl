@@ -6,7 +6,7 @@ use std::time::Duration;
 use beryl_assets::glyphs::{
     FIRST_PAGE, GlyphWorker, glyphs_rasterized_on_this_thread, prepare_latin,
 };
-use beryl_assets::packer::PAGE_SIZE;
+use beryl_assets::packer::{ATLAS_PAGES, PAGE_SIZE};
 use beryl_assets::{Prepared, Upload};
 use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey};
 use beryl_scene::text::fonts::Font;
@@ -202,4 +202,64 @@ fn a_mana_symbol_is_inked() {
         "{:?}",
         cells[0]
     );
+}
+
+/// What the worker sent for the glyphs and icons a host asks for before its first frame, at
+/// `scale`, followed by a mana symbol and the letters of "flip" asked for as laid-out text
+/// asks: each page sent, its glyph cells and its icon cells.
+fn prepared_then_demanded(scale: f32) -> (Vec<u16>, Vec<GlyphCell>, usize, Vec<GlyphKey>) {
+    let (out, results) = mpsc::channel();
+    let worker = GlyphWorker::spawn(out, || {}, || {});
+    worker.prepare(prepare_latin(scale));
+    worker.icons(scale);
+    let size = (32.0 * scale) as u16;
+    let mana = FontRef::from_index(Font::Mana.file().data, 0).expect("the Mana font parses");
+    let mut demanded = vec![GlyphKey {
+        font: Font::Mana as u8,
+        weight: 400,
+        glyph: mana.charmap().map('\u{e601}'),
+        size,
+    }];
+    demanded.extend("flip".chars().map(|character| open_sans(character, size)));
+    worker.request(demanded.clone());
+    worker.flush();
+    let (mut pages, mut glyphs, mut icons) = (Vec::new(), Vec::new(), 0);
+    for prepared in results.try_iter() {
+        let Upload::AtlasPage { page, .. } = prepared.upload else {
+            panic!("the glyph worker sent a face");
+        };
+        pages.push(page);
+        match prepared.ready {
+            AssetReady::Glyphs { glyphs: cells, .. } => glyphs.extend(cells),
+            AssetReady::Icons { cells, .. } => icons += cells.len(),
+            other => panic!("a glyph worker sent {other:?}"),
+        }
+    }
+    (pages, glyphs, icons, demanded)
+}
+
+/// On a Retina display (scale 2) and a phone (scale 3), the Latin glyphs a host asks for before
+/// its first frame filled more pages than the atlas holds. The renderer refused the pages past
+/// its last, so every icon and the glyphs laid-out text asked for afterwards, such as mana
+/// symbols and letters of "You won the flip", never drew.
+#[test]
+fn every_icon_and_demanded_glyph_fits_the_atlas_at_every_display_scale() {
+    for scale in [1.0, 2.0, 3.0] {
+        let (pages, glyphs, icons, demanded) = prepared_then_demanded(scale);
+        assert!(
+            pages.iter().all(|&page| page < ATLAS_PAGES),
+            "at scale {scale} the worker sent pages {pages:?}, past the atlas's {ATLAS_PAGES}"
+        );
+        assert_eq!(
+            icons,
+            beryl_assets::icons::ALL.len(),
+            "every icon at scale {scale}"
+        );
+        for key in demanded {
+            assert!(
+                glyphs.iter().any(|cell| cell.key == key),
+                "{key:?} at scale {scale}"
+            );
+        }
+    }
 }

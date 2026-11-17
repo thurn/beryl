@@ -19,15 +19,25 @@ use swash::scale::{Render, ScaleContext, Source};
 use swash::zeno::Format;
 
 use crate::icons;
-use crate::packer::{Full, PAGE_SIZE, Shelves};
+use crate::packer::{ATLAS_PAGES, Full, PAGE_SIZE, Shelves};
 use crate::{Prepared, Upload};
 
 /// The atlas page the worker fills first. Page 0 holds the shapes of light ([`crate::light`]).
 pub const FIRST_PAGE: u16 = 1;
 
+/// The atlas's last page, past which the worker never fills one: the renderer refuses a page
+/// past it, and the client would never learn of the glyphs on it.
+const LAST_PAGE: u16 = ATLAS_PAGES - 1;
+
+/// How many of the atlas's last pages glyphs asked for ahead of time ([`GlyphWorker::prepare`])
+/// leave free for the icons and for glyphs laid-out text asks for. At three pixels to a point a
+/// page holds about two hundred glyphs of a body style, so three hold every glyph of a game's
+/// text with room to spare.
+const DEMAND_PAGES: u16 = 3;
+
 /// The keys of the printable ASCII characters, space to tilde, of every type style in
 /// `beryl_scene::tokens` at `scale` physical pixels per point, for a host to hand to
-/// [`GlyphWorker::request`] before its first frame. A character a font lacks is left out.
+/// [`GlyphWorker::prepare`] before its first frame. A character a font lacks is left out.
 #[must_use]
 pub fn prepare_latin(scale: f32) -> Vec<GlyphKey> {
     let mut keys = Vec::new();
@@ -100,6 +110,22 @@ impl GlyphWorker {
         }
     }
 
+    /// Asks for glyphs ahead of time, so that text drawn in the first frames has them. Unlike
+    /// [`GlyphWorker::request`], it fills only the pages that leave the atlas's last
+    /// `DEMAND_PAGES` free, after the icons and glyphs asked for with it: at two pixels to a
+    /// point and more, the Latin glyphs of every type style would fill more pages than the atlas
+    /// holds. A glyph left out is rasterized when it is requested.
+    pub fn prepare(&self, keys: impl IntoIterator<Item = GlyphKey>) {
+        let keys: Vec<GlyphKey> = keys.into_iter().collect();
+        if keys.is_empty() {
+            return;
+        }
+        if let Some(requests) = &self.requests {
+            // As in `request`: the worker stops only when nobody wants its pages.
+            let _ = requests.send(Message::Prepare(keys));
+        }
+    }
+
     /// Asks for every icon of `beryl_scene::widgets::icons` rasterized at `scale` physical
     /// pixels per point, which a host does before its first frame and again whenever the
     /// display's scale changes. The cells come in an `AssetReady::Icons` that replaces the
@@ -132,6 +158,8 @@ impl GlyphWorker {
 enum Message {
     /// Glyphs to rasterize.
     Keys(Vec<GlyphKey>),
+    /// Glyphs to rasterize ahead of time, while pages short of the last `DEMAND_PAGES` have room.
+    Prepare(Vec<GlyphKey>),
     /// Every icon, at this scale.
     Icons(f32),
     /// Answer once every glyph asked for before this has been sent.
@@ -149,24 +177,29 @@ impl Drop for GlyphWorker {
 
 /// The worker's loop: takes every request waiting, rasterizes them together so that a burst
 /// of requests uploads each page once, sends the pages, and then answers the flushes that were
-/// waiting with them.
+/// waiting with them. The icons come first and glyphs asked for ahead of time last, so that
+/// what is on screen has room in the atlas before what may be.
 fn run(inbox: &Receiver<Message>, out: &Sender<Prepared>, wake: &dyn Fn()) {
     let mut atlas = Atlas::new();
     while let Ok(first) = inbox.recv() {
         let mut keys = Vec::new();
+        let mut ahead = Vec::new();
         let mut scale = None;
         let mut flushes = Vec::new();
         for message in std::iter::once(first).chain(inbox.try_iter()) {
             match message {
                 Message::Keys(more) => keys.extend(more),
+                Message::Prepare(more) => ahead.extend(more),
                 Message::Icons(asked) => scale = Some(asked),
                 Message::Flush(done) => flushes.push(done),
             }
         }
-        let mut prepared = atlas.add(&keys);
+        let mut prepared = Vec::new();
         if let Some(scale) = scale {
             prepared.extend(atlas.add_icons(scale));
         }
+        prepared.extend(atlas.add(&keys, LAST_PAGE));
+        prepared.extend(atlas.add(&ahead, LAST_PAGE - DEMAND_PAGES));
         let sent = !prepared.is_empty();
         for page in prepared {
             if out.send(page).is_err() {
@@ -206,27 +239,46 @@ impl Atlas {
         }
     }
 
-    /// Rasterizes each glyph of `keys` not rasterized before and returns the pages that
-    /// changed, each with the glyphs added to it. A page that fills up is sent and a new one
-    /// started. A glyph whose outline is empty, such as a space, is sent with an empty
-    /// rectangle. A glyph too large for a page, or of a font that does not exist, is never
-    /// sent, and draws nothing.
-    fn add(&mut self, keys: &[GlyphKey]) -> Vec<Prepared> {
+    /// Rasterizes each glyph of `keys` not rasterized before, on pages up to `last`, and returns
+    /// the pages that changed, each with the glyphs added to it. A page that fills up is sent
+    /// and the next one started. A glyph whose outline is empty, such as a space, is sent with
+    /// an empty rectangle. A glyph too large for a page, or of a font that does not exist, is
+    /// never sent, and draws nothing. Once page `last` is full the rest of `keys` is left out,
+    /// to be rasterized if asked for again with a later `last`.
+    fn add(&mut self, keys: &[GlyphKey], last: u16) -> Vec<Prepared> {
         let mut prepared = Vec::new();
+        if self.page > last {
+            return prepared;
+        }
         let mut cells = Vec::new();
-        for &key in keys {
-            if !self.done.insert(key) {
+        for (index, &key) in keys.iter().enumerate() {
+            if self.done.contains(&key) {
                 continue;
             }
             let Some(bitmap) = self.rasterize(key) else {
+                self.done.insert(key);
                 continue;
             };
             let (width, height) = (bitmap.width, bitmap.height);
-            let placed = self.shelves.insert(width, height).or_else(|Full| {
-                let glyphs = std::mem::take(&mut cells);
-                prepared.push(self.finish_page(|page| AssetReady::Glyphs { page, glyphs }));
-                self.shelves.insert(width, height)
-            });
+            let placed = match self.shelves.insert(width, height) {
+                Err(Full) if self.page < last => {
+                    let glyphs = std::mem::take(&mut cells);
+                    prepared.push(self.finish_page(|page| AssetReady::Glyphs { page, glyphs }));
+                    self.shelves.insert(width, height)
+                }
+                Err(Full) => {
+                    if last == LAST_PAGE {
+                        eprintln!(
+                            "beryl_assets: the atlas's {ATLAS_PAGES} pages are full, so {} glyphs \
+                             asked for draw nothing",
+                            keys.len() - index
+                        );
+                    }
+                    break;
+                }
+                placed => placed,
+            };
+            self.done.insert(key);
             let Ok(corner) = placed else {
                 continue;
             };
@@ -261,11 +313,15 @@ impl Atlas {
             let bitmap = icons::rasterize(artwork, scale);
             let side = bitmap.width;
             let placed = self.shelves.insert(side, side).or_else(|Full| {
+                if self.page == LAST_PAGE {
+                    return Err(Full);
+                }
                 let cells = std::mem::take(&mut cells);
                 prepared.push(self.finish_page(|page| AssetReady::Icons { page, cells }));
                 self.shelves.insert(side, side)
             });
-            // An icon too large for an empty page is never sent, and draws nothing.
+            // An icon too large for an empty page, or with no room left in the atlas, is never
+            // sent, and draws nothing.
             let Ok(corner) = placed else {
                 continue;
             };
