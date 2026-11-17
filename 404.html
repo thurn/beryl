@@ -1,22 +1,12 @@
 <!doctype html>
-<html lang="en">
-<head>
 <meta charset="utf-8">
-<base href="/beryl/">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Not found · Beryl</title>
-<meta name="description" content="Not found · Beryl">
-<meta name="cirrus-root" content="">
-<link rel="stylesheet" href="assets/cirrus.e25c8718a6.css">
-<script src="assets/cirrus.6d94a8f157.js" defer></script>
-</head>
-<body>
-<div class="c-progress-bar" aria-hidden="true"></div>
-<header class="c-header" id="c-header">
-<nav class="c-crumbs" aria-label="Breadcrumbs"><a class="c-brand" href="./">Beryl</a><a class="c-crumb" href="./">Beads</a></nav>
-</header>
-<main class="c-main" id="c-main">
-<div class="c-titleblock"><h1 class="c-title">Not found</h1><p class="c-subtitle">No bead has this address.</p></div><p><a class="c-muted" href="./">Back to beads</a></p>
-</main>
-</body>
-</html>
+<title>Beryl tickets</title>
+<script>
+const ticket = location.pathname.match(/\/beads\/([^/]+?)(?:\.html)?$/)?.[1];
+const target = ticket
+    ? "https://tickets.thurn.workers.dev/by/beads/" + encodeURIComponent(ticket)
+    : "https://tickets.thurn.workers.dev/by/";
+location.replace(target + location.search + location.hash);
+</script>
+<meta http-equiv="refresh" content="0;url=https://tickets.thurn.workers.dev/by/">
+<a href="https://tickets.thurn.workers.dev/by/">Open Beryl tickets</a>
