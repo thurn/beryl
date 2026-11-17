@@ -161,55 +161,47 @@ def render_png(t: Target, art: bool, out: Path, build: bool = True) -> str | Non
     return None
 
 
-def dump_web(
-    t: Target,
-    messages: list[dict[str, object]],
-    moment: dict[str, object],
-    art: bool,
-    out: Path,
-    serving: Shared | None = None,
-    only: int | None = None,
-) -> tuple[list[str], str | None]:
-    """Shoots the web interface's page of `messages` at `moment` (`b3d.json`'s) into `out`'s
-    `web.png` and `web.json`, from the server `serving` names or from one started for it.
-    With `only`, the index of a web element in the records, the picture shows that element
-    alone. Returns the lines dump.mjs printed (page errors, scans missing) and, if it failed,
-    why.
-    """
+def page_job(
+    t: Target, messages: list[dict[str, object]], at: int, art: bool, out: Path
+) -> dict[str, object]:
+    """What page.mjs needs to open the web interface's page of `messages` in `t`'s window, with
+    the first `at` of its events handed over (`compare.web_at`), beside the fixture file written
+    into `out` that the page reads. `run_page` adds the server's address."""
     width, height = t.width_height()
     # Unique among the snapshots one process takes at once on threads (`boxes --all`).
     name = f"b3d-match-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-    # dump.mjs answers the page's request for the fixture with this file. A file written into
+    # page.mjs answers the page's request for the fixture with this file. A file written into
     # ui/public would not do: a server started earlier (`Shared`) watches no files, so it
     # serves only the public files that existed when it started.
-    fixture = out / "web-fixture.json"
+    fixture = out / f"{name}.json"
     fixture.write_text(json.dumps({"messages": messages}))
     phone = "phone&" if t.layout == "phone" else ""
-    at = compare.web_at(messages, int(str(moment["view"])))
-    given = moment.get("view_given_ms")
-    offset = None
-    if moment.get("animating") and isinstance(given, int):
-        offset = int(str(moment["t_ms"])) - given
-    job: dict[str, object] = {
+    return {
         "route": f"/?{phone}fixture={name}&at={at}#/game",
         "fixture": {"name": name, "file": str(fixture)},
         "width": width,
         "height": height,
         "scale": float(t.scale),
-        "offset_ms": offset,
-        "png": str(out / "web.png"),
-        "json": str(out / "web.json"),
         "roles": json.loads(ROLES.read_text())["roles"],
         "target": t.test_name(),
         "art_dir": str(APP_SCANS / "art") if art else None,
-        "only": only,
     }
-    job_file: Path = out / "web-job.json"
+
+
+def run_page(
+    script: str, job: dict[str, object], out: Path, serving: Shared | None
+) -> tuple[list[str], str | None]:
+    """Runs the page script `script` (dump.mjs or motion.mjs) on `job` (`page_job`), from the
+    server `serving` names or from one started for it, and deletes the job's files afterwards.
+    Returns the lines it printed (page errors, scans missing) and, if it failed, why."""
+    job_file: Path = out / f"{script}-job.json"
+    fixture = job["fixture"]
+    assert isinstance(fixture, dict)
 
     def dump(base: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
         job_file.write_text(json.dumps({**job, "base": base}))
         return subprocess.run(
-            ["node", str(HERE / "dump.mjs"), str(job_file)],
+            ["node", str(HERE / script), str(job_file)],
             cwd=repo_paths.UI,
             env=env,
             stdin=subprocess.DEVNULL,
@@ -228,12 +220,40 @@ def dump_web(
     except shots.UiError as error:
         return [], str(error)
     finally:
-        fixture.unlink(missing_ok=True)
+        Path(str(fixture["file"])).unlink(missing_ok=True)
         job_file.unlink(missing_ok=True)
     lines = done.stdout.splitlines()
     if done.returncode != 0:
-        return lines, f"dump.mjs failed:\n{done.stdout}{done.stderr}"
+        return lines, f"{script} failed:\n{done.stdout}{done.stderr}"
     return lines, None
+
+
+def dump_web(
+    t: Target,
+    messages: list[dict[str, object]],
+    moment: dict[str, object],
+    art: bool,
+    out: Path,
+    serving: Shared | None = None,
+    only: int | None = None,
+) -> tuple[list[str], str | None]:
+    """Shoots the web interface's page of `messages` at `moment` (`b3d.json`'s) into `out`'s
+    `web.png` and `web.json` with dump.mjs. With `only`, the index of a web element in the
+    records, the picture shows that element alone. Returns `run_page`'s lines and failure.
+    """
+    at = compare.web_at(messages, int(str(moment["view"])))
+    job = page_job(t, messages, at, art, out)
+    given = moment.get("view_given_ms")
+    offset = None
+    if moment.get("animating") and isinstance(given, int):
+        offset = int(str(moment["t_ms"])) - given
+    job |= {
+        "offset_ms": offset,
+        "png": str(out / "web.png"),
+        "json": str(out / "web.json"),
+        "only": only,
+    }
+    return run_page("dump.mjs", job, out, serving)
 
 
 def report(t: Target, moment: dict[str, object], warnings: list[str], out: Path) -> str:

@@ -120,7 +120,7 @@ const COMMANDS: [Command; 8] = [
         ],
         spec: Spec {
             recording: true,
-            values: &["--within", "--role"],
+            values: &["--within", "--role", "--to"],
             switches: &["--full", "--records"],
         },
         own: &[
@@ -133,6 +133,10 @@ const COMMANDS: [Command; 8] = [
             (
                 "--records",
                 "every element as JSON records with its style, for `just b3d match`",
+            ),
+            (
+                "--to <moment>",
+                "beside --records: one line of records for each 60 Hz frame from --at to here",
             ),
         ],
         run: view::tree,

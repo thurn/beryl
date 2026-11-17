@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 
 from ..command import Command
-from . import boxes, pixels, snapshot
+from . import boxes, motion, pixels, snapshot
 
 SNAPSHOT = Command(
     "snapshot",
@@ -64,9 +64,28 @@ PIXELS = Command(
     pixels.pixel_arguments,
 )
 
+MOTION = Command(
+    "motion",
+    "each moving element's path, size and opacity on both sides, frame by frame over a span, "
+    "with the largest differences and a plot of each",
+    (
+        (
+            "just b3d match motion verbs-zones --from 1300ms --to 2000ms",
+            "every element that moves in that span, desktop, at scale 2",
+        ),
+        (
+            "just b3d match motion verbs-zones --from 1300ms --to 2000ms --layout phone "
+            "--only 'card \"Plains\"'",
+            "one card's tracks in the phone layout",
+        ),
+    ),
+    motion.run,
+    motion.motion_arguments,
+)
+
 # Each subcommand, in the order `just b3d match --help` lists them. A module adds one by writing
 # its `Command` and adding it here.
-SUBCOMMANDS: tuple[Command, ...] = (SNAPSHOT, BOXES, PIXELS)
+SUBCOMMANDS: tuple[Command, ...] = (SNAPSHOT, BOXES, PIXELS, MOTION)
 
 
 def arguments(parser: argparse.ArgumentParser) -> None:

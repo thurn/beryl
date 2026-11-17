@@ -127,6 +127,13 @@ through the client with no window or GPU (the `b3d` skill has the details):
   worst ten in the snapshot's `crops/`. `--only <locator>` (also on `snapshot`,
   and on `just b3d png`) draws one element subtree alone on both sides, on
   black.
+- `just b3d match motion <name> --from <moment> --to <moment>` steps both
+  clients through the span 60 frames a second and prints, for each moving
+  element and its web pair, the largest difference of position, size and opacity
+  and the frame of each, worst first, with a plot of both tracks in `plots/`
+  (PNG). `--only <locator>` picks one element, moving or not; the span must lie
+  within one view. Beryl 3D's frames alone are
+  `just b3d tree <name> --at <moment> --to <moment> --records`.
 
 These tools lay the frame out at scale 1 unless `--scale` gives another, while
 the desktop app on a Retina Mac runs at scale 2, so a picture of a look you

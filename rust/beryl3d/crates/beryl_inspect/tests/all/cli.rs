@@ -160,6 +160,42 @@ fn a_diff_of_a_moment_with_itself_prints_nothing() {
 }
 
 #[test]
+fn records_to_a_later_moment_print_one_line_a_frame_60_to_the_second() {
+    let printed = ok(&[
+        "tree",
+        RECORDING,
+        "--at",
+        "1400ms",
+        "--to",
+        "1450ms",
+        "--records",
+    ]);
+    let frames: Vec<Value> = (printed.lines())
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let times: Vec<f64> = (frames.iter())
+        .map(|frame| frame["t_ms"].as_f64().unwrap())
+        .collect();
+    assert_eq!(times, [1400.0, 1416.667, 1433.333, 1450.0], "{printed}");
+    for (at, frame) in frames.iter().enumerate() {
+        assert_eq!(frame["frame"], at, "{frame}");
+        assert!(!frame["elements"].as_array().unwrap().is_empty(), "{frame}");
+    }
+    let back = refused(&[
+        "tree",
+        RECORDING,
+        "--at",
+        "1450ms",
+        "--to",
+        "1400ms",
+        "--records",
+    ]);
+    assert!(back.contains("before --at"), "{back}");
+    let bare = refused(&["tree", RECORDING, "--at", "1400ms", "--to", "1450ms"]);
+    assert!(bare.contains("give --records"), "{bare}");
+}
+
+#[test]
 fn json_output_parses() {
     for line in [
         &["list", RECORDING][..],

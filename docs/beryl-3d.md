@@ -4325,8 +4325,27 @@ reference is the web interface as WebKit draws it, at scale 2.
   the subtree's records. A record the table writes for a card after a later
   element was added would be kept with that element instead; the flat layer
   writes each node's records right after adding it, so its subtrees are exact.
-- **Motion.** Element boxes, opacity and transforms are compared frame by frame
-  over an animation.
+- **Motion.** `just b3d match motion <recording> --from <moment> --to <moment>`
+  compares each moving element's path, size and opacity frame by frame, which
+  `timeline-parity` (each step's start, end and verb) does not. Beryl 3D prints
+  every element's record in each 60 Hz frame of the span
+  (`b3d tree --records --to`), with when each view was given; a card on the
+  table has its projected screen rectangle as its box. The web page opens with
+  the views given before the span's first batch, at rest, and the fixture
+  transport's `advance` hands it each later batch at the time Beryl 3D got it,
+  since a view the page opens with is shown without its animation. Its clock
+  then steps to the same times as Beryl 3D's frames; CSS and Web Animations run
+  on the document's timeline, which no fake clock stops, so each is paused when
+  first seen and moved on by hand. Each frame is paired by the matcher, and a
+  Beryl 3D element (followed by the element id in its locator, which survives a
+  card being revealed) keeps the web element it was paired with in the most
+  frames. For each pair where either side moves it prints the largest difference
+  of box centers, of sizes and of opacity with the frame of each, worst first,
+  and writes a plot of x, y, scale and opacity over time with both sides
+  overlaid (`plots/` in the span's directory, SVG and PNG). The span must lie
+  within one view of the page; the web's animation tends to start about a frame
+  later than Beryl 3D's, because the page takes a frame to react to the views it
+  is handed.
 - **Drift.** A web change never runs Beryl 3D's checks (decision C17), so the
   Beryl 3D sweep scores every target and files a bead for each one that drifted.
 

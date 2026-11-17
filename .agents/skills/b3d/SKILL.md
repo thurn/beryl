@@ -140,6 +140,15 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   `--only '<locator>'` (on `snapshot` too) draws that Beryl 3D element and its
   web pair alone, on black, so its own error shows apart from what lies behind
   it. `just b3d png --only '<locator>'` draws the Beryl 3D side alone.
+- `just b3d match motion <recording> --from <moment> --to <moment>` compares
+  an animation frame by frame: for each element that moves on either side it
+  prints the largest difference of its box's center, its size and its opacity
+  from the web's, each with its frame number and time, worst first, and writes
+  a PNG plot of x, y, scale and opacity over time with the web's line solid and
+  Beryl 3D's dashed. Read the plots: an easing or a path that differs shows as
+  two curves of different shape. Start the span after the view arrives (the
+  `step:` lines of `just b3d info` give the times); `--only '<locator>'` picks
+  one element and `--layout phone` the phone layout.
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>` (1600x900 by default),

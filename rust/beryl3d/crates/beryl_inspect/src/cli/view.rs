@@ -50,7 +50,10 @@ pub(super) fn tree(options: &Options) -> Result<Printed, Usage> {
     let mut page = open(options)?;
     seek_and_act(&mut page, options, &options.at)?;
     if options.switch("--records") {
-        return Ok(records(&mut page, options));
+        return records(&mut page, options);
+    }
+    if options.value("--to").is_some() {
+        return Err(Usage("--to: give --records beside it".to_owned()));
     }
     let (view, views, animating) = page.position();
     let now = page.now();
@@ -78,16 +81,56 @@ pub(super) fn tree(options: &Options) -> Result<Printed, Usage> {
     )))
 }
 
+/// One 60 Hz frame, in nanoseconds: the step at which `tree --records --to` prints the frames
+/// of a span, as the web interface's tools step Playwright's clock (`just b3d match motion`).
+const FRAME_NANOSECONDS: u64 = 1_000_000_000 / 60;
+
 /// `tree --records`: the moment's position and every element as a record, as one JSON object.
 /// `view_given_ms` is when the client was given the latest view, from which the web side counts
-/// how far into that view's animation the moment lies.
-fn records(page: &mut Page, options: &Options) -> Printed {
+/// how far into that view's animation the moment lies. With `--to`, one such object a line for
+/// each frame from `--at` to that moment, 1/60 s apart, each with its `frame` number, its time
+/// `t_ms` to the microsecond and `views_given_ms`, when each view so far was given.
+fn records(page: &mut Page, options: &Options) -> Result<Printed, Usage> {
     page.set_looking(true);
+    let Some(to) = options.value("--to") else {
+        return Ok(Printed::text(format!(
+            "{}\n",
+            record_value(page, options, None)
+        )));
+    };
+    let to: Moment = (to.parse()).map_err(|error| Usage(format!("--to {to}: {error}")))?;
+    let end = time_of(page, options, &to)?;
+    let start = page.now();
+    if end < start {
+        return Err(Usage(format!(
+            "--to {to} ({}ms) is before --at ({}ms); give the earlier moment as --at",
+            milliseconds(end),
+            milliseconds(start)
+        )));
+    }
+    let mut text = String::new();
+    let mut frame = 0;
+    loop {
+        let value = record_value(page, options, Some(frame));
+        let _ = writeln!(text, "{value}");
+        frame += 1;
+        // Counted from the start, so that the frames do not drift from the web's.
+        let next = start + frame * FRAME_NANOSECONDS;
+        if next > end {
+            return Ok(Printed::text(text));
+        }
+        page.step(Duration(next - page.now()));
+    }
+}
+
+/// The present moment's records as `tree --records` prints them; `frame`, for a frame of a
+/// span, adds its number and its exact time.
+fn record_value(page: &mut Page, options: &Options, frame: Option<u64>) -> Value {
     let (view, views, animating) = page.position();
     let now = page.now();
     let given = page.view_given_at();
-    let frame = page.frame();
-    let value = json!({
+    let frame_record = page.frame();
+    let mut value = json!({
         "command": options.command_line(),
         "view": view,
         "views": views,
@@ -95,9 +138,18 @@ fn records(page: &mut Page, options: &Options) -> Printed {
         "view_given_ms": given.map(milliseconds),
         "animating": animating,
         "scale": options.scale,
-        "elements": super::records::records(frame),
+        "elements": super::records::records(frame_record),
     });
-    Printed::text(format!("{value}\n"))
+    if let Some(frame) = frame {
+        value["frame"] = json!(frame);
+        let given: Vec<f64> = (page.views_given_at().into_iter())
+            .map(|at| (at as f64 / 1_000.0).round() / 1_000.0)
+            .collect();
+        value["views_given_ms"] = json!(given);
+        // To the microsecond, so that 1/60 s steps keep their fraction of a millisecond.
+        value["t_ms"] = json!((now as f64 / 1_000.0).round() / 1_000.0);
+    }
+    value
 }
 
 /// A tree line as JSON: its text, and its fields as the grammar reads them.

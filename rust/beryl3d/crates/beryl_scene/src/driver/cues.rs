@@ -1,4 +1,5 @@
-//! Clocked host inputs and extra time between views of synthetic recordings.
+//! Clocked host inputs, extra time between views of synthetic recordings, and when each view
+//! was given.
 
 use std::sync::Arc;
 
@@ -28,6 +29,17 @@ impl Cues {
 }
 
 impl Page {
+    /// When the client was given each view so far, in nanoseconds since the recording's start,
+    /// in order: the times at which the web interface's tools hand the same views to the page
+    /// (`just b3d match motion`).
+    #[must_use]
+    pub fn views_given_at(&self) -> Vec<u64> {
+        (self.inputs.iter().zip(&self.given_at))
+            .filter(|(input, _)| matches!(input, Input::Update(_)))
+            .map(|(_, &at)| at)
+            .collect()
+    }
+
     /// Adds mouse events in time order, all after the initial frame.
     pub fn set_pointer_moves(&mut self, moves: Vec<(u64, Pointer)>) {
         self.cues.moves = moves.into();
