@@ -279,6 +279,16 @@ impl Responses {
                 plays_on,
             });
         }
+        if name == ipc::TABLE_ACT {
+            // A table's answer says whether it took the action, which the client acts on: a
+            // look it took opens the library's viewer.
+            let reply = ipc::TableActReply::deserialize(value)
+                .map_err(|error| format!("the recorded `table_act` reply is not one: {error}"))?;
+            return Ok(Answer {
+                reply: Reply::TableAct(reply),
+                plays_on: false,
+            });
+        }
         Ok(Answer {
             reply: Reply::Done(Ok(())),
             plays_on: name == ipc::CHOOSE,

@@ -77,6 +77,10 @@ pub struct FaceList {
     /// Each card's faces in its record's order, by the card's name and the name it was asked
     /// for.
     cards: BTreeMap<String, Vec<FaceId>>,
+    /// Each card's mana value (`mana_value`), by the card's name and the name it was asked
+    /// for. It is worked out from the card's record, because the halves of a split card share
+    /// one scan and so one listed face.
+    mana_values: BTreeMap<String, u32>,
 }
 
 impl FaceList {
@@ -194,6 +198,23 @@ impl FaceList {
         self.cards.get(card)?.get(usize::from(index)).copied()
     }
 
+    /// The mana value of the card named `card` outside the stack, as the web's `manaValue`
+    /// (`ui/src/table/TableViewer.tsx`) works it out from its printed cost: a split card adds
+    /// up both halves' costs and any other card counts its first face's. X counts as 0, a
+    /// hybrid symbol with a number as that number, and any other symbol as 1. `None` for a card
+    /// not in the match.
+    #[must_use]
+    pub fn mana_value(&self, card: &str) -> Option<u32> {
+        self.mana_values.get(card).copied()
+    }
+
+    /// The type line of the first face of the card named `card`, if it is in the match.
+    #[must_use]
+    pub fn type_line(&self, card: &str) -> Option<&str> {
+        let face = self.cards.get(card)?.first()?;
+        Some(&self.faces[usize::from(face.0)].text.type_line)
+    }
+
     /// The face the card named `card` is played with as a land: its first face whose type
     /// line says Land, as the web's `landFace` (`ui/src/cards.ts`) finds it ([CR 712.9]):
     /// "A player playing a modal double-faced card or a copy of a modal double-faced card as a
@@ -211,6 +232,19 @@ impl FaceList {
     }
 
     fn add_entry(&mut self, asked: &str, entry: &CardEntry, token: bool) {
+        let counted = if entry.layout == "split" {
+            entry.faces.len()
+        } else {
+            entry.faces.len().min(1)
+        };
+        let mana_value = (entry.faces[..counted].iter())
+            .map(|face| cost_value(face.mana_cost.as_deref().unwrap_or("")))
+            .sum();
+        for name in [asked, entry.name.as_str()] {
+            self.mana_values
+                .entry(name.to_owned())
+                .or_insert(mana_value);
+        }
         let mut ids = Vec::with_capacity(entry.faces.len());
         for (i, face) in entry.faces.iter().enumerate() {
             let mut names = vec![face.name.clone()];
@@ -317,6 +351,19 @@ pub(crate) fn name_hash(name: &str) -> u64 {
         mix(u64::from_le_bytes(word));
     }
     hash
+}
+
+/// What the mana symbols of `cost`, written as `{1}{U}{U}`, add up to (`FaceList::mana_value`).
+fn cost_value(cost: &str) -> u32 {
+    (cost.split('{').skip(1))
+        .filter_map(|part| part.split_once('}'))
+        .map(|(symbol, _)| match symbol {
+            "X" | "Y" | "Z" => 0,
+            _ => (symbol.split('/').next())
+                .and_then(|generic| generic.parse().ok())
+                .unwrap_or(1),
+        })
+        .sum()
 }
 
 /// Whether `paragraph` of a face's rules text says a triggered ability (it begins "When",

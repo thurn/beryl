@@ -10,14 +10,19 @@
 //! opponent's creature and an activated ability on the viewer's first land.
 //! The other `screen/table-*` recordings are the same table with something more: the guided
 //! start's play or draw choice (`first`), the opening hand after a mulligan with a card to put
-//! on the bottom (`opening`), and a hosted table the other player left (`left`).
+//! on the bottom (`opening`), a hosted table the other player left (`left`), and a table where
+//! the viewer can search their library (`search`): their library's cards are named, as the
+//! table shows them to a player who looks, the table takes the look the viewer asks for, and
+//! the opponent is looking at the top three cards of their own library.
 
 use beryl_protocol::card_records::CardRecords;
-use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, LIST_AGENTS, TABLE_LOBBY};
+use beryl_protocol::ipc::{
+    CARD_RECORDS, FixtureMessage, LIST_AGENTS, TABLE_ACT, TABLE_LOBBY, TableActReply,
+};
 use beryl_protocol::protocol::{
-    AssistsView, CardType, Facing, LabelView, LinkState, LogLine, PlayerState, ProposalLine,
-    ProposalView, Side, TableAbilityOption, TableCardCommands, TablePrompt, TableView, TargetRef,
-    ZoneName,
+    AssistsView, CardHandling, CardType, Facing, LabelView, LinkState, LogLine, PlayerState,
+    ProposalLine, ProposalView, Side, TableAbilityOption, TableCardCommands, TablePrompt,
+    TableView, TargetRef, ZoneName,
 };
 use beryl_protocol::script::{Act, Notice, Reset, Step, StepTiming};
 use beryl_protocol::{AgentView, GameUpdate, PlayerView, SessionId};
@@ -28,7 +33,7 @@ use beryl_scene::testing;
 pub const PREFIX: &str = "screen/";
 
 /// The name of every screen recording.
-pub const NAMES: [&str; 11] = [
+pub const NAMES: [&str; 12] = [
     "screen/start",
     "screen/lobby",
     "screen/table",
@@ -36,6 +41,7 @@ pub const NAMES: [&str; 11] = [
     "screen/table-first",
     "screen/table-opening",
     "screen/table-left",
+    "screen/table-search",
     "screen/gallery",
     "screen/testing",
     "screen/settings",
@@ -119,6 +125,9 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
             assists(&view, &mut table);
         }
         guided_or_linked(opened, &mut table);
+        if opened == "table-search" {
+            searched(&mut view);
+        }
         view.table = Some(table);
         view
     } else {
@@ -149,6 +158,12 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         event: OPEN.to_owned(),
         payload: opened.into(),
     }));
+    if opened == "table-search" {
+        messages.push(FixtureMessage::response(
+            TABLE_ACT,
+            &TableActReply::Ok { ok: true },
+        ));
+    }
     if opened == "lobby" {
         messages.push(FixtureMessage::Event {
             event: TABLE_LOBBY.to_owned(),
@@ -228,6 +243,36 @@ fn assists(view: &PlayerView, table: &mut TableView) {
             },
         );
     }
+}
+
+/// Names the cards of the viewer's library in `view`, a few different ones so that a search of
+/// it can be sorted and grouped, and has the opponent look at the top three cards of theirs.
+fn searched(view: &mut PlayerView) {
+    let names = [
+        "Serra Angel",
+        "Island",
+        "Counterspell",
+        "Pacifism",
+        "Plains",
+    ];
+    let library = view.players.you.library.clone();
+    for (slot, name) in library.iter().zip(names.iter().cycle()) {
+        if let Some(object) = view.objects.iter_mut().find(|object| object.slot == *slot) {
+            object.name = Some((*name).to_owned());
+            object.types = match *name {
+                "Serra Angel" => vec![CardType::Creature],
+                "Pacifism" => vec![CardType::Enchantment],
+                "Counterspell" => vec![CardType::Instant],
+                _ => vec![CardType::Land],
+            };
+        }
+    }
+    view.handling = Some(CardHandling::Pile {
+        side: Side::Opponent,
+        pile: ZoneName::Library,
+        count: 3,
+        bottom: false,
+    });
 }
 
 /// Whether the screen recording `opened` (its name after `PREFIX`) is a hand-built table's view.

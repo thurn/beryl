@@ -19,7 +19,7 @@ use crate::element::{Align, Element, Overflow, Press, Shown, column};
 use crate::frame::Role;
 use crate::hud::{players, steps};
 use crate::input::{FaceId, FaceSize};
-use crate::inspect::viewer::viewer;
+use crate::inspect::viewer::table_viewer;
 use crate::manual::Target;
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::menus::{MENU, OpenMenu};
@@ -128,7 +128,7 @@ pub fn table(input: &ScreenIn) -> Element {
         .children(labels)
         .children(sweep)
         .children(landing)
-        .children(viewer(input))
+        .children(table_viewer(input))
         .children(sort)
         .children(open)
         .children(over(state, input))

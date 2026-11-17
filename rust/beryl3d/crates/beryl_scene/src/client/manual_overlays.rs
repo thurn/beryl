@@ -186,6 +186,15 @@ impl Client {
                 }
             }
             TablePress::Leave => self.leave_table(),
+            TablePress::ViewerGroup => {
+                self.viewer_control(crate::manual::viewers::ViewerControl::Group);
+            }
+            TablePress::ViewerSort(sort) => {
+                self.viewer_control(crate::manual::viewers::ViewerControl::Sort(sort));
+            }
+            TablePress::ViewerFinish(shuffle) => {
+                self.viewer_control(crate::manual::viewers::ViewerControl::Finish { shuffle });
+            }
         }
     }
 

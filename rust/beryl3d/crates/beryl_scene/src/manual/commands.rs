@@ -236,9 +236,10 @@ pub(crate) fn assist_on(view: &PlayerView, assist: Assist) -> bool {
 }
 
 /// Whether the condition `when` holds at `view`'s table, with what the client knows
-/// (`context`). Only `last_draw`, `last_token` and the deck tokens are read here: the
-/// conditions on a selection, a viewer and flows hold once the client has those, and until
-/// then their commands are not offered, as the web offers none whose condition fails.
+/// (`context`): `last_draw`, `last_token`, the deck tokens, and an open viewer and a whole
+/// library's search in it. The conditions on a selection and flows hold once the client has
+/// those, and until then their commands are not offered, as the web offers none whose
+/// condition fails.
 fn condition(view: &PlayerView, context: &Context, when: &str) -> bool {
     let Some(table) = &view.table else {
         return false;
@@ -246,6 +247,8 @@ fn condition(view: &PlayerView, context: &Context, when: &str) -> bool {
     match when {
         "last_draw" => table.last_draw.is_some(),
         "last_token" => context.last_token.is_some(),
+        "open_viewer" => context.viewer_open,
+        "whole_library" => context.whole_library,
         _ => deck_token(when, "deck_token_").is_some_and(|n| n < table.deck_tokens.len()),
     }
 }

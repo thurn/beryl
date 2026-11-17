@@ -597,7 +597,7 @@ impl Client {
             Press::Focus(id) => self.layer.focus(Some(id)),
             Press::Field(id, ref text) => self.keep_field(id, text),
             Press::View(viewed) => self.view(Some(viewed)),
-            Press::Dismiss(Dismiss::Viewer) => self.view(None),
+            Press::Dismiss(Dismiss::Viewer) => self.dismiss_viewer(),
             Press::Bug(press) => self.bug_press(press),
             Press::Dismiss(Dismiss::Revealed) => self.dismiss_revealed(),
             Press::GalleryMenu(kind) => {

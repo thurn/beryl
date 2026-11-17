@@ -32,6 +32,8 @@ pub enum Act {
     Palette,
     Shortcuts,
     View(Viewed),
+    /// Act on the open pile viewer (`viewers::ViewerControl`).
+    Viewer(viewers::ViewerControl),
     Pick(u16),
     /// Answer the table: an ability from the permanent's menu (`card_rows`).
     Answer(Answer),
@@ -57,6 +59,9 @@ pub fn act(
         Some("open_command_list") => return Act::Palette,
         Some("open_shortcuts") => return Act::Shortcuts,
         Some(client) => {
+            if let Some(control) = viewers::control(client) {
+                return Act::Viewer(control);
+            }
             return viewers::opens(client, target).map_or(Act::Nothing, Act::View);
         }
         None => {}

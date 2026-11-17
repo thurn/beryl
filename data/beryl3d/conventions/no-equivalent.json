@@ -116,7 +116,13 @@
       "shows": "field \"Scry\""
     },
     "Manual table pile viewers": {
-      "open": "The pile viewer cannot be searched, grouped or sorted, the table opens no library viewer, so a library search offers no Shuffle on closing, and the other seat sees no lifted count (needs bead by-q44s.9.40)"
+      "recording": "screen/table-search",
+      "at": "end",
+      "do": [
+        "key F3",
+        "press button \"close\""
+      ],
+      "shows": "button \"Shuffle\""
     },
     "Context menu": {
       "recording": "screen/table",

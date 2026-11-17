@@ -9,11 +9,12 @@ use glam::Vec2;
 
 use super::{Client, Platform};
 use crate::command::SessionCommand;
-use crate::element::Press;
+use crate::element::{Press, Viewed};
 use crate::input::{Button, Pointer, PointerPhase};
 use crate::manual::lobby::Lobby;
 use crate::manual::menus::{self, Act};
 use crate::manual::tokens::TokenChoice;
+use crate::manual::viewers::{self, Look, ViewerControl};
 use crate::manual::{self, Context, Sent, TablePress, TableState, Target, commands, pools};
 use crate::screens::Screen;
 use crate::widgets::BACK;
@@ -303,6 +304,8 @@ impl Client {
             bindings: &self.settings.bindings,
             last_token: self.manual.last_token.as_ref(),
             selected: &self.manual.state.selection,
+            viewer_open: self.viewing.open.is_some(),
+            whole_library: self.whole_library_open(),
         }
     }
 
@@ -311,9 +314,11 @@ impl Client {
     /// the last one, as the web's `sendHistory` clears them before it sends.
     pub(super) fn send_table(&mut self, actions: Vec<TableAction>) {
         for action in actions {
-            let sent = match (&action, TokenChoice::of(&action)) {
-                (_, Some(token)) => Sent::Token(token),
-                (TableAction::Undo { .. } | TableAction::Rewind { .. }, None) => {
+            let look = (self.show.latest()).and_then(|update| Look::of(&action, &update.view));
+            let sent = match (&action, TokenChoice::of(&action), look) {
+                (_, Some(token), _) => Sent::Token(token),
+                (_, None, Some(look)) => Sent::Look(look),
+                (TableAction::Undo { .. } | TableAction::Rewind { .. }, None, None) => {
                     self.manual.blocked.clear();
                     Sent::History
                 }
@@ -370,6 +375,10 @@ impl Client {
             (Sent::Token(token), TableActReply::Ok { .. }) => {
                 self.manual.last_token = Some(token);
             }
+            (Sent::Look(look), TableActReply::Ok { .. }) => {
+                self.open_look(look);
+                return;
+            }
             (Sent::History, TableActReply::Refused(refused)) => {
                 let blocked = refused.blocked_by.unwrap_or_default();
                 if !blocked.is_empty() {
@@ -394,6 +403,7 @@ impl Client {
             Act::Palette => self.open_palette(target, false),
             Act::Shortcuts => self.open_palette(target, true),
             Act::View(viewed) => self.view(Some(viewed)),
+            Act::Viewer(control) => self.viewer_control(control),
             Act::Pick(index) => self.start_pick(index, target),
             Act::Answer(answer) => self.send_answer(answer),
             Act::AskX(source, row) => {
@@ -415,5 +425,77 @@ impl Client {
         self.screen = Screen::Start;
         self.sheet = None;
         self.show_screen();
+    }
+}
+
+impl Client {
+    /// The table took the look `look` at a library: its viewer opens, in place of any viewer
+    /// open, as the web's `TableViewers.look` opens it once the table answers.
+    fn open_look(&mut self, look: Look) {
+        let side = look.side;
+        self.view(Some(Viewed::Pile(side, ZoneName::Library)));
+        self.manual.viewer.look = Some(look);
+        self.show_screen();
+    }
+
+    /// Whether the open viewer shows a search of a whole library its player may shuffle.
+    fn whole_library_open(&self) -> bool {
+        (self.show.latest()).is_some_and(|update| self.manual.viewer.can_shuffle(&update.view))
+    }
+
+    /// Does what a client command does to the open viewer (`ViewerControl`). With no viewer
+    /// open it does nothing.
+    pub(super) fn viewer_control(&mut self, control: ViewerControl) {
+        if self.viewing.open.is_none() {
+            return;
+        }
+        match control {
+            ViewerControl::Close => self.dismiss_viewer(),
+            ViewerControl::Search => self.layer.focus_field(viewers::SEARCH),
+            ViewerControl::Group => {
+                self.manual.viewer.grouped = !self.manual.viewer.grouped;
+                self.show_screen();
+            }
+            ViewerControl::Sort(sort) => {
+                self.manual.viewer.sort = sort;
+                self.show_screen();
+            }
+            ViewerControl::Finish { shuffle } => {
+                if self.whole_library_open() {
+                    self.close_library(shuffle);
+                }
+            }
+        }
+    }
+
+    /// The viewer's close button or Escape: on the manual table, closing a search of a whole
+    /// library its player may shuffle first asks whether to shuffle it, as the web's
+    /// `TablePileViewer` does, and closing a library's viewer ends the look. Any other viewer
+    /// closes.
+    pub(super) fn dismiss_viewer(&mut self) {
+        if self.screen != Screen::Table || self.manual.viewer.look.is_none() {
+            self.view(None);
+        } else if self.whole_library_open() && !self.manual.viewer.confirming {
+            self.manual.viewer.confirming = true;
+            self.show_screen();
+        } else {
+            self.close_library(false);
+        }
+    }
+
+    /// Ends the look the open viewer shows, shuffling the whole library first if `shuffle`
+    /// and its player may, in one batch as the web's `TableViewers.close` sends it, and closes
+    /// the viewer.
+    fn close_library(&mut self, shuffle: bool) {
+        let shuffled = shuffle && self.whole_library_open();
+        let Some(look) = self.manual.viewer.look.take() else {
+            return;
+        };
+        let Some(view) = self.show.latest().map(|update| &update.view) else {
+            return;
+        };
+        let action = look.close(view, shuffled);
+        self.send_table(vec![action]);
+        self.view(None);
     }
 }

@@ -68,7 +68,8 @@ fn ns(ms: f32) -> u64 {
 
 impl Client {
     /// Opens the viewer of `viewed`, or closes the viewer with `None`. A pile with no card opens
-    /// no viewer.
+    /// no viewer. A viewer that opens starts with an empty search, in the pile's order and
+    /// ungrouped, showing no look at a library (`manual::viewers::PileViewer`).
     pub(super) fn view(&mut self, viewed: Option<Viewed>) {
         if viewed == Some(Viewed::Revealed) {
             self.viewing.revealed = self.revealed_faces();
@@ -76,6 +77,11 @@ impl Client {
                 return;
             }
         }
+        self.manual.viewer = crate::manual::viewers::PileViewer::new();
+        self.fields.set(
+            crate::manual::viewers::SEARCH,
+            crate::widgets::FieldState::default(),
+        );
         self.viewing.open = viewed;
         self.show_screen();
     }

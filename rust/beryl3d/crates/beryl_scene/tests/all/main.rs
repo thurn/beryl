@@ -31,6 +31,7 @@ mod manual;
 mod manual_assists;
 mod manual_controls;
 mod manual_start;
+mod manual_viewer;
 mod motion;
 mod notices;
 mod object_states;

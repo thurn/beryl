@@ -23,10 +23,12 @@ use crate::faces::{CARD_BACK, FaceList};
 use crate::frame::Role;
 use crate::hud::piles::pile_cards;
 use crate::input::{FaceId, FaceSize, Size};
+use crate::manual::TablePress;
+use crate::manual::viewers::{PileViewer, SEARCH, Sort, sections};
 use crate::screens::ScreenIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, pile_name};
 use crate::tokens::{color, size, space, type_style};
-use crate::widgets::button;
+use crate::widgets::{button, field, primary};
 
 /// The overlay shell over a window of `window`'s size: `title` and, if given, `instruction` over
 /// `body` in the choice column, `actions` under it, and `aside` in the side column. The shell
@@ -108,6 +110,93 @@ pub fn viewer(input: &ScreenIn) -> Option<Element> {
     ))
 }
 
+/// The viewer the manual table shows, if one is open, as the web's `TablePileViewer` shows it:
+/// a pile's viewer, or a library's while the table lets the viewer look at it
+/// (`TableState::viewer`), has a row of controls over its cards: the search field, "Group by
+/// type" and the sort, which lists the cards in the pile's order, by name or by mana value
+/// (`manual::viewers::sections`). Closing a search of a whole library first asks whether to
+/// shuffle it: Shuffle, the highlighted choice, and Don't shuffle take the Close button's
+/// place. The Revealed Cards pile's viewer is the game screen's.
+#[must_use]
+pub fn table_viewer(input: &ScreenIn) -> Option<Element> {
+    let Viewed::Pile(side, zone) = input.viewing? else {
+        return viewer(input);
+    };
+    let view = input.view?;
+    let state = &input.table.viewer;
+    let cards = match &state.look {
+        Some(look) if zone == ZoneName::Library => look.cards(view),
+        _ => pile_cards(view, side, zone),
+    };
+    let query = input.fields.get(SEARCH).text.trim().to_lowercase();
+    let sections = sections(view, input.faces, &cards, &query, state.sort, state.grouped);
+    let mut boxes: Vec<(Option<String>, Vec<Element>)> = (sections.into_iter())
+        .map(|section| {
+            let boxes = section.cards.iter().map(|&slot| object_box(view, slot));
+            (section.label, boxes.collect())
+        })
+        .collect();
+    let body = if state.grouped {
+        sections_grid(boxes)
+    } else {
+        grid(boxes.pop().map(|(_, boxes)| boxes).unwrap_or_default())
+    };
+    let top_first = state.sort == Sort::Pile && !state.grouped;
+    let count = count_words(cards.len(), zone == ZoneName::Library, top_first);
+    let actions = if state.confirming && state.can_shuffle(view) {
+        vec![
+            primary("Shuffle").on_press(Press::Table(TablePress::ViewerFinish(true))),
+            button("Don't shuffle").on_press(Press::Table(TablePress::ViewerFinish(false))),
+        ]
+    } else {
+        vec![
+            button("Close")
+                .name("close")
+                .on_press(Press::Dismiss(Dismiss::Viewer)),
+        ]
+    };
+    let content = column()
+        .name("browser")
+        .align_items(Align::Center)
+        .gap(space::M)
+        .child(controls(input, state))
+        .child(body);
+    Some(overlay(
+        input.window.size,
+        (pile_title(side, zone), Some(&count)),
+        None,
+        content,
+        actions,
+    ))
+}
+
+/// The row of the table viewer's controls: the search field, "Group by type", checked while
+/// the viewer groups its cards, and the sort, which shows the order the viewer lists its cards
+/// in and chooses the next when pressed.
+fn controls(input: &ScreenIn, state: &PileViewer) -> Element {
+    let mut search = input.fields.get(SEARCH);
+    "Search".clone_into(&mut search.placeholder);
+    let group = button("Group by type")
+        .selected(state.grouped)
+        .on_press(Press::Table(TablePress::ViewerGroup));
+    let group = if state.grouped {
+        group.color(color::EMBER)
+    } else {
+        group
+    };
+    let sort = button(state.sort.label())
+        .name("Sort")
+        .on_press(Press::Table(TablePress::ViewerSort(state.sort.next())));
+    row()
+        .name("controls")
+        .width(size::OVERLAY_MAIN)
+        .gap(space::S)
+        .align_items(Align::Center)
+        .child(field(SEARCH, &search).grow(1.0))
+        .child(group)
+        .child(sort)
+}
+
 /// What the viewer of `side`'s pile of `zone` is called, as the web's `pileTitle` calls it.
 fn pile_title(side: Side, zone: ZoneName) -> &'static str {
     match (side, zone) {
@@ -120,10 +209,16 @@ fn pile_title(side: Side, zone: ZoneName) -> &'static str {
 /// How many cards the viewer lists, as the web's `viewerCount` says it, with " · top first"
 /// after it for a pile of more than one card.
 fn count_text(count: usize, viewed: Viewed) -> String {
-    let plural = if count == 1 { "" } else { "s" };
     let library = matches!(viewed, Viewed::Pile(_, ZoneName::Library));
+    count_words(count, library, matches!(viewed, Viewed::Pile(..)))
+}
+
+/// `count` cards, "Card" in a library's viewer and "card" elsewhere, with " · top first" after
+/// it for more than one card listed `top_first`.
+fn count_words(count: usize, library: bool, top_first: bool) -> String {
+    let plural = if count == 1 { "" } else { "s" };
     let card = if library { "Card" } else { "card" };
-    let top = if count > 1 && matches!(viewed, Viewed::Pile(..)) {
+    let top = if count > 1 && top_first {
         " · top first"
     } else {
         ""
@@ -137,6 +232,36 @@ fn grid(boxes: Vec<Element>) -> Element {
     if boxes.is_empty() {
         return text("Nothing here.").color(color::TEXT_DIM);
     }
+    cards(boxes)
+        .name("cards")
+        .max_height(size::VIEWER_HEIGHT)
+        .overflow(Overflow::Scroll)
+}
+
+/// The grids of `sections`, each under its label, in one column that scrolls past the grid's
+/// height, or "Nothing here." for no card.
+fn sections_grid(sections: Vec<(Option<String>, Vec<Element>)>) -> Element {
+    if sections.is_empty() {
+        return text("Nothing here.").color(color::TEXT_DIM);
+    }
+    let sections = sections.into_iter().map(|(label, boxes)| {
+        let label = label.unwrap_or_default();
+        column()
+            .name(&label)
+            .gap(space::S)
+            .child(text(&label).style(type_style::OVERLAY_INSTRUCTION))
+            .child(cards(boxes))
+    });
+    column()
+        .name("cards")
+        .gap(space::M)
+        .max_height(size::VIEWER_HEIGHT)
+        .overflow(Overflow::Scroll)
+        .children(sections)
+}
+
+/// The grid of `boxes`, as many columns as the cards fill up to `size::VIEWER_COLUMNS`.
+fn cards(boxes: Vec<Element>) -> Element {
     #[expect(clippy::cast_precision_loss, reason = "a handful of columns")]
     let columns = (boxes.len() as f32).min(size::VIEWER_COLUMNS);
     #[expect(
@@ -146,11 +271,8 @@ fn grid(boxes: Vec<Element>) -> Element {
     )]
     let columns = vec![Track::Points(size::VIEWER_CARD); columns as usize];
     let mut grid = Element::new(Role::List)
-        .name("cards")
         .grid_template_columns(columns)
         .gap(size::VIEWER_GAP)
-        .max_height(size::VIEWER_HEIGHT)
-        .overflow(Overflow::Scroll)
         .children(boxes);
     grid.style.display = crate::element::Display::Grid;
     grid

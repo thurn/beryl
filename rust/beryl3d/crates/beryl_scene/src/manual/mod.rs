@@ -51,6 +51,10 @@ pub struct Context<'a> {
     pub bindings: &'a Bindings,
     pub last_token: Option<&'a TokenChoice>,
     pub selected: &'a [ObjectId],
+    /// Whether a pile viewer is open, and whether it shows a search of a whole library its
+    /// player may shuffle, the conditions `open_viewer` and `whole_library`.
+    pub viewer_open: bool,
+    pub whole_library: bool,
 }
 
 impl<'a> Context<'a> {
@@ -62,6 +66,8 @@ impl<'a> Context<'a> {
             bindings,
             last_token: None,
             selected: &[],
+            viewer_open: false,
+            whole_library: false,
         }
     }
 
@@ -131,6 +137,13 @@ pub enum TablePress {
     Opening(opening::OpeningPress),
     /// Leave the table, from the banner of a table the other player left.
     Leave,
+    /// The pile viewer's "Group by type", which turns grouping on or off.
+    ViewerGroup,
+    /// The pile viewer's sort, which lists its cards in this order.
+    ViewerSort(viewers::Sort),
+    /// Close the search of a whole library, shuffling it first if `true` (Shuffle) or not
+    /// (Don't shuffle).
+    ViewerFinish(bool),
 }
 
 /// What the client keeps of the manual table: the open context menu, command list, ask
@@ -169,15 +182,19 @@ pub struct TableState {
     pub summary_over: Option<ObjectId>,
     /// Whether the Quit key asked whether to leave the table and quit (`quit`).
     pub quitting: bool,
+    /// What the open pile viewer shows beyond its pile: a library look, its sort and grouping,
+    /// and whether it asks to shuffle (`viewers::PileViewer`).
+    pub viewer: viewers::PileViewer,
 }
 
 /// What a table action the client sent asks of the table's answer to it: to remember the
 /// token it makes once the table takes it, to show the log lines that stop an undo or a rewind
-/// the table refuses, or nothing.
+/// the table refuses, to open the library viewer of a look the table takes, or nothing.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Sent {
     Token(TokenChoice),
     History,
+    Look(viewers::Look),
     Other,
 }
 
@@ -203,6 +220,7 @@ impl TableState {
             landing: None,
             summary_over: None,
             quitting: false,
+            viewer: viewers::PileViewer::new(),
         }
     }
 
