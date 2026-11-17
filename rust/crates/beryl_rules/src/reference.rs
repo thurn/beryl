@@ -290,7 +290,9 @@ fn reference_units<L: Layout>(
     }
     for mana in s.player(player).remembered_mana() {
         if paying.reads_restrictions(t) && paying.accepts(t, mana.restriction, mana.chosen_type) {
-            units.push(1u8 << (mana.color as u8)).ok()?;
+            units
+                .push(crate::card::ManaSet::one(mana.color).colors)
+                .ok()?;
         }
     }
     for &slot in s.battlefield() {

@@ -1,6 +1,6 @@
 //! Replacement effects of permanents' static abilities that replace a draw ([`Replaced::Draw`]):
 //! which apply to a draw, and the drawing player's choice among them ([CR 616.1]). Dredge,
-//! which works from a graveyard, is [`super::dredge`].
+//! which works from a graveyard, is [`dredge`].
 //!
 //! [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
 
@@ -8,19 +8,23 @@ use beryl_card::prompt::Purpose;
 use beryl_card::{Draws, Prompt};
 
 use super::{MOST, answer};
-use crate::card::{Ability, AbilityIx, FaceAbility, FaceIx, ObjectAbility, Replaced, Replacement};
-use crate::decision::{Decision, DecisionKind, OPTIONS, Opt};
+use crate::bitboard::Bitboard;
+use crate::card::{
+    Ability, AbilityIx, FaceAbility, FaceIx, ObjectAbility, Replaced, Replacement, Rewrite,
+};
+use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 #[cfg(doc)]
 use crate::event::Sink;
-use crate::event::{LossCause, ReplacementKind};
+use crate::event::{LossCause, Reason, ReplacementKind};
 use crate::filter;
 use crate::fixed::{Fixed, Full};
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::replacement;
-use crate::state::{Count, ObjectRef, State, TurnStep};
+use crate::state::{Count, ObjectRef, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
+use crate::{actions, zones};
 
 /// A replacement of draws by a static ability of a permanent ([`Replaced::Draw`]) that applies
 /// to a draw: the permanent, the ability's place among the permanent's abilities (one of a card
@@ -189,4 +193,70 @@ fn replaces_this_draw<L: Layout>(s: &State<L>, player: Seat, draws: Draws) -> bo
             !first
         }
     }
+}
+
+/// N of the card in `slot`'s dredge, with its ability, if it has dredge.
+fn dredge_of<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+) -> Option<(&'static crate::card::Ability, u8)> {
+    s.abilities(t, slot)
+        .find_map(|(_, a)| match a.replacement() {
+            Some(&Replacement {
+                rewrite: Rewrite::Dredge(n),
+                ..
+            }) => Some((a, n)),
+            _ => None,
+        })
+}
+
+/// The cards in `player`'s graveyard whose dredge could replace their next draw
+/// ([CR 702.52a]): "As long as you have at least N cards in your library, if you would draw a
+/// card, you may instead mill N cards and return this card from your graveyard to your hand."
+/// Dredge works only there, and only for the card's owner, whose graveyard it is.
+///
+/// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
+pub(crate) fn dredges<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
+    let library = s.library(player).len();
+    s.zone(ZoneKey::Of(player, Zone::Graveyard))
+        .filter(|slot| dredge_of(s, t, slot).is_some_and(|(_, n)| library >= usize::from(n)))
+}
+
+/// Offers `player` the dredge abilities that could replace their next draw, if any
+/// ([`dredges`]), and carries out the one they choose: they mill N cards, then return the
+/// card from their graveyard to their hand ([CR 702.52a]). Returns whether the draw was
+/// replaced. One draw is replaced by at most one dredge (CR 616.1f: once one has applied there
+/// is no draw left to replace).
+///
+/// The choice is among the dredge cards and the draw itself ([`Purpose::Replace`]). A
+/// replacement of draws by a permanent is not optional, so declining every dredge leaves it to
+/// apply ([`draw`]), which is what applying it first would do.
+///
+/// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
+pub(crate) fn dredge<L: Layout>(game: &mut Game<'_, L>, player: Seat) -> Result<bool, Full> {
+    let cards = dredges(game.state, game.table, player);
+    if cards.is_empty() {
+        return Ok(false);
+    }
+    let mut options = <L::Queue<Opt<L>, OPTIONS>>::default();
+    options.push(Opt::Done)?;
+    Candidates::<L>::extend_options(&mut options, cards, |out, slot| out.push(Opt::Object(slot)))?;
+    let d = Decision::options(
+        player,
+        DecisionKind::ChooseUpTo,
+        options,
+        Prompt::new(Purpose::Replace),
+    );
+    let Some(Opt::Object(card)) = d.candidates.option(answer(game.state, game.sink, &d)?) else {
+        return Ok(false);
+    };
+    let (ability, n) = dredge_of(game.state, game.table, card).expect("a dredge card");
+    crate::coverage::hit(ability);
+    let s = &*game.state;
+    game.sink.enter_source(|| s.object_ref(card));
+    let done = actions::mill::mill(game, player, n)
+        .and_then(|_| zones::move_all(game, Bitboard::single(card), Zone::Hand, Reason::Effect));
+    game.sink.leave();
+    done.map(|()| true)
 }

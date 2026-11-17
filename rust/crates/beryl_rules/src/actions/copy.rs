@@ -71,7 +71,20 @@ pub(crate) fn instruction<L: Layout>(
             .filter(|&source| !run.state().is_current(source))
             .and_then(|source| run.state().departed_spell(source))
             .cloned(),
-        _ => None,
+        Objects::Target(_)
+        | Objects::AttachedTo
+        | Objects::Those
+        | Objects::TriggeredOn
+        | Objects::TriggeredOnIn(_)
+        | Objects::ExiledWithThis
+        | Objects::PutOntoBattlefieldWithThis
+        | Objects::Carried
+        | Objects::All { .. }
+        | Objects::InZoneOf { .. }
+        | Objects::CardsIn { .. }
+        | Objects::Everywhere(_)
+        | Objects::Paid(_)
+        | Objects::Other(_) => None,
     };
     let copies = Copies {
         count,
@@ -157,7 +170,8 @@ fn choose_new_targets<L: Layout>(
         return Ok(());
     };
     for i in 0..copy.targets.len() {
-        let place = TargetPlace::new(i as u8);
+        let place =
+            TargetPlace::new(u8::try_from(i).expect("a stack entry holds at most TARGETS targets"));
         let target = copy.targets.as_slice()[i];
         let others = cast::new_targets(game.state, game.table, copy, ability, place);
         let kept = option_of(target);
@@ -169,7 +183,28 @@ fn choose_new_targets<L: Layout>(
             Opt::Object(slot) if chosen != kept => {
                 Target::object(spec, game.state.object_ref(slot))
             }
-            _ => target,
+            Opt::Object(_)
+            | Opt::Pass
+            | Opt::PlayLand(_)
+            | Opt::Play
+            | Opt::Draw
+            | Opt::Keep
+            | Opt::Mulligan
+            | Opt::Trigger(_)
+            | Opt::Yes
+            | Opt::No
+            | Opt::Done
+            | Opt::Attack(_)
+            | Opt::Defender(_)
+            | Opt::Block(_)
+            | Opt::Lethal(_)
+            | Opt::Cast { .. }
+            | Opt::Activate { .. }
+            | Opt::Mana { .. }
+            | Opt::Pool(_)
+            | Opt::Number(_)
+            | Opt::Plan(_)
+            | Opt::TurnFaceUp(_) => target,
         };
     }
     Ok(())

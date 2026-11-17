@@ -193,7 +193,14 @@ fn pick_about<L: Layout>(
         match prompt.shape() {
             Shape::Pick => prompt.part == Part::Pick,
             Shape::Split => matches!(prompt.part, Part::First | Part::Second),
-            _ => false,
+            Shape::Order
+            | Shape::YesNo
+            | Shape::Number
+            | Shape::Mode
+            | Shape::Catalog
+            | Shape::Divide
+            | Shape::Pay
+            | Shape::Declare => false,
         },
         "{prompt:?} is not answered with an object"
     );
@@ -224,7 +231,14 @@ pub fn pick_or_end<L: Layout>(
         match prompt.shape() {
             Shape::Pick => prompt.part == Part::Pick,
             Shape::Split => prompt.part == Part::First,
-            _ => false,
+            Shape::Order
+            | Shape::YesNo
+            | Shape::Number
+            | Shape::Mode
+            | Shape::Catalog
+            | Shape::Divide
+            | Shape::Pay
+            | Shape::Declare => false,
         },
         "{prompt:?} has no pick that may end"
     );
@@ -303,7 +317,7 @@ pub(crate) fn retarget<L: Layout>(
     }
     let mut unlisted = others.abilities;
     while unlisted != 0 {
-        let place = 63 - unlisted.leading_zeros() as usize;
+        let place = usize::try_from(unlisted.ilog2()).expect("a bit in a u64");
         unlisted &= !(1 << place);
         opts.push(Opt::Ability(crate::layout::index::<L>(place)))?;
     }
@@ -370,7 +384,13 @@ pub fn pay<L: Layout>(
     );
     let kind = match prompt.part {
         Part::Plan => DecisionKind::PaymentPlan,
-        _ => DecisionKind::ManaPayment,
+        Part::Pick
+        | Part::Whether
+        | Part::Instead
+        | Part::Count
+        | Part::First
+        | Part::Second
+        | Part::Aim => DecisionKind::ManaPayment,
     };
     let (options, none) = (options.iter().copied(), Bitboard::EMPTY);
     option(game, resolution, player, kind, options, prompt, none)
@@ -406,7 +426,66 @@ pub(crate) fn may_instruction<L: Layout>(
             (MAY_EXILE, cards)
         }
         Effect::Search { .. } => (MAY_SEARCH, Bitboard::EMPTY),
-        _ => (MAY, Bitboard::EMPTY),
+        Effect::Sequence(_)
+        | Effect::If { .. }
+        | Effect::May { .. }
+        | Effect::Unless { .. }
+        | Effect::ForEachPlayer { .. }
+        | Effect::Choose { .. }
+        | Effect::LookAt { .. }
+        | Effect::Counter(_)
+        | Effect::CounterInto { .. }
+        | Effect::CopySpell { .. }
+        | Effect::Destroy { .. }
+        | Effect::Regenerate(_)
+        | Effect::PhaseOut(_)
+        | Effect::ExileUntilThisLeaves(_)
+        | Effect::Sacrifice(_)
+        | Effect::ReturnToHand(_)
+        | Effect::PutIntoGraveyard(_)
+        | Effect::ReturnToBattlefield(_)
+        | Effect::PutOntoBattlefield(_)
+        | Effect::ReturnTransformed(_)
+        | Effect::PutIntoLibrary { .. }
+        | Effect::PutBack { .. }
+        | Effect::ShuffleInto { .. }
+        | Effect::Dig { .. }
+        | Effect::Fateseal { .. }
+        | Effect::Draw { .. }
+        | Effect::Discard { .. }
+        | Effect::Mill { .. }
+        | Effect::Scry { .. }
+        | Effect::Explore(_)
+        | Effect::ManifestDread(_)
+        | Effect::FlipCoin(_)
+        | Effect::DealDamage { .. }
+        | Effect::PreventDamage { .. }
+        | Effect::GainLife { .. }
+        | Effect::LoseLife { .. }
+        | Effect::CreateTokens { .. }
+        | Effect::CreateAttackingTokens { .. }
+        | Effect::CreateCopies { .. }
+        | Effect::BecomeCopy { .. }
+        | Effect::Mutate(_)
+        | Effect::AddCounters { .. }
+        | Effect::RemoveCounters { .. }
+        | Effect::AddMana { .. }
+        | Effect::AddManaOfKind { .. }
+        | Effect::Modify { .. }
+        | Effect::ChangeText { .. }
+        | Effect::ExchangeControl(..)
+        | Effect::Attach { .. }
+        | Effect::ChangeRule { .. }
+        | Effect::GainFlashback(_)
+        | Effect::PermitCast { .. }
+        | Effect::MayCast { .. }
+        | Effect::UntapUpTo { .. }
+        | Effect::Delay { .. }
+        | Effect::GetEmblem { .. }
+        | Effect::WinGame(_)
+        | Effect::LoseGame(_)
+        | Effect::ControlPlayer(_)
+        | Effect::ExtraTurn(_) => (MAY, Bitboard::EMPTY),
     };
     let agreed = match run.one(player) {
         Some(player) => {

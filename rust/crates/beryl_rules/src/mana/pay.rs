@@ -109,7 +109,8 @@ fn pay_whole<L: Layout>(
             // Spread the spent units as `spent_by_class` counted them.
             let mut rest = spent[i];
             for (j, &slot) in tapped.iter().enumerate() {
-                let later = (tapped.len() - j - 1) as u32;
+                let later =
+                    u32::try_from(tapped.len() - j - 1).expect("at most a class of sources");
                 let here = (rest - later).min(u32::from(c.amount));
                 units.push((c.kinds, Some(slot), u8::try_from(here).unwrap_or(c.amount)))?;
                 rest -= here;
@@ -193,7 +194,8 @@ fn pay_with_memory<L: Layout>(
             // Spread the spent units as `spent_by_class` counted them.
             let mut rest = spent[i];
             for (j, &slot) in tapped.iter().enumerate() {
-                let later = (tapped.len() - j - 1) as u32;
+                let later =
+                    u32::try_from(tapped.len() - j - 1).expect("at most a class of sources");
                 let here = (rest - later).min(u32::from(c.amount));
                 units.push((c.kinds, Some(slot), u8::try_from(here).unwrap_or(c.amount)))?;
                 from.push(how)?;
@@ -364,7 +366,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
             Some((card, face, i, a))
         }
         ObjectAbility::Merged(..) if !restricted => merged_mana(s, t, slot, ability, color),
-        _ => None,
+        ObjectAbility::Own(_) | ObjectAbility::Granted(_) | ObjectAbility::Merged(..) => None,
     });
     if printed.is_none()
         && (restricted || s.intrinsic_mana(t, slot) & (1 << color.index()) == 0)
@@ -531,7 +533,28 @@ pub(crate) fn manual_pay<L: Layout>(
             activated?;
             color
         }
-        _ => unreachable!("a manual payment option"),
+        Opt::Pass
+        | Opt::PlayLand(_)
+        | Opt::Play
+        | Opt::Draw
+        | Opt::Keep
+        | Opt::Mulligan
+        | Opt::Trigger(_)
+        | Opt::Yes
+        | Opt::No
+        | Opt::Done
+        | Opt::Attack(_)
+        | Opt::Defender(_)
+        | Opt::Block(_)
+        | Opt::Lethal(_)
+        | Opt::Cast { .. }
+        | Opt::Activate { .. }
+        | Opt::Number(_)
+        | Opt::Plan(_)
+        | Opt::Player(_)
+        | Opt::Ability(_)
+        | Opt::Object(_)
+        | Opt::TurnFaceUp(_) => unreachable!("a manual payment option"),
     };
     let pool = s.player(player).remembered_mana().len();
     if pool > made {
@@ -650,7 +673,7 @@ pub(crate) fn begin_instant<L: Layout>(
     // receives priority afterward."
     s.reset_passes();
     if kinds.is_power_of_two() {
-        let color = ManaColor::ALL[kinds.trailing_zeros() as usize];
+        let color = ManaColor::ALL[lowest_kind(kinds)];
         return activate(s, t, sink, slot, color);
     }
     s.ask(Pending::ManaColor { slot, ability });
@@ -669,13 +692,7 @@ pub(crate) fn activate_chosen<L: Layout>(
     let ChosenValue::Color(colors) = crate::chosen::value(ChosenKind::Color, opt) else {
         unreachable!("a color among a color's candidates");
     };
-    activate(
-        s,
-        t,
-        sink,
-        slot,
-        ManaColor::ALL[colors.0.trailing_zeros() as usize],
-    )
+    activate(s, t, sink, slot, ManaColor::ALL[lowest_kind(colors.0)])
 }
 
 /// Whether `ability` of the permanent in `slot` is a mana ability activated only as an

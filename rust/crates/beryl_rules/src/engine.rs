@@ -5,7 +5,7 @@ use crate::decision::{Answers, Choice, Decision, DecisionKind, Opt, Outcome, Sta
 use crate::event::{Cause, Sink, StackIx, Tagged};
 use crate::fixed::Full;
 use crate::ids::Seat;
-use crate::layout::{Layout, index};
+use crate::layout::Layout;
 use crate::observation::Observation;
 use crate::profile::{self, Stops};
 #[cfg(debug_assertions)]
@@ -13,7 +13,7 @@ use crate::scratch::assert_sound;
 pub use crate::scratch::{Counts, Scratch};
 use crate::state::{Pending, State, TurnStep};
 use crate::table::GameTable;
-use crate::{cast, combat, entered, face_down, layers, mana, resolve, sba, start, trigger, turn};
+use crate::{cast, combat, face_down, layers, mana, resolve, sba, start, trigger, turn};
 
 mod land;
 mod paused_step;
@@ -21,21 +21,16 @@ mod questions;
 
 pub use crate::decision::interchangeable;
 pub(crate) use crate::decision::{collapse, collapse_in_order};
-use land::{enter_from_hand, enter_or_choose, play_land};
+use land::play_land;
 pub use questions::refusal;
 pub(crate) use questions::{controlled, decision};
-use questions::{land_face, only_idle};
+use questions::{land_face, only_idle, perform_machine};
 
 /// The position a player sees the open decision in. That is the state itself, except while
 /// a resolution or a step's turn-based actions are paused (§7.3): the committed state is then
 /// the one before they began, so they are replayed into scratch up to their question.
 pub fn view<'a, L: Layout>(s: &'a State<L>, t: &GameTable, x: &'a mut Scratch<L>) -> &'a State<L> {
-    let paused = match s.pending() {
-        Pending::Resolving(_) => resolve::replay_to_question(s, t, x, None),
-        Pending::StepActions(_) => paused_step::replay_to_question(s, t, x, None),
-        _ => return s,
-    };
-    paused.unwrap_or(s)
+    replay_paused(s, t, x, None).unwrap_or(s)
 }
 
 /// `player` concedes, ending the game, unless it is over already
@@ -62,16 +57,36 @@ pub fn concede<L: Layout>(s: &mut State<L>, x: &mut Scratch<L>, player: Seat) {
 /// with its tag, as the sink keeps it.
 pub fn paused_events<L: Layout>(s: &State<L>, t: &GameTable, x: &mut Scratch<L>) -> Vec<Tagged<L>> {
     let mut seen = Vec::new();
-    match s.pending() {
-        Pending::Resolving(_) => {
-            let _ = resolve::replay_to_question(s, t, x, Some(&mut seen));
-        }
-        Pending::StepActions(_) => {
-            let _ = paused_step::replay_to_question(s, t, x, Some(&mut seen));
-        }
-        _ => {}
-    }
+    let _ = replay_paused(s, t, x, Some(&mut seen));
     seen
+}
+
+/// The replayed state at the open question, with the replay's events when requested.
+fn replay_paused<'a, L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    x: &'a mut Scratch<L>,
+    seen: Option<&mut Vec<Tagged<L>>>,
+) -> Option<&'a State<L>> {
+    match s.pending() {
+        Pending::Resolving(_) => resolve::replay_to_question(s, t, x, seen).ok(),
+        Pending::StepActions(_) => paused_step::replay_to_question(s, t, x, seen).ok(),
+        Pending::None
+        | Pending::PlayOrDraw { .. }
+        | Pending::Mulligans
+        | Pending::Discard
+        | Pending::LegendRule { .. }
+        | Pending::EnterPayingLife { .. }
+        | Pending::DeclareAttackers { .. }
+        | Pending::DeclareBlockers { .. }
+        | Pending::CombatDamage { .. }
+        | Pending::Casting(_)
+        | Pending::CastOffer { .. }
+        | Pending::TurningFaceUp { .. }
+        | Pending::OrderEntered { .. }
+        | Pending::EnterChoosing { .. }
+        | Pending::ManaColor { .. } => None,
+    }
 }
 
 /// What `viewer` sees of the open decision: [`view`]'s position, rooted at the committed
@@ -449,104 +464,6 @@ fn act<L: Layout>(s: &State<L>, sink: &mut Sink<L>, player: Seat, option: Option
     });
 }
 
-/// Answers a question of the casting machine, a paused resolution or a resolution's offer
-/// to cast, if one is open, or one of the rules' own questions that a general kind asks: the
-/// pending state says which question it is, where the kind says only the form of its answer.
-fn perform_machine<L: Layout>(
-    s: &mut State<L>,
-    t: &GameTable,
-    x: &mut Scratch<L>,
-    a: &mut dyn Answers<L>,
-    d: &Decision<L>,
-    c: Choice,
-) -> Option<Result<(), Full>> {
-    Some(match *s.pending() {
-        Pending::Resolving(ref r) => {
-            let answer = resolve::recorded(d, index::<L>(usize::from(c.0)), r.asks_hidden());
-            s.record_answer(answer)
-                .and_then(|()| resolve::resolve(s, t, x, a))
-        }
-        Pending::StepActions(_) => s
-            .record_answer(index::<L>(usize::from(c.0)))
-            .and_then(|()| paused_step::step_actions(s, t, x, a)),
-        Pending::Casting(casting) => {
-            let (option, object) = (d.candidates.option(c), d.candidates.object(c));
-            act(s, &mut x.events, d.player, option);
-            let done = cast::perform(s, t, &mut x.events, casting, option, object);
-            x.events.leave();
-            done
-        }
-        Pending::TurningFaceUp { slot, remaining } => {
-            let option = d.candidates.option(c).expect("a payment");
-            act(s, &mut x.events, d.player, None);
-            let done = face_down::perform(s, t, &mut x.events, slot, remaining, option);
-            x.events.leave();
-            done
-        }
-        Pending::CastOffer { player, free, .. } => {
-            s.settle_question();
-            match d.candidates.option(c).expect("an option choice") {
-                Opt::Pass => Ok(()),
-                cast_option => {
-                    act(s, &mut x.events, player, Some(cast_option));
-                    let done =
-                        cast::begin_cast(s, t, &mut x.events, player, cast_option, Some(free));
-                    x.events.leave();
-                    done
-                }
-            }
-        }
-        Pending::EnterPayingLife { slot, .. } => {
-            s.settle_question();
-            let pay = d.candidates.option(c) == Some(Opt::Yes);
-            act(s, &mut x.events, d.player, None);
-            let done = enter_or_choose(s, t, &mut x.events, slot, pay);
-            x.events.leave();
-            done
-        }
-        Pending::ManaColor { slot, .. } => {
-            s.settle_question();
-            act(s, &mut x.events, d.player, None);
-            let done = mana::activate_chosen(s, t, &mut x.events, slot, d.candidates.option(c));
-            x.events.leave();
-            done
-        }
-        Pending::EnterChoosing { slot, pay_life, .. } => {
-            s.settle_question();
-            act(s, &mut x.events, d.player, None);
-            // The land's entering asks the same question again, of the same candidates, and
-            // the answer is recorded for it.
-            let done = x.events.asking.begin(&[index::<L>(c.0.into())], false);
-            let done = done.and_then(|()| enter_from_hand(s, t, &mut x.events, slot, pay_life));
-            x.events.asking.end();
-            x.events.leave();
-            done
-        }
-        // The other question of a mulligan, keep or mulligan, has a kind of its own.
-        Pending::Mulligans if d.kind == DecisionKind::ChooseObject => {
-            let card = d.candidates.object(c).expect("an object choice");
-            start::put_on_bottom(s, t, &mut x.events, d.player, card)
-        }
-        Pending::Discard => {
-            let card = d.candidates.object(c).expect("an object choice");
-            turn::cleanup_discard(s, t, &mut x.events, card)
-        }
-        Pending::LegendRule { mut kept } => {
-            kept.insert(d.candidates.object(c).expect("an object choice"));
-            if sba::unresolved_legends(s, t, kept).is_some() {
-                s.ask(Pending::LegendRule { kept });
-                Ok(())
-            } else {
-                sba::apply_legend_rule(s, t, &mut x.events, kept)
-            }
-        }
-        Pending::OrderEntered { group } => {
-            entered::pick(s, group, d.candidates.object(c).expect("an object choice"))
-        }
-        _ => return None,
-    })
-}
-
 /// Takes a priority action: passing, or an action of the player's own ([`act`]). Inlined into
 /// both callers, as the engine loop's silent passes take it on every step of a rollout.
 #[expect(
@@ -576,7 +493,25 @@ fn perform_priority<L: Layout>(
             x.events.leave();
             done
         }
-        _ => pass(s, t, x, a),
+        Opt::Pass
+        | Opt::Play
+        | Opt::Draw
+        | Opt::Keep
+        | Opt::Mulligan
+        | Opt::Trigger(_)
+        | Opt::Yes
+        | Opt::No
+        | Opt::Done
+        | Opt::Attack(_)
+        | Opt::Defender(_)
+        | Opt::Block(_)
+        | Opt::Lethal(_)
+        | Opt::Pool(_)
+        | Opt::Number(_)
+        | Opt::Plan(_)
+        | Opt::Player(_)
+        | Opt::Ability(_)
+        | Opt::Object(_) => pass(s, t, x, a),
     }
 }
 
@@ -610,7 +545,25 @@ fn take_action<L: Layout>(
             s.reset_passes();
             Ok(())
         }
-        _ => unreachable!("an action of the player's own"),
+        Opt::Pass
+        | Opt::Play
+        | Opt::Draw
+        | Opt::Keep
+        | Opt::Mulligan
+        | Opt::Trigger(_)
+        | Opt::Yes
+        | Opt::No
+        | Opt::Done
+        | Opt::Attack(_)
+        | Opt::Defender(_)
+        | Opt::Block(_)
+        | Opt::Lethal(_)
+        | Opt::Pool(_)
+        | Opt::Number(_)
+        | Opt::Plan(_)
+        | Opt::Player(_)
+        | Opt::Ability(_)
+        | Opt::Object(_) => unreachable!("an action of the player's own"),
     }
 }
 
@@ -646,14 +599,33 @@ fn perform<L: Layout>(
                 sink.leave();
                 done
             }
-            _ => unreachable!("a trigger-order decision offers only triggers"),
+            Opt::Pass
+            | Opt::PlayLand(_)
+            | Opt::Play
+            | Opt::Draw
+            | Opt::Keep
+            | Opt::Mulligan
+            | Opt::Yes
+            | Opt::No
+            | Opt::Done
+            | Opt::Attack(_)
+            | Opt::Defender(_)
+            | Opt::Block(_)
+            | Opt::Lethal(_)
+            | Opt::Cast { .. }
+            | Opt::Activate { .. }
+            | Opt::Mana { .. }
+            | Opt::Pool(_)
+            | Opt::Number(_)
+            | Opt::Plan(_)
+            | Opt::Player(_)
+            | Opt::Ability(_)
+            | Opt::Object(_)
+            | Opt::TurnFaceUp(_) => unreachable!("a trigger-order decision offers only triggers"),
         },
         DecisionKind::Attacker | DecisionKind::AttackTarget => combat::attack(s, t, sink, option()),
         DecisionKind::Blocker => {
-            match option() {
-                Opt::Block(slot) => combat::block_with(s, slot),
-                _ => combat::finish_blocks(s, sink),
-            }
+            combat::choose_blocker(s, sink, option());
             Ok(())
         }
         DecisionKind::BlockTarget => combat::block_attacker(s, object()),

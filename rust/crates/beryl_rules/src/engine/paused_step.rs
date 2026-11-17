@@ -49,7 +49,22 @@ pub(super) fn step_actions<L: Layout>(
 ) -> Result<(), Full> {
     let mut record = match s.pending() {
         Pending::StepActions(r) => r.record.clone(),
-        _ => Default::default(),
+        Pending::None
+        | Pending::PlayOrDraw { .. }
+        | Pending::Mulligans
+        | Pending::Discard
+        | Pending::LegendRule { .. }
+        | Pending::EnterPayingLife { .. }
+        | Pending::DeclareAttackers { .. }
+        | Pending::DeclareBlockers { .. }
+        | Pending::CombatDamage { .. }
+        | Pending::Casting(_)
+        | Pending::Resolving(_)
+        | Pending::CastOffer { .. }
+        | Pending::TurningFaceUp { .. }
+        | Pending::OrderEntered { .. }
+        | Pending::EnterChoosing { .. }
+        | Pending::ManaColor { .. } => Default::default(),
     };
     let inline = a.inline();
     loop {

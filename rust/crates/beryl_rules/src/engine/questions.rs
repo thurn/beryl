@@ -2,17 +2,19 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{ChosenKind, FaceIx, Prompt, Purpose, Types};
-use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt, Refusal};
+use crate::decision::{Answers, Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt, Refusal};
 use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::Seat;
-use crate::layout::{Layout, Queue};
+use crate::layout::{Layout, Queue, index};
 use crate::observation::Observation;
+use crate::scratch::Scratch;
 use crate::state::{Pending, State};
 use crate::table::GameTable;
-use crate::{cast, chosen, combat, entered, face_down, mana, sba, start, trigger, turn};
+use crate::{cast, chosen, combat, entered, face_down, mana, resolve, sba, start, trigger, turn};
 
-use super::collapse;
+use super::land::{enter_from_hand, enter_or_choose};
+use super::{act, collapse, paused_step};
 
 /// The open decision, a pure function of the state, so `apply` recomputes rather than
 /// remembers it. The sink only counts the payment solver's runs. It is built as its own
@@ -188,7 +190,27 @@ pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
             Opt::Pass => true,
             Opt::Mana { .. } => floats,
             Opt::Activate { slot, ability } => quiet && cast::pointless(s, t, slot, ability),
-            _ => false,
+            Opt::PlayLand(_)
+            | Opt::Play
+            | Opt::Draw
+            | Opt::Keep
+            | Opt::Mulligan
+            | Opt::Trigger(_)
+            | Opt::Yes
+            | Opt::No
+            | Opt::Done
+            | Opt::Attack(_)
+            | Opt::Defender(_)
+            | Opt::Block(_)
+            | Opt::Lethal(_)
+            | Opt::Cast { .. }
+            | Opt::Pool(_)
+            | Opt::Number(_)
+            | Opt::Plan(_)
+            | Opt::Player(_)
+            | Opt::Ability(_)
+            | Opt::Object(_)
+            | Opt::TurnFaceUp(_) => false,
         }),
         Candidates::Objects(_) => false,
     }
@@ -243,4 +265,144 @@ pub fn refusal<L: Layout>(
 pub(crate) fn controlled<L: Layout>(s: &State<L>, mut d: Decision<L>) -> Decision<L> {
     d.decider = s.decider(d.player);
     d
+}
+
+/// Answers a question of the casting machine, a paused resolution or a resolution's offer
+/// to cast, if one is open, or one of the rules' own questions that a general kind asks: the
+/// pending state says which question it is, where the kind says only the form of its answer.
+pub(super) fn perform_machine<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    x: &mut Scratch<L>,
+    a: &mut dyn Answers<L>,
+    d: &Decision<L>,
+    c: Choice,
+) -> Option<Result<(), Full>> {
+    Some(match *s.pending() {
+        Pending::Resolving(ref r) => {
+            let answer = resolve::recorded(d, index::<L>(usize::from(c.0)), r.asks_hidden());
+            s.record_answer(answer)
+                .and_then(|()| resolve::resolve(s, t, x, a))
+        }
+        Pending::StepActions(_) => s
+            .record_answer(index::<L>(usize::from(c.0)))
+            .and_then(|()| paused_step::step_actions(s, t, x, a)),
+        Pending::Casting(casting) => {
+            let (option, object) = (d.candidates.option(c), d.candidates.object(c));
+            act(s, &mut x.events, d.player, option);
+            let done = cast::perform(s, t, &mut x.events, casting, option, object);
+            x.events.leave();
+            done
+        }
+        Pending::TurningFaceUp { slot, remaining } => {
+            let option = d.candidates.option(c).expect("a payment");
+            act(s, &mut x.events, d.player, None);
+            let done = face_down::perform(s, t, &mut x.events, slot, remaining, option);
+            x.events.leave();
+            done
+        }
+        Pending::CastOffer { player, free, .. } => {
+            let option = d.candidates.option(c).expect("an option choice");
+            offered_cast(s, t, &mut x.events, player, free, option)
+        }
+        Pending::EnterPayingLife { slot, .. } => {
+            s.settle_question();
+            let pay = d.candidates.option(c) == Some(Opt::Yes);
+            act(s, &mut x.events, d.player, None);
+            let done = enter_or_choose(s, t, &mut x.events, slot, pay);
+            x.events.leave();
+            done
+        }
+        Pending::ManaColor { slot, .. } => {
+            s.settle_question();
+            act(s, &mut x.events, d.player, None);
+            let done = mana::activate_chosen(s, t, &mut x.events, slot, d.candidates.option(c));
+            x.events.leave();
+            done
+        }
+        Pending::EnterChoosing { slot, pay_life, .. } => {
+            s.settle_question();
+            act(s, &mut x.events, d.player, None);
+            // The land's entering asks the same question again, of the same candidates, and
+            // the answer is recorded for it.
+            let done = x.events.asking.begin(&[index::<L>(c.0.into())], false);
+            let done = done.and_then(|()| enter_from_hand(s, t, &mut x.events, slot, pay_life));
+            x.events.asking.end();
+            x.events.leave();
+            done
+        }
+        // The other question of a mulligan, keep or mulligan, has a kind of its own.
+        Pending::Mulligans if d.kind == DecisionKind::ChooseObject => {
+            let card = d.candidates.object(c).expect("an object choice");
+            start::put_on_bottom(s, t, &mut x.events, d.player, card)
+        }
+        Pending::Discard => {
+            let card = d.candidates.object(c).expect("an object choice");
+            turn::cleanup_discard(s, t, &mut x.events, card)
+        }
+        Pending::LegendRule { mut kept } => {
+            kept.insert(d.candidates.object(c).expect("an object choice"));
+            if sba::unresolved_legends(s, t, kept).is_some() {
+                s.ask(Pending::LegendRule { kept });
+                Ok(())
+            } else {
+                sba::apply_legend_rule(s, t, &mut x.events, kept)
+            }
+        }
+        Pending::OrderEntered { group } => {
+            entered::pick(s, group, d.candidates.object(c).expect("an object choice"))
+        }
+        Pending::None
+        | Pending::PlayOrDraw { .. }
+        | Pending::Mulligans
+        | Pending::DeclareAttackers { .. }
+        | Pending::DeclareBlockers { .. }
+        | Pending::CombatDamage { .. } => return None,
+    })
+}
+
+/// The answer to an offer to cast during a resolution ([CR 608.2g]): "no player receives
+/// priority after it's cast." This applies the answer before the engine resumes priority.
+///
+/// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
+fn offered_cast<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    player: Seat,
+    free: bool,
+    option: Opt<L>,
+) -> Result<(), Full> {
+    s.settle_question();
+    match option {
+        Opt::Pass => Ok(()),
+        cast_option @ (Opt::PlayLand(_)
+        | Opt::Play
+        | Opt::Draw
+        | Opt::Keep
+        | Opt::Mulligan
+        | Opt::Trigger(_)
+        | Opt::Yes
+        | Opt::No
+        | Opt::Done
+        | Opt::Attack(_)
+        | Opt::Defender(_)
+        | Opt::Block(_)
+        | Opt::Lethal(_)
+        | Opt::Cast { .. }
+        | Opt::Activate { .. }
+        | Opt::Mana { .. }
+        | Opt::Pool(_)
+        | Opt::Number(_)
+        | Opt::Plan(_)
+        | Opt::Player(_)
+        | Opt::Ability(_)
+        | Opt::Object(_)
+        | Opt::TurnFaceUp(_)) => {
+            act(s, sink, player, Some(cast_option));
+            let done = cast::begin_cast(s, t, sink, player, cast_option, Some(free));
+            sink.leave();
+            done
+        }
+    }
 }

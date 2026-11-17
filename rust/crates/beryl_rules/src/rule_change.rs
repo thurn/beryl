@@ -149,7 +149,20 @@ pub(crate) fn accepts(filter: Filter, face: &Face) -> bool {
     match filter {
         Filter::Any => true,
         Filter::Types(types) => face.types.intersects(types),
-        filter => accepts_composed(filter, face),
+        filter @ (Filter::Supertypes(_)
+        | Filter::SubtypeWord(_)
+        | Filter::ColorWords(_)
+        | Filter::Whose(_)
+        | Filter::Owned(_)
+        | Filter::Tapped
+        | Filter::Token
+        | Filter::ManaValueAtMost(_)
+        | Filter::PowerAtMost(_)
+        | Filter::ManaValueAtMostX
+        | Filter::Not(_)
+        | Filter::All(_)
+        | Filter::AnyOf(_)
+        | Filter::InZone(_)) => accepts_composed(filter, face),
     }
 }
 

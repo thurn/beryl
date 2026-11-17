@@ -266,7 +266,17 @@ pub(crate) fn without_a_scene<L: Layout>(
             let (left, right) = (own_amount(s, you, left)?, own_amount(s, you, right)?);
             Some(comparison.holds(i32::from(left), i32::from(right)))
         }
-        _ => None,
+        Condition::Did
+        | Condition::Paid(_)
+        | Condition::Is(..)
+        | Condition::EnteredThisTurn(_)
+        | Condition::OnBattlefield(_)
+        | Condition::Token(_)
+        | Condition::WonFlip
+        | Condition::DrewInDrawStep(_)
+        | Condition::Not(_)
+        | Condition::All(_)
+        | Condition::Any(_) => None,
     }
 }
 
@@ -283,7 +293,23 @@ fn own_amount<L: Layout>(s: &State<L>, you: Seat, amount: Amount) -> Option<u8> 
             let cards = s.zone(ZoneKey::Of(you, zone)).count();
             Some(u8::try_from(cards).unwrap_or(u8::MAX))
         }
-        _ => None,
+        Amount::X
+        | Amount::ThatMany
+        | Amount::Carried
+        | Amount::ThoseOf(_)
+        | Amount::Count(_)
+        | Amount::Times(..)
+        | Amount::Plus(..)
+        | Amount::CardTypesAmong(_)
+        | Amount::Power(_)
+        | Amount::Toughness(_)
+        | Amount::ManaValue(_)
+        | Amount::Counters(..)
+        | Amount::Life(_)
+        | Amount::Most(..)
+        | Amount::SpellsCast(_)
+        | Amount::CardsDrawn(_)
+        | Amount::SpellsCastBefore => None,
     }
 }
 

@@ -296,7 +296,12 @@ impl<L: Layout> Scene<'_, L> {
                 let within = match zone {
                     Zone::Battlefield => s.battlefield().iter().copied().collect(),
                     Zone::Stack => cast::spells(s),
-                    _ => s.in_zone(zone),
+                    Zone::Library
+                    | Zone::Hand
+                    | Zone::Graveyard
+                    | Zone::Exile
+                    | Zone::Nowhere
+                    | Zone::Merged => s.in_zone(zone),
                 };
                 filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
             }

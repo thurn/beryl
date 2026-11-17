@@ -172,7 +172,25 @@ pub(crate) fn instruction<L: Layout>(
                 LayerChange::AddProtection(color)
             }
             // The card table refuses an effect that sets a power alone to an amount.
-            modification => match LayerChange::resolve(modification, you, &words) {
+            modification @ (Modification::AddTypes(_)
+            | Modification::RemoveTypes(_)
+            | Modification::SetTypes(_)
+            | Modification::AddSubtypeWord(_)
+            | Modification::SetSubtypeWord(_)
+            | Modification::SetLandTypeWords(_)
+            | Modification::AddKeywords(_)
+            | Modification::Grant(_)
+            | Modification::SetPower(_)
+            | Modification::SetPt(..)
+            | Modification::ModifyPt(..)
+            | Modification::LoseAllAbilities
+            | Modification::LoseAbility(_)
+            | Modification::SetColorWords(_)
+            | Modification::AddColorWords(_)
+            | Modification::AddChosenColor
+            | Modification::SwitchPt
+            | Modification::AddProtection(_)
+            | Modification::GrantEscape) => match LayerChange::resolve(modification, you, &words) {
                 Some(change) => change,
                 None => no_primitive(&modification),
             },

@@ -47,8 +47,7 @@ const NO_TWIN: u8 = u8::MAX;
 
 impl<L: Layout> Class<L> {
     pub(super) fn count(&self) -> u8 {
-        debug_assert!(self.members.count() <= 255, "a class past its room");
-        self.members.count() as u8
+        u8::try_from(self.members.count()).expect("a class holds at most 255 sources")
     }
 
     /// Whether another source fits: a plan counts a class's taps in a `u8`, so in a layout of
@@ -107,7 +106,9 @@ pub(super) fn allowed<L: Layout>(
 
 /// The rank of every class a plan consumes, above any other source's: kinds count for at
 /// most five colors and {C}, two ranks each.
-const CONSUMED_RANK: u8 = 2 * KINDS as u8 + 2;
+const CONSUMED_RANK: u8 = 14;
+// Two ranks per kind, followed by the rank reserved for consumed sources.
+const _: () = assert!(2 * KINDS + 2 == 14);
 
 /// The rank of every restricted class, the last: after the class of the same permanent's
 /// unrestricted mana, which a plan's search counts first.
@@ -309,7 +310,8 @@ impl<L: Layout> Sources<L> {
                 }
                 continue;
             }
-            let rank = (kinds.count_ones() as u8) * 2 + u8::from(other);
+            let rank = u8::try_from(kinds.count_ones()).expect("number of bits in a byte") * 2
+                + u8::from(other);
             // A source with another ability is a class of its own: tapping it for mana
             // costs that ability, so it is never interchangeable.
             if let Some(i) = classes.iter().position(|c| {

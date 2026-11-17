@@ -180,7 +180,15 @@ fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
                     .count()
                     <= usize::from(n)
             }
-            _ => true,
+            Rewrite::None
+            | Rewrite::ToZone(_)
+            | Rewrite::EntersTappedUnlessPayLife(_)
+            | Rewrite::EntersWithCounters(..)
+            | Rewrite::Instead
+            | Rewrite::Dredge(_)
+            | Rewrite::Choose(_)
+            | Rewrite::Multiply(_)
+            | Rewrite::EnterAsCopy { .. } => true,
         })
 }
 

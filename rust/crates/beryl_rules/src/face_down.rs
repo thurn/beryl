@@ -198,7 +198,31 @@ pub(crate) fn perform<L: Layout>(
             )?;
             ManaCost::NONE
         }
-        option => mana::manual_pay(s, t, sink, player, remaining, option, mana::Paying::NOTHING)?,
+        option @ (Opt::Pass
+        | Opt::PlayLand(_)
+        | Opt::Play
+        | Opt::Draw
+        | Opt::Keep
+        | Opt::Mulligan
+        | Opt::Trigger(_)
+        | Opt::Yes
+        | Opt::No
+        | Opt::Done
+        | Opt::Attack(_)
+        | Opt::Defender(_)
+        | Opt::Block(_)
+        | Opt::Lethal(_)
+        | Opt::Cast { .. }
+        | Opt::Activate { .. }
+        | Opt::Mana { .. }
+        | Opt::Pool(_)
+        | Opt::Number(_)
+        | Opt::Player(_)
+        | Opt::Ability(_)
+        | Opt::Object(_)
+        | Opt::TurnFaceUp(_)) => {
+            mana::manual_pay(s, t, sink, player, remaining, option, mana::Paying::NOTHING)?
+        }
     };
     if remaining.is_zero() {
         s.settle_question();

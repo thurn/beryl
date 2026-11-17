@@ -79,7 +79,7 @@ impl<L: Layout> Paying<L> {
                 spell: Some((card, face)),
                 object: entry.spell(),
             },
-            _ => Paying::NOTHING,
+            StackItem::Activated { .. } | StackItem::Triggered { .. } => Paying::NOTHING,
         }
     }
 
@@ -204,7 +204,10 @@ pub(crate) fn accepted_entries<L: Layout>(
     let entries = s.player(player).remembered_mana().iter();
     for (i, mana) in (0u8..).zip(entries) {
         if paying.accepts(t, mana.restriction, mana.chosen_type)
-            && !out.push_if_room((i, mana.color as u8))
+            && !out.push_if_room((
+                i,
+                u8::try_from(mana.color.index()).expect("one of six mana kinds"),
+            ))
         {
             break;
         }

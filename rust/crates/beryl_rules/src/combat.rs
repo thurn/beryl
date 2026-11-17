@@ -191,7 +191,28 @@ pub(crate) fn attack<L: Layout>(
             s.ask(Pending::DeclareAttackers { attacker: None });
             Ok(())
         }
-        _ => finish_attack(s, t, sink),
+        Opt::Pass
+        | Opt::PlayLand(_)
+        | Opt::Play
+        | Opt::Draw
+        | Opt::Keep
+        | Opt::Mulligan
+        | Opt::Trigger(_)
+        | Opt::Yes
+        | Opt::No
+        | Opt::Done
+        | Opt::Block(_)
+        | Opt::Lethal(_)
+        | Opt::Cast { .. }
+        | Opt::Activate { .. }
+        | Opt::Mana { .. }
+        | Opt::Pool(_)
+        | Opt::Number(_)
+        | Opt::Plan(_)
+        | Opt::Player(_)
+        | Opt::Ability(_)
+        | Opt::Object(_)
+        | Opt::TurnFaceUp(_) => finish_attack(s, t, sink),
     }
 }
 
@@ -407,6 +428,39 @@ pub(crate) fn block_decision<L: Layout>(
         prompt: Prompt::new(Purpose::Block),
         about: Bitboard::EMPTY,
     })
+}
+
+/// Chooses the next blocker or finishes the declaration ([CR 509.1a]):
+/// "The defending player chooses which creatures they control, if any, will block."
+///
+/// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
+pub(crate) fn choose_blocker<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, option: Opt<L>) {
+    match option {
+        Opt::Block(slot) => block_with(s, slot),
+        Opt::Pass
+        | Opt::PlayLand(_)
+        | Opt::Play
+        | Opt::Draw
+        | Opt::Keep
+        | Opt::Mulligan
+        | Opt::Trigger(_)
+        | Opt::Yes
+        | Opt::No
+        | Opt::Done
+        | Opt::Attack(_)
+        | Opt::Defender(_)
+        | Opt::Lethal(_)
+        | Opt::Cast { .. }
+        | Opt::Activate { .. }
+        | Opt::Mana { .. }
+        | Opt::Pool(_)
+        | Opt::Number(_)
+        | Opt::Plan(_)
+        | Opt::Player(_)
+        | Opt::Ability(_)
+        | Opt::Object(_)
+        | Opt::TurnFaceUp(_) => finish_blocks(s, sink),
+    }
 }
 
 /// Declares a blocker, whose attacker is the next pick.

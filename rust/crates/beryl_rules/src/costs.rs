@@ -210,7 +210,69 @@ fn unless_discards<L: Layout>(
         Effect::Discard { player: who, count } if run.one(who) == Some(player) => {
             Some(run.scene().amount(count))
         }
-        _ => None,
+        Effect::Sequence(_)
+        | Effect::If { .. }
+        | Effect::May { .. }
+        | Effect::Unless { .. }
+        | Effect::ForEachPlayer { .. }
+        | Effect::Choose { .. }
+        | Effect::LookAt { .. }
+        | Effect::Counter(_)
+        | Effect::CounterInto { .. }
+        | Effect::CopySpell { .. }
+        | Effect::Destroy { .. }
+        | Effect::Regenerate(_)
+        | Effect::PhaseOut(_)
+        | Effect::Exile(_)
+        | Effect::ExileUntilThisLeaves(_)
+        | Effect::ExileLinked(_)
+        | Effect::Sacrifice(_)
+        | Effect::ReturnToHand(_)
+        | Effect::PutIntoGraveyard(_)
+        | Effect::ReturnToBattlefield(_)
+        | Effect::PutOntoBattlefield(_)
+        | Effect::ReturnTransformed(_)
+        | Effect::PutIntoLibrary { .. }
+        | Effect::PutBack { .. }
+        | Effect::ShuffleInto { .. }
+        | Effect::Dig { .. }
+        | Effect::Fateseal { .. }
+        | Effect::Search { .. }
+        | Effect::Draw { .. }
+        | Effect::Discard { .. }
+        | Effect::Mill { .. }
+        | Effect::Scry { .. }
+        | Effect::Explore(_)
+        | Effect::ManifestDread(_)
+        | Effect::FlipCoin(_)
+        | Effect::DealDamage { .. }
+        | Effect::PreventDamage { .. }
+        | Effect::GainLife { .. }
+        | Effect::LoseLife { .. }
+        | Effect::CreateTokens { .. }
+        | Effect::CreateAttackingTokens { .. }
+        | Effect::CreateCopies { .. }
+        | Effect::BecomeCopy { .. }
+        | Effect::Mutate(_)
+        | Effect::AddCounters { .. }
+        | Effect::RemoveCounters { .. }
+        | Effect::AddMana { .. }
+        | Effect::AddManaOfKind { .. }
+        | Effect::Modify { .. }
+        | Effect::ChangeText { .. }
+        | Effect::ExchangeControl(..)
+        | Effect::Attach { .. }
+        | Effect::ChangeRule { .. }
+        | Effect::GainFlashback(_)
+        | Effect::PermitCast { .. }
+        | Effect::MayCast { .. }
+        | Effect::UntapUpTo { .. }
+        | Effect::Delay { .. }
+        | Effect::GetEmblem { .. }
+        | Effect::WinGame(_)
+        | Effect::LoseGame(_)
+        | Effect::ControlPlayer(_)
+        | Effect::ExtraTurn(_) => None,
     };
     let (game, resolution) = run.resolving();
     let hand = game.state.zone(ZoneKey::Of(player, Zone::Hand));

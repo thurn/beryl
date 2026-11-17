@@ -1,3 +1,14 @@
+// New enum variants must be classified by each reader, and values must fit the receiving
+// representation in either state layout. Cargo requires the rest of the workspace lint
+// settings to be inherited as a unit, so the rules add these lints here.
+#![deny(
+    clippy::wildcard_enum_match_arm,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
+
 //! Beryl's rules: turns, priority, casting, mana, combat, layers, triggers and the interpreter
 //! of effect data, over the kernel's state (`beryl_kernel`) and the card vocabulary
 //! (`beryl_card`). `docs/engine-architecture.md` is the design; section numbers in these docs

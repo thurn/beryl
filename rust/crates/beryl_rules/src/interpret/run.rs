@@ -108,14 +108,14 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             subject: &self.subject,
             costs: match entry.item {
                 StackItem::Spell { costs, .. } => Some(costs),
-                _ => None,
+                StackItem::Activated { .. } | StackItem::Triggered { .. } => None,
             },
             x: entry.x,
             targets: entry.targets.as_slice(),
             registers: &self.registers,
             words: match entry.item {
                 StackItem::Spell { .. } => crate::state::READ_NOW,
-                _ => entry.words,
+                StackItem::Activated { .. } | StackItem::Triggered { .. } => entry.words,
             },
         }
     }
@@ -159,19 +159,79 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::ForEachPlayer { players, effect } => {
                 return self.for_each_player(players, effect);
             }
-            _ => {
-                let together = self.game.sink.records() && at_once(effect);
-                if together {
-                    self.game.sink.together();
-                }
-                let outcome = self.instruction(effect);
-                if together {
-                    self.game.sink.apart();
-                }
-                outcome?
-            }
+            Effect::Choose { .. }
+            | Effect::LookAt { .. }
+            | Effect::Counter(_)
+            | Effect::CounterInto { .. }
+            | Effect::CopySpell { .. }
+            | Effect::Destroy { .. }
+            | Effect::Regenerate(_)
+            | Effect::PhaseOut(_)
+            | Effect::Exile(_)
+            | Effect::ExileUntilThisLeaves(_)
+            | Effect::ExileLinked(_)
+            | Effect::Sacrifice(_)
+            | Effect::ReturnToHand(_)
+            | Effect::PutIntoGraveyard(_)
+            | Effect::ReturnToBattlefield(_)
+            | Effect::PutOntoBattlefield(_)
+            | Effect::ReturnTransformed(_)
+            | Effect::PutIntoLibrary { .. }
+            | Effect::PutBack { .. }
+            | Effect::ShuffleInto { .. }
+            | Effect::Dig { .. }
+            | Effect::Fateseal { .. }
+            | Effect::Search { .. }
+            | Effect::Draw { .. }
+            | Effect::Discard { .. }
+            | Effect::Mill { .. }
+            | Effect::Scry { .. }
+            | Effect::Explore(_)
+            | Effect::ManifestDread(_)
+            | Effect::FlipCoin(_)
+            | Effect::DealDamage { .. }
+            | Effect::PreventDamage { .. }
+            | Effect::GainLife { .. }
+            | Effect::LoseLife { .. }
+            | Effect::CreateTokens { .. }
+            | Effect::CreateAttackingTokens { .. }
+            | Effect::CreateCopies { .. }
+            | Effect::BecomeCopy { .. }
+            | Effect::Mutate(_)
+            | Effect::AddCounters { .. }
+            | Effect::RemoveCounters { .. }
+            | Effect::AddMana { .. }
+            | Effect::AddManaOfKind { .. }
+            | Effect::Modify { .. }
+            | Effect::ChangeText { .. }
+            | Effect::ExchangeControl(..)
+            | Effect::Attach { .. }
+            | Effect::ChangeRule { .. }
+            | Effect::GainFlashback(_)
+            | Effect::PermitCast { .. }
+            | Effect::MayCast { .. }
+            | Effect::UntapUpTo { .. }
+            | Effect::Delay { .. }
+            | Effect::GetEmblem { .. }
+            | Effect::WinGame(_)
+            | Effect::LoseGame(_)
+            | Effect::ControlPlayer(_)
+            | Effect::ExtraTurn(_) => self.carry_out_instruction(effect)?,
         };
         Ok(())
+    }
+
+    /// Runs a single instruction, keeping its simultaneous events together in the sink.
+    fn carry_out_instruction(&mut self, effect: &'static Effect) -> Result<Outcome<L>, Stop> {
+        let together = self.game.sink.records() && at_once(effect);
+        if together {
+            self.game.sink.together();
+        }
+        let outcome = self.instruction(effect);
+        if together {
+            self.game.sink.apart();
+        }
+        outcome
     }
 
     /// Carries out one instruction that holds no other: the table of the entries, each

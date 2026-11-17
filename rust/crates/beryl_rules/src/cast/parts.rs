@@ -29,7 +29,7 @@ use crate::state::{
 };
 use crate::table::GameTable;
 
-use super::costs::{graveyard_start, total_cost};
+use super::costs::{graveyard_start, remember_cost_pick, total_cost};
 use super::delve::{DELVE, DELVE_PART, delve_candidates, delve_most, delves};
 use super::steps::{finish, pay_mana, top};
 use super::timing::entry_ability_of;
@@ -723,11 +723,7 @@ pub(super) fn perform<L: Layout>(
                 Some(Opt::Mana { slot, color }) => mana::activate(s, t, sink, slot, color)?,
                 Some(Opt::Object(slot)) => {
                     if action == CostAction::Exile {
-                        let graveyard = s.graveyard(c.player);
-                        if let Some(i) = graveyard.iter().position(|&g| g == slot) {
-                            paying.graveyard_from = u8::try_from(i + 1).unwrap_or(u8::MAX);
-                        }
-                        paying.chosen.insert(slot);
+                        remember_cost_pick(s.graveyard(c.player), &mut paying, slot);
                     } else {
                         pay_with(s, t, sink, action, slot)?;
                     }
@@ -759,11 +755,7 @@ pub(super) fn perform<L: Layout>(
             // until the last is chosen, then go from the hand or the graveyard to exile at
             // once ([`pay_with_all`]).
             let slot = object.expect("an object to pay with");
-            if let Some(i) = s.graveyard(c.player).iter().position(|&g| g == slot) {
-                // The next pick starts above it.
-                paying.graveyard_from = u8::try_from(i + 1).unwrap_or(u8::MAX);
-            }
-            paying.chosen.insert(slot);
+            remember_cost_pick(s.graveyard(c.player), &mut paying, slot);
             paying.left -= 1;
             if paying.left == 0 {
                 pay_with_all(s, t, sink, action, chosen, c.player, paying.chosen)?;

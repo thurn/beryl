@@ -25,7 +25,7 @@ use crate::card::{
     Ability, AbilityIx, AbilityKind, ObjectAbility, Replaced, Replacement, Rewrite, Types,
 };
 use crate::decision::{Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt};
-use crate::event::{Entry, Reason, ReplacementKind, Sink};
+use crate::event::{Entry, ReplacementKind, Sink};
 use crate::filter::Evaluate;
 use crate::fixed::{Fixed, Full};
 use crate::game::Game;
@@ -34,9 +34,9 @@ use crate::layers;
 use crate::layout::{Layout, Queue};
 use crate::life;
 use crate::profile::Stops;
-use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone, ZoneKey};
+use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone};
 use crate::table::{Capability, GameTable};
-use crate::{actions, chosen, interpret, zones};
+use crate::{chosen, interpret};
 use beryl_kernel::additions::Addition;
 use beryl_kernel::query::Copiable;
 
@@ -48,7 +48,7 @@ pub(crate) use destruction::destruction;
 mod draws;
 mod enchant;
 
-pub(crate) use draws::{DrawReplacement, draw};
+pub(crate) use draws::{DrawReplacement, draw, dredge, dredges};
 pub(crate) use enchant::{Enchants, enchants};
 
 /// A move proposed for one object of a batch, before the state changes: the proposal the
@@ -396,7 +396,7 @@ fn entering<L: Layout>(
         lost = Some(L::AbilityMask::default());
     }
     let mut pays_life = false;
-    for (n, ability) in face.abilities.iter().enumerate() {
+    for (ability, n) in face.abilities.iter().zip(0..) {
         let Some(replacement) = ability.replacement() else {
             continue;
         };
@@ -407,7 +407,7 @@ fn entering<L: Layout>(
             Some(lost) => lost,
             None => *lost.insert(layers::lost_entering(s, t, slot, entry, face)?),
         };
-        if lost.contains(AbilityIx::new(n as u8)) {
+        if lost.contains(AbilityIx::new(n)) {
             continue;
         }
         match replacement.rewrite {
@@ -496,7 +496,16 @@ fn copy_to_enter<L: Layout>(
             .zip(face.abilities)
             .find_map(|(n, a)| match a.replacement()?.rewrite {
                 Rewrite::EnterAsCopy { of, except } => Some((n, a, of, except)),
-                _ => None,
+                Rewrite::None
+                | Rewrite::ToZone(_)
+                | Rewrite::EntersTapped
+                | Rewrite::EntersTappedUnlessFewLands(_)
+                | Rewrite::EntersTappedUnlessPayLife(_)
+                | Rewrite::EntersWithCounters(..)
+                | Rewrite::Instead
+                | Rewrite::Dredge(_)
+                | Rewrite::Choose(_)
+                | Rewrite::Multiply(_) => None,
             })
     else {
         return Ok(None);
@@ -539,7 +548,16 @@ fn life_asked(face: &crate::card::Face) -> Option<(AbilityIx, u8)> {
         .zip(face.abilities)
         .find_map(|(n, a)| match a.replacement()?.rewrite {
             Rewrite::EntersTappedUnlessPayLife(life) => Some((AbilityIx::new(n), life)),
-            _ => None,
+            Rewrite::None
+            | Rewrite::ToZone(_)
+            | Rewrite::EntersTapped
+            | Rewrite::EntersTappedUnlessFewLands(_)
+            | Rewrite::EntersWithCounters(..)
+            | Rewrite::Instead
+            | Rewrite::Dredge(_)
+            | Rewrite::Choose(_)
+            | Rewrite::Multiply(_)
+            | Rewrite::EnterAsCopy { .. } => None,
         })
 }
 
@@ -644,72 +662,6 @@ pub(crate) fn resolution_may_ask(t: &GameTable) -> bool {
     may_ask(t) || t.can(Capability::ChoosesAsEnters)
 }
 
-/// N of the card in `slot`'s dredge, with its ability, if it has dredge.
-fn dredge_of<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
-    slot: L::Slot,
-) -> Option<(&'static crate::card::Ability, u8)> {
-    s.abilities(t, slot)
-        .find_map(|(_, a)| match a.replacement() {
-            Some(&Replacement {
-                rewrite: Rewrite::Dredge(n),
-                ..
-            }) => Some((a, n)),
-            _ => None,
-        })
-}
-
-/// The cards in `player`'s graveyard whose dredge could replace their next draw
-/// ([CR 702.52a]): "As long as you have at least N cards in your library, if you would draw a
-/// card, you may instead mill N cards and return this card from your graveyard to your hand."
-/// Dredge works only there, and only for the card's owner, whose graveyard it is.
-///
-/// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
-pub(crate) fn dredges<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
-    let library = s.library(player).len();
-    s.zone(ZoneKey::Of(player, Zone::Graveyard))
-        .filter(|slot| dredge_of(s, t, slot).is_some_and(|(_, n)| library >= usize::from(n)))
-}
-
-/// Offers `player` the dredge abilities that could replace their next draw, if any
-/// ([`dredges`]), and carries out the one they choose: they mill N cards, then return the
-/// card from their graveyard to their hand ([CR 702.52a]). Returns whether the draw was
-/// replaced. One draw is replaced by at most one dredge (CR 616.1f: once one has applied there
-/// is no draw left to replace).
-///
-/// The choice is among the dredge cards and the draw itself ([`Purpose::Replace`]). A
-/// replacement of draws by a permanent is not optional, so declining every dredge leaves it to
-/// apply ([`draw`]), which is what applying it first would do.
-///
-/// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
-pub(crate) fn dredge<L: Layout>(game: &mut Game<'_, L>, player: Seat) -> Result<bool, Full> {
-    let cards = dredges(game.state, game.table, player);
-    if cards.is_empty() {
-        return Ok(false);
-    }
-    let mut options = <L::Queue<Opt<L>, OPTIONS>>::default();
-    options.push(Opt::Done)?;
-    Candidates::<L>::extend_options(&mut options, cards, |out, slot| out.push(Opt::Object(slot)))?;
-    let d = Decision::options(
-        player,
-        DecisionKind::ChooseUpTo,
-        options,
-        Prompt::new(Purpose::Replace),
-    );
-    let Some(Opt::Object(card)) = d.candidates.option(answer(game.state, game.sink, &d)?) else {
-        return Ok(false);
-    };
-    let (ability, n) = dredge_of(game.state, game.table, card).expect("a dredge card");
-    crate::coverage::hit(ability);
-    let s = &*game.state;
-    game.sink.enter_source(|| s.object_ref(card));
-    let done = actions::mill::mill(game, player, n)
-        .and_then(|_| zones::move_all(game, Bitboard::single(card), Zone::Hand, Reason::Effect));
-    game.sink.leave();
-    done.map(|()| true)
-}
-
 /// The value of `kind` that the permanent in `slot` chooses as it enters under `player`'s
 /// control ([`Rewrite::Choose`]), asked through the record of answers ([`answer`]).
 fn choose_value<L: Layout>(
@@ -732,7 +684,16 @@ fn chooses(face: &crate::card::Face) -> Option<(AbilityIx, ChosenKind)> {
         .zip(face.abilities)
         .find_map(|(n, a)| match a.replacement()?.rewrite {
             Rewrite::Choose(kind) => Some((AbilityIx::new(n), kind)),
-            _ => None,
+            Rewrite::None
+            | Rewrite::ToZone(_)
+            | Rewrite::EntersTapped
+            | Rewrite::EntersTappedUnlessFewLands(_)
+            | Rewrite::EntersTappedUnlessPayLife(_)
+            | Rewrite::EntersWithCounters(..)
+            | Rewrite::Instead
+            | Rewrite::Dredge(_)
+            | Rewrite::Multiply(_)
+            | Rewrite::EnterAsCopy { .. } => None,
         })
 }
 

@@ -51,7 +51,13 @@ pub(crate) fn away<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> 
     for zone in zones.iter() {
         candidates |= match zone {
             Zone::Stack => s.zone(ZoneKey::Stack),
-            zone => s
+            zone @ (Zone::Library
+            | Zone::Hand
+            | Zone::Battlefield
+            | Zone::Graveyard
+            | Zone::Exile
+            | Zone::Nowhere
+            | Zone::Merged) => s
                 .players_in_seat_order(s.players())
                 .fold(Bitboard::EMPTY, |all, p| all | s.zone(ZoneKey::Of(p, zone))),
         };
@@ -159,7 +165,36 @@ pub(crate) fn match_event<L: Layout>(
 fn times<L: Layout>(e: &Event<L>) -> u8 {
     match *e {
         Event::Draw { cards, .. } => cards,
-        _ => 1,
+        Event::ZoneChange { .. }
+        | Event::Damage { .. }
+        | Event::DrawCard { .. }
+        | Event::Scry { .. }
+        | Event::TopOrBottom { .. }
+        | Event::LibraryShuffled { .. }
+        | Event::Reveal { .. }
+        | Event::LifeGain { .. }
+        | Event::LifeLoss { .. }
+        | Event::CountersAdded { .. }
+        | Event::CountersRemoved { .. }
+        | Event::Tap { .. }
+        | Event::Untap { .. }
+        | Event::Mana { .. }
+        | Event::ResolutionPayment { .. }
+        | Event::AbilityFinished
+        | Event::StackArrival { .. }
+        | Event::StackDeparture { .. }
+        | Event::TokensCreated { .. }
+        | Event::Cast { .. }
+        | Event::Ability { .. }
+        | Event::Attack { .. }
+        | Event::Block { .. }
+        | Event::StepBegins { .. }
+        | Event::GainControl { .. }
+        | Event::CoinFlip { .. }
+        | Event::Lose { .. }
+        | Event::Targeted { .. }
+        | Event::Win { .. }
+        | Event::Mutated { .. } => 1,
     }
 }
 
@@ -182,7 +217,19 @@ fn begins(event: TriggerEvent, step: TurnStep) -> bool {
         TriggerEvent::MainPhase => {
             matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain)
         }
-        _ => false,
+        TriggerEvent::Enters
+        | TriggerEvent::Dies
+        | TriggerEvent::Leaves
+        | TriggerEvent::Attacks
+        | TriggerEvent::PlayerAttacks
+        | TriggerEvent::DealsCombatDamageToPlayer
+        | TriggerEvent::CreatesTokens
+        | TriggerEvent::Casts
+        | TriggerEvent::Discards
+        | TriggerEvent::Draws
+        | TriggerEvent::BecomesTarget
+        | TriggerEvent::Mutates
+        | TriggerEvent::State(_) => false,
     }
 }
 
@@ -507,7 +554,7 @@ fn state_trigger<L: Layout>(
     let triggered = s.triggers().iter().any(|tr| same(&tr.of))
         || s.stack().iter().any(|entry| match &entry.item {
             StackItem::Triggered { of, .. } => same(of),
-            _ => false,
+            StackItem::Spell { .. } | StackItem::Activated { .. } => false,
         });
     if triggered {
         return Ok(());

@@ -26,7 +26,12 @@ pub fn target_takes<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> bo
     let how = match s.object(slot).zone() {
         Zone::Battlefield => Takes::Removal,
         Zone::Stack => Takes::Counter,
-        _ => return false,
+        Zone::Library
+        | Zone::Hand
+        | Zone::Graveyard
+        | Zone::Exile
+        | Zone::Nowhere
+        | Zone::Merged => return false,
     };
     announcing && ability.is_some_and(|ability| ability.takes_target(c.spec, how))
 }

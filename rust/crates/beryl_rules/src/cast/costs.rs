@@ -222,11 +222,24 @@ pub(super) fn graveyard_start<L: Layout>(
     }
 }
 
+/// Records a card chosen for one payment. Graveyard picks are bottom first
+/// ([`graveyard_start`]), so the next pick starts above this one.
+pub(super) fn remember_cost_pick<L: Layout>(
+    graveyard: &[L::Slot],
+    paying: &mut PayingObjects<L>,
+    slot: L::Slot,
+) {
+    if let Some(i) = graveyard.iter().position(|&card| card == slot) {
+        paying.graveyard_from = u8::try_from(i + 1).unwrap_or(u8::MAX);
+    }
+    paying.chosen.insert(slot);
+}
+
 #[cfg(test)]
 mod tests {
     use beryl_kernel::ids::{LargeSlot, SlotId};
 
-    use super::{PayingObjects, graveyard_start};
+    use super::{PayingObjects, graveyard_start, remember_cost_pick};
     use crate::layout::Large;
 
     #[test]
@@ -235,8 +248,7 @@ mod tests {
         let mut paying = PayingObjects::<Large>::start(0, 3);
         assert_eq!(graveyard_start(&graveyard, &paying), 0);
         for index in [254, 255, 276] {
-            paying.chosen.insert(graveyard[index]);
-            paying.graveyard_from = u8::try_from(index + 1).unwrap_or(u8::MAX);
+            remember_cost_pick(&graveyard, &mut paying, graveyard[index]);
             assert_eq!(graveyard_start(&graveyard, &paying), index + 1);
         }
     }

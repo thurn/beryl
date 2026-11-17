@@ -185,7 +185,11 @@ pub fn preferred_damage<L: Layout>(s: &State<L>, d: &Decision<L>) -> Option<(Cho
         let Opt::Lethal(slot) = *option else {
             return None;
         };
-        Some((Choice(i as u16), lethal(s, slot), s.derived(slot).power))
+        Some((
+            Choice(u16::try_from(i).expect("at most one lethal choice per blocker")),
+            lethal(s, slot),
+            s.derived(slot).power,
+        ))
     });
     let unambiguous = cost <= left || picks.clone().count() == 1;
     picks

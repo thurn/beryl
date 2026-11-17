@@ -72,7 +72,22 @@ fn resolve_top<L: Layout>(
     let ability = entry_ability(t, &entry);
     let record = match s.pending() {
         Pending::Resolving(r) => r.record.clone(),
-        _ => Default::default(),
+        Pending::None
+        | Pending::PlayOrDraw { .. }
+        | Pending::Mulligans
+        | Pending::Discard
+        | Pending::LegendRule { .. }
+        | Pending::EnterPayingLife { .. }
+        | Pending::DeclareAttackers { .. }
+        | Pending::DeclareBlockers { .. }
+        | Pending::CombatDamage { .. }
+        | Pending::Casting(_)
+        | Pending::StepActions(_)
+        | Pending::CastOffer { .. }
+        | Pending::TurningFaceUp { .. }
+        | Pending::OrderEntered { .. }
+        | Pending::EnterChoosing { .. }
+        | Pending::ManaColor { .. } => Default::default(),
     };
     let may_ask = replace::resolution_may_ask(t);
     // The source is asked first: whether an ability written as data asks is read from its

@@ -59,7 +59,12 @@ pub fn put_into<L: Layout>(
                 None => return Ok(()),
             }
         }
-        _ => {}
+        Zone::Hand
+        | Zone::Battlefield
+        | Zone::Graveyard
+        | Zone::Exile
+        | Zone::Nowhere
+        | Zone::Merged => {}
     }
     let (cards, to) = (Bitboard::single(object.slot), Zone::Library);
     let (reason, entry) = (Reason::Effect, Entry::default());

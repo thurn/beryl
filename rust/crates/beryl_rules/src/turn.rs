@@ -100,7 +100,12 @@ pub(crate) fn step_actions<L: Layout>(
             combat::begin_damage(s, t, sink)?;
         }
         TurnStep::Cleanup => cleanup(s),
-        _ => {}
+        TurnStep::Upkeep
+        | TurnStep::PrecombatMain
+        | TurnStep::BeginningOfCombat
+        | TurnStep::EndOfCombat
+        | TurnStep::PostcombatMain
+        | TurnStep::End => {}
     }
     Ok(())
 }

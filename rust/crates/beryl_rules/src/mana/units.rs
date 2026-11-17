@@ -52,7 +52,7 @@ impl Units {
             if some == 0 {
                 return None;
             }
-            let kinds = some.trailing_zeros() as u8;
+            let kinds = u8::try_from(some.trailing_zeros()).expect("a bit in a u64");
             some &= some - 1;
             Some((kinds, self.by_kinds[usize::from(kinds)]))
         })
