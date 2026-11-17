@@ -70,6 +70,9 @@ through the client with no window or GPU (the `b3d` skill has the details):
 
 - `just b3d list [prefix]` names every recording, and `just b3d info <name>`
   every moment of one (`view:3`, `step:4.1.0`, `prompt:1`).
+- `just b3d perf [fixture...] [--verbs]` plays fixtures in the running app and
+  prints their frame timing with the machine's load, as `just ui-perf` does for
+  the web interface.
 - `just b3d tree <name> --at <moment>` prints the elements on screen. Each line
   is a locator for `--do`, as in `--do 'hover card "Island" #8'`.
 - `just b3d diff <name> --from <moment> --to <moment>` prints what appeared,

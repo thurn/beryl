@@ -26,6 +26,7 @@ just b3d check verbs-zones                   # every interface check on every ti
 just b3d test b3d:verbs-zones                # the interface tests whose names start so
 just b3d png verbs-zones --at 1500ms --tree  # a picture of that moment, and its tree
 just b3d film verbs-zones --from 0ms --to 3s --frames 12   # twelve frames in one picture
+just b3d perf verbs-zones --verbs               # frame timing of a fixture played in the app
 ```
 
 - **`list [prefix]`** prints each recording's name, its seat (`--seat you` or

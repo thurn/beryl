@@ -29,6 +29,7 @@ from . import (
     live,
     parity,
     paths,
+    perf,
     phone,
     play,
     stand_in,
@@ -373,7 +374,7 @@ def run_fmt(args: argparse.Namespace) -> int:
 
 # The commands of the modules that register their own, listed after this module's, in order. A
 # module adds a command by writing `COMMANDS` and adding its name here.
-MODULES: tuple[ModuleType, ...] = (phone, camera, vm, parity, play)
+MODULES: tuple[ModuleType, ...] = (phone, camera, vm, parity, play, perf)
 
 OWN_COMMANDS: tuple[Command, ...] = (
     b3d_command(
