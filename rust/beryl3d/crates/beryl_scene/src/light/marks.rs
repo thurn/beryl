@@ -116,7 +116,9 @@ fn tint(mark: Mark) -> [u8; 4] {
 /// one thing are both drawn, the later begun outside the earlier. A quad over a card lying on
 /// the table goes in `Band::TableMarks`, which the depth test of the cards drawn opaque before
 /// it covers where another card lies over that one; a quad over anything raised (in flight, in
-/// a hand, on the stack) or on a player goes in `Band::RaisedMarks`. Allocates nothing.
+/// a hand, on the stack) or on a player goes in `Band::RaisedMarks`, and one over a card held
+/// up in the tray in `Band::LayerCards`, with the card, over the tray's shade. Allocates
+/// nothing.
 pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
     let open = lit.open();
     for (index, mark_open) in open.iter().enumerate() {
@@ -142,7 +144,12 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         // Just over the face, along the face's own normal, so that a card held up toward the
         // camera has its mark in front of it too.
         let position = pose.position + pose.rotation * Vec3::Z * light::LIFT;
-        let band = band(on, &pose);
+        let band = match on {
+            Subject::Object { slot } if scene.table().in_tray(usize::from(slot.0)) => {
+                Band::LayerCards
+            }
+            _ => band(on, &pose),
+        };
         if mark == Mark::Paying {
             let size = light::TAP_SIZE * pose.scale;
             // `look` lifts the paying card off the table as the mark comes up; the symbol

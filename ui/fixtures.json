@@ -1008,6 +1008,12 @@
       "until": "first target decision for seat 0"
     },
     {
+      "name": "target-own-asks",
+      "board": "target-own",
+      "until": "first target decision for seat 0",
+      "clicks": ["Jace, Vryn's Prodigy"]
+    },
+    {
       "name": "attack-past-walker",
       "board": "attack-past-walker",
       "until": "first attackTarget decision for seat 0",

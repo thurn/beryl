@@ -386,8 +386,9 @@ impl Table {
         }
     }
 
-    /// Writes the card backs a put-back's library is drawn with, under the cards of the tray,
-    /// each showing the card back's layer `back` on its face. Allocates nothing.
+    /// Writes the card backs a put-back's library is drawn with, under the cards of the tray and
+    /// like them over the tray's shade, each showing the card back's layer `back` on its face.
+    /// Allocates nothing.
     pub(super) fn write_tray_library(&self, back: u16, builder: &mut FrameBuilder) {
         for pose in &self.tray.library {
             let draw = Draw::card(
@@ -399,7 +400,7 @@ impl Table {
                 0.0,
                 0.0,
             );
-            builder.draw(Band::Opaque, draw);
+            builder.draw(Band::LayerCards, draw);
         }
     }
 }

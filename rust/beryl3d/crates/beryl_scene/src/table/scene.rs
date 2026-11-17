@@ -610,8 +610,10 @@ impl Table {
         // drawn there would darken toward black and hide the cards beneath it. It takes the
         // band its own marks take (`light::marks::band`), or a mark drawn before it would lie
         // under it.
-        // A card a box of the flat layer shows is drawn over the flat layer (`table::shown`).
-        let band = if role == Role::Card && self.shown.holds(id.0 as usize) {
+        // A card a box of the flat layer shows is drawn over the flat layer (`table::shown`),
+        // as is a card held up in the tray, over the tray's shade (`prompts::screen`).
+        let held_up = self.shown.holds(id.0 as usize) || self.in_tray(id.0 as usize);
+        let band = if role == Role::Card && held_up {
             Band::LayerCards
         } else if opacity == 255 && look.dissolve <= 0.0 && look.whiten <= 0.0 {
             Band::Opaque

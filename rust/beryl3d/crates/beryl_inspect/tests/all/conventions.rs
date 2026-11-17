@@ -49,7 +49,8 @@ fn every_key_names_an_entry_of_its_section() {
 }
 
 /// Each entry is either a recording, a moment and a tree line that show Beryl 3D following the
-/// convention, and the recording shows that line then, or an open entry with its reason.
+/// convention (with any options `assert_shows` takes), and the recording shows that
+/// line then, or an open entry with its reason.
 #[test]
 fn every_entry_shows_in_its_recording_or_is_open() {
     for (kind, name, entry) in entries() {

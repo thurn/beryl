@@ -1,1 +1,47 @@
-{ "entries": {} }
+{
+  "entries": {
+    "Phase icons": {
+      "recording": "target-own",
+      "at": "prompt:2",
+      "shows": "toggle \"Your main 1\" interactive selected"
+    },
+    "Full cards that tap": {
+      "recording": "exiled-beneath",
+      "at": "end",
+      "shows": "card \"Trinket Mage\" battlefield.yours.creatures interactive tapped"
+    },
+    "No question before a choice": {
+      "recording": "choice-search",
+      "at": "prompt:2",
+      "shows": "button \"Decline\""
+    },
+    "Target arrows by relationship": {
+      "recording": "arrow-spell",
+      "at": "end",
+      "shows": "arrow \"hostile-target\""
+    },
+    "Lands unstacked until seven": {
+      "recording": "table-crowded",
+      "at": "end",
+      "shows": "card \"Island\" battlefield.yours.lands interactive pile(3)"
+    },
+    "Linked exile under its host": {
+      "recording": "exiled-beneath",
+      "at": "end",
+      "shows": "card \"Snapcaster Mage\" #260 exile.yours.others"
+    },
+    "Own-target warning": {
+      "recording": "target-own-asks",
+      "at": "end",
+      "do": [
+        "press card \"Jace, Vryn's Prodigy\" #6"
+      ],
+      "shows": "text \"Do you want to target Jace, Vryn's Prodigy?\""
+    },
+    "Cards put back in one screen": {
+      "recording": "choice-jace",
+      "at": "prompt:2",
+      "shows": "region \"Top\""
+    }
+  }
+}

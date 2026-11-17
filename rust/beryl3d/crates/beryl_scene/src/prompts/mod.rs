@@ -53,9 +53,21 @@ impl Shown<'_> {
     }
 }
 
-/// What the flat layer shows for `prompt`, if anything.
+/// What the flat layer shows for `prompt`, if anything. While the prompt holds cards up in its
+/// tray, the table lies under the tray's shade, first in the flat layer so that the bar is drawn
+/// over it, and the cards held up are drawn over the flat layer (`Table::in_tray`), as the web
+/// interface's `TrayUnder` shades the table under them (`shades` in `ui/src/stage/Tray.tsx`).
 #[must_use]
 pub fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+    let mut screen = shape_screen(prompt, input)?;
+    if Piles::of(prompt).is_some() {
+        screen.children.insert(0, shade(input));
+    }
+    Some(screen)
+}
+
+/// What the flat layer shows for the shape of `prompt`, if anything.
+fn shape_screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
     match &prompt.body {
         ShapeBody::Pick { .. } | ShapeBody::Candidates => pick::screen(prompt, input),
         ShapeBody::Split { .. } => split::screen(prompt, input),
@@ -68,6 +80,22 @@ pub fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
         ShapeBody::Catalog { .. } => catalog::screen(prompt, input),
         ShapeBody::Divide { .. } => divide::screen(prompt, input),
     }
+}
+
+/// The whole window in the tray's shade (`.stage-tray`), which the pointer goes through.
+fn shade(input: &ScreenIn) -> Element {
+    let window = input.window.size;
+    let mut shade = crate::element::column()
+        .name("shade")
+        .width(window.width)
+        .height(window.height)
+        .background(crate::tokens::color::TRAY_SHADE)
+        .passes(true);
+    shade.anchor = Some(crate::element::Anchor::Point(
+        glam::Vec2::ZERO,
+        glam::Vec2::ZERO,
+    ));
+    shade
 }
 
 /// The faces the open prompt shows in the flat layer at full size, which the client asks for

@@ -27,7 +27,7 @@ use crate::widgets::list;
 pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
     let mut bar = prompt_bar(prompt, input);
     if let ShapeBody::Catalog { entries, chosen } = &prompt.body {
-        bar.children.insert(0, shade(input));
+        bar.children.insert(0, super::shade(input));
         bar.children.push(entries_column(entries, *chosen, input));
     }
     Some(bar)
@@ -36,19 +36,6 @@ pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
 /// The marks and arrows the client draws itself for the prompt `shown`, which was `was`: none,
 /// since a catalog is about no object.
 pub(super) fn own(_shown: Option<Shown>, _was: Option<Shown>, _steps: &mut Steps) {}
-
-/// The whole window in the tray's shade, which the pointer goes through.
-fn shade(input: &ScreenIn) -> Element {
-    let window = input.window.size;
-    let mut shade = column()
-        .name("shade")
-        .width(window.width)
-        .height(window.height)
-        .background(color::TRAY_SHADE)
-        .passes(true);
-    shade.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
-    shade
-}
 
 /// The entries in the session's order, in a scrolling list as wide as its widest entry, centred
 /// in the tray's space of the desktop layout as `.stage-choose` centres it, with the one `chosen`
