@@ -171,7 +171,11 @@ impl<L: Layout> State<L> {
                     "a card in the merged zone is part of no permanent",
                     Some(At::Slot(slot.index())),
                 )?,
-                zone => members[o.owner.index()][zone as usize].insert(slot),
+                zone @ (Zone::Library
+                | Zone::Hand
+                | Zone::Battlefield
+                | Zone::Graveyard
+                | Zone::Exile) => members[o.owner.index()][zone.index()].insert(slot),
             }
         }
         check(
@@ -190,10 +194,11 @@ impl<L: Layout> State<L> {
             None,
         )?;
         for p in Seat::BOTH {
-            let owned = |zone: Zone| members[p.index()][zone as usize];
+            let owned = |zone: Zone| members[p.index()][zone.index()];
             let listed = |list: &[L::Slot]| -> Option<Bitboard<L::Slot>> {
                 let set: Bitboard<L::Slot> = list.iter().copied().collect();
-                (set.count() as usize == list.len()).then_some(set)
+                (usize::try_from(set.count()).expect("a bit count fits in usize") == list.len())
+                    .then_some(set)
             };
             check(
                 listed(self.library(p)) == Some(owned(Zone::Library)),
@@ -209,7 +214,9 @@ impl<L: Layout> State<L> {
         let battlefield = self.in_zone(Zone::Battlefield);
         let listed: Bitboard<L::Slot> = self.battlefield().iter().copied().collect();
         check(
-            listed == battlefield && listed.count() as usize == self.battlefield().len(),
+            listed == battlefield
+                && usize::try_from(listed.count()).expect("a bit count fits in usize")
+                    == self.battlefield().len(),
             "the battlefield list disagrees",
             None,
         )?;

@@ -133,8 +133,8 @@ impl<L: Layout> State<L> {
             Zone::Stack => self.zones.stack.insert(slot),
             Zone::Hand | Zone::Exile | Zone::Nowhere | Zone::Merged => {}
         }
-        if (to as usize) < Zone::OWNED {
-            self.zones.members[owner][to as usize].insert(slot);
+        if (to.index()) < Zone::OWNED {
+            self.zones.members[owner][to.index()].insert(slot);
         }
         if let Some(carried) = carried {
             self.carry_copy(slot, carried)?;
@@ -415,7 +415,7 @@ impl<L: Layout> State<L> {
 /// [CR 400.2]: https://yawgatog.com/resources/magic-rules/#R4002
 /// [CR 402.3]: https://yawgatog.com/resources/magic-rules/#R4023
 fn forget_hand<L: Layout>(s: &mut State<L>, owner: Seat, moved: L::Slot) {
-    let hand = s.zones.members[owner.index()][Zone::Hand as usize];
+    let hand = s.zones.members[owner.index()][Zone::Hand.index()];
     // The player controlling the owner sees the hand as the owner does (CR 724.4).
     let sharer = s.sharer(owner);
     for p in Seat::BOTH {
@@ -476,8 +476,8 @@ fn leave<L: Layout>(s: &mut State<L>, slot: L::Slot) {
         Zone::Stack => s.zones.stack.remove(slot),
         Zone::Hand | Zone::Exile | Zone::Nowhere | Zone::Merged => {}
     }
-    if (o.zone as usize) < Zone::OWNED {
-        s.zones.members[owner][o.zone as usize].remove(slot);
+    if (o.zone.index()) < Zone::OWNED {
+        s.zones.members[owner][o.zone.index()].remove(slot);
     }
 }
 

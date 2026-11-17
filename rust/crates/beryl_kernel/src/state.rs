@@ -85,7 +85,7 @@ pub enum ZoneKey {
 /// zone chokepoints write it ([`crate::zone`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Zones<L: Layout = Small> {
-    /// Membership by owner, indexed by `Zone as usize` for the owned zones.
+    /// Membership by owner, indexed by `Zone::index` for the owned zones.
     pub(crate) members: L::PerPlayer<[Bitboard<L::Slot>; Zone::OWNED]>,
     pub(crate) stack: Bitboard<L::Slot>,
     /// Bottom first: the top card is the last.
@@ -424,7 +424,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn zone(&self, key: ZoneKey) -> Bitboard<L::Slot> {
         match key {
-            ZoneKey::Of(owner, zone) => self.zones.members[owner.index()][zone as usize],
+            ZoneKey::Of(owner, zone) => self.zones.members[owner.index()][zone.index()],
             ZoneKey::Stack => self.zones.stack,
         }
     }
@@ -537,7 +537,8 @@ impl<L: Layout> State<L> {
     pub(crate) fn enter_battlefield(&mut self, slot: L::Slot) -> Result<(), Full> {
         debug_assert!(self.battlefield_position(slot).is_none());
         self.battlefield.push(slot)?;
-        self.object_mut(slot).battlefield_index = (self.battlefield.len() - 1) as u16;
+        self.object_mut(slot).battlefield_index =
+            u16::try_from(self.battlefield.len() - 1).expect("a battlefield position fits in u16");
         Ok(())
     }
 
@@ -550,7 +551,8 @@ impl<L: Layout> State<L> {
         self.object_mut(slot).battlefield_index = OFF_BATTLEFIELD;
         for j in i..self.battlefield.len() {
             let later = self.battlefield.as_slice()[j];
-            self.object_mut(later).battlefield_index = j as u16;
+            self.object_mut(later).battlefield_index =
+                u16::try_from(j).expect("a battlefield position fits in u16");
         }
     }
 

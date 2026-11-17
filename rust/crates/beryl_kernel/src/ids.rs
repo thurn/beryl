@@ -79,7 +79,7 @@ pub trait SlotId:
         if i >= Self::POOL {
             Place::Pool(i - Self::POOL)
         } else {
-            let player = Seat::new((i / Self::DECK_SLOTS) as u8);
+            let player = Seat::BOTH[i / Self::DECK_SLOTS];
             Place::Deck(player, i % Self::DECK_SLOTS)
         }
     }
@@ -140,7 +140,7 @@ pub struct Slot(NonZeroU8);
 
 impl Slot {
     /// How many slots there are: 0 to 254.
-    pub const COUNT: usize = 255;
+    pub const COUNT: usize = u8::MAX as usize;
 
     /// The slot at `index`.
     ///
@@ -176,7 +176,7 @@ impl Slot {
 
     /// Every slot, in ascending order.
     pub fn all() -> impl Iterator<Item = Slot> {
-        (0..Self::COUNT as u8).map(Slot::new)
+        (0..u8::MAX).map(Slot::new)
     }
 }
 
@@ -192,7 +192,7 @@ impl SlotId for Slot {
     #[inline]
     fn from_index(index: usize) -> Slot {
         debug_assert!(index < Self::COUNT);
-        Slot::new(index as u8)
+        Slot::new(u8::try_from(index).expect("a Small slot fits in u8"))
     }
 
     #[inline]
@@ -230,7 +230,8 @@ impl SlotId for LargeSlot {
     #[inline]
     fn from_index(index: usize) -> LargeSlot {
         assert!(index < Self::COUNT, "slot {index} does not exist");
-        LargeSlot(NonZeroU16::new(index as u16 + 1).expect("one more than an index"))
+        let index = u16::try_from(index).expect("a Large slot fits in u16");
+        LargeSlot(NonZeroU16::new(index + 1).expect("one more than an index"))
     }
 
     #[inline]
@@ -330,7 +331,7 @@ pub struct CardIx(NonZeroU8);
 
 impl CardIx {
     /// How many indices there are: 0 to 254.
-    pub const COUNT: usize = 255;
+    pub const COUNT: usize = u8::MAX as usize;
 
     /// The game index `index`.
     ///
@@ -374,7 +375,7 @@ impl CardId for CardIx {
         // One comparison, as `CardIx::new` makes of a byte, and no wider index is cut down
         // to pass for a card of its own.
         assert!(index < Self::COUNT, "a game index past the 255 of a byte");
-        CardIx::new(index as u8)
+        CardIx::new(u8::try_from(index).expect("a Small game index fits in u8"))
     }
 
     #[inline]
@@ -410,7 +411,8 @@ impl CardId for LargeCardIx {
     #[inline]
     fn from_index(index: usize) -> LargeCardIx {
         assert!(index < Self::COUNT, "game index {index} does not exist");
-        LargeCardIx(NonZeroU16::new(index as u16 + 1).expect("one more than an index"))
+        let index = u16::try_from(index).expect("a Large game index fits in u16");
+        LargeCardIx(NonZeroU16::new(index + 1).expect("one more than an index"))
     }
 
     #[inline]

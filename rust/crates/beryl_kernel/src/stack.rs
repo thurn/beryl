@@ -129,10 +129,11 @@ impl<L: Layout> Target<L> {
     /// The targeted player, if it is one.
     #[inline]
     pub fn as_player(self) -> Option<Seat> {
-        match self.slot {
-            None if self.rest & Self::ABILITY == 0 => Seat::try_new(self.rest as u8),
-            _ => None,
+        if self.slot.is_some() {
+            return None;
         }
+        // Ability targets pack a high bit into this field. Only a bare seat index has an entry.
+        Seat::BOTH.get(usize::from(self.rest)).copied()
     }
 
     /// The targeted ability, if it is one.
@@ -161,7 +162,7 @@ impl<L: Layout> Target<L> {
             Some(AbilityTarget::At(place)) if place > removed => {
                 Target::ability(self.spec, place - 1)
             }
-            _ => self,
+            Some(AbilityTarget::At(_) | AbilityTarget::Gone) | None => self,
         }
     }
 
@@ -223,7 +224,12 @@ pub fn placed<L: Layout>(
     targets: &[Target<L>],
 ) -> impl Iterator<Item = (TargetPlace, Target<L>)> + '_ {
     debug_assert!(targets.len() <= TARGETS);
-    (targets.iter().enumerate()).map(|(i, &target)| (TargetPlace(i as u8), target))
+    (targets.iter().enumerate()).map(|(i, &target)| {
+        (
+            TargetPlace(u8::try_from(i).expect("a target place fits in u8")),
+            target,
+        )
+    })
 }
 
 /// A set of the places of one stack entry's targets: a byte, a bit for each place. It has no
@@ -415,7 +421,7 @@ impl<L: Layout> StackEntry<L> {
     pub fn spell(&self) -> Option<ObjectRef<L>> {
         match self.item {
             StackItem::Spell { object, .. } => Some(object),
-            _ => None,
+            StackItem::Activated { .. } | StackItem::Triggered { .. } => None,
         }
     }
 
@@ -497,7 +503,7 @@ impl<L: Layout> StackEntry<L> {
     pub fn info(&self) -> Option<&TriggerInfo<L>> {
         match &self.item {
             StackItem::Triggered { info, .. } => Some(info),
-            _ => None,
+            StackItem::Spell { .. } | StackItem::Activated { .. } => None,
         }
     }
 
@@ -506,7 +512,7 @@ impl<L: Layout> StackEntry<L> {
     pub fn costs(&self) -> Castings {
         match self.item {
             StackItem::Spell { costs, .. } => costs,
-            _ => Castings::NONE,
+            StackItem::Activated { .. } | StackItem::Triggered { .. } => Castings::NONE,
         }
     }
 

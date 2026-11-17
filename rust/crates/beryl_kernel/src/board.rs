@@ -447,7 +447,11 @@ impl<L: Layout> Board<'_, L> {
         let library = &mut self.0.zones.library[player.index()];
         assert_eq!(library.len(), top_first.len(), "not the whole library");
         let distinct: crate::bitboard::Bitboard<L::Slot> = top_first.iter().copied().collect();
-        assert_eq!(distinct.count() as usize, top_first.len(), "a slot twice");
+        assert_eq!(
+            usize::try_from(distinct.count()).expect("a bit count fits in usize"),
+            top_first.len(),
+            "a slot twice"
+        );
         for &slot in top_first {
             assert!(
                 library.position(slot).is_some(),

@@ -32,14 +32,17 @@ impl SplitMix64 {
     /// A value in `0..n`, by multiply-shift (biased by at most `n / 2^64`).
     #[inline]
     pub fn below(&mut self, n: u64) -> u64 {
-        ((u128::from(self.next_u64()) * u128::from(n)) >> 64) as u64
+        let product = u128::from(self.next_u64()) * u128::from(n);
+        u64::try_from(product >> 64).expect("the high half of a u128 fits in u64")
     }
 
     /// Shuffles `items` uniformly (Fisher-Yates).
     #[inline]
     pub fn shuffle<T>(&mut self, items: &mut [T]) {
         for i in (1..items.len()).rev() {
-            let j = self.below(i as u64 + 1) as usize;
+            let bound = u64::try_from(i).expect("a slice index fits in u64") + 1;
+            let j =
+                usize::try_from(self.below(bound)).expect("the draw is at most the slice index");
             items.swap(i, j);
         }
     }

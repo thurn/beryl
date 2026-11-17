@@ -56,6 +56,11 @@ macro_rules! kinds {
                 }
             }
 
+            /// The position of this kind in [`Self::ALL`].
+            const fn index(self) -> usize {
+                self as usize
+            }
+
             /// What it says, as a save's description words it.
             fn words(self) -> &'static str {
                 match self {
@@ -149,13 +154,13 @@ impl<L: Layout> Trackers<L> {
     /// Sets `player`'s `count` to `n`.
     #[inline]
     pub(crate) fn set_count(&mut self, count: Count, player: Seat, n: u8) {
-        self.counts[player.index()][count as usize] = n;
+        self.counts[player.index()][count.index()] = n;
     }
 
     /// Notes `tracker` of the permanent in `slot`, or no longer.
     #[inline]
     pub(crate) fn set(&mut self, tracker: Tracker, slot: L::Slot, on: bool) {
-        let set = &mut self.sets[tracker as usize];
+        let set = &mut self.sets[tracker.index()];
         if on {
             set.insert(slot);
         } else {
@@ -219,7 +224,7 @@ impl<L: Layout> Store<L> for Trackers<L> {
     fn check(&self, s: &State<L>, t: &GameTable) -> Result<(), Violation> {
         let battlefield = s.in_zone(Zone::Battlefield) | s.phased_out();
         for tracker in Tracker::ALL {
-            let set = self.sets[tracker as usize];
+            let set = self.sets[tracker.index()];
             let stray = (set & !battlefield).iter().next();
             check(
                 stray.is_none(),
@@ -236,7 +241,7 @@ impl<L: Layout> Store<L> for Trackers<L> {
             let mut each = s
                 .players()
                 .in_seat_order()
-                .map(|p| (p, self.counts[p.index()][count as usize]));
+                .map(|p| (p, self.counts[p.index()][count.index()]));
             check(
                 each.all(|(_, n)| n == 0) || t.can(count.capability()),
                 "a count kept that no card of the game reads",
@@ -246,9 +251,9 @@ impl<L: Layout> Store<L> for Trackers<L> {
         // A player's draw step is in their own turn (CR 504.1).
         let active = s.turn().active();
         check(
-            s.players().in_seat_order().all(|p| {
-                p == active || self.counts[p.index()][Count::DrewInDrawStep as usize] == 0
-            }),
+            s.players()
+                .in_seat_order()
+                .all(|p| p == active || self.counts[p.index()][Count::DrewInDrawStep.index()] == 0),
             "a card drawn in the draw step of a player whose turn it is not",
             None,
         )?;
@@ -261,13 +266,13 @@ impl<L: Layout> Store<L> for Trackers<L> {
     /// no card drawn, so there is none to save.
     fn lingering(&self, s: &State<L>, t: &GameTable) -> Option<String> {
         let tracked = Tracker::ALL.into_iter().find_map(|tracker| {
-            let slot = self.sets[tracker as usize].iter().next()?;
+            let slot = self.sets[tracker.index()].iter().next()?;
             Some(format!("{} {}", t.def(s.card(slot)).name, tracker.words()))
         });
         tracked.or_else(|| {
             s.players().in_seat_order().find_map(|player| {
                 Count::ALL.into_iter().find_map(|count| {
-                    let n = self.counts[player.index()][count as usize];
+                    let n = self.counts[player.index()][count.index()];
                     (n > 0).then(|| format!("{player:?}: {n} {}", count.words()))
                 })
             })
@@ -298,7 +303,7 @@ impl Tracked {
     /// Whether `tracker` is noted of the permanent.
     #[inline]
     pub fn has(self, tracker: Tracker) -> bool {
-        self.0 & (1 << (tracker as u8)) != 0
+        self.0 & (1 << tracker.index()) != 0
     }
 }
 
@@ -319,7 +324,7 @@ impl<L: Layout> State<L> {
     /// game no card of which reads it.
     #[inline]
     pub fn tracked(&self, tracker: Tracker, slot: L::Slot) -> bool {
-        self.trackers.sets[tracker as usize].contains(slot)
+        self.trackers.sets[tracker.index()].contains(slot)
     }
 
     /// Everything tracked of the permanent in `slot`: for [`State::signature`], tools,
@@ -328,7 +333,7 @@ impl<L: Layout> State<L> {
     pub fn trackers(&self, slot: L::Slot) -> Tracked {
         let mut found = 0;
         for tracker in Tracker::ALL {
-            found |= u8::from(self.tracked(tracker, slot)) << (tracker as u8);
+            found |= u8::from(self.tracked(tracker, slot)) << tracker.index();
         }
         Tracked(found)
     }
@@ -342,7 +347,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn count(&mut self, t: &GameTable, count: Count, player: Seat) {
         if t.can(count.capability()) {
-            let n = &mut self.trackers.counts[player.index()][count as usize];
+            let n = &mut self.trackers.counts[player.index()][count.index()];
             *n = n.saturating_add(1);
         }
     }
@@ -351,7 +356,7 @@ impl<L: Layout> State<L> {
     /// which reads it.
     #[inline]
     pub fn counted(&self, count: Count, player: Seat) -> u8 {
-        self.trackers.counts[player.index()][count as usize]
+        self.trackers.counts[player.index()][count.index()]
     }
 }
 

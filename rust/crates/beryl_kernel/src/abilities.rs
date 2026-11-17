@@ -22,7 +22,8 @@ use crate::table::{Capability, GameTable};
 
 /// How many abilities other objects can grant one permanent: the length of
 /// [`crate::object::Derived::granted`].
-const GRANTS: usize = 4;
+const GRANT_LIMIT: u8 = 4;
+const GRANTS: usize = GRANT_LIMIT as usize;
 
 impl<L: Layout> State<L> {
     /// Every ability the object in `slot` has now, in a fixed order: the abilities of its
@@ -52,7 +53,7 @@ impl<L: Layout> State<L> {
         let (granted, next_grant) = if t.can(Capability::Grants) {
             (self.granted_to(slot), 0)
         } else {
-            ([None; GRANTS], GRANTS as u8)
+            ([None; GRANTS], GRANT_LIMIT)
         };
         Abilities {
             state: self,

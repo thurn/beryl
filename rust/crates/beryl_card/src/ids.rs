@@ -82,6 +82,11 @@ pub enum Zone {
 }
 
 impl Zone {
+    /// The index of the zone. Only the first [`Self::OWNED`] indices have per-owner storage.
+    pub const fn index(self) -> usize {
+        self as usize
+    }
+
     /// Zones with a membership bitboard per owner.
     pub const OWNED: usize = 5;
 
@@ -182,6 +187,11 @@ pub enum TurnStep {
 }
 
 impl TurnStep {
+    /// The position of this step in [`Self::ALL`].
+    pub const fn index(self) -> usize {
+        self as usize
+    }
+
     /// Every step, in turn order.
     pub const ALL: [TurnStep; 13] = [
         TurnStep::Untap,

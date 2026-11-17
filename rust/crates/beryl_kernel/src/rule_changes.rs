@@ -106,7 +106,7 @@ impl Rules {
         let mut left = self.0;
         std::iter::from_fn(move || {
             (left != 0).then(|| {
-                let id = left.trailing_zeros() as u8;
+                let id = u8::try_from(left.trailing_zeros()).expect("a rule bit fits in u8");
                 left &= left - 1;
                 RuleId(id)
             })
@@ -175,6 +175,10 @@ pub enum RuleKind {
 }
 
 impl RuleKind {
+    const fn index(self) -> usize {
+        self as usize
+    }
+
     const COUNT: usize = 9;
 
     /// The kind of change `rule` is, or the part of it no code reads.
@@ -370,7 +374,7 @@ impl RuleChanges {
         let id = RuleId(u8::try_from(self.list.len()).expect("fewer than 64 rule changes"));
         self.list.push(rule);
         self.conditions.push(None);
-        self.of_kind[kind as usize] = self.of_kind[kind as usize].with(id);
+        self.of_kind[kind.index()] = self.of_kind[kind.index()].with(id);
         if matches!(rule.what, Governed::CastSpells(Filter::Any)) {
             self.of_every_spell = self.of_every_spell.with(id);
         }
@@ -448,7 +452,7 @@ impl RuleChanges {
 
     #[inline]
     pub(crate) fn of_kind(&self, kind: RuleKind) -> Rules {
-        self.of_kind[kind as usize]
+        self.of_kind[kind.index()]
     }
 
     #[inline]

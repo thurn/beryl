@@ -2,6 +2,12 @@
 //! triggered abilities listen to ([`Listens`]) and what its static abilities replace
 //! ([`Replaces`]).
 
+use beryl_card::Zone;
+
+use crate::layout::Layout;
+
+use super::{Event, Reason};
+
 /// A kind of event a triggered ability can listen to (§6.4). A card's [`Listens`] has one
 /// bit for each, so there may be up to 64.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -33,6 +39,12 @@ pub enum EventKind {
     Mutated,
 }
 
+impl EventKind {
+    const fn bit(self) -> u64 {
+        1 << self as u8
+    }
+}
+
 /// The [`EventKind`]s that a card's triggered abilities listen to, as one 64-bit mask, at
 /// three levels: every card of the game ([`crate::GameTable::listens_any`]), the permanents
 /// on the battlefield now ([`crate::State::listening`]) and the face of one card
@@ -46,7 +58,7 @@ impl Listens {
     /// The mask of one kind of event.
     #[inline]
     pub const fn event(kind: EventKind) -> Listens {
-        Listens(1 << kind as u8)
+        Listens(kind.bit())
     }
 
     /// Whether it listens to events of `kind`.
@@ -114,6 +126,12 @@ pub enum ReplacementKind {
     Damage,
 }
 
+impl ReplacementKind {
+    const fn bit(self) -> u64 {
+        1 << self as u8
+    }
+}
+
 /// What a card's static abilities do that the layers' pass over the battlefield collects:
 /// the [`ReplacementKind`]s they replace, one fact that is no replacement,
 /// [`Replaces::PLAYER_RULE_CHANGE`], and, at the state's level only, whether a permanent may
@@ -145,7 +163,7 @@ impl Replaces {
     /// The mask of one kind of replacement.
     #[inline]
     pub const fn kind(kind: ReplacementKind) -> Replaces {
-        Replaces(1 << kind as u8)
+        Replaces(kind.bit())
     }
 
     /// Whether it replaces events of `kind`.
@@ -194,5 +212,53 @@ impl std::ops::BitOrAssign for Replaces {
     #[inline]
     fn bitor_assign(&mut self, other: Replaces) {
         self.0 |= other.0;
+    }
+}
+
+impl<L: Layout> Event<L> {
+    /// The kind of event a trigger may listen to this as, or `None` if no trigger listens to
+    /// it.
+    pub fn kind(&self) -> Option<EventKind> {
+        Some(match self {
+            Event::ZoneChange {
+                to: Zone::Battlefield,
+                ..
+            } => EventKind::Enters,
+            Event::ZoneChange {
+                reason: Reason::Discard,
+                ..
+            } => EventKind::Discard,
+            Event::Attack { .. } => EventKind::Attack,
+            Event::Damage { .. } => EventKind::Damage,
+            Event::StepBegins { .. } => EventKind::Step,
+            Event::TokensCreated { .. } => EventKind::Tokens,
+            Event::Cast { .. } => EventKind::Cast,
+            Event::Draw { .. } => EventKind::Draw,
+            Event::Targeted { .. } => EventKind::Targeted,
+            Event::Mutated { .. } => EventKind::Mutated,
+            Event::ZoneChange { .. }
+            | Event::DrawCard { .. }
+            | Event::Scry { .. }
+            | Event::TopOrBottom { .. }
+            | Event::LibraryShuffled { .. }
+            | Event::Reveal { .. }
+            | Event::LifeGain { .. }
+            | Event::LifeLoss { .. }
+            | Event::CountersAdded { .. }
+            | Event::CountersRemoved { .. }
+            | Event::Tap { .. }
+            | Event::Untap { .. }
+            | Event::Mana { .. }
+            | Event::ResolutionPayment { .. }
+            | Event::AbilityFinished
+            | Event::StackArrival { .. }
+            | Event::StackDeparture { .. }
+            | Event::Ability { .. }
+            | Event::Block { .. }
+            | Event::GainControl { .. }
+            | Event::CoinFlip { .. }
+            | Event::Lose { .. }
+            | Event::Win { .. } => return None,
+        })
     }
 }

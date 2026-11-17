@@ -55,6 +55,12 @@ pub enum Flag {
     Copy = 1 << 4,
 }
 
+impl Flag {
+    const fn bit(self) -> u8 {
+        self as u8
+    }
+}
+
 /// An object's statuses, one bit per [`Flag`]. Combat is no flag: it is the object's
 /// [`CombatRole`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -65,15 +71,15 @@ impl ObjectFlags {
 
     #[inline]
     pub fn has(self, flag: Flag) -> bool {
-        self.0 & flag as u8 != 0
+        self.0 & flag.bit() != 0
     }
 
     #[inline]
     pub(crate) fn set(&mut self, flag: Flag, on: bool) {
         if on {
-            self.0 |= flag as u8;
+            self.0 |= flag.bit();
         } else {
-            self.0 &= !(flag as u8);
+            self.0 &= !(flag.bit());
         }
     }
 
@@ -85,7 +91,7 @@ impl ObjectFlags {
     /// [`State::move_object`]: crate::State::move_object
     #[inline]
     pub(crate) fn kept_across_zones(self) -> ObjectFlags {
-        ObjectFlags(self.0 & (Flag::Token as u8 | Flag::Copy as u8))
+        ObjectFlags(self.0 & (Flag::Token.bit() | Flag::Copy.bit()))
     }
 }
 
@@ -226,7 +232,7 @@ impl<L: Layout> CombatRole<L> {
                 ..
             } => (Some(*walker), None),
             CombatRole::Blocking { attackers, .. } => (None, Some(attackers.iter())),
-            _ => (None, None),
+            CombatRole::None | CombatRole::Attacking { .. } => (None, None),
         };
         walker.into_iter().chain(attackers.into_iter().flatten())
     }
@@ -243,7 +249,7 @@ impl<L: Layout> CombatRole<L> {
                 *target = AttackTarget::Removed;
             }
             CombatRole::Blocking { attackers, .. } => attackers.remove(slot),
-            _ => {}
+            CombatRole::None | CombatRole::Attacking { .. } => {}
         }
     }
 
@@ -482,7 +488,7 @@ impl<L: Layout> Object<L> {
     pub fn attack_target(&self) -> Option<AttackTarget<L>> {
         match self.combat {
             CombatRole::Attacking { target, .. } => Some(target),
-            _ => None,
+            CombatRole::None | CombatRole::Blocking { .. } => None,
         }
     }
 
@@ -496,7 +502,7 @@ impl<L: Layout> Object<L> {
                 target: AttackTarget::Planeswalker(walker),
                 ..
             } => Some(walker),
-            _ => None,
+            CombatRole::None | CombatRole::Attacking { .. } | CombatRole::Blocking { .. } => None,
         }
     }
 
@@ -515,7 +521,7 @@ impl<L: Layout> Object<L> {
     pub fn blocked_attackers(&self) -> SlotSet<L> {
         match self.combat {
             CombatRole::Blocking { attackers, .. } => attackers,
-            _ => SlotSet::EMPTY,
+            CombatRole::None | CombatRole::Attacking { .. } => SlotSet::EMPTY,
         }
     }
 
@@ -725,9 +731,9 @@ macro_rules! ability_mask {
             }
 
             #[inline]
-            #[allow(clippy::cast_possible_truncation)]
             fn from_bits(bits: u64) -> Self {
-                bits as $bits
+                let low_bits = bits & u64::from(<$bits>::MAX);
+                <$bits>::try_from(low_bits).expect("masked to the layout's ability width")
             }
         }
     )*};

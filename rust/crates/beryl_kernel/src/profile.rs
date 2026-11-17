@@ -95,7 +95,7 @@ impl StepStops {
 
 /// [`StepStops`]' bit for `step`.
 const fn bit(step: TurnStep) -> u16 {
-    1 << step as u16
+    1 << step.index()
 }
 
 /// The budgets whose exhaustion is `Outcome::Stalled` (architecture §12.3).

@@ -78,13 +78,13 @@ impl SubtypeNumbers {
         }
         let mut numbers = vec![UNNUMBERED; Subtype::ALL.len()];
         for (n, &subtype) in subtypes.iter().enumerate() {
-            numbers[subtype as usize] = u8::try_from(n).expect("at most 127 numbers");
+            numbers[subtype.index()] = u8::try_from(n).expect("at most 127 numbers");
         }
         let tests = Subtype::ALL
             .iter()
             .map(|&subtype| {
                 let mask = GameSubtypes::NONE;
-                let mask = match numbers[subtype as usize] {
+                let mask = match numbers[subtype.index()] {
                     UNNUMBERED => mask,
                     n => mask.with_bit(usize::from(n)),
                 };
@@ -105,7 +105,7 @@ impl SubtypeNumbers {
     /// The number of `subtype` in the game, if its cards name it.
     #[inline]
     fn number(&self, subtype: Subtype) -> Option<usize> {
-        let n = self.numbers[subtype as usize];
+        let n = self.numbers[subtype.index()];
         (n != UNNUMBERED).then_some(usize::from(n))
     }
 
@@ -144,7 +144,7 @@ impl SubtypeNumbers {
     /// The test of whether a set has `subtype`: one AND, to ask of many sets.
     #[inline]
     pub fn has(&self, subtype: Subtype) -> HasSubtype {
-        self.tests[subtype as usize]
+        self.tests[subtype.index()]
     }
 
     /// A face's printed subtypes by the game's numbers. Every one is numbered, but those of

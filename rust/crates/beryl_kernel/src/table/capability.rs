@@ -189,7 +189,7 @@ impl Capability {
                     Node::Condition(Condition::DrewInDrawStep(_)) => {
                         Capability::DrewInDrawStep.bit()
                     }
-                    _ => 0,
+                    Node::Filter(_) | Node::Amount(_) | Node::Condition(_) | Node::Objects(_) => 0,
                 };
             });
         }
@@ -204,20 +204,15 @@ impl Capability {
 
 /// Whether `effect`, or an instruction it holds, copies the spell whose ability it is.
 fn copies_itself(effect: &Effect) -> bool {
-    match *effect {
-        Effect::CopySpell {
-            spells: Objects::This,
-            ..
-        } => true,
-        Effect::Sequence(effects) => effects.iter().any(copies_itself),
-        Effect::If {
-            then, otherwise, ..
-        } => copies_itself(then) || otherwise.is_some_and(copies_itself),
-        Effect::May { effect, .. }
-        | Effect::Unless { effect, .. }
-        | Effect::ForEachPlayer { effect, .. } => copies_itself(effect),
-        _ => false,
-    }
+    effect.any(&|instruction| {
+        matches!(
+            instruction,
+            Effect::CopySpell {
+                spells: Objects::This,
+                ..
+            }
+        )
+    })
 }
 
 /// The event kinds trigger matching looks for away from the faces of the battlefield's

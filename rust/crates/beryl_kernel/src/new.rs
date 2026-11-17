@@ -92,12 +92,13 @@ impl<L: Layout> State<L> {
                 };
                 // A slot for each card of the deck, which was just found to fit.
                 s.zones.library[player.index()].push_bounded(slot);
-                s.zones.members[player.index()][Zone::Library as usize].insert(slot);
+                s.zones.members[player.index()][Zone::Library.index()].insert(slot);
             }
         }
         // CR 103.1: "the players determine which one of them will choose who takes the first
         // turn ... (flipping a coin, rolling dice, etc.)".
-        let chooser = Seat::new(s.rng.other.below(2) as u8);
+        let chooser =
+            Seat::new(u8::try_from(s.rng.other.below(2)).expect("the chooser is seat 0 or 1"));
         s.pending = Pending::PlayOrDraw { chooser };
         Ok(s)
     }

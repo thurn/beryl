@@ -80,7 +80,7 @@ impl PlayerSet {
     #[inline]
     pub fn sole(self) -> Option<Seat> {
         if self.count() == 1 {
-            Seat::try_new(self.0.trailing_zeros() as u8)
+            Seat::try_new(u8::try_from(self.0.trailing_zeros()).expect("a seat bit fits in u8"))
         } else {
             None
         }

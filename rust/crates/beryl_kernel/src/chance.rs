@@ -216,7 +216,7 @@ fn partner<L: Layout>(
     settled: Bitboard<L::Slot>,
 ) -> Option<L::Slot> {
     let o = s.object(slot);
-    if o.zone as usize >= Zone::OWNED {
+    if o.zone.index() >= Zone::OWNED {
         return None;
     }
     (s.zone(ZoneKey::Of(o.owner, o.zone)) & !settled)

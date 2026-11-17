@@ -104,7 +104,7 @@ impl<T: Clone, const N: usize> Fixed<T, N> {
                 kept += 1;
             }
         }
-        self.len = kept as u8;
+        self.len = u8::try_from(kept).expect("retain cannot increase the length");
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, T> {

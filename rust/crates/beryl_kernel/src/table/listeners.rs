@@ -70,8 +70,10 @@ impl GameTable {
         face: FaceIx,
         kind: EventKind,
     ) -> impl Iterator<Item = &Listener> {
-        let from = self.listeners_from[card.index()] as usize;
-        let to = self.listeners_from[card.index() + 1] as usize;
+        let from = usize::try_from(self.listeners_from[card.index()])
+            .expect("a listener offset fits in usize");
+        let to = usize::try_from(self.listeners_from[card.index() + 1])
+            .expect("a listener offset fits in usize");
         self.listeners[from..to]
             .iter()
             .filter(move |l| l.kind == kind && l.face == face)
@@ -88,8 +90,10 @@ impl GameTable {
         face: FaceIx,
         kind: EventKind,
     ) -> impl Iterator<Item = &Listener> {
-        let from = self.away_from[card.index()] as usize;
-        let to = self.away_from[card.index() + 1] as usize;
+        let from =
+            usize::try_from(self.away_from[card.index()]).expect("a listener offset fits in usize");
+        let to = usize::try_from(self.away_from[card.index() + 1])
+            .expect("a listener offset fits in usize");
         self.away_listeners[from..to]
             .iter()
             .filter(move |l| l.kind == kind && l.face == face)

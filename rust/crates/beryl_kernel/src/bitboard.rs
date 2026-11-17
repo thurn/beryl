@@ -174,7 +174,9 @@ impl<S: SlotId> Iterator for Slots<S> {
             if *word != 0 {
                 let bit = word.trailing_zeros();
                 *word &= *word - 1;
-                return Some(S::from_index(i * 64 + bit as usize));
+                return Some(S::from_index(
+                    i * 64 + usize::try_from(bit).expect("a bit index fits in usize"),
+                ));
             }
         }
         None

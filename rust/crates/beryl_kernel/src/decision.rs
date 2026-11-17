@@ -180,7 +180,9 @@ impl<L: Layout> Candidates<L> {
 
     pub fn len(&self) -> usize {
         match self {
-            Candidates::Objects(b) => b.count() as usize,
+            Candidates::Objects(b) => {
+                usize::try_from(b.count()).expect("a bit count fits in usize")
+            }
             Candidates::Options(o) => o.len(),
         }
     }

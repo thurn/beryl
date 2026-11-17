@@ -82,7 +82,7 @@ impl<L: Layout> State<L> {
             let o = self.object_mut(slot);
             o.flags.set(Flag::PhasedOut, true);
             let owner = o.owner.index();
-            self.zones.members[owner][Zone::Battlefield as usize].remove(slot);
+            self.zones.members[owner][Zone::Battlefield.index()].remove(slot);
             self.phased_out.insert(slot);
         }
         self.flags.derived_dirty = true;
@@ -117,7 +117,7 @@ impl<L: Layout> State<L> {
                 o.attached_to = None;
             }
             let owner = o.owner.index();
-            self.zones.members[owner][Zone::Battlefield as usize].insert(slot);
+            self.zones.members[owner][Zone::Battlefield.index()].insert(slot);
         }
         self.forget_phased_out_under(slots);
         self.flags.derived_dirty = true;

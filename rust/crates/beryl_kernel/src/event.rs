@@ -342,32 +342,6 @@ pub enum Event<L: Layout = Small> {
 
 impl Copy for Event<Small> {}
 
-impl<L: Layout> Event<L> {
-    /// The kind of event a trigger may listen to this as, or `None` if no trigger listens to
-    /// it.
-    pub fn kind(&self) -> Option<EventKind> {
-        Some(match self {
-            Event::ZoneChange {
-                to: Zone::Battlefield,
-                ..
-            } => EventKind::Enters,
-            Event::ZoneChange {
-                reason: Reason::Discard,
-                ..
-            } => EventKind::Discard,
-            Event::Attack { .. } => EventKind::Attack,
-            Event::Damage { .. } => EventKind::Damage,
-            Event::StepBegins { .. } => EventKind::Step,
-            Event::TokensCreated { .. } => EventKind::Tokens,
-            Event::Cast { .. } => EventKind::Cast,
-            Event::Draw { .. } => EventKind::Draw,
-            Event::Targeted { .. } => EventKind::Targeted,
-            Event::Mutated { .. } => EventKind::Mutated,
-            _ => return None,
-        })
-    }
-}
-
 /// An event a recording sink kept, with what the rules were doing as it happened.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Tagged<L: Layout = Small> {

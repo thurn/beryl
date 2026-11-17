@@ -290,6 +290,13 @@ impl Keywords {
 
 include!(concat!(env!("OUT_DIR"), "/subtypes.rs"));
 
+impl Subtype {
+    /// The position of this subtype in [`Self::ALL`].
+    pub const fn index(self) -> usize {
+        self as usize
+    }
+}
+
 /// A set of [`Subtype`]s, one bit each.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Subtypes(pub [u64; SUBTYPE_WORDS]);

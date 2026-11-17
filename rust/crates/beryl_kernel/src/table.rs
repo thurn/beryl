@@ -643,7 +643,7 @@ impl FaceFacts {
         let mut left = self.activated;
         std::iter::from_fn(move || {
             (left != 0).then(|| {
-                let i = left.trailing_zeros() as u8;
+                let i = u8::try_from(left.trailing_zeros()).expect("an ability bit fits in u8");
                 left &= left - 1;
                 AbilityIx::new(i)
             })

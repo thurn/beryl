@@ -156,7 +156,7 @@ impl<L: Layout> State<L> {
                 .zones
                 .members
                 .iter()
-                .fold(Bitboard::EMPTY, |all, owned| all | owned[zone as usize]),
+                .fold(Bitboard::EMPTY, |all, owned| all | owned[zone.index()]),
         }
     }
 }
