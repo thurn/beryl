@@ -392,8 +392,11 @@ fn place_group<'a>(
             // of a pile do, where the web's peek toward their controller. A card nearer the viewer
             // is nearer the camera, which the interface checks and the hit test take for in front,
             // so one peeking out below its permanent would read as covering it. A land keeps them
-            // level, as the web keeps them clear of the badges above the lands' row.
-            let rise = if object.types.contains(&CardType::Land) {
+            // level, as the web keeps them clear of the badges above the lands' row. So does every
+            // permanent on the phone layout, whose rows stand only a few millimetres apart: cards
+            // rising from the back row would reach into the creatures' row, and with a stack item
+            // over that row's other edge a creature there would keep no square a press can reach.
+            let rise = if object.types.contains(&CardType::Land) || rules.layout.phone.is_some() {
                 0.0
             } else {
                 step.y * CARD_HEIGHT

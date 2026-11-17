@@ -21,9 +21,11 @@
 //!   card there could not keep a pointable square.
 //! - The middle band, between the two creatures' rows, is 50 millimetres of table: 44 points at
 //!   375 by 647, as tall as the web's middle while the stack is empty. The stack's items stand
-//!   about its middle at the web's size, 68 points wide, and reach over the creatures' rows by
-//!   up to 25 points; the rows never move when a spell is cast and the camera stays where it
-//!   is, so each creature keeps most of its height uncovered.
+//!   about its middle and reach over the creatures' rows; the rows never move when a spell is
+//!   cast and the camera stays where it is. An item keeps the web's size, 68 points wide, where
+//!   the band is tall enough, as at 393 by 759 and 430 by 932, and is smaller where it is not
+//!   (`stack_height`), 51 points wide at 375 by 647, so that a tapped creature, 56 points tall
+//!   there, keeps an uncovered strip a press can reach.
 //! - Hands, piles, the stack and the players' anchors are placed relative to the camera, at
 //!   the web's places in points, converted for each window when the layout is made
 //!   (`layout`), never on the frame path.
@@ -35,6 +37,8 @@ use super::{
     CARD_HEIGHT, CARD_WIDTH, Camera, CameraData, DESKTOP, HandData, Layout, PlayerAnchor, RowArea,
     Window,
 };
+use crate::agent::hit::CELL;
+use crate::data::audit;
 use crate::data::space::layout::phone as data;
 use crate::input::Rect;
 use crate::pose::Pose;
@@ -281,6 +285,28 @@ pub(super) fn stack_pose(index: usize, count: usize, data: &PhoneStack, camera: 
     camera.screen_pose(ndc, depth, Quat::IDENTITY, height / size.height)
 }
 
+/// How tall a stack item stands on the phone, in logical points, with its middle at `middle`:
+/// the web interface's size, 68 points wide, unless that would leave a tapped creature in
+/// either side's row less than a press can reach. Each creature must keep a strip the phone's
+/// touch target tall and a cell of the hit test's grid more at each edge, between the item and
+/// its far edge, so that the rows can stay where they are while a spell is on the stack.
+fn stack_height(camera: &Camera, middle: f32) -> f32 {
+    let uncovered = audit::PHONE_TARGET_POINTS + 2.0 * CELL;
+    // A tapped card lies across its row, so its height on the table is a card's width.
+    let half = CARD_WIDTH / 2.0;
+    let reach = [data::creatures::Y, -data::creatures::Y]
+        .map(|row| {
+            let far = [row - half, row + half]
+                .map(|y| (camera.to_screen(Vec3::new(0.0, y, 0.0)).y - middle).abs())
+                .into_iter()
+                .fold(0.0, f32::max);
+            far - uncovered
+        })
+        .into_iter()
+        .fold(f32::INFINITY, f32::min);
+    (data::stack::WIDTH / RATIO).min(2.0 * reach)
+}
+
 /// A point of `window`, in logical points from its top left corner, in normalized device
 /// coordinates.
 fn ndc(window: Window, x: f32, y: f32) -> Vec2 {
@@ -374,7 +400,7 @@ pub fn layout(window: Window) -> Layout {
     };
     let stack = PhoneStack {
         middle: bands.middle.middle(),
-        height: data::stack::WIDTH / RATIO,
+        height: stack_height(&camera, bands.middle.middle()),
         step: data::stack::STEP,
         left: bands.left,
         right: bands.right,

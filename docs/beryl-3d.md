@@ -1286,7 +1286,11 @@ Each side has two rows, as on the desktop, because the web's separate lands and
 other-permanents bands are too short for the phone's touch target. The middle
 band between the creatures' rows stays the same height whether or not the stack
 holds anything, and the stack's items stand side by side about its middle, in
-rows over the battlefield when there are more than fit across.
+rows over the battlefield when there are more than fit across. The rows never
+move for the stack, so an item keeps the web's size, 68 points wide, only where
+the band is tall enough: at 375 by 647 it is 51 points wide, so that a tapped
+creature under it, 56 points tall there, keeps an uncovered strip of 44 points
+and a cell of the hit test's grid at each edge (`stack_height`).
 
 ### Objects and placement
 
@@ -1417,8 +1421,10 @@ flight start exactly where the card was.
   tucks the cards a permanent holds, and the row leaves room for them. They peek
   away from the viewer on both sides, where the web's peek toward their
   controller: a card nearer the viewer is nearer the camera, which the interface
-  checks and the hit test take for in front. The tree places them
-  `merged.<side>.<row>`.
+  checks and the hit test take for in front. Under a land, and under every
+  permanent on the phone layout, they stay level instead: the phone's rows stand
+  only a few millimetres apart, so a card rising from the back row would reach
+  into the creatures' row. The tree places them `merged.<side>.<row>`.
 - **A phased-out permanent stays where it lay, faded** to 40% opacity
   (`card.phased_out_opacity`), and the tree marks it `phased-out`. **A copy**
   shows the copied card's face and name, and the tree names the card it really

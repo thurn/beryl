@@ -426,6 +426,52 @@ fn the_stack_stands_in_the_middle_band_with_the_top_item_right_and_in_front() {
 }
 
 #[test]
+fn a_stack_item_leaves_every_tapped_creature_under_it_reachable() {
+    let mut view = ViewBuilder::new();
+    view.card(ZoneName::Stack, Side::You, "Spell");
+    for side in [Side::You, Side::Opponent] {
+        for index in 0..4 {
+            let card = view.card(ZoneName::Battlefield, side, &format!("Bear {index}"));
+            card.types = vec![CardType::Creature];
+            card.tapped = true;
+        }
+    }
+    let stack = Place::Card {
+        zone: ZoneName::Stack,
+        side: Side::You,
+        row: None,
+    };
+    for (width, height) in PHONES {
+        let window = phone(width, height);
+        let frame = frame_in(window, &view);
+        let item = bounds(cards_at(&frame, stack)[0]);
+        // At 375 by 647, the shortest middle band, the item stands over both creatures' rows,
+        // so the test judges what it covers.
+        for side in [Side::You, Side::Opponent]
+            .into_iter()
+            .filter(|_| height < 700.0)
+        {
+            let row = cards_at(&frame, battlefield_place(side, RowName::Creatures));
+            assert_eq!(row.len(), 4, "{width}x{height} {side:?}");
+            assert!(
+                row.iter().any(|card| {
+                    let [left, top, right, bottom] = bounds(card);
+                    left < item[2] && item[0] < right && top < item[3] && item[1] < bottom
+                }),
+                "{width}x{height}: the item {item:?} covers part of the {side:?} row"
+            );
+        }
+        // At least as tall as the middle band, which is no shorter than the touch target.
+        assert!(item[3] - item[1] >= 44.0, "{width}x{height}: {item:?}");
+        assert_eq!(
+            card_faults(&frame, window, reachable),
+            Vec::<String>::new(),
+            "{width}x{height}"
+        );
+    }
+}
+
+#[test]
 fn each_pile_lies_in_its_players_strip() {
     let view = ViewBuilder::sample();
     for (width, height) in PHONES {
