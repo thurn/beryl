@@ -10,6 +10,7 @@
 //!
 //! [CR 704.5j]: https://yawgatog.com/resources/magic-rules/#R7045j
 
+use beryl_card::FaceIx;
 use beryl_engine::state::CounterKind;
 use beryl_engine::{
     Choice, DecisionKind, GameTable, Opt, Replay, Scratch, Seat, Slot, State, Step, TurnStep, Zone,
@@ -22,6 +23,64 @@ use crate::{CARDS, names};
 
 const STAGE: &str = "Thespian's Stage";
 const DEPTHS: &str = "Dark Depths";
+
+/// Under [CR 712.6d], "If a permanent is copying the back face of a nonmodal double-faced
+/// permanent (even if the object representing that copy is itself a double-faced permanent),
+/// the mana value of that permanent is 0."
+///
+/// [CR 712.6d]: https://yawgatog.com/resources/magic-rules/#R7126d
+#[test]
+fn a_card_copying_a_transformed_back_face_has_mana_value_zero() {
+    const JACE: &str = names::JACE_VRYNS_PRODIGY;
+    const GEMRAZER: &str = names::GEMRAZER;
+    const SCENARIO: Scenario = Scenario::new("a nontoken copy of Jace, Telepath Unbound")
+        .permanents(P0, &[Permanent::new(JACE).transformed()])
+        .battlefield(P1, &[JACE])
+        .hand(P0, &[GEMRAZER])
+        .hand(P1, &[GEMRAZER]);
+    let (table, mut state) = beryl_scenario::position(&CARDS, &SCENARIO).unwrap();
+    let [original, copy] = Seat::BOTH.map(|seat| {
+        state
+            .battlefield()
+            .iter()
+            .copied()
+            .find(|&slot| state.object(slot).owner() == seat)
+            .unwrap()
+    });
+    let source = state.card_behind(copy).unwrap();
+    state
+        .become_copy(source, state.object_ref(copy), state.copiable(original))
+        .unwrap();
+    assert_eq!(
+        [original, copy].map(|slot| state.mana_value(&table, slot)),
+        [2, 0]
+    );
+
+    // A merge under either permanent keeps the origin of its top face.
+    let mut scratch = Scratch::new();
+    for (seat, permanent, mana_value) in [(P0, original, 2), (P1, copy, 0)] {
+        let component = Slot::all()
+            .find(|&slot| state.zone(ZoneKey::Of(seat, Zone::Hand)).contains(slot))
+            .unwrap();
+        state.board().place(component, Zone::Stack).unwrap();
+        state
+            .merge(
+                &mut scratch.events,
+                state.object_ref(component),
+                FaceIx::FRONT,
+                state.object_ref(permanent),
+                false,
+            )
+            .unwrap();
+        assert_eq!(state.mana_value(&table, permanent), mana_value);
+    }
+
+    // Copying the merged original still copies its back face.
+    state
+        .become_copy(source, state.object_ref(copy), state.copiable(original))
+        .unwrap();
+    assert_eq!(state.mana_value(&table, copy), 0);
+}
 
 /// P0's Thespian's Stage becomes a copy of P0's Dark Depths, which has its ten ice counters.
 /// The scenario stops as the legend rule asks which to keep.

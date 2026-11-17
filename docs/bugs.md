@@ -6,6 +6,14 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A nontoken copying Jace, Telepath Unbound had mana value 2.**
+  `State::mana_value` used token status to recognize copied back faces (CR
+  712.6d). The query now checks whether the effective face comes from a copy
+  effect or from the permanent's own top component.
+  `a_card_copying_a_transformed_back_face_has_mana_value_zero` compares the
+  original and the nontoken copy and checks that merging a card underneath
+  either keeps its mana value.
+
 - **A granted ability could define both power and toughness.** The card table
   refused granted abilities that define power alone, but accepted the variant
   that defines both values. The layer reader requires an ability from the card's

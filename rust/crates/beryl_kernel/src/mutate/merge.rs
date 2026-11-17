@@ -54,6 +54,11 @@ impl<L: Layout> State<L> {
         let values: Copiable<L> = self
             .copiable(onto.slot)
             .merged_with(definition, face, top)?;
+        let values = if top || !self.has_copied_face(onto.slot) {
+            values.with_component_face()
+        } else {
+            values
+        };
         self.move_object(sink, card.slot, Zone::Merged, Place::Top)?;
         self.remember(card.slot, Memo::PartOf(onto.slot))?;
         // Over a face-down permanent, the merged permanent is face up and every player sees

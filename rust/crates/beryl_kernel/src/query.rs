@@ -2,7 +2,7 @@
 //!
 //! A slot holds the game index of a definition and the face that is up. Neither is an answer:
 //! a token's definition is no card, a face-down permanent's says nothing of what it is, a
-//! copy of a back face has no mana value, and a controller is a layer result on the
+//! copy of a back face has mana value 0, and a controller is a layer result on the
 //! battlefield and the owner in a library. So no other crate reads the index: it asks one of
 //! these, each named for its rule.
 //!
@@ -91,21 +91,29 @@ impl<L: Layout> State<L> {
         }
     }
 
+    /// Whether a copy effect supplies the face in `slot` (see CR 712.6d). A merge uses
+    /// the same store for the characteristics of its top component (see CR 731.2a).
+    #[inline]
+    pub(crate) fn has_copied_face(&self, slot: L::Slot) -> bool {
+        self.object(slot).flags.has(Flag::Copy) && !self.copy_effect(slot).has_component_face()
+    }
+
     /// The mana value of the object in `slot` ([CR 202.3]): "The mana value of an object is a
     /// number equal to the total amount of mana in its mana cost, regardless of color." A spell's
     /// counts its X ([CR 202.3e]): "X is treated as the number chosen for it while the object is on
     /// the stack."
     ///
-    /// [CR 712.6d](https://yawgatog.com/resources/magic-rules/#R7126d): a transforming double-faced
-    /// permanent with its back face up "has only the characteristics of its back face. However, its
-    /// mana value is calculated using the mana cost of its front face. If a permanent is copying
-    /// the back face of a nonmodal double-faced permanent (even if the object representing that
-    /// copy is itself a double-faced permanent), the mana value of that permanent is 0." A token
-    /// with a double-faced card's faces is always such a copy ([CR 707.8a]). A face-down permanent
-    /// has no mana cost (CR 708.2a), so 0.
+    /// Under [CR 712.6d], a nonmodal double-faced permanent with its back face up "has only the
+    /// characteristics of its back face. However, its mana value is calculated using the mana cost
+    /// of its front face. If a permanent is copying the back face of a nonmodal double-faced
+    /// permanent (even if the object representing that copy is itself a double-faced permanent),
+    /// the mana value of that permanent is 0." A token with a double-faced card's faces also
+    /// copies the back face when it has it up ([CR 707.8a]). A face-down permanent has no mana
+    /// cost (CR 708.2a), so 0.
     ///
     /// [CR 202.3]: https://yawgatog.com/resources/magic-rules/#R2023
     /// [CR 202.3e]: https://yawgatog.com/resources/magic-rules/#R2023e
+    /// [CR 712.6d]: https://yawgatog.com/resources/magic-rules/#R7126d
     /// [CR 707.8a]: https://yawgatog.com/resources/magic-rules/#R7078a
     #[inline]
     pub fn mana_value(&self, t: &GameTable, slot: L::Slot) -> u8 {
@@ -124,7 +132,7 @@ impl<L: Layout> State<L> {
         let up = t.def(o.card).face(o.face);
         if !up.transformed {
             up.cost.mana_value()
-        } else if o.is_token() {
+        } else if o.is_token() || self.has_copied_face(slot) {
             0
         } else {
             t.def(o.card).front().cost.mana_value()

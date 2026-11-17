@@ -48,6 +48,8 @@ pub struct Copiable<L: Layout = Small> {
     /// The colors an exception's color words read as through the text changes of the spell or
     /// ability that made the copy, where those changed them ([`Copiable::with_addition_read`]).
     read: ReadColors,
+    /// A merge can store the face of its own top component in a copy effect (see CR 731.2a).
+    component_face: bool,
 }
 
 /// The colors one of a copy's exceptions sets ([`CopyChange::Colors`]), read through the text
@@ -107,6 +109,7 @@ impl<L: Layout> crate::relayout::Relayout for Copiable<L> {
             face: self.face,
             additions: relayout_additions::<L, M>(self.additions),
             read: self.read,
+            component_face: self.component_face,
         }
     }
 }
@@ -170,6 +173,7 @@ impl<L: Layout> Copiable<L> {
             face: FaceIx::FRONT,
             additions: L::Additions::NONE,
             read: ReadColors::NONE,
+            component_face: false,
         }
     }
 
@@ -182,6 +186,7 @@ impl<L: Layout> Copiable<L> {
             face: o.face,
             additions: L::Additions::NONE,
             read: ReadColors::NONE,
+            component_face: false,
         }
     }
 
@@ -293,6 +298,18 @@ impl<L: Layout> Copiable<L> {
             read: copied.read,
             ..self
         }
+    }
+
+    /// Marks values stored for a merged permanent whose top component supplies its own face
+    /// (see CR 731.2a). Reading the permanent's copiable values leaves this marker behind.
+    #[must_use]
+    pub(crate) fn with_component_face(mut self) -> Self {
+        self.component_face = true;
+        self
+    }
+
+    pub(crate) fn has_component_face(&self) -> bool {
+        self.component_face
     }
 
     /// Whether a state of layout `M` holds these values: whether `M` has room for their
