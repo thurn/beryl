@@ -54,7 +54,10 @@ whole report. It runs `just b3d test` on the desktop and phone windows, or reads
 their `--json` outputs from `--results <dir>` (`desktop.json`, `phone.json`).
 `just b3d parity --check` fails when `data/beryl3d/parity.json` misses a skill
 directory or a web screen file or names something gone; it is the sweep's
-`parity-list` step.
+`parity-list` step. `just b3d bug <report>` prints a Beryl 3D bug report and the
+commands that bring the app back to its state;
+`just b3d app --replay <replay.json>` resumes the game of a replay file, such as
+a report's, at its latest decision and saves nothing.
 
 Each crate's integration tests are one binary, `tests/all/main.rs` with one
 module per file, because every test binary links the crate and its dependencies

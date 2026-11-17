@@ -74,6 +74,12 @@ just b3d perf verbs-zones --verbs               # frame timing of a fixture play
   the desktop and phone windows, a minute or two; `--results <dir>` reads saved
   `test --json` outputs instead. `--check` only checks that
   `data/beryl3d/parity.json` maps every skill and web screen file.
+- **`bug <report>`** prints a Beryl 3D bug report (a folder, or an id, id prefix
+  or bead of one): its words, the commit it was built from, the first 60 lines
+  of `tree.txt`, the frame log's summary and the commands that reproduce it:
+  `tree` and `png` at the recording's moment for a report saved while a
+  recording replayed, or `just b3d app --replay <folder>/replay.json` and
+  `just b3d live tree` for a live game. A web report says so.
 
 Pictures are drawn in the Baseline tier with placeholder card faces, and text in
 the table is not drawn yet.

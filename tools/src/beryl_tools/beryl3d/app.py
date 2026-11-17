@@ -76,6 +76,10 @@ def choose_window(window: str | None, run_for: str | None, agent: bool) -> str:
 
 def app_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--fixture", help="replay this recording instead of a game")
+    parser.add_argument(
+        "--replay",
+        help="resume the game of this replay file (a bug report's replay.json), saving none",
+    )
     parser.add_argument("--pause-at", help="stop the clock at this moment (1500ms)")
     parser.add_argument("--for", dest="run_for", help="end the run after this long")
     parser.add_argument(
@@ -125,6 +129,7 @@ def run_app(args: argparse.Namespace) -> int:
     command = [str(BINARY), "--window", window]
     for option, value in (
         ("--fixture", args.fixture),
+        ("--replay", args.replay),
         ("--pause-at", args.pause_at),
         ("--for", args.run_for),
         ("--drive", args.drive),

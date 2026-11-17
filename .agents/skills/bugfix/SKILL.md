@@ -231,6 +231,21 @@ interpretation: deciding what the player is asking for is your first job
    - Errors: search `journal.jsonl` and `ui.json` for `"level":"error"`,
      `"warn"`, `panic` and `refused`.
 
+   **Beryl 3D reports.** A report whose `ui.json` names Beryl 3D as its client
+   came from the native client (docs/beryl-3d.md, "Bug reports"); the steps
+   above stay the web interface's. Run `just b3d bug <report>` first: it prints
+   the player's words, the commit, the frozen frame's element tree and the
+   frame log's summary, and then the commands that reproduce the report. Run
+   them next:
+
+   - A report saved while a recording replayed:
+     `just b3d tree <recording> --seat <seat> --at <at>ms` and `png` with the
+     same moment show the frozen frame (the `b3d` skill).
+   - A report from a live game:
+     `just b3d app --replay <folder>/replay.json --window none --for 120s`
+     resumes the game at its latest decision without saving it, and
+     `just b3d live tree`, `live png` and `live do` look at and drive it.
+
 2. **Fix and verify** rules and UI bugs through a worktree as AGENTS.md says.
    Enact has already claimed the bead for you.
    Identify the shared mechanism responsible for the complaint and fix it at

@@ -4078,6 +4078,17 @@ How it works (`beryl_scene`'s `screens::bug_report` and `client/bug.rs`, and
   and prints its path, since winit has no save dialog.
 - A drive script's or `just b3d live do`'s `key` action takes modifiers, as in
   `key Cmd+B`.
+- A report saved while a recording replays also records, in its `ui.json` log,
+  the `recording`, its `seat`, `at` (the milliseconds of the recording at the
+  freeze, on the test driver's clock) and `ended` (whether its last script had
+  ended by then), so `just b3d tree <recording> --at <at>ms` (or `--at end`)
+  shows the frozen frame again with no game.
+- `beryl3d --replay <replay.json>` (`just b3d app --replay`) resumes the game of
+  a replay file at its latest decision, as launching resumes the newest game
+  (`Sessions::resume_replay`), and saves nothing: the file is the report's, and
+  a game saved among the replays would be the one the next launch resumes.
+- `just b3d bug <report>` prints a report's words, commit, element tree and
+  frame log summary, and the commands above that reproduce it.
 
 ## Migration and compatibility
 

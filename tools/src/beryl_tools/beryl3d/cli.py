@@ -23,6 +23,7 @@ from .. import caches, cargo_pool, deadline, system, tokens, warm
 from .. import paths as repo_paths
 from . import (
     app,
+    bug,
     camera,
     gate,
     lane,
@@ -385,6 +386,7 @@ MODULES: tuple[ModuleType, ...] = (
     perf,
     spec,
     motion_film,
+    bug,
 )
 
 OWN_COMMANDS: tuple[Command, ...] = (

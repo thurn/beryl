@@ -55,8 +55,9 @@ pub struct Finished {
 enum Source {
     /// The session thread, which takes the client's commands.
     Live(Commands),
-    /// A recording, replayed on the frame thread.
-    Fixture(Fixture),
+    /// A recording, replayed on the frame thread; boxed, being several times the size of
+    /// `Live`.
+    Fixture(Box<Fixture>),
 }
 
 /// What the app adds to the host's frame loop.
@@ -82,6 +83,8 @@ struct AppFeed {
     saver: Option<Saver>,
     /// The bug report's picture, tree and views, and where reports go.
     bugs: Bugs,
+    /// The host's clock at the latest frame, in nanoseconds.
+    clock: u64,
     /// The socket `just b3d live` speaks to, in a build that has one.
     #[cfg(all(feature = "tools", unix))]
     live: Option<crate::live::Live>,
@@ -126,7 +129,7 @@ impl AppFeed {
     fn replay(&mut self, name: &str, seat: Side) {
         match Fixture::new(name, seat) {
             Ok(fixture) => {
-                self.source = Some(Source::Fixture(fixture));
+                self.source = Some(Source::Fixture(Box::new(fixture)));
                 self.ended = false;
             }
             Err(error) => eprintln!("beryl3d: {error}"),
@@ -189,6 +192,7 @@ impl Feed for AppFeed {
     }
 
     fn before(&mut self, client: &mut Client, clock: u64) {
+        self.clock = clock;
         if let Some(Source::Fixture(fixture)) = &mut self.source {
             if let Some(cards) = fixture.cards() {
                 client.handle(Input::Cards(Box::new(cards)));
@@ -233,6 +237,7 @@ impl Feed for AppFeed {
             fixture.settled(client);
             if !self.ended && fixture.ended(client) {
                 self.ended = true;
+                fixture.finished_at(ticked.clock);
                 println!("{FIXTURE_ENDED} at {:.1} ms", ticked.clock as f64 / 1e6);
                 summarize = self.finish == Finish::AtFixtureEnd;
             }
@@ -290,7 +295,13 @@ impl Feed for AppFeed {
             }
             #[cfg(feature = "tools")]
             Request::Replay { name, seat } => self.replay(name, *seat),
-            Request::FreezeFrame => self.bugs.freeze(),
+            Request::FreezeFrame => {
+                let replayed = match &self.source {
+                    Some(Source::Fixture(fixture)) => Some(fixture.replayed_at(self.clock)),
+                    _ => None,
+                };
+                self.bugs.freeze(replayed);
+            }
             Request::SaveBug { .. } => {
                 let log = self.log.borrow();
                 let frame_log = log.as_ref().and_then(|log| log.as_ref().ok());
@@ -370,7 +381,7 @@ pub(crate) fn phone_feed(
     display_hz: f32,
 ) -> Box<dyn Feed> {
     phone_app(
-        Source::Fixture(fixture),
+        Source::Fixture(Box::new(fixture)),
         Some(name.to_owned()),
         log_dir,
         display_hz,
@@ -454,6 +465,7 @@ fn phone_app(
         audio: None,
         saver: None,
         bugs,
+        clock: 0,
         #[cfg(all(feature = "tools", unix))]
         live: None,
     })
@@ -494,6 +506,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         audio: Some(audio),
         saver,
         bugs: Bugs::desktop(),
+        clock: 0,
         #[cfg(all(feature = "tools", unix))]
         live: None,
     };
@@ -565,21 +578,25 @@ pub fn run(options: &Options) -> Result<Finished, String> {
 
 /// The session thread, or with `--fixture` the recording. With `--agent`, the session starts a
 /// fresh game that the agent plays for the viewer, and keeps no replay or ledger, so that
-/// neither app has an unfinished game of it to resume.
+/// neither app has an unfinished game of it to resume. With `--replay`, it resumes that file's
+/// game and likewise keeps none.
 // Only the recording can fail to start, and only a build with `tools` has one.
 #[cfg_attr(not(feature = "tools"), expect(clippy::unnecessary_wraps))]
 fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
     #[cfg(feature = "tools")]
     if let Some(name) = &options.fixture {
-        return Fixture::new(name, Side::You).map(Source::Fixture);
+        return Fixture::new(name, Side::You).map(|fixture| Source::Fixture(Box::new(fixture)));
     }
     #[cfg(not(feature = "tools"))]
     let _ = options;
+    let resume = options.replay.clone();
+    // A resumed replay, like a game an agent plays, keeps no replay or ledger.
     let (data, played_by) = match &options.agent {
         Some(agent) => (
             None,
             Some((agent.clone(), options.opponent.clone(), options.seed)),
         ),
+        None if resume.is_some() => (None, None),
         None => (data_dirs(), None),
     };
     let offer = options.offer.clone();
@@ -588,7 +605,10 @@ fn source(options: &Options, inbox: Inbox) -> Result<Source, String> {
         {
             let inbox = inbox.clone();
             move || {
-                let live = Live::new(data, inbox).offering(&offer);
+                let mut live = Live::new(data, inbox).offering(&offer);
+                if let Some(path) = resume {
+                    live = live.resuming(path);
+                }
                 match played_by {
                     Some((agent, opponent, seed)) => live.played_by(&agent, &opponent, seed),
                     None => live,
@@ -640,14 +660,15 @@ fn start_audio(window: Window, settings: &beryl_scene::settings::Settings) -> Au
 }
 
 /// The player's saved settings and the writer of their changes, in a live game the viewer
-/// plays. A replayed recording and a game `--agent` plays start from the defaults and save
-/// nothing, so that a test's or an agent's run never changes the player's settings.
+/// plays. A replayed recording, a resumed replay file and a game `--agent` plays start from
+/// the defaults and save nothing, so that a test's or an agent's run never changes the
+/// player's settings.
 fn player_settings(options: &Options) -> (Option<beryl_scene::settings::Settings>, Option<Saver>) {
     #[cfg(feature = "tools")]
     if options.fixture.is_some() {
         return (None, None);
     }
-    if options.agent.is_some() {
+    if options.agent.is_some() || options.replay.is_some() {
         return (None, None);
     }
     let Some(dir) =

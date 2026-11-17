@@ -27,6 +27,19 @@ use {
     beryl_scene::input::Size, beryl_session::protocol::Side,
 };
 
+/// A moment of a replayed recording, which a bug report saved at it records in its `ui.json`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Replayed {
+    pub recording: String,
+    /// `you` or `opponent`, as `just b3d`'s `--seat` takes it.
+    pub seat: &'static str,
+    /// Milliseconds from the recording's start, on the test driver's clock.
+    pub at_ms: u64,
+    /// Whether the recording had played to its end by then, so that its last moment (`end`)
+    /// shows the frozen table, whatever `at_ms` says.
+    pub ended: bool,
+}
+
 /// A recording being replayed.
 pub struct Fixture {
     views: Vec<GameUpdate>,
@@ -37,6 +50,15 @@ pub struct Fixture {
     released: usize,
     /// When the next view is due, once the table rests in the last one given.
     due: Option<u64>,
+    /// The recording's name and the seat it is seen from (`you` or `opponent`), for a bug
+    /// report saved while it plays.
+    name: String,
+    seat: &'static str,
+    /// The host's clock when the first views were given, in nanoseconds: the recording's
+    /// moment 0.
+    started: Option<u64>,
+    /// The host's clock when the last script ended (`ended`), in nanoseconds.
+    ended_at: Option<u64>,
 }
 
 impl Fixture {
@@ -47,7 +69,8 @@ impl Fixture {
     /// When there is no such recording for `seat`, or it cannot be read.
     #[cfg(feature = "tools")]
     pub fn new(name: &str, seat: Side) -> Result<Self, String> {
-        Self::replaying(&pages::recording(name, seat)?)
+        let seat_word = if seat == Side::You { "you" } else { "opponent" };
+        Self::replaying(&pages::recording(name, seat)?, name, seat_word)
     }
 
     /// The recording `name` from the file `<name>.json` in `dir`, as `write` left it.
@@ -61,17 +84,41 @@ impl Fixture {
             .map_err(|error| format!("{}: {error}", path.display()))?;
         let messages: Vec<FixtureMessage> = serde_json::from_str(&text)
             .map_err(|error| format!("{}: not a recording: {error}", path.display()))?;
-        Self::replaying(&Recording(messages))
+        Self::replaying(&Recording(messages), name, "you")
     }
 
-    fn replaying(recording: &Recording) -> Result<Self, String> {
+    fn replaying(recording: &Recording, name: &str, seat: &'static str) -> Result<Self, String> {
         Ok(Self {
             views: recording.views()?,
             cards: recording.card_records()?,
             responses: Responses::new(recording),
             released: 0,
             due: None,
+            name: name.to_owned(),
+            seat,
+            started: None,
+            ended_at: None,
         })
+    }
+
+    /// Where the replay is at the host's `clock`: the recording, its seat and the moment of it,
+    /// as `just b3d tree <recording> --seat <seat> --at <ms>ms` reaches it again.
+    #[must_use]
+    pub fn replayed_at(&self, clock: u64) -> Replayed {
+        let started = self.started.unwrap_or(clock);
+        let ended = self.ended_at.is_some_and(|ended| ended <= clock);
+        let at = self.ended_at.filter(|_| ended).unwrap_or(clock);
+        Replayed {
+            recording: self.name.clone(),
+            seat: self.seat,
+            at_ms: at.saturating_sub(started) / 1_000_000,
+            ended,
+        }
+    }
+
+    /// Notes that the recording's last script ended at the host's `clock`.
+    pub fn finished_at(&mut self, clock: u64) {
+        self.ended_at.get_or_insert(clock);
     }
 
     /// The recording's card records, the first time this is asked, for the client before the
@@ -89,6 +136,9 @@ impl Fixture {
     /// The views to give the client at `clock`: the first at the start, and the next once its
     /// reply is due.
     pub fn due(&mut self, clock: u64) -> Vec<GameUpdate> {
+        if self.started.is_none() {
+            self.started = Some(clock);
+        }
         if self.released == 0 || self.due.is_some_and(|due| due <= clock) {
             self.due = None;
             self.release()

@@ -22,6 +22,7 @@ use beryl_session::Sessions;
 use beryl_session::bugs::{self, Attached, BugReport, Environment, Images, PageInfo, Region};
 use serde_json::json;
 
+use crate::fixture::Replayed;
 use crate::session::Commands;
 
 /// The line the app prints, followed by the folder, when a report is saved.
@@ -48,6 +49,8 @@ pub struct Bugs {
     tree: Option<String>,
     /// The latest views, oldest first.
     views: VecDeque<GameUpdate>,
+    /// The moment of the recording the table was frozen at, when one was replaying.
+    replayed: Option<Replayed>,
     /// The host's inbox, which a report written on a thread of its own answers.
     inbox: Option<Inbox>,
 }
@@ -64,6 +67,7 @@ impl Bugs {
             picture: None,
             tree: None,
             views: VecDeque::new(),
+            replayed: None,
             inbox: None,
         }
     }
@@ -92,8 +96,11 @@ impl Bugs {
     }
 
     /// The client has frozen the table for a report: the next frame drawn is its picture.
-    pub fn freeze(&mut self) {
+    /// `replayed` is the moment of the recording being replayed, if one is, which the report's
+    /// `ui.json` records so that it can be reopened with no game.
+    pub fn freeze(&mut self, replayed: Option<Replayed>) {
         self.wanted = true;
+        self.replayed = replayed;
         self.picture = None;
         self.tree = None;
     }
@@ -162,6 +169,7 @@ impl Bugs {
             tree: self.tree.take(),
             frame_log: frame_log.map(Path::to_owned),
             views: self.views.iter().cloned().collect(),
+            replayed: self.replayed.take(),
         };
         match live {
             Some(commands) => commands.save_bug(job),
@@ -213,6 +221,7 @@ pub struct Job {
     tree: Option<String>,
     frame_log: Option<PathBuf>,
     views: Vec<GameUpdate>,
+    replayed: Option<Replayed>,
 }
 
 impl Job {
@@ -279,7 +288,16 @@ impl Job {
                 height: f64::from(window.height),
                 scale: f64::from(scale),
             },
-            ui_log: json!({ "client": "Beryl 3D" }),
+            ui_log: match &self.replayed {
+                Some(replayed) => json!({
+                    "client": "Beryl 3D",
+                    "recording": replayed.recording,
+                    "seat": replayed.seat,
+                    "at": replayed.at_ms,
+                    "ended": replayed.ended,
+                }),
+                None => json!({ "client": "Beryl 3D" }),
+            },
             updates: (self.views.iter())
                 .map(|update| serde_json::to_value(update).unwrap_or_default())
                 .collect(),

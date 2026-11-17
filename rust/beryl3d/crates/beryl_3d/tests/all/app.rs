@@ -1,6 +1,7 @@
 //! The app run as an agent runs it: a fixture replayed with no window for three seconds exits
 //! with status 0, prints the frame log's summary and names a log that reads back. And the
-//! options a release build lacks are not options without `tools`, and read as given with it.
+//! options a release build lacks are not options without `tools`, and read as given with it;
+//! `--replay` names a file that exists.
 
 use std::process::Command;
 
@@ -87,4 +88,27 @@ fn a_release_build_has_no_fixture_option() {
     assert_eq!(offered.offer, ["expert", "random"]);
     assert!(agent(&["--offer", "expert"], false).is_err());
     assert!(agent(&["--offer", "nobody"], true).is_err_and(|error| error.contains("nobody")));
+
+}
+
+#[test]
+fn replay_resumes_only_a_file_that_exists() {
+    let parse = |words: &[&str], tools| {
+        let words: Vec<String> = words.iter().map(|word| (*word).to_owned()).collect();
+        Options::parse(&words, tools)
+    };
+    let missing = std::env::temp_dir().join("b3d-no-such-replay.json");
+    let missing = missing.to_str().expect("a path");
+    assert!(
+        parse(&["--replay", missing], true).is_err_and(|error| error.contains("no such file")),
+        "a missing replay file is a usage error"
+    );
+    let file = std::env::temp_dir().join(format!("b3d-replay-{}.json", std::process::id()));
+    std::fs::write(&file, "{}").expect("a file");
+    let path = file.to_str().expect("a path");
+    let resumed = parse(&["--replay", path], true).expect("a debug build resumes a file");
+    assert_eq!(resumed.replay.as_deref(), Some(file.as_path()));
+    assert!(parse(&["--replay", path], false).is_err());
+    assert!(parse(&["--replay", path, "--fixture", "verbs-zones"], true).is_err());
+    let _ = std::fs::remove_file(&file);
 }

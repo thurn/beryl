@@ -1,6 +1,7 @@
 //! The app's command line (docs/beryl-3d.md, "Driving the running app"). `just b3d app` passes
 //! it on, choosing the window for an agent's run and for a person's.
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use beryl_host::Class;
@@ -47,6 +48,9 @@ impl Window {
 pub struct Options {
     /// The recording to replay instead of a game.
     pub fixture: Option<String>,
+    /// A replay file whose game to resume at its latest decision instead of the newest game,
+    /// such as a bug report's `replay.json` (`--replay`). The game saves nothing.
+    pub replay: Option<PathBuf>,
     /// Where the clock stops: a moment as `just b3d` writes one (`1500ms`, `prompt:1`).
     pub pause_at: Option<String>,
     /// How long the run lasts before the app ends it.
@@ -82,9 +86,9 @@ pub const OPPONENT: &str = "mcts-hidden";
 /// The seed of a game `--agent` starts, unless `--seed` gives another: the prototype's.
 pub const SEED: u64 = 20_261_114;
 
-/// Whether this build has the options only a debug build has (`--fixture`, `--pause-at`,
-/// `--drive`, `--load`, `--slow-gpu`, `--agent`, `--opponent`, `--seed`, `--search-class` and
-/// `--offer`).
+/// Whether this build has the options only a debug build has (`--fixture`, `--replay`,
+/// `--pause-at`, `--drive`, `--load`, `--slow-gpu`, `--agent`, `--opponent`, `--seed`,
+/// `--search-class` and `--offer`).
 pub const TOOLS: bool = cfg!(feature = "tools");
 
 impl Options {
@@ -97,6 +101,7 @@ impl Options {
     pub fn parse(arguments: &[String], tools: bool) -> Result<Self, String> {
         let mut options = Self {
             fixture: None,
+            replay: None,
             pause_at: None,
             run_for: None,
             window: Window::Fullscreen,
@@ -119,6 +124,13 @@ impl Options {
             };
             match option.as_str() {
                 "--fixture" if tools => options.fixture = Some(value()?),
+                "--replay" if tools => {
+                    let path = PathBuf::from(value()?);
+                    if !path.is_file() {
+                        return Err(format!("--replay {}: no such file", path.display()));
+                    }
+                    options.replay = Some(path);
+                }
                 "--pause-at" if tools => options.pause_at = Some(value()?),
                 "--drive" if tools => options.drive = Some(value()?),
                 "--load" if tools => options.load = Some(crate::load::parse(&value()?)?),
@@ -158,6 +170,9 @@ impl Options {
                 _ => return Err(format!("{option} is not an option.\n{}", usage(tools))),
             }
         }
+        if options.replay.is_some() && (options.fixture.is_some() || options.agent.is_some()) {
+            return Err("--replay resumes a game, so it takes no --fixture or --agent".to_owned());
+        }
         Ok(options)
     }
 }
@@ -172,6 +187,9 @@ pub fn usage(tools: bool) -> String {
     ];
     if tools {
         lines.push("  --fixture <recording>                            replay a recording");
+        lines.push(
+            "  --replay <replay.json>                           resume that file's game, saving none",
+        );
         lines.push("  --pause-at <moment>                              stop the clock there");
         lines.push(
             "  --drive <script>                                 play a script of actions, then end",

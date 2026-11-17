@@ -206,7 +206,7 @@ impl Sessions {
             if matches!(view.status, Status::Over { .. }) {
                 return Ok(None);
             }
-            self.resume_file(&file, &path).map(Some)
+            self.resume_file(&file, &path, Some(&path)).map(Some)
         });
         resumed.unwrap_or_else(|e| {
             journal::warn(
@@ -218,10 +218,29 @@ impl Sessions {
         })
     }
 
+    /// Resumes the game in the replay file at `path`, replacing any game in progress, as
+    /// [`Sessions::resume_latest`] resumes the newest one, but whether or not it has ended. The
+    /// game plays on without saving: the file is a copy, such as a bug report's `replay.json`,
+    /// that the game must not change, and a game saved among the replays would be the newest one
+    /// the next launch resumes.
+    ///
+    /// # Errors
+    ///
+    /// When the file cannot be read, or its game does not replay.
+    pub fn resume_replay(&self, path: &Path) -> Result<SessionId, SessionError> {
+        let file = ReplayFile::load(path)?;
+        self.resume_file(&file, path, None)
+    }
+
     /// Resumes `file`, read from `path`, replacing any game in progress: it replays the record
     /// to where it ends ([`Game::from_replay`]), emits the view there and plays on, saving to
-    /// `path` still.
-    fn resume_file(&self, file: &ReplayFile, path: &Path) -> Result<SessionId, SessionError> {
+    /// `save` if given.
+    fn resume_file(
+        &self,
+        file: &ReplayFile,
+        path: &Path,
+        save: Option<&Path>,
+    ) -> Result<SessionId, SessionError> {
         let commit = build_commit();
         if file.commit.as_deref() != Some(commit) {
             journal::info(
@@ -244,7 +263,7 @@ impl Sessions {
                 Ok((game, Some(view)))
             },
             None,
-            Some(path.to_owned()),
+            save.map(Path::to_owned),
             true,
             about,
         )

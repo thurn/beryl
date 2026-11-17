@@ -16,6 +16,7 @@
 //! `--search-class` puts it in another class, to compare them.
 
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
 
@@ -152,6 +153,8 @@ pub struct Live {
     inbox: Inbox,
     /// The game `--agent` asked for, and the agent that answers for the viewer in it.
     played_by: Option<(StartGame, String)>,
+    /// The replay file `--replay` asked to resume in place of the newest game.
+    resume: Option<PathBuf>,
     /// The agents `--offer` adds after the session's own on the start screen.
     offered: Vec<AgentView>,
     /// The decklists the client was last given card records for (`give_cards`).
@@ -200,6 +203,7 @@ impl Live {
             decks,
             inbox,
             played_by: None,
+            resume: None,
             offered: Vec::new(),
             cards_for: None,
         }
@@ -217,6 +221,14 @@ impl Live {
                 description: agent.description.to_owned(),
             })
             .collect();
+        self
+    }
+
+    /// The same sessions, which resume the game in the replay file at `path` on `begin` in place
+    /// of the newest game, saving nothing (`Sessions::resume_replay`).
+    #[must_use]
+    pub fn resuming(mut self, path: PathBuf) -> Self {
+        self.resume = Some(path);
         self
     }
 
@@ -334,13 +346,18 @@ pub fn search_report(searches: &[Searched]) -> Option<String> {
 }
 
 impl Session for Live {
-    /// Starts the game `played_by` asked for, or otherwise resumes the newest unfinished game,
-    /// as the web app does on launch. Then it sends the agents a person may play, which put the
-    /// client on the start screen when no game has sent a view.
+    /// Starts the game `played_by` asked for, or resumes the replay file `resuming` named, or
+    /// otherwise resumes the newest unfinished game, as the web app does on launch. Then it
+    /// sends the agents a person may play, which put the client on the start screen when no
+    /// game has sent a view.
     fn begin(&mut self) {
         if let Some((start, agent)) = &self.played_by {
             if let Err(error) = self.sessions.start_game(start, Some(agent)) {
                 eprintln!("beryl3d: the game did not start: {error:?}");
+            }
+        } else if let Some(path) = &self.resume {
+            if let Err(error) = self.sessions.resume_replay(path) {
+                eprintln!("beryl3d: {} does not resume: {error}", path.display());
             }
         } else {
             beryl_shell::resume_latest(&self.sessions);

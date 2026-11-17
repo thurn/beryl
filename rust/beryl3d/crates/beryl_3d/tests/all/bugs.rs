@@ -1,7 +1,7 @@
 //! Bug reports: an app replaying `pay-default` with no window, driven to press Cmd+B, take the
 //! whole window, describe the bug and submit it, writes a report folder into `$BERYL_BUGS` with
-//! the picture of the frozen frame, its element tree, the frame log, the latest views and the
-//! files every report holds.
+//! the picture of the frozen frame, its element tree, the frame log, the latest views, the
+//! recording's moment in `ui.json` and the files every report holds.
 
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -93,7 +93,18 @@ fn a_report_saved_from_a_replay_holds_the_picture_the_tree_and_the_logs() {
         !tree.contains("region \"bug report\""),
         "the picture shows nothing of the report: {tree}"
     );
-    assert!(read("ui.json").contains("Beryl 3D"));
+    // The report records where the replay was, so `just b3d tree` can reopen it with no game.
+    let ui: serde_json::Value = serde_json::from_str(&read("ui.json")).expect("ui.json is JSON");
+    let log = &ui["log"];
+    assert_eq!(log["client"], "Beryl 3D", "{ui}");
+    assert_eq!(log["recording"], "pay-default", "{ui}");
+    assert_eq!(log["seat"], "you", "{ui}");
+    assert_eq!(log["ended"], false, "pay-default plays for longer than 1000 ms: {ui}");
+    let at = log["at"].as_u64().expect("`at` is a whole number of milliseconds");
+    assert!(
+        (1000..1100).contains(&at),
+        "frozen when the script pressed Cmd+B at 1000 ms: {ui}"
+    );
     // The window is the app's 1600 by 900 points at one pixel to a point.
     let window = std::fs::read(folder.join("window.png")).expect("the picture");
     assert_eq!(
