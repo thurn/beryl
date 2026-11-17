@@ -17,9 +17,10 @@ use crate::event::{self, Entry, Reason, Sink};
 use crate::filter::Filter;
 use crate::ids::Seat;
 use crate::layers::entering::as_it_would_exist;
+use crate::rng::SplitMix64;
 use crate::scratch::Scratch;
 use crate::state::{TurnStep, Zone};
-use crate::{CardTable, GameTable, Profile, State, layers};
+use crate::{CardTable, GameTable, Observation, Profile, State, layers};
 
 use super::events::{find, put};
 
@@ -155,6 +156,35 @@ fn a_copy_of_a_back_face_aura_enters_attached() {
     x.events.asking.end();
     assert_eq!(s.copiable(mirror).face(&t).name, "Test Land Aura");
     assert_eq!(s.object(mirror).attached_to(), Some(land));
+}
+
+/// A face-down permanent's card is hidden ([CR 708.2]). Redealing it for the other
+/// player can change its original card, but must keep the existing copy effect intact.
+///
+/// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
+#[test]
+fn redealing_the_card_under_a_face_down_copy_preserves_the_copy() {
+    let (t, mut s) = game();
+    let mut x = Scratch::new();
+    let source = put(&t, &mut s, &mut x, Seat::P0, "Test Opal");
+    let slot = put(&t, &mut s, &mut x, Seat::P1, "Test Tapland");
+    let values = s.copiable(source);
+    s.enter_as_copy(s.permanent_at(slot).unwrap(), values)
+        .unwrap();
+    s.board().set_face(slot, FaceIx::DOWN);
+    layers::refresh(&mut s, &t, &mut x.events).unwrap();
+
+    let original = s.card_really_is(slot);
+    let view = Observation::new(&s, Seat::P0);
+    let mut rng = SplitMix64::new(5);
+    let mut changed = false;
+    for _ in 0..8 {
+        let dealt = view.determinize(&t, &mut rng);
+        dealt.check_invariants(&t).unwrap();
+        assert_eq!(dealt.copiable(slot), s.copiable(slot));
+        changed |= dealt.card_really_is(slot) != original;
+    }
+    assert!(changed);
 }
 
 static CARDS: CardTable = CardTable::new(&[&MOON, &OPAL, &SPRINGS, &TAPLAND]);

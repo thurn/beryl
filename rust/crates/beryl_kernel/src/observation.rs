@@ -7,7 +7,7 @@ use crate::ids::{CardId, Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
 use crate::rng::SplitMix64;
 use crate::state::{
-    Derived, Object, Pending, PendingTrigger, Player, StackEntry, State, Turn, Zone, ZoneKey,
+    Derived, Flag, Object, Pending, PendingTrigger, Player, StackEntry, State, Turn, Zone, ZoneKey,
 };
 use crate::table::GameTable;
 use beryl_card::{Ability, Behavior, FaceIx, Objects, Words};
@@ -254,24 +254,21 @@ impl<'a, L: Layout> Observation<'a, L> {
                 remainder.push_bounded(card);
             }
             let mut unknown: L::Deck<L::Slot> = Default::default();
-            // Merged permanents the viewer sees, over a face-down card the viewer doesn't
-            // know ([`crate::Memo::FaceDownUnder`]): that card is dealt in its memo.
-            let mut under: L::Deck<L::Slot> = Default::default();
+            // A copy can hide the card underneath while its copy effect stays in force.
+            // Deal that card into its `Memo::Really`, separately from the slots that
+            // can trade their card fields to satisfy a hidden pick.
+            let mut hidden_originals: L::Deck<L::Slot> = Default::default();
             for i in 0..t.deck_len(player) {
                 let slot = L::Slot::deck(player, i);
-                if !shown(slot)
-                    && self.root.knows(self.viewer, slot)
-                    && !self.root.knows_card_really_is(self.viewer, slot)
-                {
-                    // One of the deck's slots, of which the layout has no more than these.
-                    under.push_bounded(slot);
-                } else if self.root.knows(self.viewer, slot) || shown(slot) {
-                    // The card it really is, even under a copy effect.
+                if shown(slot) || self.root.knows_card_really_is(self.viewer, slot) {
                     let card = s.card_really_is(slot);
                     let at = remainder
                         .position(card)
                         .expect("a known card not in its deck");
                     remainder.remove(at);
+                } else if self.root.object(slot).flags.has(Flag::Copy) {
+                    // One of the deck's slots, of which the layout has no more than these.
+                    hidden_originals.push_bounded(slot);
                 } else {
                     // One of the deck's slots, of which the layout has no more than these.
                     unknown.push_bounded(slot);
@@ -282,7 +279,7 @@ impl<'a, L: Layout> Observation<'a, L> {
                 s.object_mut(slot).card = card;
             }
             let dealt = remainder.iter().skip(unknown.len());
-            for (&slot, &card) in under.iter().zip(dealt) {
+            for (&slot, &card) in hidden_originals.iter().zip(dealt) {
                 s.deal_card_really_is(slot, card);
             }
             if let Some(picks) = &picks {
