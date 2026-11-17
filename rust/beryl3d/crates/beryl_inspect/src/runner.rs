@@ -326,7 +326,7 @@ pub fn each<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R>
 /// `data/beryl3d/gates.json`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// The median over all tests.
+    /// The median over the tests of the recorded fixtures ([`fixture_median`]).
     pub median_frames: usize,
     /// The most any one test evaluates.
     pub most_frames: usize,
@@ -364,11 +364,12 @@ impl Limits {
             return Vec::new();
         };
         let mut over = Vec::new();
-        if every_test && frames.median > self.median_frames {
+        let median = fixture_median(outcomes);
+        if let Some(median) = median.filter(|m| every_test && *m > self.median_frames) {
             over.push(format!(
-                "the median test evaluates {} frames, over the limit of {} in \
-                 data/beryl3d/gates.json (tests.median_frames)",
-                frames.median, self.median_frames
+                "the median test of a recorded fixture evaluates {median} frames, over the \
+                 limit of {} in data/beryl3d/gates.json (tests.median_frames)",
+                self.median_frames
             ));
         }
         if frames.most > self.most_frames {
@@ -380,6 +381,22 @@ impl Limits {
         }
         over
     }
+}
+
+/// The median frames over the tests of the recorded fixtures that ran, or none when none ran.
+/// A fixture's recording name has no `/`; a card's spec moment, `<card>/<moment>`, does. Spec
+/// moments are left out because a change to cards alone adds them, and the fast check runs no
+/// Beryl 3D lane for such a change. Over every test, the median moved with each new card
+/// scenario, and the next Beryl 3D change to be pushed failed on a limit it had not moved.
+#[must_use]
+pub fn fixture_median(outcomes: &[Outcome]) -> Option<usize> {
+    let mut counts: Vec<usize> = outcomes
+        .iter()
+        .filter(|o| o.error.is_none() && !o.test.recording.contains('/'))
+        .map(|o| o.frames)
+        .collect();
+    counts.sort_unstable();
+    counts.get(counts.len() / 2).copied()
 }
 
 /// The frames the tests that ran evaluated: the median, the most, and the test that evaluated

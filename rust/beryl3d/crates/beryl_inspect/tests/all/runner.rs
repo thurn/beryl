@@ -257,7 +257,7 @@ fn the_frame_limits_name_what_is_over_them() {
     let over = limits.over(&outcomes, true);
     assert_eq!(over.len(), 2, "{over:?}");
     assert!(
-        over[0].contains("median test evaluates 30 frames"),
+        over[0].contains("median test of a recorded fixture evaluates 30 frames"),
         "{over:?}"
     );
     assert!(
@@ -267,6 +267,21 @@ fn the_frame_limits_name_what_is_over_them() {
     // A prefix's tests are held to the most, not the median.
     assert_eq!(limits.over(&outcomes, false).len(), 1);
     assert!(limits.over(&outcomes[..1], true).is_empty());
+}
+
+#[test]
+fn the_median_frame_limit_leaves_out_card_spec_moments() {
+    // Card scenarios add spec moments without running Beryl 3D's lanes, so they must not move
+    // the median that every Beryl 3D push is held to.
+    let limits = Limits {
+        median_frames: 20,
+        most_frames: 500,
+    };
+    let fixtures = [outcome("a", 10), outcome("b", 20), outcome("c", 20)];
+    let moments = (0..10).map(|n| outcome(&format!("card/moment-{n}"), 400));
+    let outcomes: Vec<Outcome> = fixtures.into_iter().chain(moments).collect();
+    assert_eq!(runner::fixture_median(&outcomes), Some(20));
+    assert!(limits.over(&outcomes, true).is_empty());
 }
 
 /// The verdict the run log gets for `name` when `b3d test` runs it against its entry in the

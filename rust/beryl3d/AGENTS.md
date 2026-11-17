@@ -331,10 +331,11 @@ project, and selects the main lanes.
   the same rule as the frame limits.
 
   Under `tests` are the limits on the frames an interface test draws at its
-  check times: `median_frames` over every test and `most_frames` for any one.
-  `just b3d test` holds both when it runs every test, and `most_frames` when it
-  runs a prefix's tests. They are set from a measurement and rise by the same
-  rule as the frame limits.
+  check times: `median_frames` over the recorded fixtures' tests (card spec
+  moments are left out, since a card-only push adds them without running Beryl
+  3D's lanes) and `most_frames` for any one. `just b3d test` holds both when it
+  runs every test, and `most_frames` when it runs a prefix's tests. They are set
+  from a measurement and rise by the same rule as the frame limits.
 
 - `data/beryl3d/test-faults.json`:
   `{"tests": {"<test name>": {"<rule>": <count>}}}`, the faults each interface

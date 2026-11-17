@@ -381,12 +381,14 @@ impl Report<'_> {
             |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
         let _ = writeln!(
             out,
-            "{}, {} failed, {}; {} frames, median {} a test; {:.1}s, {:.1} test-ms a test",
+            "{}, {} failed, {}; {} frames, median {} a test ({} for the recorded fixtures); \
+             {:.1}s, {:.1} test-ms a test",
             count(self.outcomes.len(), "test", "tests"),
             self.failed,
             count(self.found.len(), "different fault", "different faults"),
             self.frames(),
             self.median(),
+            runner::fixture_median(self.outcomes).unwrap_or(0),
             self.seconds,
             self.test_ms(),
         );
