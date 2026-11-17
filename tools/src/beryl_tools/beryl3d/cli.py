@@ -26,6 +26,7 @@ from . import (
     bug,
     camera,
     clear_save,
+    compare,
     gate,
     lane,
     live,
@@ -442,6 +443,7 @@ OWN_COMMANDS: tuple[Command, ...] = (
         "film",
         "draws up to 24 frames of a recording as a grid in one PNG, a line of text per frame",
     ),
+    compare.COMMAND,
     Command(
         "timeline-parity",
         "holds the web interface's and Beryl 3D's timelines of every recording to each other",

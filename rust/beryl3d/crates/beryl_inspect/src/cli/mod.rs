@@ -263,16 +263,16 @@ const COMMANDS: [Command; 8] = [
                 "writes <name>.<seat>.json for each recording",
             ),
             (
-                "just b3d export ui/target/recordings",
-                "the same, into another directory",
+                "just b3d export /tmp/one --only opening-play",
+                "both seats of one recording",
             ),
         ],
         spec: Spec {
             recording: false,
-            values: &[],
+            values: &["--only"],
             switches: &[],
         },
-        own: &[],
+        own: &[("--only <recording>", "only that recording, from both seats")],
         run: timeline::export,
     },
 ];

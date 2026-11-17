@@ -164,6 +164,24 @@ pub fn write_rgba_png(path: &Path, pixels: &[u8], width: u32, height: u32) -> Re
         .map_err(|error| format!("{}: {error}", path.display()))
 }
 
+/// Reads the PNG file at `path` as RGBA bytes, row by row from the top, whatever its own
+/// color type: `just b3d compare` puts the web interface's screenshot beside a frame with it.
+///
+/// # Errors
+///
+/// When the file cannot be read or decoded; the message names it.
+pub fn read_rgba_png(path: &Path) -> Result<Picture, String> {
+    let image = image::open(path)
+        .map_err(|error| format!("{}: {error}", path.display()))?
+        .into_rgba8();
+    let (width, height) = image.dimensions();
+    Ok(Picture {
+        pixels: image.into_raw(),
+        width,
+        height,
+    })
+}
+
 /// A picture read back from the GPU: `width` by `height` pixels of RGBA bytes, row by row from
 /// the top.
 pub struct Picture {

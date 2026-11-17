@@ -1,6 +1,7 @@
 //! The picture commands of `just b3d` (docs/beryl-3d.md, "The agent interface"): `png` draws one
-//! moment of a recording with the real renderer, offscreen, and `film` draws a span of it as a
-//! grid of frames in one picture. The crate is this one program, with no library, and links no
+//! moment of a recording with the real renderer, offscreen, `film` draws a span of it as a
+//! grid of frames in one picture, and `compare` puts a moment beside the web interface's
+//! screenshot of it. The crate is this one program, with no library, and links no
 //! engine, so that it rebuilds and relinks fast after an edit (docs/beryl-3d.md,
 //! "Edit-to-output time"). Its tests run the program.
 //!
@@ -8,6 +9,7 @@
 //! status 2 and a message that names what would work. Every file is written under
 //! `$BERYL_CACHE/b3d/out/` with a name that includes the process id, so two runs never share one.
 
+mod compare;
 mod film;
 mod font;
 
@@ -44,7 +46,7 @@ struct Command {
     run: fn(&Options) -> Result<String, Error>,
 }
 
-const COMMANDS: [Command; 2] = [
+const COMMANDS: [Command; 3] = [
     Command {
         name: "png",
         summary: "draws one moment of a recording to a PNG file",
@@ -118,6 +120,30 @@ const COMMANDS: [Command; 2] = [
         ],
         run: film::film,
     },
+    Command {
+        name: "compare",
+        summary: "puts the web interface's screenshot of a moment beside Beryl 3D's frame of it",
+        examples: [
+            (
+                "just b3d compare opening-play --at prompt:1",
+                "the play-or-draw prompt in both interfaces",
+            ),
+            (
+                "just b3d compare pay-default --seat opponent --at view:2",
+                "a moment from the opponent's seat",
+            ),
+        ],
+        spec: Spec {
+            recording: true,
+            values: &["--web"],
+            switches: &[],
+        },
+        own: &[(
+            "--web <png>",
+            "the web interface's screenshot to put on the left (`just b3d compare` takes it)",
+        )],
+        run: compare::compare,
+    },
 ];
 
 fn main() -> ExitCode {
@@ -153,7 +179,7 @@ fn run(args: &[String]) -> Ran {
         let names: Vec<&str> = COMMANDS.iter().map(|c| c.name).collect();
         return usage(&Usage(format!(
             "there is no command '{first}'; the picture commands are {}. `just b3d` lists them.",
-            names.join(" and ")
+            names.join(", ")
         )));
     };
     let rest = &args[1..];
@@ -183,7 +209,7 @@ fn run(args: &[String]) -> Ran {
 fn listing() -> String {
     let mut out = String::from("b3d-render: Beryl 3D's picture commands\n");
     for command in &COMMANDS {
-        let _ = writeln!(out, "  {:<5}  {}", command.name, command.summary);
+        let _ = writeln!(out, "  {:<7}  {}", command.name, command.summary);
     }
     out.push_str("`b3d-render <command> --help` gives a command's options and examples.\n");
     out

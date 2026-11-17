@@ -102,14 +102,20 @@ through the client with no window or GPU (the `b3d` skill has the details):
   app's scan cache (`~/Library/Caches/ca.thurn.beryl/art`) and Beryl's drawn
   card frame where a scan is missing; neither command downloads one. Set
   `BERYL3D_SCANS` to an empty directory to see every face drawn.
+- `just b3d compare <name> --at <moment>` writes one PNG with the web
+  interface's screenshot of the same moment on the left and `png`'s frame on the
+  right. It exports the recording (`just b3d export <directory> --only <name>`),
+  shoots the page as `just ui-shots` does, and keeps the screenshot, which
+  `--web <png>` reuses.
 
 These tools lay the frame out at scale 1 unless `--scale` gives another, while
 the desktop app on a Retina Mac runs at scale 2, so a picture of a look you
 changed is drawn with `--scale 2` (the windowless app runs at 2 on macOS). A
 tree line shows that text was laid out, not that its glyphs drew. An executor or
 Warden closes a bead that changes how something looks only after reading a
-picture of it beside the web interface's at the same moment, and names both
-files on the bead ("What these tools cannot show" in the `b3d` skill).
+picture of it beside the web interface's at the same moment
+(`just b3d compare --scale 2`), and names the file on the bead ("What these
+tools cannot show" in the `b3d` skill).
 
 The text commands are the `b3d` program in `beryl_inspect` (`src/cli`), and the
 pictures are `b3d-render` in `beryl_pictures` (with `Headless` in `beryl_host`),

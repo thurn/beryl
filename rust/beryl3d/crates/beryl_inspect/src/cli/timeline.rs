@@ -187,7 +187,15 @@ pub(super) fn export(options: &Options) -> Result<Printed, Usage> {
             ));
         }
     };
-    let names = recordings::names().map_err(Usage)?;
+    let mut names = recordings::names().map_err(Usage)?;
+    if let Some(only) = options.value("--only") {
+        names.retain(|(name, _)| name == only);
+        if names.is_empty() {
+            return Err(Usage(format!(
+                "--only {only}: no recording has that name; `just b3d list` names them"
+            )));
+        }
+    }
     fs::create_dir_all(&directory).map_err(|e| Usage(format!("{}: {e}", directory.display())))?;
     // Each recording on a thread of its own, as many at once as the command's CPU tokens allow
     // (`runner::each`): one after another, the export took about 40 s, the longest of the

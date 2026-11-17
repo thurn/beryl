@@ -21,5 +21,5 @@ pub use enhanced::SHADER as ENHANCED_SHADER;
 pub use mesh::CARD_RADIUS;
 pub use renderer::{Drawn, Limits, Renderer};
 pub use surface::{Native, Presented, Surface};
-pub use target::{Picture, Readback, Target, write_rgba_png};
+pub use target::{Picture, Readback, Target, read_rgba_png, write_rgba_png};
 pub use textures::BACK_LAYER;
