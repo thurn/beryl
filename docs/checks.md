@@ -444,6 +444,26 @@ ticket-backed reports with fixtures.
 - There is no quarantine. Every check that runs can fail CI, except those on
   `verdicts.PENDING`, each tied to the ticket whose work will make it pass.
 
+A step records `result_kind` separately from its checks' `outcome`: `pass` and
+`fail` mean a completed attempt; `cannot-run`, `external`, `hang`, `wall` and
+`stopped` mean incomplete coverage. `deferred` means the fast check handed the
+unfinished work to its named downstream lane. Incomplete attempts fail required
+lanes. Only this explicit fast-check deferral may pass with unfinished work.
+
+Each attempt retains its raw `exit_code` and POSIX `signal`, where known. A
+negative POSIX exit or a shell's signal exit is `external`; a Windows NTSTATUS
+termination retains its raw status without assigning a POSIX signal. This
+identifies how the process ended, not who sent a signal. Failed attempts keep
+their own output for 14 days under `$BERYL_CACHE/ci/steps`, linked by
+`output_path` on the first record.
+
+Incomplete attempts never trigger a flake rerun or test-deletion ticket, settle
+a product verdict, or become a bisection culprit. Their partial check results
+remain visible with the termination reason. Bisection stops with its unresolved
+range when a probe cannot run or is interrupted. Nightly adapters retain the
+same exit semantics: an environmental failure keeps the night unsuccessful
+without filing a product-test failure.
+
 ## Budgets and hang limits
 
 - A run that goes over budget still passes. No timer fails a run for being slow.

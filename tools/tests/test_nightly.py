@@ -444,3 +444,21 @@ def test_a_lane_quotes_its_own_steps_output_and_keeps_it_whole(bd: FakeTickets) 
     [kept] = list((nightly.folder() / "failures").glob("*.txt"))
     assert kept.read_text() == "fuzz output\n"
     assert str(kept) in text
+
+
+@pytest.mark.parametrize("code", [125, -15])
+def test_nightly_environment_outcomes_are_not_product_failures(
+    code: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def in_tree(commit: str, command: list[str], out: IO[str] | None = None) -> int:
+        return code
+
+    monkeypatch.setattr(nightly.coverage, "in_tree", in_tree)
+    with open(nightly.folder() / "out.txt", "w") as out:
+        assert nightly.fuzz_step("abc123", out) == code
+    [record] = runlog.read_log(NOW - timedelta(days=3650))
+    assert record["exit_code"] == code
+    assert record["timeout"] in ("cannot-run", "external")
+    assert nightly_failures.failed_checks("abc123", NOW - timedelta(days=3650)) == {}
+    assert fire(Fake(code=code))["outcome"] == "failed"

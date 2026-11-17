@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import paths, runlog, system, tokens, verdicts, warm
+from . import paths, runlog, step_results, system, tokens, verdicts, warm
 from .checks import Failure, Outcome, Steps, WallClock
 from .reruns import unproven
 
@@ -129,6 +129,8 @@ def suspects(outcomes: list[Outcome]) -> list[Suspect]:
     for o in outcomes:
         f = o.failure
         if f is None:
+            continue
+        if any(step_results.incomplete(r) for r in f.records):
             continue
         failing = [r for r in f.records if r["outcome"] == "fail"]
         if not f.args:
@@ -239,8 +241,18 @@ class Prober:
             cwd = Path(self.tree.moved(str(f.step.cwd)))
             code, output = self.steps.run(cmd, cwd, step_env)
             took = time.perf_counter() - started
-            records = run.log(lane, f.step.name, code == 0, took, results)
-        if code is None:
+            records = run.log(
+                lane,
+                f.step.name,
+                code == 0,
+                took,
+                results,
+                step_results.kind(code) if code is None else None,
+                exit_code=code,
+                output=output,
+            )
+        if step_results.kind(code) not in ("pass", "fail"):
+            print(f"bisect: incomplete probe ({step_results.kind(code)}, exit {code})")
             return [(m, None) for m in members]
         named = f.step.failed(output) if code != 0 and f.step.failed else []
         found: list[tuple[Suspect, bool | None]] = []

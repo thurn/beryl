@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from . import paths, system, tokens
+from .reruns import CANNOT_RUN
 from .clock import Clock
 
 # The steps that start by building `paths.CLI_BUILD` in the checkout's target directory. Each
@@ -168,15 +169,18 @@ class Steps:
             with self.lock:
                 if self.over():
                     return None, ""
-                proc = subprocess.Popen(
-                    cmd,
-                    cwd=cwd,
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    stdout=out,
-                    stderr=subprocess.STDOUT,
-                    **system.own_session(),
-                )
+                try:
+                    proc = subprocess.Popen(
+                        cmd,
+                        cwd=cwd,
+                        env=env,
+                        stdin=subprocess.DEVNULL,
+                        stdout=out,
+                        stderr=subprocess.STDOUT,
+                        **system.own_session(),
+                    )
+                except OSError as error:
+                    return CANNOT_RUN, f"Could not start step: {error}\n"
                 self.running.add(proc)
             started = self.clock.now()
             code: int | None = None

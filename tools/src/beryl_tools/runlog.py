@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import flaky, nightly, paths, prune, runstore, system, verdicts
+from . import flaky, nightly, paths, prune, runstore, step_results, system, verdicts
 from .runstore import Tally
 
 # The file a step appends its checks' results to, one JSON object a line: check, outcome, seconds.
@@ -223,12 +223,17 @@ class Run:
         results: Path,
         killed: str | None = None,
         cpu: float | None = None,
+        *,
+        exit_code: int | None = None,
+        output: str = "",
     ) -> list[dict[str, object]]:
         """A finished step's records: one per check it reported, and one for the step itself
         (marked `whole`) when it reported none, or failed though none of them did. A step that
-        was killed, or exited `CANNOT_RUN`, marks its failures `timeout` with why (`hang`,
-        `wall`, `stopped` or `cannot-run`, checks.lane_steps): neither says anything about a
-        check, so none of them waits for a verdict (verdicts.settle).
+        was interrupted marks every record `timeout` with why (`external`, `hang`,
+        `wall`, `deferred`, `stopped` or `cannot-run`). Its partial results cannot settle
+        verdicts. `result_kind` distinguishes completed passes and failures from these
+        incomplete attempts. Raw exit codes and signals remain attached, and failed
+        attempts keep their own output for 14 days in `$BERYL_CACHE/ci/steps`.
 
         The first record also holds the step's own wall and CPU seconds, `step_seconds` and
         `step_cpu_seconds`, which a step that reported checks has in no other record.
@@ -238,6 +243,13 @@ class Run:
         has no per-check measurement, so its CPU time is split among them in proportion to their
         wall `seconds`, evenly if all of those are 0; a skipped check gets none.
         """
+        result_kind = killed or (
+            step_results.kind(exit_code)
+            if exit_code is not None
+            else "pass" if passed else "fail"
+        )
+        if result_kind not in ("pass", "fail"):
+            killed = result_kind
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         load = round(system.loadavg()[0], 2)
         checks = read_results(results)
@@ -276,6 +288,9 @@ class Run:
                 "lane": lane,
                 "check": c["check"],
                 "outcome": c["outcome"],
+                "result_kind": result_kind,
+                "exit_code": exit_code,
+                "signal": step_results.signal_number(exit_code),
                 "seconds": c["seconds"],
                 "load": load,
                 "chosen": c.get("chosen", self.chosen),
@@ -294,9 +309,15 @@ class Run:
             if cpu is not None:
                 records[0]["step_cpu_seconds"] = round(cpu, 3)
         if killed:
+            # Partial passes and pending failures cannot settle an interrupted attempt.
             for r in records:
-                if r["outcome"] == "fail":
-                    r["timeout"] = killed
+                r["timeout"] = killed
+        if not passed and output:
+            kept = flaky.keep(
+                f"{lane}-{step}", output, paths.cache_root() / "ci" / "steps"
+            )
+            if kept is not None:
+                records[0]["output_path"] = str(kept)
         return records
 
     def log(
@@ -308,10 +329,23 @@ class Run:
         results: Path,
         killed: str | None = None,
         cpu: float | None = None,
+        *,
+        exit_code: int | None = None,
+        output: str = "",
     ) -> list[dict[str, object]]:
         """Logs a finished step's records and returns them (`records`)."""
         try:
-            records = self.records(lane, step, passed, seconds, results, killed, cpu)
+            records = self.records(
+                lane,
+                step,
+                passed,
+                seconds,
+                results,
+                killed,
+                cpu,
+                exit_code=exit_code,
+                output=output,
+            )
         except Exception as e:  # Logging never fails a check.
             warn(e)
             return []
@@ -327,7 +361,7 @@ class Run:
         """The verdicts this run reached (verdicts.settle), and the delete beads its flakes
         filed (flaky.py), a line each."""
         with self.lock:
-            records = list(self.logged)
+            records = [r for r in self.logged if not step_results.incomplete(r)]
         try:
             lines = verdicts.settle(
                 records, self.script, self.place, self.tree, self.commit, self.host

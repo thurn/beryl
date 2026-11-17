@@ -30,7 +30,7 @@ A step that fails is rerun once before its lane fails, narrowed to the checks it
 failed where it can name them: a pass on the rerun passes the lane, prints a `flaky: <lane>
 <check>` line for each and files a bead to delete each flaky check (flaky.py). The rerun only
 detects a flake: no check is ever excused for flaking. A step killed as hung or cut off, or one that failed to build or start
-(exit `CANNOT_RUN`), is no flake and is not rerun, nor are the static checks (fmt, clippy, tsc).
+(exit `CANNOT_RUN`), or one terminated externally, is no flake and is not rerun, nor are the static checks (fmt, clippy, tsc).
 After the run, each failure it resolves gets a verdict (verdicts.py), and a step whose only
 failing checks are pending (verdicts.PENDING) fails no lane.
 
@@ -77,6 +77,7 @@ from . import (
     runlog,
     script_checks,
     standalone,
+    step_results,
     speed,
     store_cards,
     system,
@@ -262,10 +263,13 @@ def lane_steps(
             wall = clock.wall() - wall - (after[1] - before[1])
             # A kill says nothing about the step's checks, nor does a step that could not
             # run them: verdicts.py passes both over.
-            killed = "cannot-run" if code == CANNOT_RUN else None
+            result_kind = step_results.kind(code)
+            killed = None if result_kind in ("pass", "fail") else result_kind
             if code is None:
                 killed = "stopped" if steps.stopped.is_set() else "wall"
                 killed = "hang" if seconds >= limit and not steps.walled() else killed
+                if killed == "wall" and script == "check":
+                    killed = "deferred"
             records = run.log(
                 lane.name,
                 step.name,
@@ -274,6 +278,8 @@ def lane_steps(
                 results,
                 killed,
                 None if system.WINDOWS else steps.cpu_used() - cpu,
+                exit_code=code,
+                output=output,
             )
         if code == 0:
             limits.passed(lane.name, step.name, seconds)
@@ -293,6 +299,8 @@ def lane_steps(
             )
         elif code is None:
             ended += f"STOPPED after {took(wall, seconds)}"
+        elif killed:
+            ended += f"INCOMPLETE ({killed}, exit {code}) after {took(wall, seconds)}"
         elif code != 0:
             ended += f"FAILED (exit {code}) after {took(wall, seconds)}"
         else:
@@ -302,7 +310,7 @@ def lane_steps(
                 f", after waiting {after[1] - before[1]:.1f} s for CPU tokens"
                 f"{' and the shared build' if f'{lane.name}:{step.name}' in BUILDS_CLI else ''}"
             )
-        if code != 0 and step.failed and code not in (None, CANNOT_RUN):
+        if result_kind == "fail" and step.failed:
             # Named before the rerun's output follows, so a rerun of the lot says so.
             checks = step.failed(output)
             ended += f"; rerunning {', '.join(checks) if checks else 'it'} once"
@@ -335,7 +343,7 @@ def lane_steps(
     for n, step in enumerate(lane.steps):
         t, flakes = now(), len(flaky)
         code, records, output = attempt(step, step.cmd)
-        if code is None and steps.walled() and script == "check":
+        if code is None and any(r.get("result_kind") == "deferred" for r in records):
             # The fast check's hard limit (deadline.py): what it did not finish is left to
             # whatever runs the lane after the push (`Lane.deferred_to`).
             deferred = [s.name for s in lane.steps[n:]]
@@ -354,7 +362,7 @@ def lane_steps(
                 excused,
                 deferred=deferred,
             )
-        why = verdicts.excused(records) if code not in (0, None, CANNOT_RUN) else []
+        why = verdicts.excused(records) if step_results.kind(code) == "fail" else []
         if why:
             excused.extend(why)
             held = ", ".join(f"{check} {reason}" for reason, check in why)
@@ -364,7 +372,7 @@ def lane_steps(
         if code != 0:
             timings.append(f"{step.name} {'KILLED' if code is None else 'FAILED'}")
             failure = None
-            if step.failed and code not in (None, CANNOT_RUN):
+            if step.failed and step_results.kind(code) == "fail":
                 failure = Failure(step, step.failed(output), records, lane.warm)
             return Outcome(
                 lane.name,

@@ -25,7 +25,7 @@ import socket
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 
-from . import incidents, runlog, verdicts
+from . import incidents, runlog, step_results, verdicts
 
 LABEL = "nightly-failure"
 # The metadata key of the checks a nightly ticket was filed for, a line each: a card's name in a
@@ -53,7 +53,10 @@ def failed_checks(
     for r in runlog.read_log(since):
         if r.get("script") == script and r.get("commit") == commit:
             check = str(r["check"])
-            last[check] = (str(r.get("lane")), str(r.get("outcome")))
+            last[check] = (
+                str(r.get("lane")),
+                "incomplete" if step_results.incomplete(r) else str(r.get("outcome")),
+            )
     found: dict[str, list[str]] = {}
     for check, (lane, outcome) in last.items():
         if outcome == "fail":

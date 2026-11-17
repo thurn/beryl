@@ -485,3 +485,35 @@ def test_verdict_history_keeps_migrated_and_native_comment_ids() -> None:
         ("2", "catch"),
         ("ticket:2", "stale"),
     ]
+
+
+@pytest.mark.parametrize(
+    "kind", ["external", "cannot-run", "hang", "deferred", "wall", "stopped"]
+)
+def test_interrupted_partial_results_cannot_settle_or_create_verdicts(
+    kind: str,
+    repo: Path,
+    bd: FakeTickets,
+) -> None:
+    assert checks.run_lanes([one("shots:board", False)], "check", 60) == 1
+    write(repo, "ui/src/Board.tsx", "changed product\n")
+    run = runlog.Run.start("check")
+    with run.step({}) as (_, results):
+        results.write_text(
+            '{"check":"shots:board","outcome":"pass","seconds":0}\n'
+            '{"check":"shots:hand","outcome":"fail","seconds":0}\n'
+        )
+        records = run.log("shots", "shots", False, 1, results, kind)
+    # Even malformed upstream flake flags cannot turn an incomplete attempt into a verdict.
+    for record in records:
+        record["flaky"] = True
+    assert (
+        verdicts.settle(records, run.script, run.place, run.tree, run.commit, run.host)
+        == []
+    )
+    assert bd.verdicts("shots:board") == []
+    assert run.settle() == []
+    assert checks.run_lanes([one("shots:board", True)], "check", 60) == 0
+    assert bd.verdicts("shots:board") == ["catch"]
+    assert bd.verdicts("shots:hand") == []
+    assert not bd.filed

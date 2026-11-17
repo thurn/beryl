@@ -642,6 +642,9 @@ def settle(
     """Gives a verdict to each failure this run resolves: its flakes, and the earlier failures
     from the same `place` of checks that now pass. Keeps the failures that stand for a later
     run, records each verdict on its check's ticket, and returns a line for each."""
+    from .step_results import incomplete
+
+    records = [r for r in records if not incomplete(r)]
     found: list[tuple[str, str, Entry]] = []
     flaked = {str(r["check"]) for r in records if r.get("flaky")}
 

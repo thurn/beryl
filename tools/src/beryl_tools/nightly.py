@@ -118,7 +118,14 @@ def fuzz_step(commit: str, out: IO[str]) -> int:
     began = time.monotonic()
     with run.step(dict(os.environ)) as (_, results):
         code = coverage.in_tree(commit, system.utility(["just", "fuzz"]), out)
-        run.log("fuzz", "games", code == 0, time.monotonic() - began, results)
+        run.log(
+            "fuzz",
+            "games",
+            code == 0,
+            time.monotonic() - began,
+            results,
+            exit_code=code,
+        )
     return code
 
 
@@ -135,7 +142,14 @@ def scale_step(commit: str, out: IO[str]) -> int:
     with run.step(dict(os.environ)) as (env, results):
         command = [sys.executable, "-m", "beryl_tools.cli", "scale", "--assert-memory"]
         code = coverage.in_tree(commit, system.utility(command), out, env)
-        run.log("scale", "rehearsal", code == 0, time.monotonic() - began, results)
+        run.log(
+            "scale",
+            "rehearsal",
+            code == 0,
+            time.monotonic() - began,
+            results,
+            exit_code=code,
+        )
     return code
 
 
@@ -151,7 +165,14 @@ def motion_step(commit: str, out: IO[str]) -> int:
         # With the moments of cards changing zone, past the fast check's budget (motion.py).
         command = [sys.executable, "-m", "beryl_tools.cli", "motion", "--more"]
         code = coverage.in_tree(commit, system.utility(command), out, env)
-        run.log("motion", "motion", code == 0, time.monotonic() - began, results)
+        run.log(
+            "motion",
+            "motion",
+            code == 0,
+            time.monotonic() - began,
+            results,
+            exit_code=code,
+        )
     return code
 
 
@@ -168,7 +189,14 @@ def ui_counts_step(commit: str, out: IO[str]) -> int:
     with run.step(dict(os.environ)) as (env, results):
         command = [sys.executable, "-m", "beryl_tools.cli", "ui-counts", "--gate"]
         code = coverage.in_tree(commit, system.utility(command), out, env)
-        run.log("ui-counts", "ui-counts", code == 0, time.monotonic() - began, results)
+        run.log(
+            "ui-counts",
+            "ui-counts",
+            code == 0,
+            time.monotonic() - began,
+            results,
+            exit_code=code,
+        )
     return code
 
 
@@ -185,7 +213,14 @@ def oracle_step(commit: str, out: IO[str]) -> int:
     with run.step(dict(os.environ)) as (env, results):
         command = [sys.executable, "-m", "beryl_tools.cli", "oracle"]
         code = coverage.in_tree(commit, system.utility(command), out, env)
-        run.log("oracle", "oracle", code == 0, time.monotonic() - began, results)
+        run.log(
+            "oracle",
+            "oracle",
+            code == 0,
+            time.monotonic() - began,
+            results,
+            exit_code=code,
+        )
     return code
 
 
@@ -207,7 +242,14 @@ def iroh_step(commit: str, out: IO[str]) -> int:
             NIGHTLY_PACKAGE,
         ]
         code = coverage.in_tree(commit, system.utility(command), out, env)
-        run.log("iroh", "offline-link", code == 0, time.monotonic() - began, results)
+        run.log(
+            "iroh",
+            "offline-link",
+            code == 0,
+            time.monotonic() - began,
+            results,
+            exit_code=code,
+        )
     return code
 
 
