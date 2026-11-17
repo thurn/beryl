@@ -158,6 +158,12 @@ impl Client {
             }
             TablePress::SortDone => self.send_answer(Answer::Done),
             TablePress::SortCancel => self.send_answer(Answer::Cancel),
+            TablePress::Opening(press) => {
+                for answer in press.answers() {
+                    self.send_answer(answer);
+                }
+            }
+            TablePress::Leave => self.leave_table(),
         }
     }
 

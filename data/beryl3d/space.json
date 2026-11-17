@@ -890,6 +890,7 @@
       "palette": { "width": 560, "top": 96, "height": 420 },
       "log": { "width": 320, "top": 96, "height": 460 },
       "drop": { "opponent_hand": 0.0533, "rim": 2, "radius": 6 },
+      "link": { "top": 158, "top_share": 0.18, "phone_top": 8, "width": 520 },
       "sweep": { "rim": 1 },
       "selection": {
         "above": 5,

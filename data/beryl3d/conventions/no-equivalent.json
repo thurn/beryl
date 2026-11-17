@@ -89,10 +89,12 @@
       "shows": "region \"Assists\""
     },
     "Guided manual table start": {
-      "open": "The table opens with no die roll, Play or Draw choice, or Keep and Mulligan (needs bead by-q44s.9.24)"
+      "recording": "screen/table-opening",
+      "at": "end",
+      "shows": "button \"Done\""
     },
     "Manual table connection": {
-      "open": "No recording shows a dropped connection, a redial, Resume table or a join failure (needs bead by-q44s.9.24)"
+      "open": "A dropped connection freezes the table under a banner and a table the other player left offers Lobby (screen/table-left), but Beryl 3D cannot host, join or resume a table, so it shows no Resume table, join failure or version mismatch (needs bead by-q44s.9.41)"
     },
     "Manual table prompts": {
       "recording": "screen/table",

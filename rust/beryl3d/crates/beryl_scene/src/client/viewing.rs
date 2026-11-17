@@ -158,8 +158,12 @@ impl Client {
             back,
             relaid,
         };
-        let covered =
-            self.viewing.open.is_some() && matches!(self.screen, Screen::Game | Screen::Table);
+        // A pile's viewer covers the table, and so, on a manual table, do the guided start's
+        // opening and the banner of a frozen table, whose cards take no press.
+        let covered = (self.viewing.open.is_some()
+            && matches!(self.screen, Screen::Game | Screen::Table))
+            || self.guided_start()
+            || self.table_frozen();
         self.show.show_in(&self.viewing.boxes, moves, covered);
     }
 

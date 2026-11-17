@@ -11,6 +11,7 @@ pub(crate) mod opening;
 mod settings;
 mod start;
 mod table;
+mod table_opening;
 mod testing;
 
 pub use bug_report::{BugForm, BugStage, CLICK, DESCRIPTION, span};

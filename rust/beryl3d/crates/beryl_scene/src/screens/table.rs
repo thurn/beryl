@@ -5,8 +5,9 @@
 //! the dock, the token search or the library order tray; the viewer of a pile; the rectangle a
 //! sweep draws; the summary of the selected permanents; the outline of where a held card would
 //! land; and what the assists show: the proposal panel, state nudges' labels and the sorting
-//! tray (`manual::assists`). Only the solo table is built: the web interface's host and join
-//! screens come later.
+//! tray (`manual::assists`); the guided start's opening (`super::table_opening`); and, while
+//! the other seat's connection is down, the banner that says so (`manual::link`). Only the solo
+//! table can be opened: the web interface's host and join screens come later.
 
 use beryl_protocol::protocol::Facing;
 use glam::Vec2;
@@ -21,7 +22,9 @@ use crate::inspect::viewer::viewer;
 use crate::manual::Target;
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::menus::{MENU, OpenMenu};
-use crate::manual::{TableState, ask, assists, drop, log, order, palette, selection, tokens};
+use crate::manual::{
+    TableState, ask, assists, drop, link, log, opening, order, palette, selection, tokens,
+};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::widgets::{context_menu, menu, sheet_menu};
 
@@ -39,7 +42,9 @@ pub fn table(input: &ScreenIn) -> Element {
     // window, so the pointer reaches the table's cards around what it shows. It does not pass
     // presses through, which every element in it would inherit.
     let mut screen = column().name("table");
-    for (index, command) in COMMANDS.iter().enumerate() {
+    let frozen = input.view.is_some_and(link::frozen);
+    // A frozen table answers no key of its own (`manual::link`).
+    for (index, command) in COMMANDS.iter().enumerate().filter(|_| !frozen) {
         let Ok(index) = u16::try_from(index) else {
             break;
         };
@@ -53,7 +58,7 @@ pub fn table(input: &ScreenIn) -> Element {
     // With Shift held and no binding of its own, a token command's key makes its token face
     // down (`listenTableKeys` in `ui/src/table/keyboard.ts`). The unshifted bindings come
     // first, so a command bound to the shifted chord keeps it.
-    for (index, command) in COMMANDS.iter().enumerate() {
+    for (index, command) in COMMANDS.iter().enumerate().filter(|_| !frozen) {
         let Ok(index) = u16::try_from(index) else {
             break;
         };
@@ -71,7 +76,12 @@ pub fn table(input: &ScreenIn) -> Element {
         .view
         .and_then(|view| view.table.as_ref())
         .map(|table| &table.log[..]);
-    let log = lines.and_then(|lines| {
+    // A frozen table hides its log, whose undo and rewind are table input, and whose button
+    // on the phone stands where the banner does. The guided start's opening covers it.
+    let opening = input
+        .view
+        .is_some_and(|view| opening::prompt(view).is_some());
+    let log = lines.filter(|_| !frozen && !opening).and_then(|lines| {
         log::log(
             lines,
             state.log_open,
@@ -99,10 +109,15 @@ pub fn table(input: &ScreenIn) -> Element {
         .map(|(from, to)| selection::rectangle(selection::sweep_box(from, to)));
     let landing = state.landing.as_ref().map(drop::target);
     // The summary hides while a sweep is drawn, as the web's hides while selecting, and while
-    // the command list, a prompt or the order tray is open over the table.
+    // the command list, a prompt or the order tray is open over the table, or the table is frozen.
     let summary = (input.view)
-        .filter(|_| state.sweep.is_none() && !state.overlay_open())
+        .filter(|_| state.sweep.is_none() && !state.overlay_open() && !frozen)
         .and_then(|view| selection::summary(view, &state.selection, state.summary_over));
+    let window = input.window;
+    let connection = input.view.and_then(|view| {
+        let top = link::top(window.size, window.phone(), window.safe_area.top);
+        link::banner(view, window.size, top)
+    });
     screen
         .children(log)
         .children(summary)
@@ -114,6 +129,8 @@ pub fn table(input: &ScreenIn) -> Element {
         .children(sort)
         .children(open)
         .children(over(state, input))
+        .children(super::table_opening::table_opening(input))
+        .children(connection)
 }
 
 /// The command list, ask prompt, token search, custom token form or order tray the table

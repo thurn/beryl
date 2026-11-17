@@ -6,7 +6,9 @@
 //! (`ask`), the token search and custom token form (`tokens`), the library order tray (`order`)
 //! and the log (`log`); what the assists show (`assists`): the proposal panel, state nudges'
 //! labels and the sorting tray; the pile viewers (`viewers`), the selection (`selection`), dropping
-//! held cards (`drop`) and the arrows a player draws (`arrows`).
+//! held cards (`drop`) and the arrows a player draws (`arrows`); the guided start's play or
+//! draw choice and opening hands (`opening`), and the banner that freezes the table while the
+//! other seat's connection is down (`link`).
 
 pub mod arrows;
 pub mod ask;
@@ -14,9 +16,11 @@ pub mod assists;
 pub mod bindings;
 pub mod commands;
 pub mod drop;
+pub mod link;
 pub mod lobby;
 pub mod log;
 pub mod menus;
+pub mod opening;
 pub mod order;
 pub mod palette;
 pub mod selection;
@@ -107,6 +111,10 @@ pub enum TablePress {
     SortDone,
     /// The sorting tray's Cancel.
     SortCancel,
+    /// A button or card of the guided start.
+    Opening(opening::OpeningPress),
+    /// Leave the table, from the banner of a table the other player left.
+    Leave,
 }
 
 /// What the client keeps of the manual table: the open context menu, command list, ask

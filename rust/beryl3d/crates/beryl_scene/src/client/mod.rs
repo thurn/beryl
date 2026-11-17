@@ -437,6 +437,8 @@ impl Client {
         self.inspect(table_now);
         self.write_pill(self.screen == Screen::Game && self.sheet.is_none());
         let visible = self.hud_shown();
+        // The guided start's opening covers the table's life totals and pile counts, not notices.
+        let counted = visible && !self.guided_start();
         let mut builder = FrameBuilder::new(&mut self.frame, self.tier);
         // The flat layer is placed for the table's camera, so the frame takes it even when no
         // game view writes the table, as on the start screen (the "layer drawn" check).
@@ -455,9 +457,9 @@ impl Client {
             table_now,
             self.show.table().layout(),
             self.window.size,
-            (visible, targets),
+            (counted, targets),
         );
-        (self.piles).write(&mut self.layer, self.show.table(), visible);
+        (self.piles).write(&mut self.layer, self.show.table(), counted);
         (self.notices).write(
             &mut self.layer,
             self.show.notices(),

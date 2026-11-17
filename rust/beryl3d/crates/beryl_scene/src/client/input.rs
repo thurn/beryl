@@ -78,7 +78,9 @@ impl Client {
             self.press(&Press::Dismiss(Dismiss::Menu));
             return;
         }
-        if self.table_pointer(&pointer)
+        // A frozen table takes no gesture of its own; the flat layer's buttons still work.
+        let frozen = self.table_frozen();
+        if (!frozen && self.table_pointer(&pointer))
             || self.scroll_layer(&pointer)
             || self.open_table_menu(&pointer)
             || self.carry_item(&pointer)

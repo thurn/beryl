@@ -194,14 +194,14 @@ fn element(notice: &Notice, view: &PlayerView) -> Element {
                 .unwrap_or("Coin flip");
             let who = who(*player);
             let result = if *won { "won" } else { "lost" };
-            titled(title, Some(&format!("{who} {result} the flip")))
+            step_banner(title, Some(&format!("{who} {result} the flip")))
         }
         Notice::Roll { sides, outcomes } => roll(*sides, outcomes, view),
-        Notice::Shuffle => titled("Shuffled", None),
-        Notice::Rewind { to } => titled(&format!("Rewound to {to}"), None),
-        Notice::Phase { phase } => titled(phase_name(*phase), None),
-        Notice::TableTurn { name } => titled(&format!("{name}'s turn"), None),
-        Notice::Game { number } => titled(&format!("Game {number}"), None),
+        Notice::Shuffle => step_banner("Shuffled", None),
+        Notice::Rewind { to } => step_banner(&format!("Rewound to {to}"), None),
+        Notice::Phase { phase } => step_banner(phase_name(*phase), None),
+        Notice::TableTurn { name } => step_banner(&format!("{name}'s turn"), None),
+        Notice::Game { number } => step_banner(&format!("Game {number}"), None),
     }
 }
 
@@ -237,13 +237,13 @@ fn roll(sides: u32, outcomes: &[u32], view: &PlayerView) -> Element {
             let name = if seat == you { "You" } else { peer };
             let _ = write!(detail, "{name}: {result}");
         }
-        return titled("Rolled dice (d6)", Some(&detail));
+        return step_banner("Rolled dice (d6)", Some(&detail));
     }
     if let [result] = results.as_slice() {
         return if sides == 2 {
-            titled(result, None)
+            step_banner(result, None)
         } else {
-            titled(&format!("Rolled {result} (d{sides})"), None)
+            step_banner(&format!("Rolled {result} (d{sides})"), None)
         };
     }
     let title = if sides == 2 {
@@ -251,7 +251,7 @@ fn roll(sides: u32, outcomes: &[u32], view: &PlayerView) -> Element {
     } else {
         format!("Rolled dice (d{sides})")
     };
-    titled(&title, Some(&results.join(", ")))
+    step_banner(&title, Some(&results.join(", ")))
 }
 
 /// The name of a manual table's phase, as the web's `PHASES` has it.
@@ -272,7 +272,7 @@ const fn phase_name(phase: TablePhase) -> &'static str {
 }
 
 /// A banner with `title` in the title style, and `detail` below it if any.
-fn titled(title: &str, detail: Option<&str>) -> Element {
+pub(crate) fn step_banner(title: &str, detail: Option<&str>) -> Element {
     banner(text(title).style(type_style::TITLE), detail)
 }
 

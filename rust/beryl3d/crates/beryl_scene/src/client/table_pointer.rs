@@ -171,9 +171,13 @@ impl Client {
 
     /// The card in `slot`, held on the table, was let go at `at`: the cards it carries land
     /// where it was let go. Several put on the top of a library open the order tray instead.
+    /// On a frozen table (`manual::link`) nothing moves.
     pub(super) fn table_drop(&mut self, slot: usize, at: Vec2) {
         self.manual.landing = None;
-        let Some(to) = self.landing_at(slot, at) else {
+        let to = (!self.table_frozen())
+            .then(|| self.landing_at(slot, at))
+            .flatten();
+        let Some(to) = to else {
             self.show_screen();
             return;
         };

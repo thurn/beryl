@@ -35,7 +35,7 @@ pub enum SessionCommand {
     /// Change the manual table (`TableConnections::act`).
     TableAct(TableAction),
     /// Answer the table's prompt or one of its assists: a proposal's line or Apply, a state
-    /// nudge's label, an ability from a permanent's menu, or the sorting tray
+    /// nudge's label, an ability from a permanent's menu, the sorting tray, or the guided start
     /// (`TableConnections::answer`). The table's reply comes back as `Reply::TableAct`.
     TableAnswer(Answer),
     /// Close the manual table (`TableConnections::leave`).

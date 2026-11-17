@@ -100,7 +100,7 @@ impl Client {
     /// Opens the context menu of what is at `at` (`manual::target_at`) there, on the table
     /// screen with no sheet over it. Returns whether it did.
     pub(super) fn open_table_menu_at(&mut self, at: Vec2) -> bool {
-        if self.screen != Screen::Table || self.sheet.is_some() {
+        if self.screen != Screen::Table || self.sheet.is_some() || self.table_frozen() {
             return false;
         }
         let Some(view) = self.show.latest().map(|update| &update.view) else {
@@ -164,6 +164,9 @@ impl Client {
         let Some(command) = commands::COMMANDS.get(usize::from(index)) else {
             return;
         };
+        if self.table_frozen() {
+            return;
+        }
         let Some(view) = self.show.latest().map(|update| &update.view) else {
             return;
         };
@@ -237,6 +240,21 @@ impl Client {
         }
         self.manual.pending.push_back(Sent::Other);
         self.commands.push_back(SessionCommand::TableAnswer(answer));
+    }
+
+    /// Whether the table on screen shows the guided start's opening (`manual::opening`).
+    pub(super) fn guided_start(&self) -> bool {
+        self.screen == Screen::Table
+            && (self.show.latest())
+                .is_some_and(|update| manual::opening::prompt(&update.view).is_some())
+    }
+
+    /// Whether the table on screen is frozen because the other seat's connection is down or
+    /// the other player left (`manual::link`): the pointer and the keys then reach only the
+    /// banner's Lobby and what the flat layer shows over every screen.
+    pub(super) fn table_frozen(&self) -> bool {
+        self.screen == Screen::Table
+            && (self.show.latest()).is_some_and(|update| crate::manual::link::frozen(&update.view))
     }
 
     /// The table answered the oldest table action not yet answered: a token it made is the one

@@ -27,7 +27,7 @@ use super::ScreenIn;
 use crate::data::space::flat::opening as metrics;
 use crate::data::space::flat::phone::opening as phone;
 use crate::data::space::flat::phone::{ACTION_GAP, ACTION_HEIGHT, GUTTER};
-use crate::element::{Align, Anchor, Element, Justify, Shown, column, row, text};
+use crate::element::{Align, Anchor, Element, Justify, Press, Shown, column, row, text};
 use crate::frame::Role;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
 use crate::text::TypeStyle;
@@ -86,19 +86,71 @@ pub fn opening(input: &ScreenIn) -> Option<Element> {
         0
     };
     let title = title(view, picking.is_some());
-    let slots = to_bottom.max(bottom.len());
+    let actions = if picking.is_some() {
+        1
+    } else {
+        input.prompt.map_or(0, |prompt| prompt.buttons.len())
+    };
+    let shown: Vec<ObjectId> = (hand.iter().copied())
+        .filter(|&slot| !picked(slot))
+        .filter(|_| starting.is_some())
+        .collect();
+    Some(present(
+        &Presentation {
+            view,
+            starting,
+            title: &title,
+            hand: &shown,
+            rows: hand.len(),
+            bottom: &bottom,
+            slots: to_bottom.max(bottom.len()),
+            actions,
+            press: None,
+        },
+        input,
+    ))
+}
+
+/// What an opening shows: whether the viewer is on the play (none while that is still being
+/// chosen), the title, the cards still in the hand row and those on their way to the bottom,
+/// how many cards the hand holds in all (which sizes the phone's rows), how many slots the
+/// bottom row has, how many buttons the dock holds, and what a press on a card does, if
+/// anything. The engine's game and the manual table each fill it from their own prompt.
+pub(crate) struct Presentation<'a> {
+    pub view: &'a PlayerView,
+    pub starting: Option<Side>,
+    pub title: &'a str,
+    pub hand: &'a [ObjectId],
+    pub rows: usize,
+    pub bottom: &'a [ObjectId],
+    pub slots: usize,
+    pub actions: usize,
+    pub press: Option<fn(ObjectId) -> Press>,
+}
+
+/// The opening `shown` describes, over the dimmed table: the coin, the title, the hand and the
+/// bottom slots, as the web's `OpeningPresentation` lays them out.
+pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
+    let Presentation {
+        view,
+        starting,
+        slots,
+        ..
+    } = *shown;
     let sizes = if super::phone(input) {
         // Room for both rows while cards move between the hand and the slots, as the web
         // keeps it, and for the prompt's buttons in the dock under them.
-        let rows = hand.len().div_ceil(phone::PER_ROW);
-        let actions = if picking.is_some() {
-            1
-        } else {
-            input.prompt.map_or(0, |prompt| prompt.buttons.len())
-        };
-        Sizes::phone(input.window, rows, slots, actions)
+        let rows = shown.rows.div_ceil(phone::PER_ROW);
+        Sizes::phone(input.window, rows, slots, shown.actions)
     } else {
         Sizes::DESKTOP
+    };
+    let card = |slot: ObjectId, width: f32| {
+        let card = card_box(view, slot, width);
+        match shown.press {
+            Some(press) => card.on_press(press(slot)),
+            None => card,
+        }
     };
     let mut coin = row().name("coin").height(sizes.coin_height);
     coin.style.margin = [0.0, 0.0, sizes.coin_gap, 0.0];
@@ -115,15 +167,12 @@ pub fn opening(input: &ScreenIn) -> Option<Element> {
                 .passes(true),
         );
     }
-    let mut heading = text(&title)
+    let mut heading = text(shown.title)
         .style(sizes.title)
         .color(color::TEXT)
         .passes(true);
     heading.style.margin = [0.0, 0.0, sizes.title_gap, 0.0];
-    let cards = (hand.iter())
-        .filter(|&&slot| !picked(slot))
-        .filter(|_| starting.is_some())
-        .map(|&slot| card_box(view, slot, sizes.card));
+    let cards = (shown.hand.iter()).map(|&slot| card(slot, sizes.card));
     let mut hand_row = row().name("hand").gap(sizes.card_gap).children(cards);
     if let Some(width) = sizes.hand_width {
         // The phone's hand wraps in rows of four (`.phone-opening .opening-hand`).
@@ -133,8 +182,8 @@ pub fn opening(input: &ScreenIn) -> Option<Element> {
             .justify_content(Justify::Center);
     }
     let slots_row = (slots > 0).then(|| {
-        let boxes = (0..slots).map(|at| match bottom.get(at) {
-            Some(&slot) => card_box(view, slot, sizes.slot),
+        let boxes = (0..slots).map(|at| match shown.bottom.get(at) {
+            Some(&slot) => card(slot, sizes.slot),
             None => empty_slot(at, sizes.slot),
         });
         let mut slots_row = row()
@@ -144,9 +193,12 @@ pub fn opening(input: &ScreenIn) -> Option<Element> {
         slots_row.style.margin = [sizes.slots_gap, 0.0, 0.0, 0.0];
         slots_row
     });
+    // The pointer goes through to the table's cards, unless the cards here take presses of
+    // their own, which they would inherit the passing from.
+    let passes = shown.press.is_none();
     let mut screen = column()
         .name("opening")
-        .passes(true)
+        .passes(passes)
         .align_items(Align::Center)
         .child(coin)
         .child(heading)
@@ -156,13 +208,11 @@ pub fn opening(input: &ScreenIn) -> Option<Element> {
     // below the window's top middle instead, as the web pads `.opening` down from the top.
     let top = Vec2::new(input.window.size.width / 2.0, sizes.top);
     screen.anchor = Some(Anchor::Point(top, Vec2::new(0.5, 0.0)));
-    Some(
-        row()
-            .name("opening screen")
-            .passes(true)
-            .child(super::backdrop(input))
-            .child(screen),
-    )
+    row()
+        .name("opening screen")
+        .passes(passes)
+        .child(super::backdrop(input))
+        .child(screen)
 }
 
 /// The title, as the web's `Opening` words it.

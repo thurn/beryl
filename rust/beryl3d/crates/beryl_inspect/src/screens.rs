@@ -6,12 +6,15 @@
 //! deck loaded. The manual table's assists have one of their own, `screen/table-assists`: the
 //! same table with every assist on, a turn upkeep proposal, a state nudge's label on the
 //! opponent's creature and an activated ability on the viewer's first land.
+//! The other `screen/table-*` recordings are the same table with something more: the guided
+//! start's play or draw choice (`first`), the opening hand after a mulligan with a card to put
+//! on the bottom (`opening`), and a hosted table the other player left (`left`).
 
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::{CARD_RECORDS, FixtureMessage, LIST_AGENTS, TABLE_LOBBY};
 use beryl_protocol::protocol::{
-    AssistsView, CardType, LabelView, LogLine, PlayerState, ProposalLine, ProposalView, Side,
-    TableAbilityOption, TableCardCommands, TableView, TargetRef, ZoneName,
+    AssistsView, CardType, LabelView, LinkState, LogLine, PlayerState, ProposalLine, ProposalView,
+    Side, TableAbilityOption, TableCardCommands, TablePrompt, TableView, TargetRef, ZoneName,
 };
 use beryl_protocol::script::Reset;
 use beryl_protocol::{AgentView, GameUpdate, PlayerView, SessionId};
@@ -22,11 +25,14 @@ use beryl_scene::testing;
 pub const PREFIX: &str = "screen/";
 
 /// The name of every screen recording.
-pub const NAMES: [&str; 8] = [
+pub const NAMES: [&str; 11] = [
     "screen/start",
     "screen/lobby",
     "screen/table",
     "screen/table-assists",
+    "screen/table-first",
+    "screen/table-opening",
+    "screen/table-left",
     "screen/gallery",
     "screen/testing",
     "screen/settings",
@@ -74,11 +80,10 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
     let opens = match opened {
         "settings" | "bug-report" => vec!["start", opened],
         // A table's view opens the table screen; the start screen's press would start a table.
-        "table" | "table-assists" => Vec::new(),
+        _ if table_screen(opened) => Vec::new(),
         _ => vec![opened],
     };
-    let table_screen = opened.starts_with("table");
-    let mut view = if table_screen {
+    let mut view = if table_screen(opened) {
         let mut view = testing::ViewBuilder::sample().build();
         let mut table = testing::table(&view);
         // A few log lines, so that the checks see the log at the table's left with its undo
@@ -100,6 +105,7 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         if opened == "table-assists" {
             assists(&view, &mut table);
         }
+        guided_or_linked(opened, &mut table);
         view.table = Some(table);
         view
     } else {
@@ -111,7 +117,7 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         Vec::new(),
     ));
     // The table's cards have placeholder faces, as a stress board's do.
-    let records = if table_screen {
+    let records = if table_screen(opened) {
         crate::stress::placeholder_records(std::slice::from_ref(&view))
     } else {
         CardRecords::none()
@@ -201,5 +207,39 @@ fn assists(view: &PlayerView, table: &mut TableView) {
                 }],
             },
         );
+    }
+}
+
+/// Whether the screen recording `opened` (its name after `PREFIX`) is a hand-built table's view.
+fn table_screen(opened: &str) -> bool {
+    opened.starts_with("table")
+}
+
+/// Gives the hand-built `table` what the screen recording `opened` adds to it: the
+/// guided start's play or draw choice, its opening hand after one mulligan, or a link to a
+/// guest who has left.
+fn guided_or_linked(opened: &str, table: &mut TableView) {
+    match opened {
+        "table-first" => {
+            table.choosing_first = true;
+            table.prompt = Some(TablePrompt::Choose {
+                title: "You won the roll".to_owned(),
+                options: vec!["Play".to_owned(), "Draw".to_owned()],
+                selected: None,
+            });
+        }
+        "table-opening" => {
+            table.prompt = Some(TablePrompt::Opening {
+                hand: table.orders.you.hand.clone(),
+                mulligans: 1,
+                to_bottom: Some(1),
+                bottom: Vec::new(),
+            });
+        }
+        "table-left" => {
+            table.link = LinkState::Left;
+            table.peer_name = Some("Alex".to_owned());
+        }
+        _ => {}
     }
 }
