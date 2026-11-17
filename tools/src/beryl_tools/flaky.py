@@ -14,6 +14,12 @@ concurrent runs sharing a fixture directory, an exporter changing between attemp
 those beads cost an Opus session. A check that flakes less than once a week costs one rerun a
 week, which is cheaper.
 
+Each bead and each later comment quotes the end of the failed attempt's output ([`tail`]),
+and the whole of it is kept in `$BERYL_CACHE/ci/flakes` ([`keep`]) for [`KEEP_DAYS`]. Before
+this, the run printed only the rerun's passing output, and the Beryl 3D sweep overwrites its
+output file on every firing, so the six flaky-check beads open on 2026-11-17 for steps that
+name no checks of their own each asked an Opus session to find a failure nothing had kept.
+
 Each check has at most one open bead, labeled [`LABEL`] with the check in its metadata
 ([`CHECK_KEY`]). While it is open, a later flake of the same check adds a comment to it instead
 of filing another. Nothing here fails a run: a bd call that fails is reported and the run goes
@@ -22,17 +28,25 @@ on (verdicts.Beads).
 
 from __future__ import annotations
 
+import re
 import socket
+import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from . import verdicts
+from . import paths, verdicts
 
 LABEL = "flaky-check"
 CHECK_KEY = "beryl_flaky_check"
 PRIORITY = "1"
 # How recent an earlier flake of the same check must be for a flake to file a bead.
 REPEAT_DAYS = 7
+# How much of the failed attempt's output a bead or comment quotes.
+TAIL_LINES = 40
+TAIL_CHARS = 3000
+# How long a failed attempt's whole output is kept.
+KEEP_DAYS = 14
 
 
 @dataclass(frozen=True)
@@ -85,6 +99,52 @@ def earlier(
     return found
 
 
+def tail(output: str) -> str:
+    """The end of a failed attempt's output, short enough for a bead."""
+    return "\n".join(output.rstrip().splitlines()[-TAIL_LINES:])[-TAIL_CHARS:]
+
+
+def folder() -> Path:
+    return paths.cache_root() / "ci" / "flakes"
+
+
+def keep(check: str, output: str, where: Path | None = None) -> Path | None:
+    """Writes a failed attempt's whole `output` to a file of its own under `where` (`folder`
+    by default) and returns it, after removing files there older than [`KEEP_DAYS`]; None when
+    there is no output or it cannot be written."""
+    if not output.strip():
+        return None
+    where = where or folder()
+    try:
+        where.mkdir(parents=True, exist_ok=True)
+        old = time.time() - KEEP_DAYS * 86400
+        for f in where.glob("*.txt"):
+            if f.stat().st_mtime < old:
+                f.unlink(missing_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        name = re.sub(r"[^A-Za-z0-9._-]+", "_", check)[:120]
+        # A run's flakes in the same second, or a concurrent run's, each get a file.
+        for n in range(1000):
+            path = where / f"{stamp}-{name}{f'-{n}' if n else ''}.txt"
+            try:
+                with open(path, "x") as handle:
+                    handle.write(output)
+                return path
+            except FileExistsError:
+                continue
+        return None
+    except OSError:
+        return None
+
+
+def quoted(output: str, kept: Path | None, host: str) -> str:
+    """The failed attempt's output as a bead quotes it: its tail and where the rest is."""
+    if not output.strip():
+        return "The failed attempt printed nothing."
+    where = f" The whole output is in `{kept}` on {host}." if kept else ""
+    return f"The end of the failed attempt's output:{where}\n\n```\n{tail(output)}\n```"
+
+
 def title(check: str, flake: Flake) -> str:
     if flake.whole:
         return f"Delete the flaky test in step {check}"
@@ -100,15 +160,21 @@ def acceptance(check: str, flake: Flake) -> str:
     return f"`{check}` no longer runs in CI, {done}"
 
 
-def body(check: str, flake: Flake, where: str, before: list[verdicts.Entry]) -> str:
+def body(
+    check: str,
+    flake: Flake,
+    where: str,
+    before: list[verdicts.Entry],
+    failure: str = "",
+) -> str:
     what = (
         f"The step `{check}`, which names no checks of its own,"
         if flake.whole
         else f"The check `{check}` (lane `{flake.lane}`)"
     )
     find = (
-        "First find which test or check inside the step failed: the slow-CI and fast-check"
-        " logs of the failing run show its output. Then treat that one as the flaky check.\n\n"
+        "First find which test or check inside the step failed, from the output above. Then"
+        " treat that one as the flaky check.\n\n"
         if flake.whole
         else ""
     )
@@ -117,7 +183,8 @@ def body(check: str, flake: Flake, where: str, before: list[verdicts.Entry]) -> 
         f" flaked the same way {len(before)} time(s) in the {REPEAT_DAYS} days before, in other"
         f" runs: {', '.join(was(e) for e in before)}. The flake failed no lane, but checks must fail deterministically, so the flaky one is deleted"
         " instead of being rerun until it passes. `just ci-report` lists its runs, failures"
-        f" and verdicts; its bead of verdicts is {verdicts.bead_id(check)}.\n\n{find}"
+        f" and verdicts; its bead of verdicts is {verdicts.bead_id(check)}.\n\n"
+        f"{failure + chr(10) * 2 if failure else ''}{find}"
         "Before deleting it, ask: could a fast, deterministic test (a Rust unit test, a Node"
         " test with no browser, a check against a recorded fixture) keep most of what this"
         " check protects? If so, write that test, then delete this check. If not, delete it"
@@ -141,10 +208,12 @@ def report(
     commit: str,
     store: verdicts.Beads | None = None,
     host: str | None = None,
+    failures: dict[str, str] | None = None,
 ) -> list[str]:
     """Comments on the open bead of each check in `flakes` that has one, and files a bead for
     each other check that flaked in another run in the last `REPEAT_DAYS` (`earlier`); returns
-    a line for each."""
+    a line for each. Each comment and bead quotes the check's failed attempt from `failures`
+    ([`quoted`]), whose whole output is kept ([`keep`])."""
     if not flakes:
         return []
     store = store or verdicts.STORE
@@ -154,10 +223,16 @@ def report(
     # One `bd export` for all of them, and none when every flaky check has its bead open.
     history = store.history([c for c in flakes if c not in known])
     lines: list[str] = []
+    short = host.split(".")[0]
     for check, flake in sorted(flakes.items()):
+        output = (failures or {}).get(check, "")
+        kept = keep(check, output)
+        if kept:
+            lines.append(f"flaky: {check}: its failed attempt's output is in {kept}")
+        failure = quoted(output, kept, short)
         bead = known.get(check)
         if bead:
-            store.add_comment(bead, f"Flaked again in {where}.")
+            store.add_comment(bead, f"Flaked again in {where}.\n\n{failure}")
             lines.append(f"flaky: {check}: {bead} is open to delete it")
             continue
         before = earlier(history.get(check, []), script, commit, host)
@@ -169,7 +244,7 @@ def report(
             continue
         code, out = store.create_issue(
             title=title(check, flake),
-            body=body(check, flake, where, before),
+            body=body(check, flake, where, before, failure),
             acceptance=acceptance(check, flake),
             priority=PRIORITY,
             labels=f"{LABEL},tier:opus",

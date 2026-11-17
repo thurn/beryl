@@ -381,6 +381,12 @@ ticket-backed reports with fixtures.
   first flake files nothing: most single flakes came from the run, not the check
   (a loaded sweep, a shared fixture directory, code changing between the
   attempts). Each check has at most one open bead; a later flake comments on it.
+- The bead, and each later comment, quotes the last 40 lines of the failed
+  attempt's output, and the whole output is kept for 14 days in
+  `$BERYL_CACHE/ci/flakes` on the machine that ran it. Without this, a step that
+  names no checks of its own left its bead nothing to go on: the run prints only
+  the rerun's passing output, and the Beryl 3D sweep overwrites its output file
+  on every firing.
 - The agent working that bead first asks whether a fast, deterministic test (a
   Rust unit test, a Node test with no browser, a check against a recorded
   fixture) could keep most of what the check protects. If so, it writes that

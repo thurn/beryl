@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from beryl_tools.flaky import folder as flakes_folder
 from beryl_tools import (
     checks,
     cli,
@@ -37,6 +38,7 @@ class FakeBd(verdicts.Beads):
                 "title": args[args.index("--title") + 1],
                 "priority": args[args.index("--priority") + 1],
                 "acceptance": args[args.index("--acceptance") + 1],
+                "body": args[args.index("--description") + 1],
                 "metadata": json.loads(args[args.index("--metadata") + 1]),
                 "comments": [],
             }
@@ -136,7 +138,7 @@ def flaky(check: str, root: Path, whole: bool = False) -> checks.Lane:
     fails, passes = reports(check, "fail", "false")[2], reports(check, "pass")[2]
     if whole:
         fails, passes = "false", "true"
-    once = f"if [ -e ran ]; then {passes}; else touch ran; {fails}; fi"
+    once = f"if [ -e ran ]; then {passes}; else touch ran; echo 'first attempt broke'; {fails}; fi"
     lane = check.split(":")[0]
     return checks.Lane(lane).step(lane, ["sh", "-c", once], root, rerun=checks.whole)
 
@@ -349,6 +351,11 @@ def test_a_check_files_its_delete_bead_when_it_flakes_in_a_second_run(
     assert checks.run_lanes([flaky("ui-test:scry", tmp_path)], "check", 60) == 0
     [(bead, filed)] = bd.filed.items()
     assert filed["title"] == "Delete flaky check ui-test:scry"
+    # The bead quotes the failed attempt, whose rerun's passing output is all the run printed,
+    # and the whole of it is kept.
+    assert "first attempt broke" in str(filed["body"])
+    kept = sorted(flakes_folder().glob("*-ui-test_scry*.txt"))
+    assert len(kept) == 4 and "first attempt broke" in kept[-1].read_text()
     assert filed["priority"] == "1"
     assert filed["metadata"] == {"beryl_flaky_check": "ui-test:scry"}
     assert f"flaky: ui-test:scry: filed {bead} to delete it" in capsys.readouterr().out
@@ -358,6 +365,7 @@ def test_a_check_files_its_delete_bead_when_it_flakes_in_a_second_run(
     assert list(bd.filed) == [bead]
     [comment] = bd.filed[bead]["comments"]  # pyre-ignore[23]: a list, from FakeBd
     assert str(comment).startswith("Flaked again in `by check`")
+    assert "first attempt broke" in str(comment)
     assert (
         f"flaky: ui-test:scry: {bead} is open to delete it" in capsys.readouterr().out
     )

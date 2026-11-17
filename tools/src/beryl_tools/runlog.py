@@ -188,6 +188,10 @@ class Run:
     # Why a check ran, unless its step says (`label`): slow CI runs them all.
     chosen: str = "all"
     logged: list[dict[str, object]] = field(default_factory=list)
+    # The output of the failed attempt of each check that then passed on its rerun, by check
+    # (checks.lane_steps). flaky.py quotes it on the check's bead, since the rerun's passing
+    # output is all the run prints of that step.
+    failures: dict[str, str] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     @staticmethod
@@ -332,8 +336,9 @@ class Run:
                 for r in records
                 if r.get("flaky")
             }
+            failures = {c: self.failures.get(c, "") for c in flakes}
             return lines + flaky.report(
-                flakes, self.script, self.commit, host=self.host
+                flakes, self.script, self.commit, host=self.host, failures=failures
             )
         except Exception as e:  # Neither do verdicts.
             warn(e)

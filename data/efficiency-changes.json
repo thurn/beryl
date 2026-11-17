@@ -228,5 +228,10 @@
     "label": "The fast check's pytest step runs the Python test files that fit its window, those the change edits or whose imports reach it first, and stops at the window's end, instead of all 855 tests on any tools/ change (median 93 s, cut off at 180 s in a quarter of runs), and the browser sweep runs the whole suite",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+  },
+  {
+    "label": "A flaky-check bead and its repeat comments quote the failed attempt's output, kept for 14 days in $BERYL_CACHE/ci/flakes, instead of naming only the step and sending an Opus session to look for logs that the rerun and the Beryl 3D sweep had already overwritten (6 such beads for whole steps open on 2026-11-17)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

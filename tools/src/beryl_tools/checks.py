@@ -325,6 +325,9 @@ def lane_steps(
                 flaky.extend(checks or [step.name])
                 for r in records:
                     r["flaky"] = r["outcome"] == "fail"
+                    if r["flaky"]:
+                        with run.lock:
+                            run.failures[str(r["check"])] = output
             return again, rerun, output_again
         log.append(ended)
         return code, records, output
