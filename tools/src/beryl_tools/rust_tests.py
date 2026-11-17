@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 
 from . import (
     card_text,
+    compile_timings,
     deadline,
     paths,
     runlog,
@@ -164,9 +165,10 @@ def rust_lane(
     )
     if checked == []:
         return lane
-    lane.step("clippy", [*STEP, "clippy", *scope]).step(
+    timing = [] if fast else ["--timings"]
+    lane.step("clippy", [*STEP, "clippy", *timing, *scope]).step(
         "tests",
-        [*STEP, "fast-rust-tests" if fast else "rust-tests", *named],
+        [*STEP, "fast-rust-tests" if fast else "rust-tests", *timing, *named],
         rerun=failed_tests,
     )
     if text_inputs or card_text.affected(checked):
@@ -179,17 +181,20 @@ def rust_lane(
 def clippy_step(*scope: str) -> int:
     """The rust lane's clippy step over `scope` (`BUILD_SCOPE`), in clippy's own target
     directory (`paths.CLIPPY_TARGET`, which says why)."""
+    command = [
+        "cargo",
+        "clippy",
+        "--locked",
+        *(s for s in scope if s != "--timings"),
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings",
+    ]
+    if "--timings" in scope:
+        return compile_timings.run(command, "clippy", paths.clippy_env()).returncode
     return subprocess.run(
-        [
-            "cargo",
-            "clippy",
-            "--locked",
-            *scope,
-            "--all-targets",
-            "--",
-            "-D",
-            "warnings",
-        ],
+        command,
         cwd=paths.RUST,
         env=paths.clippy_env(),
         stdin=subprocess.DEVNULL,
@@ -245,6 +250,8 @@ def rust_tests_step(
     cargo-nextest is missing. Each test's result goes to the run log: nextest's from its JUnit
     report (rust/.config/nextest.toml), the `allocations` targets' and the doctests' as one
     check each."""
+    timed = "--timings" in only
+    only = tuple(a for a in only if a != "--timings")
     routine = fast or slow
     if routine and packages is not None:
         packages = [package for package in packages if package != NIGHTLY_PACKAGE]
@@ -263,6 +270,10 @@ def rust_tests_step(
             file=sys.stderr,
             flush=True,
         )
+        if timed:
+            built = compile_timings.run([*cargo, "--no-run"], "test-build")
+            if built.returncode:
+                return CANNOT_RUN
         return subprocess.run(cargo, cwd=paths.RUST, check=False).returncode
     # Inside a fast check, the tests that run are those that fit its target (rust_fit.py); the
     # records to plan with are read while the tests build.
@@ -272,13 +283,17 @@ def rust_tests_step(
         else None
     )
     started = time.perf_counter()
-    build = subprocess.run(
-        [*cargo, "--no-run", "--message-format=json-render-diagnostics"],
-        cwd=paths.RUST,
-        stdout=subprocess.PIPE,
-        text=True,
-        errors="replace",
-        check=False,
+    build = (
+        compile_timings.run([*cargo, "--no-run"], "test-build")
+        if timed
+        else subprocess.run(
+            [*cargo, "--no-run", "--message-format=json-render-diagnostics"],
+            cwd=paths.RUST,
+            stdout=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            check=False,
+        )
     )
     # The build's share of the step, which says whether a slow run compiled or tested slowly.
     print(finished_line(time.perf_counter() - started), flush=True)

@@ -39,6 +39,7 @@ from . import (
     session,
     store,
     tickets,
+    timings,
 )
 from .beads import main_checkout
 from .metrics import Mark
@@ -70,6 +71,7 @@ def sources() -> list[ingest.Source]:
         cpu.Leases(cpu.leases_path(paths.cache_root()), host),
         locks.LockLog(locks.folder(checkout), host),
         cilog.RunLog(cilog.runlog_path(paths.cache_root())),
+        timings.Timings(paths.cache_root()),
         verdicts,
         commits.Commits.here(checkout),
     ]
@@ -531,6 +533,15 @@ def run_machine(args: argparse.Namespace) -> Result:
     return answer(args, machine.report)
 
 
+def run_compile(args: argparse.Namespace) -> Result:
+    fresh(args)
+    db = reader()
+    try:
+        return timings.report(db, from_arguments(args))
+    finally:
+        db.close()
+
+
 def run_enact(args: argparse.Namespace) -> Result:
     return answer(args, locks.report)
 
@@ -555,6 +566,12 @@ def run_findings(args: argparse.Namespace) -> Result:
 
 
 def run_metrics(args: argparse.Namespace) -> Result:
+    fresh(args)
+    db = reader()
+    try:
+        timings.register_metrics(db)
+    finally:
+        db.close()
     if args.name is None:
         return metrics.listing()
     name: str = str(args.name)
@@ -582,6 +599,10 @@ def run_changes(args: argparse.Namespace) -> Result:
 
 
 QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
+    "compile": (
+        "per-crate Cargo unit seconds by mode, with cache hits separate",
+        run_compile,
+    ),
     "summary": (
         "tickets closed, per-ticket medians, where time and dollars went, epics",
         run_summary,
@@ -642,6 +663,7 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
 # The queries that take `--since` and cohort filters, with their default range: roll-ups
 # look at the last week, drill-downs at everything.
 SCOPED: dict[str, str] = {
+    "compile": "7d",
     "summary": "7d",
     "time": "7d",
     "dollars": "7d",

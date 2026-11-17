@@ -422,8 +422,14 @@ which test definition each real card's scenario now covers.
   build, read from `cargo --timings` output that the `rust` lane's steps write
   when run with a flag, and from the scale rehearsal. `just efficiency metrics`
   gains `compile.<crate>.check`, `.clippy` and `.test-build`. The same ticket
-  fixes `just efficiency cards`, which did not finish in two minutes during
-  planning.
+  profiles `just efficiency cards`, which did not finish in two minutes during
+  planning, separating query time from automatic ingestion and recording what it
+  is waiting for if the delay remains. Slow CI enables `--timings`; the fast
+  check leaves it off. Stable Cargo's HTML `UNIT_DATA` supplies unit durations
+  and its artifact messages supply freshness. The `compile` query reports
+  rebuilt medians separately from cache hits. Its shares use summed unit seconds
+  within each mode, because parallel units overlap; CPU-token waits, build-lock
+  waits and copying the cache are not compile costs.
 - **Then fix the largest.** One ticket takes the three largest costs the series
   shows and reduces each, with before and after in its close reason. The known
   candidates are downstream monomorphization in `beryl_search` (section C),

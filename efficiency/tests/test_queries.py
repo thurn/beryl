@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_efficiency import claude, cli, facts, ingest, store
+from beryl_efficiency import changes, claude, cli, facts, ingest, store
 from beryl_efficiency.beads import Beads
 from beryl_efficiency.scope import Scope, parse_since
 from tests.synthetic import CHECKOUT, PROJECT, Transcript, listing
@@ -371,8 +371,10 @@ def test_a_session_lists_its_rows_in_order(
 
 
 def test_metrics_lists_and_draws_its_series(
-    root: Path, capsys: pytest.CaptureFixture[str]
+    root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(changes, "load", lambda: [])
+    monkeypatch.setattr(changes, "file_versions", lambda checkout: [])
     _, listed = run(capsys, "metrics")
     found = listed["metrics"]
     assert isinstance(found, list)
@@ -384,10 +386,7 @@ def test_metrics_lists_and_draws_its_series(
     assert isinstance(days, list)
     # A ticket is dated by when it began; these tickets have no start, so by their creation.
     assert [(d["day"], d["count"]) for d in days] == [("2026-11-01", 3)]
-    # Marks come from the checkout's own data/efficiency-changes.json, so only their metric is fixed.
-    marks = series["marks"]
-    assert isinstance(marks, list)
-    assert all(m["metric"] == "bead.dollars" for m in marks)
+    assert series["marks"] == []
     assert cli.main(["metrics", "no.such", "--no-ingest"]) == 1
 
 

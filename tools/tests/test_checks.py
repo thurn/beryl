@@ -740,7 +740,7 @@ def test_the_steps_that_run_the_cli_share_one_build_that_holds_no_idle_tokens(
 
 
 def test_clippy_builds_in_its_own_target_directory() -> None:
-    clippy = next(s for s in rust_tests.rust_lane().steps if s.name == "clippy")
+    clippy = next(s for s in checks.rust_lane(fast=True).steps if s.name == "clippy")
     assert clippy.cmd[-len(paths.BUILD_SCOPE) - 1 :] == ["clippy", *paths.BUILD_SCOPE]
     assert paths.clippy_env()["CARGO_TARGET_DIR"] == str(paths.CLIPPY_TARGET)
     assert paths.CLIPPY_TARGET.parent == paths.RUST / "target"
