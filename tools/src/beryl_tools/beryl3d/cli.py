@@ -197,7 +197,9 @@ def record() -> int:
     built = shared_build()
     if built != 0:
         return built
-    line = [str(program("record"))]
+    # Cargo refreshes the top-level copy even when it compiles nothing. Use the linker's
+    # file so a warm invocation does not pay macOS's first-run check again (`linked`).
+    line = [str(linked("record"))]
     # `record` spreads its jobs over `runner::spread`, which adds threads as its lease grows.
     return tokens.run_program(
         line, grow=True, cwd=paths.WORKSPACE, check=False

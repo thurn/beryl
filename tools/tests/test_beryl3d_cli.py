@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import sys
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager
 from pathlib import Path
@@ -110,7 +111,7 @@ def test_a_missing_pack_is_recorded_and_the_command_run_again(
         ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"],
         ["/linked/b3d", "list"],
         cli.SHARED_BUILD,
-        ["/built/record"],
+        ["/linked/record"],
         ["/linked/b3d", "list"],
     ]
 
@@ -245,3 +246,95 @@ def test_a_build_runs_under_the_checkouts_build_lock(
     monkeypatch.setattr(cli, "cargo", cargo)
     assert cli.shared_build() == 0
     assert held == [True]
+
+
+# A compiler controlled through stdin, so concurrent lanes and cancellation are tested
+# without sleeps or assumptions about how quickly either process gets scheduled.
+BUILD_CHILD = """
+import sys
+from pathlib import Path
+from beryl_tools.beryl3d import cli
+
+root = Path(sys.argv[1])
+cli.paths.build_lock = lambda: root / 'build.lock'
+
+def cargo(arguments):
+    assert arguments == cli.SHARED_BUILD
+    try:
+        with cli.system.file_lock(cli.paths.build_lock(), timeout=0):
+            raise AssertionError('cargo started outside the build lock')
+    except cli.system.LockHeld:
+        pass
+    print('locked', flush=True)
+    assert sys.stdin.read(1) == 'x'
+    built = root / 'built'
+    if built.exists():
+        print('reused', flush=True)
+        return 0
+    print('compiling', flush=True)
+    built.write_text('ready')
+    return 0
+
+cli.cargo = cargo
+print('started', flush=True)
+raise SystemExit(cli.shared_build())
+"""
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+def test_parallel_lanes_reuse_a_build_and_a_canceled_holder_releases_it(
+    tmp_path: Path, cancel: bool
+) -> None:
+    children: list[subprocess.Popen[str]] = []
+    try:
+        for _ in range(3):
+            child = subprocess.Popen(
+                [sys.executable, "-c", BUILD_CHILD, str(tmp_path)],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+            children.append(child)
+            output_pipe = child.stdout
+            assert output_pipe is not None
+            assert output_pipe.readline().strip() == "started"
+            if len(children) == 1:
+                assert output_pipe.readline().strip() == "locked"
+
+        first, *followers = children
+        if cancel:
+            first.kill()
+            first.wait()
+            assert not (tmp_path / "built").exists()
+        else:
+            input_pipe = first.stdin
+            assert input_pipe is not None
+            input_pipe.write("x")
+            input_pipe.flush()
+            assert first.wait() == 0
+
+        # Either follower may acquire the released lock first.
+        for child in followers:
+            input_pipe = child.stdin
+            assert input_pipe is not None
+            input_pipe.write("x")
+            input_pipe.flush()
+        results = []
+        for child in followers:
+            output, _ = child.communicate()
+            assert child.returncode == 0
+            locked, result = output.splitlines()
+            assert locked == "locked"
+            results.append(result)
+        assert sorted(results) == (
+            ["compiling", "reused"] if cancel else ["reused"] * 2
+        )
+        assert (tmp_path / "built").read_text() == "ready"
+    finally:
+        for child in children:
+            if child.poll() is None:
+                child.kill()
+            child.wait()
+            for pipe in (child.stdin, child.stdout):
+                if pipe is not None:
+                    pipe.close()
