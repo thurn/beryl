@@ -230,5 +230,38 @@ pub mod scenarios {
                 ME.mana(ManaColor::Red, 3),
                 ME.has(Zone::Graveyard, Card::LionsEyeDiamond, 1),
             ]),
+        // The artifact has only a triggered ability. It is legal to name, and
+        // its enter trigger still exiles P0's Needle.
+        Scenario::new("Pithing Needle can name a card with only a triggered ability")
+            .battlefield(P0, &[Card::Island])
+            .hand(P0, &[NEEDLE, Card::Plains])
+            .battlefield(P1, &[Card::Plains])
+            .hand(P1, &[Prop::Artifact])
+            .actions(&[
+                ME.casts(NEEDLE),
+                Resolve,
+                ME.names(Prop::Artifact),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.casts(Prop::Artifact),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Exile, NEEDLE, 1),
+            ]),
+        // Naming Thalia leaves her static cost increase in effect.
+        Scenario::new("Pithing Needle leaves Thalia's spell tax in effect")
+            .interaction(&[Card::ThaliaGuardianOfThraben, Card::LightningBolt])
+            .battlefield(P0, &[Card::Mountain; 4])
+            .hand(P0, &[NEEDLE, Card::LightningBolt])
+            .battlefield(P1, &[Card::ThaliaGuardianOfThraben])
+            .actions(&[
+                ME.casts(NEEDLE),
+                Resolve,
+                ME.names(Card::ThaliaGuardianOfThraben),
+                ME.casts(Card::LightningBolt),
+                ME.targets_player(THEM),
+                ME.tapped(Card::Mountain, 4),
+                Resolve,
+                THEM.life(17),
+            ]),
     ];
 }

@@ -70,6 +70,28 @@
     }
   ],
   "Braingeyser": [],
+  "Cavern of Souls": [
+    {
+      "published_at": "2018-12-07",
+      "hash": "9802dae67ba6",
+      "covered": "Replacement::choose_as_enters"
+    },
+    {
+      "published_at": "2018-12-07",
+      "hash": "7288823ce2c0",
+      "untestable": "Cavern of Souls' mana protects a spell when spent on kicker covers ordinary casting. Scripting a kicker paid on a spell cast without its mana cost requires selecting a specific casting option from a CastOffer. See by-ptc7.2.20."
+    },
+    {
+      "published_at": "2023-11-10",
+      "hash": "7288823ce2c0",
+      "untestable": "Cavern of Souls' mana protects a spell when spent on kicker covers ordinary casting. Scripting a kicker paid on a spell cast without its mana cost requires selecting a specific casting option from a CastOffer. See by-ptc7.2.20."
+    },
+    {
+      "published_at": "2023-11-10",
+      "hash": "9802dae67ba6",
+      "covered": "Replacement::choose_as_enters"
+    }
+  ],
   "Chains of Mephistopheles": [
     {
       "published_at": "2004-10-04",
@@ -484,6 +506,29 @@
       ]
     }
   ],
+  "Gurmag Angler": [
+    {
+      "published_at": "2021-03-19",
+      "hash": "b7d5be1f1f35",
+      "scenario": [
+        "Gurmag Angler cast for one mana still drains for seven"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "8636578e770e",
+      "scenario": [
+        "Gurmag Angler can delve while escaping"
+      ]
+    },
+    {
+      "published_at": "2021-03-19",
+      "hash": "1afc05f82747",
+      "scenario": [
+        "Gurmag Angler with seven cards in the graveyard costs {B}"
+      ]
+    }
+  ],
   "Humility": [
     {
       "published_at": "2006-02-01",
@@ -871,6 +916,44 @@
       "untestable": "No implemented creature has X in its printed mana cost. A scenario with an X creature such as Stonecoil Serpent needs an entry replacement whose counter count comes from the cast spell’s X."
     }
   ],
+  "Pithing Needle": [
+    {
+      "published_at": "2005-06-01",
+      "hash": "088320ffe374",
+      "scenario": [
+        "naming Strip Mine leaves its mana ability"
+      ]
+    },
+    {
+      "published_at": "2005-06-01",
+      "hash": "556b7b9f37fe",
+      "scenario": [
+        "Pithing Needle can name a card with only a triggered ability",
+        "naming a card stops a token copy of it"
+      ]
+    },
+    {
+      "published_at": "2005-06-01",
+      "hash": "f709db8dfd4e",
+      "untestable": "The scenario naming a card stops it from being cycled in hand covers the hand. The activation engine only offers actions from the hand and battlefield, so the graveyard and exile cases await by-ptc7.2.18."
+    },
+    {
+      "published_at": "2009-10-01",
+      "hash": "f49d86995b08",
+      "scenario": [
+        "Pithing Needle leaving the battlefield ends its restriction"
+      ]
+    },
+    {
+      "published_at": "2012-10-01",
+      "hash": "6c8d3cfd7460",
+      "scenario": [
+        "naming a planeswalker stops its loyalty abilities",
+        "Pithing Needle can name a card with only a triggered ability",
+        "Pithing Needle leaves Thalia's spell tax in effect"
+      ]
+    }
+  ],
   "Quicksilver Gargantuan": [
     {
       "published_at": "2011-01-01",
@@ -1028,6 +1111,42 @@
       ]
     }
   ],
+  "Thalia, Guardian of Thraben": [
+    {
+      "published_at": "2018-03-16",
+      "hash": "889b8c10da1e",
+      "scenario": [
+        "Thalia and Helm adjust Force of Will's alternative cost",
+        "Thalia increases the cost without changing mana value"
+      ]
+    },
+    {
+      "published_at": "2018-03-16",
+      "hash": "a9e866a2571e",
+      "scenario": [
+        "Thalia: Lightning Bolt costs one more",
+        "Thalia: an opponent's Counterspell costs one more",
+        "Thalia: a creature spell costs no more"
+      ]
+    },
+    {
+      "published_at": "2021-11-19",
+      "hash": "889b8c10da1e",
+      "scenario": [
+        "Thalia and Helm adjust Force of Will's alternative cost",
+        "Thalia increases the cost without changing mana value"
+      ]
+    },
+    {
+      "published_at": "2021-11-19",
+      "hash": "a9e866a2571e",
+      "scenario": [
+        "Thalia: Lightning Bolt costs one more",
+        "Thalia: an opponent's Counterspell costs one more",
+        "Thalia: a creature spell costs no more"
+      ]
+    }
+  ],
   "Thespian's Stage": [
     {
       "published_at": "2018-12-07",
@@ -1057,6 +1176,21 @@
         "it copies an opponent's Dark Depths for Marit Lage",
         "it copies what is printed on a land Blood Moon made a Mountain"
       ]
+    }
+  ],
+  "Trinisphere": [
+    {
+      "published_at": "2020-08-07",
+      "hash": "0b4ac53ec3f0",
+      "scenario": [
+        "Trinisphere sets the final cost without changing mana value",
+        "Trinisphere and Thalia: flashback costs three"
+      ]
+    },
+    {
+      "published_at": "2020-08-07",
+      "hash": "943aceb7f9eb",
+      "untestable": "Casting Shrapnel Blast by sacrificing Trinisphere is rejected at game setup because spells cannot yet sacrifice a permanent as a cost. See by-ptc7.2.19."
     }
   ],
   "Underworld Breach": [

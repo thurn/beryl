@@ -114,5 +114,50 @@ pub mod scenarios {
                 Resolve,
                 ME.controls(ANGLER, 1),
             ]),
+        // Exiling six cards pays the generic cost and leaves the printed mana
+        // value at seven for Mana Drain's delayed trigger.
+        Scenario::new("Gurmag Angler cast for one mana still drains for seven")
+            .interaction(&[Card::ManaDrain])
+            .battlefield(P0, &[Card::Swamp])
+            .hand(P0, &[ANGLER])
+            .graveyard(P0, &[Card::Island; 6])
+            .battlefield(P1, &[Card::Island; 2])
+            .hand(P1, &[Card::ManaDrain, Card::Plains])
+            .actions(&[
+                ME.casts(ANGLER),
+                ME.has(Zone::Exile, Card::Island, 6),
+                THEM.casts(Card::ManaDrain),
+                ME.has(Zone::Graveyard, ANGLER, 1),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.passes(),
+                THEM.mana(ManaColor::Colorless, 7),
+            ]),
+        // Escape supplies the alternative cost. Delve pays its generic mana with
+        // six cards, and escape's separate cost takes three more.
+        Scenario::new("Gurmag Angler can delve while escaping")
+            .interaction(&[Card::UnderworldBreach])
+            .battlefield(P0, &[Card::UnderworldBreach, Card::Swamp])
+            .graveyard(
+                P0,
+                &[
+                    ANGLER,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .actions(&[
+                ME.escapes(ANGLER),
+                ME.tapped(Card::Swamp, 1),
+                ME.has(Zone::Exile, Card::Island, 9),
+                Resolve,
+                ME.controls(ANGLER, 1),
+            ]),
     ];
 }

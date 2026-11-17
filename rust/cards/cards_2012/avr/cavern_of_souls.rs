@@ -218,5 +218,32 @@ pub mod scenarios {
                 THEM.passes(),
                 THEM.mana(ManaColor::Colorless, 2),
             ]),
+        // Swamps cover the base price and the generic part of kicker. Only the
+        // Cavern can pay kicker's blue mana, and that alone protects the spell.
+        Scenario::new("Cavern of Souls' mana protects a spell when spent on kicker")
+            .interaction(&[Card::UrborgEmissary])
+            .battlefield(P0, &[Card::Swamp; 4])
+            .hand(P0, &[Card::CavernOfSouls, Card::UrborgEmissary])
+            .battlefield(P1, &[Card::Island, Card::Island, Prop::Flier])
+            .hand(P1, &[Prop::Instant])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Wizard"),
+                Action::Cast {
+                    player: P0,
+                    card: Card::UrborgEmissary,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                ME.tapped(Card::Swamp, 4),
+                ME.tapped(Card::CavernOfSouls, 1),
+                THEM.casts(Prop::Instant),
+                Resolve,
+                ME.targets(Prop::Flier),
+                Resolve,
+                THEM.has(Zone::Graveyard, Prop::Instant, 1),
+                THEM.has(Zone::Hand, Prop::Flier, 1),
+                ME.controls(Card::UrborgEmissary, 1),
+            ]),
     ];
 }

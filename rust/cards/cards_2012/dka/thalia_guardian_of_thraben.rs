@@ -83,5 +83,44 @@ pub mod scenarios {
                 Resolve,
                 ME.controls(MOTHER, 1),
             ]),
+        // Thalia adds one generic mana to Force's alternative cost, which
+        // starts with no mana. Helm can then remove exactly that mana.
+        Scenario::new("Thalia and Helm adjust Force of Will's alternative cost")
+            .interaction(&[Card::ForceOfWill, Card::HelmOfAwakening])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(P0, &[THALIA, Card::HelmOfAwakening])
+            .hand(P0, &[Card::ForceOfWill, Prop::UntargetedSpell])
+            .battlefield(P1, &[Card::Plains])
+            .hand(P1, &[Prop::Artifact, Card::Plains])
+            .actions(&[
+                THEM.casts(Prop::Artifact),
+                Action::Cast {
+                    player: P0,
+                    card: Card::ForceOfWill,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                ME.life(19),
+                ME.has(Zone::Exile, Prop::UntargetedSpell, 1),
+                THEM.has(Zone::Graveyard, Prop::Artifact, 1),
+            ]),
+        // Mana Drain reads Bolt's printed mana value even though Thalia taxes it.
+        Scenario::new("Thalia increases the cost without changing mana value")
+            .interaction(&[BOLT, Card::ManaDrain])
+            .battlefield(P0, &[THALIA, Card::Mountain, Card::Mountain])
+            .hand(P0, &[BOLT])
+            .battlefield(P1, &[Card::Island; 3])
+            .hand(P1, &[Card::ManaDrain, Card::Plains])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                ME.tapped(Card::Mountain, 2),
+                THEM.casts(Card::ManaDrain),
+                ME.has(Zone::Graveyard, BOLT, 1),
+                ME.done_attacking(),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.passes(),
+                THEM.mana(ManaColor::Colorless, 1),
+            ]),
     ];
 }

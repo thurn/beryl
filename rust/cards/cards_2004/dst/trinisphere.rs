@@ -216,5 +216,34 @@ pub mod scenarios {
                 Resolve,
                 ME.controls(Card::Plains, 2),
             ]),
+        // Thalia's increase and Helm's reduction apply before the minimum. Bolt
+        // costs three to cast, and Mana Drain still reads its printed mana value.
+        Scenario::new("Trinisphere sets the final cost without changing mana value")
+            .interaction(&[BOLT, THALIA, Card::HelmOfAwakening, Card::ManaDrain])
+            .battlefield(
+                P0,
+                &[
+                    TRINISPHERE,
+                    THALIA,
+                    Card::HelmOfAwakening,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                ],
+            )
+            .hand(P0, &[BOLT])
+            .battlefield(P1, &[Card::Island; 3])
+            .hand(P1, &[Card::ManaDrain, Card::Plains])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                ME.tapped(Card::Mountain, 3),
+                THEM.casts(Card::ManaDrain),
+                ME.has(Zone::Graveyard, BOLT, 1),
+                ME.done_attacking(),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.passes(),
+                THEM.mana(ManaColor::Colorless, 1),
+            ]),
     ];
 }
