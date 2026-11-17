@@ -22,5 +22,53 @@
     "card": "Glasspool Mimic",
     "scenario": "generated 2: cast from hand",
     "gap": "a choice Beryl leaves out because no answer changes anything, which the oracle asks anyway: whether to enter as a copy when the player controls no creature"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Dandân",
+    "scenario": "generated 5: wait for the state condition on the battlefield",
+    "gap": "a setup trigger pending at the first main phase"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Dark Depths",
+    "scenario": "generated 3: remove the source's last counter on the battlefield",
+    "gap": "Dark Depths starts with fewer counters than it enters with"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Jace, Wielder of Mysteries",
+    "scenario": "generated 6: draw outside the draw step on the battlefield",
+    "gap": "a Win outcome assertion"
+  },
+  {
+    "oracle": "forge",
+    "card": "Snapcaster Mage",
+    "scenario": "generated 2: use a casting permission from the graveyard from hand",
+    "gap": "casting a spell with flashback"
+  },
+  {
+    "oracle": "forge",
+    "card": "Snapcaster Mage",
+    "scenario": "generated 3: use a casting permission from the graveyard from hand",
+    "gap": "casting a spell with flashback"
+  },
+  {
+    "oracle": "forge",
+    "card": "Snapcaster Mage",
+    "scenario": "generated 4: use a casting permission from the graveyard from hand",
+    "gap": "casting a spell with flashback"
+  },
+  {
+    "oracle": "forge",
+    "card": "Underworld Breach",
+    "scenario": "generated 8: cast a spell with granted escape on the battlefield",
+    "gap": "paying more than one casting option, or one not described"
+  },
+  {
+    "oracle": "forge",
+    "card": "Underworld Breach",
+    "scenario": "generated 9: cast a spell with granted escape on the battlefield",
+    "gap": "paying more than one casting option, or one not described"
   }
 ]

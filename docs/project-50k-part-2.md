@@ -461,8 +461,11 @@ hand-picked witnesses. Twenty-seven abilities are listed as unreachable
   listens to or replaces, the generator has a recipe that makes the event
   happen: the opponent attacks, either player casts, draws, discards, gains or
   loses life, a creature dies, the card itself leaves the battlefield, damage is
-  dealt. A test holds that every `TriggerEvent` and every replaced event has a
-  recipe.
+  dealt, a land is played or a permanent enters. A test and exhaustive matches
+  hold every `TriggerEvent` and replaced event to a recipe. An ability can be
+  exercised from the graveyard or exile. When an effect gives permission to cast
+  from either zone, the recipe plays the granting effect and uses the permission
+  at priority. The 16-run cap applies to each recipe opening.
 - **Witnesses from neighbours.** A witness is a position fragment under which a
   field's value changes the outcome. A test requires one for every neighbour
   `neighbours.rs` can make, so adding a mutant kind without a way to observe it

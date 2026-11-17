@@ -144,6 +144,10 @@ fn run_card(name: &str) -> ExitCode {
     for why in unplayable {
         println!("fail generated: a run could not be played: {why}");
     }
+    let cut = match derived.as_ref().map_or(0, |generated| generated.cut) {
+        0 => String::new(),
+        cut => format!(" ({cut} generated answers cut at the per-opening limit)"),
+    };
     let generated = derived.as_ref().map_or(0, |d| d.scenarios.len());
     let custom = if derived.is_none() {
         " (a Rust body: none generated)"
@@ -151,7 +155,7 @@ fn run_card(name: &str) -> ExitCode {
         ""
     };
     println!(
-        "{} hand-written, {generated} generated{custom}, {} failed",
+        "{} hand-written, {generated} generated{custom}, {} failed{cut}",
         written.len(),
         failed + unplayable.len()
     );

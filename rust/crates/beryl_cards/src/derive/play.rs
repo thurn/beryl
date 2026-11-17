@@ -7,7 +7,8 @@ use beryl_engine::card::{
     Ability, CardDef, FaceIx, ObjectAbility, TargetKind, TriggerEvent, Types,
 };
 
-use beryl_engine::{DecisionKind, Outcome, Step, TurnStep};
+use beryl_card::Seat;
+use beryl_engine::{Decision, DecisionKind, Opt, Outcome, Step, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, Ending, Live, P0, Scenario};
 
 use super::position::{LAST_TURN, Place, TURN};
@@ -28,12 +29,20 @@ pub(super) enum Stimulus {
     Act(Action),
     /// An action player 0 takes at their priority with something on the stack: a response.
     Respond(Action),
+    /// Take this action if the preceding play left it legal. Otherwise drop this run.
+    Try(Action),
+    /// Cast a card only once an earlier action gave it permission in this zone.
+    CastFrom(Seat, &'static str, Zone),
+    /// Choose this target if the runner has not already chosen its sole target.
+    Aim(Action),
     /// Pass priority, the stack empty, until the game reaches step `.1` of turn `.0`. Unlike
     /// [`Action::AdvanceTo`], it lets every question on the way be asked: an attacker to
     /// declare, a trigger's target.
     PassUntil(u16, TurnStep),
     /// Stop here, whatever is on the stack.
     Hold,
+    /// Keep this run even if the source acted through a rule or replacement.
+    Keep,
 }
 
 /// One run of an opening.
@@ -47,6 +56,8 @@ pub(super) struct Run {
     /// only by the card: the oracles may put them on the stack either way, and then ask that
     /// question of another trigger.
     pub(super) unordered: bool,
+    /// A recipe could not take its prescribed action in this branch.
+    pub(super) unavailable: bool,
 }
 
 /// The cards player 0 casts a spell of the card's own in response to: a sorcery, and a
@@ -277,9 +288,55 @@ impl Walk {
                 actions: prelude.to_vec(),
                 touched: false,
                 unordered: false,
+                unavailable: false,
             },
             next: 0,
         })
+    }
+
+    /// Carry out an action prescribed by a recipe when it applies to this decision.
+    fn try_stimulus(&mut self, pending: Option<Stimulus>, decision: &Decision) -> bool {
+        let at_priority =
+            decision.kind == DecisionKind::Priority && self.live.state().stack().is_empty();
+        let action = match pending {
+            Some(Stimulus::Aim(answer)) => {
+                if let Action::Answer { player, kind, .. } = answer
+                    && (kind != decision.kind || player != decision.decider)
+                {
+                    // The runner chooses a sole legal target silently.
+                    self.next += 1;
+                    return true;
+                }
+                Some(answer)
+            }
+            Some(Stimulus::Try(action)) if at_priority => Some(action),
+            Some(Stimulus::CastFrom(player, card, zone)) if at_priority => self
+                .live
+                .picks(decision)
+                .into_iter()
+                .find_map(|(choice, action)| {
+                    let Opt::Cast { slot, .. } = decision.candidates.option(choice)? else {
+                        return None;
+                    };
+                    (decision.player == player
+                        && self.live.name(slot) == card
+                        && self.live.state().object(slot).zone() == zone)
+                        .then_some(action)
+                }),
+            _ => return false,
+        };
+        // A recipe need not remain legal after each alternate branch. Only the action
+        // under the current decision is optional. Errors advancing the game still fail it.
+        if let Some(action) = action
+            && self.live.act(action).is_ok()
+        {
+            self.run.actions.push(action);
+            self.run.touched = true;
+            self.next += 1;
+        } else {
+            self.run.unavailable = true;
+        }
+        true
     }
 
     /// The run, done: a script that ends the game says so, or the runner, which plays no
@@ -309,6 +366,7 @@ impl Walk {
 /// question answered. The first question takes answer `first` where it is given; each other
 /// takes its first answer, and each of its other answers not yet in `taken` joins `taken`
 /// and goes to `branches` with a copy of the walk at that question, for a later run.
+#[allow(clippy::too_many_lines)]
 pub(super) fn walk(
     def: &'static CardDef,
     stimuli: &[Stimulus],
@@ -331,13 +389,20 @@ pub(super) fn walk(
             break;
         }
         let pending = stimuli.get(walk.next).copied();
+        if matches!(pending, Some(Stimulus::Keep)) {
+            walk.run.touched = true;
+            walk.next += 1;
+            continue;
+        }
         let probe = match (s.stack().is_empty(), pending) {
             (_, Some(Stimulus::Hold)) => break,
             // Done, unless what was done triggered something not yet on the stack.
-            (true, None | Some(Stimulus::PassUntil(..))) => Action::pass(P0),
-            (true, Some(Stimulus::Act(action))) | (false, Some(Stimulus::Respond(action))) => {
-                action
-            }
+            (
+                true,
+                None | Some(Stimulus::PassUntil(..) | Stimulus::Keep | Stimulus::CastFrom(..)),
+            ) => Action::pass(P0),
+            (true, Some(Stimulus::Act(action) | Stimulus::Try(action) | Stimulus::Aim(action)))
+            | (false, Some(Stimulus::Respond(action))) => action,
             (true, Some(Stimulus::Respond(_))) => {
                 return Err("nothing on the stack to respond to".to_owned());
             }
@@ -350,6 +415,12 @@ pub(super) fn walk(
         let now = *walk.live.state().turn();
         if now.number() > LAST_TURN {
             break;
+        }
+        if walk.try_stimulus(pending, &d) {
+            if walk.run.unavailable {
+                break;
+            }
+            continue;
         }
         let action = if d.kind == DecisionKind::Priority {
             let stack = !walk.live.state().stack().is_empty();
@@ -375,7 +446,15 @@ pub(super) fn walk(
                     }
                     (Action::pass(d.player), false)
                 }
-                Some(Stimulus::Respond(_) | Stimulus::Hold) | None => break,
+                Some(
+                    Stimulus::Respond(_)
+                    | Stimulus::Hold
+                    | Stimulus::Keep
+                    | Stimulus::Aim(_)
+                    | Stimulus::Try(_)
+                    | Stimulus::CastFrom(..),
+                )
+                | None => break,
             };
             if done {
                 walk.run.touched |= names_card(action, def);

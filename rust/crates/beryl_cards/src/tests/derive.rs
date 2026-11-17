@@ -16,102 +16,15 @@ const CUSTOM: &[&str] = &[];
 /// a generated scenario exercises fails too, so the list stays current.
 const UNREACHED: &[(&str, &str)] = &[
     (
-        "Reki, the History of Kamigawa: ability 0 (Triggered)",
-        "it triggers on a legendary spell its controller casts, and a generated scenario casts \
-         a sorcery, which is not legendary; the card's hand-written scenarios cast a legendary \
-         creature",
-    ),
-    (
-        "Animate Dead: ability 3 (Triggered)",
-        "it is the delayed ability the enters ability creates, which triggers as Animate Dead \
-         leaves the battlefield, and a generated scenario never makes it leave; the card's \
-         hand-written scenarios destroy it and flicker it",
-    ),
-    (
-        "Underworld Breach: ability 0 (Static)",
-        "it gives escape to nonland cards in its controller's graveyard, and a generated scenario \
-         casts the card with that graveyard empty; the card's hand-written scenarios escape \
-         creatures, instants, sorceries and an artifact",
-    ),
-    (
-        "Dark Depths: ability 2 (Triggered)",
-        "it triggers once Dark Depths has no ice counters, and a generated position starts it \
-         with the ten it enters with, which ten activations would remove; the card's \
-         hand-written scenarios start it with one or two",
-    ),
-    (
         "Cavern of Souls: ability 2 (Mana)",
         "its mana pays only for a creature spell of the type the land chose as it entered, and a \
          generated position puts the land onto the battlefield having chosen none; the card's \
          hand-written scenarios play it, choose Human and cast a Human with that mana",
     ),
     (
-        "Bloodghast: ability 0 (Static)",
-        "it stops the card blocking, and a generated scenario casts the card and never has an \
-         opponent attack; the card's hand-written scenarios have one attack into it",
-    ),
-    (
-        "Bloodghast: ability 1 (Static)",
-        "it gives haste while an opponent has 10 or less life, and a generated scenario leaves \
-         every life total at 20; the card's hand-written scenarios lower it and attack",
-    ),
-    (
-        "Bloodghast: ability 2 (Triggered)",
-        "it works only in a graveyard, and a generated scenario casts the card from a hand; \
-         the card's hand-written scenarios play a land with it in a graveyard",
-    ),
-    (
-        "Dandân: ability 0 (Static)",
-        "it stops the card attacking a player with no Island, and a generated scenario casts the \
-         card and never attacks; the card's hand-written scenarios attack players with and \
-         without one",
-    ),
-    (
-        "Dandân: ability 1 (Triggered)",
-        "it triggers when its controller controls no Island, and a generated scenario casts the \
-         card with Islands and keeps them; the card's hand-written scenarios have Mind Bend make \
-         the Island a Swamp",
-    ),
-    (
         "Lord of Atlantis: ability 0 (Static)",
         "it affects only other Merfolk, and a generated scenario casts the card with none on the \
          battlefield; the card's hand-written scenarios have Merfolk on both sides",
-    ),
-    (
-        "Life from the Loam: ability 1 (Replacement)",
-        "dredge works from a graveyard, and a generated scenario casts the card from a hand and \
-         draws nothing after; the card's hand-written scenarios dredge in the draw step and \
-         during a spell",
-    ),
-    (
-        "Rest in Peace: ability 1 (Replacement)",
-        "casting it puts nothing into a graveyard: it becomes a permanent, and its enters \
-         trigger exiles; the card's hand-written scenarios destroy and discard under it",
-    ),
-    (
-        "Chains of Mephistopheles: ability 0 (Replacement)",
-        "a generated scenario casts the card and no player draws after it resolves; the card's \
-         hand-written scenarios draw under it in and out of the draw step",
-    ),
-    (
-        "Notion Thief: ability 0 (Replacement)",
-        "a generated scenario casts the card and no opponent draws after it resolves; the \
-         card's hand-written scenarios have the opponent loot under it",
-    ),
-    (
-        "Hullbreacher: ability 0 (Replacement)",
-        "a generated scenario casts the card and no opponent draws after it resolves; the \
-         card's hand-written scenarios have the opponent loot under it",
-    ),
-    (
-        "Furnace of Rath: ability 0 (Replacement)",
-        "casting it deals no damage, and a generated position has nothing that deals damage \
-         after; the card's hand-written scenarios double Lightning Bolt's and combat damage",
-    ),
-    (
-        "Containment Priest: ability 0 (Replacement)",
-        "a generated scenario puts onto the battlefield only spells it casts, which were cast; \
-         the card's hand-written scenarios return creatures with Flickerwisp under it",
     ),
     (
         "Spara's Headquarters: ability 0 (Mana)",
@@ -130,18 +43,6 @@ const UNREACHED: &[(&str, &str)] = &[
         "as offspring's trigger",
     ),
     (
-        "Fiend Hunter: ability 1 (Triggered)",
-        "it returns the cards exiled with the Hunter, and a generated scenario casts the card and \
-         never has it leave the battlefield; the card's hand-written scenarios destroy and bounce \
-         it",
-    ),
-    (
-        "Worldgorger Dragon: ability 1 (Triggered)",
-        "it returns the cards exiled with the Dragon, and a generated scenario casts the card and \
-         never has it leave the battlefield; the card's hand-written scenarios destroy it and \
-         sacrifice it to Animate Dead's leaves ability",
-    ),
-    (
         "Leonin Scimitar: ability 1 (Activated)",
         "equip targets a creature its controller controls, and a generated position gives the \
          Equipment's controller none; the card's hand-written scenario equips one",
@@ -154,11 +55,6 @@ const UNREACHED: &[(&str, &str)] = &[
     (
         "Leonin Scimitar: ability 0 (Static)",
         "it changes only the creature the Equipment is attached to, as equip",
-    ),
-    (
-        "Jace, Wielder of Mysteries: ability 0 (Replacement)",
-        "it replaces a draw from an empty library, and a generated position's library empties \
-         only under the −8, whose own second sentence wins the game first",
     ),
 ];
 
@@ -246,6 +142,49 @@ fn generating_twice_gives_the_same_scenarios() {
         }
     });
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Start each permission with an ordinary game action. A successful cast must have used
+/// it: Snapcaster's spell is exiled on resolution and the Spellbinder's opponent adds a
+/// second copy of the creature to the battlefield.
+#[test]
+fn generated_openings_use_permissions_from_graveyard_and_exile() {
+    use crate::{names, props};
+    use beryl_engine::Zone;
+    use beryl_scenario::{P0, P1};
+    use beryl_scenario_types::{ME, THEM};
+
+    let cases = [
+        (
+            names::SNAPCASTER_MAGE,
+            P0,
+            props::SORCERY.card,
+            ME.has(Zone::Exile, props::SORCERY.card, 1),
+        ),
+        (
+            names::ELITE_SPELLBINDER,
+            P1,
+            props::VANILLA.card,
+            THEM.controls(props::VANILLA.card, 2),
+        ),
+    ];
+    for (source, caster, spell, assertion) in cases {
+        let generated = derive::for_card(card(source));
+        let used = generated.scenarios.iter().any(|scenario| {
+            if !scenario.actions.iter().any(|action| matches!(
+                action, beryl_scenario::Action::Cast { player, card, .. } if *player == caster && *card == spell
+            )) {
+                return false;
+            }
+            let mut actions = scenario.actions.to_vec();
+            actions.push(assertion);
+            beryl_scenario::run(&CARDS, &scenario.actions(Vec::leak(actions))).is_ok()
+        });
+        assert!(
+            used,
+            "{source} never generated a successful cast with the permission"
+        );
+    }
 }
 
 /// The abilities and casting options of `def`'s faces, each named for a report, with the

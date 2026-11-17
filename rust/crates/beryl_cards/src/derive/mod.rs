@@ -10,8 +10,9 @@
 //! opens a scenario (cast with each set of its casting options, played as a land, each ability
 //! activated), as does each of those in response to a spell where it had none, and each event
 //! its triggered abilities wait for that the position can bring about: an attack, a step, a
-//! spell cast ([`play`]). What follows is played to a quiet position, the stack resolved, and
-//! on to the end step where the card has an ability that waits for a step.
+//! spell cast ([`play`]). Event recipes add just the hand or battlefield cards they need.
+//! They can take actions on either player's turn, including drawing, discarding, and
+//! interacting with a source on the battlefield, in a graveyard or in exile ([`recipe`]).
 //!
 //! Every question asked on the way (a target, a mode, a "may", an "unless", a payment, an
 //! attacker or a blocker) gets each answer the scenario vocabulary can give it: the first run
@@ -35,6 +36,7 @@ use crate::CARDS;
 
 mod play;
 mod position;
+mod recipe;
 mod witness;
 
 use play::{Answers, Walk, openings, walk};
@@ -45,9 +47,7 @@ use witness::{Witness, witnesses};
 pub const PREFIX: &str = "generated";
 
 /// The most runs one opening plays, a bound on what a card with many questions adds to the
-/// tests and the oracle lane. The answers past it, in the order the runs come to them, are left
-/// untaken and counted in [`Generated::cut`]: today twelve, of two cards, all of them choices
-/// of cards where a run before took others.
+/// tests and the oracle lane. The queued answers past it count toward [`Generated::cut`].
 const MOST_RUNS: usize = 16;
 
 /// One card's generated scenarios.
@@ -162,6 +162,10 @@ pub fn for_card(def: &'static CardDef) -> Generated {
         failures: Vec::new(),
         cut: 0,
     };
+    let mut generator = Generator {
+        def,
+        generated: &mut generated,
+    };
     let witnesses = witnesses(def);
     for (place, witness) in positions(def, &witnesses) {
         // Playing the same actions from a witness can exercise a different ability.
@@ -173,59 +177,94 @@ pub fn for_card(def: &'static CardDef) -> Generated {
             Some(w) => format!("{} {}", place.words(), w.words),
             None => place.words(),
         };
-        'openings: for (label, stimuli) in openings(def, place, &start, prelude, &preamble) {
-            // The runs still to play, each a walk to go on with and the answer it is to give
-            // the question it stopped at, and the answers some run gave or will give.
-            let mut pending: VecDeque<(Walk, Option<usize>)> = VecDeque::new();
-            match Walk::new(&start, prelude) {
-                Ok(first) => pending.push_back((first, None)),
-                Err(e) => generated.failures.push(format!("{words}: {e}")),
-            }
-            let mut taken = Answers::new();
-            let mut runs = 0;
-            while let Some((from, answer)) = pending.pop_front() {
-                if runs == MOST_RUNS {
-                    generated.cut += pending.len() + 1;
-                    break;
-                }
-                runs += 1;
-                let mut branches = Vec::new();
-                let run = match walk(def, &stimuli, from, answer, &mut taken, &mut branches) {
-                    Ok(walked) => walked.finish(def, place),
-                    Err(e) => {
-                        generated.failures.push(format!("{label} {words}: {e}"));
-                        break;
-                    }
-                };
-                if !matches!(place, Place::Mana(..)) {
-                    pending.extend(branches.into_iter().map(|(w, answer)| (w, Some(answer))));
-                }
-                // A block among several attackers, which neither oracle's exporter can say,
-                // leaves the run out, as does a question after triggers ordered by name.
-                let block = |a: &Action| matches!(a, Action::Answer { kind, .. } if *kind == DecisionKind::BlockTarget);
-                if run.unordered || run.actions.iter().any(block) {
-                    continue;
-                }
-                if !run.touched || !seen.insert(format!("{:?}", run.actions)) {
-                    continue;
-                }
-                let name = String::leak(format!(
-                    "{PREFIX} {}: {label} {words}",
-                    generated.scenarios.len() + 1,
-                ));
-                let scenario = Scenario {
-                    name,
-                    actions: Vec::leak(run.actions),
-                    ..start
-                };
-                generated.scenarios.push(scenario);
-                if let Place::Mana(..) = place {
-                    // As mana, the card's part is the same whatever the spell asks: one run
-                    // of the first spell it pays for is enough.
-                    break 'openings;
-                }
+        for (label, stimuli) in openings(def, place, &start, prelude, &preamble) {
+            let label = format!("{label} {words}");
+            if generator.opening(place, &start, prelude, &label, &stimuli, &mut seen) {
+                break;
             }
         }
     }
+    for opening in recipe::openings(def) {
+        generator.opening(
+            opening.place,
+            &opening.start,
+            &[],
+            &opening.label,
+            &opening.stimuli,
+            &mut BTreeSet::new(),
+        );
+    }
     generated
+}
+
+struct Generator<'a> {
+    def: &'static CardDef,
+    generated: &'a mut Generated,
+}
+
+impl Generator<'_> {
+    /// Play one opening and its alternate answers. Return whether a mana opening has
+    /// already shown the source paying for a spell.
+    fn opening(
+        &mut self,
+        place: Place,
+        start: &Scenario,
+        prelude: &[Action],
+        label: &str,
+        stimuli: &[play::Stimulus],
+        seen: &mut BTreeSet<String>,
+    ) -> bool {
+        // The runs still to play, each a walk to go on with and the answer it is to give
+        // the question it stopped at, and the answers some run gave or will give.
+        let mut pending: VecDeque<(Walk, Option<usize>)> = VecDeque::new();
+        match Walk::new(start, prelude) {
+            Ok(first) => pending.push_back((first, None)),
+            Err(e) => self.generated.failures.push(format!("{label}: {e}")),
+        }
+        let mut taken = Answers::new();
+        let mut runs = 0;
+        while let Some((from, answer)) = pending.pop_front() {
+            if runs == MOST_RUNS {
+                self.generated.cut += pending.len() + 1;
+                break;
+            }
+            runs += 1;
+            let mut branches = Vec::new();
+            let run = match walk(self.def, stimuli, from, answer, &mut taken, &mut branches) {
+                Ok(walked) => walked.finish(self.def, place),
+                Err(e) => {
+                    self.generated.failures.push(format!("{label}: {e}"));
+                    break;
+                }
+            };
+            if !matches!(place, Place::Mana(..)) {
+                pending.extend(branches.into_iter().map(|(w, answer)| (w, Some(answer))));
+            }
+            // A block among several attackers, which neither oracle's exporter can say,
+            // leaves the run out, as does a question after triggers ordered by name.
+            let block = |a: &Action| matches!(a, Action::Answer { kind, .. } if *kind == DecisionKind::BlockTarget);
+            if run.unavailable || run.unordered || run.actions.iter().any(block) {
+                continue;
+            }
+            if !run.touched || !seen.insert(format!("{:?}", run.actions)) {
+                continue;
+            }
+            let name = String::leak(format!(
+                "{PREFIX} {}: {label}",
+                self.generated.scenarios.len() + 1,
+            ));
+            let scenario = Scenario {
+                name,
+                actions: Vec::leak(run.actions),
+                ..*start
+            };
+            self.generated.scenarios.push(scenario);
+            if let Place::Mana(..) = place {
+                // As mana, the card's part is the same whatever the spell asks: one run
+                // of the first spell it pays for is enough.
+                return true;
+            }
+        }
+        false
+    }
 }

@@ -72,6 +72,7 @@ def test_exporter_gaps_turn_failures_unsupported_and_report_stale_ones(
         {
             ("xmage", "Generated", "Generated 1"): "a gap",
             ("xmage", "Generated", "Generated 2"): "another gap",
+            ("xmage", "Generated", "Generated 3"): "an exporter refusal",
             ("forge", "Generated", "Generated 1"): "Forge's gap",
         },
     )
@@ -79,7 +80,7 @@ def test_exporter_gaps_turn_failures_unsupported_and_report_stale_ones(
         "pass": 1,
         "fail": 1,
         "allowlisted": 0,
-        "unsupported": 0,
+        "unsupported": 1,
         "scenarios": [
             {
                 "card": "Generated",
@@ -88,11 +89,17 @@ def test_exporter_gaps_turn_failures_unsupported_and_report_stale_ones(
                 "failure": "x",
             },
             {"card": "Generated", "name": "Generated 2", "status": "pass"},
+            {
+                "card": "Generated",
+                "name": "Generated 3",
+                "status": "unsupported",
+                "reason": "an exporter refusal",
+            },
         ],
     }
     # Generated 2 passes, so its entry is stale; Forge's entry is not XMage's.
     assert oracles.apply_gaps("xmage", result) == ["Generated / Generated 2"]
-    assert result["fail"] == 0 and result["unsupported"] == 1 and result["pass"] == 1
+    assert result["fail"] == 0 and result["unsupported"] == 2 and result["pass"] == 1
     gap = result["scenarios"][0]  # pyre-ignore[16]
     assert gap["status"] == "unsupported" and gap["reason"] == "exporter gap: a gap"
     assert "failure" not in gap

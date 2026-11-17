@@ -1,12 +1,12 @@
 //! The positions generated scenarios start from: basic lands, the designated props and the
 //! card, which the position holds only where the card starts.
 
-use beryl_engine::TurnStep;
 use beryl_engine::card::{
     Ability, AbilityKind, CardDef, Cost, Face, FaceIx, ManaColor, Players, Rewrite, TriggerEvent,
     Types,
 };
 use beryl_engine::state::CounterKind;
+use beryl_engine::{TurnStep, Zone};
 use beryl_scenario::{Action, P0, P1, Permanent, PlayerSetup, Scenario};
 
 use super::PREFIX;
@@ -77,6 +77,7 @@ pub(super) enum Place {
     /// On the battlefield with this face up.
     Battlefield(FaceIx),
     Graveyard,
+    Exile,
     /// On the battlefield with this face up, a mana ability's, beside this basic land, the
     /// only other mana its owner has.
     Mana(FaceIx, &'static str),
@@ -90,6 +91,14 @@ impl Place {
             places.push(Place::Battlefield(FaceIx::BACK));
         }
         places.push(Place::Graveyard);
+        if def
+            .faces
+            .iter()
+            .flat_map(|face| face.abilities)
+            .any(|a| !a.zones().contains(Zone::Battlefield) && a.zones().contains(Zone::Exile))
+        {
+            places.push(Place::Exile);
+        }
         for (f, face) in def.faces.iter().enumerate() {
             let makes_mana = face.abilities.iter().any(|a| a.kind() == AbilityKind::Mana);
             if makes_mana && is_permanent(face) {
@@ -112,6 +121,7 @@ impl Place {
             Place::Hand => "from hand".to_owned(),
             Place::Battlefield(f) => format!("on the battlefield{}", face(f)),
             Place::Graveyard => "from the graveyard".to_owned(),
+            Place::Exile => "from exile".to_owned(),
             Place::Mana(f, land) => format!("paying beside {land}{}", face(f)),
         }
     }
@@ -158,7 +168,7 @@ fn triggers_before_main(face: &Face) -> bool {
 pub(super) fn early(def: &'static CardDef, place: Place) -> bool {
     match place {
         Place::Battlefield(f) | Place::Mana(f, _) => triggers_before_main(def.face(f)),
-        Place::Hand | Place::Graveyard => false,
+        Place::Hand | Place::Graveyard | Place::Exile => false,
     }
 }
 
@@ -221,10 +231,16 @@ pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witnes
         opponent_added = witness.theirs;
     }
     let mut graveyard = without(&[props::INSTANT.card], card);
+    let exile = if place == Place::Exile {
+        leak(vec![card])
+    } else {
+        &[]
+    };
     match place {
         Place::Hand => hand.insert(0, card),
         Place::Battlefield(f) | Place::Mana(f, _) => battlefield.push(permanent(def, f)),
         Place::Graveyard => graveyard.insert(0, card),
+        Place::Exile => {}
     }
     let library = leak(without(LIBRARY, card));
     let early = early(def, place);
@@ -252,7 +268,7 @@ pub(super) fn start(def: &'static CardDef, place: Place, witness: Option<&Witnes
             battlefield: &[],
             permanents: leak(battlefield),
             graveyard: leak(graveyard),
-            exile: &[],
+            exile,
             library,
         },
         PlayerSetup {

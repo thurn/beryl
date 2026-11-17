@@ -474,10 +474,10 @@ DIVERGENCES: Path = paths.REPO / "data" / "oracle-divergences.json"
 # positions played by random choices, filed under the card "Generated".
 GENERATED = 100
 
-# Generated scenarios an oracle fails for a gap in its exporter rather than a difference in the
-# rules, by oracle, card and scenario, with the gap: reported as unsupported. An entry whose
-# scenario passes when played is stale and fails the run, so the list stays current; a change
-# to a generator renames what it covers. Both generators' scenarios may be listed: the random
+# Generated scenarios an oracle cannot express because of its exporter, by oracle, card and
+# scenario. The exporter may already report the scenario as unsupported. An entry whose
+# scenario passes is stale and fails the run, so the list stays current. A change to a
+# generator can rename what it covers. Both generators' scenarios may be listed: the random
 # ones under the card "Generated", and those generated from a card's definition
 # (`beryl_cards::derive`) under their card.
 GAPS: Path = paths.REPO / "data" / "oracle-exporter-gaps.json"
@@ -506,8 +506,8 @@ def mark_generated(result: dict[str, object]) -> None:
 
 def apply_gaps(oracle: str, result: dict[str, object]) -> list[str]:
     """Reports the scenarios of `result` that `EXPORTER_GAPS` lists for `oracle` as unsupported,
-    recounting, and returns the stale entries: those whose scenario was played and did not
-    fail."""
+    recounting, and returns the stale entries: those whose scenario was neither a failure nor
+    unsupported."""
     scenarios = cast(list[dict[str, object]], result["scenarios"])
     gaps = {
         f"{card} / {name}": why
@@ -519,9 +519,11 @@ def apply_gaps(oracle: str, result: dict[str, object]) -> list[str]:
     for s in scenarios:
         key = f"{s['card']} / {s['name']}"
         why = gaps.get(key)
-        if why is None or s["status"] != "fail":
+        if why is None or s["status"] not in ("fail", "unsupported"):
             continue
         stale.discard(key)
+        if s["status"] == "unsupported":
+            continue
         s["status"] = "unsupported"
         s["reason"] = f"exporter gap: {why}"
         s.pop("failures", None)
