@@ -65,7 +65,8 @@ def reproduce(opened: Opened) -> list[str]:
     if replay.is_file():
         return [
             f"just b3d app --replay {replay} --window none --for 120s",
-            "just b3d live tree",
+            # `just b3d app` runs until `--for` ends, so `live` is run beside it.
+            "just b3d live tree  (from another shell while the app runs)",
         ]
     return []
 
