@@ -465,9 +465,10 @@ fn brighter(color: [u8; 4]) -> [u8; 4] {
     [lift(color[0]), lift(color[1]), lift(color[2]), color[3]]
 }
 
-/// The color of `node`'s text and icon: `tint`, a float's, if given; the faint type color
-/// while it is disabled, whatever its style says, as a disabled button's dim type is; its
-/// style's color; or the type color. An icon with no color of its own is drawn in the dim text
+/// The color of `node`'s text and icon: `tint`, a float's, if given; while it is disabled,
+/// whatever its style says, a disabled button's dim label color (`.button:disabled`) on a
+/// button with words and the faint type color on anything else; its style's color; or the type
+/// color. An icon with no color of its own is drawn in the dim text
 /// color, and in the text color under the pointer or with the focus (`.icon-button`).
 fn ink(node: &Node, state: StateBits, tint: Option<[u8; 4]>) -> [u8; 4] {
     let element = &node.element;
@@ -475,7 +476,12 @@ fn ink(node: &Node, state: StateBits, tint: Option<[u8; 4]>) -> [u8; 4] {
         return tint;
     }
     if !element.enabled {
-        return color::TEXT_FAINT;
+        let words = element.role == Role::Button && !matches!(element.shows, Some(Shown::Icon(..)));
+        return if words {
+            color::DISABLED_INK
+        } else {
+            color::TEXT_FAINT
+        };
     }
     if let Some(color) = element.style.color {
         return color;

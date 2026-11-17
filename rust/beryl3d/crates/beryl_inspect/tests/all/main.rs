@@ -10,6 +10,7 @@ mod conventions;
 mod differential;
 mod faults;
 mod frame_allocation;
+mod furniture;
 mod gate;
 mod hud;
 mod log;

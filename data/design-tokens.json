@@ -1073,6 +1073,10 @@
         "value": "#57514c",
         "note": "A disabled button's rim: the `border-color` of `.button:disabled`."
       },
+      "DISABLED_INK": {
+        "value": "#7e7873",
+        "note": "A disabled button's dim label: the `color` of `.button:disabled`."
+      },
       "ICON_BUTTON": {
         "value": "rgb(24 21 19 / 62%)",
         "note": "An icon button's round face of dark glass: the `background` of `.icon-button` in `ui/src/design/components/icon-button.css`."

@@ -51,9 +51,10 @@ fn a_disabled_button_is_drawn_faint_and_a_press_on_it_sends_nothing() {
     );
     // The flat stone face and dim rim of `.button:disabled`, whatever the button's own style.
     assert!(panels(frame).contains(&color::DISABLED));
-    // "Cancel" is six glyphs in the faint type color, and the enabled "Auto Pay" has none.
+    // "Cancel" is six glyphs in the dim label color of `.button:disabled`, and the enabled
+    // "Auto Pay" has none.
     let faint = (frame.draws.iter())
-        .filter(|draw| draw.material == Material::Glyph as u8 && draw.tint == color::TEXT_FAINT)
+        .filter(|draw| draw.material == Material::Glyph as u8 && draw.tint == color::DISABLED_INK)
         .count();
     assert_eq!(faint, 6);
     let at = centre(frame, cancel as usize);

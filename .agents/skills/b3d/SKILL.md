@@ -101,12 +101,18 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
 - A `tree` line with the right string says the text was laid out, not that its
   glyphs drew. Only a picture shows that.
 - The interface checks judge interactive elements. Text that overlaps other
-  text, a mark off its card and colours that differ from the web's are not
-  checked.
+  text and a mark off its card are not checked. Of the colours, only the action
+  buttons' and the life orbs' are held to the web's, by the furniture tests
+  (`beryl_inspect/tests/all/furniture.rs`), which read the web's CSS and the
+  frame's draw records.
 - A change to how something looks (text, icons, furniture, marks, prompts) is
-  done only after you have read a `png` of it and of the web interface at the
-  same moment (`just ui-shots` or `just specs --describe`), and compared the
-  two. Write what you compared, and the paths of both pictures, on the bead.
+  done only after you have read a picture of it beside the web interface's at
+  the same moment and compared the two.
+  `just b3d compare <recording> --at <moment>` writes both into one PNG: the web
+  page shot from the recording's exported fixture on the left, Beryl 3D's frame
+  on the right, at the same window size and `--scale`. The web side shows the
+  moment's view at rest. Write what you compared, and the picture's path, on
+  the bead.
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>` (1600x900 by default),
