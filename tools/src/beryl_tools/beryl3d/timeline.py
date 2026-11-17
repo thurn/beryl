@@ -47,6 +47,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -113,19 +114,46 @@ def agree(a: Step, b: Step) -> bool:
 # How long the web interface holds a strike back at a time while its way would cross an earlier
 # strike's (`LOOK.wait` in ui/src/stage/enter.ts).
 STRIKE_WAIT_MS = 25.0
+# How long, as a share of a `vanish` step, the web interface takes to close up what the card
+# that left made room for (`CLOSES` in ui/src/stage/tracks.ts).
+CLOSES = 0.4
+# The stage's timing conventions, whose `closes` say how long a close-up after a cut takes.
+UI_CONVENTIONS: Path = repo_paths.REPO / "data" / "ui-conventions.json"
+
+
+@cache
+def _cut_closes() -> float:
+    """The longest close-up the session sends for a `vanish` step that takes no time (a cut,
+    such as a finished ability), from `closes` in `data/ui-conventions.json`'s verbs."""
+    verbs = json.loads(UI_CONVENTIONS.read_text())["verbs"]
+    return max(
+        (float(ms) for verb in verbs for ms in verb.get("closes", {}).values()),
+        default=0.0,
+    )
+
+
+def _closes(step: Step) -> float:
+    """How long the web interface takes, after the `vanish` step `step` ends, to close up what
+    its card made room for (`roomIn` and `Timing.closes` in ui/src/stage/tracks.ts)."""
+    length = step["end"] - step["start"]
+    return float(round(CLOSES * length)) if length > TOLERANCE_MS else _cut_closes()
 
 
 @dataclass
 class _Script:
     """How far [`laid_out_later`] has got through the steps of one script, on one side of
-    `own`: how much later the web's steps are than Beryl 3D's, the beat it is in, and on each
-    side the latest end of the steps of the beats before that one and of every step so far.
+    `own`: how much later the web's steps are than Beryl 3D's, the beat it is in, on each
+    side the latest end of the steps of the beats before that one and of every step so far,
+    and the longest close-up after a web `vanish` step of the beat before and of this beat
+    (None where it has none).
     """
 
     shift: float = 0.0
     beat: int | None = None
     before: tuple[float, float] | None = None
     so_far: tuple[float, float] = (float("-inf"), float("-inf"))
+    closed_before: float | None = None
+    closes: float | None = None
 
 
 def _strike_wait(grown: float) -> bool:
@@ -144,9 +172,10 @@ def laid_out_later(
       after a card left are at their new places (`closedBy` in ui/src/stage/tracks.ts), which
       depends on where its layout puts them. Beryl 3D lays its table out differently, so its
       close-up can end sooner. Accepted: the first step of a beat (not the first beat of its
-      script) begins later on the web, as long as the web's beat begins no sooner than every
-      earlier step of its script on the web has ended, and waits at least as long after that
-      as Beryl 3D's waits after its own.
+      script) begins later on the web, as long as the beat before holds a `vanish` step on the
+      web, the web's beat begins no sooner than every earlier step of its script on the web has
+      ended, and it waits longer after that than Beryl 3D's waits after its own by no more than
+      the longest close-up after one of those `vanish` steps ([`_closes`]).
     - **A strike is held back.** The web holds a strike back, 25 ms at a time, while its way
       across the table would cross an earlier strike's still on its way out or back, and every
       later step of the beat as long (`awaited` in ui/src/stage/enter.ts). Beryl 3D does not
@@ -160,9 +189,10 @@ def laid_out_later(
     sides. A step that is not accepted leaves the accepted shift as it was, so a real
     difference that moves every later step still counts each of them.
 
-    This cannot tell a close-up from any other reason the first step of a beat began later
-    on the web, since neither timeline says why a beat ended when it did: a Beryl 3D beat that
-    begins too early after the one before it is accepted too.
+    Within that bound this cannot tell a close-up from any other reason the first step of a
+    beat began later on the web, since neither timeline says why a beat ended when it did: a
+    Beryl 3D beat that begins up to a close-up too early after one where a card left is
+    accepted too.
     """
     accepted: set[Place] = set()
     scripts: dict[tuple[int, bool], _Script] = {}
@@ -174,6 +204,7 @@ def laid_out_later(
             if script.beat is not None:
                 script.before = script.so_far
             script.beat = beat
+            script.closed_before, script.closes = script.closes, None
         a, b = by_web.get(at), by_native.get(at)
         if a is not None and b is not None:
             shift = a["start"] - b["start"]
@@ -181,6 +212,8 @@ def laid_out_later(
                 if not agree(a, b):
                     accepted.add(at)
                 script.shift = shift
+        if a is not None and a["verb"] == "vanish":
+            script.closes = max(script.closes or 0.0, _closes(a))
         web_end, native_end = script.so_far
         script.so_far = (
             web_end if a is None else max(web_end, a["end"]),
@@ -201,14 +234,18 @@ def _later(a: Step, b: Step, script: _Script, first: bool) -> bool:
         return True
     if not first:
         return a["verb"] == "strike" and _strike_wait(grown)
-    before = script.before
+    before, closes = script.before, script.closed_before
     if before is None:
         return False
     web_gap = a["start"] - before[0]
     native_gap = b["start"] - before[1]
     if abs(web_gap - native_gap) <= TOLERANCE_MS:
         return True
-    return web_gap > native_gap and web_gap >= -TOLERANCE_MS
+    return (
+        closes is not None
+        and web_gap >= -TOLERANCE_MS
+        and native_gap < web_gap <= native_gap + closes + TOLERANCE_MS
+    )
 
 
 @dataclass(frozen=True)

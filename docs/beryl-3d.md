@@ -4213,8 +4213,10 @@ comparison itself (`laid_out_later` in
 timelines alone, rather than listed:
 
 - The first step of a beat, other than a script's first, may begin later on the
-  web, if the web's beat begins no sooner than all of the script's earlier steps
-  on the web have ended and waits at least as long after them as Beryl 3D's.
+  web, if a card vanished in the beat before, the web's beat begins no sooner
+  than all of the script's earlier steps on the web have ended, and it waits
+  longer after them than Beryl 3D's by no more than the web's close-up after
+  that card: 0.4 of its `vanish` step, or for a cut the session's `closes`.
 - A strike that is not the first step of its beat may begin a whole number of 25
   ms waits later on the web than the step before it.
 - The steps after either are accepted while the web is later by the same amount,

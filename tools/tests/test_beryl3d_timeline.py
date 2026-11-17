@@ -70,8 +70,8 @@ def test_a_step_whose_sound_alone_differs_counts() -> None:
 
 def test_a_beat_the_web_holds_for_cards_closing_up_is_accepted() -> None:
     # The web's beat 1 lasts until cards closing up after the vanished card are in place,
-    # 140 ms after its last step ends; Beryl 3D's table closes up sooner. Beat 2 and the
-    # step after it follow 140 ms later on the web, and are accepted.
+    # 40 ms (0.4 of its 100 ms) after its last step ends; Beryl 3D's table closes up at
+    # once. Beat 2 and the step after it follow 40 ms later on the web, and are accepted.
     native = [
         step(0.0, verb="vanish"),
         step(100.0, beat=1, verb="vanish"),
@@ -80,8 +80,30 @@ def test_a_beat_the_web_holds_for_cards_closing_up_is_accepted() -> None:
     ]
     web = [dict(s) for s in native]
     for later in web[2:]:
-        later["start"] += 140.0
-        later["end"] += 140.0
+        later["start"] += 40.0
+        later["end"] += 40.0
+    assert timeline.compare(web, native) is None
+
+
+def test_a_later_beat_that_no_close_up_explains_counts() -> None:
+    # No card left in beat 0, so nothing closes up after it: beat 1 beginning later on the
+    # web counts. After a vanish, a beat later by more than its close-up counts too.
+    native = [step(0.0), step(100.0, beat=1)]
+    found = timeline.compare([step(0.0), step(140.0, beat=1)], native)
+    assert found is not None and found.count == 1
+    native = [step(0.0, verb="vanish"), step(100.0, beat=1)]
+    web = [step(0.0, verb="vanish"), step(141.5, beat=1)]
+    found = timeline.compare(web, native)
+    assert found is not None and found.count == 1
+
+
+def test_a_beat_after_a_cut_waits_for_the_sessions_close_up() -> None:
+    # A finished ability vanishes in no time; the session gives its close-up's length.
+    cut = step(100.0, number=1, verb="vanish")
+    cut["start"] = cut["end"] = 100.0
+    native = [step(0.0), cut, step(100.0, beat=1)]
+    web = [dict(s) for s in native]
+    web[2] = step(100.0 + timeline._cut_closes(), beat=1)
     assert timeline.compare(web, native) is None
 
 
