@@ -10,18 +10,30 @@ const SHADOW_DARKNESS: f32 = 0.55;
 // Where a card-mesh vertex lies in the key light's clip space, for the depth-only pass that
 // draws the shadow map. A record of any material but a card's (the table, which shares the card
 // mesh) is moved past the far plane, so it casts nothing.
+//
+// A card casts what the main pass shows of it. One less than half opaque (a phased-out card,
+// or one fading out) casts nothing, as the Baseline tier's contact shadow under it fades with
+// its opacity. A dissolving card breaks up from the top of its face down (`shade_card`), so its
+// shadow is cut to the rows below the breaking edge's middle: each vertex above the cut is moved
+// down onto it, and a card fully dissolved casts a line with no area.
 @vertex
 fn vs_shadow(
     @location(0) position: vec2<f32>,
+    @location(1) uv: vec2<f32>,
     @location(4) row0: vec4<f32>,
     @location(5) row1: vec4<f32>,
     @location(6) row2: vec4<f32>,
     @location(8) layer_material: vec2<u32>,
+    @location(9) tint: vec4<f32>,
+    @location(10) params: vec4<f32>,
 ) -> @builtin(position) vec4<f32> {
-    if ((layer_material.y & 255u) != CARD) {
+    if ((layer_material.y & 255u) != CARD || tint.a < 0.5) {
         return vec4<f32>(0.0, 0.0, 2.0, 1.0);
     }
-    let point = vec4<f32>(position, 0.0, 1.0);
+    // The card mesh's uv runs down the face, from 0 at its top edge, and its position's y up it.
+    let cut = params.x * (1.0 + DISSOLVE_EDGE) - 0.5 * DISSOLVE_EDGE;
+    let y = select(position.y, (0.5 - cut) * CARD_SIZE.y, params.x > 0.0 && uv.y < cut);
+    let point = vec4<f32>(position.x, y, 0.0, 1.0);
     let table = vec4<f32>(dot(row0, point), dot(row1, point), dot(row2, point), 1.0);
     return lit.light_view_projection * table;
 }

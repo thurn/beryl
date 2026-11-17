@@ -109,7 +109,6 @@ impl Enhanced {
     /// `uniforms` the uniform buffer of each of the renderer's slots, in order.
     pub(crate) fn new<'a>(
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
         layout: &wgpu::BindGroupLayout,
         uniforms: impl Iterator<Item = &'a wgpu::Buffer>,
@@ -136,10 +135,11 @@ impl Enhanced {
             compare: Some(wgpu::CompareFunction::LessEqual),
             ..Default::default()
         });
+        let uniforms: Vec<&wgpu::Buffer> = uniforms.collect();
         let mut enhanced = Self {
             pipelines,
             layout: lit_layout,
-            shadow: Shadow::new(device, queue),
+            shadow: Shadow::new(device, &uniforms),
             bloom: Bloom::new(device, format, layout),
             comparison,
             groups: Vec::new(),
@@ -147,6 +147,7 @@ impl Enhanced {
             format,
         };
         enhanced.groups = uniforms
+            .iter()
             .map(|buffer| enhanced.group(device, buffer))
             .collect();
         Some(enhanced)
@@ -197,6 +198,9 @@ impl Enhanced {
         counter: Option<&FragmentCounter>,
     ) -> u32 {
         let mut draw_calls = self.shadow.draw(encoder, draws, counter);
+        // Bloom's targets are made with the main pass's, on the first frame of a size, so that
+        // the first frame with a glow, often the first of a script, makes none.
+        self.bloom.size_targets(device, draws.width, draws.height);
         let targets = self.targets(device, draws.width, draws.height);
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -225,7 +229,7 @@ impl Enhanced {
             draw_calls += draws.record(&mut pass, &self.pipelines, |pass| pass != Pass::Layer);
             count::end(counter, &mut pass);
         }
-        draw_calls += self.bloom.apply(device, encoder, draws, view, counter);
+        draw_calls += self.bloom.apply(encoder, draws, view, counter);
         if draws.frame.layer < draws.kept {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("flat layer"),
@@ -353,4 +357,39 @@ fn lit_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
             },
         ],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use beryl_scene::frame::{Band, Draw, Frame, FrameBuilder};
+    use beryl_scene::input::Tier;
+    use glam::Affine3A;
+    use glam::camera::rh::proj::directx;
+
+    use crate::{Limits, Renderer, Target};
+
+    /// The first Enhanced frame of a size makes every target a later frame of that size can
+    /// need, bloom's among them, even when it has no glow to bloom. Otherwise the first frame
+    /// with a glow, often the first frame of a script, would make two textures and three bind
+    /// groups, a stall on a slow device at the moment an animation starts.
+    #[test]
+    fn the_first_enhanced_frame_makes_bloom_targets_without_a_glow() {
+        let mut renderer = Renderer::headless(Limits::Default).expect("a GPU adapter");
+        assert!(renderer.enhanced_available(), "no Enhanced support");
+        let mut frame = Frame::with_capacity(0, 1, 0);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Enhanced);
+        builder.camera(directx::orthographic(
+            -100.0, 100.0, -100.0, 100.0, -100.0, 100.0,
+        ));
+        builder.draw(
+            Band::Opaque,
+            Draw::table(Affine3A::IDENTITY, [90, 90, 90, 255]),
+        );
+        let frame = builder.finish();
+        let mut target = Target::offscreen(&renderer, 64, 48);
+        renderer.render(frame, &mut target);
+        let enhanced = renderer.enhanced.as_ref().expect("the Enhanced tier");
+        assert_eq!(enhanced.bloom.sized_for(), Some((64, 48)));
+        assert!(enhanced.targets.is_some());
+    }
 }

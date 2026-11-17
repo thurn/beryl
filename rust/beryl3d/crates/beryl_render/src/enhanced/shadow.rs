@@ -45,16 +45,24 @@ const MAP: u32 = data::MAP as u32;
 )]
 const BIAS: i32 = data::BIAS as i32;
 
-/// The mesh attributes `vs_shadow` reads: the position.
-const MESH_ATTRIBUTES: [wgpu::VertexAttribute; 1] = [wgpu::VertexAttribute {
-    format: wgpu::VertexFormat::Float32x2,
-    offset: 0,
-    shader_location: 0,
-}];
+/// The mesh attributes `vs_shadow` reads: the position and the uv.
+const MESH_ATTRIBUTES: [wgpu::VertexAttribute; 2] = [
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x2,
+        offset: 0,
+        shader_location: 0,
+    },
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x2,
+        offset: 8,
+        shader_location: 1,
+    },
+];
 
 /// The record's fields `vs_shadow` reads, at the offsets `Draw` lays them out: the three rows
-/// of the transform, and `layer` with `material` and `flags`.
-const RECORD_ATTRIBUTES: [wgpu::VertexAttribute; 4] = [
+/// of the transform, `layer` with `material` and `flags`, the tint, whose opacity decides
+/// whether the card casts, and the params, whose first is a card's dissolve.
+const RECORD_ATTRIBUTES: [wgpu::VertexAttribute; 6] = [
     wgpu::VertexAttribute {
         format: wgpu::VertexFormat::Float32x4,
         offset: 0,
@@ -75,6 +83,16 @@ const RECORD_ATTRIBUTES: [wgpu::VertexAttribute; 4] = [
         offset: 56,
         shader_location: 8,
     },
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Unorm8x4,
+        offset: 60,
+        shader_location: 9,
+    },
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x4,
+        offset: 64,
+        shader_location: 10,
+    },
 ];
 
 /// The shadow map and what draws it.
@@ -83,18 +101,15 @@ pub(crate) struct Shadow {
     pub(crate) view: wgpu::TextureView,
     /// The depth-only pipeline that draws the cards into the map.
     pipeline: wgpu::RenderPipeline,
-    /// The layout of the map pass's bind group 1: `Lit` alone, since the map cannot be bound
-    /// while it is drawn into.
-    layout: wgpu::BindGroupLayout,
-    /// The map pass's bind group 1 for each of the renderer's slots, by `Slot::index`, made
-    /// the first time the slot is drawn.
-    groups: Vec<Option<wgpu::BindGroup>>,
-    device: wgpu::Device,
+    /// The map pass's bind group 1 for each of the renderer's slots, by `Slot::index`, each
+    /// naming the `Lit` in that slot's uniform buffer. Made with the map, at startup.
+    groups: Vec<wgpu::BindGroup>,
 }
 
 impl Shadow {
-    /// The shadow map, `enhanced.shadow.map` pixels on a side, and its pipeline.
-    pub(crate) fn new(device: &wgpu::Device, _queue: &wgpu::Queue) -> Self {
+    /// The shadow map, `enhanced.shadow.map` pixels on a side, its pipeline, and its pass's
+    /// bind group for each slot whose uniform buffer is in `uniforms`, in order.
+    pub(crate) fn new(device: &wgpu::Device, uniforms: &[&wgpu::Buffer]) -> Self {
         let view = device
             .create_texture(&wgpu::TextureDescriptor {
                 label: Some("shadow map"),
@@ -112,6 +127,8 @@ impl Shadow {
                 view_formats: &[],
             })
             .create_view(&wgpu::TextureViewDescriptor::default());
+        // The map pass's bind group 1 holds `Lit` alone, since the map cannot be bound while it
+        // is drawn into.
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("shadow map lit"),
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -125,12 +142,27 @@ impl Shadow {
                 count: None,
             }],
         });
+        let groups = uniforms
+            .iter()
+            .map(|buffer| {
+                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("shadow map lit"),
+                    layout: &layout,
+                    entries: &[wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer,
+                            offset: LIT_OFFSET,
+                            size: NonZeroU64::new(LIT),
+                        }),
+                    }],
+                })
+            })
+            .collect();
         Self {
             view,
             pipeline: pipeline(device, &layout),
-            layout,
-            groups: Vec::new(),
-            device: device.clone(),
+            groups,
         }
     }
 
@@ -144,7 +176,14 @@ impl Shadow {
         draws: &Draws,
         counter: Option<&FragmentCounter>,
     ) -> u32 {
-        let group = self.group(draws);
+        let Some(group) = self.groups.get(draws.slot.index) else {
+            debug_assert!(
+                false,
+                "no shadow map bind group for slot {}",
+                draws.slot.index
+            );
+            return 0;
+        };
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("shadow map"),
             color_attachments: &[],
@@ -161,7 +200,7 @@ impl Shadow {
             multiview_mask: None,
         });
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(1, &group, &[]);
+        pass.set_bind_group(1, group, &[]);
         pass.set_vertex_buffer(0, draws.vertices.slice(..));
         pass.set_index_buffer(draws.indices.slice(..), wgpu::IndexFormat::Uint16);
         let indices = draws.ranges[Mesh::Card as usize].clone();
@@ -183,31 +222,6 @@ impl Shadow {
         }
         count::end(counter, &mut pass);
         draw_calls
-    }
-
-    /// The map pass's bind group 1 for the slot `draws` was written into, naming the `Lit` in
-    /// its uniform buffer. A slot's buffers are made once, with the renderer.
-    fn group(&mut self, draws: &Draws) -> wgpu::BindGroup {
-        let index = draws.slot.index;
-        if self.groups.len() <= index {
-            self.groups.resize(index + 1, None);
-        }
-        self.groups[index]
-            .get_or_insert_with(|| {
-                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("shadow map lit"),
-                    layout: &self.layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &draws.slot.uniforms,
-                            offset: LIT_OFFSET,
-                            size: NonZeroU64::new(LIT),
-                        }),
-                    }],
-                })
-            })
-            .clone()
     }
 }
 

@@ -74,7 +74,7 @@ pub struct Renderer {
     freed_full: Option<Format>,
     depth: Option<(wgpu::TextureView, u32, u32)>,
     /// The Enhanced tier, on a device that can draw it.
-    enhanced: Option<Enhanced>,
+    pub(crate) enhanced: Option<Enhanced>,
     /// Present when the renderer counts the fragments each frame shades.
     counter: Option<FragmentCounter>,
     /// The GPU adapter's name and backend, for logs.
@@ -117,7 +117,7 @@ impl Renderer {
         let slots = Slots::new(&device, UNIFORM_BUFFER, RECORDS * RECORD, |uniforms| {
             bind_groups(&device, &layout, uniforms, &sampler, &faces, &atlas)
         });
-        let enhanced = Enhanced::new(&device, &queue, target_format, &layout, slots.uniforms());
+        let enhanced = Enhanced::new(&device, target_format, &layout, slots.uniforms());
         Self {
             device,
             queue,

@@ -55,3 +55,45 @@ fn every_gated_board_resolves_and_draws_the_same_in_both_tiers() {
         assert_eq!(enhanced.moment(), None, "{name}");
     }
 }
+
+/// A step down to Baseline in the middle of play moves nothing (docs/beryl-3d.md, "Choosing a
+/// tier"): on each gated board with particles, a playback that steps down on the first frame
+/// with particles, while a `vanish` is under way, draws every frame from then on exactly as a
+/// playback in Baseline from the start draws it.
+#[test]
+fn a_step_down_in_the_middle_of_a_vanish_draws_what_baseline_draws() {
+    let mut stepped_any = false;
+    for name in BOARDS {
+        let mut baseline = Playback::new(name)
+            .expect("a gated board")
+            .with_tier(Tier::Baseline);
+        let mut stepped = Playback::new(name)
+            .expect("a gated board")
+            .with_tier(Tier::Enhanced);
+        let mut stepped_at = None;
+        while let Some(moment) = baseline.moment() {
+            assert_eq!(stepped.moment(), Some(moment), "{name}");
+            baseline.handle();
+            stepped.handle();
+            let frame = moment.frame;
+            let base = baseline.frame();
+            let drawn = stepped.frame();
+            if stepped_at.is_some() {
+                assert_eq!(drawn.tier, Tier::Baseline, "{name} frame {frame}");
+                assert!(
+                    base.resolved == drawn.resolved && base.names == drawn.names,
+                    "{name} frame {frame}: the elements differ after the step down"
+                );
+                assert!(
+                    base.draws == drawn.draws,
+                    "{name} frame {frame}: the records differ after the step down"
+                );
+            } else if drawn.load.particles > 0 {
+                stepped_at = Some(frame);
+                stepped.set_tier(Tier::Baseline);
+            }
+        }
+        stepped_any |= stepped_at.is_some();
+    }
+    assert!(stepped_any, "no gated board has a frame with particles");
+}

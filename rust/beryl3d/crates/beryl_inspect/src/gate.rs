@@ -200,6 +200,12 @@ impl Playback {
         self
     }
 
+    /// Draws every later frame in `tier`, as a host does when it steps the tier down during
+    /// play: the client is handed `Input::Tier` before the next frame.
+    pub fn set_tier(&mut self, tier: Tier) {
+        self.client.handle(Input::Tier(tier));
+    }
+
     /// Whether the next group of views is handed over before the next frame: the first at
     /// once, and each later one when `REST_FRAMES` frames have passed since the one before and
     /// the client has nothing left to animate.

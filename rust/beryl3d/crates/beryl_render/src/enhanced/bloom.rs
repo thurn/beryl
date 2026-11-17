@@ -190,8 +190,7 @@ impl Bloom {
     /// frame has no glows; otherwise the glows' runs and one call for each of the blur across,
     /// the blur down and the composite. `counter`, when present, counts each pass's fragments.
     pub(crate) fn apply(
-        &mut self,
-        device: &wgpu::Device,
+        &self,
         encoder: &mut wgpu::CommandEncoder,
         draws: &Draws,
         view: &wgpu::TextureView,
@@ -202,8 +201,12 @@ impl Bloom {
         if glows.is_empty() {
             return 0;
         }
-        self.size_targets(device, draws.width, draws.height);
-        let Some(targets) = &self.targets else {
+        let Some(targets) = self
+            .targets
+            .as_ref()
+            .filter(|targets| targets.frame == (draws.width, draws.height))
+        else {
+            debug_assert!(false, "bloom's targets are sized before it is applied");
             return 0;
         };
         let mut draw_calls = {
@@ -238,8 +241,8 @@ impl Bloom {
     }
 
     /// Makes the small targets for a frame `width` by `height`, again only when the size
-    /// changes.
-    fn size_targets(&mut self, device: &wgpu::Device, width: u32, height: u32) {
+    /// changes. `Enhanced::render` calls it on every frame, before `apply`.
+    pub(crate) fn size_targets(&mut self, device: &wgpu::Device, width: u32, height: u32) {
         if self
             .targets
             .as_ref()
@@ -310,7 +313,13 @@ impl Bloom {
         })
     }
 
-    /// Frees the small targets, which the next frame with glows makes again.
+    /// The frame size the small targets were made for, if they exist.
+    #[cfg(test)]
+    pub(super) fn sized_for(&self) -> Option<(u32, u32)> {
+        self.targets.as_ref().map(|targets| targets.frame)
+    }
+
+    /// Frees the small targets, which the next Enhanced frame makes again.
     pub(crate) fn low_memory(&mut self) {
         self.targets = None;
     }
