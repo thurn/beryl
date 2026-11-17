@@ -132,16 +132,14 @@ class SweepStep:
     part: str = QUICK
 
 
-# The sweep's own steps, run after the lane's. A check that only the sweep runs (every
-# interface test on every tick, the counts in the virtual machine, the phone builds) is
-# appended here, in the [`SLOW`] part when it takes more than a few minutes.
+# The sweep's own steps, run after the lane's: checks only the sweep runs (every tick, the
+# counts in the virtual machine), in the [`SLOW`] part when one takes more than a few minutes.
 OWN: tuple[SweepStep, ...] = (
     # The app starts with no window and shows its first frame.
     SweepStep("smoke", (*BY, "b3d", "smoke")),
-    # The tier chosen at startup and its drop to Baseline, in the app with no window.
+    # The tier chosen at startup and its drop to Baseline (tiers.py).
     SweepStep("tiers", (*BY, "b3d", "tiers")),
-    # A release build has no live socket: it builds release, so the sweep runs it and the lane
-    # does not.
+    # A release build has no live socket. It builds release, so only the sweep runs it.
     SweepStep("release-socket", (*BY, "b3d", "release-socket")),
     # Every interface test with the checks applied on every tick: the exhaustive form of the
     # lane's `test` step.
