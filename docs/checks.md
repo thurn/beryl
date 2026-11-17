@@ -351,6 +351,12 @@ skill works them as one Enact run, grouped by shared cause. The Beryl 3D sweep's
 `b3d-sweep` beads are not among them: they are Beryl 3D's own work, filed under
 its epic.
 
+The reporters use Enact's active tracker through
+`tools/src/beryl_tools/tickets.py`. The main checkout selects ticket enrollment
+for all linked worktrees. Use the tests in `tools/tests/test_tickets.py`,
+`test_bugs.py` and `test_verdicts.py` to check backend selection and
+ticket-backed reports with fixtures.
+
 ## Flaky checks
 
 - A step that fails is rerun once, narrowed to the checks it says failed. A

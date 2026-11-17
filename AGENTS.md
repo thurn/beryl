@@ -127,9 +127,12 @@ means `python3 ~/enact/scripts/enact.py`.
 - Slow CI runs on two machines: this Mac and Cygnus, a Windows PC. A pass on
   either one moves `master` forward. `enact ci --wait` lists failures on the
   other OS as `other_os_stewards`.
-- Beads are the task tracker. They live in this repo (`bd`, prefix `by`);
-  publish bead changes with `enact sync`. Plans, designs and decisions go in
-  beads, not Markdown, so a bead's history is the record.
+- The live task tracker is Beads (`bd`, prefix `by`). Publish direct Beads edits
+  with `enact sync`. Beryl's bug and CI reporters and efficiency ingest also
+  support Enact's ticket backend. Run `enact backend` to identify the active
+  tracker. In ticket mode, use the returned `tk` path for direct edits, which
+  publish immediately. Plans, designs and decisions go in the tracker so its
+  history is the record.
 - File beads freely and in parallel. Merge conflicts are cheap: `enact push`
   rebases, and you fix and push again. A bead can be picked up within minutes of
   filing, so either land what it depends on in `staging` first or block it with
