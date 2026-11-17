@@ -27,10 +27,9 @@ On an Apple silicon Mac:
 | iOS and Android SDKs     | `just mobile-setup`                                                                      |
 | Lima                     | `brew install lima`, then `just bench-count` once to create the count gate's VM          |
 
-Beryl uses Enact's `tk` ticket client. The repository configures the production
-project in `.enact.toml`. Use `enact backend` for the managed executable path
-and the [ticket dashboard](https://tickets.thurn.workers.dev/beryl) for
-browsing.
+Beryl uses Enact’s `tk` ticket client and the SQLite service hosted on JARVIS.
+Connect to the tailnet and run `enact backend` for the client path and effective
+URL. Browse tickets on the [Beryl dashboard][tickets].
 
 Run the setup recipes one at a time: each installs with Homebrew, which takes a
 lock.
@@ -65,3 +64,5 @@ build in a headless simulator or emulator.
 The step icons beside each life total are from
 [Phosphor Icons](https://phosphoricons.com), Copyright (c) 2023 Phosphor Icons,
 under the MIT License.
+
+[tickets]: https://jarvis.tail4b0774.ts.net:8443/beryl/

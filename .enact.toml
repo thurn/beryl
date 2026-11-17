@@ -5,7 +5,7 @@ master_branch = "master"
 
 [tickets]
 project = "by"
-url = "https://tickets.thurn.workers.dev"
+url = "https://jarvis.tail4b0774.ts.net:8443"
 
 [checks]
 fast = "uv run --quiet --project tools by check"
