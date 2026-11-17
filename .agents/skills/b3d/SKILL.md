@@ -81,8 +81,28 @@ just b3d perf verbs-zones --verbs               # frame timing of a fixture play
   recording replayed, or `just b3d app --replay <folder>/replay.json` and
   `just b3d live tree` for a live game. A web report says so.
 
-Pictures are drawn in the Baseline tier with placeholder card faces, and text in
-the table is not drawn yet.
+Pictures are drawn in the Baseline tier unless `--tier` says otherwise, with
+the scans in the app's scan cache and Beryl's drawn card frame where one is
+missing.
+
+## What these tools cannot show
+
+Every command here lays the frame out at one physical pixel to a point, and so
+does the windowless app (`just b3d app` without a window). `--scale 2` only
+enlarges the picture: the client is still told scale 1, so its glyphs, icons and
+positions are the scale-1 ones, stretched. A Retina Mac runs the desktop app at
+scale 2, and faults that only happen there (letters missing from a word, a mark
+beside its card instead of around it) do not show in any of these pictures.
+
+- A `tree` line with the right string says the text was laid out, not that its
+  glyphs drew. Only a picture shows that.
+- The interface checks judge interactive elements. Text that overlaps other
+  text, a mark off its card and colours that differ from the web's are not
+  checked.
+- A change to how something looks (text, icons, furniture, marks, prompts) is
+  done only after you have read a `png` of it and of the web interface at the
+  same moment (`just ui-shots` or `just specs --describe`), and compared the
+  two. Write what you compared, and the paths of both pictures, on the bead.
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>` (1600x900 by default),

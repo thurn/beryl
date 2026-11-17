@@ -102,6 +102,14 @@ through the client with no window or GPU (the `b3d` skill has the details):
   card frame where a scan is missing; neither command downloads one. Set
   `BERYL3D_SCANS` to an empty directory to see every face drawn.
 
+These tools and the windowless app lay the frame out at scale 1, while the
+desktop app on a Retina Mac runs at scale 2, so they miss faults that only
+happen at scale 2. A tree line shows that text was laid out, not that its glyphs
+drew. An executor or Warden closes a bead that changes how something looks only
+after reading a picture of it beside the web interface's at the same moment, and
+names both files on the bead ("What these tools cannot show" in the `b3d`
+skill).
+
 The text commands are the `b3d` program in `beryl_inspect` (`src/cli`), and the
 pictures are `b3d-render` in `beryl_pictures` (with `Headless` in `beryl_host`),
 built in debug. A wrong name, moment or locator exits with 2 and lists what
