@@ -33,7 +33,7 @@ SETTLE_FRAMES: int = json.loads(
 DROP_WITHIN = 120
 # What the app prints, followed by the path, when it has written its frame log.
 FRAME_LOG = "frame log: "
-COMMON = (
+COMMON: tuple[str, ...] = (
     *("--window", "none", "--fixture", "verbs-zones"),
     *("--slow-gpu", "25ms", "--for", "8s"),
 )

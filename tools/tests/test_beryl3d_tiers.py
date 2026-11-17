@@ -6,7 +6,9 @@ from typing import Any
 
 from beryl_tools.beryl3d import tiers
 
-AUTOMATIC, ENHANCED, FAILS = tiers.RUNS
+AUTOMATIC: tiers.Run = tiers.RUNS[0]
+ENHANCED: tiers.Run = tiers.RUNS[1]
+FAILS: tiers.Run = tiers.RUNS[2]
 
 
 def log(starts: str, steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
