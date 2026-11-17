@@ -5,7 +5,7 @@ import type { PlayerView } from "../generated/protocol";
 import type { LogEntry } from "./log";
 
 /** Whether the opponent is acting while the player waits: thinking, or their turn playing on.
- * The spinner under their orb (Player.tsx' Thinking) shows it, wordless. */
+ * The dock's turn button then says "Opponent's Turn" (PromptBar.tsx). */
 export function opponentActing(view: PlayerView, waiting: boolean): boolean {
   return (
     view.status.kind === "thinking" ||

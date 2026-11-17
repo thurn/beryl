@@ -406,7 +406,8 @@
       "name": "game-opponent-thinking",
       "route": "/?fixture=opponent-turn&at=12#/game",
       "width": 1600,
-      "height": 900
+      "height": 900,
+      "expect": ".stage-prompt .button:disabled"
     },
     {
       "name": "game-halt-main",

@@ -58,6 +58,7 @@ import {
 import { RevealedCards } from "./Revealed.tsx";
 import { OrderRow, TrayUnder } from "./Tray.tsx";
 import { landing } from "./tray.ts";
+import { opponentActing } from "../game/Narration";
 import "./stage.css";
 import "./effects.css";
 import "./heft.css";
@@ -189,6 +190,7 @@ export function StageBoard({
   const number = prompts.number.bind(prompts);
   const answers = {
     waiting,
+    opponentTurn: opponentActing(view, waiting),
     press,
     cancel: cancel ?? (() => {}),
     suggest,
@@ -253,7 +255,6 @@ export function StageBoard({
           lost={lost}
           log={log}
           tableLog={tableLog}
-          waiting={waiting}
           logOpen={logOpen}
           onLog={toggleLog}
           client={client}

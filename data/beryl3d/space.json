@@ -928,7 +928,6 @@
     "step_off": 0.6,
     "step_fixed": 0.32,
     "incoming_gap": 6,
-    "thinking_gap": 8,
     "banner": 2500,
     "banner_gap": 12,
     "log_left": 18,

@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 
 use beryl_protocol::prompt::{ButtonId, PromptButton, PromptView};
-use beryl_protocol::protocol::Status;
+use beryl_protocol::protocol::{Side, Status};
 use glam::Vec2;
 
 use super::Piles;
@@ -343,9 +343,16 @@ fn button_width(label: &str) -> f32 {
 /// primary one drawn as the primary button.
 fn phone_button(button_view: &PromptButton) -> Element {
     let widget = if button_view.primary { primary } else { button };
-    let mut element = widget(&button_view.label)
-        .enabled(button_view.enabled)
-        .on_press(Press::Button(button_view.id))
+    phone_sized(
+        widget(&button_view.label)
+            .enabled(button_view.enabled)
+            .on_press(Press::Button(button_view.id)),
+    )
+}
+
+/// `element`, a button, as large as a finger (`.phone-dock .button`).
+fn phone_sized(element: Element) -> Element {
+    let mut element = element
         .height(data::BUTTON_HEIGHT)
         .min_width(data::BUTTON_MIN_WIDTH)
         .style(TypeStyle {
@@ -355,4 +362,42 @@ fn phone_button(button_view: &PromptButton) -> Element {
     let padding = data::BUTTON_PADDING;
     element.style.padding = [0.0, padding, 0.0, padding];
     element
+}
+
+/// The words on the turn button's place while the opponent acts, Arena's label, which the
+/// web's dock shows the same way (`waitingLabel` in `ui/src/stage/PromptBar.tsx`).
+const OPPONENTS_TURN: &str = "Opponent's Turn";
+
+/// What stands where the prompt's buttons do while no prompt is open and the opponent acts: a
+/// disabled button saying "Opponent's Turn", as the web's dock shows with no spinner under the
+/// opponent's orb. The opponent acts while they decide, or while their turn plays on without
+/// the viewer, as the web's `opponentActing` says. `None` at any other time.
+#[must_use]
+pub fn waiting(input: &ScreenIn) -> Option<Element> {
+    let view = input.view?;
+    let acting = match view.status {
+        Status::Thinking => true,
+        Status::Playing => view.turn.active == Side::Opponent,
+        _ => false,
+    };
+    if !acting || input.prompt.is_some() {
+        return None;
+    }
+    let label = button(OPPONENTS_TURN).enabled(false);
+    if !input.window.phone() {
+        return Some(
+            row()
+                .name("prompt")
+                .gap(space::M)
+                .padding(space::L)
+                .child(label),
+        );
+    }
+    let bands = phone_bands(input.window).unwrap_or_default();
+    let mut label = phone_sized(label);
+    label.anchor = Some(Anchor::Point(
+        Vec2::new(bands.right, bands.your_strip.middle()),
+        Vec2::new(1.0, 0.5),
+    ));
+    Some(holder().name("prompt").child(label))
 }

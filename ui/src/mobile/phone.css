@@ -242,18 +242,6 @@ body.phone::before {
   right: calc(50% + 24px);
   font-size: 15px;
 }
-.phone-thinking {
-  position: absolute;
-  left: calc(50% + 48px);
-  top: 50%;
-  translate: 0 -50%;
-  pointer-events: none;
-}
-.phone-thinking .thinking {
-  display: block;
-  width: 24px;
-  height: 24px;
-}
 /* A pile that opens takes its touch over the card the stage draws there. */
 .phone-pile-button {
   position: absolute;

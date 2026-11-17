@@ -50,6 +50,9 @@ export const usePrompt = (prompts: Prompts) =>
 interface Answers {
   /** A view is on its way, or the game plays on without the player. */
   waiting: boolean;
+  /** The opponent is acting, so the dock says whose turn it is (Arena's "Opponent's Turn") in
+   * the turn button's place, where it would otherwise stand disabled as "Pass". */
+  opponentTurn: boolean;
   press(button: ButtonId): void;
   /** Takes back the cast the open decision is part of, where it may be. */
   cancel?: () => void;
@@ -386,6 +389,7 @@ function PassOn({
 export function PromptDock({
   asked: { prompt, decision, sending },
   waiting,
+  opponentTurn,
   press,
   cancel,
   suggest,
@@ -396,7 +400,7 @@ export function PromptDock({
     return waiting ? (
       <Dock className="stage-prompt">
         <div className="turn-action">
-          <TurnButton label="Pass" disabled />
+          <TurnButton label={waitingLabel(opponentTurn)} disabled />
         </div>
       </Dock>
     ) : null;
@@ -461,6 +465,7 @@ export function PromptDock({
 export function PhonePromptDock({
   asked: { prompt, sending },
   waiting,
+  opponentTurn,
   press,
   suggest,
 }: { asked: Asked } & Answers) {
@@ -468,7 +473,7 @@ export function PhonePromptDock({
   if (!prompt) {
     return waiting ? (
       <div className="phone-dock">
-        <TurnButton label="Pass" disabled />
+        <TurnButton label={waitingLabel(opponentTurn)} disabled />
       </div>
     ) : null;
   }
@@ -581,3 +586,8 @@ export function PhonePromptOver({
     </>
   );
 }
+
+/** What the disabled turn button says while the game plays on without the player: whose turn
+ * it is when the opponent is acting, else "Pass". */
+const waitingLabel = (opponentTurn: boolean) =>
+  opponentTurn ? "Opponent's Turn" : "Pass";

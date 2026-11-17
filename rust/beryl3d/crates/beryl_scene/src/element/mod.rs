@@ -439,8 +439,6 @@ pub mod floats {
     /// The step banner between the opponent's orb and their permanents, such as "Combat" over
     /// "Blockers declared" (`hud::banner`).
     pub const STEP_BANNER: FloatId = FloatId(32);
-    /// The ring under the opponent's orb while they decide (`hud::banner`).
-    pub const THINKING: FloatId = FloatId(33);
     /// The count of cards scrolled off the left end and the right end of the viewer's hand.
     pub const HAND_COUNT: [FloatId; 2] = [FloatId(34), FloatId(35)];
     /// The count of items scrolled off the stack's bottom, at its left, and its top, at its

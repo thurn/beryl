@@ -24,7 +24,7 @@ import {
 } from "react";
 import type { MouseEvent } from "react";
 import { Button, Tip } from "../components/Controls";
-import { LifeOrb, ManaPool, PlayerBadge, Thinking } from "../components/Player";
+import { LifeOrb, ManaPool, PlayerBadge } from "../components/Player";
 import { StepStops } from "../components/Steps";
 import type { PlayerView, Side, StopsSetting } from "../generated/protocol";
 import type { Box } from "../game/placement";
@@ -33,7 +33,7 @@ import { FullControlIcon } from "../game/Corner";
 import { InspectAt, inspectorPlace } from "../game/Inspector";
 import { Incoming, LifeChange } from "../game/Life";
 import type { LogEntry } from "../game/log";
-import { GameLog, opponentActing } from "../game/Narration";
+import { GameLog } from "../game/Narration";
 import { TableLog } from "../table/TableLog.tsx";
 import type { TableLogControls } from "../table/tableLog";
 import { PileButton, ZoneViewer } from "../game/Piles";
@@ -110,7 +110,6 @@ export function Hud({
   lost,
   log,
   tableLog,
-  waiting,
   logOpen,
   onLog,
   orb,
@@ -129,7 +128,6 @@ export function Hud({
   view: PlayerView;
   log: LogEntry[];
   tableLog?: TableLogControls;
-  waiting: boolean;
   logOpen: boolean;
   onLog(): void;
   client?: TableClient;
@@ -229,14 +227,6 @@ export function Hud({
           </div>
         )}
       </NoticeSlot>
-      {opponentActing(view, waiting) && !bannerUp && (
-        <div
-          className="hud thinking-hud"
-          style={scry?.notice.player === "opponent" ? { top: 200 } : undefined}
-        >
-          <Thinking />
-        </div>
-      )}
       {SIDES.map((side) => (
         <div
           key={side}

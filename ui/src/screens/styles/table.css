@@ -196,13 +196,6 @@
   padding: 2px 12px;
   font-size: 14px;
 }
-/* The opponent thinking, under their orb, clear of its rays. */
-.thinking-hud {
-  left: calc(782px + var(--shift-mid, 0px));
-  top: 166px;
-  z-index: 250;
-  pointer-events: none;
-}
 /* In combat, the damage the unblocked attackers will deal, a badge on the rim of the life orb
    toward the table: a number, solid red when lethal. */
 .life-incoming {

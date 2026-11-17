@@ -21,7 +21,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { ManaPool, Thinking } from "../components/Player";
+import { ManaPool } from "../components/Player";
 import type {
   ObjectView,
   PlayerView,
@@ -140,6 +140,7 @@ export function PhoneStageBoard({
   const number = prompts.number.bind(prompts);
   const answers = {
     waiting,
+    opponentTurn: opponentActing(view, waiting),
     press,
     cancel: cancel ?? (() => {}),
     suggest,
@@ -326,11 +327,6 @@ export function PhoneStageBoard({
                 !opening && <PhonePromptDock asked={asked} {...answers} />
               ) : (
                 <>
-                  {!opening && opponentActing(view, waiting) && (
-                    <div className="phone-thinking">
-                      <Thinking />
-                    </div>
-                  )}
                   {onCommandList && (
                     <button
                       type="button"

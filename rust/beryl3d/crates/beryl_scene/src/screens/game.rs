@@ -21,7 +21,8 @@ use crate::tokens::{color, size};
 pub fn game(input: &ScreenIn) -> Element {
     let prompt = input
         .prompt
-        .and_then(|prompt| prompts::screen(prompt, input));
+        .and_then(|prompt| prompts::screen(prompt, input))
+        .or_else(|| prompts::waiting(input));
     let pieces: Vec<Element> = [
         game_over::scrim(input),
         game_over::game_over(input),
@@ -64,7 +65,8 @@ pub fn game_phone(input: &ScreenIn) -> Element {
     let opening = opening::shown(input);
     let prompt = input
         .prompt
-        .and_then(|prompt| prompts::screen(prompt, input));
+        .and_then(|prompt| prompts::screen(prompt, input))
+        .or_else(|| prompts::waiting(input));
     let furniture = input.view.filter(|_| !opening).map(|view| {
         [
             players::players(input),

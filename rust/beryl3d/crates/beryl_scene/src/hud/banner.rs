@@ -6,16 +6,14 @@
 //! - It shows for `hud.banner` milliseconds (the web's `BANNER_MS`) on the show's clock from the
 //!   first frame whose view at rest calls for it, then hides until that view no longer calls for
 //!   it and a later one calls for a banner again, as the web's `useBannerUp`.
-//! - The ring under the opponent's orb while they decide (the web's `Thinking`) lies where the
-//!   banner does, so it hides while the banner is up. Both are floats (`floats::STEP_BANNER`,
-//!   `floats::THINKING`), laid out ahead (`Banner::prepare`), so that the frame that shows or
-//!   hides one lays nothing out and allocates nothing.
+//! - The banner is a float (`floats::STEP_BANNER`), laid out ahead (`Banner::prepare`), so that
+//!   the frame that shows or hides it lays nothing out and allocates nothing.
 
 use beryl_protocol::protocol::{Combat, Kind, PlayerView, Side, Status, Step};
 use glam::Vec2;
 
 use super::players::orb_centre;
-use crate::data::space::hud::{BANNER, BANNER_GAP, THINKING_GAP};
+use crate::data::space::hud::{BANNER, BANNER_GAP};
 use crate::element::{Align, Element, Justify, column, floats, text};
 use crate::frame::Role;
 use crate::layout::{FloatLook, Layer};
@@ -34,17 +32,13 @@ const DETAILS: [&str; 5] = [
     "Combat damage",
 ];
 
-/// The key the thinking ring is laid out under.
-const RING: u64 = 0;
-
-/// What the banner and the thinking ring show now.
+/// What the banner shows now.
 #[derive(Debug, Default)]
 pub struct Banner {
     /// The detail the view at rest calls for, by index in `DETAILS`, and since when.
     wanted: Option<(usize, u64)>,
     /// The detail the banner float shows, if any.
     shown: Option<usize>,
-    thinking: bool,
 }
 
 /// The step banner `view` calls for during combat, as the web's `combatBanner`: its detail, by
@@ -83,16 +77,12 @@ pub fn words(detail: usize) -> (&'static str, &'static str) {
 const SHOWS: u64 = (BANNER * ratio::NANOS_PER_MS) as u64;
 
 impl Banner {
-    /// Lays out in `layer` the banner `view` will call for once the table shows it, and the
-    /// thinking ring if the opponent decides in it, which `write` then shows without laying
-    /// anything out. Lays out nothing that is laid out already, so a game lays out each banner
-    /// once at most.
+    /// Lays out in `layer` the banner `view` will call for once the table shows it, which
+    /// `write` then shows without laying anything out. Lays out nothing that is laid out already, so a game lays out each
+    /// banner once at most.
     pub fn prepare(layer: &mut Layer, view: &PlayerView) {
         if let Some(detail) = combat_banner(view) {
             layer.prepare(floats::STEP_BANNER, detail as u64, || banner(detail));
-        }
-        if matches!(view.status, Status::Thinking) {
-            layer.prepare(floats::THINKING, RING, thinking_ring);
         }
     }
 
@@ -103,8 +93,7 @@ impl Banner {
             .is_some_and(|(_, since)| now.saturating_sub(since) < SHOWS)
     }
 
-    /// Shows in `layer` the banner and the thinking ring that `view`, the view at rest, calls for
-    /// at `now` in `window`, or neither unless `visible`. Lays nothing out and allocates nothing.
+    /// Shows in `layer` the banner that `view`, the view at rest, calls for at `now` in `window`, or neither unless `visible`. Lays nothing out and allocates nothing.
     pub fn write(
         &mut self,
         layer: &mut Layer,
@@ -135,22 +124,6 @@ impl Banner {
                 floats::STEP_BANNER,
                 FloatLook {
                     point: Vec2::new(window.size.width / 2.0, below + BANNER_GAP),
-                    anchor: Vec2::new(0.5, 0.0),
-                    ..FloatLook::default()
-                },
-            );
-        }
-        let thinking =
-            visible && !up && view.is_some_and(|view| matches!(view.status, Status::Thinking));
-        if thinking != self.thinking {
-            layer.show_prepared(floats::THINKING, thinking.then_some(RING));
-            self.thinking = thinking;
-        }
-        if thinking {
-            layer.set_float_look(
-                floats::THINKING,
-                FloatLook {
-                    point: Vec2::new(orb.x, below + THINKING_GAP),
                     anchor: Vec2::new(0.5, 0.0),
                     ..FloatLook::default()
                 },
@@ -188,16 +161,4 @@ fn banner(detail: usize) -> Element {
         );
     element.role = Role::Region;
     element
-}
-
-/// The ring under the opponent's orb while they decide, the web's `Thinking` spinner held
-/// still: the flat layer draws no arcs, so the whole ring is gold.
-fn thinking_ring() -> Element {
-    Element::new(Role::Region)
-        .name("Opponent thinking")
-        .width(size::THINKING)
-        .height(size::THINKING)
-        .border((color::THINKING, size::THINKING_TRACK))
-        .radius(size::THINKING / 2.0)
-        .passes(true)
 }

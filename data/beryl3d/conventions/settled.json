@@ -53,7 +53,9 @@
       "shows": "button \"Resolve\""
     },
     "The opponent's turn": {
-      "open": "The web interface does not follow it either: while the opponent acts, its dock shows a disabled \"Pass\" button (PromptDock in ui/src/stage/PromptBar.tsx) and a spinner under their orb (Thinking in ui/src/components/Player.tsx); Beryl 3D shows the same spinner as a still gold ring and no button. Following the rule (Arena's \"Opponent's Turn\" in the button's place, no spinner) means changing the web and Beryl 3D together (needs bead by-q44s.9.34)."
+      "recording": "verbs-cast-theirs",
+      "at": "view:3",
+      "shows": "button \"Opponent's Turn\" disabled"
     },
     "Attacking a planeswalker": {
       "recording": "attack-past-walker",

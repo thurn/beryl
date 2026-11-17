@@ -103,7 +103,7 @@ pub struct Client {
     notices: NoticeFloats,
     /// The counts of the cards scrolled off each end of a battlefield row.
     row_counts: RowCounts,
-    /// The step banner and the thinking ring under the opponent's orb.
+    /// The step banner under the opponent's orb.
     banner: Banner,
     /// The game log, as the views have told it so far, and whether it is folded and open.
     log: Log,
