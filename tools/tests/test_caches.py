@@ -1,6 +1,8 @@
 import io
 import os
+import shutil
 import time
+from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
 
@@ -72,7 +74,7 @@ def low_disk_cache(
     """A cache whose volume has `free` bytes free (a faked `caches.free_space`), with gone
     checkouts' folders of several ages and a shared target, keyed by what each is."""
     monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
-    monkeypatch.setattr(paths, "worktree_names", lambda: ["beryl"])
+    monkeypatch.setattr(paths, "worktree_paths", lambda: [tmp_path / "beryl"])
     monkeypatch.setattr(caches, "free_space", lambda _: free)
     target = tmp_path / "target"
     made = {
@@ -95,13 +97,16 @@ def present(made: dict[str, Path]) -> set[str]:
     return {kind for kind, path in made.items() if path.exists()}
 
 
-def test_low_on_disk_it_prunes_recent_folders_and_the_shared_target(
+def test_low_on_disk_it_prunes_recent_folders_and_build_targets(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     made = low_disk_cache(tmp_path, monkeypatch, free=caches.LOW_DISK - 1)
+    checkout = crowded_checkout(tmp_path / "beryl", 1)
+    deps = checkout / "rust" / "target" / "debug" / "deps"
     assert caches.run(io.StringIO()) == 0
     # A gone checkout's folder last written within the hour may belong to a run finishing.
     assert present(made) == {"minutes old", "live", "deps"}
+    assert [p.name for p in deps.iterdir()] == ["unit-0123456789abcdef.cgu0.new.rcgu.o"]
 
 
 def test_with_room_on_disk_it_prunes_only_day_old_folders(
@@ -253,17 +258,38 @@ def test_a_target_under_the_threshold_is_pruned_when_its_sweep_is_due(
 def test_low_disk_mode_prunes_each_worktree_target_but_a_busy_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    pruned: list[Path] = []
-    monkeypatch.setattr(warm, "prune", pruned.append)
     idle = tmp_path / "slot-01" / "rust" / "beryl3d" / "target"
     busy = tmp_path / "slot-02" / "rust" / "target"
+    sessions = Path("debug/incremental/crate")
     for target in (idle, busy):
-        (target / "debug").mkdir(parents=True)
+        (target / "debug" / "deps").mkdir(parents=True)
+        (target / sessions / "s-1-old").mkdir(parents=True)
+        (target / sessions / "s-2-new").mkdir()
     monkeypatch.setattr(
         paths, "worktree_paths", lambda: [tmp_path / "slot-01", tmp_path / "slot-02"]
     )
     out = io.StringIO()
     with system.file_lock(busy / "debug" / ".cargo-lock"):
         caches.prune_worktree_targets(out)
-    assert pruned == [idle]
+    assert {p.name for p in (idle / sessions).iterdir()} == {"s-2-new"}
+    assert {p.name for p in (busy / sessions).iterdir()} == {"s-1-old", "s-2-new"}
     assert f"a cargo build holds {busy}" in out.getvalue()
+
+
+def test_low_disk_mode_keeps_pruning_after_a_worktree_target_disappears(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gone: Path = crowded_checkout(tmp_path / "slot-01", 1)
+    idle = crowded_checkout(tmp_path / "slot-02", 1)
+    monkeypatch.setattr(paths, "worktree_paths", lambda: [gone, idle])
+    enumerate_targets: Callable[[], list[Path]] = caches.worktree_targets
+
+    def remove_after_enumeration() -> list[Path]:
+        targets = enumerate_targets()
+        shutil.rmtree(gone / "rust" / "target")
+        return targets
+
+    monkeypatch.setattr(caches, "worktree_targets", remove_after_enumeration)
+    caches.prune_worktree_targets(io.StringIO())
+    deps = idle / "rust" / "target" / "debug" / "deps"
+    assert [p.name for p in deps.iterdir()] == ["unit-0123456789abcdef.cgu0.new.rcgu.o"]

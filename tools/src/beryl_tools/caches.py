@@ -171,6 +171,8 @@ def prune_worktree_targets(out: IO[str], dry_run: bool = False) -> None:
                 warm.prune(target)
         except system.LockHeld:
             out.write(f"prune-caches: a cargo build holds {target}; left it\n")
+        except FileNotFoundError:
+            continue  # The target was removed after discovery.
 
 
 @dataclass(frozen=True)
