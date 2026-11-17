@@ -36,11 +36,14 @@ from __future__ import annotations
 import argparse
 import atexit
 import os
+import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 from . import paths, system, tokens
+from .reruns import CANNOT_RUN
 
 # How long a machine may sit with no user before `stop_idle` stops it. Booting takes about
 # 10 s, and the fast check's count gate runs several times an hour while sessions push Rust
@@ -200,3 +203,72 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         help=f"stop the Lima machines no command has used for {IDLE_MINUTES} minutes",
     )
     p.set_defaults(func=stop_command)
+
+
+def wsl_status(vm: str) -> str | None:
+    """The WSL distribution `vm`'s state, Running or Stopped; None if there is none."""
+    run = subprocess.run(
+        ["wsl", "--list", "--verbose"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "WSL_UTF8": "1"},
+        check=False,
+    )
+    for line in run.stdout.splitlines():
+        fields = line.replace("*", " ").split()
+        if len(fields) >= 2 and fields[0] == vm:
+            return fields[1]
+    return None
+
+
+def status(vm: str) -> str | None:
+    """The machine `vm`'s state (Running, Stopped and so on); None if there is none."""
+    if system.WINDOWS:
+        return wsl_status(vm)
+    listed = subprocess.run(
+        ["limactl", "list", "--format", "{{.Name}} {{.Status}}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    for line in listed.stdout.splitlines():
+        name, _, state = line.partition(" ")
+        if name == vm:
+            return state
+    return None
+
+
+def vm_mounts(vm: str) -> list[Path]:
+    """The host directories Lima mounts in `vm`, from the `location:` lines of its
+    lima.yaml; empty when the file cannot be read. The VM sees only these, so a checkout
+    elsewhere (a second clone, say) cannot be built there."""
+    try:
+        text = (Path.home() / ".lima" / vm / "lima.yaml").read_text()
+    except OSError:
+        return []
+    found = re.findall(
+        r"^\s*-?\s*location:\s*[\"']?([^\"'#\n]+?)[\"']?\s*$", text, re.M
+    )
+    return [Path(os.path.expanduser(f)) for f in found if f.startswith(("/", "~"))]
+
+
+def vm_sees(path: Path, vm: str) -> bool:
+    """Whether `path` is inside a directory `vm` mounts. WSL sees every Windows drive, and a
+    lima.yaml that cannot be read is given the benefit of the doubt."""
+    if system.WINDOWS:
+        return True
+    mounts = vm_mounts(vm)
+    resolved = path.resolve()
+    return not mounts or any(resolved.is_relative_to(m.resolve()) for m in mounts)
+
+
+def vm_failed(code: int, vm: str) -> int:
+    """The code for a counting script that exited `code` (non-zero): `CANNOT_RUN` when the
+    VM was the problem, ssh's 255 or a VM no longer running (one stopped as idle mid-run once
+    failed the count gate with `ha.sock: no such file or directory` on
+    2026-11-16), else `code`."""
+    if code == 255 or status(vm) != "Running":
+        message = f"the {vm} VM stopped or could not be reached (exit {code})"
+        print(f"bench: {message}; nothing was counted", file=sys.stderr)
+        return CANNOT_RUN
+    return code

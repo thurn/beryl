@@ -2,6 +2,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from beryl_tools import bench
 
 TOP = """Processes: 812 total
@@ -303,3 +305,43 @@ def test_the_gate_drops_last_runs_callgrind_outputs_but_a_worktree_keeps_them(
     run_count(tmp_path, "a", "/repo/a", ["a"])
     assert not gate.exists()
     assert mine.exists()
+
+
+LIMA_YAML = """images:
+- location: "https://cloud-images.ubuntu.com/releases/ubuntu-arm64.img"
+  arch: "aarch64"
+mounts:
+- location: /Users/me/beryl
+  mountPoint: /Users/me/beryl
+  writable: false
+# - location: "{{.GlobalTempDir}}/lima"
+"""
+
+
+def test_the_vm_sees_only_checkouts_under_its_mounts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".lima" / "vm").mkdir(parents=True)
+    (tmp_path / ".lima" / "vm" / "lima.yaml").write_text(LIMA_YAML)
+    monkeypatch.setattr(bench.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(bench.system, "WINDOWS", False)
+    # Image URLs and commented-out mounts are not mounts.
+    assert bench.vm_host.vm_mounts("vm") == [Path("/Users/me/beryl")]
+    assert bench.vm_host.vm_sees(Path("/Users/me/beryl/.worktrees/a/rust"), "vm")
+    # A second clone, such as the one the tracker cutover pushed from, is not visible.
+    assert not bench.vm_host.vm_sees(Path("/Users/me/.config/rollout/beryl/rust"), "vm")
+    # A VM whose config cannot be read is given the benefit of the doubt.
+    assert bench.vm_host.vm_sees(Path("/anywhere"), "missing")
+
+
+def test_a_vm_that_stopped_mid_count_cannot_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    status = {"now": "Stopped"}
+    monkeypatch.setattr(bench.vm_host, "status", lambda vm: status["now"])
+    assert bench.vm_host.vm_failed(1, "vm") == bench.CANNOT_RUN
+    status["now"] = "Running"
+    # ssh's own failure says nothing about the count.
+    assert bench.vm_host.vm_failed(255, "vm") == bench.CANNOT_RUN
+    # A running VM whose script failed reports the script's code: a real failure.
+    assert bench.vm_host.vm_failed(1, "vm") == 1

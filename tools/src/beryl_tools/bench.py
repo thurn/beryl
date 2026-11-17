@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import count_trend, paths, system, vm_host, warm
+from .reruns import CANNOT_RUN
 
 if TYPE_CHECKING:
     from .checks import Lane
@@ -296,34 +297,6 @@ fi
     )
 
 
-def wsl_status(vm: str = VM) -> str | None:
-    """The WSL distribution `vm`'s state, Running or Stopped; None if there is none."""
-    run = subprocess.run(
-        ["wsl", "--list", "--verbose"],
-        capture_output=True,
-        text=True,
-        env={**os.environ, "WSL_UTF8": "1"},
-        check=False,
-    )
-    for line in run.stdout.splitlines():
-        fields = line.replace("*", " ").split()
-        if len(fields) >= 2 and fields[0] == vm:
-            return fields[1]
-    return None
-
-
-def vm_status(vm: str = VM) -> str | None:
-    if system.WINDOWS:
-        return wsl_status(vm)
-    for line in output(
-        "limactl", "list", "--format", "{{.Name}} {{.Status}}"
-    ).splitlines():
-        name, _, status = line.partition(" ")
-        if name == vm:
-            return status
-    return None
-
-
 def vm_command(script: str, vm: str = VM, workdir: str | None = None) -> list[str]:
     """`script` run in `vm`'s login shell from `workdir`, by default this checkout's rust/
     directory. That path exists in the machine only when this checkout is in the main checkout,
@@ -427,7 +400,7 @@ def wsl_ensure(vm: str = VM) -> int:
     if shutil.which("wsl") is None:
         log("WSL is missing: wsl --install, in an administrator's terminal")
         return 2
-    if wsl_status(vm) is not None:
+    if vm_host.wsl_status(vm) is not None:
         return 0
     log(f"creating the {vm} WSL distribution (downloads Ubuntu once; a few minutes)")
     return subprocess.run(
@@ -460,7 +433,7 @@ def vm_ensure(vm: str = VM, cpus: int = 4, memory_gib: int = 4) -> int:
     # This command uses the machine until it exits: its CPUs count against the pool, and it is
     # not stopped as idle meanwhile (vm_host.py).
     vm_host.join(vm, cpus)
-    status = vm_status(vm)
+    status = vm_host.status(vm)
     checkout = paths.main_checkout() or paths.REPO
     size = [f"--cpus={cpus}", f"--memory={memory_gib}"]
     if status is None:
@@ -672,19 +645,23 @@ def lane() -> Lane:
 
 
 def vm_ready() -> int:
-    """Whether the bench VM can count now: 0, or the code to exit with."""
+    """0 when the bench VM can count now, else `CANNOT_RUN` with the reason logged, so a VM
+    problem is not rerun, judged or bisected as a count that failed (vm_host.vm_failed).
+    """
+    why = None
     if platform.machine() not in ("arm64", "aarch64"):
         # The bar counts an aarch64 build's instructions; an x86-64 build runs others.
-        log("the gate's bar is for Apple silicon; `just bench-count` compares here")
-        return 2
-    if not system.WINDOWS and shutil.which("limactl") is None:
-        log("Lima is missing: brew install lima, then `just bench-count` once")
-        return 2
-    if vm_status() is None:
-        # Creating it takes minutes, past CI's deadline.
-        log(f"no {VM} VM: run `just bench-count` once to create it")
-        return 2
-    return vm_ensure()
+        why = "the gate's bar is for Apple silicon; `just bench-count` compares here"
+    elif not system.WINDOWS and shutil.which("limactl") is None:
+        why = "Lima is missing: brew install lima, then `just bench-count` once"
+    elif vm_host.status(VM) is None:  # Creating it takes minutes, past CI's deadline.
+        why = f"no {VM} VM: run `just bench-count` once to create it"
+    elif not vm_host.vm_sees(paths.RUST, VM):
+        mounts = ", ".join(map(str, vm_host.vm_mounts(VM)))
+        why = f"the {VM} VM mounts {mounts}, not {paths.REPO}: count from a worktree of it"
+    if why:
+        log(why)
+    return CANNOT_RUN if why or vm_ensure() != 0 else 0
 
 
 def family_gate(names: list[str]) -> int:
@@ -712,7 +689,7 @@ def family_gate(names: list[str]) -> int:
         vm_command(script), stdout=subprocess.PIPE, text=True, check=False
     )
     if run.returncode != 0:
-        return run.returncode
+        return vm_host.vm_failed(run.returncode, VM)
     failed = False
     for name in names:
         present = counted(run.stdout, family_benchmark("present", name))
@@ -753,7 +730,7 @@ def count_gate(args: argparse.Namespace) -> int:
         check=False,
     )
     if run.returncode != 0:
-        return run.returncode
+        return vm_host.vm_failed(run.returncode, VM)
     measured = counted(run.stdout, gate.benchmark)
     if measured is None:
         log(f"Gungraun reported no count for {gate.benchmark}")

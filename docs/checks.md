@@ -194,7 +194,11 @@ The lanes slow CI adds to the fast check's:
   (`count_trend.py`). Its second step, `count-gate-families`, runs
   `just count-gate --family <name>` for each family with a bar in that file,
   failing a family whose present cost passes its ratio (`docs/benchmarking.md`,
-  "The present-cost gate").
+  "The present-cost gate"). Both steps count in the `beryl-bench` Lima VM, which
+  mounts only the main checkout. When the VM is missing, stopped, out of reach,
+  or cannot see the checkout (a second clone, say), the step exits `CANNOT_RUN`
+  and says why. The lane still fails, but nothing is rerun, given a verdict or
+  bisected.
 
 Slow CI runs on two machines: this Mac and Cygnus, a Windows PC. A pass on
 either one moves `master` forward. A failure's Steward ticket (the P0 ticket
