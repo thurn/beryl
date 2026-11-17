@@ -9,21 +9,20 @@ fixed in the same session. Newest first.
 - **Redealing a face-down copy could corrupt its copied values.** The hidden
   card was dealt into the field that holds the copied definition. Search now
   deals it into the memo that keeps the original card. The regression
-  `redealing_the_card_under_a_face_down_copy_preserves_the_copy` checks
-  that the original card can vary and the copy effect remains consistent.
+  `redealing_the_card_under_a_face_down_copy_preserves_the_copy` checks that the
+  original card can vary and the copy effect remains consistent.
 
-- **Entering as a copy of a back face could panic.** The Aura attachment
-  check looked up the copied face on the original card. It now reads the
-  selected copy and applies its values in the preview used to choose a legal
-  attachment. `a_copy_of_a_back_face_aura_enters_attached` covers a single-faced
-  card entering as an Aura's back face and attaching to a land.
+- **Entering as a copy of a back face could panic.** The Aura attachment check
+  looked up the copied face on the original card. It now reads the selected copy
+  and applies its values in the preview used to choose a legal attachment.
+  `a_copy_of_a_back_face_aura_enters_attached` covers a single-faced card
+  entering as an Aura's back face and attaching to a land.
 
-- **A draw replacement could read stale abilities during resolution.** The
-  draw code consulted the battlefield after a layer input changed without
-  refreshing the layer results. The replacement lookup now refreshes them
-  before reading abilities or controllers.
-  `a_draw_replacement_reads_the_current_controller` tests a draw immediately
-  after a control change.
+- **A draw replacement could read stale abilities during resolution.** The draw
+  code consulted the battlefield after a layer input changed without refreshing
+  the layer results. The replacement lookup now refreshes them before reading
+  abilities or controllers. `a_draw_replacement_reads_the_current_controller`
+  tests a draw immediately after a control change.
 
 - **Seventeen damage prevention effects could stall a game.** The damage
   replacement code used the same fixed lists in both layouts, so retrying the
