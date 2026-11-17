@@ -40,8 +40,11 @@ pub const GEAR_INSET: f32 = size::SETTINGS_GEAR_INSET;
 /// (`ui/src/game/Corner.tsx`). The web hides its bug button while the report is open.
 #[must_use]
 pub fn corner(bug: bool, undo: bool) -> Element {
+    // Clear, as `element::holder` is: a float's top element is otherwise drawn on a panel.
     column()
         .name("corner")
+        .background([0; 4])
+        .border(([0; 4], 0.0))
         .gap(size::CORNER_GAP)
         .child(icon_button(icons::GEAR, "Settings").on_press(Press::Sheet(Some(Sheet::Settings))))
         .children(bug.then(|| {
