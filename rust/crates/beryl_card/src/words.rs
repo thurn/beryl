@@ -365,12 +365,12 @@ impl SubtypeWords {
     /// The subtypes these words name on an object with `words`.
     #[inline]
     pub fn read(self, words: &Words) -> Subtypes {
-        if !words.changes_subtypes() {
-            self.0
-        } else {
+        if words.changes_subtypes() {
             self.0
                 .iter()
                 .fold(Subtypes::NONE, |set, s| set.with(words.subtype(s)))
+        } else {
+            self.0
         }
     }
 }
@@ -389,13 +389,13 @@ impl LandTypeWords {
     /// The basic land types these words name on an object with `words`.
     #[inline]
     pub fn read(self, words: &Words) -> BasicLandTypes {
-        if !words.changes_subtypes() {
-            self.0
-        } else {
+        if words.changes_subtypes() {
             self.0
                 .subtypes()
                 .filter_map(|s| BasicLandTypes::of_subtype(words.subtype(s)))
                 .fold(BasicLandTypes::NONE, BasicLandTypes::union)
+        } else {
+            self.0
         }
     }
 }
