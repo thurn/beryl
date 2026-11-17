@@ -16,6 +16,7 @@ use crate::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
 use crate::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
 use crate::agent::tree::locator_of;
 use crate::agent::{self, Fault, Subject, hit::bounds};
+use crate::data::audit;
 use crate::frame::Frame;
 use crate::input::Rect;
 use crate::play::record::{Plant, Planted, ScriptRecord};
@@ -439,10 +440,30 @@ fn times(given_at: &[u64], client: &crate::Client, end: u64) -> Vec<u64> {
         for run in &script.effects {
             times.insert(real(run.start));
             times.insert(real(run.start + run.duration / 2));
+            times.insert(real(run.start + last_seen(run.duration)));
             times.insert(real(run.start + run.duration));
         }
     }
     times.into_iter().filter(|&t| t <= end).collect()
+}
+
+/// How far into an effect run of `duration` an element it fades out, such as the amount a
+/// life total changed by (`hud::counts`), is last seen: its opacity falls from 1 to 0 over the
+/// run, and the checks stop seeing it at `audit::TRANSPARENT`. The element has moved farthest
+/// from where it began by then, so a line of text it crosses only late in the run, as the
+/// change crosses the "Combat" notice under the total, is crossed here, which neither the
+/// run's start nor its middle shows.
+fn last_seen(duration: u64) -> u64 {
+    // A little short of the threshold, so that rounding never leaves the element transparent.
+    let through = f64::from(1.0 - audit::TRANSPARENT) * 0.95;
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "an effect lasts seconds at most, and the fraction is between 0 and 1"
+    )]
+    let at = (duration as f64 * through) as u64;
+    at
 }
 
 /// The times at which `judged`'s subjects are sampled: each tick of the clock (a multiple of
