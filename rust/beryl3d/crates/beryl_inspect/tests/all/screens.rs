@@ -101,13 +101,17 @@ fn every_built_screen_shows_in_its_recording() {
 }
 
 /// Asserts that the recording `entry` names shows the tree line its `shows` names at the
-/// moment its `at` names, from the player's seat in the usual desktop window. `name` says
-/// which entry failed. The screens file's built screens and the conventions files' entries
-/// are both held to this.
+/// moment its `at` names, in the usual desktop window, once the actions its optional `do` lists
+/// (as `just b3d tree --do` takes them, such as `hover card #8`) are done there in order. It is
+/// seen from the player's seat, or from the opponent's where its optional `seat` is
+/// `"opponent"`. The table is first let come to rest, unless its optional `still` is `false`,
+/// which shows a moment of an animation as `just b3d tree --at` does. `name` says which entry
+/// failed. The screens file's built screens and the conventions files' entries are both held
+/// to this.
 pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
     use std::str::FromStr;
 
-    use beryl_scene::driver::Moment;
+    use beryl_scene::driver::{Action, Moment};
     use beryl_scene::input::Size;
 
     let field = |key: &str| {
@@ -120,12 +124,33 @@ pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
         width: 1600.0,
         height: 900.0,
     };
-    let mut page = beryl_inspect::pages::page(recording, Side::You, Layout::Desktop, size)
+    let side = match entry["seat"].as_str() {
+        None | Some("you") => Side::You,
+        Some("opponent") => Side::Opponent,
+        Some(other) => panic!("{name}: `seat` is \"you\" or \"opponent\", not {other:?}"),
+    };
+    let still = entry["still"].as_bool().unwrap_or(true);
+    let mut page = beryl_inspect::pages::page(recording, side, Layout::Desktop, size)
         .unwrap_or_else(|why| panic!("{name}: {why}"));
     let moment = Moment::from_str(at).unwrap_or_else(|why| panic!("{name}: {at}: {why:?}"));
     page.seek(&moment)
         .unwrap_or_else(|why| panic!("{name}: {why}"));
-    page.still();
+    if still {
+        page.still();
+    }
+    let actions = entry["do"].as_array().map_or(&[][..], Vec::as_slice);
+    for action in actions {
+        let action = action
+            .as_str()
+            .unwrap_or_else(|| panic!("{name}: each action of `do` is a string"));
+        let parsed =
+            Action::from_str(action).unwrap_or_else(|why| panic!("{name}: {action}: {why:?}"));
+        page.try_act(&parsed)
+            .unwrap_or_else(|why| panic!("{name}: {action}: {why}"));
+        if still {
+            page.still();
+        }
+    }
     let tree = page.tree();
     assert!(
         tree.contains(shows),

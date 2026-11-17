@@ -497,6 +497,13 @@
         "weight": 600,
         "size": 22,
         "line_height": 1.2
+      },
+      "TURN_CAPTION": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 17.8,
+        "line_height": 1.236,
+        "note": "What the prompt's primary button says under it, such as where a pass leads: `.turn-caption` in `ui/src/screens/styles/controls.css`, 17.8 points on a 22-point line."
       }
     },
     "size": {
@@ -1143,6 +1150,10 @@
       "BANNER_DETAIL": {
         "value": "#f3ece0",
         "note": "The step banner's detail: `.step-banner-detail`'s `color`."
+      },
+      "TURN_CAPTION": {
+        "value": "#b4b2ae",
+        "note": "The caption under the prompt's primary button: `.turn-caption`'s `color`."
       }
     },
     "mana": {

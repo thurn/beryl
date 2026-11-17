@@ -48,12 +48,23 @@ enum Cut {
 pub const AIM_ID: u32 = ARROW_IDS + (1 << 16);
 
 /// Writes the records of the arrows and lines in `lit` as they are at `now`, and the arrows to
-/// the pointer.
-pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
+/// the pointer. While the table shows a `prompt` that asks something other than priority, the
+/// line from an ability to its source is hidden, as the web stage's `Overlay.lines` hides it
+/// (UI Conventions, "A line from an ability to its source").
+pub fn write(
+    lit: &Lit,
+    now: u64,
+    prompt: bool,
+    scene: &Scene<'_>,
+    builder: &mut FrameBuilder<'_>,
+) {
     for (index, open) in lit.open().iter().enumerate() {
         let Span::Arrow(arrow) = open.span else {
             continue;
         };
+        if prompt && arrow.arrow == Arrow::Source {
+            continue;
+        }
         let (Some(from), Some(to)) = (scene.reach(arrow.from), scene.reach(arrow.to)) else {
             continue;
         };

@@ -191,9 +191,13 @@ project, and selects the main lanes.
   `not-seen`): `{"entries": {"<convention name>": entry}}`, where an entry is
   `{"recording", "at", "shows"}` with the meaning a `screens.json` screen's has,
   showing Beryl 3D following the convention, or
-  `{"open": "<why Beryl 3D cannot follow it without a numbered exception>"}`.
-  Beryl 3D never edits `data/ui-conventions.json` itself. A `beryl_inspect` test
-  checks each key and each recording.
+  `{"open": "<why Beryl 3D cannot follow it without a numbered exception>"}`. A
+  recording entry may add `do`, actions run at `at` as `just b3d tree --do` runs
+  them (such as a hover); `seat: "opponent"` to see it from the opponent's seat;
+  and `still: false` to see the moment mid-animation, as `tree --at` does,
+  instead of once the table rests. Beryl 3D never edits
+  `data/ui-conventions.json` itself. A `beryl_inspect` test checks each key and
+  each recording.
 
 - `data/beryl3d/gates.json`: the audit, frame, tier, material and test gates.
   Each number under `audit` becomes an `f32` constant in `beryl_scene`'s

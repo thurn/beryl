@@ -254,7 +254,15 @@ fn pay_default_plays_to_its_end_from_both_seats_by_pressing_its_buttons() {
 fn pay_default_shows_each_prompt_in_the_prompt_bar() {
     let mut page = Page::fixture("pay-default", Side::You, Layout::Desktop);
     for (moment, lines) in [
-        ("prompt:1", &["button \"Next\""][..]),
+        // The primary button stands over its caption: where passing leads.
+        (
+            "prompt:1",
+            &[
+                "region \"turn action\"",
+                "button \"Next\"",
+                "text \"To Combat\"",
+            ][..],
+        ),
         (
             "prompt:2",
             &["text \"Pay {1}{W}.\"", "button \"Auto Pay\""][..],

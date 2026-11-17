@@ -77,14 +77,38 @@ pub(super) fn bar(
             bar.children.extend(controls.take());
         }
         let widget = if button_view.primary { primary } else { button };
-        bar.children.push(
-            widget(&button_view.label)
-                .enabled(button_view.enabled)
-                .on_press(Press::Button(button_view.id)),
-        );
+        let pressed = widget(&button_view.label)
+            .enabled(button_view.enabled)
+            .on_press(Press::Button(button_view.id));
+        bar.children.push(if button_view.primary {
+            captioned(pressed, &button_view.caption)
+        } else {
+            pressed
+        });
     }
     bar.children.extend(controls);
     bar
+}
+
+/// The primary button `pressed` with what it says under its label, `caption`, beneath it, as
+/// the web's `.turn-action` stands a `.turn-caption` under the turn button: where a pass leads
+/// ("Next" over "To Combat"), or the value an X is set to ("Pay" over "X = 1"). A button with
+/// no caption stands alone.
+fn captioned(pressed: Element, caption: &str) -> Element {
+    if caption.is_empty() {
+        return pressed;
+    }
+    column()
+        .name("turn action")
+        .gap(space::S)
+        .align_items(Align::Center)
+        .child(pressed)
+        .child(
+            text(caption)
+                .style(type_style::TURN_CAPTION)
+                .color(color::TURN_CAPTION)
+                .text_align(TextAlign::Center),
+        )
 }
 
 /// The prompt bar on the phone layout, as the web interface's `PhonePromptDock` and

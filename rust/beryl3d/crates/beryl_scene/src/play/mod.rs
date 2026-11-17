@@ -50,7 +50,7 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 use beryl_protocol::GameUpdate;
-use beryl_protocol::protocol::PlayerView;
+use beryl_protocol::protocol::{Kind, PlayerView, Status};
 use beryl_protocol::script::{
     Act, OwnStep, StepTiming, Subject, Table as Played, Verb, own_timings,
 };
@@ -615,8 +615,13 @@ impl Show {
         };
         self.table
             .write(shown, motion, &self.faces, &dress, builder);
+        // The view shown, its scripts played out, asks something other than priority, as the
+        // web stage's `#prompt` says: the line from an ability to its source is hidden then.
+        let prompt = self.settled()
+            && matches!(&shown.status, Status::Deciding { decision }
+                if decision.kind != Kind::Priority);
         let scene = Scene::new(self, now);
-        light::arrows::write(&self.lit, now, &scene, builder);
+        light::arrows::write(&self.lit, now, prompt, &scene, builder);
         light::marks::write(&self.lit, now, &scene, builder);
         light::streaks::write(&self.lit, now, &scene, builder);
         effects::light::write(&self.active_effects, now, &scene, builder);
