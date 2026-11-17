@@ -45,13 +45,13 @@ leased (`tools/AGENTS.md`), never `available_parallelism` alone.
 for a change here. `just b3d timeline-parity [--fixtures] [prefix]` compares the
 web interface's and Beryl 3D's timelines of the recordings (see
 `data/beryl3d/timeline-parity.json`, below). The lane runs it with `--fixtures`
-and the sweep without. `just b3d parity` prints the parity list (docs/beryl-3d.md,
-"The parity list"): for each kind of item the web interface shows (fixtures,
-card specs, timelines, verbs, effects, marks, prompt shapes, screens, UI
-Conventions entries, tools and launch tests), how many Beryl 3D has and the
-first few it lacks; `--full` names all of them and `--json` prints the whole
-report. It runs `just b3d test` on the desktop and phone windows, or reads their
-`--json` outputs from `--results <dir>` (`desktop.json`, `phone.json`).
+and the sweep without. `just b3d parity` prints the parity list
+(docs/beryl-3d.md, "The parity list"): for each kind of item the web interface
+shows (fixtures, card specs, timelines, verbs, effects, marks, prompt shapes,
+screens, UI Conventions entries, tools and launch tests), how many Beryl 3D has
+and the first few it lacks; `--full` names all of them and `--json` prints the
+whole report. It runs `just b3d test` on the desktop and phone windows, or reads
+their `--json` outputs from `--results <dir>` (`desktop.json`, `phone.json`).
 `just b3d parity --check` fails when `data/beryl3d/parity.json` misses a skill
 directory or a web screen file or names something gone; it is the sweep's
 `parity-list` step.
@@ -169,12 +169,12 @@ project, and selects the main lanes.
   `.claude/skills` to a job, or to `"none: <why it looks at no client>"`.
   `web_screens` maps every `ui/src/screens/*.tsx`, every `ui/src/table` file
   ending in `View.tsx` or `Opening.tsx` and every `ui/src/table/lobby/*.tsx` to
-  the `name` of a `screens.json` screen, to `"missing"` when Beryl 3D has no such
-  screen, or to `"none: <why>"`. `verbs`, `effects` and `marks` map each name of
-  those lists of `data/ui-conventions.json` to one recording that plays it, as
-  `screens.json`'s `prompt_shapes` maps each prompt shape. `just b3d parity
-  --check` keeps the maps complete, and a `beryl_inspect` test checks that each
-  named recording exists.
+  the `name` of a `screens.json` screen, to `"missing"` when Beryl 3D has no
+  such screen, or to `"none: <why>"`. `verbs`, `effects` and `marks` map each
+  name of those lists of `data/ui-conventions.json` to one recording that plays
+  it, as `screens.json`'s `prompt_shapes` maps each prompt shape.
+  `just b3d parity --check` keeps the maps complete, and a `beryl_inspect` test
+  checks that each named recording exists.
 
 - `data/beryl3d/screens.json`: Beryl 3D's screens, each with the recording, the
   moment (`at`) and the tree line (`shows`) that show it once it is `built`, and
@@ -184,10 +184,10 @@ project, and selects the main lanes.
   `data/ui-conventions.json` (`exception`, `settled`, `no-equivalent`,
   `not-seen`): `{"entries": {"<convention name>": entry}}`, where an entry is
   `{"recording", "at", "shows"}` with the meaning a `screens.json` screen's has,
-  showing Beryl 3D following the convention, or `{"open": "<why Beryl 3D cannot
-  follow it without a numbered exception>"}`. Beryl 3D never edits
-  `data/ui-conventions.json` itself. A `beryl_inspect` test checks each key and
-  each recording.
+  showing Beryl 3D following the convention, or
+  `{"open": "<why Beryl 3D cannot follow it without a numbered exception>"}`.
+  Beryl 3D never edits `data/ui-conventions.json` itself. A `beryl_inspect` test
+  checks each key and each recording.
 
 - `data/beryl3d/gates.json`: the audit, frame, tier, material and test gates.
   Each number under `audit` becomes an `f32` constant in `beryl_scene`'s
