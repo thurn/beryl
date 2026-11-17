@@ -28,7 +28,12 @@
       "open": "State nudges put no tags on cards or life totals (needs bead by-q44s.9.25)"
     },
     "Selection rectangle": {
-      "open": "No summary of the selected permanents' count, power and toughness, and no action draws a rectangle (needs bead by-q44s.9.26)"
+      "recording": "screen/table",
+      "at": "end",
+      "do": [
+        "drag 560,410 to 900,600"
+      ],
+      "shows": "text \"4/4\""
     },
     "Undo": {
       "open": "The engine game has no undo button (needs bead by-q44s.9.27)"
@@ -56,7 +61,14 @@
       "shows": "pile \"Opponent's library\""
     },
     "Library drop halves": {
-      "open": "The halves are drawn mid-drag, but no action holds a drag over a library to show them (needs bead by-q44s.9.26)"
+      "recording": "screen/table",
+      "at": "end",
+      "still": false,
+      "do": [
+        "drag 560,410 to 900,600",
+        "hold card \"Serra Angel\" #11 over pile \"Your library\""
+      ],
+      "shows": "text \"Top\""
     },
     "Lobby": {
       "recording": "screen/lobby",
@@ -81,7 +93,7 @@
       "open": "The library menu offers no Scry or Surveil under Assists (needs bead by-q44s.9.25)"
     },
     "Manual table pile viewers": {
-      "open": "The pile viewer cannot be searched, grouped or sorted, and a library search offers no Shuffle on closing (needs bead by-q44s.9.26)"
+      "open": "The pile viewer cannot be searched, grouped or sorted, the table opens no library viewer, so a library search offers no Shuffle on closing, and the other seat sees no lifted count (needs bead by-q44s.9.40)"
     },
     "Context menu": {
       "recording": "screen/table",

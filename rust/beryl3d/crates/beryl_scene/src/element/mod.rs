@@ -164,6 +164,10 @@ pub enum Anchor {
     Point(Vec2, Vec2),
     /// The centre of a scene object as the camera projects it.
     Object(Subject, Vec2),
+    /// Centred above a scene object's box as the table draws it, with the element's bottom
+    /// edge the given number of logical points above the box's highest point, as the web's
+    /// `translate(-50%, calc(-100% - 5px))` stands a label over a card.
+    Above(Subject, f32),
     /// A point of the window where a menu opens, in logical points, as `Menu.tsx` places one:
     /// its top left corner stands at the point, or its right or bottom edge does where the menu
     /// would otherwise pass the window's edge, and it is kept `flat.menu_edge` points inside the

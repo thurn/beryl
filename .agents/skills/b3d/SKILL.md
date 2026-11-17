@@ -99,8 +99,10 @@ name and sets the seat and the window.
   `button "Resolve"`. A whole tree line works too, since what follows the id is
   ignored. `region "prompt" > button "Cancel"` looks inside another element.
 - **An action** is `press <locator>`, `hover <locator>`, `menu <locator>` (a right click),
-  `drag <locator> to <locator>`, `type <locator> "<text>"`, `key <name>`,
-  `move <x>,<y>`, `step <duration>` or `still`.
+  `drag <locator> to <locator>`, `hold <locator> over <locator>` (a drag not let go, to
+  see what a drag shows mid-way), `type <locator> "<text>"`, `key <name>`,
+  `move <x>,<y>`, `step <duration>` or `still`. A point `<x>,<y>` may stand in place of
+  any locator, as in `drag 700,500 to card #8`, which sweeps from the empty table.
 
 For example, copy a line from `tree` into `--do`:
 

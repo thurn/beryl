@@ -27,7 +27,7 @@ use beryl_protocol::protocol::{Side, Status, ZoneName};
 use beryl_protocol::script::Verb;
 use glam::Vec2;
 
-pub use action::{Action, KeyChord, key_code};
+pub use action::{Action, KeyChord, key_code, point};
 pub use check::{Checked, Mode, StepMoment, TimelineStep};
 pub use moment::{Duration, Moment, Name, Offset, ParseError};
 pub use recording::{Answer, OPEN, RECORDINGS, Recording, Responses, plays_on};
@@ -398,10 +398,10 @@ impl Page {
             | Action::Menu(locator)
             | Action::Type(locator, _)
             | Action::Wheel(locator, _) => vec![locator],
-            Action::Drag(from, to) => vec![from, to],
+            Action::Drag(from, to) | Action::Hold(from, to) => vec![from, to],
             Action::Key(_) | Action::Move(_) | Action::Step(_) | Action::Still => Vec::new(),
         };
-        for locator in locators {
+        for locator in locators.into_iter().filter(|text| point(text).is_none()) {
             let element = self.try_find(locator)?;
             if uncovered(self.frame(), element.index).is_none() {
                 let message = format!("no part of '{locator}' can be pressed: it is covered");
@@ -430,6 +430,10 @@ impl Page {
             Action::Hover(locator) => self.hover(locator),
             Action::Menu(locator) => self.click(locator, Button::Secondary),
             Action::Drag(from, to) => self.drag(from, to),
+            Action::Hold(from, to) => {
+                let (start, end) = (self.point(from), self.point(to));
+                self.hold_between(start, end);
+            }
             Action::Type(locator, text) => self.type_text(locator, text),
             Action::Key(chord) => self.key_chord(*chord),
             Action::Move(point) => self.move_to(*point),
@@ -534,18 +538,6 @@ impl Page {
             safe_area: self.safe_area,
             at: self.now,
         }
-    }
-
-    /// Where an action on `locator`'s element happens: the centre of its largest uncovered
-    /// rectangle.
-    fn point(&mut self, locator: &str) -> Vec2 {
-        let element = self.find(locator);
-        let frame = self.frame();
-        let Some(rect) = uncovered(frame, element.index) else {
-            let message = format!("no part of '{locator}' can be pressed: it is covered");
-            panic!("{}", self.error(&message));
-        };
-        Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0)
     }
 
     fn pointer(&mut self, phase: PointerPhase, position: Vec2, button: Button) {

@@ -12,6 +12,7 @@ mod frame_allocation;
 mod gate;
 mod hud;
 mod log;
+mod manual_table;
 mod opening;
 mod pack;
 mod parity;

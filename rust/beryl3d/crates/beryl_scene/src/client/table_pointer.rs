@@ -253,8 +253,9 @@ impl Client {
     }
 
     /// On each frame at `now` on the manual table: the held card drops where it is let go, the
-    /// selected cards wear the `selected` mark, and a command waiting for its target draws an
-    /// arrow from its card to the mouse.
+    /// selected cards wear the `selected` mark, the selection's summary stands over the highest
+    /// selected permanent, and a command waiting for its target draws an arrow from its card to
+    /// the mouse.
     pub(super) fn table_frame(&mut self, now: u64) {
         let table = self.screen == Screen::Table
             && (self.show.latest()).is_some_and(|update| update.view.table.is_some());
@@ -263,6 +264,13 @@ impl Client {
             return;
         }
         selection::mark(self.show.lit_mut(), &self.manual.state.selection, now);
+        // The summary follows the highest selected permanent as the table last drew it, and
+        // the screen is built again only when that permanent changes.
+        let over = selection::highest(&self.frame, &self.manual.state.selection);
+        if over != self.manual.state.summary_over {
+            self.manual.state.summary_over = over;
+            self.show_screen();
+        }
         if let (Some(pick), Some(mouse)) = (self.manual.picking, self.owned.mouse) {
             self.show.lit_mut().set_aims([arrows::aim(pick, mouse)]);
         }

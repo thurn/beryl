@@ -284,6 +284,14 @@ fn every_action_name_is_a_line_run_accepts() {
             ),
         ),
         (
+            "hold card #8 over pile \"Your library\"",
+            Action::Hold("card #8".to_owned(), "pile \"Your library\"".to_owned()),
+        ),
+        (
+            "drag 500,400 to card #8",
+            Action::Drag("500,400".to_owned(), "card #8".to_owned()),
+        ),
+        (
             "type field \"Deck name\" \"WU \\\"Control\\\"\"",
             Action::Type(
                 "field \"Deck name\"".to_owned(),

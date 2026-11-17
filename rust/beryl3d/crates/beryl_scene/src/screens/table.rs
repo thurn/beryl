@@ -3,7 +3,8 @@
 //! log at its left, and whatever the table shows over itself: the context menu a right click or
 //! a long press opens, which on a phone is a bottom sheet, the command list, the ask prompt in
 //! the dock, the token search or the library order tray; the viewer of a pile; the rectangle a
-//! sweep draws; and the outline of where a held card would land. Only the solo table is built:
+//! sweep draws; the summary of the selected permanents; and the outline of where a held card
+//! would land. Only the solo table is built:
 //! the web interface's host and join screens come later.
 
 use beryl_protocol::protocol::Facing;
@@ -88,8 +89,14 @@ pub fn table(input: &ScreenIn) -> Element {
         .filter(|(from, to)| from.distance(*to) >= DRAG_THRESHOLD_POINTS)
         .map(|(from, to)| selection::rectangle(selection::sweep_box(from, to)));
     let landing = state.landing.as_ref().map(drop::target);
+    // The summary hides while a sweep is drawn, as the web's hides while selecting, and while
+    // the command list, a prompt or the order tray is open over the table.
+    let summary = (input.view)
+        .filter(|_| state.sweep.is_none() && !state.overlay_open())
+        .and_then(|view| selection::summary(view, &state.selection, state.summary_over));
     screen
         .children(log)
+        .children(summary)
         .children(sweep)
         .children(landing)
         .children(viewer(input))

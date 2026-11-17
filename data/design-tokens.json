@@ -1055,6 +1055,18 @@
         "value": "rgb(255 205 96 / 90%)",
         "note": "The line round a sweep's rectangle: `.selection-rectangle`'s `border`."
       },
+      "SELECTION_SUMMARY": {
+        "value": "#231b17",
+        "note": "The panel of the summary over the selected permanents on the manual table: `.selection-summary`'s `background` in `ui/src/table/selection.css`."
+      },
+      "SELECTION_SUMMARY_RIM": {
+        "value": "rgb(255 205 96 / 55%)",
+        "note": "The line round the selection summary: `.selection-summary`'s `border`."
+      },
+      "SELECTION_SUMMARY_INK": {
+        "value": "#f6e9d7",
+        "note": "The selection summary's text: `.selection-summary`'s `color`."
+      },
       "DROP_HALF": {
         "value": "rgb(19 16 13 / 88%)",
         "note": "A half of a library's drop outline not under the pointer: `.table-library-half`'s `background` in `ui/src/table/drag.css`."

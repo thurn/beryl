@@ -26,7 +26,7 @@ use beryl_scene::input::{
     AssetReady, Button, GlyphCell, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase,
     Size, Tier,
 };
-use beryl_scene::layout::{FloatLook, Layer, centre_of};
+use beryl_scene::layout::{FloatLook, Layer, spot_of};
 use beryl_scene::light::{MarkSpan, Span};
 use beryl_scene::table::Table;
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
@@ -516,7 +516,7 @@ fn an_anchored_element_allocates_nothing() {
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         show.frame(now, &mut builder);
-        layer.follow(|subject| centre_of(&builder, show.table(), subject));
+        layer.follow(|subject| spot_of(&builder, show.table(), subject));
         layer.write(&mut builder, show.table().camera(), true);
         builder.finish();
         let after = ALLOCATIONS.load(Ordering::Relaxed);

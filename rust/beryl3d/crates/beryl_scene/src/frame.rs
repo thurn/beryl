@@ -435,9 +435,17 @@ impl Frame {
     /// of the flat layer), on the window in logical points, if the frame holds it.
     #[must_use]
     pub fn centre(&self, id: ElementId) -> Option<Vec2> {
+        let corners = self.corners(id)?;
+        Some(corners.iter().copied().sum::<Vec2>() / 4.0)
+    }
+
+    /// The corners of the box of the table's element `id` (a card or an ability, not an
+    /// element of the flat layer), on the window in logical points, if the frame holds it.
+    #[must_use]
+    pub fn corners(&self, id: ElementId) -> Option<[Vec2; 4]> {
         let element = (self.resolved.iter())
             .find(|element| element.id == id && element.place != Place::Layer)?;
-        Some(element.corners.iter().copied().sum::<Vec2>() / 4.0)
+        Some(element.corners)
     }
 
     /// The name of a resolved element.
@@ -514,6 +522,12 @@ impl<'a> FrameBuilder<'a> {
     #[must_use]
     pub fn centre(&self, id: ElementId) -> Option<Vec2> {
         self.frame.centre(id)
+    }
+
+    /// The corners of the table's element `id` as written so far (`Frame::corners`).
+    #[must_use]
+    pub fn corners(&self, id: ElementId) -> Option<[Vec2; 4]> {
+        self.frame.corners(id)
     }
 
     /// Names the card the element at `at` in `Frame::resolved` really is, for a copy

@@ -8,17 +8,19 @@
 //! started at which it is given. A line with no `at` is given as soon as the line before it
 //! is done. `step <duration>` waits that long before the next line, `still` waits until
 //! nothing on the table moves, and a drag takes eight moves 16 ms apart, as the test driver's
-//! does. Blank lines and lines beginning `#` are skipped.
+//! does; `hold` makes the same moves and does not let go. Blank lines and lines beginning `#`
+//! are skipped.
 //!
 //! A locator is found in the frame at the tick its action is given, and the pointer goes to
-//! the centre of the element's largest uncovered rectangle, as the test driver's does.
+//! the centre of the element's largest uncovered rectangle, as the test driver's does. A point
+//! `<x>,<y>` in place of a locator is that point of the window.
 
 use std::collections::VecDeque;
 use std::path::Path;
 
 use beryl_scene::Client;
 use beryl_scene::agent::{locate, uncovered};
-use beryl_scene::driver::{Action, Duration};
+use beryl_scene::driver::{Action, Duration, point as written_point};
 use beryl_scene::frame::Wake;
 use beryl_scene::input::{
     Button, Input, Key, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, TextChange,
@@ -216,7 +218,7 @@ impl Drive {
                 let point = point(locator)?;
                 self.pointer(at, PointerPhase::Move, point, Button::None);
             }
-            Action::Drag(from, to) => {
+            Action::Drag(from, to) | Action::Hold(from, to) => {
                 let start = point(from)?;
                 let end = point(to)?;
                 self.pointer(at, PointerPhase::Down, start, Button::Primary);
@@ -226,7 +228,9 @@ impl Drive {
                     let point = start.lerp(end, move_number as f32 / DRAG_MOVES as f32);
                     self.pointer(time, PointerPhase::Move, point, Button::Primary);
                 }
-                self.pointer(time, PointerPhase::Up, end, Button::Primary);
+                if matches!(action, Action::Drag(..)) {
+                    self.pointer(time, PointerPhase::Up, end, Button::Primary);
+                }
                 self.cursor = time;
             }
             Action::Type(locator, text) => {
@@ -284,8 +288,11 @@ fn mouse(phase: PointerPhase, position: Vec2, button: Button) -> Pointer {
 }
 
 /// Where an action on `locator`'s element happens in the client's frame at `clock`: the centre
-/// of its largest uncovered rectangle.
+/// of its largest uncovered rectangle, or the point itself when `locator` writes one.
 fn point(client: &mut Client, clock: u64, locator: &str) -> Result<Vec2, String> {
+    if let Some(at) = written_point(locator) {
+        return Ok(at);
+    }
     client.prepare(clock);
     let frame = client.frame(clock);
     let index = locate(frame, locator).map_err(|error| error.to_string())?;

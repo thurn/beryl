@@ -4,7 +4,8 @@
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{
     AssistsView, CardType, Declaration, LinkState, ManaPool, ManualOrders, ObjectId, ObjectView,
-    PlayerState, PlayerView, SessionId, Side, StackItem, TablePhase, TableView, ZoneName,
+    PlayerState, PlayerView, PowerToughness, SessionId, Side, StackItem, TablePhase, TableView,
+    ZoneName,
 };
 use beryl_protocol::script::{Act, Curve, Reset, Room, Script, Step, StepTiming};
 
@@ -52,9 +53,12 @@ impl ViewBuilder {
             for name in ["Island", "Island", "Plains"] {
                 builder.card(ZoneName::Battlefield, side, name).types = vec![CardType::Land];
             }
-            builder
-                .card(ZoneName::Battlefield, side, "Serra Angel")
-                .types = vec![CardType::Creature];
+            let angel = builder.card(ZoneName::Battlefield, side, "Serra Angel");
+            angel.types = vec![CardType::Creature];
+            angel.pt = Some(PowerToughness {
+                power: 4,
+                toughness: 4,
+            });
             builder.card(ZoneName::Battlefield, side, "Pacifism").types =
                 vec![CardType::Enchantment];
             builder.card(ZoneName::Graveyard, side, "Brainstorm");

@@ -2738,12 +2738,15 @@ These four are written one way everywhere.
   it.
 - **An action** is one line: `press <locator>`, `hover <locator>`,
   `menu <locator>` (a right click), `drag <locator> to <locator>`,
-  `type <locator> "<text>"`, `key <name>`, `move <x>,<y>`,
-  `wheel <locator> <x>,<y>` (turn the mouse wheel over an element by that many
-  points; a negative `y` scrolls toward the end), `step <duration>` or `still`
-  (run the clock until nothing moves). `--do` takes one action. A drive script
-  is a file of them. The running app's socket reads them. The test driver's
-  methods have the same names.
+  `hold <locator> over <locator>` (a drag that is not let go, to see what a drag
+  shows while it is over something), `type <locator> "<text>"`, `key <name>`,
+  `move <x>,<y>`, `wheel <locator> <x>,<y>` (turn the mouse wheel over an
+  element by that many points; a negative `y` scrolls toward the end),
+  `step <duration>` or `still` (run the clock until nothing moves). A point
+  `<x>,<y>` of the window may stand in place of any locator, so
+  `drag 700,500 to card #8` starts a drag on the empty table. `--do` takes one
+  action. A drive script is a file of them. The running app's socket reads them.
+  The test driver's methods have the same names.
 
 ### What is printed
 

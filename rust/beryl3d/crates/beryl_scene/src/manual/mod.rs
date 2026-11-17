@@ -101,7 +101,8 @@ pub enum TablePress {
 /// the last token made, the table actions sent and not yet answered, and whether Shift was held
 /// at the last press of the pointer, which runs a command list row's shifted form. Also the selected
 /// cards, the rectangle a sweep has drawn so far (from where it began to the pointer), the
-/// command waiting for the object or player it acts toward, and where the held card would land.
+/// command waiting for the object or player it acts toward, where the held card would land, and
+/// the selected permanent the selection's summary stands over.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TableState {
     pub menu: Option<menus::OpenMenu>,
@@ -125,6 +126,9 @@ pub struct TableState {
     pub sweep: Option<(Vec2, Vec2)>,
     pub picking: Option<arrows::Pick>,
     pub landing: Option<drop::Destination>,
+    /// The highest selected permanent on the window, which the selection's summary stands
+    /// over (`selection::highest`).
+    pub summary_over: Option<ObjectId>,
 }
 
 /// What a table action the client sent asks of the table's answer to it: to remember the
@@ -157,6 +161,7 @@ impl TableState {
             sweep: None,
             picking: None,
             landing: None,
+            summary_over: None,
         }
     }
 

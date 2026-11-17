@@ -9,7 +9,7 @@ use beryl_scene::element::{
 };
 use beryl_scene::frame::{ElementId, Frame, FrameBuilder, Role, StateBits};
 use beryl_scene::input::{Input, Key, KeyCode, KeyPhase, Modifiers, Tier};
-use beryl_scene::layout::{Layer, centre_of};
+use beryl_scene::layout::{Layer, spot_of};
 use beryl_scene::pose::Curve;
 use beryl_scene::table::Table;
 use glam::Vec2;
@@ -150,7 +150,7 @@ fn an_element_anchored_to_a_card_stays_on_it_while_it_flies() {
         let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         show.frame(now, &mut builder);
         let card = builder.centre(ElementId(u32::from(cards.land.0)));
-        layer.follow(|subject| centre_of(&builder, show.table(), subject));
+        layer.follow(|subject| spot_of(&builder, show.table(), subject));
         let (layout_nodes, text_runs) = layer.take_work();
         assert_eq!((layout_nodes, text_runs), (0, 0), "no layout at {now}");
         layer.write(&mut builder, show.table().camera(), true);

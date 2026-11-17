@@ -6,7 +6,9 @@ use glam::Vec2;
 use super::moment::{Duration, ParseError};
 use crate::input::{KeyCode, Modifiers};
 
-/// One action.
+/// One action. Wherever an action takes a locator, it also takes a point of the window,
+/// `<x>,<y>` in logical points (`point`), so that a drag can start on the empty table, where no
+/// element is.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
     /// `press <locator>`
@@ -18,6 +20,10 @@ pub enum Action {
     Menu(String),
     /// `drag <locator> to <locator>`
     Drag(String, String),
+    /// `hold <locator> over <locator>`: a drag that is not let go, which presses on the first
+    /// element and moves to the second as `drag` does and keeps the button down there, so that
+    /// what a drag shows while it is over something can be seen.
+    Hold(String, String),
     /// `type <locator> "<text>"`
     Type(String, String),
     /// `key <name>`, or `key <modifiers>+<name>` as in `key Cmd+B`
@@ -100,8 +106,9 @@ impl std::str::FromStr for Action {
     fn from_str(line: &str) -> Result<Self, ParseError> {
         let line = line.trim();
         let actions = "The actions are press <locator>, hover <locator>, menu <locator>, drag <locator> to \
-                       <locator>, type <locator> \"<text>\", key <name>, move <x>,<y>, wheel \
-                       <locator> <x>,<y>, step <duration> and still";
+                       <locator>, hold <locator> over <locator>, type <locator> \"<text>\", key \
+                       <name>, move <x>,<y>, wheel <locator> <x>,<y>, step <duration> and still. A \
+                       point <x>,<y> may stand in place of a locator";
         let expected =
             |why: &str| ParseError(format!("'{line}' is not an action: {why}. {actions}"));
         let (verb, rest) = line.split_once(' ').unwrap_or((line, ""));
@@ -123,6 +130,14 @@ impl std::str::FromStr for Action {
                 Ok(Self::Drag(
                     rest[..at].trim().to_owned(),
                     rest[at + 4..].trim().to_owned(),
+                ))
+            }
+            "hold" => {
+                let at = outside_quotes(rest, " over ")
+                    .ok_or_else(|| expected("hold needs <locator> over <locator>"))?;
+                Ok(Self::Hold(
+                    rest[..at].trim().to_owned(),
+                    rest[at + 6..].trim().to_owned(),
                 ))
             }
             "type" => {
@@ -163,8 +178,10 @@ impl std::str::FromStr for Action {
     }
 }
 
-/// The point `<x>,<y>` that `text` writes, in logical points.
-fn point(text: &str) -> Option<Vec2> {
+/// The point `<x>,<y>` that `text` writes, in logical points, if it writes one rather than a
+/// locator.
+#[must_use]
+pub fn point(text: &str) -> Option<Vec2> {
     let (x, y) = text.split_once(',')?;
     Some(Vec2::new(x.trim().parse().ok()?, y.trim().parse().ok()?))
 }

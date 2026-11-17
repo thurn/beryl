@@ -447,7 +447,7 @@ impl Client {
         // Elements anchored to a card, an ability or a player stand where the table drew it.
         let table = self.show.table();
         self.layer
-            .follow(|subject| layout::centre_of(&builder, table, subject));
+            .follow(|subject| layout::spot_of(&builder, table, subject));
         // A total that changes shows the element `prepare` laid out for it.
         self.counts.write(
             &mut self.layer,
