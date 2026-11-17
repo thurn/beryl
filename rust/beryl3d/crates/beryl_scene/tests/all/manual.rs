@@ -37,7 +37,11 @@ pub(super) fn client_at_table(view: &beryl_protocol::PlayerView) -> (Client, Fra
 
 /// A client on the Mac in a `width` by `height` window that has been given `view` and drawn
 /// it.
-fn client_in(view: &beryl_protocol::PlayerView, width: f32, height: f32) -> (Client, Frame) {
+pub(super) fn client_in(
+    view: &beryl_protocol::PlayerView,
+    width: f32,
+    height: f32,
+) -> (Client, Frame) {
     let mut client = Client::new(Config {
         elements: 2048,
         draws: 2048,

@@ -259,6 +259,7 @@
     }
   },
   "pointer": {
+    "refusal_ms": 240,
     "rise_ms": 100,
     "fall_ms": 160,
     "raise_mm": 34.45,
@@ -625,7 +626,21 @@
       "padding": 0.29,
       "radius": 0.9,
       "border": 0.1,
-      "numerals": 1.1
+      "numerals": 1.1,
+      "name": 1.0,
+      "name_gap": 0.35,
+      "named_bottom": 3.9,
+      "named_right": 0.62
+    },
+    "lock": {
+      "left": 0.62,
+      "top": 1.9,
+      "height": 1.8,
+      "icon": 1.15,
+      "padding_left": 0.26,
+      "padding_right": 0.32,
+      "radius": 0.9,
+      "border": 0.1
     },
     "count": {
       "right": 0.62,
@@ -947,7 +962,9 @@
       "pill_text": 16,
       "pill_padding": 10,
       "revealed_width": 52,
-      "sheet_margin": 8
+      "sheet_margin": 8,
+      "mana_right": 32,
+      "mana_width": 48
     }
   }
 }

@@ -9,18 +9,26 @@
 //! stand where a game shows the player's unspent mana, which the table does not show
 //! separately (`hud::counts`).
 //!
-//! On the phone the web opens these in a sheet from the mana total beside the life orb; Beryl
-//! 3D does not show them on the phone layout yet.
+//! On the phone each player's strip shows a Mana button with their total mana instead, between
+//! the piles and the life orb, as the web's `ManaButton` (`ui/src/stage/PhoneStageBoard.tsx`)
+//! stands it. It opens a sheet (`sheet`, the web's `ManaSheet` in
+//! `ui/src/stage/PhoneChrome.tsx`), where each mana symbol and counter is a button that adds one
+//! beside a minus button that removes one.
 
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ManaPool, PlayerState, Side};
+use glam::Vec2;
 
 use super::TablePress;
-use crate::element::{Align, Anchor, Element, Press, holder, row, text};
+use crate::data::space::hud::phone as data;
+use crate::element::{
+    Align, Anchor, Display, Element, Justify, Press, Track, column, holder, row, text,
+};
 use crate::hud::counts::{index, points};
 use crate::input::Size;
-use crate::table::DESKTOP;
-use crate::tokens::{color, size, space};
+use crate::table::{DESKTOP, Window, phone_bands};
+use crate::tokens::{color, size, space, type_style};
+use crate::widgets::button;
 
 /// The mana symbols, in the order the web's `POOL_SYMBOLS` shows them, with each one's amount.
 fn mana(pool: ManaPool) -> [(&'static str, u32); 6] {
@@ -34,21 +42,139 @@ fn mana(pool: ManaPool) -> [(&'static str, u32); 6] {
     ]
 }
 
-/// Both players' rows, in a window of `size`, or none on the phone layout.
+/// Both players' rows in `window`, or on the phone layout their Mana buttons.
 #[must_use]
-pub fn pools(view: &PlayerView, window: Size, phone: bool) -> Option<Element> {
-    if phone {
-        return None;
+pub fn pools(view: &PlayerView, window: Window) -> Option<Element> {
+    if let Some(bands) = phone_bands(window) {
+        let strips = [
+            (Side::You, bands.your_strip),
+            (Side::Opponent, bands.opponent_strip),
+        ];
+        let buttons = strips.into_iter().filter_map(|(side, strip)| {
+            let at = Vec2::new(window.size.width / 2.0 - data::MANA_RIGHT, strip.middle());
+            mana_button(player(view, side), side, adjustable(view, side), at)
+        });
+        return Some(holder().name("pools").children(buttons));
     }
-    let seats = view.table.as_ref().map_or(1, |table| table.seats);
     Some(
         holder()
             .name("pools")
             .children([Side::You, Side::Opponent].map(|side| {
-                let adjust = side == Side::You || seats == 2;
-                pool(player(view, side), side, window, adjust)
+                pool(
+                    player(view, side),
+                    side,
+                    window.size,
+                    adjustable(view, side),
+                )
             })),
     )
+}
+
+/// Whether the viewer may change `side`'s mana and counters in `view`: their own always, and
+/// the opponent's at a table of two seats, as the web's `Chrome` gives a row `adjust`.
+fn adjustable(view: &PlayerView, side: Side) -> bool {
+    side == Side::You || view.table.as_ref().is_some_and(|table| table.seats == 2)
+}
+
+/// `player`'s Mana button on the phone, for `side`, its right edge's middle at `at`: the word
+/// and their total mana under it, which opens their sheet. A player whose mana and counters the
+/// viewer may not change and who has none shows no button, as the web's `ManaButton` hides.
+fn mana_button(player: &PlayerState, side: Side, adjust: bool, at: Vec2) -> Option<Element> {
+    let total: u32 = mana(player.mana).iter().map(|&(_, count)| count).sum();
+    let counters = player
+        .named_counters
+        .iter()
+        .any(|counter| counter.count != 0);
+    if !adjust && total == 0 && !counters {
+        return None;
+    }
+    let whose = match side {
+        Side::You => "Your",
+        Side::Opponent => "Opponent's",
+    };
+    let mut element = column();
+    element.role = crate::frame::Role::Button;
+    let mut element = element
+        .name(&format!("{whose} mana: {total}"))
+        .width(data::MANA_WIDTH)
+        .min_height(size::ICON_BUTTON.max(data::BUTTON_HEIGHT))
+        .align_items(Align::Center)
+        .justify_content(Justify::Center)
+        .radius(size::PANEL_RADIUS)
+        .background(color::PANEL)
+        .border((color::METAL, size::BORDER))
+        .child(text("Mana").passes(true))
+        .child(
+            text(&total.to_string())
+                .style(type_style::BUTTON)
+                .passes(true),
+        )
+        .on_press(Press::Table(TablePress::ManaSheet(Some(side))));
+    element.anchor = Some(Anchor::Point(at, Vec2::new(1.0, 0.5)));
+    Some(element)
+}
+
+/// The sheet of `side`'s mana and counters on the phone, as the web's `ManaSheet` shows them:
+/// its heading and a Done button that closes it,
+/// then each mana symbol and counter in three columns, each a button that adds one beside a
+/// minus button that removes one if the viewer may change them. None in the desktop layout.
+/// The web stands it at the bottom of the window; here it stands below the opponent's strip, as
+/// the log sheet does (`hud::phone::log_sheet`), since the life totals are floats drawn over
+/// every screen element and would show through a sheet over the viewer's strip.
+#[must_use]
+pub fn sheet(view: &PlayerView, window: Window, side: Side) -> Option<Element> {
+    let bands = phone_bands(window)?;
+    let adjust = adjustable(view, side);
+    let heading = row()
+        .align_items(Align::Center)
+        .justify_content(Justify::SpaceBetween)
+        .child(text("Mana").style(type_style::TITLE))
+        .child(
+            button("Done")
+                .min_width(data::BUTTON_MIN_WIDTH)
+                .on_press(Press::Table(TablePress::ManaSheet(None))),
+        );
+    let mut grid = Element::new(crate::frame::Role::Region)
+        .gap(space::S)
+        .grid_template_columns(vec![Track::Fraction(1.0); 3]);
+    grid.style.display = Display::Grid;
+    let grid = grid.children(entries(player(view, side), adjust).enumerate().map(
+        |(at, (name, count, words))| {
+            let at = u8::try_from(at).unwrap_or(u8::MAX);
+            let add = counter(&format!("{name} counter: {count}"), &words, adjust)
+                .grow(1.0)
+                .min_height(size::ICON_BUTTON);
+            if !adjust {
+                return add;
+            }
+            let remove = counter(&format!("Remove {name}"), "\u{2212}", true)
+                .min_width(size::ICON_BUTTON)
+                .min_height(size::ICON_BUTTON)
+                .on_press(Press::Table(TablePress::CounterRemove { side, at }));
+            row()
+                .gap(space::S)
+                .child(add.on_press(Press::Table(TablePress::Counter { side, at })))
+                .child(remove)
+        },
+    ));
+    let label = match side {
+        Side::You => "Your mana and counters",
+        Side::Opponent => "Opponent's mana and counters",
+    };
+    let margin = data::SHEET_MARGIN;
+    let mut sheet = column()
+        .name(label)
+        .width(bands.right - bands.left)
+        .padding(space::M)
+        .gap(space::S)
+        .background(color::PANEL)
+        .border((color::METAL, size::BORDER))
+        .radius(size::PANEL_RADIUS)
+        .child(heading)
+        .child(grid);
+    let top = bands.opponent_strip.bottom() + margin;
+    sheet.anchor = Some(Anchor::Point(Vec2::new(bands.left, top), Vec2::ZERO));
+    Some(sheet)
 }
 
 /// `side`'s state in `view`.
@@ -67,8 +193,37 @@ fn pool(player: &PlayerState, side: Side, window: Size, adjust: bool) -> Element
         Side::You => "Your",
         Side::Opponent => "Opponent's",
     };
+    let mut element = row()
+        .name(&format!("{whose} counters"))
+        .gap(space::S)
+        .align_items(Align::Center)
+        .children(
+            entries(player, adjust)
+                .enumerate()
+                .map(|(at, (name, count, words))| {
+                    let at = u8::try_from(at).unwrap_or(u8::MAX);
+                    let button = counter(&format!("{name} counter: {count}"), &words, adjust);
+                    if adjust {
+                        button.on_press(Press::Table(TablePress::Counter { side, at }))
+                    } else {
+                        button
+                    }
+                }),
+        );
+    element.anchor = Some(Anchor::Point(
+        points(DESKTOP.players[index(side)].pool, window),
+        glam::Vec2::new(0.0, 0.5),
+    ));
+    element
+}
+
+/// `player`'s mana symbols and named counters as a row or a sheet shows them, each its name, its
+/// count and the words it shows: every mana symbol if `adjust`, and otherwise only those with
+/// mana, then each named counter that is not zero. Their order is the one `counter_name`
+/// numbers them in.
+fn entries(player: &PlayerState, adjust: bool) -> impl Iterator<Item = (String, u32, String)> {
     let mana = (mana(player.mana).into_iter())
-        .filter(|&(_, count)| adjust || count > 0)
+        .filter(move |&(_, count)| adjust || count > 0)
         .map(|(symbol, count)| {
             let words = if count > 0 {
                 format!("{{{symbol}}}{count}")
@@ -87,28 +242,7 @@ fn pool(player: &PlayerState, side: Side, window: Size, adjust: bool) -> Element
                 words,
             )
         });
-    let mut element = row()
-        .name(&format!("{whose} counters"))
-        .gap(space::S)
-        .align_items(Align::Center)
-        .children(
-            mana.chain(named)
-                .enumerate()
-                .map(|(at, (name, count, words))| {
-                    let at = u8::try_from(at).unwrap_or(u8::MAX);
-                    let button = counter(&format!("{name} counter: {count}"), &words, adjust);
-                    if adjust {
-                        button.on_press(Press::Table(TablePress::Counter { side, at }))
-                    } else {
-                        button
-                    }
-                }),
-        );
-    element.anchor = Some(Anchor::Point(
-        points(DESKTOP.players[index(side)].pool, window),
-        glam::Vec2::new(0.0, 0.5),
-    ));
-    element
+    mana.chain(named)
 }
 
 /// One counter, named `name`, showing `words`: a button if it takes clicks.

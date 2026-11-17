@@ -42,9 +42,9 @@ const STYLE: TypeStyle = TypeStyle {
 };
 
 /// The records a cost may write: those a card may write besides itself, its soft edge, its
-/// contact shadow and a mark. A hand card wears no badges, so they are all the cost's: four
-/// symbols of one glyph each, or a generic symbol and two hybrid ones, whose letters take three
-/// glyphs each.
+/// contact shadow and a mark. A hand card wears no badges, so they are all the cost's: seven
+/// symbols of one glyph each, or a generic symbol and three hybrid ones, whose letters take
+/// three glyphs each.
 const BUDGET: usize = RECORDS_PER_OBJECT - 4;
 
 /// The shaped mana symbols, by the text between their braces, sorted by it.

@@ -7,7 +7,8 @@
 //! built by hand, with the sample
 //! deck loaded. The manual table's assists have one of their own, `screen/table-assists`: the
 //! same table with every assist on, a turn upkeep proposal, a state nudge's label on the
-//! opponent's creature and an activated ability on the viewer's first land.
+//! opponent's creature and an activated ability on the viewer's first land, and the viewer's
+//! creature wears a named counter and the lock of a permanent that doesn't untap.
 //! The other `screen/table-*` recordings are the same table with something more: the guided
 //! start's play or draw choice (`first`), the opening hand after a mulligan with a card to put
 //! on the bottom (`opening`), a hosted table the other player left (`left`), and a table where
@@ -24,9 +25,9 @@ use beryl_protocol::ipc::{
     TABLE_SAVED, TableActReply, TableConnectionError,
 };
 use beryl_protocol::protocol::{
-    AssistsView, CardHandling, CardType, Facing, LabelView, LinkState, LogLine, PlayerState,
-    ProposalLine, ProposalView, Side, TableAbilityOption, TableCardCommands, TablePrompt,
-    TableView, TargetRef, ZoneName,
+    AssistsView, CardHandling, CardType, Facing, LabelView, LinkState, LogLine, NamedCounter,
+    PlayerState, ProposalLine, ProposalView, Side, TableAbilityOption, TableCardCommands,
+    TablePrompt, TableView, TargetRef, ZoneName,
 };
 use beryl_protocol::script::{Act, Notice, Reset, Step, StepTiming};
 use beryl_protocol::{AgentView, GameUpdate, PlayerView, SessionId};
@@ -110,6 +111,9 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
             card.facing = Facing::Down;
         }
         let mut view = builder.build();
+        if opened == "table-assists" {
+            marks(&mut view);
+        }
         let mut table = testing::table(&view);
         // A few log lines, so that the checks see the log at the table's left with its undo
         // and rewind buttons.
@@ -214,6 +218,26 @@ fn saved_tables() -> [FixtureMessage; 2] {
         FixtureMessage::response(TABLE_SAVED, &saved),
         FixtureMessage::response(TABLE_JOIN, &mismatch),
     ]
+}
+
+/// Marks the viewer's first creature on the battlefield of `view` as the manual table marks a
+/// permanent: two named counters, one of a name past six letters, which its badge shortens,
+/// and the flag that it doesn't untap, which shows a lock.
+fn marks(view: &mut PlayerView) {
+    let creature = (view.objects.iter_mut()).find(|object| {
+        object.controller == Side::You
+            && object.zone == ZoneName::Battlefield
+            && object.types.contains(&CardType::Creature)
+    });
+    if let Some(creature) = creature {
+        creature.named_counters = [("Corruption", 2), ("Ki", 1)]
+            .map(|(name, count)| NamedCounter {
+                name: name.to_owned(),
+                count,
+            })
+            .into();
+        creature.doesnt_untap = true;
+    }
 }
 
 /// Turns every assist of `table`, a table of `view`, on, with what each shows: a turn upkeep

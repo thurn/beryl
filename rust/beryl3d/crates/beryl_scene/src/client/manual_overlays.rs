@@ -158,6 +158,11 @@ impl Client {
                 self.run_table_command(id, crate::manual::Target::Table);
             }
             TablePress::Counter { side, at } => self.adjust_counter(side, at, true),
+            TablePress::CounterRemove { side, at } => self.adjust_counter(side, at, false),
+            TablePress::ManaSheet(side) => {
+                self.manual.mana_sheet = side;
+                self.show_screen();
+            }
             TablePress::Quit => {
                 self.manual.quitting = false;
                 self.requests.push_back(crate::command::Request::Quit);

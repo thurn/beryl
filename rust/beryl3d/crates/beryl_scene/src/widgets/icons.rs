@@ -25,6 +25,11 @@ pub const MINUS: IconId = IconId(10);
 pub const WHOLE: IconId = IconId(40);
 /// The phone's menu button, which opens the settings: three bars.
 pub const MENU: IconId = IconId(41);
+/// The lock a permanent that doesn't untap wears in its corner (`table::badges`).
+pub const LOCK: IconId = IconId(42);
+/// The atlas size of the lock, in logical points: large enough that a battlefield card drawn
+/// big on a Retina display still samples it at about one texel a pixel.
+pub const LOCK_SIDE: u16 = 24;
 
 /// The icon of each step stop, filled, in the order of the web interface's `STEP_STOPS`
 /// (`ui/src/components/Steps.tsx`): untap, upkeep, draw, first main, beginning of combat,
@@ -45,7 +50,7 @@ pub const PHASE_SIDE: u16 = 32;
 
 /// The first of the icons that hold the layers of the life orbs' art, one for each layer of
 /// each seat's orb (`art::orb::icon`).
-pub const ORB: u16 = 42;
+pub const ORB: u16 = 43;
 
 /// How many icons there are: every id is below this.
 pub const COUNT: u16 = ORB + crate::art::orb::ICONS;

@@ -15,7 +15,9 @@ use crate::manual::lobby::Lobby;
 use crate::manual::menus::{self, Act};
 use crate::manual::tokens::TokenChoice;
 use crate::manual::viewers::{self, Look, ViewerControl};
-use crate::manual::{self, Context, Sent, TablePress, TableState, Target, commands, pools};
+use crate::manual::{
+    self, Context, Pending, Sent, TablePress, TableState, Target, commands, pools,
+};
 use crate::screens::Screen;
 use crate::widgets::BACK;
 use beryl_protocol::ipc::TableActReply;
@@ -40,6 +42,9 @@ pub(super) struct Manual {
     /// last frame, which then plays the refusal sound, as the web's `shakeRefusal` plays it for
     /// every refused table action and `useRefusal` for every refused click.
     pub(super) refused: bool,
+    /// The card whose click is sending table actions, while `table_click` runs its command,
+    /// which `send_table` records as where each action came from.
+    clicked: Option<ObjectId>,
 }
 
 impl std::ops::Deref for Manual {
@@ -174,7 +179,9 @@ impl Client {
             ZoneName::Library => ("library.draw", Target::Pile(side, ZoneName::Library)),
             _ => return true,
         };
+        self.manual.clicked = Some(slot);
         self.run_table_command(id, target);
+        self.manual.clicked = None;
         true
     }
 
@@ -334,12 +341,8 @@ impl Client {
                 }
                 _ => Sent::Other,
             };
-            // A driver that never answers, such as a recording's, would otherwise make the
-            // list grow for as long as the table is open.
-            if self.manual.pending.len() >= PENDING {
-                self.manual.pending.pop_front();
-            }
-            self.manual.pending.push_back(sent);
+            let from = self.manual.clicked;
+            self.remember(Pending { sent, from });
             self.commands.push_back(SessionCommand::TableAct(action));
         }
     }
@@ -347,11 +350,21 @@ impl Client {
     /// Sends `answer` to the table's prompt or assist. Its reply comes back as a table action's
     /// does, so it waits in the same queue, asking nothing of the reply but the refusal sound.
     pub(super) fn send_answer(&mut self, answer: Answer) {
+        self.remember(Pending {
+            sent: Sent::Other,
+            from: None,
+        });
+        self.commands.push_back(SessionCommand::TableAnswer(answer));
+    }
+
+    /// Remembers `pending` until the table answers it.
+    fn remember(&mut self, pending: Pending) {
+        // A driver that never answers, such as a recording's, would otherwise make the list
+        // grow for as long as the table is open.
         if self.manual.pending.len() >= PENDING {
             self.manual.pending.pop_front();
         }
-        self.manual.pending.push_back(Sent::Other);
-        self.commands.push_back(SessionCommand::TableAnswer(answer));
+        self.manual.pending.push_back(pending);
     }
 
     /// Whether the table on screen shows the guided start's opening (`manual::opening`).
@@ -373,14 +386,19 @@ impl Client {
     /// Create another token makes again, and an undo or rewind it refused because later lines
     /// depend on it opens the log with those lines highlighted. Any refusal plays the refusal
     /// sound in the next frame, so that a key or a drop the table would not take does not
-    /// pass in silence.
+    /// pass in silence, and shakes the card clicked to send the action, if one was, unless
+    /// the table froze since (`shakeRefusal` in `ui/src/stage/Refusal.tsx`).
     pub(super) fn take_table_reply(&mut self, reply: TableActReply) {
-        if matches!(reply, TableActReply::Refused(_)) {
+        let refused = matches!(reply, TableActReply::Refused(_));
+        if refused {
             self.manual.refused = true;
         }
-        let Some(sent) = self.manual.pending.pop_front() else {
+        let Some(Pending { sent, from }) = self.manual.pending.pop_front() else {
             return;
         };
+        if let Some(slot) = from.filter(|_| refused && !self.table_frozen()) {
+            self.show.pointer_mut().refuse(usize::from(slot.0));
+        }
         match (sent, reply) {
             (Sent::Token(token), TableActReply::Ok { .. }) => {
                 self.manual.last_token = Some(token);
@@ -430,6 +448,7 @@ impl Client {
         self.manual.close_overlay();
         self.manual.state.selection.clear();
         self.manual.picking = None;
+        self.manual.mana_sheet = None;
         self.manual.lobby = Lobby::new();
         self.commands.push_back(SessionCommand::TableLeave);
         self.screen = Screen::Start;

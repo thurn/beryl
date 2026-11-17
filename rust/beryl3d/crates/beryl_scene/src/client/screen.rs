@@ -235,6 +235,7 @@ impl Client {
             }
             AssetReady::Icons { page, cells } => {
                 self.layer.icons_mut().add(page, &cells);
+                self.show.badges_mut().add_icons(page, &cells);
             }
         }
     }

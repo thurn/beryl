@@ -7,7 +7,8 @@ use beryl_scene::frame::Role;
 use beryl_scene::input::{Button, PointerPhase};
 
 use super::manual::{
-    action, acts, client_at_table, cmd, commands, key, middle, pointer, press, table_view,
+    action, acts, client_at_table, client_in, cmd, commands, key, middle, pointer, press,
+    table_view,
 };
 
 #[test]
@@ -137,4 +138,93 @@ fn a_common_counter_name_adds_that_counter() {
     let sent = serde_json::to_value(acts(&mut client)).unwrap();
     assert_eq!(sent[0]["counter"]["name"], "charge", "{sent}");
     assert_eq!(sent[0]["counter"]["add"], 1, "{sent}");
+}
+
+#[test]
+fn a_refused_click_shakes_the_card_clicked_and_an_accepted_one_does_not() {
+    use beryl_protocol::ipc::{TableActReply, TableRefusalReason, TableRefused};
+    use beryl_scene::command::Reply;
+    use beryl_scene::input::Input;
+
+    const MS: u64 = 1_000_000;
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let island = middle(&frame, Role::Card, "Island");
+    let across = |client: &mut beryl_scene::Client, now: u64| {
+        let frame = client.frame(now).clone();
+        middle(&frame, Role::Card, "Island").x - island.x
+    };
+    let click = |client: &mut beryl_scene::Client| {
+        client.handle(pointer(PointerPhase::Down, island, Button::Primary));
+        client.handle(pointer(PointerPhase::Up, island, Button::Primary));
+        client.frame(MS);
+        assert_eq!(acts(client).len(), 1, "the click taps the Island");
+    };
+
+    click(&mut client);
+    client.handle(Input::Reply(Reply::TableAct(TableActReply::Refused(
+        TableRefused {
+            refused: TableRefusalReason::Permission,
+            blocked_by: None,
+        },
+    ))));
+    // The shake starts at the first frame after the reply.
+    assert!(across(&mut client, 10 * MS).abs() < 0.01);
+    let shaken: Vec<f32> = (1..12)
+        .map(|ms| across(&mut client, (10 + 10 * ms) * MS))
+        .collect();
+    assert!(
+        shaken.iter().any(|x| *x < -2.0) && shaken.iter().any(|x| *x > 1.0),
+        "the Island shakes left and right: {shaken:?}"
+    );
+    assert!(
+        across(&mut client, 400 * MS).abs() < 0.01,
+        "and comes to rest where it was"
+    );
+
+    click(&mut client);
+    client.handle(Input::Reply(Reply::TableAct(TableActReply::Ok {
+        ok: true,
+    })));
+    let still: Vec<f32> = (0..12)
+        .map(|ms| across(&mut client, (500 + 10 * ms) * MS))
+        .collect();
+    assert!(
+        still.iter().all(|x| x.abs() < 0.01),
+        "an accepted click shakes nothing: {still:?}"
+    );
+}
+
+#[test]
+fn on_a_phone_the_mana_button_opens_a_sheet_that_adds_and_removes_mana() {
+    let view = table_view();
+    let (mut client, frame) = client_in(&view, 393.0, 759.0);
+    let names = |frame: &beryl_scene::frame::Frame| {
+        (frame.resolved.iter())
+            .map(|element| frame.name(element.name).to_owned())
+            .collect::<Vec<_>>()
+    };
+    assert!(
+        !names(&frame).iter().any(|name| name == "U counter: 0"),
+        "the phone shows no row of counters"
+    );
+    press(&mut client, 0, Role::Button, "Your mana: 0");
+    let frame = client.frame(0).clone();
+    assert!(
+        names(&frame).contains(&"Your mana and counters".to_owned()),
+        "the Mana button opens the sheet"
+    );
+    press(&mut client, 0, Role::Button, "U counter: 0");
+    let add = action(serde_json::json!({ "player_counter": { "seat": 0, "name": "U", "add": 1 } }));
+    assert_eq!(acts(&mut client), vec![add]);
+    press(&mut client, 0, Role::Button, "Remove U");
+    let remove =
+        action(serde_json::json!({ "player_counter": { "seat": 0, "name": "U", "add": -1 } }));
+    assert_eq!(acts(&mut client), vec![remove]);
+    press(&mut client, 0, Role::Button, "Done");
+    let frame = client.frame(0).clone();
+    assert!(
+        !names(&frame).contains(&"Your mana and counters".to_owned()),
+        "Done closes the sheet"
+    );
 }

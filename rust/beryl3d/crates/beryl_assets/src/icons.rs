@@ -15,8 +15,8 @@ use std::cell::Cell;
 use beryl_scene::input::IconCell;
 use beryl_scene::widgets::IconId;
 use beryl_scene::widgets::icons::{
-    BUG, CLOSE, FULL_CONTROL, GEAR, LOG, MENU, MINUS, PASS_ON, PHASE_SIDE, PHASES, PLUS, SPEAKER,
-    SPEAKER_OFF, STEPS, STEPS_OUTLINED, UNDO, WHOLE,
+    BUG, CLOSE, FULL_CONTROL, GEAR, LOCK, LOCK_SIDE, LOG, MENU, MINUS, PASS_ON, PHASE_SIDE, PHASES,
+    PLUS, SPEAKER, SPEAKER_OFF, STEPS, STEPS_OUTLINED, UNDO, WHOLE,
 };
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, Pixmap, Stroke, Transform};
 
@@ -66,6 +66,8 @@ pub struct Outline {
 
 /// The view box of the web's 24-unit icons.
 const BOX_24: [f32; 4] = [0.0, 0.0, 24.0, 24.0];
+/// The view box of the web's 16-unit mark icons (`MarkBadge`, components/Card.tsx).
+const BOX_16: [f32; 4] = [0.0, 0.0, 16.0, 16.0];
 /// The view box of Phosphor's icons.
 const BOX_256: [f32; 4] = [0.0, 0.0, 256.0, 256.0];
 /// The size of an icon button's glyph (`.icon-button > svg`, icon-button.css) and of a step
@@ -181,7 +183,7 @@ const PEAK: [Shape; 3] = [
 ];
 
 /// Every icon, in the order of their ids.
-pub const ALL: [Artwork; 42] = [
+pub const ALL: [Artwork; 43] = [
     // `Gear`, game/Corner.tsx: filled even-odd, its hole left empty (`.gear`, table.css).
     button(
         GEAR,
@@ -521,6 +523,23 @@ pub const ALL: [Artwork; 42] = [
     ),
     // `MenuIcon`, mobile/chrome.tsx: three bars stroked 2 wide (`.phone-menu`, phone.css).
     button(MENU, &[stroked("M5 7h14M5 12h14M5 17h14", 2.0)]),
+    // The lock of a permanent that doesn't untap, `MARK_ICONS.lock` in components/Card.tsx:
+    // filled even-odd, so the shackle's hole is left empty. It is drawn on the card's face
+    // (`beryl_scene::table::badges`), not in the flat layer.
+    Artwork {
+        icon: LOCK,
+        size: LOCK_SIDE,
+        view: BOX_16,
+        shapes: &[Shape {
+            data: "M4 7 V5 A4 4 0 0 1 12 5 V7 H14 V15 H2 V7 Z M6 7 H10 V5 A2 2 0 0 0 6 5 Z",
+            fill: Some(Fill {
+                ink: 1.0,
+                even_odd: true,
+            }),
+            stroke: None,
+            rotate: None,
+        }],
+    },
 ];
 
 thread_local! {

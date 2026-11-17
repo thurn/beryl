@@ -292,13 +292,22 @@ impl Show {
         &mut self.badges
     }
 
-    /// Shapes the numbers and signs of the badges, once, at `scale`, and the mana symbols of
-    /// every cost the face list names that are not shaped yet, for the costs hand cards show.
+    /// Shapes the numbers and signs of the badges, once, at `scale`; the mana symbols of every
+    /// cost the face list names that are not shaped yet, for the costs hand cards show; and the
+    /// name of every named counter in the latest view not shaped yet. Each view is the latest
+    /// when it arrives, so every name a view shows is shaped before a frame shows it.
     pub fn shape_badges(&mut self, text: &mut Text, wanted: &mut Glyphs, scale: f32) {
         if !self.badges.shaped() {
             self.badges.shape(text, wanted, scale);
         }
         self.badges.shape_costs(text, wanted, self.faces.list());
+        // `latest`, with the show's fields borrowed apart from the badges.
+        let latest = (self.waiting.back().map(|waiting| &*waiting.update))
+            .or((self.playing.as_ref()).and_then(|playing| playing.update.as_deref()))
+            .or(self.shown.as_deref());
+        if let Some(update) = latest {
+            self.badges.shape_names(text, wanted, &update.view.objects);
+        }
     }
 
     /// The latest view: the last to arrive, which the table shows once every script before it

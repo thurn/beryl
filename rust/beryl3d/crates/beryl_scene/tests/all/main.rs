@@ -6,6 +6,7 @@
 //! shared table and scripts, `common`, sit beside them.
 
 mod agent;
+mod badges_manual;
 mod bug_report;
 mod checks;
 #[path = "../common/mod.rs"]

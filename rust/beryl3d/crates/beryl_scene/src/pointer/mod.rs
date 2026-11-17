@@ -16,6 +16,7 @@
 
 mod held;
 pub use held::Hold;
+mod refusal;
 
 pub mod rows;
 pub mod touch;
@@ -32,6 +33,7 @@ use crate::play::compile::Compiled;
 use crate::pose::{Curve, Pose, Segment};
 use crate::table::{CARD_HEIGHT, Camera, Look};
 use held::{By, Fall, Grip, Lean};
+use refusal::Shake;
 
 /// The most hand cards that can be rising, raised or falling at once (`frame::LIFTED`).
 const LIFTS: usize = crate::frame::LIFTED;
@@ -63,6 +65,8 @@ pub struct Pointer {
     /// Whether a held card let go anywhere is dropped where it was let go (`LetGo::Dropped`),
     /// as on the manual table, where the client finds the place it lands.
     drops_anywhere: bool,
+    /// The card shaking because the manual table refused an action sent from it (`refuse`).
+    shake: Option<Shake>,
 }
 
 /// One hand card easing from `from` to `to` (0 in the fan, 1 raised) since the time `since`.
@@ -127,6 +131,7 @@ impl Pointer {
         let_go: None,
         fall: None,
         drops_anywhere: false,
+        shake: None,
     };
 
     /// Makes a held card let go anywhere be dropped where it was let go (`LetGo::Dropped`), or
@@ -221,12 +226,33 @@ impl Pointer {
         }
     }
 
-    /// Advances the held card's lean to the frame at `now`. The client calls this before it
-    /// builds each frame.
+    /// Advances the held card's lean to the frame at `now`, starts a shake asked for since the
+    /// last frame and forgets one that is over. The client calls this before it builds each
+    /// frame.
     pub fn advance(&mut self, now: u64) {
         if let Some(grip) = self.grip.filter(|grip| grip.held) {
             self.lean.advance(grip.at, now);
         }
+        if let Some(shake) = &mut self.shake {
+            shake.since.get_or_insert(now);
+            if shake.done(now) {
+                self.shake = None;
+            }
+        }
+    }
+
+    /// Shakes the card in `slot`, from the next frame, because the manual table refused the
+    /// action a click on it sent. A shake under way on another card stops.
+    pub fn refuse(&mut self, slot: usize) {
+        self.shake = Some(Shake { slot, since: None });
+    }
+
+    /// How far across the screen the card in `slot` is shaken at `now`, in logical points.
+    #[must_use]
+    pub fn shaken(&self, slot: usize, now: u64) -> f32 {
+        self.shake
+            .filter(|shake| shake.slot == slot)
+            .map_or(0.0, |shake| shake.offset(now))
     }
 
     /// Where the card in `slot` is drawn at `now` by `camera` because of the pointer, if it is
@@ -269,13 +295,14 @@ impl Pointer {
             .map_or(0.0, |lift| lift.at(now))
     }
 
-    /// Whether a hand card is rising or falling at `now`, a card is held, or one let go is
-    /// falling back.
+    /// Whether a hand card is rising or falling at `now`, a card is held, one let go is
+    /// falling back, or a refused card is shaking.
     #[must_use]
     pub fn moving(&self, now: u64) -> bool {
         self.lifts.iter().any(|lift| !lift.done(now))
             || self.held().is_some()
             || self.fall.is_some_and(|fall| !fall.done(now))
+            || self.shake.is_some_and(|shake| !shake.done(now))
     }
 
     /// Starts the hand card in `slot` easing toward `to` at `now`, from where it is then.
@@ -317,8 +344,9 @@ impl Pointer {
 
 /// Changes `look`, how the card in `slot` is drawn at `now` by `camera`, for what `pointer` is
 /// doing with it: a hand card that is up out of the fan is drawn that far toward its raised
-/// pose. A card a script is moving is drawn where the script has it. The card under the pointer
-/// is marked `HOVERED` by `update`, once the frame's hit test has found it.
+/// pose, and a card shaking because the manual table refused its action is drawn that far
+/// across the screen. A card a script is moving is drawn where the script has it. The card
+/// under the pointer is marked `HOVERED` by `update`, once the frame's hit test has found it.
 pub fn look(pointer: &Pointer, slot: usize, (now, camera): (u64, &Camera), look: &mut Look) {
     if look.state & StateBits::MOVING != 0 {
         return;
@@ -335,6 +363,12 @@ pub fn look(pointer: &Pointer, slot: usize, (now, camera): (u64, &Camera), look:
     let lift = pointer.lift(slot, now);
     if lift > 0.0 {
         look.pose = between(&look.pose, &raised(&look.pose, camera), lift);
+    }
+    let shaken = pointer.shaken(slot, now);
+    let points_per_millimetre = camera.points_per_millimetre(look.pose.position);
+    if shaken != 0.0 && points_per_millimetre > 0.0 {
+        let [right, _, _] = camera.axes();
+        look.pose.position += right * (shaken / points_per_millimetre);
     }
 }
 

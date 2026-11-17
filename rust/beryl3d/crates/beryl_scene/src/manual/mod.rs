@@ -120,6 +120,10 @@ pub enum TablePress {
     /// The counter at `at` of `side`'s row of mana and player counters, which adds one
     /// (`pools`).
     Counter { side: Side, at: u8 },
+    /// The minus button beside that counter in the phone's sheet, which removes one.
+    CounterRemove { side: Side, at: u8 },
+    /// Open the phone's sheet of `side`'s mana and counters, or close it (`pools::sheet`).
+    ManaSheet(Option<Side>),
     /// Quit's question was answered Quit.
     Quit,
     /// Close the command list, ask prompt, token search, custom token form or order tray.
@@ -178,7 +182,7 @@ pub struct TableState {
     pub last_token: Option<TokenChoice>,
     /// For each table action sent and not yet answered, oldest first, what the client does
     /// with the table's answer to it.
-    pub pending: std::collections::VecDeque<Sent>,
+    pub pending: std::collections::VecDeque<Pending>,
     pub shift: bool,
     pub selection: Vec<ObjectId>,
     pub sweep: Option<(Vec2, Vec2)>,
@@ -192,6 +196,9 @@ pub struct TableState {
     /// What the open pile viewer shows beyond its pile: a library look, its sort and grouping,
     /// and whether it asks to shuffle (`viewers::PileViewer`).
     pub viewer: viewers::PileViewer,
+    /// Whose mana and counters the phone's sheet shows, while it is open (`pools::sheet`). A
+    /// new view leaves it open, so that a player adding mana sees the count change.
+    pub mana_sheet: Option<Side>,
 }
 
 /// What a table action the client sent asks of the table's answer to it: to remember the
@@ -203,6 +210,15 @@ pub enum Sent {
     History,
     Look(viewers::Look),
     Other,
+}
+
+/// A table action sent and not yet answered: what its answer asks of the client, and the card a
+/// click sent it from, which shakes if the table refuses it, as the web's `send` names the
+/// element that `shakeRefusal` shakes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Pending {
+    pub sent: Sent,
+    pub from: Option<ObjectId>,
 }
 
 impl TableState {
@@ -229,6 +245,7 @@ impl TableState {
             summary_over: None,
             quitting: false,
             viewer: viewers::PileViewer::new(),
+            mana_sheet: None,
         }
     }
 

@@ -117,6 +117,10 @@ pub fn table(input: &ScreenIn) -> Element {
         .filter(|_| state.sweep.is_none() && !state.overlay_open() && !frozen)
         .and_then(|view| selection::summary(view, &state.selection, state.summary_over));
     let window = input.window;
+    // The phone's sheet of a player's mana and counters, hidden while the table is frozen.
+    let mana_sheet = (input.view.zip(state.mana_sheet))
+        .filter(|_| !frozen)
+        .and_then(|(view, side)| pools::sheet(view, window, side));
     let connection = input.view.and_then(|view| {
         let top = link::top(window.size, window.phone(), window.safe_area.top);
         link::banner(view, window.size, top, input.lobby.link_error.as_deref())
@@ -132,6 +136,7 @@ pub fn table(input: &ScreenIn) -> Element {
         .children(table_viewer(input))
         .children(sort)
         .children(open)
+        .children(mana_sheet)
         .children(over(state, input))
         .children(super::table_opening::table_opening(input))
         .children(connection)
@@ -155,8 +160,7 @@ fn controls(state: &TableState, input: &ScreenIn, frozen: bool) -> Vec<Element> 
             let inset = crate::data::space::flat::table::EDGE;
             turn::next(table.phase, input.window.size, inset)
         });
-    let pools =
-        (input.view).and_then(|view| pools::pools(view, input.window.size, input.window.phone()));
+    let pools = (input.view).and_then(|view| pools::pools(view, input.window));
     [
         players::players(input),
         steps::table_steps(input),
