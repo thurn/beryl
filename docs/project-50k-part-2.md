@@ -542,7 +542,8 @@ card (`card-data.json`, MIT/Apache-2.0), translated node by node into vocabulary
 entries and prelude functions by a table in
 `tools/src/beryl_tools/phase_draft.py`. For a sentence that table cannot
 translate, the brief looks for a matching rendered ability from an implemented
-card. If it finds none, it prints the unresolved sentence and the three nearest
+card. The fallback uses a single prelude-only ability on a plain printed face.
+If it finds none, it prints the unresolved sentence and its three nearest
 examples.
 
 - **Nothing of Phase is built.** Python reads the JSON from `$BERYL_CACHE` at
@@ -552,8 +553,9 @@ examples.
   not change. P1 still holds: Beryl parses no Oracle text.
 - **The renderer checks the draft.** Phase drops or misreads some clauses on
   cards it reports as parsed, so a draft is only a draft until it renders back
-  to the Oracle text. `card new` prints the render diff, which names the missing
-  or extra words.
+  to the Oracle text. `card new` prints the render diff for the draft it wrote.
+  Before writing, `card brief` shows the status of the card file if one exists
+  or marks rendering pending.
 - **A field the table does not read stops the draft**, naming the field, instead
   of dropping a clause silently.
 - **When the draft is complete, the brief is short:** the Oracle text, the

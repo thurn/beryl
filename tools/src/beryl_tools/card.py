@@ -1,17 +1,8 @@
 """`card`: the tools a card is written with.
 
-`card brief <name>` prints the packet one model writes one card from, in this order:
-
-1. Oracle text: each face's name, mana cost, type line, rules text, and power and toughness,
-   loyalty or defense, from the card store, which holds every card in the pool, implemented or
-   not.
-2. Rulings: Scryfall's, from its `rulings` bulk file in $BERYL_CACHE/scryfall, fetched on first
-   use and joined by oracle id.
-3. Vocabulary: the entries of beryl_card the rules text most likely needs, read from its source
-   as text (vocabulary.py), each with its file, line and doc comment.
-4. The nearest implemented cards by rules text (nearest.py), each with its file under
-   rust/cards and the vocabulary entries its definition uses.
-5. The XMage class, MIT-licensed, as a reference: its path in the oracle checkout and its source.
+`card brief <name>` shows the Oracle text, a Rust draft, its render status and rulings.
+For clauses the draft cannot cover, it looks up vocabulary, nearby card files and the
+XMage class for the card writer.
 
 A card someone found the vocabulary cannot express has an entry in data/card-escalations.json
 (ESCALATIONS): the mechanic it needs, the rule that mechanic falls under and the ability's Oracle
@@ -191,45 +182,61 @@ def section(title: str, body: str) -> str:
 
 def brief(record: Json, sources: Sources) -> str:
     """The packet for the card of `record`."""
+    from . import draft
+
     name = str(record["name"])
-    text = nearest.rules_text(record)
     parts = [f"# {name}\n", section("Oracle text", oracle_text(record))]
+    body = ruling_lines(record, sources.ledger)
     if (complete := complete_note(record, sources)) is not None:
         parts.append(section("Complete from the store", complete))
+        if body != "Scryfall has none.":
+            parts.append(section("Rulings", body))
+        return "\n".join(parts)
     if (escalated := escalation(name, sources.escalations)) is not None:
         parts.append(section("Escalation", escalated))
 
-    body = ruling_lines(record, sources.ledger)
-    parts.append(section("Rulings", body))
+    drafter = draft.Drafter(sources)
+    proposal = drafter.draft(record)
+    if proposal.expression:
+        code = f"```rust\npub static CARD: CardDef = {proposal.expression};\n```"
+        parts.append(section("Draft", code))
+        if name in drafter.files:
+            status = draft.render_status(record, drafter.renderer([name]))
+        else:
+            status = "Pending. Run `just card new` to write and render this draft."
+        parts.append(section("Render status", status))
+    if body != "Scryfall has none." or proposal.unresolved:
+        parts.append(section("Rulings", body))
+    if proposal.source_note:
+        parts.append(section("Draft source", proposal.source_note))
+    if proposal.complete:
+        return "\n".join(parts)
 
+    files = drafter.files
     entries = vocabulary.entries(sources.vocabulary)
+    listed: list[str] = []
+    with card_store.Store(sources.store) as store:
+        for clause in proposal.unresolved:
+            listed.append(f"- {clause.text} ({clause.reason})")
+            for example in nearest.nearest(clause.text, name, store, files, most=3):
+                path = files[example]
+                code = definition(path)
+                used = [entry.name for entry in entries if uses(entry, code)]
+                listed.append(
+                    f"  - {example}: {where(path)}"
+                    + (f"\n    uses {', '.join(used)}" if used else "")
+                )
+    parts.append(section("Unresolved clauses", "\n".join(listed)))
+    text = "\n".join(clause.text for clause in proposal.unresolved)
     shown = vocabulary.matching(text, name, entries)
     parts.append(
         section(
             "Vocabulary",
             "\n\n".join(
-                f"### {e.name} ({where(e.path)}:{e.line})\n\n{e.doc}" for e in shown
+                f"### {entry.name} ({where(entry.path)}:{entry.line})\n\n{entry.doc}"
+                for entry in shown
             )
             or "No entry shares a word with its rules text.",
-        )
-    )
-
-    files = card_files.implemented(sources.cards, sources.store)
-    with card_store.Store(sources.store) as store:
-        near = nearest.nearest(text, name, store, files)
-    listed: list[str] = []
-    for card in near:
-        code = definition(files[card])
-        used = [e.name for e in entries if uses(e, code)]
-        listed.append(
-            f"- {card}: {where(files[card])}"
-            + (f"\n  uses {', '.join(used)}" if used else "")
-        )
-    parts.append(
-        section(
-            "Nearest implemented cards",
-            "\n".join(listed)
-            or "No implemented card shares a word with its rules text.",
         )
     )
 
@@ -351,8 +358,7 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     commands = p.add_subparsers(dest="card_command", required=True)
     b = commands.add_parser(
         "brief",
-        help="the packet a card is written from: Oracle text, rulings, vocabulary, the "
-        "nearest implemented cards and the XMage class",
+        help="draft a definition and show its Oracle text, render status and rulings",
     )
     b.add_argument("name", help="the card's name or slug, e.g. 'Lightning Bolt'")
     b.set_defaults(func=run_brief)

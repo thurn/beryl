@@ -1,11 +1,8 @@
 """`card new <name>`: starts a card's file.
 
-It writes `rust/cards/<crate>/<set>/<card>.rs`, where `card path` says the file goes, with the
-generated header (card_header.py) and the smallest definition that compiles: each face its
-`printed::` constant with no abilities, and an empty `scenarios` module, which every card file
-has because its set crate's build script lists each file's `SCENARIOS`. It then names the
-implemented card of the same card type whose rules text is nearest (nearest.py), to read as a
-model, and the next steps, `just card brief` and `just card check`.
+It writes the generated header and whatever the drafter can translate, or the
+smallest definition when no clause has a draft. When it writes a draft it also
+renders the file and reports differences from Oracle text.
 
 It refuses a card that already has a file, a card complete from the store, whose set crate's
 build writes its definition, and a name the store lacks, with `card brief`'s message. An
@@ -26,6 +23,7 @@ from . import (
     card_files,
     card_header,
     card_store,
+    draft,
     nearest,
     set_groups,
     store_cards,
@@ -34,10 +32,12 @@ from . import (
 Json = card_store.Json
 
 
-def definition(record: Json) -> str:
-    """The source of the card's smallest definition, after its header."""
+def definition(record: Json, expression: str = "") -> str:
+    """The draft or the card's smallest definition, after its header."""
     faces = cast(list[Json], record["faces"])
-    if len(faces) == 1:
+    if expression:
+        card = expression
+    elif len(faces) == 1:
         card = f"Printed::{set_groups.camel(str(faces[0]['name']))}.card()"
     else:
         printed = ", ".join(
@@ -108,14 +108,28 @@ def run(args: argparse.Namespace, sources: card.Sources = card.Sources()) -> int
             file=sys.stderr,
         )
         return 1
+    drafter = draft.Drafter(sources)
+    proposal = drafter.draft(found)
     path.parent.mkdir(exist_ok=True)
-    path.write_text(card_header.header(found) + definition(found))
+    source = card_header.header(found) + definition(found, proposal.expression)
+    try:
+        with path.open("x", encoding="utf-8") as file:
+            file.write(source)
+    except FileExistsError:
+        print(
+            f"card new: {name} already has a file, {card.where(path)}", file=sys.stderr
+        )
+        return 1
     # A long name can take a line past rustfmt's width; formatting is best effort.
     subprocess.run(
         ["rustfmt", "--edition", "2024", str(path)], check=False, capture_output=True
     )
     print(f"card new: wrote {card.where(path)}")
-    near = model(found, sources)
+    if proposal.expression:
+        print(draft.render_status(found, drafter.renderer([name])))
+    if proposal.source_note:
+        print(proposal.source_note)
+    near = model(found, sources) if not proposal.complete else None
     if near is not None:
         print(
             f"  The nearest {card_types(found)} implemented: {near[0]}, {card.where(near[1])}"
@@ -125,8 +139,6 @@ def run(args: argparse.Namespace, sources: card.Sources = card.Sources()) -> int
 
 
 def register(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    p = commands.add_parser(
-        "new", help="start a card's file: its header and the smallest definition"
-    )
+    p = commands.add_parser("new", help="start a card's file with its header and draft")
     p.add_argument("name", help="the card's name or slug, e.g. 'Lightning Bolt'")
     p.set_defaults(func=run)

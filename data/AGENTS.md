@@ -37,6 +37,13 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   `covered` (the vocabulary entry or rules-library scenario that covers it), or
   `untestable` (the reason). `just card rulings <name> --add` adds missing
   entries with blank reasons for the writer to fill.
+- `phase-data.json` pins the [Phase](https://github.com/phase-rs/phase)
+  card-data release by its published `card_data_hash` and the SHA-256 of the
+  JSON bytes. `just card brief` and `just card new` use Phase's typed parse as a
+  drafting source. The MIT/Apache-2.0 project publishes the JSON at
+  `https://data.phase-rs.dev/card-data.json`. Beryl stores it in
+  `$BERYL_CACHE/phase/card-data.json` and verifies it against the pin when
+  loading it.
 - `card-printings.csv`: the specific printing chosen for each card.
 - `rules-version.json`: the Comprehensive Rules release that every citation in
   the code is checked against.

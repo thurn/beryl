@@ -15,6 +15,8 @@ import pytest
 from beryl_tools import (
     card,
     card_store,
+    phase_data,
+    render_diff,
     oracles,
     rulings,
     scryfall,
@@ -108,7 +110,7 @@ pub const SCENARIOS: &[Scenario] = &[Effect::GainLife];
 
 
 @pytest.fixture
-def sources(tmp_path: Path) -> card.Sources:
+def sources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> card.Sources:
     """A store of five cards, of which three are implemented, a vocabulary of a few entries."""
     cards = [
         record(
@@ -178,6 +180,8 @@ def sources(tmp_path: Path) -> card.Sources:
         write(tmp_path / "vocabulary" / path, text)
     for path, text in CARD_FILES.items():
         write(tmp_path / "cards" / path, text)
+    monkeypatch.setattr(phase_data, "read", lambda: "No Phase data in this fixture.")
+    monkeypatch.setattr(render_diff, "rendered", lambda names: [])
     return card.Sources(
         store,
         tmp_path / "vocabulary",
@@ -242,7 +246,7 @@ def part(text: str, title: str) -> str:
     return text.split(f"## {title}\n", 1)[1].split("\n## ", 1)[0]
 
 
-def test_an_implemented_cards_brief_has_all_five_parts(
+def test_an_unresolved_brief_includes_references(
     sources: card.Sources, cached: Path
 ) -> None:
     date, digest = rulings.key({"published_at": "2004-10-04", "comment": "Earlier."})
@@ -260,8 +264,9 @@ def test_an_implemented_cards_brief_has_all_five_parts(
     assert sections(text) == [
         "Oracle text",
         "Rulings",
+        "Draft source",
+        "Unresolved clauses",
         "Vocabulary",
-        "Nearest implemented cards",
         "XMage class",
     ]
     assert "Counterspell {U}{U}\nInstant\nCounter target spell." in part(
@@ -278,10 +283,12 @@ def test_an_implemented_cards_brief_has_all_five_parts(
     assert (
         "effect/mod.rs:9)" in vocabulary_part and '"Counter [spell]"' in vocabulary_part
     )
-    nearest_part = part(text, "Nearest implemented cards")
+    nearest_part = part(text, "Unresolved clauses")
     leak = (sources.cards / "cards_1993" / "lea" / "mana_leak.rs").as_posix()
     # Its uses come from its definition: the comment and the scenarios name no entry.
-    assert f"- Mana Leak: {leak}\n  uses build::counter, build::TARGET" in nearest_part
+    assert (
+        f"- Mana Leak: {leak}\n    uses build::counter, build::TARGET" in nearest_part
+    )
     assert "Counterspell:" not in nearest_part
     xmage_part = part(text, "XMage class")
     assert "cards/c/Counterspell.java" in xmage_part
@@ -307,7 +314,7 @@ def test_missing_rulings_and_checkout_are_said_and_the_brief_goes_on(
     monkeypatch.setattr(scryfall, "http_get", offline)
     text = brief_of("Counterspell", sources)
     assert "not cached and could not be fetched" in part(text, "Rulings")
-    assert "Mana Leak" in part(text, "Nearest implemented cards")
+    assert "Mana Leak" in part(text, "Unresolved clauses")
     assert "no XMage checkout" in part(text, "XMage class")
     assert "oracle-setup" in part(text, "XMage class")
 
@@ -468,3 +475,27 @@ def test_the_real_vocabulary_reads() -> None:
             vocabulary.VARIANT.match(lines[entry.line - 1])
             or "fn " in lines[entry.line - 1]
         )
+
+
+def test_complete_brief_prints_only_oracle_draft_and_pending_render(
+    sources: card.Sources, cached: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parse: card_store.Json = {
+        "oracle_text": "Lightning Bolt deals 3 damage to any target.",
+        "abilities": [
+            {
+                "kind": "Spell",
+                "description": "Lightning Bolt deals 3 damage to any target.",
+                "effect": {
+                    "type": "DealDamage",
+                    "target": {"type": "Any"},
+                    "amount": {"type": "Fixed", "value": 3},
+                },
+            }
+        ],
+    }
+    monkeypatch.setattr(phase_data, "read", lambda: {"lightning bolt": parse})
+    text = brief_of("Lightning Bolt", sources)
+    assert sections(text) == ["Oracle text", "Draft", "Render status"]
+    assert "deal_damage_to_any_target(3)" in part(text, "Draft")
+    assert "Pending" in part(text, "Render status")

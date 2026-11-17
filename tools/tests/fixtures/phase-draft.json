@@ -1,0 +1,47 @@
+{
+  "mind_rot": {
+    "oracle_text": "Target player discards two cards.",
+    "abilities": [
+      {
+        "kind": "Spell",
+        "effect": {
+          "type": "Discard",
+          "count": {"type": "Fixed", "value": 2},
+          "target": {"type": "Player"}
+        },
+        "description": "Target player discards two cards."
+      }
+    ]
+  },
+  "opt": {
+    "oracle_text": "Scry 1. (Look at the top card of your library. You may put that card on the bottom.)\nDraw a card.",
+    "abilities": [
+      {
+        "kind": "Spell",
+        "effect": {"type": "Scry", "count": {"type": "Fixed", "value": 1}},
+        "description": "Scry 1."
+      },
+      {
+        "kind": "Spell",
+        "effect": {"type": "Draw", "count": {"type": "Fixed", "value": 1}},
+        "description": "Draw a card."
+      }
+    ]
+  },
+  "visionary": {
+    "oracle_text": "When this creature enters, draw a card.",
+    "triggers": [
+      {
+        "mode": "ChangesZone",
+        "execute": {
+          "kind": "Spell",
+          "effect": {"type": "Draw", "count": {"type": "Fixed", "value": 1}}
+        },
+        "valid_card": {"type": "SelfRef"},
+        "destination": "Battlefield",
+        "trigger_zones": ["Battlefield"],
+        "description": "When this creature enters, draw a card."
+      }
+    ]
+  }
+}

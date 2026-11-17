@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import card, card_check, card_new, card_store
+from beryl_tools import card, card_check, card_new, card_store, phase_data, render_diff
 
 
 def record(name: str, *faces: dict[str, str]) -> card_store.Json:
@@ -35,7 +35,7 @@ COUNTERSPELL = "pub static CARD: CardDef = card(names::COUNTERSPELL, &[]);\n"
 
 
 @pytest.fixture
-def sources(tmp_path: Path) -> card.Sources:
+def sources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> card.Sources:
     """A store of five cards in Alpha, whose set crate has one card file, Counterspell's."""
     cards = [
         record("Counterspell", instant("Counterspell", "Counter target spell.")),
@@ -65,6 +65,8 @@ def sources(tmp_path: Path) -> card.Sources:
     (crate / "lea").mkdir(parents=True)
     (crate / "Cargo.toml").write_text("[package]\n")
     (crate / "lea" / "counterspell.rs").write_text(COUNTERSPELL)
+    monkeypatch.setattr(phase_data, "read", lambda: "No Phase data in this fixture.")
+    monkeypatch.setattr(render_diff, "rendered", lambda names: [])
     return card.Sources(store, tmp_path / "vocabulary", tmp_path / "cards")
 
 
@@ -386,3 +388,33 @@ def test_the_commands_are_registered() -> None:
         True,
     )
     assert parser.parse_args(["card", "new", "Ancestral Recall"]).func == card_new.run
+
+
+def test_new_writes_a_draft_and_reports_a_render_difference(
+    sources: card.Sources,
+    no_rustfmt: list[list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    parse: card_store.Json = {
+        "oracle_text": "Copy target spell.",
+        "abilities": [
+            {
+                "description": "Copy target spell.",
+                "kind": "Spell",
+                "effect": {"type": "Draw", "count": {"type": "Fixed", "value": 1}},
+            }
+        ],
+    }
+    monkeypatch.setattr(phase_data, "read", lambda: {"ancestral recall": parse})
+    monkeypatch.setattr(
+        render_diff,
+        "rendered",
+        lambda names: [(names[0], [render_diff.Face(names[0], "Draw a card.")])],
+    )
+    assert new("Ancestral Recall", sources) == 0
+    path = sources.cards / "cards_1993" / "lea" / "ancestral_recall.rs"
+    assert "Ability::spell().effect(&draw(you(), 1))" in path.read_text()
+    output = capsys.readouterr().out
+    assert "[-copy target spell-]" in output
+    assert "{+draw a card+}" in output
