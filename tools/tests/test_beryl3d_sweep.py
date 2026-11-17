@@ -105,6 +105,7 @@ def test_the_quick_part_holds_the_build_and_the_lane_and_the_slow_part_the_vm() 
         "release-socket",
         "every-tick",
         "timeline-parity-all",
+        "parity-list",
     ]
     assert set(sweep.BUILDS) <= set(quick)
     assert [s.name for s in sweep.chosen(None, sweep.MAC, sweep.SLOW)] == [
